@@ -1,0 +1,18 @@
+---
+import ListView from "../../components/ListView.svelte";
+import Layout from "../../layouts/Layout.astro";
+
+const lists = [{
+	title: "To Do",
+	cards: []
+},
+{
+	title: "In Progress",
+	cards: []
+}]
+---
+
+<Layout title="Tickets">
+	<h1>Black Wallet</h1>
+	<ListView lists={lists} client:load></ListView>
+</Layout>

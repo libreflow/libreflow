@@ -1,0 +1,11 @@
+---
+import Layout from "../../layouts/Layout.astro";
+import WorkspaceView from "../../components/WorkspaceView.svelte";
+import { getWorkspaces } from "../../lib/Workspaces";
+
+const workspaces = await getWorkspaces();
+---
+
+<Layout title="Workspaces">
+	<WorkspaceView client:only workspaces={workspaces}></WorkspaceView>
+</Layout>

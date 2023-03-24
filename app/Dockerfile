@@ -1,8 +1,10 @@
-FROM node:4-onbuild
+FROM node:alpine3.16
 
-EXPOSE 3000
+WORKDIR /app
 
-RUN npm install -g sequelize && npm install -g sequelize-cli
-RUN npm install -g pm2
+COPY . .
 
-CMD npm start
+RUN npm i -g pnpm
+RUN pnpm install
+
+CMD pnpm run dev

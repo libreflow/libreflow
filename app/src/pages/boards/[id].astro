@@ -1,0 +1,29 @@
+---
+import ListView from "../../components/ListView.svelte";
+import Layout from "../../layouts/Layout.astro";
+import { getBoard } from "../../lib/Boards";
+import { getCards } from "../../lib/Cards";
+import { getLists } from "../../lib/Lists";
+
+const { id } = Astro.params;
+
+if (!id) {
+	return Astro.redirect("/workspaces");
+}
+
+const board = await getBoard(parseInt(id));
+
+if (!board) {
+	return Astro.redirect("/workspaces");
+}
+
+let lists = (await getLists(board)) || [];
+for (const list of lists) {
+	const cards = await getCards(list);
+	list.cards = cards || [];
+}
+---
+
+<Layout title={board.name}>
+	<ListView lists={lists} board={board} client:load></ListView>
+</Layout>
