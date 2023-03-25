@@ -70,7 +70,7 @@
 	<div
 		id="modal"
 		on:click|stopPropagation={() => {}}
-		class="w-[800px] shadow-sm p-6 h-[600px]">
+		class="w-[800px] shadow-sm p-6 h-auto">
 		<div id="modal-content">
 			<div class="flex flex-row justify-between items-center">
 				<h1 class="m-0">{title}</h1>

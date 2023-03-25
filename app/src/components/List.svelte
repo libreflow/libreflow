@@ -2,14 +2,16 @@
 	import { flip } from "svelte/animate";
 	import { dndzone } from "svelte-dnd-action";
 	import Card from "./Card.svelte";
-	import type { List } from "../types";
+	import type { Card as CardType } from "../types";
 
-	export let list: List;
+	export let cards: CardType[];
+	export let name: string;
+	export let uid: string;
 	export let onDrop: (items: any) => void;
 
 	const flipDurationMs = 150;
 	function handleDndConsider(e: Event & { detail: { items: any }}) {
-		list.cards = e.detail.items;
+		cards = e.detail.items;
 	}
 	function handleDndFinalize(e: Event & { detail: { items: any }}) {
 		onDrop(e.detail.items);
@@ -23,12 +25,12 @@
 				description: "This is a demo card!",
 				tags: [],
 				additional: [],
-				list_uid: list.uid,
+				list_uid: uid,
 			}),
 		}).then((response) => response.json());
 
 		if (response.success == true) {
-			list.cards.push({
+			cards.push({
 				title: "New Card",
 				description: "This is a demo card!",
 				tags: [],
@@ -36,7 +38,7 @@
 				uid: response.data.uid,
 				id: response.data.uid,
 			});
-			list = list;
+			cards = cards;
 		}
 	}
 </script>
@@ -44,18 +46,18 @@
 <div
 	class="rounded-lg bg-gray-100 border min-h-[200px] w-[300px] flex flex-col">
 	<div class="w-full py-4 px-4 flex flex-row justify-between items-center">
-		<h2 class="text-lg font-medium text-gray-500">{list.name}</h2>
+		<h2 class="text-lg font-medium text-gray-500">{name}</h2>
 		<span
 			class="rounded-full bg-secondary text-primary w-[35px] h-[35px] flex items-center justify-center font-medium text-sm">
-			{list.cards.length}
+			{cards.length}
 		</span>
 	</div>
 	<div
 		class="px-4 py-4 flex flex-col gap-4 mb-auto h-full min-h-[200px]"
-		use:dndzone={{ items: list.cards, flipDurationMs }}
+		use:dndzone={{ items: cards, flipDurationMs }}
 		on:consider={handleDndConsider}
 		on:finalize={handleDndFinalize}>
-		{#each list.cards as card (card.uid)}
+		{#each cards as card (card.uid)}
 			<div animate:flip={{ duration: flipDurationMs }}>
 				<Card {card} />
 			</div>
