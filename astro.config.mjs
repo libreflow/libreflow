@@ -14,7 +14,7 @@ export default defineConfig({
   integrations: [svelte(), tailwind()],
   output: "server",
   adapter: node({
-    mode: "standalone"
+    mode: "middleware"
   }),
 	server: {
 		port: 3000

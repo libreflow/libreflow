@@ -17,11 +17,9 @@
 			}),
 		});
 	}
-	function handleItemFinalize(listIndex: number, newItems: any[]) {
-		console.log(lists);
-		
-		lists[listIndex].cards = newItems;
-		lists = lists;
+
+	function updateLists(l: ListType[]) {
+		lists = l;
 	}
 </script>
 
@@ -52,12 +50,9 @@
 	{boardName}
 </h1>
 <div class="flex flex-row overflow-x-auto w-full gap-6">
-	{#each lists as list, listIndex (list.uid)}
+	{#each lists as list(list.uid)}
 		<List
-			cards={list.cards}
-			name={list.name}
-			uid={list.uid}
-			onDrop={(newItems) => handleItemFinalize(listIndex, newItems)} />
+		bind:list allLists={lists} updateLists={updateLists}/>
 	{/each}
 	<AddList
 		bind:lists

@@ -1,0 +1,27 @@
+---
+import Layout from "../layouts/Layout.astro";
+
+import { User } from "../lib/User";
+
+const isLoggedIn = await User.isLoggedIn(Astro);
+if (!isLoggedIn) {
+	Astro.cookies.delete("token")
+	Astro.cookies.delete("expires")
+	return Astro.redirect("/login");
+}
+---
+
+<Layout title="Welcome to Astro.">
+	<main>
+		<h1>Dashboard</h1>
+		<a href="/workspaces">Workspaces</a>
+	</main>
+</Layout>
+
+<style is:global>
+	* {
+		box-sizing: border-box;
+		padding: 0;
+		margin: 0;
+	}
+</style>

@@ -12,7 +12,7 @@
 			return;
 		}
 
-		const response = await fetch("/api/workspaces", {
+		const response = await fetch("http://localhost:3004/api/workspaces", {
 			method: "DELETE",
 			body: JSON.stringify({
 				uid,

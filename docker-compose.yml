@@ -1,24 +1,37 @@
 version: '3'
 services:
-  #nginx:
-  #  build: ./nginx
-  #  links:
-  #    - app:app
-  #  ports:
-  #    - "8080:8080"
+  app:
+    build: ./
+    container_name: libreflow-app
+    command: pnpm run dev --host
+    links:
+      - server
+    environment:
+      PORT: 3000
+      DB_CONNECTION: postgres://user:secure1@db/main
+      NODE_ENV: "development"
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./:/libreflow-app
 
-  #app:
-  #  build: ./app
-  #  links:
-  #    - db
-  #  environment:
-  #    PORT: 3000
-  #    DB_CONNECTION: postgres://user:secure1@db/main
-  #    NODE_ENV: "development"
-  #  ports:
-  #    - "3000:3000"
+  server:
+    build: ../server
+    container_name: libreflow-server
+    command: pnpm run dev --host
+    links:
+      - db:db
+    environment:
+      PORT: 3000
+      DB_CONNECTION: postgres://user:secure1@db/main
+      NODE_ENV: "development"
+    ports:
+      - "3004:3000"
+    volumes:
+      - ../server/:/libreflow-server
 
   db:
-    build: ./postgres
+    build: ../database
+    container_name: libreflow-db
     ports:
       - "5430:5432"
