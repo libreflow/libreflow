@@ -12,7 +12,7 @@ export class User {
 		// Validate the token
 		const token = Astro.cookies.get("token").value;
 
-		const response = await fetch("http://localhost:3004/api/validate", {
+		const response = await fetch("http://libreflow-server:3004/api/validate", {
 			method: "POST",
 			body: JSON.stringify({
 				token
