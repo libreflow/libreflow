@@ -1,11 +1,14 @@
 ---
-import Sidebar from '../components/Sidebar.astro';
+import Header from '../components/Header.svelte';
+
 
 export interface Props {
 	title: string;
 }
 
 const { title } = Astro.props;
+
+const light = Astro.cookies.get("light")?.boolean()
 ---
 
 <!DOCTYPE html>
@@ -13,54 +16,24 @@ const { title } = Astro.props;
 	<head>
 		<meta charset="UTF-8" />
 		<meta name="viewport" content="width=device-width" />
-		<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+		<link
+			href="/logo-dark.svg"
+			rel="icon"
+			media="(prefers-color-scheme: light)"
+		/>
+		<link
+			href="/logo-light.svg"
+			rel="icon"
+			media="(prefers-color-scheme: dark)"
+		/>
+
 		<meta name="generator" content={Astro.generator} />
 		<title>{title}</title>
 	</head>
-	<body>
-		<Sidebar></Sidebar>
-		<main class="px-16 py-12">
+	<body class="w-screen">
+		<Header client:load light={light}></Header>
+		<main class="max-w-screen-2xl mx-auto w-full prose prose-xl">
 			<slot />
 		</main>
 	</body>
 </html>
-
-<style is:global>
-	body {
-		@apply grid w-[100vw] h-[100vh];
-		grid-template-columns: 80px 1fr;
-		grid-template-rows: auto;
-	}
-
-	h1 {
-		@apply text-4xl font-medium mb-4;
-	}
-
-	input, textarea {
-		@apply rounded-lg border px-4 py-2 text-base outline-none hover:bg-gray-50 focus:bg-gray-100 transition-colors;
-	}
-
-	[contenteditable="true"] {
-		@apply outline-none relative w-fit;
-	}
-
-	[contenteditable="true"]:hover::before {
-		visibility: visible;
-	}
-
-	[contenteditable="true"]::before {
-		visibility: hidden;
-		position: absolute;
-		left: calc(100% + 10px);
-		content: url("data:image/svg+xml,%3Csvg width='25' height='25' viewBox='0 0 15 15' fill='none' xmlns='http://www.w3.org/2000/svg'><path d='M11.8536 1.14645C11.6583 0.951184 11.3417 0.951184 11.1465 1.14645L3.71455 8.57836C3.62459 8.66832 3.55263 8.77461 3.50251 8.89155L2.04044 12.303C1.9599 12.491 2.00189 12.709 2.14646 12.8536C2.29103 12.9981 2.50905 13.0401 2.69697 12.9596L6.10847 11.4975C6.2254 11.4474 6.3317 11.3754 6.42166 11.2855L13.8536 3.85355C14.0488 3.65829 14.0488 3.34171 13.8536 3.14645L11.8536 1.14645ZM4.42166 9.28547L11.5 2.20711L12.7929 3.5L5.71455 10.5784L4.21924 11.2192L3.78081 10.7808L4.42166 9.28547Z' fill='currentColor' fill-rule='evenodd' clip-rule='evenodd'></path></svg%3E");
-		transition: visibility 0.4s ease;
-	}
-
-	button.dark {
-		@apply bg-secondary text-primary font-semibold px-4 py-2 rounded-lg hover:bg-slate-800 transition-colors active:bg-slate-700;
-	}
-
-	a[href] {
-		@apply underline text-slate-800 hover:text-slate-600 hover:no-underline
-	}
-</style>

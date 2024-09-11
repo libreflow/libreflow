@@ -1,0 +1,29 @@
+---
+import OverviewSchemaContainer from "#components/OverviewSchemaContainer.svelte";
+import Layout from "#layouts/Layout.astro";
+import { Mix, MixerHorizontal } from "radix-svelte-icons";
+import { prisma } from "src/shared";
+
+
+const schemas = await prisma.schema.findMany({
+	orderBy: {
+		createdAt: "desc"
+	}
+})
+
+---
+
+<Layout title="Schemas | OpenSchema">
+	<main class="my-16 grid grid-cols-[1fr,3fr]">
+		<aside>
+			<span class="flex flex-row gap-2 items-center text-base font-semibold"><MixerHorizontal size={20}></MixerHorizontal>Filters</span>
+		</aside>
+		<div>
+			<div class="mt-8">
+				{schemas.map((schema) => (
+					<OverviewSchemaContainer {schema} />
+				))}
+			</div>
+		</div>
+	</main>
+</Layout>

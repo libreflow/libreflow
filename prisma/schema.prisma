@@ -1,0 +1,44 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum SchemaStatus {
+	// The schema was successfully reviewed and published
+	Published
+	// The schema is currently being reviewed
+	Review
+	// The schema was rejected
+	Rejected
+	// The schema is deprecated
+	Deprecated
+	// The schema was archived and should no longer be used.
+	Archived
+}
+
+model Schema {
+	id Int @id @default(autoincrement())
+
+	name String
+	description String
+	longdescription String?
+	version String
+	schema Json
+	category String
+	tags String[]
+	downloads Int @default(0)
+	status SchemaStatus @default(Review)
+
+	sha512 String
+	createdAt DateTime @default(now())
+	updatedAt DateTime @updatedAt
+
+	@@unique([name, version])
+}

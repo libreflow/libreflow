@@ -25,3 +25,7 @@ pnpm-lock.yaml
 
 # macOS-specific files
 .DS_Store
+
+# Docker Postgres Artifacts
+logs
+data

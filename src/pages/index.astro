@@ -1,27 +1,22 @@
 ---
+import Showcase from "#components/Showcase.svelte";
 import Layout from "../layouts/Layout.astro";
 
-import { User } from "../lib/User";
 
-const isLoggedIn = await User.isLoggedIn(Astro);
-if (!isLoggedIn) {
-	Astro.cookies.delete("token")
-	Astro.cookies.delete("expires")
-	return Astro.redirect("/login");
-}
 ---
 
-<Layout title="Welcome to Astro.">
-	<main>
-		<h1>Dashboard</h1>
-		<a href="/workspaces">Workspaces</a>
-	</main>
-</Layout>
+<Layout title="OpenSchema">
+<div class="my-16 grid grid-cols-[2fr,1fr] gap-4">
+	<h1 class="font-medium leading-tight text-5xl "><span class="text-primary">OpenSchema.wiki</span> is the largest online repository for structured data. It is used by services, webpages and organizations around the globe to ensure consistency in their data and workflows.</h1>
+	<Showcase></Showcase>
+	<p>Schema.org vocabulary can be used with many different encodings, including RDFa, Microdata and JSON-LD. These vocabularies cover entities, relationships between entities and actions, and can easily be extended through a well-documented extension model. Over 50 million sites use Schema.org to markup their web pages and email messages. Many applications from Google, Microsoft, Pinterest, Yandex and others already use these vocabularies to power rich, extensible experiences.</p>
+	<p>A shared vocabulary makes it easier for webmasters and developers to decide on a schema and get the maximum benefit for their efforts. It is in this spirit that the founders, together with the larger community have come together - to provide a shared collection of schemas.</p>
+</div>
+<div class="bg-base-200 w-full py-8 px-8 flex flex-row justify-evenly">
+	<span class="text-2xl font-bold">Google</span>
+	<span class="text-2xl font-bold">Microsoft</span>
+	<span class="text-2xl font-bold">Yahoo</span>
+	<span class="text-2xl font-bold">Bing</span>
+</div>
 
-<style is:global>
-	* {
-		box-sizing: border-box;
-		padding: 0;
-		margin: 0;
-	}
-</style>
+</Layout>

@@ -1,1 +1,0 @@
-export { default as CardInspector } from "./CardInspector.svelte";

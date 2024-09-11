@@ -1,16 +1,15 @@
 {
-	"extends": "astro/tsconfigs/strict",
+  "extends": "astro/tsconfigs/strict",
 	"compilerOptions": {
-		"target": "ESNext",
-		"module": "ESNext",
-		"moduleResolution": "node",
-		"resolveJsonModule": true,
-		"isolatedModules": true,
-		"noEmit": true,
-		"forceConsistentCasingInFileNames": true,
-		"esModuleInterop": true,
-		"skipLibCheck": true,
-		"strict": true,
-		"importsNotUsedAsValues": "error"
+		"baseUrl": "./",
+		"paths": {
+			"#components/*": ["./src/components/*"],
+			"#layouts/*": ["./src/layouts/*"],
+			"#styles/*": ["./src/styles/*"],
+			"#lib/*": ["./src/lib/*"],
+			"#types/*": ["./src/types/*"],
+			"#modules/*": ["./src/modules/*"],
+		},
+		"types": ["astro", "bun-types"]
 	}
 }

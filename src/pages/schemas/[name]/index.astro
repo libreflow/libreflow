@@ -1,0 +1,10 @@
+---
+const { name } = Astro.params;
+
+if (!name) {
+	return Astro.redirect("/404");
+}
+
+return Astro.redirect(`/schemas/${name}/latest`);
+
+---

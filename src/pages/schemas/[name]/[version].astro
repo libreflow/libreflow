@@ -1,0 +1,58 @@
+---
+import SchemaRenderer from "#components/Schema/SchemaRenderer.svelte";
+import { Tab, TabList, TabPanel, Tabs } from "#components/Tabs";
+import Layout from "#layouts/Layout.astro";
+import { parseMarkdown } from "#lib/markdown";
+import { convertSchemaToTypescript } from "#lib/typescript";
+import SchemaModule from "#modules/SchemaModule.svelte";
+import type { Schema } from "@prisma/client";
+import { prisma } from "src/shared";
+
+const { name, version } = Astro.params;
+
+if (!name || !version) {
+	return Astro.redirect("/404");
+}
+
+let schema: Schema | null = null;
+const latest = await prisma.schema.findFirst({
+	where: {
+		name
+	},
+	orderBy: {
+		createdAt: "desc"
+	},
+});
+
+if (!latest) {
+	return Astro.redirect("/404");
+}
+
+if (version === "latest") {
+	// Retrieve the latest schema with the provided name
+	schema = latest
+} else {
+	// Retrieve the schema with the provided name and version
+	schema = await prisma.schema.findUnique({
+		where: {
+			name_version: {
+				name,
+				version
+			}
+		}
+	})
+}
+
+
+if (!schema) {
+	return Astro.redirect("/404");
+}
+
+	const typescript = await convertSchemaToTypescript(schema.schema as any, schema.name);
+	const longDescriptionMarkdown = await parseMarkdown(schema.longdescription || "")
+---
+
+
+<Layout title=`${schema.name}:${schema.version} | OpenSchema`>
+	<SchemaModule {schema} {typescript} {latest} markdown={longDescriptionMarkdown.code} client:load></SchemaModule>
+</Layout>
