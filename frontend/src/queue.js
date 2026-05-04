@@ -546,7 +546,7 @@ export function addToQueueEnd(trackId) {
   }
   // Ne pas dupliquer si déjà en queue
   if (!_queueOverride.includes(String(trackId))) _queueOverride.push(String(trackId));
-  _updateQueueBadge(_queueOverride.length);
+  _updateQueueBadge(_buildUpcoming().length);
   if (queueOpen) renderQueue();
   return true;
 }

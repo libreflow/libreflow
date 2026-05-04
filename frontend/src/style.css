@@ -3585,8 +3585,6 @@ html[data-mode="light"] .pl-folder-h:hover .pl-folder-count { background: var(--
 .queue-item  { display: flex; align-items: center; gap: var(--sp-2); padding: var(--sp-1d) var(--sp-3h); cursor: pointer; transition: background var(--dur-fast) ease, transform var(--dur-interact) var(--spring-soft); border-radius: var(--sp-1); margin: 0 var(--sp-1); }
 .queue-item:hover     { background: var(--bg3); }
 .queue-item:active    { transform: scale(.98); transition-duration: var(--dur-fast); }
-.queue-item.dragging  { opacity: .4; background: var(--bg4); }
-.queue-item.drag-over { border-top: var(--border-w-lg) solid var(--g); }
 .queue-item.active    { background: var(--accent-subtle); }
 .queue-empty          { padding: var(--sp-10) var(--sp-5); text-align: center; color: var(--t3); font-size: var(--fs-caption); }
 .q-art    { width: var(--icon-36); height: var(--icon-36); border-radius: var(--sp-1); background: var(--bg4); flex-shrink: 0; overflow: hidden; display: flex; align-items: center; justify-content: center; font-size: var(--fs-base); }
@@ -3654,6 +3652,11 @@ html[data-mode="light"] .pl-folder-h:hover .pl-folder-count { background: var(--
   position: relative;
   will-change: transform;
 }
+.queue-item--explicit .q-drag-handle,
+.queue-item--natural {
+  touch-action: none;
+}
+
 .queue-item--explicit .q-drag-handle {
   cursor: grab;
   opacity: 0;
