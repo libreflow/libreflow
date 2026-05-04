@@ -34,6 +34,7 @@ let _queueOverrideTrackId = null; // ID de la piste en cours au moment du reorde
 const Q_ROW_H = 50; // hauteur px d'un .queue-item — padding 7px*2 + art 36px
 
 let _ptrState = null; // null quand inactif
+let _springBackTimer = null;
 
 // ── Data builders ────────────────────────────────────────────
 
@@ -159,8 +160,14 @@ export function toggleQueue() {
 }
 
 export function closeQueue() {
+  if (_springBackTimer) {
+    clearTimeout(_springBackTimer);
+    document.querySelectorAll('.queue-ghost').forEach(el => el.remove());
+    _springBackTimer = null;
+  }
   if (_ptrState) {
     _cleanupDrag(_ptrState.ghost, _ptrState.items || [], _ptrState.itemEl);
+    document.getElementById('queue-list')?.classList.remove('queue-promote-active');
     window.removeEventListener('pointermove',   _onReorderMove);
     window.removeEventListener('pointerup',     _onReorderUp);
     window.removeEventListener('pointercancel', _onReorderUp);
@@ -406,6 +413,7 @@ function _startPromotionDrag(e, itemEl) {
 
   _ptrState = {
     mode: 'promote', listEl, itemEl, ghost, trackId,
+    items: [],  // pas d'items à animer pour la promotion (contrairement au reorder)
     startY: e.clientY, startRectTop: rect.top,
     targetIdx: -1,
   };
@@ -473,7 +481,7 @@ function _onPromotionUp() {
   } else {
     // Spring-back : annuler avec animation
     ghost.classList.add('queue-ghost--spring');
-    setTimeout(() => { ghost.remove(); }, 300);
+    _springBackTimer = setTimeout(() => { ghost.remove(); _springBackTimer = null; }, 300);
     itemEl.classList.remove('q-placeholder');
     _ptrState = null;
     _removePromotionListeners();
