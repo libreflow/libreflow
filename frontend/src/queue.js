@@ -164,16 +164,13 @@ export function closeQueue() {
 
 // ── Rendu ────────────────────────────────────────────────────
 
-// TODO Task 3: replace with two-section renderQueue (explicit + natural)
 export function renderQueue() {
   const el     = document.getElementById('queue-list');
-  const fl     = getFiltered();
+  const tracks = get('tracks');
   const curIdx = get('curIdx');
-  const tracks = get('tracks'); // Phase 4
   const repeat = get('repeat');
 
-  // repeat='one' → la piste actuelle rejoue indéfiniment
-  // Afficher la piste répétée 5× en dégradé pour visualiser la boucle
+  // repeat='one' — comportement inchangé
   if (repeat === 'one' && curIdx >= 0) {
     const t = tracks[curIdx];
     _updateQueueBadge('∞');
@@ -192,34 +189,72 @@ export function renderQueue() {
     return;
   }
 
-  // Build upcoming list (override user OU ordre filtré)
-  const upcoming = _buildUpcoming();
-  _updateQueueBadge(upcoming.length);
-  // repeat='all' : compléter avec le début de la liste si peu de pistes (seulement sans override)
-  if (!_queueOverride && repeat === 'all' && upcoming.length < 20 && curIdx >= 0) {
-    const startFl = fl.findIndex(x => x.id === tracks[curIdx]?.id);
-    for (let i = 0; i < fl.length && upcoming.length < 20; i++) {
-      if (i !== startFl) upcoming.push(fl[i]);
+  // Invalider l'override si la piste a changé depuis le reorder
+  if (_queueOverride && curIdx >= 0 && tracks[curIdx]?.id !== _queueOverrideTrackId) {
+    _queueOverride = null; _queueOverrideTrackId = null;
+  }
+
+  const explicit = _buildExplicitQueue();
+  const natural  = _buildNaturalUpcoming();
+
+  // repeat='all' : compléter la section naturelle si peu de pistes et pas d'override
+  if (!_queueOverride && repeat === 'all' && natural.length < 20 && curIdx >= 0) {
+    const fl    = getFiltered();
+    const curId = tracks[curIdx]?.id;
+    const startFl = fl.findIndex(x => x.id === curId);
+    for (let i = 0; i < fl.length && natural.length < 20; i++) {
+      if (i !== startFl && !natural.find(t => t.id === fl[i].id)) natural.push(fl[i]);
     }
   }
-  if (!upcoming.length) {
-    el.innerHTML = `<div class="queue-empty">${i18n('queue_empty')}</div>`; return;
+
+  _updateQueueBadge(explicit.length + natural.length);
+
+  if (!explicit.length && !natural.length) {
+    el.innerHTML = `<div class="queue-empty">${i18n('queue_empty')}</div>`;
+    return;
   }
-  el.innerHTML = upcoming.slice(0, 50).map((t, i) => {
-    const artHTML = t.art ? `<img src="${t.art}" alt="">` : extEmoji(t.ext);
-    return `<div class="queue-item" draggable="true"
-        data-id="${t.id}" data-fi="${i}"
-        data-queue-item="true"
-        data-action="play-queue-item" data-track-id="${t.id}">
-      <div class="q-drag-handle"><svg viewBox="0 0 6 14"><circle cx="2" cy="2" r="1.2"/><circle cx="5" cy="2" r="1.2"/><circle cx="2" cy="7" r="1.2"/><circle cx="5" cy="7" r="1.2"/><circle cx="2" cy="12" r="1.2"/><circle cx="5" cy="12" r="1.2"/></svg></div>
-      <div class="q-art">${artHTML}</div>
-      <div class="q-info">
-        <div class="q-name">${esc(t.name)}</div>
-        <div class="q-artist">${esc(t.artistFull || t.artist || '–')}</div>
-      </div>
-      <div class="q-dur">${fmtd(t.duration)}</div>
+
+  let html = '';
+
+  // ── Section "Prochainement" (queue explicite) ─────────────
+  if (explicit.length) {
+    html += `<div class="queue-section-header">
+      <span class="queue-section-label">Prochainement (${explicit.length})</span>
+      <button class="queue-clear-btn" data-action="clear-queue">✕ tout</button>
     </div>`;
-  }).join('');
+    html += explicit.map((t, i) => {
+      const artHTML = t.art ? `<img src="${t.art}" alt="">` : extEmoji(t.ext);
+      return `<div class="queue-item queue-item--explicit" data-id="${t.id}" data-qi="${i}">
+        <div class="q-drag-handle"><svg viewBox="0 0 6 14" aria-hidden="true" width="10" height="14"><circle cx="2" cy="2" r="1.2"/><circle cx="5" cy="2" r="1.2"/><circle cx="2" cy="7" r="1.2"/><circle cx="5" cy="7" r="1.2"/><circle cx="2" cy="12" r="1.2"/><circle cx="5" cy="12" r="1.2"/></svg></div>
+        <div class="q-art">${artHTML}</div>
+        <div class="q-info">
+          <div class="q-name">${esc(t.name)}</div>
+          <div class="q-artist">${esc(t.artistFull || t.artist || '–')}</div>
+        </div>
+        <div class="q-dur">${fmtd(t.duration)}</div>
+        <button class="queue-remove-btn" data-action="remove-from-queue" data-track-id="${t.id}" title="Retirer">✕</button>
+      </div>`;
+    }).join('');
+  }
+
+  // ── Section "À suivre" (naturelle) ──────────────────────
+  if (natural.length) {
+    html += `<div class="queue-section-divider">À suivre : ${esc(_getQueueSource())}</div>`;
+    html += natural.slice(0, 50).map((t, i) => {
+      const artHTML = t.art ? `<img src="${t.art}" alt="">` : extEmoji(t.ext);
+      return `<div class="queue-item queue-item--natural" data-id="${t.id}" data-ni="${i}"
+          data-action="play-queue-item" data-track-id="${t.id}">
+        <div class="q-art">${artHTML}</div>
+        <div class="q-info">
+          <div class="q-name">${esc(t.name)}</div>
+          <div class="q-artist">${esc(t.artistFull || t.artist || '–')}</div>
+        </div>
+        <div class="q-dur">${fmtd(t.duration)}</div>
+      </div>`;
+    }).join('');
+  }
+
+  el.innerHTML = html;
 }
 
 // ── Drag and drop ────────────────────────────────────────────
