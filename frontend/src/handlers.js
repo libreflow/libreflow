@@ -472,18 +472,6 @@ function _handleDragStart(e) {
   if (tr) { onTrackDragStart(e, tr.dataset.trackId); return; }
 }
 
-function _handleDragOver(e) {
-  // Queue : géré par Pointer Events
-}
-
-function _handleDrop(e) {
-  // Queue : géré par Pointer Events
-}
-
-function _handleDragEnd(e) {
-  // Queue : géré par Pointer Events
-}
-
 // ── Enregistrement ────────────────────────────────────────────────────────
 
 /**
@@ -499,7 +487,4 @@ export function registerHandlers() {
   document.addEventListener('contextmenu', _handleContextMenu);
   document.addEventListener('keydown',     _handleKeydown);
   document.addEventListener('dragstart',   _handleDragStart);
-  document.addEventListener('dragover',    _handleDragOver);
-  document.addEventListener('drop',        _handleDrop);
-  document.addEventListener('dragend',     _handleDragEnd);
 }

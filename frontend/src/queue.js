@@ -159,6 +159,13 @@ export function toggleQueue() {
 }
 
 export function closeQueue() {
+  if (_ptrState) {
+    _cleanupDrag(_ptrState.ghost, _ptrState.items || [], _ptrState.itemEl);
+    window.removeEventListener('pointermove',   _onReorderMove);
+    window.removeEventListener('pointerup',     _onReorderUp);
+    window.removeEventListener('pointercancel', _onReorderUp);
+    // Note: promotion listeners (Task 5) will also be cleaned up here
+  }
   queueOpen = false;
   document.getElementById('queue-panel').classList.remove('open');
   document.getElementById('btn-queue').classList.remove('active');
@@ -168,6 +175,7 @@ export function closeQueue() {
 // ── Rendu ────────────────────────────────────────────────────
 
 export function renderQueue() {
+  initQueueDrag(); // idempotent — guard dataset.dragInit prévient les doubles enregistrements
   const el     = document.getElementById('queue-list');
   const tracks = get('tracks');
   const curIdx = get('curIdx');
