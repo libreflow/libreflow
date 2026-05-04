@@ -164,7 +164,9 @@ export function closeQueue() {
     window.removeEventListener('pointermove',   _onReorderMove);
     window.removeEventListener('pointerup',     _onReorderUp);
     window.removeEventListener('pointercancel', _onReorderUp);
-    // Note: promotion listeners (Task 5) will also be cleaned up here
+    window.removeEventListener('pointermove',   _onPromotionMove);
+    window.removeEventListener('pointerup',     _onPromotionUp);
+    window.removeEventListener('pointercancel', _onPromotionUp);
   }
   queueOpen = false;
   document.getElementById('queue-panel').classList.remove('open');
@@ -308,7 +310,11 @@ function _onQueuePointerDown(e) {
     const itemEl = handle.closest('.queue-item--explicit');
     if (itemEl) { _startReorderDrag(e, itemEl); return; }
   }
-  // Promotion (naturelle → explicite) : Task 5
+  // Promotion : drag depuis item naturel (pas depuis un bouton d'action)
+  if (!e.target.closest('[data-action]')) {
+    const natural = e.target.closest('.queue-item--natural');
+    if (natural) { _startPromotionDrag(e, natural); }
+  }
 }
 
 // ── Reorder drag (section explicite) ────────────────────────
@@ -382,6 +388,97 @@ function _onReorderUp() {
   window.removeEventListener('pointerup',     _onReorderUp);
   window.removeEventListener('pointercancel', _onReorderUp);
   renderQueue();
+}
+
+// ── Promotion drag (section naturelle → explicite) ───────────
+
+function _startPromotionDrag(e, itemEl) {
+  e.preventDefault();
+  const listEl  = document.getElementById('queue-list');
+  const trackId = itemEl.dataset.id;
+  if (!trackId) return;
+
+  const rect  = itemEl.getBoundingClientRect();
+  const ghost = _createGhost(itemEl, rect);
+  ghost.classList.add('queue-ghost--promote');
+
+  itemEl.classList.add('q-placeholder');
+
+  _ptrState = {
+    mode: 'promote', listEl, itemEl, ghost, trackId,
+    startY: e.clientY, startRectTop: rect.top,
+    targetIdx: -1,
+  };
+
+  window.addEventListener('pointermove',   _onPromotionMove);
+  window.addEventListener('pointerup',     _onPromotionUp);
+  window.addEventListener('pointercancel', _onPromotionUp);
+}
+
+function _onPromotionMove(e) {
+  if (!_ptrState || _ptrState.mode !== 'promote') return;
+  const { ghost, listEl, startY, startRectTop } = _ptrState;
+
+  const dy = e.clientY - startY;
+  ghost.style.top = (startRectTop + dy) + 'px';
+
+  // Détecter si le ghost est au-dessus du séparateur "À suivre"
+  const divider = listEl.querySelector('.queue-section-divider');
+  const inZone  = divider
+    ? e.clientY < divider.getBoundingClientRect().top
+    : true; // pas encore de section explicite → toute la zone est valide
+
+  listEl.classList.toggle('queue-promote-active', inZone);
+
+  if (inZone) {
+    const explicitItems = [...listEl.querySelectorAll('.queue-item--explicit')];
+    const ghostTop = parseFloat(ghost.style.top);
+    const ghostMid = ghostTop + Q_ROW_H / 2;
+    let targetIdx = 0;
+    for (let i = 0; i < explicitItems.length; i++) {
+      const midY = explicitItems[i].getBoundingClientRect().top + Q_ROW_H / 2;
+      if (ghostMid > midY) targetIdx = i + 1;
+    }
+    _ptrState.targetIdx = targetIdx;
+  } else {
+    _ptrState.targetIdx = -1;
+  }
+}
+
+function _onPromotionUp() {
+  if (!_ptrState || _ptrState.mode !== 'promote') return;
+  const { itemEl, ghost, listEl, trackId, targetIdx } = _ptrState;
+
+  listEl.classList.remove('queue-promote-active');
+
+  const _removePromotionListeners = () => {
+    window.removeEventListener('pointermove',   _onPromotionMove);
+    window.removeEventListener('pointerup',     _onPromotionUp);
+    window.removeEventListener('pointercancel', _onPromotionUp);
+  };
+
+  if (targetIdx >= 0) {
+    // Promouvoir : insérer dans la queue explicite à targetIdx
+    const current  = _queueOverride ? [..._queueOverride] : [];
+    const filtered = current.filter(id => id !== trackId);
+    filtered.splice(targetIdx, 0, trackId);
+    _queueOverride        = filtered;
+    _queueOverrideTrackId = get('tracks')[get('curIdx')]?.id ?? null;
+
+    ghost.remove();
+    itemEl.classList.remove('q-placeholder');
+    _ptrState = null;
+    _removePromotionListeners();
+    renderQueue();
+  } else {
+    // Spring-back : annuler avec animation
+    ghost.classList.add('queue-ghost--spring');
+    setTimeout(() => { ghost.remove(); }, 300);
+    itemEl.classList.remove('q-placeholder');
+    _ptrState = null;
+    _removePromotionListeners();
+    // Pas de renderQueue() : rien n'a changé
+  }
 }
 
 export function playQueueItem(id) {
