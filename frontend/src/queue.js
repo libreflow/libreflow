@@ -199,11 +199,15 @@ export function renderQueue() {
 
   // repeat='all' : compléter la section naturelle si peu de pistes et pas d'override
   if (!_queueOverride && repeat === 'all' && natural.length < 20 && curIdx >= 0) {
-    const fl    = getFiltered();
-    const curId = tracks[curIdx]?.id;
-    const startFl = fl.findIndex(x => x.id === curId);
+    const fl       = getFiltered();
+    const curId    = tracks[curIdx]?.id;
+    const startFl  = fl.findIndex(x => x.id === curId);
+    const naturalSet = new Set(natural.map(t => t.id));
     for (let i = 0; i < fl.length && natural.length < 20; i++) {
-      if (i !== startFl && !natural.find(t => t.id === fl[i].id)) natural.push(fl[i]);
+      if (i !== startFl && !naturalSet.has(fl[i].id)) {
+        natural.push(fl[i]);
+        naturalSet.add(fl[i].id);
+      }
     }
   }
 
