@@ -1,0 +1,318 @@
+// LibreFlow — queue.js
+// Panneau de file d'attente : affichage, drag-and-drop, lecture directe.
+// Extrait de app.js.
+//
+// Remaining window.* : closeSettings (app.js — pas encore extrait).
+//
+// Exports publics (utilisés par app.js + HTML) :
+//   queueOpen
+//   toggleQueue, closeQueue, renderQueue
+//   qDragStart, qDragOver, qDrop, qDragEnd, playQueueItem
+
+import { esc, extEmoji, fmtd }            from './utils.js';
+import { eqOpen, closeEQ }                from './eq.js';
+import { i18n }                           from './i18n.js';
+import { get, set }                       from './store.js';
+import { getFiltered, _trackIdxMap,
+         invalidateFilterCache }          from './search.js';
+import { playAt }                         from './player.js';
+import { closeSettings } from './settings.js';
+import { emit, EVENTS } from './bus.js';
+import { toast } from './ui.js';
+
+// ── State ────────────────────────────────────────────────────
+export let queueOpen  = false;
+let qDragIdx          = -1;
+let _qDragging        = false;
+// BUG FIX : mémoriser l'ordre de la queue après un drag-drop utilisateur.
+// On stocke les IDs + le curIdx au moment du reorder pour détecter un changement de piste.
+let _queueOverride        = null; // null | Array<string> (IDs dans l'ordre voulu)
+let _queueOverrideTrackId = null; // ID de la piste en cours au moment du reorder (pas l'index)
+
+// ── Data builders ────────────────────────────────────────────
+
+/** Queue explicite : map _queueOverride vers Track[], filtre IDs invalides. */
+function _buildExplicitQueue() {
+  if (!_queueOverride || !_queueOverride.length) return [];
+  const tracks = get('tracks');
+  return _queueOverride
+    .filter(id => _trackIdxMap?.has(id))
+    .map(id => tracks[_trackIdxMap.get(id)]);
+}
+
+/** Queue naturelle : tracks filtrées après la piste en cours, sans les IDs explicites. */
+function _buildNaturalUpcoming() {
+  const fl      = getFiltered();
+  const curIdx  = get('curIdx');
+  const tracks  = get('tracks');
+  const overSet = new Set(_queueOverride || []);
+  const curId   = curIdx >= 0 ? tracks[curIdx]?.id : null;
+  const startFl = curId ? fl.findIndex(x => x.id === curId) : -1;
+  const result  = [];
+  for (let i = startFl + 1; i < fl.length && result.length < 50; i++) {
+    if (!overSet.has(fl[i].id)) result.push(fl[i]);
+  }
+  return result;
+}
+
+/** Source textuelle pour le header "À suivre : [source]". */
+function _getQueueSource() {
+  const view = get('view');
+  if (view === 'liked')    return 'Titres aimés';
+  if (view === 'radio')    return 'Radio';
+  if (view === 'playlist') {
+    const pl = (get('playlists') || []).find(p => p.id === get('curPlId'));
+    if (pl?.name) return pl.name;
+  }
+  return 'Bibliothèque';
+}
+
+/** Retourne l'état courant de la queue pour la persistance en cfg. */
+export function getQueueState() {
+  return {
+    ids:      _queueOverride        ? [..._queueOverride]  : null,
+    anchorId: _queueOverrideTrackId ?? null,
+  };
+}
+
+/**
+ * Restaure la queue après le boot (appelé après rebuildTrackIdxMap).
+ * IDs invalides (piste supprimée) sont silencieusement filtrés.
+ */
+export function restoreQueueState({ ids, anchorId } = {}) {
+  if (!Array.isArray(ids) || !ids.length) return;
+  _queueOverride        = ids.filter(id => _trackIdxMap?.has(id));
+  _queueOverrideTrackId = anchorId ?? null;
+  if (_queueOverride.length) _updateQueueBadge(_queueOverride.length);
+  else { _queueOverride = null; _queueOverrideTrackId = null; }
+}
+
+/** Réinitialise l'override (appelé depuis app.js quand la piste en cours change). */
+export function clearQueueOverride() {
+  _queueOverride = null; _queueOverrideTrackId = null;
+  // Le badge doit refléter la queue naturelle, pas forcément 0
+  refreshQueueBadge();
+}
+
+/** Retire un ID de la queue explicite. */
+export function removeFromQueue(id) {
+  if (!_queueOverride) return;
+  _queueOverride = _queueOverride.filter(x => x !== id);
+  if (!_queueOverride.length) {
+    _queueOverride        = null;
+    _queueOverrideTrackId = null;
+  }
+  refreshQueueBadge();
+  if (queueOpen) renderQueue();
+}
+
+/** Vide entièrement la queue explicite. */
+export function clearExplicitQueue() {
+  _queueOverride        = null;
+  _queueOverrideTrackId = null;
+  refreshQueueBadge();
+  if (queueOpen) renderQueue();
+}
+
+/** Recalcule et affiche le badge sans ouvrir le panneau. Appelé par app.js après chaque playAt. */
+export function refreshQueueBadge() {
+  _updateQueueBadge(_buildUpcoming().length);
+}
+
+/** Met à jour le badge numérique sur #btn-queue. Accepte aussi '∞' pour repeat='one'. */
+function _updateQueueBadge(count) {
+  const badge = document.getElementById('queue-badge');
+  if (!badge) return;
+  if (count === '∞') {
+    badge.textContent = '∞';
+    badge.style.display = '';
+    return;
+  }
+  badge.textContent = count > 0 ? String(count > 99 ? '99+' : count) : '';
+  badge.style.display = count > 0 ? '' : 'none';
+}
+
+/** Construit la liste "upcoming" courante (override ou ordre filtré). */
+function _buildUpcoming() {
+  const explicit = _buildExplicitQueue();
+  const natural  = _buildNaturalUpcoming();
+  return [...explicit, ...natural];
+}
+
+// ── Toggle / close ───────────────────────────────────────────
+
+export function toggleQueue() {
+  queueOpen = !queueOpen;
+  document.getElementById('queue-panel').classList.toggle('open', queueOpen);
+  document.getElementById('btn-queue').classList.toggle('active', queueOpen);
+  document.getElementById('app')?.classList.toggle('panel-queue-open', queueOpen);
+  if (eqOpen) closeEQ();
+  if (queueOpen && document.getElementById('settings-panel').classList.contains('on')) closeSettings();
+  if (queueOpen) renderQueue();
+}
+
+export function closeQueue() {
+  queueOpen = false;
+  document.getElementById('queue-panel').classList.remove('open');
+  document.getElementById('btn-queue').classList.remove('active');
+  document.getElementById('app')?.classList.remove('panel-queue-open');
+}
+
+// ── Rendu ────────────────────────────────────────────────────
+
+export function renderQueue() {
+  const el     = document.getElementById('queue-list');
+  const fl     = getFiltered();
+  const curIdx = get('curIdx');
+  const tracks = get('tracks'); // Phase 4
+  const repeat = get('repeat');
+
+  // repeat='one' → la piste actuelle rejoue indéfiniment
+  // Afficher la piste répétée 5× en dégradé pour visualiser la boucle
+  if (repeat === 'one' && curIdx >= 0) {
+    const t = tracks[curIdx];
+    _updateQueueBadge('∞');
+    const artHTML = t?.art
+      ? `<img src="${t.art}" alt="">`
+      : extEmoji(t?.ext ?? '');
+    const row = `<div class="queue-item queue-item--loop" data-action="play-queue-item" data-track-id="${t?.id}">
+      <div class="q-art q-art--loop">${artHTML}<span class="q-loop-icon">🔂</span></div>
+      <div class="q-info">
+        <div class="q-name">${esc(t?.name ?? '')}</div>
+        <div class="q-artist">${esc(t?.artistFull || t?.artist || '–')}</div>
+      </div>
+      <div class="q-dur">${fmtd(t?.duration ?? 0)}</div>
+    </div>`;
+    el.innerHTML = Array(5).fill(row).join('');
+    return;
+  }
+
+  // Build upcoming list (override user OU ordre filtré)
+  const upcoming = _buildUpcoming();
+  _updateQueueBadge(upcoming.length);
+  // repeat='all' : compléter avec le début de la liste si peu de pistes (seulement sans override)
+  if (!_queueOverride && repeat === 'all' && upcoming.length < 20 && curIdx >= 0) {
+    const startFl = fl.findIndex(x => x.id === tracks[curIdx]?.id);
+    for (let i = 0; i < fl.length && upcoming.length < 20; i++) {
+      if (i !== startFl) upcoming.push(fl[i]);
+    }
+  }
+  if (!upcoming.length) {
+    el.innerHTML = `<div class="queue-empty">${i18n('queue_empty')}</div>`; return;
+  }
+  el.innerHTML = upcoming.slice(0, 50).map((t, i) => {
+    const artHTML = t.art ? `<img src="${t.art}" alt="">` : extEmoji(t.ext);
+    return `<div class="queue-item" draggable="true"
+        data-id="${t.id}" data-fi="${i}"
+        data-queue-item="true"
+        data-action="play-queue-item" data-track-id="${t.id}">
+      <div class="q-drag-handle"><svg viewBox="0 0 6 14"><circle cx="2" cy="2" r="1.2"/><circle cx="5" cy="2" r="1.2"/><circle cx="2" cy="7" r="1.2"/><circle cx="5" cy="7" r="1.2"/><circle cx="2" cy="12" r="1.2"/><circle cx="5" cy="12" r="1.2"/></svg></div>
+      <div class="q-art">${artHTML}</div>
+      <div class="q-info">
+        <div class="q-name">${esc(t.name)}</div>
+        <div class="q-artist">${esc(t.artistFull || t.artist || '–')}</div>
+      </div>
+      <div class="q-dur">${fmtd(t.duration)}</div>
+    </div>`;
+  }).join('');
+}
+
+// ── Drag and drop ────────────────────────────────────────────
+
+export function qDragStart(e, i) {
+  qDragIdx = i;
+  _qDragging = true;
+  e.currentTarget.classList.add('dragging');
+  e.dataTransfer.effectAllowed = 'move';
+}
+
+export function qDragOver(e, i) {
+  e.preventDefault();
+  document.querySelectorAll('.queue-item').forEach(el => el.classList.remove('drag-over'));
+  e.currentTarget.classList.add('drag-over');
+}
+
+export function qDrop(e, i) {
+  e.preventDefault();
+  if (qDragIdx < 0 || qDragIdx === i) { renderQueue(); return; }
+  // BUG FIX : reorder persist via _queueOverride (plus de toast mensonger)
+  const upcoming = _buildUpcoming();
+  if (qDragIdx < upcoming.length && i < upcoming.length) {
+    const [moved] = upcoming.splice(qDragIdx, 1);
+    upcoming.splice(i, 0, moved);
+    _queueOverride        = upcoming.map(t => t.id);
+    _queueOverrideTrackId = get('tracks')[get('curIdx')]?.id ?? null;
+  }
+  renderQueue();
+}
+
+export function qDragEnd() {
+  document.querySelectorAll('.queue-item').forEach(el => {
+    el.classList.remove('dragging', 'drag-over');
+  });
+  qDragIdx = -1;
+  setTimeout(() => { _qDragging = false; }, 50);
+}
+
+export function playQueueItem(id) {
+  if (_qDragging) return;
+  const t = (_trackIdxMap.has(id) ? get('tracks')[_trackIdxMap.get(id)] : undefined);
+  if (!t) return;
+  const fi = getFiltered().findIndex(x => x.id === t.id);
+  if (fi >= 0) { playAt(fi); return; }
+  // BUG-3 FIX : piste hors filtre → vider la recherche puis jouer
+  const srch = document.getElementById('srch');
+  if (srch && srch.value) {
+    srch.value = '';
+    const clr = document.getElementById('srch-clear');
+    if (clr) clr.style.display = 'none';
+    set('query', '');
+    invalidateFilterCache();
+    emit(EVENTS.FILTER_CHANGED, {});
+    emit(EVENTS.RENDER_LIB, {});
+    toast(i18n('t_queue_filter_cleared') || 'Recherche effacée pour jouer ce titre', 'info');
+    requestAnimationFrame(() => {
+      const fi2 = getFiltered().findIndex(x => x.id === t.id);
+      if (fi2 >= 0) playAt(fi2);
+    });
+  }
+}
+
+/**
+ * Insère un titre en première position de la file ("Lire ensuite").
+ * Si _queueOverride n'existe pas encore, le crée à partir de l'ordre filtré courant.
+ * @param {string} trackId — id du titre à insérer
+ * @returns {boolean} true si succès
+ */
+export function addToQueueNext(trackId) {
+  const t = (_trackIdxMap.has(trackId) ? get('tracks')[_trackIdxMap.get(trackId)] : null);
+  if (!t) return false;
+  // Construire l'upcoming courant puis insérer en tête (en retirant si déjà présent)
+  const upcoming = _buildUpcoming().filter(u => u.id !== trackId);
+  upcoming.unshift(t);
+  _queueOverride        = upcoming.map(u => u.id);
+  _queueOverrideTrackId = get('tracks')[get('curIdx')]?.id ?? null;
+  _updateQueueBadge(upcoming.length);
+  if (queueOpen) renderQueue();
+  return true;
+}
+
+/**
+ * Ajoute un titre en DERNIÈRE position de la file d'attente.
+ * @param {string} trackId — id du titre à ajouter
+ * @returns {boolean} true si succès
+ */
+export function addToQueueEnd(trackId) {
+  const t = _trackIdxMap.has(trackId) ? get('tracks')[_trackIdxMap.get(trackId)] : null;
+  if (!t) return false;
+  // Construire la file si elle n'existe pas encore
+  if (!_queueOverride) {
+    _queueOverride        = _buildUpcoming().map(u => u.id);
+    _queueOverrideTrackId = get('tracks')[get('curIdx')]?.id ?? null;
+  }
+  // Ne pas dupliquer si déjà en queue
+  if (!_queueOverride.includes(String(trackId))) _queueOverride.push(String(trackId));
+  _updateQueueBadge(_queueOverride.length);
+  if (queueOpen) renderQueue();
+  return true;
+}
