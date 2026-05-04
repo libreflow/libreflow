@@ -11,7 +11,7 @@
 //   data-pl-ctx-id="..."                   → contextmenu (playlist nav)
 //   data-pl-folder-ctx-id="..."            → contextmenu (folder)
 //   data-pl-drag-id="..."                  → dragstart (playlist nav)
-//   data-queue-item="true" + data-fi="..."  → drag events (queue reorder)
+//   .q-drag-handle (queue-item--explicit)  → Pointer Events via initQueueDrag()
 //   data-backdrop-action="..."             → click uniquement si e.target === element
 //   data-input-action="..."                → 'input' / 'change'
 //
@@ -21,8 +21,7 @@ import { togglePlay, prev, next, toggleShuffle, toggleRepeat, toggleLike,
          likeat }                                             from './player.js';
 import { toggleQueue, closeQueue, playQueueItem,
          addToQueueNext, addToQueueEnd,
-         removeFromQueue, clearExplicitQueue,
-         qDragStart, qDragOver, qDrop, qDragEnd }             from './queue.js';
+         removeFromQueue, clearExplicitQueue }                 from './queue.js';
 import { toggleEQ, closeEQ, applyEQPreset,
          filterEQPresets, setMasterGain,
          toggleEQAutoMode, toggleEQAB }                        from './eq.js';
@@ -467,27 +466,22 @@ function _handleDragStart(e) {
   // Playlist nav item drag
   const plNav = e.target.closest('[data-pl-drag-id]');
   if (plNav) { onPlNavDragStart(e, plNav.dataset.plDragId); return; }
-  // Queue item drag
-  const qItem = e.target.closest('[data-queue-item]');
-  if (qItem) { qDragStart(e, +qItem.dataset.fi); return; }
+  // Queue : géré par Pointer Events (initQueueDrag)
   // Track row drag
   const tr = e.target.closest('[draggable="true"][data-track-id]');
   if (tr) { onTrackDragStart(e, tr.dataset.trackId); return; }
 }
 
 function _handleDragOver(e) {
-  const qItem = e.target.closest('[data-queue-item]');
-  if (qItem) qDragOver(e, +qItem.dataset.fi);
+  // Queue : géré par Pointer Events
 }
 
 function _handleDrop(e) {
-  const qItem = e.target.closest('[data-queue-item]');
-  if (qItem) qDrop(e, +qItem.dataset.fi);
+  // Queue : géré par Pointer Events
 }
 
 function _handleDragEnd(e) {
-  const qItem = e.target.closest('[data-queue-item]');
-  if (qItem) qDragEnd();
+  // Queue : géré par Pointer Events
 }
 
 // ── Enregistrement ────────────────────────────────────────────────────────

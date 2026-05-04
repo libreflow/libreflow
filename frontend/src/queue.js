@@ -25,12 +25,15 @@ import { toast } from './ui.js';
 
 // ── State ────────────────────────────────────────────────────
 export let queueOpen  = false;
-let qDragIdx          = -1;
-let _qDragging        = false;
 // BUG FIX : mémoriser l'ordre de la queue après un drag-drop utilisateur.
 // On stocke les IDs + le curIdx au moment du reorder pour détecter un changement de piste.
 let _queueOverride        = null; // null | Array<string> (IDs dans l'ordre voulu)
 let _queueOverrideTrackId = null; // ID de la piste en cours au moment du reorder (pas l'index)
+
+// ── Drag Pointer Events ──────────────────────────────────────────────────────
+const Q_ROW_H = 50; // hauteur px d'un .queue-item — padding 7px*2 + art 36px
+
+let _ptrState = null; // null quand inactif
 
 // ── Data builders ────────────────────────────────────────────
 
@@ -152,7 +155,7 @@ export function toggleQueue() {
   document.getElementById('app')?.classList.toggle('panel-queue-open', queueOpen);
   if (eqOpen) closeEQ();
   if (queueOpen && document.getElementById('settings-panel').classList.contains('on')) closeSettings();
-  if (queueOpen) renderQueue();
+  if (queueOpen) { renderQueue(); initQueueDrag(); }
 }
 
 export function closeQueue() {
@@ -261,45 +264,120 @@ export function renderQueue() {
   el.innerHTML = html;
 }
 
-// ── Drag and drop ────────────────────────────────────────────
+// ── Drag helpers ─────────────────────────────────────────────
 
-export function qDragStart(e, i) {
-  qDragIdx = i;
-  _qDragging = true;
-  e.currentTarget.classList.add('dragging');
-  e.dataTransfer.effectAllowed = 'move';
+function _createGhost(itemEl, rect) {
+  const ghost = itemEl.cloneNode(true);
+  ghost.className = 'queue-ghost';
+  ghost.style.cssText = [
+    `left:${rect.left}px`, `top:${rect.top}px`,
+    `width:${rect.width}px`, `height:${rect.height}px`,
+  ].join(';');
+  document.body.appendChild(ghost);
+  return ghost;
 }
 
-export function qDragOver(e, i) {
-  e.preventDefault();
-  document.querySelectorAll('.queue-item').forEach(el => el.classList.remove('drag-over'));
-  e.currentTarget.classList.add('drag-over');
+function _cleanupDrag(ghost, items, itemEl) {
+  ghost.remove();
+  if (itemEl) itemEl.classList.remove('q-placeholder');
+  items.forEach(el => { el.style.transform = ''; el.style.transition = ''; });
+  _ptrState = null;
 }
 
-export function qDrop(e, i) {
+// ── Init drag (appelé une seule fois) ───────────────────────
+
+export function initQueueDrag() {
+  const el = document.getElementById('queue-list');
+  if (!el || el.dataset.dragInit) return;
+  el.dataset.dragInit = '1';
+  el.addEventListener('pointerdown', _onQueuePointerDown);
+}
+
+function _onQueuePointerDown(e) {
+  // Reorder explicite : drag depuis le handle uniquement
+  const handle = e.target.closest('.q-drag-handle');
+  if (handle) {
+    const itemEl = handle.closest('.queue-item--explicit');
+    if (itemEl) { _startReorderDrag(e, itemEl); return; }
+  }
+  // Promotion (naturelle → explicite) : Task 5
+}
+
+// ── Reorder drag (section explicite) ────────────────────────
+
+function _startReorderDrag(e, itemEl) {
   e.preventDefault();
-  if (qDragIdx < 0 || qDragIdx === i) { renderQueue(); return; }
-  // BUG FIX : reorder persist via _queueOverride (plus de toast mensonger)
-  const upcoming = _buildUpcoming();
-  if (qDragIdx < upcoming.length && i < upcoming.length) {
-    const [moved] = upcoming.splice(qDragIdx, 1);
-    upcoming.splice(i, 0, moved);
-    _queueOverride        = upcoming.map(t => t.id);
+  const listEl = document.getElementById('queue-list');
+  const items  = [...listEl.querySelectorAll('.queue-item--explicit')];
+  const srcIdx = items.indexOf(itemEl);
+  if (srcIdx < 0) return;
+
+  const rect  = itemEl.getBoundingClientRect();
+  const ghost = _createGhost(itemEl, rect);
+
+  itemEl.classList.add('q-placeholder');
+  items.forEach((el, i) => { if (i !== srcIdx) el.style.transition = 'transform .15s ease'; });
+
+  _ptrState = {
+    mode: 'reorder', listEl, itemEl, ghost, items,
+    srcIdx, targetIdx: srcIdx,
+    startY: e.clientY, startRectTop: rect.top,
+  };
+
+  window.addEventListener('pointermove',   _onReorderMove);
+  window.addEventListener('pointerup',     _onReorderUp);
+  window.addEventListener('pointercancel', _onReorderUp);
+}
+
+function _onReorderMove(e) {
+  if (!_ptrState || _ptrState.mode !== 'reorder') return;
+  const { ghost, items, itemEl, srcIdx, startY, startRectTop } = _ptrState;
+
+  const dy = e.clientY - startY;
+  ghost.style.top = (startRectTop + dy) + 'px';
+
+  // Calcul index cible
+  const ghostMid = parseFloat(ghost.style.top) + Q_ROW_H / 2;
+  let targetIdx = 0;
+  for (let i = 0; i < items.length; i++) {
+    if (items[i] === itemEl) continue;
+    const midY = items[i].getBoundingClientRect().top + Q_ROW_H / 2;
+    if (ghostMid > midY) targetIdx = i;
+  }
+  if (srcIdx <= targetIdx) targetIdx = Math.min(targetIdx, items.length - 1);
+  _ptrState.targetIdx = targetIdx;
+
+  // Animer les items voisins
+  items.forEach((el, i) => {
+    if (el === itemEl) return;
+    let shift = 0;
+    if (srcIdx < targetIdx && i > srcIdx && i <= targetIdx) shift = -Q_ROW_H;
+    if (srcIdx > targetIdx && i >= targetIdx && i < srcIdx) shift =  Q_ROW_H;
+    el.style.transform = shift ? `translateY(${shift}px)` : '';
+  });
+}
+
+function _onReorderUp() {
+  if (!_ptrState || _ptrState.mode !== 'reorder') return;
+  const { itemEl, ghost, items, srcIdx, targetIdx } = _ptrState;
+
+  if (srcIdx !== targetIdx) {
+    const ex = _buildExplicitQueue();
+    const [moved] = ex.splice(srcIdx, 1);
+    ex.splice(targetIdx, 0, moved);
+    _queueOverride        = ex.map(t => t.id);
     _queueOverrideTrackId = get('tracks')[get('curIdx')]?.id ?? null;
   }
+
+  _cleanupDrag(ghost, items, itemEl);
+  window.removeEventListener('pointermove',   _onReorderMove);
+  window.removeEventListener('pointerup',     _onReorderUp);
+  window.removeEventListener('pointercancel', _onReorderUp);
   renderQueue();
 }
 
-export function qDragEnd() {
-  document.querySelectorAll('.queue-item').forEach(el => {
-    el.classList.remove('dragging', 'drag-over');
-  });
-  qDragIdx = -1;
-  setTimeout(() => { _qDragging = false; }, 50);
-}
-
 export function playQueueItem(id) {
-  if (_qDragging) return;
+  if (_ptrState) return;
   const t = (_trackIdxMap.has(id) ? get('tracks')[_trackIdxMap.get(id)] : undefined);
   if (!t) return;
   const fi = getFiltered().findIndex(x => x.id === t.id);
