@@ -177,7 +177,7 @@ let _saveCfgTimer     = null;
 let crossfadeDur = 0;
 // cfFadeTimer, cfNextTimer, _cfRafId, _cfGen, audioNext, audioNextSource,
 // audioNextGain, _gaplessNextIdx → player.js
-// queueOpen, qDragIdx, _qDragging → queue.js
+// queueOpen, _ptrState → queue.js
 let manualQueue       = [];
 // eqOpen, eqCtx, eqSource, eqNodes → eq.js
 // cinemaOpen, cinemaBg, cinemaHideTimer → cinema.js
