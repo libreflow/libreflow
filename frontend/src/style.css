@@ -3730,7 +3730,7 @@ html[data-mode="light"] .pl-folder-h:hover .pl-folder-count { background: var(--
   100% { opacity: 0;   transform: scale(.92) translateY(8px); }
 }
 .queue-ghost--spring {
-  animation: qSpringBack var(--dur-fast) ease forwards;
+  animation: qSpringBack var(--dur-modal) ease forwards;
 }
 
 /* ═══ ÉGALISEUR ══════════════════════════════════════════════ */
