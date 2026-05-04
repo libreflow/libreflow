@@ -6,8 +6,11 @@
 //
 // Exports publics (utilisés par app.js + HTML) :
 //   queueOpen
-//   toggleQueue, closeQueue, renderQueue
-//   qDragStart, qDragOver, qDrop, qDragEnd, playQueueItem
+//   toggleQueue, closeQueue, renderQueue, refreshQueueBadge
+//   getQueueState, restoreQueueState, clearQueueOverride
+//   removeFromQueue, clearExplicitQueue
+//   addToQueueNext, addToQueueEnd, playQueueItem
+//   initQueueDrag (Task 4)
 
 import { esc, extEmoji, fmtd }            from './utils.js';
 import { eqOpen, closeEQ }                from './eq.js';
@@ -47,6 +50,7 @@ function _buildNaturalUpcoming() {
   const tracks  = get('tracks');
   const overSet = new Set(_queueOverride || []);
   const curId   = curIdx >= 0 ? tracks[curIdx]?.id : null;
+  // curId = null → startFl = -1 → loop starts at 0 → shows full filtered list
   const startFl = curId ? fl.findIndex(x => x.id === curId) : -1;
   const result  = [];
   for (let i = startFl + 1; i < fl.length && result.length < 50; i++) {
@@ -160,6 +164,7 @@ export function closeQueue() {
 
 // ── Rendu ────────────────────────────────────────────────────
 
+// TODO Task 3: replace with two-section renderQueue (explicit + natural)
 export function renderQueue() {
   const el     = document.getElementById('queue-list');
   const fl     = getFiltered();
@@ -287,12 +292,11 @@ export function playQueueItem(id) {
 export function addToQueueNext(trackId) {
   const t = (_trackIdxMap.has(trackId) ? get('tracks')[_trackIdxMap.get(trackId)] : null);
   if (!t) return false;
-  // Construire l'upcoming courant puis insérer en tête (en retirant si déjà présent)
-  const upcoming = _buildUpcoming().filter(u => u.id !== trackId);
-  upcoming.unshift(t);
-  _queueOverride        = upcoming.map(u => u.id);
+  const explicit = _buildExplicitQueue().filter(u => u.id !== trackId);
+  explicit.unshift(t);
+  _queueOverride        = explicit.map(u => u.id);
   _queueOverrideTrackId = get('tracks')[get('curIdx')]?.id ?? null;
-  _updateQueueBadge(upcoming.length);
+  _updateQueueBadge(_buildUpcoming().length);
   if (queueOpen) renderQueue();
   return true;
 }
@@ -307,7 +311,7 @@ export function addToQueueEnd(trackId) {
   if (!t) return false;
   // Construire la file si elle n'existe pas encore
   if (!_queueOverride) {
-    _queueOverride        = _buildUpcoming().map(u => u.id);
+    _queueOverride        = [];
     _queueOverrideTrackId = get('tracks')[get('curIdx')]?.id ?? null;
   }
   // Ne pas dupliquer si déjà en queue
