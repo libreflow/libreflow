@@ -790,11 +790,16 @@ html[data-mode="light"] .genre-badge { background:rgba(0,0,0,.10); border-color:
 /* background/border automatiques via --glass-panel / --border-3 */
 html[data-mode="light"] #ctx-menu     { backdrop-filter:none; -webkit-backdrop-filter:none; box-shadow:var(--shadow-ctx-lt); }
 html[data-mode="light"] .ctx-head     { color:var(--t); border-bottom:var(--border-w-sm) solid var(--sep); }
-html[data-mode="light"] .ctx-item     { color:var(--t2); }
-html[data-mode="light"] .ctx-item:hover { background:var(--bg4); color:var(--t); }
-html[data-mode="light"] .ctx-item svg { stroke:var(--t3); }
-html[data-mode="light"] .ctx-item:hover svg { stroke:var(--t); }
-html[data-mode="light"] .ctx-sep      { border-color:var(--sep); }
+html[data-mode="light"] .ctx-item                { color:var(--t2); }
+html[data-mode="light"] .ctx-item:hover          { background:var(--bg4); color:var(--t); }
+html[data-mode="light"] .ctx-item svg            { stroke:var(--t3); }
+html[data-mode="light"] .ctx-item:hover svg      { stroke:var(--t); }
+html[data-mode="light"] .ctx-sep                 { border-color:var(--sep); }
+/* Danger items doivent rester rouges en mode clair (spécificité forcée) */
+html[data-mode="light"] .ctx-item.danger,
+html[data-mode="light"] .ctx-item--danger        { color:var(--red); }
+html[data-mode="light"] .ctx-item.danger:hover,
+html[data-mode="light"] .ctx-item--danger:hover  { background:rgba(var(--red-rgb),.1); color:var(--red); }
 
 /* ── Modales ── */
 /* background/border/scrim désormais automatiques via --glass-surface / --border-X / --scrim */
@@ -878,7 +883,7 @@ html[data-mode="light"] .tag-edit-cancel:hover { color:var(--t2); }
 /* ── Dossier surveillé ── */
 html[data-mode="light"] .wf           { background:var(--bg2); border:var(--border-w-sm) solid var(--bg5); }
 html[data-mode="light"] .wf:hover     { background:var(--bg3); border-color:var(--bg6); }
-html[data-mode="light"] .wbtn         { background:var(--g); color: var(--text-on-accent)fff; }
+html[data-mode="light"] .wbtn         { background:var(--g); color: var(--text-on-accent); }
 html[data-mode="light"] .wbtn svg     { stroke: var(--text-on-accent); fill:none; }
 html[data-mode="light"] .watch-indicator { background:var(--accent-subtle); color:var(--g); border-color:var(--accent-mid); }
 
@@ -1262,6 +1267,10 @@ button { cursor: pointer; }
   flex: 1; min-width: var(--search-input-min);
   letter-spacing: var(--ls-heading);
 }
+.vh-count {
+  font-size: var(--fs-caption); color: var(--t4); flex-shrink: 0;
+  letter-spacing: var(--ls-micro);
+}
 
 /* Recherche */
 .srch {
@@ -1573,6 +1582,59 @@ html[data-mode="light"] mark.srch-hl { background: rgba(var(--g-rgb), .22); }
   letter-spacing: var(--ls-display);
 }
 .card-sub { font-size: var(--fs-sm); color: var(--t2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: var(--lh-comfort); }
+.card-ct  { font-size: var(--fs-xs); color: var(--t3); margin-top: var(--sp-nano); }
+.card-year { font-size: var(--fs-xs); color: var(--t3); margin-left: var(--sp-1); }
+
+/* ── Texte sous l'artwork ────────────────────────────────── */
+.card-info { overflow: hidden; flex: 1; min-width: 0; }
+/* Placeholder artwork (emoji) quand aucune pochette disponible */
+.card-art-ph { display: flex; align-items: center; justify-content: center; width: 100%; height: 100%; font-size: var(--fs-disp-sm); user-select: none; }
+
+/* ── Artiste cards — artwork circulaire ──────────────────── */
+.card-artist .card-art { border-radius: 50%; }
+.card-art.card-art-round { border-radius: 50%; }
+.card-art-ph.card-art-circle { border-radius: 50%; }
+
+/* ── Mosaïque 4 arts — playlist cards ───────────────────── */
+.card-mosaic {
+  display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr;
+  width: 100%; height: 100%;
+}
+.card-mosaic img { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+/* ── Badges smart / pin sur les cards playlist ───────────── */
+.smart-badge {
+  position: absolute; top: var(--sp-1); left: var(--sp-1);
+  background: rgba(var(--g-rgb),.85); color: var(--text-on-accent);
+  font-size: var(--fs-xs); border-radius: var(--r-sm);
+  padding: 0 var(--sp-1); line-height: var(--lh-px-14); z-index: 1;
+}
+.pin-badge {
+  position: absolute; top: var(--sp-1); right: var(--sp-1);
+  font-size: var(--fs-sm); line-height: 1; z-index: 1;
+}
+
+/* ── Virtual scroll — spacers & group headers ────────────── */
+.virt-sp  { flex-shrink: 0; }
+.tr-grp   {
+  display: flex; align-items: center; gap: var(--sp-2);
+  padding: 0 var(--sp-2h);
+  font-size: var(--fs-xs); font-weight: 700; color: var(--t3);
+  letter-spacing: var(--ls-caps); text-transform: uppercase;
+  border-bottom: var(--border-w-sm) solid var(--bg4);
+  position: sticky; top: 0; z-index: 2;
+  background: var(--bg1);
+}
+.grp-artist { font-weight: 400; color: var(--t3); text-transform: none; letter-spacing: 0; }
+
+/* ── Grid empty state (albums / artistes) ────────────────── */
+.grid-empty {
+  grid-column: 1 / -1;
+  display: flex; flex-direction: column; align-items: center;
+  justify-content: center; gap: var(--sp-2h);
+  padding: var(--sp-15) var(--sp-5); color: var(--t3); text-align: center;
+  font-size: var(--fs-md);
+}
 
 /* ── Playlists grid ───────────────────────────────────────── */
 .pl-card-active { border-color: rgba(var(--g-rgb),.5) !important; box-shadow: var(--shadow-pl-card); }
@@ -1613,6 +1675,10 @@ html[data-mode="light"] mark.srch-hl { background: rgba(var(--g-rgb), .22); }
 /* Mode list explicite */
 #content-area[data-view="list"] #tlist      { display: block; }
 #content-area[data-view="list"] #genre-grid { display: none !important; }
+
+/* Mode grille (albums / artistes / playlists) : masquer #tlist */
+#content-area[data-view="grid"] #tlist      { display: none !important; }
+#content-area[data-view="grid"] #genre-grid { display: none !important; }
 
 .genre-empty {
   grid-column: 1 / -1;
@@ -1744,8 +1810,10 @@ html[data-mode="light"] mark.srch-hl { background: rgba(var(--g-rgb), .22); }
 }
 .bc-back:hover { background: var(--bg3); color: var(--t); }
 .bc-back svg   { width: var(--icon-md); height: var(--icon-md); fill: currentColor; }
-.bc-sep { color: var(--t3); font-size: var(--fs-caption); }
-.bc-cur { font-size: var(--fs-md); color: var(--t); font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: min(var(--text-empty-max), 45vw); }
+.bc-sep  { color: var(--t3); font-size: var(--fs-caption); }
+.bc-cur  { font-size: var(--fs-md); color: var(--t); font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: min(var(--text-empty-max), 45vw); }
+.bc-link { background: none; border: none; cursor: pointer; color: var(--t3); font-size: var(--fs-md); padding: 0 var(--sp-1); border-radius: var(--r-sm); transition: color var(--ease); white-space: nowrap; }
+.bc-link:hover { color: var(--t); }
 
 /* ═══ ÉTATS VIDES ════════════════════════════════════════════ */
 .empty {
@@ -2822,7 +2890,7 @@ html[data-mode="light"] .orphan-item { border-bottom-color: var(--bg5); }
   display: flex; align-items: center; justify-content: center;
   transition: background var(--ease), color var(--ease);
 }
-.bte-cover-clear:hover { background: var(--danger); color: var(--text-on-accent); }
+.bte-cover-clear:hover { background: var(--red); color: var(--text-on-accent); }
 
 .bte-hint {
   font-size: var(--fs-sm); color: var(--t3); margin: 0 0 var(--sp-5);
@@ -3159,6 +3227,17 @@ html[data-mode="light"] .bte-cover-clear    { background: var(--bg3); border-col
 .ctx-item svg         { width: var(--icon-md); height: var(--icon-md); fill: currentColor; flex-shrink: 0; }
 .ctx-item.danger      { color: var(--red); }
 .ctx-item.danger:hover { background: rgba(var(--red-rgb),.1); }
+/* BEM modifiers (playlists ctx menu) */
+.ctx-item--danger      { color: var(--red); }
+.ctx-item--danger:hover { background: rgba(var(--red-rgb),.1); }
+.ctx-item--sub         { position: relative; }
+.ctx-item--sub:hover .ctx-submenu { display: block; }
+.ctx-submenu {
+  display: none; position: absolute; left: 100%; top: 0;
+  background: var(--bg2); border: var(--border-w-sm) solid var(--border-1);
+  border-radius: var(--r); box-shadow: var(--shadow-pop);
+  min-width: 160px; z-index: 200; padding: var(--sp-1q);
+}
 .ctx-sep              { height: var(--sep-h); background: var(--bg5); margin: var(--sp-1q) 0; }
 .ctx-submenu-lbl      { font-size: var(--fs-xs); font-weight: 700; color: var(--t3); letter-spacing: var(--ls-caps-sm); text-transform: uppercase; padding: var(--sp-1h) var(--sp-3) var(--sp-micro); }
 
@@ -3225,6 +3304,8 @@ html[data-mode="light"] .bte-cover-clear    { background: var(--bg3); border-col
 .pl-act-btn:hover  { background: var(--bg4); color: var(--t); border-color: var(--bg6); }
 .pl-act-btn:active { transform: scale(.96); }
 .pl-act-btn svg    { width: var(--icon-xs); height: var(--icon-xs); flex-shrink: 0; }
+/* Modificateur icône seul (ex: bouton ••• plus d'options) */
+.pl-act-btn.icon-btn { padding: var(--sp-1p) var(--sp-2); letter-spacing: .08em; }
 
 /* Actions header playlist */
 .pl-hdr-actions { display: flex; gap: var(--sp-1h); margin-left: auto; align-items: center; }
@@ -3491,6 +3572,24 @@ html[data-mode="light"] .pl-folder-h:hover .pl-folder-count { background: var(--
 .set-row:last-child { margin-bottom: 0; }
 .set-row-label   { font-size: var(--fs-md); color: var(--t2); line-height: var(--lh-comfort); }
 .set-row-sub     { font-size: var(--fs-sm); color: var(--t3); margin-top: var(--sp-micro); }
+
+/* ─── Toggle switch (ReplayGain, settings) ─── */
+.toggle-wrap   { position: relative; display: inline-block; width: 40px; height: 22px; flex-shrink: 0; cursor: pointer; }
+.toggle-wrap input { opacity: 0; width: 0; height: 0; position: absolute; }
+.toggle-slider {
+  position: absolute; inset: 0;
+  background: var(--bg5); border-radius: 22px;
+  transition: background var(--ease);
+}
+.toggle-slider::before {
+  content: ''; position: absolute;
+  width: 16px; height: 16px; left: 3px; bottom: 3px;
+  background: var(--t3); border-radius: 50%;
+  transition: transform var(--ease), background var(--ease);
+}
+.toggle-wrap input:checked + .toggle-slider            { background: var(--g); }
+.toggle-wrap input:checked + .toggle-slider::before    { transform: translateX(18px); background: #fff; }
+.toggle-wrap input:focus-visible + .toggle-slider      { outline: var(--border-w-lg) solid var(--g); outline-offset: 2px; }
 
 .lang-toggle  { display: flex; background: var(--bg4); border-radius: var(--r); padding: var(--sp-1q); gap: var(--sp-micro); }
 .lang-btn     { padding: var(--sp-1p) var(--sp-3h); border-radius: var(--r); border: none; font-size: var(--fs-caption); font-weight: 600; color: var(--t3); background: transparent; transition: background var(--ease), color var(--ease); }
@@ -4713,6 +4812,12 @@ kbd              { display: inline-flex; align-items: center; justify-content: c
 .stat-card-lbl { font-size: var(--fs-caption); color: var(--t3); font-weight: 500; }
 .stat-card-ico { position: absolute; right: var(--sp-4); top: var(--sp-4); opacity: .12; }
 .stat-card-ico svg { width: var(--icon-36); height: var(--icon-36); }
+.stat-card-trend { display: flex; align-items: center; gap: var(--sp-1); margin-top: var(--sp-1h); flex-wrap: wrap; }
+.stat-trend      { font-size: var(--fs-sm); font-weight: 600; }
+.stat-trend.up   { color: var(--green); }
+.stat-trend.down { color: var(--red); }
+.stat-trend.neutral { color: var(--t3); }
+.stat-trend-sub  { font-size: var(--fs-xs); color: var(--t3); margin-left: var(--sp-1); }
 
 /* Top tracks */
 .stats-top     { background: var(--bg2); border: var(--border-w-sm) solid var(--bg4); border-radius: var(--r-card); overflow: hidden; }
@@ -4911,7 +5016,7 @@ html.vinyl-spin #pl-img.art-loaded.vinyl-playing {
   to   { opacity: 1; transform: none; }
 }
 ::view-transition-old(view-title) {
-  animation: vtTitleOut var(--dur)ease both;
+  animation: vtTitleOut var(--dur) ease both;
 }
 ::view-transition-new(view-title) {
   animation: vtTitleIn  var(--dur-mid) var(--decelerate) both;
@@ -5710,7 +5815,7 @@ html[data-mode="light"] #mp-ov {
   transition: opacity var(--dur-fast) ease, color var(--dur-fast) ease, background var(--dur-fast) ease, transform var(--dur) var(--spring);
 }
 .rv-row:hover .rv-row-remove { opacity: .6; }
-.rv-row-remove:hover { opacity: 1 !important; color: var(--danger) !important; background: rgba(var(--red-rgb),.1); transform: scale(1.15); }
+.rv-row-remove:hover { opacity: 1 !important; color: var(--red) !important; background: rgba(var(--red-rgb),.1); transform: scale(1.15); }
 .rv-row-remove:active { transform: scale(.9); }
 
 /* Mini EQ animé sur la ligne active */

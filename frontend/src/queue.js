@@ -22,6 +22,7 @@ import { playAt }                         from './player.js';
 import { closeSettings } from './settings.js';
 import { emit, EVENTS } from './bus.js';
 import { toast } from './ui.js';
+import { setView } from './views.js';
 
 // ── State ────────────────────────────────────────────────────
 export let queueOpen  = false;
@@ -495,7 +496,8 @@ export function playQueueItem(id) {
   if (!t) return;
   const fi = getFiltered().findIndex(x => x.id === t.id);
   if (fi >= 0) { playAt(fi); return; }
-  // BUG-3 FIX : piste hors filtre → vider la recherche puis jouer
+  // UX-QUEUE-1 FIX : piste hors vue courante → basculer vers 'all' et jouer
+  // Couvre : filtre actif, vue "liked" (piste non aimée), vue "playlist" (piste absente)
   const srch = document.getElementById('srch');
   if (srch && srch.value) {
     srch.value = '';
@@ -503,14 +505,15 @@ export function playQueueItem(id) {
     if (clr) clr.style.display = 'none';
     set('query', '');
     invalidateFilterCache();
-    emit(EVENTS.FILTER_CHANGED, {});
-    emit(EVENTS.RENDER_LIB, {});
-    toast(i18n('t_queue_filter_cleared') || 'Recherche effacée pour jouer ce titre', 'info');
-    requestAnimationFrame(() => {
-      const fi2 = getFiltered().findIndex(x => x.id === t.id);
-      if (fi2 >= 0) playAt(fi2);
-    });
   }
+  setView('all', document.getElementById('ni-all'));
+  emit(EVENTS.FILTER_CHANGED, {});
+  emit(EVENTS.RENDER_LIB, {});
+  toast(i18n('t_queue_filter_cleared') || 'Vue réinitialisée pour jouer ce titre', 'info');
+  requestAnimationFrame(() => {
+    const fi2 = getFiltered().findIndex(x => x.id === t.id);
+    if (fi2 >= 0) playAt(fi2);
+  });
 }
 
 /**

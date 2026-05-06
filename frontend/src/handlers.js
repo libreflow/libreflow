@@ -59,7 +59,7 @@ import { goHome, setView, nextSort, nextAlbumSort, onSearch } from './views.js';
 import { setCinemaBg, toggleCinemaRadio }                      from './cinema.js';
 import { rescanGenres, drillGenre }                            from './genres.js';
 import { setLang }                                             from './i18n.js';
-import { playById, scrollToCurrentTrack }                      from './renderer.js';
+import { playById, scrollToCurrentTrack, drillDown }           from './renderer.js';
 import { closePlModal, clearPlCover,
          confirmPlaylistModal, onPlCoverSelected,
          openNewPlaylistModal, openRenamePlaylistModal,
@@ -198,6 +198,7 @@ const _ACTIONS = {
   'viz-toggle':      ()    => { setVizEnabled(!getVizEnabled()); _syncVizBtns(true); },
 
   // ── Window controls ───────────────────────────────────────
+  'win-minimize':    ()    => invoke('win_minimize'),
   'win-maximize':    ()    => invoke('win_maximize'),
   'win-close':       ()    => invoke('win_close'),
 
@@ -276,9 +277,20 @@ const _ACTIONS = {
   'likeat':                (btn, e) => likeat(e, btn.dataset.trackId, btn),
   'play-queue-item':       btn  => playQueueItem(btn.dataset.trackId),
 
-  // Genres
+  // Genres + grilles drill-down
   'drill-genre':           btn  => drillGenre(btn.dataset.key, btn.dataset.name),
+  'drill-album':           btn  => drillDown('albums',  btn.dataset.key, btn.dataset.name),
+  'drill-artist':          btn  => drillDown('artists', btn.dataset.key, btn.dataset.name),
   'rescan-genres':         ()   => rescanGenres(),
+
+  // Breadcrumb
+  'bc-navigate':           btn  => {
+    const idx = parseInt(btn.dataset.bcIdx, 10);
+    if (idx === 0) {
+      const drillFrom = get('drillFrom');
+      if (drillFrom) setView(drillFrom);
+    }
+  },
 
   // Stats
   'heat-period':           btn  => setHeatPeriod(+btn.dataset.days),

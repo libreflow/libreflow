@@ -1,0 +1,137 @@
+// mini.rs — Mini-player Tauri
+
+use serde_json::Value;
+use std::sync::Mutex;
+use tauri::{AppHandle, Emitter, Manager, WebviewWindowBuilder};
+
+pub struct MiniState(pub Mutex<Option<Value>>);
+
+#[tauri::command]
+pub async fn mini_toggle(app: AppHandle) -> Result<(), String> {
+    if let Some(win) = app.get_webview_window("mini") {
+        win.close().map_err(|e| e.to_string())?;
+    } else {
+        open_mini(&app).await?;
+    }
+    Ok(())
+}
+
+/// Ouvre le mini-player centré en bas de l'écran.
+/// Appelé aussi depuis commands.rs lors de la réduction de la fenêtre principale.
+/// BUG FIX M2 : vérification d'existence atomique avant création pour éviter double-open
+pub async fn open_mini(app: &AppHandle) -> Result<(), String> {
+    // Si déjà ouvert, juste le ramener au premier plan
+    if let Some(existing) = app.get_webview_window("mini") {
+        let _ = existing.show();
+        let _ = existing.set_focus();
+        return Ok(());
+    }
+    create_mini_window(app)
+}
+
+fn create_mini_window(app: &AppHandle) -> Result<(), String> {
+    let mini = WebviewWindowBuilder::new(app, "mini", tauri::WebviewUrl::App("mini.html".into()))
+        .title("LibreFlow Mini")
+        .inner_size(280.0, 360.0)
+        .min_inner_size(220.0, 260.0)
+        .max_inner_size(400.0, 520.0)
+        .decorations(false)
+        .always_on_top(true)
+        .resizable(true)
+        .skip_taskbar(true)
+        .build()
+        .map_err(|e| e.to_string())?;
+
+    // Positionner en bas de l'écran, centré horizontalement
+    if let Ok(Some(monitor)) = mini.current_monitor() {
+        let screen_w = monitor.size().width  as f64;
+        let screen_h = monitor.size().height as f64;
+        let scale    = monitor.scale_factor();
+
+        // Taille logique du mini (pixels indépendants de la densité)
+        let mini_w = 280.0_f64;
+        let mini_h = 360.0_f64;
+        let margin = 20.0_f64; // marge avec le bord bas de l'écran
+
+        // Centré horizontalement, collé en bas
+        let x = ((screen_w / scale) - mini_w) / 2.0 * scale;
+        let y = ((screen_h / scale) - mini_h - margin) * scale;
+
+        let _ = mini.set_position(tauri::PhysicalPosition::new(x as i32, y as i32));
+    }
+
+    // L'état initial est récupéré par mini.html via invoke('mini_get_state') au chargement.
+    // Pas besoin d'émettre depuis ici — évite une race condition si le webview n'est pas prêt.
+
+    Ok(())
+}
+
+/// Ferme le mini-player et restaure la fenêtre principale.
+/// Appelé depuis mini.html via le bouton fermer.
+#[tauri::command]
+pub async fn mini_close(app: AppHandle) -> Result<(), String> {
+    // Fermer le mini
+    if let Some(mini_win) = app.get_webview_window("mini") {
+        mini_win.close().map_err(|e| e.to_string())?;
+    }
+    // Restaurer la fenêtre principale
+    if let Some(main_win) = app.get_webview_window("main") {
+        let _ = main_win.unminimize();
+        // Remettre une taille raisonnable si la fenêtre était minimisée
+        // (le plugin window-state restaure la dernière taille connue,
+        //  mais après unminimize la fenêtre reste parfois à taille nulle)
+        let current = main_win.inner_size().ok();
+        let needs_resize = current.map(|s| s.width < 400 || s.height < 300).unwrap_or(true);
+        if needs_resize {
+            let _ = main_win.set_size(tauri::LogicalSize::new(1100.0_f64, 700.0_f64));
+            // Centrer sur le moniteur courant
+            if let Ok(Some(monitor)) = main_win.current_monitor() {
+                let sw = monitor.size().width  as f64 / monitor.scale_factor();
+                let sh = monitor.size().height as f64 / monitor.scale_factor();
+                let x  = ((sw - 1100.0) / 2.0 * monitor.scale_factor()) as i32;
+                let y  = ((sh -  700.0) / 2.0 * monitor.scale_factor()) as i32;
+                let _ = main_win.set_position(tauri::PhysicalPosition::new(x, y));
+            }
+        }
+        let _ = main_win.set_focus();
+    }
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn mini_update(app: AppHandle, data: Value) -> Result<(), String> {
+    if let Some(state) = app.try_state::<MiniState>() {
+        match state.0.lock() {
+            Ok(mut lock) => *lock = Some(data.clone()),
+            Err(e)       => eprintln!("[mini_update] mutex poisonné : {e}"),
+        }
+    }
+    if let Some(win) = app.get_webview_window("mini") {
+        let _ = win.emit("mini-update", &data);
+    }
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn mini_progress(app: AppHandle, data: Value) -> Result<(), String> {
+    if let Some(win) = app.get_webview_window("mini") {
+        let _ = win.emit("mini-progress", &data);
+    }
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn mini_get_state(app: AppHandle) -> Option<Value> {
+    // BUG FIX M1 : récupération explicite du mutex empoisonné au lieu de discard silencieux.
+    // BUG FIX E2 : bind le résultat du match dans une variable locale `x` pour satisfaire
+    // le borrow checker (le temporaire MutexGuard doit être droppé avant la fin du bloc).
+    let state = app.try_state::<MiniState>()?;
+    let x = match state.0.lock() {
+        Ok(guard)  => guard.clone(),
+        Err(poison) => {
+            eprintln!("[mini_get_state] mutex empoisonné, récupération des données");
+            poison.into_inner().clone()
+        }
+    };
+    x
+}

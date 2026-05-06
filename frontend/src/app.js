@@ -383,7 +383,7 @@ async function boot() {
     // We store them but flag them as needing file load
     tracks = saved.map(r => {
       // Re-apply mainArtist on load to fix any old bad data in DB
-      const artistFull = r.artistFull || r.artist || 'Artiste inconnu';
+      const artistFull = r.artistFull || r.artist || i18n('unknown_artist');
       const artist     = mainArtist(artistFull) || artistFull;
       return {
         id: r.id, name: r.name,
@@ -465,7 +465,9 @@ async function boot() {
     applyLang();
     setMode(getDisplayMode());
     document.getElementById('pc-shuf')?.classList.toggle('on', shuffle);
+    document.getElementById('pc-shuf')?.setAttribute('aria-pressed', String(shuffle));
     document.getElementById('pc-rep')?.classList.toggle('on', repeat !== 'none');
+    document.getElementById('pc-rep')?.setAttribute('aria-pressed', String(repeat !== 'none'));
     if (getWatchPath()) updateWatchUI();
     setTimeout(updateVolSlider, 100);
     if (playbackSpeed !== 1) setSpeed(playbackSpeed);
@@ -506,7 +508,7 @@ async function boot() {
           updateBar();
           patchActiveTrack();
           // UX-5: toast de session restaurée
-          const _resumeTitle = resumeTrack.title || resumeTrack.file?.split(/[\\/]/).pop() || '…';
+          const _resumeTitle = resumeTrack.name || resumeTrack.file?.split(/[\\/]/).pop() || '…';
           toast(i18n('t_session_restored', _resumeTitle), 'info');
           // On ne relance PAS la lecture — l'utilisateur choisit de reprendre
         }
@@ -518,7 +520,9 @@ async function boot() {
     applyLang();
     setMode(getDisplayMode());
     document.getElementById('pc-shuf')?.classList.toggle('on', shuffle);
+    document.getElementById('pc-shuf')?.setAttribute('aria-pressed', String(shuffle));
     document.getElementById('pc-rep')?.classList.toggle('on', repeat !== 'none');
+    document.getElementById('pc-rep')?.setAttribute('aria-pressed', String(repeat !== 'none'));
     if (getWatchPath()) updateWatchUI();
     setTimeout(updateVolSlider, 100);
     if (playbackSpeed !== 1) setSpeed(playbackSpeed);
@@ -537,7 +541,7 @@ async function boot() {
   // Sans ça, les listeners Tauri survivent à un rechargement → handlers doublés.
   const _unlisteners = [];
   listen('win-state', (e) => { const s = e.payload;
-    document.getElementById('tbt-max').title = (s==='maximized'||s==='fullscreen') ? 'Restaurer' : 'Agrandir';
+    document.getElementById('tbt-max').title = (s==='maximized'||s==='fullscreen') ? i18n('tb_restore') : i18n('tb_maximize');
   }, { target: { kind: 'Any' } }).then(u => _unlisteners.push(u));
   listen('media-key', function(e) { const cmd = e.payload;
     if      (cmd === 'toggle-play') togglePlay();
@@ -560,7 +564,7 @@ async function boot() {
       // 2. Toutes les saves en parallèle — allSettled garantit qu'aucune rejection ne coupe les autres
       await Promise.allSettled([
         _doSaveCfg(),
-        _flushTrackBatch(),
+        flushTrackBatch(),
         flushPlayLog(),
       ]);
       return true;
@@ -710,7 +714,7 @@ document.addEventListener('drop', async e=>{
       a.addEventListener('error',()=>done(0),{once:true});
       setTimeout(()=>done(a.duration||0),3000);
     });
-    const t={id:crypto.randomUUID?crypto.randomUUID():Math.random().toString(36).slice(2)+Date.now(),name:file.name.replace(/\.[^.]+$/,'').replace(/[-_]+/g,' ').trim(),artist:'Artiste inconnu',artistFull:'Artiste inconnu',album:'',ext,path:file.webkitRelativePath||file.name,duration:dur,dateAdded:Date.now(),art:null,artColor:null,url,file,metaDone:false};
+    const t={id:crypto.randomUUID?crypto.randomUUID():Math.random().toString(36).slice(2)+Date.now(),name:file.name.replace(/\.[^.]+$/,'').replace(/[-_]+/g,' ').trim(),artist:i18n('unknown_artist'),artistFull:i18n('unknown_artist'),album:'',ext,path:file.webkitRelativePath||file.name,duration:dur,dateAdded:Date.now(),art:null,artColor:null,url,file,metaDone:false};
     newTracks.push(t); document.getElementById('sn').textContent=newTracks.length;
   }
   tracks.push(...newTracks); set('tracks', tracks); emit(EVENTS.LIBRARY_UPDATED, { tracks }); rebuildTrackIdxMap(); invalidateFilter(); updateStats(); renderLib(); showView('lib');
@@ -952,7 +956,7 @@ function spawnRipple(el, x, y) {
   rpl.addEventListener('animationend', () => rpl.remove(), { once: true });
 }
 document.addEventListener('pointerdown', (e) => {
-  const el = e.target.closest('.tr, .tbt, .pc, .tb-icon-btn, .mbtn');
+  const el = e.target.closest('.tr, .tbt, .pc, .tb-icon-btn, .mbtn, .pl-card, .sb-item');
   if (el && !el.classList.contains('tr-skel')) spawnRipple(el, e.clientX, e.clientY);
 }, { passive: true });
 
@@ -1224,14 +1228,20 @@ export async function clearLibrary() {
   document.getElementById('tc').textContent       = '0:00';
   document.getElementById('td').textContent       = '–:––';
   document.getElementById('pl-lk').classList.remove('on');
+  document.getElementById('pl-lk').setAttribute('aria-pressed', 'false');
   document.getElementById('cinema-lk')?.classList.remove('on');
+  document.getElementById('cinema-lk')?.setAttribute('aria-pressed', 'false');
   document.getElementById('pc-shuf').classList.remove('on');
+  document.getElementById('pc-shuf').setAttribute('aria-pressed', 'false');
   document.getElementById('cinema-shuf')?.classList.remove('on');
+  document.getElementById('cinema-shuf')?.setAttribute('aria-pressed', 'false');
   document.getElementById('pc-rep').classList.remove('on');
+  document.getElementById('pc-rep').setAttribute('aria-pressed', 'false');
   document.getElementById('cinema-rep')?.classList.remove('on');
+  document.getElementById('cinema-rep')?.setAttribute('aria-pressed', 'false');
   setIcon(false);
   // Stats sidebar
-  document.getElementById('sb-stats').innerHTML  = 'Aucune musique importée';
+  document.getElementById('sb-stats').innerHTML  = i18n('sb_empty');
   const _btnClear = document.getElementById('btn-clear');
   if (_btnClear) _btnClear.disabled = true;
   // Vider IndexedDB

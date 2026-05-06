@@ -1,0 +1,365 @@
+// taskbar.rs — Windows Thumbnail Toolbar (Précédent / Play-Pause / Suivant)
+// v2 : icônes 24×24, leak HIMAGELIST corrigé, état disabled prev/next/play,
+//      emit ciblé sur la fenêtre "main" (fix boutons non-fonctionnels).
+
+#![cfg(target_os = "windows")]
+#![allow(non_snake_case, unsafe_code, clippy::cast_ptr_alignment)]
+
+use std::sync::{Mutex, OnceLock};
+
+use tauri::{AppHandle, Emitter, Manager};
+use tokio::sync::mpsc;
+
+use windows::{
+    Win32::{
+        Foundation::{BOOL, COLORREF, HWND, LPARAM, LRESULT, POINT, RECT, WPARAM},
+        Graphics::Gdi::{
+            CreateBitmap, CreateCompatibleBitmap, CreateCompatibleDC, CreatePen,
+            CreateSolidBrush, DeleteDC, DeleteObject, FillRect, GetDC, Polygon,
+            ReleaseDC, SelectObject, HBITMAP, HBRUSH, HDC, HGDIOBJ, HPEN, PS_SOLID,
+        },
+        System::Com::{
+            CoCreateInstance, CoInitializeEx, CLSCTX_ALL, COINIT_APARTMENTTHREADED,
+        },
+        UI::{
+            Controls::{
+                ImageList_Create, ImageList_Destroy, ImageList_ReplaceIcon,
+                HIMAGELIST, ILC_COLOR32,
+            },
+            Shell::{
+                DefSubclassProc, ITaskbarList3, SetWindowSubclass, TaskbarList,
+                THUMBBUTTON, THUMBBUTTONFLAGS, THBF_DISABLED, THBF_ENABLED, THBF_NOBACKGROUND,
+                THB_BITMAP, THB_FLAGS, THB_TOOLTIP,
+            },
+            WindowsAndMessaging::{
+                CreateIconIndirect, DestroyIcon, HICON, ICONINFO, WM_COMMAND,
+            },
+        },
+    },
+};
+
+// ── Helper : récupère un MutexGuard même si le mutex est poisonné ─────────
+// Pattern recommandé : au lieu de paniquer sur le lock suivant un thread panic,
+// on récupère la donnée (probablement cohérente) et on continue.
+fn lock_recover<T>(m: &'static Mutex<T>) -> std::sync::MutexGuard<'static, T> {
+    m.lock().unwrap_or_else(|poison| {
+        eprintln!("[taskbar] mutex poisonné — récupération gracieuse");
+        poison.into_inner()
+    })
+}
+
+// ── Identifiants boutons ────────────────────────────────────────────────────
+const BTN_PREV: u32 = 0x4001;
+const BTN_PLAY: u32 = 0x4002;
+const BTN_NEXT: u32 = 0x4003;
+
+const IMG_PREV: u32 = 0;
+const IMG_PLAY: u32 = 1;
+const IMG_NEXT: u32 = 2;
+
+const SUBCLASS_UID: usize = 0x4C46_0001; // "LF" taskbar
+const ICON_SIZE:    i32   = 24;           // 24×24 pour une meilleure lisibilité
+
+// ── État global ─────────────────────────────────────────────────────────────
+static MAIN_HWND:  Mutex<isize> = Mutex::new(0);
+static CUR_IL:     Mutex<isize> = Mutex::new(0); // HIMAGELIST courante (raw handle)
+static PLAYING:    Mutex<bool>  = Mutex::new(false);
+static HAS_TRACKS: Mutex<bool>  = Mutex::new(false);
+
+// Canal mpsc pour pont FFI → Tokio (try_send non-bloquant depuis Win32 callback)
+static BTN_TX: OnceLock<mpsc::Sender<String>> = OnceLock::new();
+
+// ── API publique ─────────────────────────────────────────────────────────────
+
+/// Initialise la thumbnail toolbar. Appelé une seule fois depuis main.rs au setup.
+pub fn setup(hwnd_raw: isize, app: AppHandle) {
+    unsafe { setup_impl(hwnd_raw, app) }
+}
+
+/// Met à jour l'icône Play/Pause.
+pub fn update_play_state(playing: bool) {
+    *lock_recover(&PLAYING) = playing;
+    unsafe { refresh_toolbar() }
+}
+
+/// Active/désactive les boutons selon la présence de pistes.
+pub fn update_has_tracks(has: bool) {
+    *lock_recover(&HAS_TRACKS) = has;
+    unsafe { refresh_toolbar() }
+}
+
+// ── Implémentation ───────────────────────────────────────────────────────────
+
+unsafe fn setup_impl(hwnd_raw: isize, app: AppHandle) {
+    let hwnd = HWND(hwnd_raw as *mut _);
+    *lock_recover(&MAIN_HWND) = hwnd_raw;
+
+    // Canal mpsc : seul try_send (non-bloquant, sans allocation) sera appelé depuis
+    // le Win32 message-loop thread → aucun risque de panique à travers la FFI boundary.
+    // Le receiver tourne dans le runtime Tokio et peut appeler win.emit() sans restriction.
+    let (tx, mut rx) = mpsc::channel::<String>(8);
+    BTN_TX.set(tx).ok();
+    let app_for_rx = app.clone();
+    tauri::async_runtime::spawn(async move {
+        while let Some(key) = rx.recv().await {
+            if let Some(win) = app_for_rx.get_webview_window("main") {
+                let _ = win.emit("media-key", key);
+            }
+        }
+    });
+
+    // Sous-classer la fenêtre pour intercepter WM_COMMAND des boutons thumbnail.
+    // data = 0 : le subclass_proc n'a plus besoin de l'AppHandle (il utilise BTN_TX).
+    let _ = SetWindowSubclass(hwnd, Some(subclass_proc), SUBCLASS_UID, 0);
+
+    let _ = CoInitializeEx(None, COINIT_APARTMENTTHREADED);
+    let Ok(tb3) = CoCreateInstance::<_, ITaskbarList3>(&TaskbarList, None, CLSCTX_ALL)
+        else { return; };
+    if tb3.HrInit().is_err() { return; }
+
+    let playing    = *lock_recover(&PLAYING);
+    let has_tracks = *lock_recover(&HAS_TRACKS);
+    let il = build_image_list(playing);
+    swap_il(il);
+    let _ = tb3.ThumbBarSetImageList(hwnd, cur_il());
+    let _ = tb3.ThumbBarAddButtons(hwnd, &mk_buttons(playing, has_tracks));
+}
+
+/// Reconstruit l'image list et met à jour les boutons.
+unsafe fn refresh_toolbar() {
+    let hwnd_raw = *lock_recover(&MAIN_HWND);
+    if hwnd_raw == 0 { return; }
+    let hwnd = HWND(hwnd_raw as *mut _);
+
+    let playing    = *lock_recover(&PLAYING);
+    let has_tracks = *lock_recover(&HAS_TRACKS);
+
+    let _ = CoInitializeEx(None, COINIT_APARTMENTTHREADED);
+    let Ok(tb3) = CoCreateInstance::<_, ITaskbarList3>(&TaskbarList, None, CLSCTX_ALL)
+        else { return; };
+    if tb3.HrInit().is_err() { return; }
+
+    let il = build_image_list(playing);
+    swap_il(il);                                           // détruit l'ancienne
+    let _ = tb3.ThumbBarSetImageList(hwnd, cur_il());
+    let _ = tb3.ThumbBarUpdateButtons(hwnd, &mk_buttons(playing, has_tracks));
+}
+
+// ── Gestion HIMAGELIST ───────────────────────────────────────────────────────
+
+/// Remplace la HIMAGELIST courante et détruit l'ancienne (fix memory leak).
+unsafe fn swap_il(new_il: HIMAGELIST) {
+    let old_raw = {
+        let mut g = lock_recover(&CUR_IL);
+        let old = *g;
+        *g = new_il.0 as isize;
+        old
+    };
+    if old_raw != 0 {
+        // Ignorer le résultat — handle peut déjà être invalide après recréation du taskbar
+        let _ = ImageList_Destroy(HIMAGELIST(old_raw));
+    }
+}
+
+fn cur_il() -> HIMAGELIST {
+    HIMAGELIST(*lock_recover(&CUR_IL))
+}
+
+// ── Boutons ──────────────────────────────────────────────────────────────────
+
+fn mk_buttons(playing: bool, has_tracks: bool) -> [THUMBBUTTON; 3] {
+    let nav_flags = if has_tracks {
+        THBF_ENABLED | THBF_NOBACKGROUND
+    } else {
+        THBF_DISABLED | THBF_NOBACKGROUND
+    };
+    let play_flags = if has_tracks {
+        THBF_ENABLED | THBF_NOBACKGROUND
+    } else {
+        THBF_DISABLED | THBF_NOBACKGROUND
+    };
+    let play_tip = if playing { "Pause" } else { "Play" };
+    [
+        thumb_btn(BTN_PREV, IMG_PREV, "Previous", nav_flags),
+        thumb_btn(BTN_PLAY, IMG_PLAY, play_tip,   play_flags),
+        thumb_btn(BTN_NEXT, IMG_NEXT, "Next",      nav_flags),
+    ]
+}
+
+fn thumb_btn(id: u32, img: u32, tip: &str, flags: THUMBBUTTONFLAGS) -> THUMBBUTTON {
+    let mut tb = THUMBBUTTON::default();
+    tb.dwMask  = THB_BITMAP | THB_FLAGS | THB_TOOLTIP;
+    tb.iId     = id;
+    tb.iBitmap = img;
+    tb.dwFlags = flags;
+    let wide: Vec<u16> = tip.encode_utf16().collect();
+    let n = wide.len().min(tb.szTip.len() - 1);
+    tb.szTip[..n].copy_from_slice(&wide[..n]);
+    tb
+}
+
+// ── Image list ───────────────────────────────────────────────────────────────
+
+unsafe fn build_image_list(playing: bool) -> HIMAGELIST {
+    let icons = [
+        make_icon_prev(),
+        if playing { make_icon_pause() } else { make_icon_play() },
+        make_icon_next(),
+    ];
+    let il = ImageList_Create(ICON_SIZE, ICON_SIZE, ILC_COLOR32, 3, 0);
+    for &ic in &icons {
+        if !ic.is_invalid() {
+            ImageList_ReplaceIcon(il, -1, ic);
+        }
+        let _ = DestroyIcon(ic);
+    }
+    il
+}
+
+// ── Icônes GDI 24×24 ─────────────────────────────────────────────────────────
+//
+// Convention : fond noir (#000000), formes plein blanc (#FFFFFF).
+// Les couleurs réelles dans la thumbnail toolbar sont remplacées par Windows
+// selon le thème système → le noir devient transparent, le blanc devient
+// la couleur de l'icône système (blanc en mode sombre, gris en mode clair).
+
+unsafe fn make_icon<F: Fn(HDC)>(draw_fn: F) -> HICON {
+    let s = ICON_SIZE;
+    let hdc_screen = GetDC(HWND(std::ptr::null_mut()));
+    let mem_dc     = CreateCompatibleDC(hdc_screen);
+    let color_bm   = CreateCompatibleBitmap(hdc_screen, s, s);
+    ReleaseDC(HWND(std::ptr::null_mut()), hdc_screen);
+
+    let old_bm = SelectObject(mem_dc, HGDIOBJ(color_bm.0));
+
+    // Fond entièrement noir (deviendra transparent dans la thumbnail toolbar)
+    let black_brush: HBRUSH = CreateSolidBrush(COLORREF(0x0000_0000));
+    let full_rect = RECT { left: 0, top: 0, right: s, bottom: s };
+    FillRect(mem_dc, &full_rect, black_brush);
+    let _ = DeleteObject(HGDIOBJ(black_brush.0));
+
+    // Stylet et brosse blancs pour les formes
+    let white_pen:   HPEN   = CreatePen(PS_SOLID, 0, COLORREF(0x00FF_FFFF));
+    let white_brush: HBRUSH = CreateSolidBrush(COLORREF(0x00FF_FFFF));
+    let old_pen  = SelectObject(mem_dc, HGDIOBJ(white_pen.0));
+    let old_brsh = SelectObject(mem_dc, HGDIOBJ(white_brush.0));
+
+    draw_fn(mem_dc);
+
+    SelectObject(mem_dc, old_pen);
+    SelectObject(mem_dc, old_brsh);
+    let _ = DeleteObject(HGDIOBJ(white_pen.0));
+    let _ = DeleteObject(HGDIOBJ(white_brush.0));
+    SelectObject(mem_dc, old_bm);
+    let _ = DeleteDC(mem_dc);
+
+    // Masque monochrome tout à zéro = zones opaques partout
+    let mask_bm: HBITMAP = CreateBitmap(s, s, 1, 1, None);
+    let ii = ICONINFO {
+        fIcon: BOOL(1),
+        xHotspot: 0,
+        yHotspot: 0,
+        hbmMask:  mask_bm,
+        hbmColor: color_bm,
+    };
+    let icon = CreateIconIndirect(&ii).unwrap_or(HICON(std::ptr::null_mut()));
+    let _ = DeleteObject(HGDIOBJ(color_bm.0));
+    let _ = DeleteObject(HGDIOBJ(mask_bm.0));
+    icon
+}
+
+// ⏮ Précédent : barre verticale gauche + triangle pointant à gauche
+unsafe fn make_icon_prev() -> HICON {
+    make_icon(|dc| {
+        // Barre verticale gauche (3 px de large, marges 3px)
+        let bar = [
+            POINT { x: 3,  y: 3  }, POINT { x: 6,  y: 3  },
+            POINT { x: 6,  y: 21 }, POINT { x: 3,  y: 21 },
+        ];
+        let _ = Polygon(dc, &bar);
+        // Triangle pointe à gauche (apex x=7, base x=21)
+        let tri = [
+            POINT { x: 21, y: 3  },
+            POINT { x: 21, y: 21 },
+            POINT { x: 7,  y: 12 },
+        ];
+        let _ = Polygon(dc, &tri);
+    })
+}
+
+// ▶ Lecture : triangle pointant à droite, centré
+unsafe fn make_icon_play() -> HICON {
+    make_icon(|dc| {
+        let tri = [
+            POINT { x: 4,  y: 2  },
+            POINT { x: 4,  y: 22 },
+            POINT { x: 21, y: 12 },
+        ];
+        let _ = Polygon(dc, &tri);
+    })
+}
+
+// ⏸ Pause : deux barres verticales
+unsafe fn make_icon_pause() -> HICON {
+    make_icon(|dc| {
+        let b1 = [
+            POINT { x: 4,  y: 3  }, POINT { x: 9,  y: 3  },
+            POINT { x: 9,  y: 21 }, POINT { x: 4,  y: 21 },
+        ];
+        let _ = Polygon(dc, &b1);
+        let b2 = [
+            POINT { x: 15, y: 3  }, POINT { x: 20, y: 3  },
+            POINT { x: 20, y: 21 }, POINT { x: 15, y: 21 },
+        ];
+        let _ = Polygon(dc, &b2);
+    })
+}
+
+// ⏭ Suivant : triangle pointant à droite + barre verticale droite
+unsafe fn make_icon_next() -> HICON {
+    make_icon(|dc| {
+        // Triangle pointe à droite (apex x=17, base x=3)
+        let tri = [
+            POINT { x: 3,  y: 3  },
+            POINT { x: 3,  y: 21 },
+            POINT { x: 17, y: 12 },
+        ];
+        let _ = Polygon(dc, &tri);
+        // Barre verticale droite
+        let bar = [
+            POINT { x: 18, y: 3  }, POINT { x: 21, y: 3  },
+            POINT { x: 21, y: 21 }, POINT { x: 18, y: 21 },
+        ];
+        let _ = Polygon(dc, &bar);
+    })
+}
+
+// ── Subclass proc ─────────────────────────────────────────────────────────────
+
+unsafe extern "system" fn subclass_proc(
+    hwnd: HWND,
+    msg: u32,
+    wparam: WPARAM,
+    lparam: LPARAM,
+    _uid: usize,
+    _data: usize,
+) -> LRESULT {
+    if msg == WM_COMMAND {
+        let btn_id = (wparam.0 & 0xFFFF) as u32;
+        let key = match btn_id {
+            BTN_PREV => Some("prev"),
+            BTN_PLAY => Some("toggle-play"),
+            BTN_NEXT => Some("next"),
+            _        => None,
+        };
+        if let Some(k) = key {
+            // try_send est non-bloquant et sans panique → sûr depuis un callback Win32 FFI.
+            // Le receiver Tokio (spawné dans setup_impl) appellera win.emit() côté async.
+            if let Some(tx) = BTN_TX.get() {
+                let _ = tx.try_send(k.to_string());
+            }
+            return LRESULT(0);
+        }
+    }
+    DefSubclassProc(hwnd, msg, wparam, lparam)
+}

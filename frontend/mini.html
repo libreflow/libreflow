@@ -1,0 +1,1286 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<title>LibreFlow Mini</title>
+<style>
+@font-face { font-family:'Syne';    font-weight:700;     font-style:normal; font-display:swap; src:url('/fonts/syne-700.woff2')    format('woff2'); }
+@font-face { font-family:'DM Sans'; font-weight:300; font-style:normal;  font-display:swap; src:url('/fonts/dm-sans-300.woff2')  format('woff2'); }
+@font-face { font-family:'DM Sans'; font-weight:400; font-style:normal;  font-display:swap; src:url('/fonts/dm-sans-400.woff2')  format('woff2'); }
+@font-face { font-family:'DM Sans'; font-weight:500; font-style:normal;  font-display:swap; src:url('/fonts/dm-sans-500.woff2')  format('woff2'); }
+
+@property --g {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #3b82f6;
+}
+
+*, *::before, *::after { margin:0; padding:0; box-sizing:border-box; }
+
+/* ── Tokens ────────────────────────────────────────────────── */
+:root {
+  --g:       #3b82f6;
+  transition: --g 0.8s ease;
+  --gd:      rgba(59,130,246,.14);
+  --gg:      rgba(59,130,246,.28);
+  --bg:      #0d0d0d;
+  --bg1:     #111111;
+  --bg2:     #161616;
+  --bg3:     #1e1e1e;
+  --bg4:     #262626;
+  --t:       #ffffff;
+  --t2:      #a0a0a0;
+  --t3:      #717171;
+  --dur:     150ms;
+  --ease:    var(--dur) ease;
+  --spring:  cubic-bezier(.34,1.56,.64,1);
+  --smooth:  cubic-bezier(.4,0,.2,1);
+  --font:    'DM Sans', -apple-system, 'Segoe UI', sans-serif;
+  --g-rgb:   59,130,246;
+  --vol-pct: 100; /* valeur initiale pour l'input volume (définie aussi via JS) */
+}
+
+[data-theme="green"]  { --g:#1db954; --gd:rgba(29,185,84,.14);  --gg:rgba(29,185,84,.28);  --g-rgb:29,185,84;   }
+[data-theme="blue"]   { --g:#3b82f6; --gd:rgba(59,130,246,.14); --gg:rgba(59,130,246,.28); --g-rgb:59,130,246;  }
+[data-theme="purple"] { --g:#a855f7; --gd:rgba(168,85,247,.14); --gg:rgba(168,85,247,.28); --g-rgb:168,85,247;  }
+[data-theme="red"]    { --g:#ef4444; --gd:rgba(239,68,68,.14);  --gg:rgba(239,68,68,.28);  --g-rgb:239,68,68;   }
+[data-theme="orange"] { --g:#f97316; --gd:rgba(249,115,22,.14); --gg:rgba(249,115,22,.28); --g-rgb:249,115,22;  }
+[data-theme="pink"]   { --g:#ec4899; --gd:rgba(236,72,153,.14); --gg:rgba(236,72,153,.28); --g-rgb:236,72,153;  }
+[data-theme="cyan"]   { --g:#06b6d4; --gd:rgba(6,182,212,.14);  --gg:rgba(6,182,212,.28);  --g-rgb:6,182,212;   }
+
+/* html = noir pur derrière le border-radius (WebView2 corners) */
+html { background: #000; }
+html, body { height: 100%; width: 100%; overflow: hidden; }
+
+body {
+  font-family: var(--font);
+  font-size: 13px;
+  -webkit-font-smoothing: antialiased;
+  user-select: none;
+  -webkit-user-select: none;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  border-radius: 14px;
+  border: 1px solid color-mix(in srgb, var(--g) 38%, transparent);
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--g) 15%, transparent),
+    0 20px 56px rgba(0,0,0,.85),
+    inset 0 1px 0 rgba(255,255,255,.06);
+  overflow: hidden;
+  container-type: inline-size;
+  color: #fff;
+}
+
+/* ── Artwork full-bleed (couche la plus basse) ─────────────── */
+#art-bg {
+  position: absolute; inset: 0;
+  z-index: 0;
+  background: #0e0e0e;
+}
+#art-img {
+  position: absolute; inset: 0;
+  width: 100%; height: 100%;
+  object-fit: cover;
+  opacity: 0;
+  transition: opacity .7s ease;
+}
+#art-img.on { opacity: 1; }
+.art-em {
+  position: absolute; inset: 0;
+  display: flex; align-items: center; justify-content: center;
+}
+.art-em svg {
+  width: 26%; height: 26%;
+  fill: rgba(255,255,255,.08);
+  stroke: none;
+}
+
+/* ── Fond ambiant (couleur extraite, flouté) ───────────────── */
+#ambient-canvas {
+  position: absolute; inset: 0;
+  z-index: 1;
+  width: 100%; height: 100%;
+  opacity: 0;
+  transition: opacity 1.4s ease;
+  pointer-events: none;
+}
+#ambient-canvas.on { opacity: 1; }
+
+/* ── Gradient overlay : lisibilité titlebar + panel bas ─────── */
+#art-overlay {
+  position: absolute; inset: 0;
+  z-index: 2;
+  background: linear-gradient(
+    to bottom,
+    rgba(0,0,0,.38) 0%,
+    rgba(0,0,0,.08) 15%,
+    transparent     32%,
+    transparent     55%,
+    rgba(0,0,0,.55) 72%,
+    rgba(0,0,0,.90) 100%
+  );
+  pointer-events: none;
+}
+
+/* ── Titlebar ───────────────────────────────────────────────── */
+.titlebar {
+  -webkit-app-region: drag;
+  position: relative;
+  z-index: 20;
+  flex-shrink: 0;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 5px 0 9px;
+}
+
+/* Logo LibreFlow — blanc (toujours sur fond sombre) */
+.tb-logo {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  opacity: .65;
+  transition: opacity var(--dur) var(--smooth);
+  -webkit-app-region: drag;
+}
+body:hover .tb-logo { opacity: .85; }
+.tb-logo img {
+  width: 13px; height: 13px;
+  flex-shrink: 0;
+  /* filtre blanc pour que l'icône soit blanche sur fond sombre */
+  filter: brightness(0) invert(1);
+}
+.tb-logo-name {
+  font-size: 10px;
+  font-weight: 700;
+  font-family: 'Syne', var(--font);
+  color: #fff;
+  letter-spacing: .07em;
+  text-transform: uppercase;
+}
+
+/* Sys-buttons */
+.sys-btns {
+  -webkit-app-region: no-drag;
+  display: flex;
+  gap: 2px;
+  opacity: 0;
+  transition: opacity var(--dur) var(--smooth);
+}
+body:hover .sys-btns { opacity: 1; }
+.sys-btn {
+  width: 18px; height: 18px;
+  border-radius: 4px;
+  background: rgba(0,0,0,.35);
+  border: none;
+  color: rgba(255,255,255,.6);
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer;
+  transition: background var(--ease), color var(--ease);
+  backdrop-filter: blur(6px);
+}
+.sys-btn:hover { background: rgba(var(--g-rgb, 59,130,246),.22); color: #fff; }
+.sys-btn.home:hover  { color: var(--g); }
+.sys-btn.close:hover { background: rgba(var(--red-rgb, 232,64,64),.25); color: var(--red); }
+.sys-btn svg {
+  width: 8px; height: 8px;
+  stroke: currentColor; fill: none;
+  stroke-width: 2; stroke-linecap: round; stroke-linejoin: round;
+  pointer-events: none;
+}
+.sys-btn.home svg { width: 9px; height: 9px; }
+.sys-sep {
+  width: 1px; height: 10px;
+  background: rgba(255,255,255,.12);
+  margin: 0 1px;
+  align-self: center;
+}
+
+/* ── Zone centrale — pochette + drag ───────────────────────── */
+.flex-spacer {
+  flex: 1;
+  min-height: 64px;
+  position: relative;
+  z-index: 5;
+  -webkit-app-region: drag;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px 0 6px;
+  overflow: hidden;
+}
+
+/* Carte pochette centrée */
+.art-card-wrap {
+  -webkit-app-region: no-drag;
+  position: relative;
+  width:  clamp(60px, 46cqw, 130px);
+  height: clamp(60px, 46cqw, 130px);
+  flex-shrink: 0;
+}
+#art-card-img {
+  display: block;
+  width: 100%; height: 100%;
+  object-fit: cover;
+  border-radius: 10px;
+  opacity: 0;
+  transition: opacity .55s ease, border-radius .5s ease,
+              box-shadow .8s ease;
+  box-shadow:
+    0 6px 28px rgba(0,0,0,.65),
+    0 0 0 1px rgba(255,255,255,.10),
+    0 0 32px color-mix(in srgb, var(--g) 38%, transparent);
+  will-change: transform, opacity;
+}
+#art-card-img.on { opacity: 1; }
+
+/* Animation entrée piste — scale + fade */
+@keyframes artCardIn {
+  from { transform: scale(0.88); opacity: 0; }
+  to   { transform: scale(1);    opacity: 1; }
+}
+#art-card-img.track-in {
+  animation: artCardIn .45s cubic-bezier(.34,1.4,.64,1) forwards;
+}
+@media (prefers-reduced-motion: reduce) {
+  #art-card-img.track-in { animation: none; }
+}
+
+/* Placeholder quand pas de pochette — couleur accent */
+.art-card-ph {
+  position: absolute; inset: 0;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 10px;
+  background: linear-gradient(135deg,
+    color-mix(in srgb, var(--g) 28%, #111),
+    color-mix(in srgb, var(--g) 12%, #0a0a0a));
+  border: 1px solid color-mix(in srgb, var(--g) 22%, transparent);
+  opacity: 0;
+  transition: opacity .4s ease, background .8s ease, border-color .8s ease;
+}
+.art-card-ph.on { opacity: 1; }
+/* Initiales artiste */
+.art-card-ph-init {
+  font-size: clamp(22px, 8cqw, 42px);
+  font-weight: 800;
+  font-family: 'Syne', var(--font);
+  color: color-mix(in srgb, var(--g) 90%, #fff);
+  letter-spacing: -.03em;
+  text-shadow: 0 2px 12px rgba(0,0,0,.4);
+  user-select: none;
+}
+
+/* ── Marquee titre long ──────────────────────────────────────── */
+.track-name-row {
+  min-width: 0;
+  overflow: hidden;
+}
+.track-name {
+  display: inline-block;
+}
+.track-name.marquee {
+  animation: miniMarquee 11s ease-in-out infinite;
+  animation-delay: 1.2s;
+}
+@keyframes miniMarquee {
+  0%, 18%  { transform: translateX(0); }
+  72%, 90% { transform: translateX(var(--mq-offset, -40px)); }
+  100%     { transform: translateX(0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .track-name.marquee { animation: none; }
+}
+
+/* ── Panel inférieur ────────────────────────────────────────── */
+.bottom-panel {
+  position: relative;
+  z-index: 10;
+  flex-shrink: 0;
+  padding: 6px 16px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  -webkit-app-region: no-drag;
+  overflow: hidden;
+}
+
+/* ── Info piste ─────────────────────────────────────────────── */
+.info {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  align-items: center;
+  text-align: center;
+}
+.track-name-row {
+  min-width: 0;
+  width: 100%;
+  overflow: hidden;
+  text-align: center;
+}
+.track-name {
+  font-size: 13px;
+  font-weight: 700;
+  font-family: 'Syne', var(--font);
+  color: #fff;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  letter-spacing: -.03em;
+  line-height: 1.3;
+  cursor: pointer;
+  transition: opacity var(--dur) var(--smooth);
+}
+.track-name:hover { opacity: .75; }
+.radio-artist-row {
+  display: flex; align-items: center; justify-content: center;
+  gap: 5px; min-width: 0; width: 100%; overflow: hidden;
+}
+.radio-badge {
+  flex-shrink: 0;
+  display: flex; align-items: center; gap: 3px;
+  font-size: 8px; font-weight: 800; letter-spacing: .06em;
+  color: var(--g);
+  line-height: 1;
+}
+.radio-badge-dot {
+  width: 5px; height: 5px; border-radius: 50%;
+  background: var(--g); flex-shrink: 0;
+  animation: radio-dot-pulse 6s ease-in-out infinite;
+}
+@keyframes radio-dot-pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: .35; }
+}
+.track-artist {
+  font-size: 11px;
+  color: rgba(255,255,255,.52);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  line-height: 1.3;
+  max-width: 100%;
+}
+.track-album { display: none !important; }
+
+/* ── Contrôles ──────────────────────────────────────────────── */
+.controls {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  -webkit-app-region: no-drag;
+  padding-top: 5px;
+}
+
+.btn {
+  background: none; border: none;
+  width: 30px; height: 30px;
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  color: rgba(255,255,255,.72);
+  cursor: pointer;
+  transition: background var(--ease), color var(--ease), transform var(--dur) var(--spring);
+  flex-shrink: 0;
+}
+.btn:hover  { background: color-mix(in srgb, var(--g) 22%, transparent); color: var(--g); }
+.btn:active { transform: scale(.86); }
+.btn.on     { color: var(--g); }
+.btn svg {
+  width: 13px; height: 13px;
+  stroke: currentColor; fill: none;
+  stroke-width: 2; stroke-linecap: round; stroke-linejoin: round;
+  pointer-events: none;
+}
+.btn svg.fill { fill: currentColor; stroke: none; }
+.btn-like svg.heart     { fill: none; stroke: currentColor; }
+.btn-like.on svg.heart  { fill: currentColor; stroke: currentColor; }
+
+/* Badge "1" en repeat-one */
+.btn-rep.rep-one { position: relative; }
+.btn-rep.rep-one::after {
+  content: '1';
+  position: absolute; top: 1px; right: 1px;
+  font-size: 7px; font-weight: 700; line-height: 1;
+  color: var(--g);
+  background: var(--bg, #18181b);
+  border-radius: 50%;
+  width: 9px; height: 9px;
+  display: flex; align-items: center; justify-content: center;
+  pointer-events: none;
+}
+
+/* Bouton play — couleur du thème/pochette, icône blanche */
+.btn-play {
+  flex-shrink: 0;
+  width: 38px; height: 38px;
+  border-radius: 50%;
+  background: var(--g);
+  border: none;
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer;
+  margin: 0 4px;
+  box-shadow:
+    0 0 0 3px color-mix(in srgb, var(--g) 36%, transparent),
+    0 4px 20px color-mix(in srgb, var(--g) 44%, transparent);
+  transition: transform var(--dur) var(--spring), box-shadow var(--ease), filter var(--ease);
+  will-change: transform;
+}
+.btn-play:hover {
+  filter: brightness(1.14);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--g) 48%, transparent), 0 6px 26px color-mix(in srgb, var(--g) 55%, transparent);
+  transform: scale(1.08);
+}
+.btn-play:active { transform: scale(.91); filter: brightness(.96); }
+.btn-play svg {
+  width: 14px; height: 14px;
+  stroke: none;
+  pointer-events: none;
+}
+/* Icône blanche sur fond coloré — override l'attribut fill inline */
+.btn-play svg * { fill: #fff; }
+#ico-play-m { margin-left: 1.5px; }
+
+/* ── Barre de progression ──────────────────────────────────── */
+.prog-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  -webkit-app-region: no-drag;
+}
+.prog-time, .prog-dur {
+  font-size: 10px;
+  color: rgba(255,255,255,.45);
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
+  letter-spacing: .02em;
+  min-width: 28px;
+}
+.prog-time { text-align: right; }
+.prog-dur  { text-align: left; }
+
+.prog-bar {
+  flex: 1;
+  height: 3px;
+  background: rgba(255,255,255,.20);
+  border-radius: 3px;
+  cursor: pointer;
+  position: relative;
+  overflow: visible;
+  transition: height var(--ease), background var(--ease);
+}
+.prog-bar:hover { height: 5px; background: rgba(255,255,255,.30); }
+.prog-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--g) 0%, color-mix(in srgb, var(--g) 60%, #fff) 100%);
+  border-radius: 3px;
+  width: 100%;
+  transform: scaleX(0);
+  transform-origin: left center;
+  transition: transform .25s linear;
+  will-change: transform;
+  position: relative;
+}
+/* Thumb au survol */
+.prog-bar:hover .prog-fill::after {
+  content: '';
+  position: absolute;
+  right: -5px; top: 50%;
+  transform: translateY(-50%);
+  width: 11px; height: 11px;
+  border-radius: 50%;
+  background: var(--g);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--g) 40%, transparent), 0 1px 8px rgba(0,0,0,.6);
+}
+
+/* ── Indicateur volume (pill, apparaît 1.8s au changement) ──── */
+.vol-ind {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  right: 0;
+  background: rgba(0,0,0,.72);
+  border: 1px solid rgba(255,255,255,.12);
+  border-radius: 6px;
+  padding: 3px 8px;
+  font-size: 10px;
+  color: rgba(255,255,255,.78);
+  opacity: 0;
+  pointer-events: none;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  display: flex; align-items: center; gap: 4px;
+  transition: opacity .15s ease;
+  z-index: 30;
+  backdrop-filter: blur(8px);
+}
+.vol-ind.on { opacity: 1; }
+.vol-ind svg {
+  width: 9px; height: 9px;
+  stroke: rgba(255,255,255,.65); fill: none;
+  stroke-width: 2; stroke-linecap: round; stroke-linejoin: round;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   RESPONSIVE — container queries (largeur) + @media (hauteur)
+   ═══════════════════════════════════════════════════════════════ */
+
+/* ≥ 360px de large : info + boutons légèrement plus grands */
+@container (min-width: 360px) {
+  .track-name   { font-size: 14px; }
+  .track-artist { font-size: 11.5px; }
+  .btn          { width: 32px; height: 32px; }
+  .btn svg      { width: 14px; height: 14px; }
+  .btn-play     { width: 42px; height: 42px; }
+  .btn-play svg { width: 15px; height: 15px; }
+  .bottom-panel { padding: 8px 20px 14px; }
+}
+
+/* < 260px de large : logo texte caché, marges réduites */
+@container (max-width: 260px) {
+  .tb-logo-name { display: none; }
+  .bottom-panel { padding: 5px 10px 10px; gap: 5px; }
+  .btn          { width: 26px; height: 26px; }
+  .btn svg      { width: 11px; height: 11px; }
+  .btn-play     { width: 34px; height: 34px; margin: 0 2px; }
+  .prog-time, .prog-dur { min-width: 22px; font-size: 9px; }
+}
+
+/* < 220px de large : masquer prev/next + durée */
+@container (max-width: 220px) {
+  .btn-prev, .btn-next { display: none; }
+  .prog-dur  { display: none; }
+}
+
+/* < 180px de large : ultra compact */
+@container (max-width: 180px) {
+  .btn-like  { display: none; }
+  .info      { display: none; }
+  .prog-time { display: none; }
+}
+
+/* ── Hauteur : portrait normal (≥ 240px) — tout visible ──── */
+/* (défaut CSS, rien à overrider) */
+
+/* Hauteur : compact (< 240px) — réduire espaces, garder pochette */
+@media (max-height: 239px) {
+  .flex-spacer  { min-height: 50px; padding: 4px 0 2px; }
+  .art-card-wrap { width: clamp(44px, 36cqw, 88px); height: clamp(44px, 36cqw, 88px); }
+  .bottom-panel { padding: 4px 14px 8px; gap: 4px; }
+  .track-name   { font-size: 12px; }
+  .track-artist { font-size: 10px; }
+}
+
+/* Hauteur : paysage (< 180px) — cacher la pochette */
+@media (max-height: 179px) {
+  .flex-spacer { display: none; }
+  .bottom-panel { padding: 4px 14px 8px; gap: 4px; }
+}
+
+/* Hauteur : très compact (< 120px) — cacher l'info texte */
+@media (max-height: 119px) {
+  .info         { display: none; }
+  .bottom-panel { gap: 3px; padding: 3px 12px 6px; }
+}
+
+/* Hauteur : ultra-compact (< 90px) — masquer les timecodes */
+@media (max-height: 89px) {
+  .prog-time, .prog-dur { display: none; }
+  .bottom-panel { gap: 2px; padding: 2px 10px 4px; }
+}
+
+/* ── Reduced motion ─────────────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    transition-duration: .01ms !important;
+    animation-duration:  .01ms !important;
+  }
+}
+</style>
+</head>
+<body>
+
+<!-- Couches de fond (de bas en haut : ambient → art → overlay) -->
+<canvas id="ambient-canvas"></canvas>
+<div id="art-bg">
+  <img id="art-img" alt="">
+  <div class="art-em" id="art-em">
+    <svg viewBox="0 0 24 24"><path d="M9 18V5l12-2v13M9 18c0 1.1-.9 2-2 2s-2-.9-2-2 .9-2 2-2 2 .9 2 2zm12 0c0 1.1-.9 2-2 2s-2-.9-2-2 .9-2 2-2 2 .9 2 2z"/></svg>
+  </div>
+</div>
+<div id="art-overlay" aria-hidden="true"></div>
+
+<!-- Barre de titre : logo gauche + sys-buttons droite -->
+<div class="titlebar">
+  <div class="tb-logo">
+    <img src="/icon-16.png" width="13" height="13" alt="LibreFlow">
+    <span class="tb-logo-name">LibreFlow</span>
+  </div>
+  <div class="sys-btns">
+    <button class="sys-btn home" id="btn-home" title="Accueil">
+      <svg viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+    </button>
+    <div class="sys-sep"></div>
+    <button class="sys-btn" id="btn-expand" title="Agrandir">
+      <svg viewBox="0 0 24 24"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>
+    </button>
+    <button class="sys-btn close" id="btn-close" title="Fermer">
+      <svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    </button>
+  </div>
+</div>
+
+<!-- Zone centrale : pochette centrée + zone draggable autour -->
+<div class="flex-spacer">
+  <div class="art-card-wrap" id="art-card-wrap">
+    <img id="art-card-img" alt="">
+    <div class="art-card-ph" id="art-card-ph">
+      <span class="art-card-ph-init" id="art-card-init">♪</span>
+    </div>
+  </div>
+</div>
+
+<!-- Panel inférieur : info + contrôles + progression -->
+<div class="bottom-panel">
+
+  <!-- Info piste -->
+  <div class="info">
+    <div class="track-name-row">
+      <div class="track-name" id="track-name" title="Double-cliquer pour restaurer">–</div>
+    </div>
+    <div class="radio-artist-row">
+      <div class="radio-badge" id="radio-badge" style="display:none">
+        <span class="radio-badge-dot"></span>RADIO
+      </div>
+      <div class="track-artist" id="track-artist">–</div>
+    </div>
+    <div class="track-album" id="track-album" style="display:none"></div>
+  </div>
+
+  <!-- Contrôles -->
+  <div class="controls">
+    <button class="btn btn-like" id="btn-like" title="Favoris">
+      <svg viewBox="0 0 24 24" class="heart">
+        <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
+      </svg>
+    </button>
+    <button class="btn btn-prev" id="btn-prev" title="Précédent">
+      <svg viewBox="0 0 24 24" class="fill"><polygon points="19 20 9 12 19 4"/><rect x="4" y="4" width="2.5" height="16" rx="1"/></svg>
+    </button>
+    <button class="btn-play" id="btn-play" title="Play/Pause">
+      <svg id="ico-play-m"  viewBox="0 0 24 24"><polygon points="6 3 20 12 6 21" fill="#111"/></svg>
+      <svg id="ico-pause-m" viewBox="0 0 24 24" style="display:none">
+        <rect x="5"  y="4" width="4" height="16" rx="1.5" fill="#111"/>
+        <rect x="15" y="4" width="4" height="16" rx="1.5" fill="#111"/>
+      </svg>
+    </button>
+    <button class="btn btn-next" id="btn-next" title="Suivant">
+      <svg viewBox="0 0 24 24" class="fill"><polygon points="5 4 15 12 5 20"/><rect x="17.5" y="4" width="2.5" height="16" rx="1"/></svg>
+    </button>
+    <!-- Shuffle / repeat : cachés visuellement, conservés pour le JS -->
+    <button class="btn btn-shuf" id="btn-shuf" style="display:none" title="Aléatoire">
+      <svg viewBox="0 0 24 24">
+        <path d="M4 5h3a6 6 0 0 1 5.5 3.6"/><path d="M4 19h3a6 6 0 0 0 5.5-3.6"/>
+        <polyline points="16 3 20 7 16 11"/><polyline points="16 13 20 17 16 21"/>
+        <path d="M20 7h-3a6 6 0 0 0-5 2.7"/><path d="M20 17h-3a6 6 0 0 1-5-2.7"/>
+      </svg>
+    </button>
+    <button class="btn btn-rep" id="btn-rep" title="Répétition">
+      <svg viewBox="0 0 24 24">
+        <polyline points="17 1 21 5 17 9"/>
+        <path d="M3 11V9a4 4 0 0 1 4-4h14"/>
+        <polyline points="7 23 3 19 7 15"/>
+        <path d="M21 13v2a4 4 0 0 1-4 4H3"/>
+      </svg>
+    </button>
+  </div>
+
+  <!-- Progression : [0:57] ████░░░ [/ 1:56] -->
+  <div class="prog-wrap">
+    <div class="vol-ind" id="vol-ind">
+      <svg viewBox="0 0 24 24"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>
+      <span id="vol-pct">100%</span>
+    </div>
+    <span class="prog-time" id="ptime">0:00</span>
+    <div class="prog-bar" id="pbar">
+      <div class="prog-fill" id="pbar-fill"></div>
+    </div>
+    <span class="prog-dur" id="pdur"></span>
+  </div>
+
+</div>
+
+<!-- vol-mini caché : conservé pour la logique JS (volume-set IPC) -->
+<input type="range" id="vol-mini" min="0" max="1" step="0.01" value="1"
+       style="display:none" aria-hidden="true">
+
+<script>
+function invoke(...a) {
+  if (window.__TAURI__?.core?.invoke) return window.__TAURI__.core.invoke(...a);
+  return new Promise((res, rej) => {
+    let n = 0;
+    const t = setInterval(() => {
+      if (window.__TAURI__?.core?.invoke) { clearInterval(t); window.__TAURI__.core.invoke(...a).then(res).catch(rej); }
+      else if (++n > 200) { clearInterval(t); rej(new Error('Tauri non disponible')); }
+    }, 25);
+  });
+}
+function listen(...a) {
+  if (window.__TAURI__?.event?.listen) return window.__TAURI__.event.listen(...a);
+  return new Promise(res => {
+    let n = 0;
+    const t = setInterval(() => {
+      if (window.__TAURI__?.event?.listen) { clearInterval(t); window.__TAURI__.event.listen(...a).then(res); }
+      else if (++n > 200) { clearInterval(t); res(() => {}); }
+    }, 25);
+  });
+}
+function emit(ev, payload) {
+  if (window.__TAURI__?.event?.emit) return window.__TAURI__.event.emit(ev, payload);
+  return new Promise(res => {
+    let n = 0;
+    const t = setInterval(() => {
+      if (window.__TAURI__?.event?.emit) { clearInterval(t); window.__TAURI__.event.emit(ev, payload).then(res); }
+      else if (++n > 200) { clearInterval(t); res(); }
+    }, 25);
+  });
+}
+const $ = id => document.getElementById(id);
+
+let _posRestored    = false; // restaurer la position sauvegardée une seule fois au premier applyState
+let _prevVolume     = -1;    // pour détecter les changements de volume
+let _volTimer       = null;  // timer masquage indicateur volume
+let _sliderDragging = false; // QW-10 : évite la boucle applyState↔input pendant le drag
+
+// ── Marquee helper — recalcule l'overflow à chaque appel ──────
+function _updateMarquee() {
+  const tnEl = $('track-name');
+  if (!tnEl) return;
+  tnEl.classList.remove('marquee');
+  requestAnimationFrame(() => {
+    const overflow = tnEl.scrollWidth - (tnEl.parentElement?.clientWidth ?? 0);
+    if (overflow > 4) {
+      tnEl.style.setProperty('--mq-offset', `-${overflow + 8}px`);
+      tnEl.classList.add('marquee');
+    }
+  });
+}
+
+// ResizeObserver : recalcule le marquee à chaque redimensionnement
+if (typeof ResizeObserver !== 'undefined') {
+  const _mqRow = $('track-name') && $('track-name').parentElement;
+  if (_mqRow) {
+    new ResizeObserver(() => _updateMarquee()).observe(_mqRow);
+  }
+}
+
+function applyState(data) {
+  if (!data) return;
+
+  const tnEl = $('track-name');
+  tnEl.textContent = data.title  || '–';
+  tnEl.title       = data.title  || '';
+  _updateMarquee();
+  $('track-artist').textContent = data.artist || '–';
+  const albumEl = $('track-album');
+  if (albumEl) { albumEl.textContent = data.album || ''; albumEl.style.display = data.album ? '' : 'none'; }
+  if (data.duration) { const pd = $('pdur'); if (pd) pd.textContent = '/ ' + data.duration; }
+
+  const img     = $('art-img');
+  const em      = $('art-em');
+  const cardImg = $('art-card-img');
+  const cardPh  = $('art-card-ph');
+
+  if (data.art) {
+    img.src = data.art;
+    img.classList.add('on');
+    em.style.display = 'none';
+    if (cardImg) {
+      const isNew = cardImg.dataset.lastSrc !== data.art;
+      if (isNew) {
+        // Nouvelle pochette → animation entrée
+        cardImg.dataset.lastSrc = data.art;
+        cardImg.classList.remove('track-in', 'on');
+        cardImg.src = data.art;
+        requestAnimationFrame(() => {
+          void cardImg.offsetWidth; // reflow
+          cardImg.classList.add('on', 'track-in');
+        });
+      } else {
+        cardImg.classList.add('on');
+      }
+    }
+    if (cardPh) cardPh.classList.remove('on');
+    _ambientLoad(data.art);
+  } else {
+    img.classList.remove('on');
+    em.style.display = 'flex';
+    if (cardImg) cardImg.classList.remove('on');
+    if (cardPh)  cardPh.classList.add('on');
+    // Ambient depuis artColor quand pas de pochette
+    if (data.artColor) _ambientLoadFromColor(data.artColor);
+    else               _ambientClear();
+  }
+
+  // Initiales artiste dans le placeholder
+  const initEl = $('art-card-init');
+  if (initEl && data.artist && data.artist !== '–') {
+    const words = data.artist.trim().split(/\s+/);
+    initEl.textContent = words.length >= 2
+      ? (words[0][0] + words[words.length-1][0]).toUpperCase()
+      : data.artist.slice(0, 2).toUpperCase();
+  }
+
+  $('ico-play-m').style.display  = data.playing ? 'none'  : 'block';
+  $('ico-pause-m').style.display = data.playing ? 'block' : 'none';
+
+  $('btn-like').classList.toggle('on', !!data.liked);
+  $('btn-shuf').classList.toggle('on', !!data.shuffle);
+  $('btn-rep').classList.toggle('on',      !!data.repeat && data.repeat !== 'none');
+  $('btn-rep').classList.toggle('rep-one', data.repeat === 'one');
+  const radioBadge = $('radio-badge');
+  if (radioBadge) radioBadge.style.display = data.radioActive ? '' : 'none';
+
+  if (data.progress != null) {
+    $('pbar-fill').style.transform = `scaleX(${data.progress / 100})`;
+    $('ptime').textContent = data.time || '0:00';
+  }
+
+  if (data.theme) document.documentElement.setAttribute('data-theme', data.theme);
+
+  // ── Accent dynamique : même logique que applyArtColor / clearArtColor dans app.js ──
+  if (data.dynColor && data.artColor) {
+    const _m = data.artColor.match(/(\d+)[,\s]+(\d+)[,\s]+(\d+)/);
+    if (_m) {
+      const [, r, g, b] = _m;
+      document.documentElement.style.setProperty('--g',     data.artColor);
+      document.documentElement.style.setProperty('--g-rgb', `${r},${g},${b}`);
+      document.documentElement.style.setProperty('--gd',    `rgba(${r},${g},${b},.14)`);
+      document.documentElement.style.setProperty('--gg',    `rgba(${r},${g},${b},.28)`);
+    }
+  } else {
+    // Retirer les overrides inline → [data-theme] reprend la cascade
+    document.documentElement.style.removeProperty('--g');
+    document.documentElement.style.removeProperty('--g-rgb');
+    document.documentElement.style.removeProperty('--gd');
+    document.documentElement.style.removeProperty('--gg');
+  }
+
+  // ── Indicateur volume + slider + barre verticale ────────────
+  if (data.volume != null) {
+    const pct = Math.round(data.volume * 100);
+    // Sync slider horizontal (caché, mais conservé pour la logique JS)
+    const vm = $('vol-mini');
+    if (vm && !_sliderDragging) {
+      vm.value = data.volume;
+      vm.style.setProperty('--vol-pct', (data.volume * 100).toFixed(1));
+    }
+    // Sync barre verticale
+    const vfill = $('vol-v-fill');
+    if (vfill && !_sliderDragging) {
+      vfill.style.transform = `scaleY(${data.volume})`;
+      const vv = $('vol-v');
+      if (vv) vv.setAttribute('aria-valuenow', pct);
+    }
+    // Flash barre verticale + pill quand le volume change (pas au premier rendu)
+    if (_prevVolume >= 0 && pct !== _prevVolume) {
+      // Pill vol-ind
+      const vi = $('vol-ind');
+      $('vol-pct').textContent = pct + '%';
+      vi.classList.add('on');
+      clearTimeout(_volTimer);
+      _volTimer = setTimeout(() => vi.classList.remove('on'), 1800);
+      // Flash barre verticale
+      const vv = $('vol-v');
+      if (vv) {
+        vv.classList.remove('flash');
+        requestAnimationFrame(() => vv.classList.add('flash'));
+        clearTimeout(vv._ft);
+        vv._ft = setTimeout(() => vv.classList.remove('flash'), 350);
+      }
+    }
+    _prevVolume = pct;
+  }
+
+  // ── Restauration position (une seule fois au premier applyState) ──
+  if (!_posRestored && data.miniPos) {
+    _posRestored = true;
+    const WV = window.__TAURI__?.webviewWindow?.WebviewWindow;
+    const Phys = window.__TAURI__?.dpi?.PhysicalPosition;
+    if (WV?.getByLabel && Phys) {
+      WV.getByLabel('mini').then(w => {
+        if (w) w.setPosition(new Phys(data.miniPos.x, data.miniPos.y)).catch(() => {});
+      }).catch(() => {});
+    }
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  AMBIENT CANVAS — gradient animé depuis les couleurs de la pochette
+//  Technique portée depuis cinema.js : 4 radials + drift sinusoïdal
+//  + cross-fade interpolé entre pistes (1.4 s)
+// ═══════════════════════════════════════════════════════════════════
+
+const _ambCanvas = $('ambient-canvas');
+const _ambCtx    = _ambCanvas ? _ambCanvas.getContext('2d') : null;
+
+let _ambColors  = null;   // { cT, cL, cR } couleurs courantes
+let _ambNext    = null;   // couleurs cibles du cross-fade
+let _ambCross   = null;   // { start, dur }
+let _ambT       = 0;      // temps animation (ms)
+let _ambRaf     = null;   // handle RAF
+let _ambLast    = 0;      // dernier timestamp RAF
+let _ambW       = 0;
+let _ambH       = 0;
+
+// ── Helpers couleur (portés de cinema.js) ──────────────────────────
+
+function _rgbToHsl(r, g, b) {
+  r /= 255; g /= 255; b /= 255;
+  const mx = Math.max(r,g,b), mn = Math.min(r,g,b);
+  let h = 0, s = 0;
+  const l = (mx + mn) / 2;
+  if (mx !== mn) {
+    const d = mx - mn;
+    s = l > 0.5 ? d / (2 - mx - mn) : d / (mx + mn);
+    switch (mx) {
+      case r: h = ((g-b)/d + (g<b?6:0))/6; break;
+      case g: h = ((b-r)/d + 2)/6;          break;
+      case b: h = ((r-g)/d + 4)/6;          break;
+    }
+  }
+  return [h*360, s, l];
+}
+function _hslToRgb(h, s, l) {
+  h /= 360;
+  if (s === 0) { const v = Math.round(l*255); return [v,v,v]; }
+  const q = l<0.5 ? l*(1+s) : l+s-l*s, p = 2*l-q;
+  const hue = t => {
+    if (t<0) t+=1; if (t>1) t-=1;
+    if (t<1/6) return p+(q-p)*6*t;
+    if (t<0.5) return q;
+    if (t<2/3) return p+(q-p)*(2/3-t)*6;
+    return p;
+  };
+  return [Math.round(hue(h+1/3)*255), Math.round(hue(h)*255), Math.round(hue(h-1/3)*255)];
+}
+function _boostSat(r, g, b, sf=1.55, lMin=0.12) {
+  let [h,s,l] = _rgbToHsl(r,g,b);
+  s = Math.min(1, s*sf);
+  l = Math.max(lMin, l);
+  return _hslToRgb(h, s, l);
+}
+function _regionAvg(ctx, x, y, w, h) {
+  const d = ctx.getImageData(x|0, y|0, w|0, h|0).data;
+  let r=0,g=0,b=0; const n = d.length>>2;
+  for (let i=0; i<d.length; i+=4) { r+=d[i]; g+=d[i+1]; b+=d[i+2]; }
+  return [r/n|0, g/n|0, b/n|0];
+}
+
+// ── Échantillonnage couleurs depuis l'artwork ──────────────────────
+
+function _ambientLoad(artUrl) {
+  const img = new Image();
+  img.crossOrigin = 'anonymous';
+  img.onload = () => {
+    const SZ = 64, hw = SZ>>1, q = SZ>>2;
+    const th = SZ/3|0, by = SZ*2/3|0, bh = SZ-by;
+    const c  = document.createElement('canvas');
+    c.width  = c.height = SZ;
+    const tc = c.getContext('2d', { willReadFrequently: true });
+    tc.drawImage(img, 0, 0, SZ, SZ);
+    const newCol = {
+      cT: _boostSat(..._regionAvg(tc, q, 0,  hw, th)),
+      cL: _boostSat(..._regionAvg(tc, 0, by, hw, bh)),
+      cR: _boostSat(..._regionAvg(tc, hw,by, hw, bh)),
+    };
+    if (!_ambColors) { _ambColors = newCol; }
+    else             { _ambNext = newCol; _ambCross = { start: performance.now(), dur: 1400 }; }
+    $('ambient-canvas').classList.add('on');
+    _ambientStartLoop();
+  };
+  img.onerror = () => {};
+  img.src = artUrl;
+}
+
+function _ambientClear() {
+  $('ambient-canvas').classList.remove('on');
+  _ambientStopLoop();
+  _ambColors = null; _ambNext = null; _ambCross = null;
+}
+
+/** Ambient fallback depuis une chaîne artColor (ex: "rgb(123,45,67)") */
+function _ambientLoadFromColor(colorStr) {
+  const m = colorStr.match(/(\d+)[,\s]+(\d+)[,\s]+(\d+)/);
+  if (!m) return;
+  const [r, g, b] = [+m[1], +m[2], +m[3]];
+  const cT = _boostSat(r, g, b);
+  const [h, s, l] = _rgbToHsl(...cT);
+  const newCol = {
+    cT,
+    cL: _hslToRgb((h + 40) % 360, Math.min(1, s), l),
+    cR: _hslToRgb((h - 30 + 360) % 360, Math.min(1, s), l),
+  };
+  if (!_ambColors) { _ambColors = newCol; }
+  else { _ambNext = newCol; _ambCross = { start: performance.now(), dur: 1200 }; }
+  $('ambient-canvas').classList.add('on');
+  _ambientStartLoop();
+}
+
+// ── Boucle d'animation ─────────────────────────────────────────────
+
+function _ambientStartLoop() {
+  if (_ambRaf) return;
+  _ambLast = performance.now();
+  _ambRaf  = requestAnimationFrame(_ambientFrame);
+}
+function _ambientStopLoop() {
+  if (_ambRaf) { cancelAnimationFrame(_ambRaf); _ambRaf = null; }
+}
+
+function _lerpC([r1,g1,b1],[r2,g2,b2],t){
+  return [r1+(r2-r1)*t|0, g1+(g2-g1)*t|0, b1+(b2-b1)*t|0];
+}
+
+function _ambientFrame(now) {
+  _ambRaf = null;
+  const dt = Math.min(now - _ambLast, 80);
+  _ambT   += dt; _ambLast = now;
+
+  let col = _ambColors;
+  if (_ambCross && _ambNext) {
+    const raw = Math.min(1, (now - _ambCross.start) / _ambCross.dur);
+    const p   = raw < 0.5 ? 2*raw*raw : -1+(4-2*raw)*raw; // ease-in-out
+    col = {
+      cT: _lerpC(_ambColors.cT, _ambNext.cT, p),
+      cL: _lerpC(_ambColors.cL, _ambNext.cL, p),
+      cR: _lerpC(_ambColors.cR, _ambNext.cR, p),
+    };
+    if (raw >= 1) { _ambColors = _ambNext; _ambNext = null; _ambCross = null; }
+  }
+
+  if (col) _ambientRender(col);
+  _ambRaf = requestAnimationFrame(_ambientFrame);
+}
+
+function _ambientRender({ cT, cL, cR }) {
+  if (!_ambCtx || !_ambW || !_ambH) return;
+  const W = _ambW, H = _ambH;
+  const [rT,gT,bT] = cT, [rL,gL,bL] = cL, [rR,gR,bR] = cR;
+  const rM=(rL+rR)>>1, gM=(gL+gR)>>1, bM=(bL+bR)>>1;
+
+  const t = _ambT;
+  const driftX  = Math.sin(t * 0.000524) * W * 0.07;
+  const breathR = 1 + Math.sin(t * 0.000391) * 0.08;
+  const driftLX = W * (0.08 + Math.sin(t * 0.000419 + 1.0) * 0.06);
+  const driftRX = W * (0.92 + Math.sin(t * 0.000449 + 2.1) * 0.06);
+  const driftCY = H * (1.04 + Math.sin(t * 0.000287 + 0.5) * 0.04);
+
+  _ambCtx.fillStyle = '#050505';
+  _ambCtx.fillRect(0, 0, W, H);
+
+  // Halo top-center (couleur dominante)
+  const cx = W * 0.5 + driftX;
+  const g1 = _ambCtx.createRadialGradient(cx, 0, 0, cx, 0, H * 1.12 * breathR);
+  g1.addColorStop(0,   `rgba(${rT},${gT},${bT},.78)`);
+  g1.addColorStop(0.45,`rgba(${rT},${gT},${bT},.24)`);
+  g1.addColorStop(1,   'rgba(0,0,0,0)');
+  _ambCtx.fillStyle = g1; _ambCtx.fillRect(0,0,W,H);
+
+  // Accent bas-gauche
+  const g2 = _ambCtx.createRadialGradient(driftLX, H, 0, driftLX, H, H * 0.8);
+  g2.addColorStop(0,   `rgba(${rL},${gL},${bL},.64)`);
+  g2.addColorStop(0.55,`rgba(${rL},${gL},${bL},.14)`);
+  g2.addColorStop(1,   'rgba(0,0,0,0)');
+  _ambCtx.fillStyle = g2; _ambCtx.fillRect(0,0,W,H);
+
+  // Accent bas-droit
+  const g3 = _ambCtx.createRadialGradient(driftRX, H, 0, driftRX, H, H * 0.8);
+  g3.addColorStop(0,   `rgba(${rR},${gR},${bR},.64)`);
+  g3.addColorStop(0.55,`rgba(${rR},${gR},${bR},.14)`);
+  g3.addColorStop(1,   'rgba(0,0,0,0)');
+  _ambCtx.fillStyle = g3; _ambCtx.fillRect(0,0,W,H);
+
+  // Chaud centre-bas (mix gauche+droit)
+  const g4 = _ambCtx.createRadialGradient(W*0.5, driftCY, 0, W*0.5, driftCY, H * 0.62);
+  g4.addColorStop(0,   `rgba(${rM},${gM},${bM},.38)`);
+  g4.addColorStop(1,   'rgba(0,0,0,0)');
+  _ambCtx.fillStyle = g4; _ambCtx.fillRect(0,0,W,H);
+}
+
+// ── ResizeObserver — met à jour les dimensions du canvas ───────────
+if (_ambCanvas) {
+  new ResizeObserver(() => {
+    const dpr = devicePixelRatio || 1;
+    _ambW = Math.round(_ambCanvas.offsetWidth  * dpr);
+    _ambH = Math.round(_ambCanvas.offsetHeight * dpr);
+    _ambCanvas.width  = _ambW;
+    _ambCanvas.height = _ambH;
+  }).observe(_ambCanvas);
+}
+
+// Attendre __TAURI__ avant de démarrer (fix build MSI)
+function waitForTauri(cb, n = 0) {
+  if (window.__TAURI__?.core?.invoke) { cb(); }
+  else if (n < 200) { setTimeout(() => waitForTauri(cb, n + 1), 25); }
+  else { cb(); }
+}
+
+waitForTauri(() => {
+  // Init — avec retry si mini_get_state retourne null (race condition: mini_update pas encore
+  // écrit dans le mutex Rust au moment où mini.html charge).
+  let _initRetries = 0;
+  function _tryInitState() {
+    invoke('mini_get_state').then(state => {
+      if (state) { applyState(state); }
+      else if (_initRetries < 8) { _initRetries++; setTimeout(_tryInitState, 80); }
+    }).catch(() => {});
+  }
+  _tryInitState();
+
+  // Écouter les mises à jour
+  // { target: { kind: 'Any' } } requis pour recevoir les events émis vers une webview spécifique
+  // BUG FIX F7 : stocker les unlisteners → appelés au pagehide pour éviter les listeners zombies
+  const _unlisteners = [];
+  listen('mini-update',   e => applyState(e.payload),          { target: { kind: 'Any' } }).then(u => _unlisteners.push(u));
+  listen('mini-progress', e => {
+    if (!e.payload) return;
+    $('pbar-fill').style.transform = `scaleX(${(e.payload.progress || 0) / 100})`;
+    $('ptime').textContent = e.payload.time || '0:00';
+  },                                                            { target: { kind: 'Any' } }).then(u => _unlisteners.push(u));
+  window.addEventListener('pagehide', () => {
+    _savePos(); // best-effort : sauvegarde position avant fermeture (cas focus main)
+    _unlisteners.forEach(u => { try { u(); } catch {} });
+  });
+
+  // Commandes → fenêtre principale
+  const send = (cmd, data) => emit('mini-cmd', { cmd, data: data ?? null });
+
+  // ── Sauvegarde position ─────────────────────────────────────
+  async function _savePos() {
+    try {
+      const WV = window.__TAURI__?.webviewWindow?.WebviewWindow;
+      if (!WV?.getByLabel) return;
+      const w = await WV.getByLabel('mini');
+      if (!w) return;
+      const pos = await w.outerPosition();
+      if (pos) send('save-mini-pos', { x: pos.x, y: pos.y });
+    } catch {}
+  }
+
+  // Sys buttons
+  $('btn-close').addEventListener('click',  async () => { await _savePos(); invoke('mini_close').catch(() => {}); });
+  $('btn-expand').addEventListener('click', async () => {
+    await _savePos();
+    const WV = window.__TAURI__?.webviewWindow?.WebviewWindow;
+    if (WV) {
+      WV.getByLabel('main').then(w => {
+        if (!w) return;
+        w.unminimize().catch(() => {});
+        w.show().catch(() => {});
+        w.setFocus().catch(() => {});
+      }).catch(() => {});
+    }
+  });
+  $('btn-home').addEventListener('click',   async () => {
+    await _savePos();
+    invoke('mini_close').catch(() => {});
+    send('go-home');
+  });
+
+  // Contrôles lecture
+  $('btn-play').addEventListener('click',   () => send('toggle-play'));
+  $('btn-prev').addEventListener('click',   () => send('prev'));
+  $('btn-next').addEventListener('click',   () => send('next'));
+  $('btn-like').addEventListener('click',   () => send('toggle-like'));
+  $('btn-shuf').addEventListener('click',   () => send('toggle-shuffle'));
+  $('btn-rep').addEventListener('click',    () => send('toggle-repeat'));
+
+  // Double-clic titre → restaurer
+  $('track-name').addEventListener('dblclick', () => invoke('mini_close').catch(() => {}));
+
+  // Seek — drag complet (pointerdown + move + up)
+  {
+    const _pb      = $('pbar');
+    const _pbFill  = $('pbar-fill');
+    let   _seeking = false;
+    let   _pbRect  = null;
+    function _seekAt(clientX) {
+      const pos = Math.max(0, Math.min(1, (clientX - _pbRect.left) / _pbRect.width));
+      if (_pbFill) _pbFill.style.transform = `scaleX(${pos})`;
+      send('seek', pos);
+    }
+    _pb.addEventListener('pointerdown', e => {
+      _seeking = true; _pbRect = _pb.getBoundingClientRect();
+      _pb.setPointerCapture(e.pointerId); _seekAt(e.clientX);
+    });
+    _pb.addEventListener('pointermove', e => { if (!_seeking || !_pbRect) return; _seekAt(e.clientX); });
+    const _endSeek = () => { _seeking = false; _pbRect = null; };
+    _pb.addEventListener('pointerup',     _endSeek);
+    _pb.addEventListener('pointercancel', _endSeek);
+    window.addEventListener('blur', _endSeek);
+  }
+
+  // Volume slider
+  const _vm = $('vol-mini');
+  if (_vm) {
+    _vm.addEventListener('mousedown',  () => { _sliderDragging = true;  });
+    _vm.addEventListener('mouseup',    () => { _sliderDragging = false; });
+    _vm.addEventListener('touchstart', () => { _sliderDragging = true;  }, { passive: true });
+    _vm.addEventListener('touchend',   () => { _sliderDragging = false; });
+    _vm.addEventListener('input', () => {
+      const v = parseFloat(_vm.value);
+      _vm.style.setProperty('--vol-pct', (v * 100).toFixed(1));
+      send('volume-set', v);
+      $('vol-pct').textContent = Math.round(v * 100) + '%';
+      const vi = $('vol-ind');
+      vi.classList.add('on');
+      clearTimeout(_volTimer);
+      _volTimer = setTimeout(() => vi.classList.remove('on'), 1500);
+    });
+  }
+
+
+  // Vol-v — drag vertical
+  const _vv = $('vol-v');
+  if (_vv) {
+    let _vvDrag = false, _vvRect = null;
+    function _setVolV(clientY) {
+      const pos = 1 - Math.max(0, Math.min(1, (clientY - _vvRect.top) / _vvRect.height));
+      const fill = $('vol-v-fill');
+      if (fill) fill.style.transform = `scaleY(${pos})`;
+      const vm2 = $('vol-mini');
+      if (vm2) { vm2.value = pos; vm2.style.setProperty('--vol-pct', (pos * 100).toFixed(1)); }
+      _vv.setAttribute('aria-valuenow', Math.round(pos * 100));
+      send('volume-set', pos);
+      $('vol-pct').textContent = Math.round(pos * 100) + '%';
+      const vi2 = $('vol-ind');
+      if (vi2) { vi2.classList.add('on'); clearTimeout(_volTimer); _volTimer = setTimeout(() => vi2.classList.remove('on'), 1500); }
+    }
+    _vv.addEventListener('pointerdown', e => {
+      _vvDrag = true; _vvRect = _vv.getBoundingClientRect();
+      _vv.setPointerCapture(e.pointerId);
+      _sliderDragging = true; _setVolV(e.clientY);
+    });
+    _vv.addEventListener('pointermove', e => { if (_vvDrag && _vvRect) _setVolV(e.clientY); });
+    const _endVv = () => { _vvDrag = false; _vvRect = null; _sliderDragging = false; };
+    _vv.addEventListener('pointerup',     _endVv);
+    _vv.addEventListener('pointercancel', _endVv);
+  }
+
+  // Clavier — raccourcis mini-player
+  document.addEventListener('keydown', e => {
+    if (e.target.tagName === 'INPUT') return;
+    switch (e.code) {
+      case 'Space':      e.preventDefault(); send('toggle-play'); break;
+      case 'ArrowRight': e.preventDefault(); send('next');        break;
+      case 'ArrowLeft':  e.preventDefault(); send('prev');        break;
+      case 'ArrowUp':    e.preventDefault(); send('volume-up');   break;
+      case 'ArrowDown':  e.preventDefault(); send('volume-down'); break;
+      case 'KeyM':       e.preventDefault(); send('toggle-mute'); break;
+    }
+  });
+
+}); // end waitForTauri
+</script>
+</body>
+</html>

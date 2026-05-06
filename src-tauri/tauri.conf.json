@@ -1,0 +1,75 @@
+{
+  "productName": "LibreFlow",
+  "version": "1.1.0",
+  "identifier": "com.libreflow.player",
+  "build": {
+    "beforeDevCommand": "npm run vite -- --port 1420",
+    "beforeBuildCommand": "npm run vite:build",
+    "devUrl": "http://localhost:1420",
+    "frontendDist": "../dist"
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "shortDescription": "Lecteur de musique desktop libre et rapide",
+    "longDescription": "LibreFlow est un lecteur audio desktop conçu pour les grandes bibliothèques musicales. EQ 10 bandes, ReplayGain, crossfade, visualiseur, mode cinéma, mini-player.",
+    "copyright": "© 2026 Robin Di Berardini",
+    "category": "Music",
+    "windows": {
+      "certificateThumbprint": null,
+      "digestAlgorithm": "sha256",
+      "timestampUrl": "",
+      "nsis": {
+        "displayLanguageSelector": true,
+        "languages": ["French", "English"],
+        "installMode": "currentUser",
+        "installerIcon": "icons/icon.ico",
+        "headerImage": "icons/128x128.png"
+      },
+      "wix": {
+        "language": "fr-FR"
+      }
+    }
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDFBNzk2NTkzNkYxQjc5QkUKUldTK2VSdHZrMlY1R3J0Ti9qMklMRzhrY1hvZ3NFVW5Za0VMUHVrOUFjdFlJb3VtalArRitJVFkK",
+      "endpoints": [
+        "https://github.com/robindiberardini/libreflow/releases/latest/download/latest.json"
+      ]
+    }
+  },
+  "app": {
+    "withGlobalTauri": true,
+    "windows": [
+      {
+        "label": "main",
+        "title": "LibreFlow",
+        "width": 1100,
+        "height": 700,
+        "minWidth": 600,
+        "minHeight": 400,
+        "decorations": false,
+        "transparent": false,
+        "visible": false
+      }
+    ],
+    "security": {
+      "assetProtocol": {
+        "enable": true,
+        "scope": [
+          "**/*.mp3",  "**/*.flac", "**/*.ogg",  "**/*.opus",
+          "**/*.m4a",  "**/*.aac",  "**/*.wav",  "**/*.wma",
+          "**/*.aiff", "**/*.ape",  "**/*.alac"
+        ]
+      }
+    }
+  }
+}
