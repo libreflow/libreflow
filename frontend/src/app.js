@@ -187,6 +187,7 @@ let manualQueue       = [];
 let albumSort         = 'name';   // 'name' | 'count' | 'duration'
 let artistSort        = 'name';   // 'name' | 'count'
 let genreSort         = 'count';  // 'count' | 'name'
+const _unlisteners    = [];        // Tauri listeners — collected for cleanup on pagehide
 // Signatures de cache pour les grilles — évite de recalculer si rien n'a changé
 // _genreGridSig → genres.js (Jalon 5)
 
@@ -536,10 +537,6 @@ async function boot() {
   // Vérifier les mises à jour 10s après le boot (non bloquant, silencieux si pas configuré)
   setTimeout(() => checkForUpdate().catch(() => {}), 10_000);
 
-  // Window state — win.emit() Rust est webview-spécifique → { target: Any } requis
-  // BUG FIX F6 : stocker les unlisteners pour les appeler au déchargement de la page.
-  // Sans ça, les listeners Tauri survivent à un rechargement → handlers doublés.
-  const _unlisteners = [];
   listen('win-state', (e) => { const s = e.payload;
     document.getElementById('tbt-max').title = (s==='maximized'||s==='fullscreen') ? i18n('tb_restore') : i18n('tb_maximize');
   }, { target: { kind: 'Any' } }).then(u => _unlisteners.push(u));
@@ -937,7 +934,7 @@ waitForTauri(() => {
     else if (cmd === 'save-mini-pos' && data) {
       setMiniPos(data); saveCfg();
     }
-  }).then(u => { if (typeof _unlisteners !== 'undefined') _unlisteners.push(u); });
+  }).then(u => { _unlisteners.push(u); });
 });
 // Note: mini.html uses invoke('mini_get_state') on load to get initial state,
 // so the mini-request-state event is not needed.
