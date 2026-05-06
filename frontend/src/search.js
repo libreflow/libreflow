@@ -11,7 +11,7 @@
 //   _coll                   Intl.Collator partagé
 //   _normalizeGenre(g)      Normalise un genre vers sa clé canonique
 //   rebuildTrackIdxMap()    Reconstruit _trackIdxMap depuis get('tracks')
-//   trackIdx(id)            Retourne l'index d'une piste par son id, ou -1
+//   trackIdx(id|track)      Retourne l'index d'une piste par son id ou objet, ou -1
 //   filteredIdx(t)          Retourne la position de t dans getFiltered(), O(1)
 //   getFiltered()           Liste pistes filtrées + triées pour la vue courante
 //   invalidateFilterCache() Invalide le cache de getFiltered()
@@ -39,9 +39,11 @@ export function rebuildTrackIdxMap() {
   }
 }
 
-/** Retourne l'index d'une piste dans tracks[] par son id, ou -1. */
-export function trackIdx(id) {
-  const i = _trackIdxMap.get(id);
+/** Retourne l'index d'une piste dans tracks[] par son id (string) ou objet piste, ou -1. */
+export function trackIdx(idOrTrack) {
+  const key = typeof idOrTrack === 'string' ? idOrTrack : idOrTrack?.id;
+  if (!key) return -1;
+  const i = _trackIdxMap.get(key);
   return i !== undefined ? i : -1;
 }
 
