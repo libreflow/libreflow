@@ -942,25 +942,6 @@ waitForTauri(() => {
 // Note: mini.html uses invoke('mini_get_state') on load to get initial state,
 // so the mini-request-state event is not needed.
 
-// ── UX-6 Ripple — onde au clic sur .tr / .tbt / .pc ─────────────────────────
-// Délégation sur document : un seul listener pour tous les éléments, y compris
-// ceux créés dynamiquement par le virtual scroll.
-function spawnRipple(el, x, y) {
-  const rect = el.getBoundingClientRect();
-  const cx   = x - rect.left;
-  const cy   = y - rect.top;
-  const maxD = Math.hypot(Math.max(cx, rect.width - cx), Math.max(cy, rect.height - cy)) * 2;
-  const rpl  = document.createElement('span');
-  rpl.className = 'rpl';
-  rpl.style.cssText = `width:${maxD}px;height:${maxD}px;left:${cx - maxD/2}px;top:${cy - maxD/2}px`;
-  el.appendChild(rpl);
-  rpl.addEventListener('animationend', () => rpl.remove(), { once: true });
-}
-document.addEventListener('pointerdown', (e) => {
-  const el = e.target.closest('.tr, .tbt, .pc, .tb-icon-btn, .mbtn, .pl-card, .sb-item');
-  if (el && !el.classList.contains('tr-skel')) spawnRipple(el, e.clientX, e.clientY);
-}, { passive: true });
-
 // ── P1-3 Parallax tilt — cartes playlist / album / artiste ───────────────
 // Délégation sur #content-area : un seul listener pour les grilles dynamiques.
 // Remplace le transform CSS hover (.card:hover translateY(-4px)) par un tilt 3D.

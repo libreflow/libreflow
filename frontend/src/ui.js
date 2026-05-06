@@ -208,7 +208,7 @@ document.addEventListener('keydown', e => {
 
 // ── Ripple ────────────────────────────────────────────────────────────────
 
-const _RIPPLE_SEL = '.tr, .tbt, .mbtn, .pc';
+const _RIPPLE_SEL = '.tr, .tbt, .mbtn, .pc, .tb-icon-btn, .pl-card, .sb-item';
 
 export function initRipple() {
   document.addEventListener('pointerdown', (e) => {
