@@ -227,11 +227,13 @@ export async function playAt(filteredIdx, { skipScroll = false } = {}) {
     const t  = fl[filteredIdx];
     if (!t) return;
 
-    const ok = await ensureUrl(t);
-    if (!ok) { toast(i18n('t_not_found'), 'error'); return; }
-
+    // INP-1 : mise à jour visuelle synchrone avant le premier await
     curIdx = trackIdx(t);
     set('curIdx', curIdx);
+    emit(EVENTS.TRACK_CHANGE, { track: t, idx: curIdx });
+
+    const ok = await ensureUrl(t);
+    if (!ok) { toast(i18n('t_not_found'), 'error'); return; }
 
     clearQueueOverride();
     audio.src = t.url;
@@ -248,7 +250,6 @@ export async function playAt(filteredIdx, { skipScroll = false } = {}) {
     saveCfg();
 
     if (radioActive) radioRefillQueue();
-    emit(EVENTS.TRACK_CHANGE, { track: t, idx: curIdx });
     // Mettre à jour le titre de la fenêtre : "Titre — Artiste | LibreFlow"
     const _wTitle = [t.name, t.artistFull || t.artist].filter(Boolean).join(' — ');
     invoke('win_set_title', { title: _wTitle ? `${_wTitle} | LibreFlow` : 'LibreFlow' }).catch(() => {});
