@@ -307,6 +307,7 @@ async function boot() {
     initRgState(cfg.rgEnabled !== false, cfg.rgTargetLUFS||-14);
     if (cfg.playbackSpeed && SPEEDS.includes(cfg.playbackSpeed)) {
       playbackSpeed = cfg.playbackSpeed;
+      set('playbackSpeed', playbackSpeed);
       // ERG-3 : pré-initialiser le bouton avant tout repaint pour éviter le flash "1×"
       if (playbackSpeed !== 1) {
         const _bspd = document.getElementById('btn-speed');
@@ -319,8 +320,8 @@ async function boot() {
       initCinemaBg(_bgMigration[cfg.cinemaBg] || cfg.cinemaBg);
     }
     // Restaurer état playback
-    if (cfg.shuffle)   shuffle = true;
-    if (cfg.repeat && ['none','all','one'].includes(cfg.repeat)) repeat = cfg.repeat;
+    if (cfg.shuffle)   { shuffle = true; set('shuffle', true); }
+    if (cfg.repeat && ['none','all','one'].includes(cfg.repeat)) { repeat = cfg.repeat; set('repeat', repeat); }
     if (cfg.albumSort       && ['name','duration','count','year'].includes(cfg.albumSort))    { albumSort       = cfg.albumSort;       set('albumSort',       albumSort); }
     if (cfg.artistSort      && ['name','count'].includes(cfg.artistSort))              { artistSort      = cfg.artistSort;      set('artistSort',      artistSort); }
     if (cfg.genreSort       && ['count','name'].includes(cfg.genreSort))               { genreSort       = cfg.genreSort;       set('genreSort',       genreSort); }
