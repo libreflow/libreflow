@@ -2843,7 +2843,7 @@ html[data-mode="light"] .orphan-item { border-bottom-color: var(--bg5); }
   box-shadow: var(--shadow-lg), var(--shadow-inset-hi);
   padding: var(--sp-6) var(--sp-7);
   width: var(--modal-bte-w); max-width: 92vw;
-  animation: modalBoxIn var(--dur-mid) var(--spring-soft);
+  /* animation ici retirée — elle jouait au boot. La bonne animation est sous .on ci-dessus. */
 }
 .bte-fields {
   display: grid; grid-template-columns: var(--pl-art-col) 1fr;
@@ -3023,7 +3023,7 @@ html[data-mode="light"] .bte-cover-clear    { background: var(--bg3); border-col
 
 /* ─ Smart playlist mode switcher ─ */
 .spl-mode-btn { transition: background var(--dur-fast) var(--smooth), color var(--dur-fast) var(--smooth); }
-.spl-mode-btn.active { background: var(--g) !important; color: var(--c-black) !important; border-color: transparent !important; }
+.spl-mode-btn.active { background: var(--g) !important; color: var(--text-on-accent) !important; border-color: transparent !important; }
 
 /* ─ Smart playlist rule row ─ */
 .spl-rule-row {
@@ -3046,7 +3046,7 @@ html[data-mode="light"] .bte-cover-clear    { background: var(--bg3); border-col
   padding: var(--sp-micro) var(--sp-1h); border-radius: var(--r-md); font-size: var(--fs-base); line-height: var(--lh-1);
   transition: color var(--dur-fast) var(--smooth), background var(--dur-fast) var(--smooth);
 }
-.spl-rule-del:hover { color: var(--danger, #ef4444); background: rgba(239,68,68,.1); }
+.spl-rule-del:hover { color: var(--red); background: rgba(var(--red-rgb),.10); }
 
 /* ═══ SIDEBAR PLAYLISTS ══════════════════════════════════════ */
 .ni-pl { padding-left: var(--sp-2h); padding-right: var(--sp-2); font-size: var(--fs-md); }
@@ -3236,7 +3236,7 @@ html[data-mode="light"] .bte-cover-clear    { background: var(--bg3); border-col
   display: none; position: absolute; left: 100%; top: 0;
   background: var(--bg2); border: var(--border-w-sm) solid var(--border-1);
   border-radius: var(--r); box-shadow: var(--shadow-pop);
-  min-width: 160px; z-index: 200; padding: var(--sp-1q);
+  min-width: 160px; z-index: var(--z-dropdown); padding: var(--sp-1q);
 }
 .ctx-sep              { height: var(--sep-h); background: var(--bg5); margin: var(--sp-1q) 0; }
 .ctx-submenu-lbl      { font-size: var(--fs-xs); font-weight: 700; color: var(--t3); letter-spacing: var(--ls-caps-sm); text-transform: uppercase; padding: var(--sp-1h) var(--sp-3) var(--sp-micro); }
@@ -3256,7 +3256,7 @@ html[data-mode="light"] .bte-cover-clear    { background: var(--bg3); border-col
   background: none; border: none; color: var(--t3);
   width: var(--icon-3xl); height: var(--icon-3xl); cursor: pointer;
   display: flex; align-items: center; justify-content: center;
-  border-radius: var(--sp-1); transition: background var(--ease), color var(--ease);
+  border-radius: var(--r-md); transition: background var(--ease), color var(--ease);
 }
 .sb-section-lbl button:hover { background: var(--bg3); color: var(--t); }
 .sb-section-lbl button svg   { width: var(--icon-sm); height: var(--icon-sm); fill: currentColor; }
@@ -3707,43 +3707,43 @@ html[data-mode="light"] .pl-folder-h:hover .pl-folder-count { background: var(--
 .queue-item--loop:nth-child(4) { opacity: .2; }
 .queue-item--loop:nth-child(5) { opacity: .09; }
 
-/* ── Queue : sections Spotify ──────────────────────────────── */
+/* ── Queue : sections ──────────────────────────────── */
 .queue-section-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 10px 12px 4px;
+  padding: var(--sp-2h) var(--sp-3) var(--sp-1);
 }
 .queue-section-label {
-  font-size: 10px;
+  font-size: var(--fs-xs);
   font-weight: 700;
-  letter-spacing: .08em;
+  letter-spacing: var(--ls-xwide);
   text-transform: uppercase;
   color: var(--t2);
 }
 .queue-clear-btn {
-  font-size: 11px;
+  font-size: var(--fs-sm);
   color: var(--t2);
   background: none;
   border: none;
   cursor: pointer;
-  padding: 2px 8px;
-  border-radius: 4px;
-  transition: color var(--dur) ease, background var(--dur) ease;
+  padding: var(--sp-micro) var(--sp-2);
+  border-radius: var(--r-md);
+  transition: color var(--ease), background var(--ease);
 }
 .queue-clear-btn:hover {
   color: var(--t);
   background: var(--bg3);
 }
 .queue-section-divider {
-  padding: 12px 12px 4px;
-  font-size: 10px;
+  padding: var(--sp-3) var(--sp-3) var(--sp-1);
+  font-size: var(--fs-xs);
   font-weight: 700;
-  letter-spacing: .08em;
+  letter-spacing: var(--ls-xwide);
   text-transform: uppercase;
   color: var(--t2);
-  border-top: 1px solid var(--sep);
-  margin-top: 6px;
+  border-top: var(--border-w-sm) solid var(--sep);
+  margin-top: var(--sp-1h);
 }
 
 /* Items explicites (draggable + supprimables) */
@@ -3774,26 +3774,27 @@ html[data-mode="light"] .pl-folder-h:hover .pl-folder-count { background: var(--
   background: none;
   border: none;
   cursor: pointer;
-  color: var(--t2);
-  font-size: 15px;
-  line-height: 1;
-  padding: 4px 6px;
-  border-radius: 4px;
+  color: var(--t3);
+  font-size: var(--fs-md);
+  line-height: var(--lh-1);
+  padding: var(--sp-1) var(--sp-1h);
+  border-radius: var(--r-md);
   flex-shrink: 0;
-  transition: color var(--dur) ease;
+  transition: color var(--ease), background var(--ease);
 }
 .queue-item--explicit:hover .queue-remove-btn {
   display: flex;
   align-items: center;
 }
 .queue-remove-btn:hover {
-  color: var(--g);
+  color: var(--red);
+  background: rgba(var(--red-rgb), .1);
 }
 
 /* Items naturels (lecture seule sauf promotion) */
 .queue-item--natural {
   cursor: grab;
-  padding-left: 12px;
+  padding-left: var(--sp-3);
 }
 .queue-item--natural:active {
   cursor: grabbing;
@@ -3809,27 +3810,27 @@ html[data-mode="light"] .pl-folder-h:hover .pl-folder-count { background: var(--
 .queue-ghost {
   position: fixed;
   pointer-events: none;
-  z-index: 9999;
-  border-radius: 8px;
+  z-index: var(--z-tooltip);
+  border-radius: var(--r-art);
   background: var(--bg4);
-  box-shadow: 0 6px 24px rgba(0,0,0,.35);
+  box-shadow: var(--shadow-mp-drag);
   opacity: .88;
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 0 12px;
+  gap: var(--sp-2);
+  padding: 0 var(--sp-3);
 }
 
 /* Promotion : zone explicite en surbrillance quand ghost au-dessus */
 .queue-promote-active .queue-section-header {
   background: var(--bg3);
-  border-radius: 6px;
+  border-radius: var(--r);
 }
 
 /* Spring-back animation (promotion annulée) */
 @keyframes qSpringBack {
   0%   { opacity: .88; transform: scale(1); }
-  100% { opacity: 0;   transform: scale(.92) translateY(8px); }
+  100% { opacity: 0;   transform: scale(.92) translateY(var(--sp-2)); }
 }
 .queue-ghost--spring {
   animation: qSpringBack var(--dur-modal) ease forwards;
