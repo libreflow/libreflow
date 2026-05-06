@@ -621,8 +621,13 @@ export function updateBreadcrumb() {
 /** Joue une piste par son ID. */
 export function playById(id) {
   if (!id) return;
-  const idx = trackIdx(id);
-  if (idx >= 0) playAt(idx);
+  const tidx = trackIdx(id);
+  if (tidx < 0) return;
+  const tracks = get('tracks') || [];
+  const t = tracks[tidx];
+  if (!t) return;
+  const fi = filteredIdx(t);
+  if (fi >= 0) playAt(fi);
 }
 
 /** Met à jour la classe .act sur la piste courante dans le DOM (sans re-rendu complet). */
