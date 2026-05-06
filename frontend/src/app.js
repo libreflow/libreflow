@@ -639,6 +639,7 @@ export async function shufflePlaylist() {
   // Attendre playAt pour que curIdx et le cache soient à jour avant buildQ()
   await playAt(ri);
   shuffle = true;
+  set('shuffle', true);
   const _shufBtn = document.getElementById('pc-shuf');
   _shufBtn?.classList.add('on');
   _shufBtn?.setAttribute('aria-pressed', 'true');
