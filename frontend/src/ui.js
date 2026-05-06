@@ -213,7 +213,7 @@ const _RIPPLE_SEL = '.tr, .tbt, .mbtn, .pc, .tb-icon-btn, .pl-card, .sb-item';
 export function initRipple() {
   document.addEventListener('pointerdown', (e) => {
     const el = e.target.closest(_RIPPLE_SEL);
-    if (!el) return;
+    if (!el || el.classList.contains('tr-skel')) return;
     const rect = el.getBoundingClientRect();
     const size = Math.max(rect.width, rect.height) * 2;
     const r = document.createElement('span');
