@@ -435,9 +435,9 @@ function _handleDblClick(e) {
   // Playlist nav span — inline rename (this = span)
   const span = e.target.closest('[data-pl-rename-id]');
   if (span) { e.stopPropagation(); _plNavInlineRename(span.dataset.plRenameId, span); return; }
-  // Track row — open tag editor
+  // Track row — play track (tag editor accessible via context menu)
   const tr = e.target.closest('[data-track-id]');
-  if (tr) { openTagEditor(tr.dataset.trackId); return; }
+  if (tr) { playById(tr.dataset.trackId); return; }
 }
 
 function _handleContextMenu(e) {
