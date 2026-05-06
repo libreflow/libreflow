@@ -1210,8 +1210,8 @@ export async function clearLibrary() {
   plFolders = []; set('plFolders', []); recentPls = []; set('recentPls', []);
   renderPlNav();
   curIdx  = -1; set('curIdx', -1);
-  shuffle = false; resetShuffleQ();
-  repeat  = 'none';
+  shuffle = false; set('shuffle', false); resetShuffleQ();
+  repeat  = 'none'; set('repeat', 'none');
   query   = ''; set('query', '');
   // Arrêter l'audio
   audio.pause();
