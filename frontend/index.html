@@ -314,7 +314,7 @@
   <button class="sleep-opt" data-action="sleep-end-track" data-i18n="sleep_opt_end">⏹ Fin du titre</button>
   <div class="sleep-custom-row">
     <input id="sleep-custom-input" class="sleep-custom-inp" type="number" min="1" max="999" placeholder="min…"
-      onkeydown="if(event.key==='Enter')setSleepCustom()" />
+      data-input-action="sleep-custom-key" />
     <button class="sleep-custom-btn" data-action="sleep-custom">OK</button>
   </div>
   <button class="sleep-opt sleep-opt-cancel" id="sleep-opt-cancel" data-action="cancel-sleep" data-i18n="sleep_opt_cancel">Annuler</button>

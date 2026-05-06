@@ -423,6 +423,10 @@ function _handleInput(e) {
     case 'pl-sort':
       setPlSort(el.value);
       break;
+
+    case 'sleep-custom-key':
+      if (e.type === 'keydown' && e.key === 'Enter') setSleepCustom();
+      break;
   }
 }
 
@@ -495,6 +499,7 @@ export function registerHandlers() {
   document.addEventListener('click',       _handleBackdropClick);
   document.addEventListener('input',       _handleInput);
   document.addEventListener('change',      _handleInput);
+  document.addEventListener('keydown',     _handleInput);   // for sleep-custom-key Enter
   document.addEventListener('dblclick',    _handleDblClick);
   document.addEventListener('contextmenu', _handleContextMenu);
   document.addEventListener('keydown',     _handleKeydown);
