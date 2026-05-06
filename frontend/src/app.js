@@ -303,7 +303,7 @@ async function boot() {
       vinylSpin:   cfg.vinylSpin === true,
     });
     set('displayMode', cfg.displayMode || 'dark');
-    crossfadeDur  = cfg.crossfadeDur||0;
+    crossfadeDur  = cfg.crossfadeDur||0;  set('crossfadeDur', crossfadeDur);
     initRgState(cfg.rgEnabled !== false, cfg.rgTargetLUFS||-14);
     if (cfg.playbackSpeed && SPEEDS.includes(cfg.playbackSpeed)) {
       playbackSpeed = cfg.playbackSpeed;
