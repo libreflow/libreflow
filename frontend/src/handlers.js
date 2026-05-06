@@ -423,10 +423,6 @@ function _handleInput(e) {
     case 'pl-sort':
       setPlSort(el.value);
       break;
-
-    case 'sleep-custom-key':
-      if (e.type === 'keydown' && e.key === 'Enter') setSleepCustom();
-      break;
   }
 }
 
@@ -458,6 +454,12 @@ function _handleContextMenu(e) {
 
 function _handleKeydown(e) {
   if (e.key !== 'Enter' && e.key !== ' ') return;
+  // sleep-custom-key: Enter on #sleep-custom-input → setSleepCustom()
+  if (e.key === 'Enter' && e.target.id === 'sleep-custom-input') {
+    e.preventDefault();
+    setSleepCustom();
+    return;
+  }
   // BUG-1 FIX : ne pas intercepter si le focus est dans un champ de saisie ou
   // du contenu éditable (ex. éditeur de tags inline, renommage playlist).
   if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA'
@@ -499,7 +501,6 @@ export function registerHandlers() {
   document.addEventListener('click',       _handleBackdropClick);
   document.addEventListener('input',       _handleInput);
   document.addEventListener('change',      _handleInput);
-  document.addEventListener('keydown',     _handleInput);   // for sleep-custom-key Enter
   document.addEventListener('dblclick',    _handleDblClick);
   document.addEventListener('contextmenu', _handleContextMenu);
   document.addEventListener('keydown',     _handleKeydown);
