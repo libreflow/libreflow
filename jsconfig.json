@@ -1,0 +1,17 @@
+{
+  "compilerOptions": {
+    "checkJs": true,
+    "strict": true,
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "noUnusedLocals": true,
+    "noUnusedParameters": false,
+    "baseUrl": ".",
+    "paths": {
+      "@src/*": ["frontend/src/*"]
+    }
+  },
+  "include": ["frontend/src/**/*.js"],
+  "exclude": ["node_modules", "src-tauri"]
+}
