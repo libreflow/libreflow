@@ -1,3 +1,4 @@
+// @ts-check
 // search.js — Filtrage, tri et index O(1) pour la bibliothèque LibreFlow
 //
 // Optimisations :
@@ -17,6 +18,8 @@
 //   invalidateFilterCache() Invalide le cache de getFiltered()
 //   GENRE_ALIASES           Map des variantes de genres vers leur clé canonique
 
+/** @import { Track } from './types.js' */
+
 import { get } from './store.js';
 
 // ── Collator partagé (P3) ────────────────────────────────────────────────────
@@ -27,10 +30,14 @@ const _compare = (a, b) => _coll.compare(a || '', b || '');
 // ── Map id → index (projection exacte de tracks[]) ───────────────────────────
 // INVARIANT : _trackIdxMap === projection exacte de tracks[]
 // Toute mutation de tracks[] → rebuildTrackIdxMap() OBLIGATOIRE
+/** @type {Map<string, number>} */
 export const _trackIdxMap = new Map();
 
-/** Reconstruit _trackIdxMap depuis tracks[] en store.
- *  À appeler après chaque mutation de tracks[]. */
+/**
+ * Reconstruit _trackIdxMap depuis tracks[] en store.
+ * À appeler après chaque mutation de tracks[].
+ * @returns {void}
+ */
 export function rebuildTrackIdxMap() {
   const tracks = get('tracks') || [];
   _trackIdxMap.clear();
@@ -39,7 +46,11 @@ export function rebuildTrackIdxMap() {
   }
 }
 
-/** Retourne l'index d'une piste dans tracks[] par son id (string) ou objet piste, ou -1. */
+/**
+ * Retourne l'index d'une piste dans tracks[] par son id (string) ou objet piste, ou -1.
+ * @param {string | Track} idOrTrack
+ * @returns {number}
+ */
 export function trackIdx(idOrTrack) {
   const key = typeof idOrTrack === 'string' ? idOrTrack : idOrTrack?.id;
   if (!key) return -1;
@@ -51,7 +62,10 @@ export function trackIdx(idOrTrack) {
 // posMap : Map<Track, position_dans_result> pour filteredIdx O(1)
 const _GF = { sig: null, result: null, posMap: null };
 
-/** Invalide le cache de getFiltered(). Appeler après toute mutation UI. */
+/**
+ * Invalide le cache de getFiltered(). Appeler après toute mutation UI.
+ * @returns {void}
+ */
 export function invalidateFilterCache() {
   _GF.sig = null;
 }
@@ -117,7 +131,11 @@ export const GENRE_ALIASES = Object.freeze({
   'variété':             'variete',
 });
 
-/** Normalise un genre : toLowerCase + trim + alias → clé canonique. */
+/**
+ * Normalise un genre : toLowerCase + trim + alias → clé canonique.
+ * @param {string | null | undefined} g
+ * @returns {string}
+ */
 export function _normalizeGenre(g) {
   if (!g) return '';
   const key = g.toLowerCase().trim().replace(/\s+/g, ' ');
@@ -178,8 +196,11 @@ function _sortTracks(src, sort, recentPlays) {
 
 // ── getFiltered ───────────────────────────────────────────────────────────────
 
-/** Retourne la liste de pistes filtrées + triées pour la vue et le tri courants.
- *  Résultat mis en cache ; invalider via invalidateFilterCache(). */
+/**
+ * Retourne la liste de pistes filtrées + triées pour la vue et le tri courants.
+ * Résultat mis en cache ; invalider via invalidateFilterCache().
+ * @returns {Track[]}
+ */
 export function getFiltered() {
   const tracks      = get('tracks')      || [];
   const sort        = get('sort')        || 'az';
@@ -196,7 +217,7 @@ export function getFiltered() {
   const tracksSig   = tracks.length + '|' + (tracks[tracks.length - 1]?.id || '');
   const likedSig    = (view === 'liked') ? (liked?.size ?? 0) : '';
   const recentSig   = (sort === 'recent') ? recentPlays.slice(0, 20).join(',') : '';
-  const sig = `${sort}|${query}|${view}|${drillKey}|${drillFrom}|${curPlId}|${plSort}|${tracksSig}|${likedSig}|${recentSig}`;
+  const sig = `${sort}\0${query}\0${view}\0${drillKey}\0${drillFrom}\0${curPlId}\0${plSort}\0${tracksSig}\0${likedSig}\0${recentSig}`;
 
   if (_GF.sig === sig) return _GF.result;
 
@@ -240,18 +261,21 @@ export function getFiltered() {
   let filtered = query ? _filterByQuery(src, query) : src;
 
   // ── Tri ───────────────────────────────────────────────────────────────────
-  // Playlist en mode 'manual' sans query : conserver l'ordre de la playlist
-  const isManualPlaylist = (view === 'playlist' || (drillFrom === '' && curPlId))
-    && plSort === 'manual' && !query;
+  // Playlist en mode 'manual' sans query : conserver l'ordre de la playlist.
+  // Vue 'recent' sans query : ordre de lecture récente déjà appliqué dans le filtre,
+  //   ne pas ré-appliquer _sortTracks qui écraserait cet ordre.
+  const isManualPlaylist = view === 'playlist' && plSort === 'manual' && !query;
+  const isRecentView     = view === 'recent' && !query;
   let result;
-  if (isManualPlaylist) {
-    result = filtered; // ordre de la playlist préservé
+  if (isManualPlaylist || isRecentView) {
+    result = filtered; // ordre préservé (playlist manuelle ou récentes)
   } else {
     result = _sortTracks(filtered, sort, recentPlays);
   }
 
   // ── Build posMap (P4/P7) ──────────────────────────────────────────────────
-  const posMap = new Map(result.map((t, i) => [t, i]));
+  // Utilise t.id (string) comme clé — les références d'objets changent après setTracks()
+  const posMap = new Map(result.map((t, i) => [t.id, i]));
 
   _GF.sig    = sig;
   _GF.result = result;
@@ -260,10 +284,18 @@ export function getFiltered() {
   return result;
 }
 
-/** Retourne la position de `track` dans le dernier résultat de getFiltered(), O(1).
- *  Retourne -1 si la piste n'est pas dans le résultat courant. */
+/**
+ * Retourne la position de `track` dans le dernier résultat de getFiltered(), O(1).
+ * Accepte un objet piste ou un id (string) directement.
+ * Retourne -1 si la piste n'est pas dans le résultat courant.
+ * @param {Track | string | null} track
+ * @returns {number}
+ */
 export function filteredIdx(track) {
   if (!track || !_GF.posMap) return -1;
-  const pos = _GF.posMap.get(track);
+  // Compatibilité : appelé avec un objet piste ou un id string direct
+  const id = (typeof track === 'string') ? track : (track.id ?? null);
+  if (!id) return -1;
+  const pos = _GF.posMap.get(id);
   return pos !== undefined ? pos : -1;
 }
