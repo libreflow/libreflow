@@ -30,11 +30,17 @@ const EQ_FREQS = [32, 64, 125, 250, 500, 1000, 2000, 4000, 8000, 16000];
 const EQ_BAND_COUNT = 10;
 
 // ── Noeuds exportés (live bindings) ──────────────────────────────────────────
+/** @type {AudioContext | null} */
 export let eqCtx        = null;
+/** @type {MediaElementAudioSourceNode | null} */
 export let eqSource     = null;
+/** @type {BiquadFilterNode[]} */
 export let eqNodes      = [];
+/** @type {AnalyserNode | null} */
 export let eqAnalyser   = null;
+/** @type {GainNode | null} */
 export let audioOutGain = null;
+/** @type {GainNode | null} */
 export let masterGainNode = null;
 export let eqEnabled    = false;
 export let eqOpen       = false;
@@ -216,7 +222,7 @@ export function initEQ() {
 // ── ensureEQResumed ───────────────────────────────────────────────────────────
 /** Relance l'AudioContext si suspendu (autoplay policy). */
 export function ensureEQResumed() {
-  if (eqCtx?.state === 'suspended') eqCtx.resume();
+  if (eqCtx?.state === 'suspended') eqCtx.resume().catch(e => console.warn('[EQ] AudioContext resume failed:', e));
 }
 
 // ── setMasterGain ─────────────────────────────────────────────────────────────
@@ -231,9 +237,10 @@ export function setMasterGain(v, immediate = false) {
       masterGainNode.gain.setTargetAtTime(val, eqCtx.currentTime, 0.01);
     }
   } else {
-    // Fallback avant initEQ()
-    const audio = document.getElementById('audio');
-    if (audio) audio.volume = val;
+    // Fallback avant initEQ() — lire depuis le slider DOM (R1 : jamais hardcoder audio.volume)
+    const _audio = document.getElementById('audio');
+    const _volEl = document.getElementById('vol');
+    if (_audio && _volEl) _audio.volume = parseFloat(_volEl.value);
   }
 }
 
@@ -261,6 +268,7 @@ export function closeEQ() {
 // ── setEQBand ─────────────────────────────────────────────────────────────────
 /** Modifie le gain de la bande `idx` (0-9) à la valeur `db` (en dB). */
 export function setEQBand(idx, db) {
+  if (isNaN(db) || !isFinite(db)) return;
   if (!eqCtx) initEQ();
   if (!eqNodes[idx]) return;
   const val = Math.max(-12, Math.min(12, db));

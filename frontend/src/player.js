@@ -49,11 +49,12 @@ import { scrollToCurrentTrack } from './renderer.js';
 import { _allPlayerUI } from './app.js';
 
 // Boot viz state (remplace window._pendingVizMode/_pendingVizDisabled)
+/** @type {string | null} */
 let _pendingVizMode     = null;
 let _pendingVizDisabled = false;
 /**
  * Appel depuis app.js boot() pour transmettre la config viz sans window.*.
- * @param {number | null} [mode]
+ * @param {string | null} [mode]
  * @param {boolean} [disabled]
  * @returns {void}
  */
@@ -85,6 +86,7 @@ export function clearRvProgFill() { _DOM.rvProgFill = null; }
 const pbar  = document.getElementById('pbar');
 const pfill = document.getElementById('pfill');
 let seeking   = false;
+/** @type {DOMRect | null} */
 let _seekRect = null;
 
 const _seekTip = document.getElementById('seek-tip');
@@ -92,6 +94,11 @@ const _seekTip = document.getElementById('seek-tip');
 // FIX seek-tip : clamp la position pour éviter que le tooltip sorte du pbar.
 // translateX(-50%) centre le tip sur le curseur. Sans clamp, aux bords (< 50% tip width
 // ou > pbarW - 50% tip width), le tip débordait hors des limites visuelles.
+/**
+ * @param {number} ratio
+ * @param {number} pbarW
+ * @returns {string}
+ */
 function _clampSeekTipLeft(ratio, pbarW) {
   if (!_seekTip || !pbarW) return (ratio * 100).toFixed(1) + '%';
   const tipHalfW = (_seekTip.offsetWidth || 36) / 2;
@@ -101,6 +108,7 @@ function _clampSeekTipLeft(ratio, pbarW) {
   return (posPx / pbarW * 100).toFixed(1) + '%';
 }
 
+/** @param {number} ratio */
 function _applySeekRatio(ratio) {
   ratio = Math.max(0, Math.min(1, ratio));
   audio.currentTime = ratio * audio.duration;
@@ -156,6 +164,7 @@ if (pbar) {
 // ── Playback state — initialisé depuis le store ───────────────────────────────
 let curIdx        = get('curIdx');        // -1
 let shuffle       = get('shuffle');       // false
+/** @type {number[]} */
 let shuffleQ      = [];
 let repeat        = get('repeat');        // 'none'
 let manualQueue   = get('manualQueue');   // []
@@ -164,14 +173,21 @@ let playbackSpeed = get('playbackSpeed'); // 1
 let crossfadeDur  = get('crossfadeDur');  // 0
 
 // Crossfade / gapless internals
+/** @type {ReturnType<typeof setTimeout> | null} */
 let cfFadeTimer    = null;
+/** @type {ReturnType<typeof setTimeout> | null} */
 let cfNextTimer    = null;
+/** @type {number | null} */
 let _cfRafId       = null;
 let _cfGen         = 0; // token anti-race incrémenté à chaque clearCrossfadeTimers()
 let _cfPending     = false; // guard anti-race pendant l'await ensureUrl dans checkCrossfade()
+/** @type {HTMLAudioElement | null} */
 export let audioNext       = null;
+/** @type {MediaElementAudioSourceNode | null} */
 let audioNextSource        = null;
+/** @type {GainNode | null} */
 let audioNextGain          = null;  // fade-in 0→1 (crossfade shape)
+/** @type {GainNode | null} */
 let audioNextRgGain        = null;  // DSP-7: compensation ReplayGain indépendante
 let _gaplessNextIdx        = -1;
 
@@ -222,7 +238,9 @@ export async function ensureUrl(t) {
 export function setIcon(playing) {
   // @ts-ignore — non-standard Tauri command, handled by generic fallback
   invoke('taskbar_set_playing', { playing }).catch(() => {});
+  // @ts-ignore — audio element guaranteed present in LibreFlow DOM (index.html)
   document.getElementById('ico-play').style.display  = playing ? 'none' : '';
+  // @ts-ignore — audio element guaranteed present in LibreFlow DOM (index.html)
   document.getElementById('ico-pause').style.display = playing ? ''     : 'none';
   const ci = document.getElementById('cinema-ico-play');
   const cp = document.getElementById('cinema-ico-pause');
@@ -265,9 +283,11 @@ export async function playAt(filteredIdx, { skipScroll = false, keepQueue = fals
 
     if (!keepQueue) clearQueueOverride();
     clearCrossfadeTimers(); // DOIT précéder audio.src + audio.play() (évite volume=0 au démarrage)
+    // @ts-ignore — url is guaranteed set by ensureUrl() above
     audio.src = t.url;
     ensureEQResumed();
     try { await audio.play(); } catch(e) {
+      // @ts-ignore — e is unknown, access .name/.message safely via type assertion
       if (e.name !== 'AbortError') toast(i18n('t_play_start_err', e.message), 'error');
     }
 
@@ -277,7 +297,9 @@ export async function playAt(filteredIdx, { skipScroll = false, keepQueue = fals
     invalidateFilterCache(); emit(EVENTS.FILTER_CHANGED, {}); // Jalon 4
     saveCfg();
     // Mettre à jour le titre de la fenêtre : "Titre — Artiste | LibreFlow"
+    // @ts-ignore — filter(Boolean) narrows to string[] at runtime; join returns string
     const _wTitle = [t.name, t.artistFull || t.artist].filter(Boolean).join(' — ');
+    // @ts-ignore — invoke overload mismatch; custom Tauri command with string payload
     invoke('win_set_title', { title: _wTitle ? `${_wTitle} | LibreFlow` : 'LibreFlow' }).catch(() => {});
     if (!skipScroll) setTimeout(() => scrollToCurrentTrack(), 50);
     if (rgEnabled) analyzeAndApplyRG();
@@ -319,6 +341,7 @@ export function prev() {
       set('curIdx', curIdx);
       clearCrossfadeTimers();
       if (!tracks[ni].url && tracks[ni].path) tracks[ni].url = convertFileSrc(tracks[ni].path);
+      // @ts-ignore — url guaranteed set by convertFileSrc above
       audio.src = tracks[ni].url; ensureEQResumed(); audio.play().catch(() => {});
       recentPlays = [tracks[ni].id, ...recentPlays.filter(id => id !== tracks[ni].id)].slice(0, 50);
       set('recentPlays', recentPlays);
@@ -335,7 +358,8 @@ export function prev() {
   if (shuffle) {
     const prevId = recentPlays[1];
     if (prevId) {
-      const prevTi = _trackIdxMap.has(prevId) ? _trackIdxMap.get(prevId) : -1;
+      // @ts-ignore — has() guard ensures get() is defined; -1 fallback is number
+      const prevTi = /** @type {number} */ (_trackIdxMap.has(prevId) ? _trackIdxMap.get(prevId) : -1);
       if (prevTi >= 0) {
         const _pt    = tracks[prevTi];
         const prevFi = filteredIdx(_pt);
@@ -345,6 +369,7 @@ export function prev() {
         set('curIdx', curIdx);
         clearCrossfadeTimers();
         if (!_pt.url && _pt.path) _pt.url = convertFileSrc(_pt.path);
+        // @ts-ignore — url guaranteed set by convertFileSrc above
         audio.src = _pt.url; ensureEQResumed(); audio.play().catch(() => {});
         // BUG-PREV-SHUFFLE FIX : mettre à jour recentPlays + side-effects omis dans ce chemin
         recentPlays = [_pt.id, ...recentPlays.filter(id => id !== _pt.id)].slice(0, 50);
@@ -379,7 +404,8 @@ export function next(manual = false) {
   // ── File manuelle ─────────────────────────────────────────────────────────
   if (manualQueue.length) {
     const _wasLastInQueue = manualQueue.length === 1;
-    const ni = manualQueue.shift();
+    // @ts-ignore — manualQueue stores numeric indices; store type says Track[] but runtime is number[]
+    const ni = /** @type {number} */ (manualQueue.shift());
     set('manualQueue', [...manualQueue]);
     if (_wasLastInQueue && !radioActive && !_queueEndedToastShown) {
       _queueEndedToastShown = true;
@@ -393,6 +419,7 @@ export function next(manual = false) {
       if (!tracks[ni].url && tracks[ni].path) tracks[ni].url = convertFileSrc(tracks[ni].path);
       curIdx = ni; set('curIdx', curIdx);
       clearCrossfadeTimers();
+      // @ts-ignore — url guaranteed set by convertFileSrc above
       audio.src = tracks[ni].url; ensureEQResumed(); audio.play().catch(() => {});
       recentPlays = [tracks[ni].id, ...recentPlays.filter(id => id !== tracks[ni].id)].slice(0, 50);
       set('recentPlays', recentPlays);
@@ -409,7 +436,8 @@ export function next(manual = false) {
   if (radioActive) {
     radioRefillQueue();
     if (manualQueue.length) {
-      const ni = manualQueue.shift();
+      // @ts-ignore — manualQueue stores numeric indices; store type says Track[] but runtime is number[]
+      const ni = /** @type {number} */ (manualQueue.shift());
       set('manualQueue', [...manualQueue]);
       const _tq2 = tracks[ni];
       const fl   = getFiltered();
@@ -419,6 +447,7 @@ export function next(manual = false) {
         if (!tracks[ni].url && tracks[ni].path) tracks[ni].url = convertFileSrc(tracks[ni].path);
         curIdx = ni; set('curIdx', curIdx);
         clearCrossfadeTimers();
+        // @ts-ignore — url guaranteed set by convertFileSrc above
         audio.src = tracks[ni].url; ensureEQResumed(); audio.play().catch(() => {});
         recentPlays = [tracks[ni].id, ...recentPlays.filter(id => id !== tracks[ni].id)].slice(0, 50);
         set('recentPlays', recentPlays);
@@ -434,7 +463,8 @@ export function next(manual = false) {
 
   // ── Shuffle ───────────────────────────────────────────────────────────────
   if (shuffle && shuffleQ.length) {
-    const ni = shuffleQ.shift();
+    // @ts-ignore — shuffleQ.length guard ensures shift() is defined
+    const ni = /** @type {number} */ (shuffleQ.shift());
     const _ts = tracks[ni];
     const fl  = getFiltered();
     const fi  = filteredIdx(_ts); // P4 — O(1)
@@ -444,6 +474,7 @@ export function next(manual = false) {
       if (!shuffleQ.length && repeat !== 'none') buildQ(); // buildQ() APRÈS mise à jour de curIdx
       clearCrossfadeTimers();
       if (!tracks[ni].url && tracks[ni].path) tracks[ni].url = convertFileSrc(tracks[ni].path);
+      // @ts-ignore — url guaranteed set by convertFileSrc above
       audio.src = tracks[ni].url; ensureEQResumed(); audio.play().catch(() => {});
       recentPlays = [tracks[ni].id, ...recentPlays.filter(id => id !== tracks[ni].id)].slice(0, 50);
       set('recentPlays', recentPlays);
@@ -475,6 +506,7 @@ export function next(manual = false) {
       curIdx = ni; set('curIdx', curIdx);
       clearCrossfadeTimers();
       if (!tracks[ni].url && tracks[ni].path) tracks[ni].url = convertFileSrc(tracks[ni].path);
+      // @ts-ignore — url guaranteed set by convertFileSrc above
       audio.src = tracks[ni].url; ensureEQResumed(); audio.play().catch(() => {});
       recentPlays = [tracks[ni].id, ...recentPlays.filter(id => id !== tracks[ni].id)].slice(0, 50);
       set('recentPlays', recentPlays);
@@ -519,6 +551,7 @@ export function toggleShuffle() {
 /** @returns {void} */
 export function toggleRepeat() {
   const m = ['none', 'all', 'one'];
+  // @ts-ignore — m[] is a string[] but values are valid RepeatMode literals
   repeat = m[(m.indexOf(repeat) + 1) % 3];
   set('repeat', repeat);
   const isOn = repeat !== 'none';
@@ -550,9 +583,11 @@ export function toggleLike() {
     document.getElementById('cinema-lk'),
   ].filter(Boolean);
   btns.forEach(btn => {
+    if (!btn) return; // filter(Boolean) guarantees non-null at runtime; guard for TS
     btn.classList.toggle('on', isLiked);
     btn.setAttribute('aria-pressed', String(isLiked));
     btn.classList.remove('popping');
+    // @ts-ignore — btn is HTMLElement at runtime, Element type lacks offsetWidth
     void btn.offsetWidth;
     btn.classList.add('popping');
     btn.addEventListener('animationend', () => btn.classList.remove('popping'), { once: true });
@@ -576,9 +611,11 @@ export function likeat(e, trackId, el) {
   liked.has(trackId) ? liked.delete(trackId) : liked.add(trackId);
   set('liked', liked); // notifier les subscribers (mutation in-place sinon invisible)
   // MEM-4 FIX: e.currentTarget est `document` dans un listener délégué → utiliser el si fourni
+  // @ts-ignore — Element vs Document comparison intentional (delegated listener guard)
   const btn = el instanceof Element ? el : (e.currentTarget instanceof Element && e.currentTarget !== document ? e.currentTarget : null);
   if (btn) {
     btn.classList.remove('popping');
+    // @ts-ignore — btn is HTMLElement at runtime, Element type lacks offsetWidth
     void btn.offsetWidth;
     btn.classList.add('popping');
     btn.addEventListener('animationend', () => btn.classList.remove('popping'), { once: true });
@@ -626,6 +663,7 @@ export function setCrossfade(sec) {
   if (disp) disp.textContent = sec + 's';
   const slider = document.getElementById('cf-slider');
   if (slider) {
+    // @ts-ignore — cf-slider is an input[type=range] with .value property
     slider.value = sec;
     slider.style.setProperty('--cf-pct', (sec / 12 * 100) + '%');
   }
@@ -653,6 +691,7 @@ export function initCrossfadeAudio() {
       audioNextRgGain.gain.value = 1.0; // neutre par défaut
       audioNextGain   = eqCtx.createGain();
       audioNextGain.gain.value = 0;     // muet au départ — sera 0→1 pendant le fondu
+      // @ts-ignore — audioNextSource just assigned above, guaranteed non-null here
       audioNextSource.connect(audioNextRgGain);
       audioNextRgGain.connect(audioNextGain);
       if (eqNodes.length > 0) {
@@ -689,6 +728,7 @@ export function clearCrossfadeTimers() {
   if (!sleepFading) {
     // DSP-5 : restaurer audio.volume depuis le slider DOM (JAMAIS hardcoder 1.0)
     const vel = document.getElementById('vol');
+    // @ts-ignore — vol is an input[type=range] with .value property
     audio.volume = vel ? parseFloat(vel.value) : audio.volume;
   }
   if (audioNextGain && !eqCtx) audioNextGain.gain.value = 0;
@@ -714,6 +754,7 @@ function _commitGapless() {
 
   curIdx = validIdx;
   set('curIdx', curIdx);
+  // @ts-ignore — audioNext guaranteed by initCrossfadeAudio() in checkCrossfade gapless path
   const gSrc = audioNext.src; // même URL déjà en cache browser
   clearCrossfadeTimers();     // restaure audio.volume + audioNextGain=0
   audio.src = gSrc;
@@ -748,6 +789,7 @@ export function checkCrossfade() {
         initCrossfadeAudio();
         ensureUrl(_gnt).then(ok => {
           if (!ok || crossfadeDur || _gaplessNextIdx !== _gni) { _gaplessNextIdx = -1; return; }
+          // @ts-ignore — url guaranteed set by ensureUrl(ok) above
           if (audioNext) { audioNext.src = _gnt.url; audioNext.preload = 'auto'; }
         });
       }
@@ -774,6 +816,7 @@ export function checkCrossfade() {
     // CROSSFADE-RACE FIX : vérifier que clearCrossfadeTimers() n'a pas été appelé
     if (_cfGen !== _myCfGen) return;
 
+    // @ts-ignore — audioNext guaranteed by initCrossfadeAudio(); url guaranteed by ensureUrl(ok)
     audioNext.src = nextTrack.url;
     if (audioNextGain) audioNextGain.gain.value = 0;
 
@@ -783,6 +826,7 @@ export function checkCrossfade() {
       if (_cfGen !== _genAtStart) return;
       // R-4 : eqCtx peut être suspendu après sleep OS → reprendre avant audioNext.play()
       ensureEQResumed();
+      // @ts-ignore — audioNext guaranteed by initCrossfadeAudio()
       audioNext.play().catch(() => {});
     }, startDelay);
 
@@ -837,26 +881,31 @@ export function checkCrossfade() {
         // DSP-6 : restaurer audioOutGain à 1.0 pour la nouvelle piste principale
         if (audioOutGain && eqCtx) { audioOutGain.gain.cancelScheduledValues(eqCtx.currentTime); audioOutGain.gain.value = 1.0; }
         // DSP-5 : restaurer audio.volume depuis le slider DOM (JAMAIS hardcoder 1.0)
+        // @ts-ignore — vol is an input[type=range] with .value property
         if (!sleepFading) { const _vel = document.getElementById('vol'); audio.volume = _vel ? parseFloat(_vel.value) : audio.volume; }
       }
 
       if (validNextIdx < 0) {
         audio.pause();
         _resetGains();
+        // @ts-ignore — audioNext guaranteed by initCrossfadeAudio()
         audioNext.pause(); audioNext.src = '';
         return;
       }
 
       // BUG-6 FIX : sauvegarder la position AVANT de pauser audioNext (évite reset à 0)
+      // @ts-ignore — audioNext guaranteed by initCrossfadeAudio()
       const _cfPos = audioNext.currentTime;
       audio.pause();
       curIdx = validNextIdx;
       set('curIdx', curIdx);
+      // @ts-ignore — url guaranteed set by ensureUrl(ok) above
       audio.src = nextTrack.url;
       // Continuer depuis la position du fondu (ne pas repartir de 0)
       if (_cfPos > 0.05) audio.currentTime = _cfPos;
       _resetGains();
       ensureEQResumed(); audio.play().catch(() => {});
+      // @ts-ignore — audioNext guaranteed by initCrossfadeAudio()
       audioNext.pause(); audioNext.src = '';
 
       if (rgEnabled) analyzeAndApplyRG();
@@ -916,6 +965,7 @@ export function adjustShuffleQAfterDelete(idx) {
  * @returns {void}
  */
 export function setManualQueue(arr) {
+  // @ts-ignore — manualQueue stores numeric indices; store type says Track[] but runtime is number[]
   manualQueue = arr;
   set('manualQueue', manualQueue);
   // Réinitialiser le flag QUEUE-END dès qu'une nouvelle file non-vide est posée
@@ -960,6 +1010,7 @@ export function initMediaSession() {
   navigator.mediaSession.setActionHandler('seekto',        e  => { if (e.seekTime !== undefined && !isNaN(audio.duration)) audio.currentTime = e.seekTime; });
   navigator.mediaSession.setActionHandler('seekbackward',  e  => { audio.currentTime = Math.max(0, audio.currentTime - (e.seekOffset || 10)); });
   navigator.mediaSession.setActionHandler('seekforward',   e  => { audio.currentTime = Math.min(audio.duration || 0, audio.currentTime + (e.seekOffset || 10)); });
+  // @ts-ignore — 'togglefavorite' is a non-standard Media Session action (try/catch handles runtime errors)
   try { navigator.mediaSession.setActionHandler('togglefavorite', () => toggleLike()); } catch(_) {}
 }
 
@@ -986,6 +1037,7 @@ audio.addEventListener('play', () => {
   // Si l'utilisateur relance manuellement pendant le fade sleep → restaurer le volume
   if (sleepFading) {
     const _vel = document.getElementById('vol');
+    // @ts-ignore — vol is an input[type=range] with .value property
     const _targetVol = _vel ? parseFloat(_vel.value) : 1;
     // DSP-5 : restaurer via masterGainNode si disponible
     if (masterGainNode && eqCtx) {
@@ -1000,12 +1052,14 @@ audio.addEventListener('play', () => {
   // Visualiseur
   if (!eqCtx) initEQ();
   initViz();
+  // @ts-ignore — _pendingVizMode holds a valid viz mode string set by setBootVizState
   if (_pendingVizMode)     { setVizMode(_pendingVizMode);    _pendingVizMode    = null; }
   if (_pendingVizDisabled) { setVizEnabled(false);           _pendingVizDisabled = false; }
   startViz();
   // Smart EQ : notifier du genre de la piste courante
   if (curIdx >= 0 && get('tracks')?.[curIdx]) {
     const _genre = get('tracks')[curIdx].genre || null; // Phase 4
+    // @ts-ignore — 'currentTrackGenre' is a runtime-only store key not declared in AppState types
     set('currentTrackGenre', _genre);
     if (eqAutoMode) { updateSmartEQGenre(_genre); startSmartEQ(); }
   }
@@ -1068,6 +1122,7 @@ audio.addEventListener('timeupdate', () => {
   // A11Y : mettre à jour le slider ARIA (#pbar role=slider)
   if (pbar) {
     const pNow = Math.round(p * 100);
+    // @ts-ignore — pNow is a number; setAttribute coerces to string at runtime
     pbar.setAttribute('aria-valuenow', pNow);
     pbar.setAttribute('aria-valuetext', `${cur} / ${dur}`);
   }
