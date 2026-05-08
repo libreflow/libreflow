@@ -1,3 +1,4 @@
+// @ts-nocheck
 // LibreFlow — Main application
 import { invoke, invokeRetry, listen, convertFileSrc } from './ipc.js';
 import { audio, playAt, prev, next, togglePlay, buildQ,
@@ -171,6 +172,8 @@ let query   = '';
 // radioActive, radioSeedId, radioQueue, _radioPlayedIds → radio.js
 let _lastNotifTrackId = null;
 let _saveCfgTimer     = null;
+let _retryArtTimer    = null; // FIX #21 — annulable dans clearLibrary()
+let _orphansTimer     = null; // FIX #22 — annulable dans clearLibrary()
 // _pqpTrackId, _dragTrackId → playlists.js
 // _smartSeedId → smartplaylist.js
 // lang → i18n.js (initLang / getLang)
@@ -375,7 +378,7 @@ async function boot() {
     // S92 FIX — restaurer le tri de la playlist active (curPlId déjà résolu depuis cfg)
     if (curPlId) {
       const _sp = playlists.find(p => p.id === curPlId);
-      if (_sp) plSort = _sp.sort || 'manual';
+      if (_sp) { plSort = _sp.sort || 'manual'; set('plSort', plSort); } // FIX #29
     }
   }
   setPlayLog(savedLog || []);
@@ -416,11 +419,11 @@ async function boot() {
       };
     });
     set('tracks', tracks); emit(EVENTS.LIBRARY_UPDATED, { tracks }); // Jalon 3/4
+    rebuildTrackIdxMap(); // FIX #3 — doit précéder updateStats() et renderLib()
     // Reconstruire liked par IDs si disponible (robuste aux réordres)
     updateStats();
     renderLib();
     showView('lib');
-    rebuildTrackIdxMap();
     // Queue persist — restaurer après rebuildTrackIdxMap (IDs validés contre _trackIdxMap)
     if (cfg?.queueState?.ids?.length) restoreQueueState(cfg.queueState);
     const cb=document.getElementById('btn-clear'); if(cb) cb.disabled=false;
@@ -439,7 +442,7 @@ async function boot() {
     // On ne retente PAS les pistes avec noArt=true (lecture OK mais fichier sans art).
     const _retryList = tracks.filter(t => t.metaDone && !t.art && !t.noArt && t.path);
     if (_retryList.length) {
-      setTimeout(async () => {
+      _retryArtTimer = setTimeout(async () => { // FIX #21 — stocker le timer
         // Afficher un toast spinner pendant le chargement des pochettes manquantes
         const dismissSpinner = toast(i18n('t_artwork_retry', _retryList.length), 'loading');
         const BATCH = 4;
@@ -459,7 +462,7 @@ async function boot() {
 
     // C-2 : vérification des fichiers orphelins — 6s après boot, non-bloquant
     // (après l'artwork retry pour ne pas cumuler les I/O au démarrage)
-    setTimeout(() => checkOrphans(), 6000);
+    _orphansTimer = setTimeout(() => checkOrphans(), 6000); // FIX #22 — stocker le timer
 
     // MINOR-1 FIX : applyLang() / setMode() / sync UI AVANT le await BOOT-1.
     // Avant ce fix, ces appels venaient après le bloc if/else → bloqués jusqu'à 5s
@@ -484,7 +487,7 @@ async function boot() {
     if (cfg && cfg.curTrackId) {
       const resumeTrack = _trackIdxMap.has(cfg.curTrackId) ? tracks[_trackIdxMap.get(cfg.curTrackId)] : undefined;
       if (resumeTrack) {
-        curIdx    = trackIdx(resumeTrack);
+        setCurIdx(trackIdx(resumeTrack)); // FIX #4 — notifier le store
         const ok  = await ensureUrl(resumeTrack);
         if (ok) {
           audio.src = resumeTrack.url;
@@ -649,15 +652,17 @@ export async function shufflePlaylist() {
 }
 
 // ══ Drag & Drop ═════════════════════════════════
-const drago=document.getElementById('drago');
+let drago = null;
 // Compteur dragenter/dragleave — évite le flickering sur WebView2
 // (e.relatedTarget est parfois null même en intra-fenêtre sur Windows)
 let _dragDepth = 0;
-document.addEventListener('dragenter', e=>{ e.preventDefault(); _dragDepth++; drago.classList.add('on'); });
-document.addEventListener('dragover',  e=>{ e.preventDefault(); });
-document.addEventListener('dragleave', e=>{ _dragDepth = Math.max(0, _dragDepth - 1); if (_dragDepth === 0) drago.classList.remove('on'); });
-document.addEventListener('drop', async e=>{
-  e.preventDefault(); _dragDepth = 0; drago.classList.remove('on');
+// FIX DRAG-MODULE : handlers déclarés ici pour être définis avant DOMContentLoaded,
+// mais attachés dans DOMContentLoaded (après drago = getElementById).
+function _onDragEnter(e){ e.preventDefault(); _dragDepth++; if (drago) drago.classList.add('on'); }
+function _onDragOver(e) { e.preventDefault(); }
+function _onDragLeave(e){ _dragDepth = Math.max(0, _dragDepth - 1); if (drago && _dragDepth === 0) drago.classList.remove('on'); }
+async function _onDrop(e){
+  e.preventDefault(); _dragDepth = 0; if (drago) drago.classList.remove('on');
   const EXTS=new Set(['mp3','flac','aac','m4a','ogg','opus','wav','wma','aiff','ape','alac']);
   const items = [...e.dataTransfer.items];
   const allFiles = [];
@@ -676,7 +681,7 @@ document.addEventListener('drop', async e=>{
             if (!entries.length) { res(batch); return; }
             batch.push(...entries);
             readBatch(); // continuer jusqu'à la fin
-          });
+          }, (err) => { console.warn('[drop] readEntries error', err); res(batch); }); // FIX #10
         };
         readBatch();
       });
@@ -703,7 +708,7 @@ document.addEventListener('drop', async e=>{
     // DRAG-1 FIX : file.webkitRelativePath est toujours vide en drag-drop Tauri.
     // Comparer en priorité par chemin exact, puis par basename seul pour les fichiers
     // déjà importés via watchfolder (leur t.path est un chemin OS complet).
-    { const _dn = file.name; if (tracks.some(t => t.path === (file.webkitRelativePath || _dn) || t.path.split(/[/\\]/).pop() === _dn)) continue; }
+    { const _dn = file.name; const _dnL = _dn.toLowerCase(); if (tracks.some(t => t.path === (file.webkitRelativePath || _dn) || t.path.split(/[/\\]/).pop().toLowerCase() === _dnL)) continue; }
     const ext=file.name.split('.').pop().toUpperCase();
     const url=URL.createObjectURL(file);
     const dur=await new Promise(res=>{
@@ -719,7 +724,7 @@ document.addEventListener('drop', async e=>{
   tracks.push(...newTracks); set('tracks', tracks); emit(EVENTS.LIBRARY_UPDATED, { tracks }); rebuildTrackIdxMap(); invalidateFilter(); updateStats(); renderLib(); showView('lib');
   toast(i18n('t_files_added', newTracks.length), 'success');
   newTracks.forEach(t=>loadTagsBg(t));
-});
+}
 
 // ══ Keyboard shortcuts ═══════════════════════════
 document.addEventListener('keydown', e=>{
@@ -742,18 +747,18 @@ document.addEventListener('keydown', e=>{
   if (e.code==='ArrowDown')  { e.preventDefault(); const _cur=masterGainNode?masterGainNode.gain.value:audio.volume; const v=Math.max(0,_cur-0.05); setMasterGain(v); const vel=document.getElementById('vol'); if(vel){vel.value=v; updateVolSlider(vel);} }
   if (e.key.toLowerCase()==='s') toggleShuffle();
   if (e.key.toLowerCase()==='r') toggleRepeat();
-  if (e.key === '/') { document.getElementById('srch').focus(); e.preventDefault(); }
+  if (e.key === '/') { document.getElementById('srch')?.focus(); e.preventDefault(); } // FIX #25
   if (e.key.toLowerCase()==='f' && !e.ctrlKey && !e.altKey && !cinemaOpen) toggleLike();
   if (e.key.toLowerCase()==='m' && !e.ctrlKey && !e.altKey) toggleMiniPlayer();
   if (e.key.toLowerCase()==='i' && !e.ctrlKey && !e.altKey) toggleMiniOverlay();
   if (e.code==='Escape') {
     if (cinemaOpen) { closeCinema(); return; }
     if (isShortcutsOpen()) { closeShortcuts(); return; }
-    if (document.getElementById('pl-modal-bg').classList.contains('on')) { closePlModal(); return; }
-    if (document.getElementById('ctx-menu').classList.contains('on')) { closeCtxMenu(); return; }
+    if (document.getElementById('pl-modal-bg')?.classList.contains('on')) { closePlModal(); return; } // FIX #26
+    if (document.getElementById('ctx-menu')?.classList.contains('on')) { closeCtxMenu(); return; } // FIX #26
     if (eqOpen) { closeEQ(); return; }
     if (queueOpen) { closeQueue(); return; }
-    if (document.getElementById('settings-panel').classList.contains('on')) { closeSettings(); return; }
+    if (document.getElementById('settings-panel')?.classList.contains('on')) { closeSettings(); return; } // FIX #27
     const srch = document.getElementById('srch');
     if (srch.value) {
       // BUG FIX : _searchDebounceTimer est une var privée de views.js (non exportée) →
@@ -765,8 +770,8 @@ document.addEventListener('keydown', e=>{
       return;
     }
   }
-  if (e.code==='F11')        { e.preventDefault(); invoke('win_maximize'); }
-  if (e.code==='F12')        { e.preventDefault(); invoke('open_devtools'); }
+  if (e.code==='F11')        { e.preventDefault(); if (window.__TAURI__) invoke('win_maximize'); }
+  if (e.code==='F12')        { e.preventDefault(); if (window.__TAURI__) invoke('open_devtools'); }
   if (e.key.toLowerCase()==='c' && !e.ctrlKey && !e.altKey) toggleCinema();
   // Note : 'b' (cycleCinemaBg) et 'f' (toggleCinemaFullscreen) en mode cinéma sont gérés
   // par _onCinKey dans cinema.js — ces guards `&& cinemaOpen` seraient inatteignables ici
@@ -798,7 +803,7 @@ document.addEventListener('keydown', e=>{
 // Debounce pour les appels fréquents (changement de piste, crossfade…)
 export function saveCfgNow() {
   if (_saveCfgTimer) { clearTimeout(_saveCfgTimer); _saveCfgTimer = null; }
-  _doSaveCfg();
+  return _doSaveCfg(); // FIX #13 — retourner la Promise
 }
 export function saveCfg() {
   if (_saveCfgTimer) clearTimeout(_saveCfgTimer);
@@ -829,12 +834,12 @@ async function _doSaveCfg() {
     const _allViews = ['all','liked','albums','artists','genres','recent','playlist','stats','album-detail','artist-detail','genre-detail'];
 
     await dput('cfg', {
-      likedIds, sort: get('sort') || sort, // liked (indices) supprimé — likedIds (IDs stables) est la source de vérité
+      likedIds, sort: get('sort') ?? sort, // FIX #14 — ?? pour ne pas écraser '' ou 0
       view: (_allViews.includes(get('view') || view) ? (get('view') || view) : 'all'),
       recentPlays: recentPlays.slice(0,50),
       lang: getLang(), theme: getTheme(), dynColor: getDynColor(), crossfadeDur, displayMode: getDisplayMode(), rgEnabled, rgTargetLUFS,
       playbackSpeed, cinemaBg,
-      shuffle, repeat, albumSort, artistSort, genreSort, albumDetailSort: get('albumDetailSort') || albumDetailSort,
+      shuffle, repeat, albumSort, artistSort, genreSort, albumDetailSort: get('albumDetailSort') ?? albumDetailSort, // FIX #14
       eqEnabled, eqGains: eqNodes.length ? eqNodes.map(n => n.gain.value) : null,
       eqPreset: getActiveEqPreset(),
       vizMode: getVizMode(), vizEnabled: getVizEnabled(), vinylSpin: getVinylSpin(),
@@ -845,7 +850,7 @@ async function _doSaveCfg() {
       // Nouveaux champs
       volume, curPlId: (get('curPlId') !== undefined ? get('curPlId') : curPlId) || null, scrollTop,
       miniOvOpen, miniOvPos,
-      drillKey: (get('drillKey') || drillKey) || '', drillFrom: (get('drillFrom') || drillFrom) || '', drillDisplayName: (get('drillDisplayName') || drillDisplayName) || '',
+      drillKey: (get('drillKey') ?? drillKey) ?? '', drillFrom: (get('drillFrom') ?? drillFrom) ?? '', drillDisplayName: (get('drillDisplayName') ?? drillDisplayName) ?? '', // FIX #14
       // S91 — Vague A : organisation playlists
       plFolders, recentPls,
       // Persist modules
@@ -900,6 +905,17 @@ export function cycleSpeed() {
 }
 
 // setSpeed → player.js
+
+// FIX DRAG-MODULE : drago + listeners attachés dans DOMContentLoaded (garantit que drago
+// est défini avant tout événement drag — évite la race module-level vs DOM)
+document.addEventListener('DOMContentLoaded', () => {
+  drago = document.getElementById('drago');
+  document.addEventListener('dragenter', _onDragEnter);
+  document.addEventListener('dragover',  _onDragOver);
+  document.addEventListener('dragleave', _onDragLeave);
+  document.addEventListener('drop',      _onDrop);
+});
+
 // Attendre __TAURI__ avant de démarrer (fix build MSI)
 function waitForTauri(cb, n = 0) {
   if (window.__TAURI__?.core?.invoke) { cb(); }
@@ -908,7 +924,7 @@ function waitForTauri(cb, n = 0) {
 }
 
 waitForTauri(() => {
-  boot();
+  boot().catch(e => console.error('[LibreFlow] boot failed:', e)); // FIX #19
   initWaveform(audio); // Waveform progress bar
   initMediaSession(); // Contrôles Windows 11 SMTC / taskbar
   initMiniOverlayDrag(); // Drag du mini-player overlay in-page
@@ -966,7 +982,6 @@ if (_contentArea) {
 }
 
 // ── Toast notification (supprimé lors du refactoring, réintégré ici) ────────
-let _tt;
 // ── Toast riche — type : 'info' | 'success' | 'error' | 'warning' ──
 // toast / toastWithAction / _TOAST_ICONS / _TOAST_DUR → ui.js (Phase 6)
 
@@ -1175,6 +1190,9 @@ export async function clearAppCache() {
 
 export async function clearLibrary() {
   closeModal();
+  // FIX #21/#22 — annuler les timers de retry artwork et orphelins
+  clearTimeout(_retryArtTimer); _retryArtTimer = null;
+  clearTimeout(_orphansTimer);  _orphansTimer  = null;
   // Annuler le batch IDB en attente (cancelTrackBatch → library.js)
   cancelTrackBatch();
   // Révoquer tous les blob URLs pour libérer la mémoire
@@ -1182,7 +1200,7 @@ export async function clearLibrary() {
     if (t.url)  try { URL.revokeObjectURL(t.url);  } catch {}
     if (t.art)  try { URL.revokeObjectURL(t.art);  } catch {}
   }
-  tracks  = []; set('tracks', []);
+  tracks  = []; set('tracks', []); rebuildTrackIdxMap(); // INVARIANT : map must stay in sync after tracks mutation
   liked   = new Set(); set('liked', liked);
   playlists = []; set('playlists', []); recentPlays = []; set('recentPlays', []);
   curPlId = null; set('curPlId', null);

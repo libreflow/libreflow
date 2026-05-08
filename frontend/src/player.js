@@ -13,7 +13,7 @@
  * fonctions encore dans app.js (saveCfg, getFiltered, trackIdx, toast, …).
  * Ces shims seront éliminés lors des phases ultérieures.
  */
-/** @import { Track, RepeatMode } from './types.js' */
+/** @import { Track } from './types.js' */
 
 import { emit, EVENTS }                           from './bus.js';
 import { get, set, subscribe }                    from './store.js';
@@ -25,7 +25,7 @@ import { wfUpdate } from './waveform.js';
 
 import { eqCtx, eqNodes, eqAutoMode,
          initEQ, ensureEQResumed,
-         masterGainNode, setMasterGain, audioOutGain,
+         masterGainNode, audioOutGain,
          updateSmartEQGenre, startSmartEQ }       from './eq.js';
 import { initViz, startViz, stopViz,
          setVizMode, setVizEnabled }              from './viz.js';
@@ -37,12 +37,11 @@ import { logPlay }                                from './playlog.js';
 import { rgEnabled, analyzeAndApplyRG,
          cancelRgAnalysis }                       from './replaygain.js';
 import { updateMiniProgress }                     from './miniplayer.js';
-import { syncMiniOverlay, updateMiniOverlayProgress } from './minioverlay.js';
+import { updateMiniOverlayProgress } from './minioverlay.js';
 import { clearQueueOverride, queueOpen,
-         renderQueue, refreshQueueBadge }         from './queue.js';
-import { cinemaOpen, updateCinema,
-         updateCinemaProgress }                   from './cinema.js';
-import { CFG, SPEEDS, SPEED_LBLS }               from './cfg.js';
+         renderQueue }                            from './queue.js';
+import { updateCinemaProgress }                   from './cinema.js';
+import { SPEEDS, SPEED_LBLS }                     from './cfg.js';
 import { getFiltered, filteredIdx, trackIdx, _trackIdxMap, invalidateFilterCache } from './search.js';
 import { toast }                                        from './ui.js';
 import { saveCfg, saveCfgNow } from './app.js';
@@ -65,7 +64,7 @@ export function setBootVizState(mode, disabled) {
 
 
 // ── Audio element ─────────────────────────────────────────────────────────────
-export const audio = document.getElementById('audio');
+export const audio = /** @type {HTMLAudioElement} */ (document.getElementById('audio'));
 audio.crossOrigin = 'anonymous'; // requis pour Web Audio API createMediaElementSource
 
 // ── DOM refs cachées pour timeupdate (évite getElementById à 60fps) ───────────
@@ -221,6 +220,7 @@ export async function ensureUrl(t) {
  * @returns {void}
  */
 export function setIcon(playing) {
+  // @ts-ignore — non-standard Tauri command, handled by generic fallback
   invoke('taskbar_set_playing', { playing }).catch(() => {});
   document.getElementById('ico-play').style.display  = playing ? 'none' : '';
   document.getElementById('ico-pause').style.display = playing ? ''     : 'none';

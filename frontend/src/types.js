@@ -13,7 +13,7 @@
  * @property {string}              [ext]
  * @property {number}              [track]
  * @property {string}              [genre]
- * @property {number}              [year]
+ * @property {number | null}              [year]
  * @property {number}              [dateAdded]
  * @property {string}              [artistFull]
  * @property {string}              [url]

@@ -8,11 +8,13 @@
  * @typedef {{ title?: string, artist?: string, album?: string, cover_base64?: string }} TagResult
  */
 
+/** @type {Promise<void> | null} */
 let _tauriReady = null;
 
 function _waitTauriReady() {
   if (_tauriReady) return _tauriReady;
   return (_tauriReady = new Promise(res => {
+    // @ts-ignore — __TAURI__ injected at runtime by Tauri, not in Window type
     if (window.__TAURI__) { res(); return; }
     const handler = () => {
       window.removeEventListener('tauri://init', handler);
@@ -42,6 +44,7 @@ function _waitTauriReady() {
  */
 async function invoke(cmd, args) {
   await _waitTauriReady();
+  // @ts-ignore — __TAURI__ injected at runtime by Tauri, not in Window type
   return window.__TAURI__.core.invoke(cmd, args);
 }
 
@@ -53,8 +56,11 @@ async function invoke(cmd, args) {
  */
 async function listen(event, handler, options) {
   await _waitTauriReady();
+  // @ts-ignore — __TAURI__ injected at runtime by Tauri, not in Window type
   return options
+    // @ts-ignore — __TAURI__ injected at runtime by Tauri, not in Window type
     ? window.__TAURI__.event.listen(event, handler, options)
+    // @ts-ignore — __TAURI__ injected at runtime by Tauri, not in Window type
     : window.__TAURI__.event.listen(event, handler);
 }
 
@@ -66,7 +72,9 @@ function convertFileSrc(filePath) {
   // Normalise les backslashes Windows en slashes avant toute conversion.
   // Tauri convertFileSrc encode \ en %5C au lieu de / → 404 sur asset.localhost.
   const normalized = filePath.replace(/\\/g, '/');
+  // @ts-ignore — __TAURI__ injected at runtime by Tauri, not in Window type
   if (window.__TAURI__?.core?.convertFileSrc) {
+    // @ts-ignore — __TAURI__ injected at runtime by Tauri, not in Window type
     return window.__TAURI__.core.convertFileSrc(normalized);
   }
   const encoded = encodeURIComponent(normalized)
@@ -85,6 +93,7 @@ async function invokeRetry(cmd, args, maxRetries = 3) {
   let delay = 200;
   for (let attempt = 0; attempt < maxRetries; attempt++) {
     try {
+      // @ts-ignore — invokeRetry passes generic string cmd, overloads handle specific commands
       return await invoke(cmd, args);
     } catch (err) {
       if (attempt === maxRetries - 1) throw err;
