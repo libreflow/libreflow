@@ -1,3 +1,4 @@
+// @ts-check
 /**
  * store.js — Reactive state container (< 80 lines, zero deps)
  *
@@ -18,7 +19,42 @@
  * AudioNode refs, RAF handles) stay module-local in their respective files.
  */
 
-/** @type {Record<string, any>} */
+/** @import { Track, Playlist, PlaylistFolder, RepeatMode, ViewMode, SortKey, DisplayMode, AlbumSortKey, PlSortKey } from './types.js' */
+
+/**
+ * @typedef {Object} AppState
+ * @property {Track[]}          tracks
+ * @property {Set<string>}      liked
+ * @property {string[]}         recentPlays
+ * @property {number}           curIdx
+ * @property {boolean}          shuffle
+ * @property {RepeatMode}       repeat
+ * @property {number}           playbackSpeed
+ * @property {number}           crossfadeDur
+ * @property {Track[]}          manualQueue
+ * @property {ViewMode}         view
+ * @property {SortKey}          sort
+ * @property {string}           query
+ * @property {string}           drillKey
+ * @property {string}           drillFrom
+ * @property {string}           drillDisplayName
+ * @property {string}           theme
+ * @property {boolean}          dynColor
+ * @property {DisplayMode}      displayMode
+ * @property {string|null}      currentArtColor
+ * @property {AlbumSortKey}     albumSort
+ * @property {'name'|'count'}   artistSort
+ * @property {'count'|'name'}   genreSort
+ * @property {'track'|'az'}     albumDetailSort
+ * @property {Playlist[]}       playlists
+ * @property {string|null}      curPlId
+ * @property {PlaylistFolder[]} plFolders
+ * @property {string[]}         recentPls
+ * @property {PlSortKey}        plSort
+ * @property {string|null}      ctxTrackId
+ */
+
+/** @type {AppState} */
 const _state = {
   // ── Library ─────────────────────────────────────────────────────────
   tracks:            [],        // Track[] — full, unfiltered
@@ -63,28 +99,41 @@ const _state = {
 /** @type {Map<string, Set<Function>>} */
 const _subs = new Map();
 
+// Re-entrancy guard: tracks which keys are currently being notified to prevent
+// a subscriber calling set() on the same key from causing nested notification mid-iteration.
+const _notifying = new Set();
+
 function _notify(key, val) {
+  if (_notifying.has(key)) {
+    // Re-entrant call: schedule for next microtask to avoid mid-iteration side effects.
+    queueMicrotask(() => _notify(key, _state[key]));
+    return;
+  }
   const set = _subs.get(key);
   if (!set) return;
-  for (const cb of set) {
-    try { cb(val); } catch (e) { console.error('[store] subscriber error', key, e); queueMicrotask(() => { throw e; }); }
+  _notifying.add(key);
+  try {
+    for (const cb of [...set]) {
+      try { cb(val); } catch (e) { console.error('[store] subscriber error', key, e); queueMicrotask(() => { throw e; }); }
+    }
+  } finally {
+    _notifying.delete(key);
   }
 }
 
 /**
- * Read a state value synchronously.
- * @param {string} key
- * @returns {any}
+ * @template {keyof AppState} K
+ * @param {K} key
+ * @returns {AppState[K]}
  */
 export function get(key) {
   return _state[key];
 }
 
 /**
- * Write a state value and notify subscribers.
- * Skips notification if the value is strictly equal to the current one.
- * @param {string} key
- * @param {any} val
+ * @template {keyof AppState} K
+ * @param {K} key
+ * @param {AppState[K]} val
  */
 export function set(key, val) {
   if (_state[key] === val) return;
@@ -93,11 +142,10 @@ export function set(key, val) {
 }
 
 /**
- * Subscribe to changes on a specific key.
- * The callback is called with the new value every time set() is called for that key.
- * @param {string} key
- * @param {Function} cb
- * @returns {Function} Unsubscribe function
+ * @template {keyof AppState} K
+ * @param {K} key
+ * @param {(val: AppState[K]) => void} cb
+ * @returns {() => void}
  */
 export function subscribe(key, cb) {
   if (!_subs.has(key)) _subs.set(key, new Set());
@@ -106,13 +154,22 @@ export function subscribe(key, cb) {
 }
 
 /**
- * Batch update multiple keys without triggering intermediate notifications.
- * All subscribers are notified once per key after the batch.
- * @param {Record<string, any>} updates
+ * @param {Partial<AppState>} updates
  */
 export function setBatch(updates) {
+  const toNotify = [];
   for (const [key, val] of Object.entries(updates)) {
+    if (_state[key] === val) continue;
     _state[key] = val;
-    _notify(key, val);
+    toNotify.push(key);
   }
+  for (const key of toNotify) _notify(key, _state[key]);
 }
+
+/**
+ * Force-notify subscribers for a key even if the value reference hasn't changed.
+ * Use when mutating an object/array in-place (e.g. tracks.splice()).
+ * @param {keyof AppState} key
+ * @returns {void}
+ */
+export function notify(key) { _notify(key, _state[key]); }
