@@ -38,6 +38,7 @@ let vizR = 59, vizG = 130, vizB = 246; // couleur courante (défaut : --g bleu)
 let _vizRGB     = '59,130,246';
 let _resizeObs  = null;   // ResizeObserver — stocké pour pouvoir le déconnecter
 let _vizBins    = 0;      // P8 — cache de eqAnalyser.frequencyBinCount (immuable après init)
+let _dpr        = 1;      // devicePixelRatio mis en cache au resize (évite property access par frame)
 
 /* ── P2 FIX : Circle mode — buckets pré-alloués ──────────── */
 // Évite 60 stroke()+strokeStyle par frame → max 8 GPU draw calls (1 par bucket d'alpha).
@@ -100,7 +101,9 @@ export function initViz() {
 function _resizeCanvas() {
   if (!canvas) return;
   const pl   = canvas.parentElement;
+  if (!pl) return;
   const dpr  = window.devicePixelRatio || 1;
+  _dpr = dpr;
   canvas.width  = pl.offsetWidth  * dpr;
   canvas.height = pl.offsetHeight * dpr;
   // Les styles width/height sont gérés par CSS (width:100%; height:100%)
@@ -129,6 +132,7 @@ export function setVizMode(mode) {
   if (!['bars', 'oscilloscope', 'circle'].includes(mode)) return;
   vizMode = mode;
   _grad = null; // invalider le cache gradient lors du changement de mode
+  if (_ghostTimeData) _ghostTimeData.fill(128); // réinitialiser la traîne oscilloscope
   saveCfg();
 }
 
@@ -240,14 +244,17 @@ function _draw() {
   if (!running) return;
   // Vérifier eqAnalyser AVANT de planifier le prochain frame — évite une boucle infinie si l'analyser disparaît
   if (!eqAnalyser) { running = false; return; }
-  raf = requestAnimationFrame(_draw);
+
+  // FIX : skip si le canvas n'est pas encore rendu (dimensions nulles) — évite le reschedule
+  // infini quand le composant est invisible ou pas encore mis en page.
+  const w = canvas.width;
+  const h = canvas.height;
+  if (w === 0 || h === 0) { raf = requestAnimationFrame(_draw); return; }
 
   // P8 FIX : bins, _vizData, _timeData, smoothed sont tous pré-alloués dans startViz()
   // → supprimé les guards de taille qui tournaient à chaque frame (480 checks/sec inutiles)
   const bins = _vizBins; // P8 — lecture du cache startViz(), jamais de re-read par frame
 
-  const w = canvas.width;
-  const h = canvas.height;
   canvasCtx.clearRect(0, 0, w, h);
   canvasCtx.globalAlpha = 1;
 
@@ -272,12 +279,13 @@ function _draw() {
   }
 
   canvasCtx.globalAlpha = 1; // reset — évite de teinter les autres composants canvas
+  raf = requestAnimationFrame(_draw);
 }
 
 /* ── Mode bars ────────────────────────────────────────────── */
 
 function _drawBars(bins, w, h) {
-  const dpr = window.devicePixelRatio || 1;
+  const dpr = _dpr;
 
   // On n'utilise que les BAR_COUNT premiers bins (basses/médiums — les plus expressifs)
   const gap     = 2 * dpr;
@@ -350,7 +358,7 @@ function _drawBars(bins, w, h) {
 
 function _drawOscilloscope(bins, w, h) {
   eqAnalyser.getByteTimeDomainData(_timeData);
-  const dpr = window.devicePixelRatio || 1;
+  const dpr = _dpr;
   const mid  = h / 2;
   const amp  = h * 0.38; // amplitude max = 38% du demi-canvas
   const sliceW = w / bins;
@@ -410,7 +418,7 @@ function _drawOscilloscope(bins, w, h) {
 /* ── Mode circle ──────────────────────────────────────────── */
 
 function _drawCircle(bins, w, h) {
-  const dpr     = window.devicePixelRatio || 1;
+  const dpr     = _dpr;
   const cx      = _circlecx ?? w / 2;  // centré sur #pcplay (calculé au resize)
   const cy      = _circlecy ?? h / 2;
   // inner + maxBar = 0.42 × h → marges 8 % en haut/bas — plus de débordement sur la player bar
@@ -465,4 +473,4 @@ function _drawCircle(bins, w, h) {
 /* ── Exports window.* ─────────────────────────────────────── */
 // setVizMode / getVizMode sont intentionnellement absents ici :
 // app.js les importe et les ré-exporte sur window — un seul point d'export.
-Object.assign(window, { initViz, startViz, stopViz, updateVizColor });
+Object.assign(window, { initViz, startViz, stopViz, updateVizColor, setVizEnabled, getVizEnabled });

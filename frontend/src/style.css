@@ -53,6 +53,30 @@
   border: 0;
 }
 
+/* Boot spinner — affiché pendant le chargement initial, masqué par app.js via display:none */
+#boot-spinner {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  background: var(--bg, #080808);
+  color: var(--t2, #b8ada5);
+  z-index: 99999;
+  font-size: 13px;
+  letter-spacing: .04em;
+}
+#boot-spinner svg {
+  animation: boot-spin 1.2s linear infinite;
+  color: var(--g, #3b82f6);
+}
+@keyframes boot-spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
 /* ── Typed custom property — active les transitions CSS sur --art-color ── */
 @property --art-color {
   syntax: '<color>';
@@ -715,7 +739,7 @@ html[data-mode="light"] .pbar:hover .pfill::after {
   background: var(--g);
   box-shadow: var(--shadow-pcplay);
 }
-html[data-mode="light"] #pbar-wave    { mix-blend-mode: multiply; }
+
 html[data-mode="light"] .vslider      { accent-color:var(--g); }
 html[data-mode="light"] .vol svg      { fill:var(--t2); }
 html[data-mode="light"] #pl-n         { color:var(--t); }
@@ -2116,7 +2140,9 @@ html[data-mode="light"] mark.srch-hl { background: rgba(var(--g-rgb), .22); }
 }
 
 /* Contenu de la player bar au-dessus du canvas */
-#pl > *:not(#pl-viz) { position: relative; z-index: 1; }
+/* #np-live exclu : position:relative (spécificité 2-0-0) écraserait position:absolute
+   de .sr-only (0-1-0), le rendant grid item et repoussant .pl-r sur une 2e rangée cachée. */
+#pl > *:not(#pl-viz):not(#np-live) { position: relative; z-index: 1; }
 .pl-info { display: flex; align-items: center; gap: var(--sp-3); min-width: 0; }
 .pl-art  {
   width: var(--art-player); height: var(--art-player); border-radius: var(--r2);
@@ -2355,50 +2381,7 @@ html[data-mode="light"] mark.srch-hl { background: rgba(var(--g-rgb), .22); }
   z-index: 1;
 }
 
-/* ── Waveform canvas — dessiné sur le fond de la pbar ─────── */
-#pbar-wave {
-  position: absolute; inset: 0;
-  width: 100%; height: 100%;
-  pointer-events: none;
-  z-index: 1;
-  opacity: 0;
-  transition: opacity 600ms ease;
-  border-radius: var(--r-xs);
-}
-#pbar-wave.wf-ready { opacity: 1; }
-/* Shimmer pendant le décodage OfflineAudioContext */
-#pbar-wave.wf-loading {
-  opacity: 1;
-  background: linear-gradient(
-    90deg,
-    rgba(255,255,255,0)       0%,
-    rgba(255,255,255,0.08)   30%,
-    rgba(255,255,255,0.14)   50%,
-    rgba(255,255,255,0.08)   70%,
-    rgba(255,255,255,0)      100%
-  );
-  background-size: 200% 100%;
-  animation: wf-shimmer 1.4s ease infinite;
-}
-@keyframes wf-shimmer {
-  0%   { background-position: 200% 0; }
-  100% { background-position: -200% 0; }
-}
-html[data-mode="light"] #pbar-wave.wf-loading {
-  background: linear-gradient(
-    90deg,
-    rgba(0,0,0,0)     0%,
-    rgba(0,0,0,0.06) 30%,
-    rgba(0,0,0,0.10) 50%,
-    rgba(0,0,0,0.06) 70%,
-    rgba(0,0,0,0)    100%
-  );
-  background-size: 200% 100%;
-  animation: wf-shimmer 1.4s ease infinite;
-}
-/* wf-on : la waveform canvas reste derrière le pfill (z-index 1 < 2) — pfill toujours visible */
-
-/* Tooltip temps au survol waveform */
+/* Tooltip temps au survol progress bar */
 
 /* Contrôles droite */
 .pl-r   { display: flex; align-items: center; justify-content: flex-end; gap: var(--sp-1h); }
@@ -2674,6 +2657,19 @@ html[data-mode="light"] .sleep-custom-inp:focus { border-color: var(--g); backgr
   transition: background var(--dur-fast) ease;
 }
 .t-action:hover { background: rgba(255,255,255,.26); }
+/* Bouton fermeture des toasts error/warning (UX-2) */
+.t-close {
+  background: none;
+  border: none;
+  color: inherit;
+  cursor: pointer;
+  font-size: 1.1em;
+  padding: 0 4px;
+  opacity: 0.7;
+  line-height: 1;
+  flex-shrink: 0;
+}
+.t-close:hover { opacity: 1; }
 
 /* ═══ DRAG OVERLAY ═══════════════════════════════════════════ */
 #drago {
@@ -2683,6 +2679,12 @@ html[data-mode="light"] .sleep-custom-inp:focus { border-color: var(--g); backgr
   z-index: var(--z-overlay); pointer-events: none;
 }
 #drago.on { display: flex; animation: dragoIn .18s ease forwards; }
+/* Bordure visible lors du drag-over (UX-13) — app.js doit ajouter/retirer .drag-over sur dragenter/dragleave */
+#drago.drag-over,
+#drago:focus-within {
+  border: 2px dashed var(--accent, #7c6af5);
+  border-radius: 12px;
+}
 /* Bordure pointillée en pseudo-élément animé */
 #drago::before {
   content: '';

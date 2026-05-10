@@ -420,9 +420,10 @@ function guessGenre(track) {
   if (artist && GENRE_ARTISTS.has(artist)) return GENRE_ARTISTS.get(artist);
 
   // 2. Correspondance partielle artiste (ex: "Drake feat. Lil Wayne" → "drake")
+  const artistFirst = artist.split(' ')[0]; // hoist — évite O(n) splits dans la boucle
   for (const [key, genre] of GENRE_ARTISTS) {
-    if (artist.includes(key) || key.includes(artist.split(' ')[0])) {
-      if (artist.split(' ')[0].length > 3) return genre; // éviter faux positifs sur prénoms courts
+    if (artist.includes(key) || key.includes(artistFirst)) {
+      if (artistFirst.length > 3) return genre; // éviter faux positifs sur prénoms courts
     }
   }
 

@@ -27,10 +27,11 @@ export function setSleepFading(val) { sleepFading = val; }
 
 export function toggleSleepMenu() {
   const menu = document.getElementById('sleep-menu');
+  if (!menu) return;
   menu.classList.toggle('on');
   if (menu.classList.contains('on')) {
     // Close on outside click
-    setTimeout(() => document.addEventListener('click', _sleepOutside, { once: true }), 0);
+    setTimeout(() => { document.removeEventListener('click', _sleepOutside); document.addEventListener('click', _sleepOutside, { once: true }); }, 0);
   }
 }
 
@@ -42,7 +43,7 @@ function _sleepOutside(e) {
 }
 
 export function setSleepTimer(minutes) {
-  document.getElementById('sleep-menu').classList.remove('on');
+  document.getElementById('sleep-menu')?.classList.remove('on');
   cancelSleepTimer(true); // cancel any previous timer silently
   sleepTimerEnd    = Date.now() + minutes * 60 * 1000;
   sleepFading      = false;
@@ -50,9 +51,8 @@ export function setSleepTimer(minutes) {
   _sleepWarnedMin  = false;
 
   const indicator = document.getElementById('sleep-indicator');
-  indicator.style.display = 'flex';
-  indicator.classList.add('active');
-  document.getElementById('sleep-opt-cancel').classList.add('on');
+  if (indicator) { indicator.style.display = 'flex'; indicator.classList.add('active'); }
+  document.getElementById('sleep-opt-cancel')?.classList.add('on');
 
   // Clear active state on all option buttons
   document.querySelectorAll('.sleep-opt').forEach(b => b.classList.remove('active'));
@@ -66,15 +66,14 @@ export function setSleepTimer(minutes) {
 }
 
 export function setSleepEndOfTrack() {
-  document.getElementById('sleep-menu').classList.remove('on');
+  document.getElementById('sleep-menu')?.classList.remove('on');
   cancelSleepTimer(true);
   sleepEndOfTrack = true;
   sleepFading     = false;
 
   const indicator = document.getElementById('sleep-indicator');
-  indicator.style.display = 'flex';
-  indicator.classList.add('active');
-  document.getElementById('sleep-opt-cancel').classList.add('on');
+  if (indicator) { indicator.style.display = 'flex'; indicator.classList.add('active'); }
+  document.getElementById('sleep-opt-cancel')?.classList.add('on');
 
   const el = document.getElementById('sleep-countdown');
   if (el) el.textContent = '⏹';
@@ -107,10 +106,9 @@ export function cancelSleepTimer(silent) {
     audio.volume = _targetVol;
   }
   const indicator = document.getElementById('sleep-indicator');
-  indicator.style.display = 'none';
-  indicator.classList.remove('active');
-  document.getElementById('sleep-opt-cancel').classList.remove('on');
-  document.getElementById('sleep-menu').classList.remove('on');
+  if (indicator) { indicator.style.display = 'none'; indicator.classList.remove('active'); }
+  document.getElementById('sleep-opt-cancel')?.classList.remove('on');
+  document.getElementById('sleep-menu')?.classList.remove('on');
   if (!silent) toast(i18n('t_sleep_cancel'));
 }
 
@@ -148,7 +146,10 @@ function _sleepTick() {
     if (masterGainNode && eqCtx) {
       masterGainNode.gain.setTargetAtTime(vol, eqCtx.currentTime, 0.02);
     } else {
-      audio.volume = vol;
+      // Fallback sans masterGainNode : proportion du slider courant (R1 — jamais hardcoder)
+      const _volEl = document.getElementById('vol');
+      const _maxVol = _volEl ? parseFloat(_volEl.value) : 1;
+      audio.volume = vol * _maxVol;
     }
   }
   _updateSleepCountdown();

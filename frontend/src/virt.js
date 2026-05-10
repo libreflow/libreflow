@@ -36,24 +36,27 @@ const VIRT = {
 };
 
 function virtBuildRows(fl, { sort = 'az', query = '', view = 'all' } = {}) {
+  if (!fl || !fl.length) return [];
   const rows = [];
   const grouped = ['az','za','artist','album'].includes(sort) && !query && view === 'all';
   if (grouped) {
-    const keyFn = sort==='artist' ? t=>t.artist||'?' : sort==='album' ? t=>t.album||'?' : t=>t.name[0]?.toUpperCase().replace(/[^A-Z]/,'#')||'#';
-    const grps = {};
-    fl.forEach(t => { const k = keyFn(t); (grps[k]=grps[k]||[]).push(t); });
-    const keys = Object.keys(grps).sort((a,b) => sort==='za' ? _cmp(b, a) : _cmp(a, b));
+    // BUG-i1 FIX : normalize() + decompose supprime les diacritiques → É/È/Ê → E (même groupe que les titres en E)
+    const _normFirst = c => c ? (c.normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase().replace(/[^A-Z]/,'#') || '#') : '#';
+    const keyFn = sort==='artist' ? t=>(t.artist||'').trim()||'?' : sort==='album' ? t=>(t.album||'').trim()||'?' : t=>_normFirst(t.name?.[0]);
+    const grps = new Map();
+    fl.forEach(t => { const k = keyFn(t); const g = grps.get(k); if (g) g.push(t); else grps.set(k, [t]); });
+    const keys = [...grps.keys()].sort((a,b) => sort==='za' ? _cmp(b, a) : _cmp(a, b));
     let fi = 0;
     keys.forEach(k => {
       // Pour le tri album : inclure l'artiste majoritaire du groupe comme indice visuel
       let artistHint = '';
-      if (sort === 'album' && grps[k].length) {
+      if (sort === 'album' && grps.get(k).length) {
         const artistCounts = {};
-        grps[k].forEach(t => { const a = t.artist||''; artistCounts[a] = (artistCounts[a]||0) + 1; });
+        grps.get(k).forEach(t => { const a = t.artist||''; artistCounts[a] = (artistCounts[a]||0) + 1; });
         artistHint = Object.entries(artistCounts).sort((a,b)=>b[1]-a[1])[0]?.[0] || '';
       }
       rows.push({ type:'grp', key: k, artistHint });
-      grps[k].forEach(t => { rows.push({ type:'tr', track: t, fi: fi++ }); });
+      grps.get(k).forEach(t => { rows.push({ type:'tr', track: t, fi: fi++ }); });
     });
   } else {
     fl.forEach((t, i) => rows.push({ type:'tr', track: t, fi: i }));
@@ -73,6 +76,8 @@ function virtTotalH(rows)         { return VIRT._totalH; }
 function virtOffsetOf(rows, idx)  { return VIRT._offsets[idx] || 0; }
 
 function virtIdxAtScroll(rows, scrollTop) {
+  if (!rows || !rows.length) return 0;
+  scrollTop = Math.min(scrollTop, VIRT._totalH);
   if (scrollTop <= 0) return 0;
   // Recherche binaire sur le prefix-sum VIRT._offsets — O(log n) au lieu de O(n)
   const offsets = VIRT._offsets;

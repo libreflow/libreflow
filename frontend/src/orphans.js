@@ -8,16 +8,18 @@
 //   4. _relocateOrphan   — file picker → update path/url dans tracks[] + IDB
 //   5. _deleteOrphans    — splice tracks[], ddel IDB, rebuildTrackIdxMap, emit events
 
-import { ddel, dput }                                             from './db.js';
-import { get }                                                    from './store.js';
+import { ddel }                                                    from './db.js';
+import { get, notify }                                            from './store.js';
 import { invoke, convertFileSrc }                                 from './ipc.js';
 import { emit, EVENTS }                                           from './bus.js';
 import { trackIdx, rebuildTrackIdxMap, invalidateFilterCache }    from './search.js';
 import { VIRT }                                                   from './virt.js';
 import { audio }                                                  from './player.js';
-import { toast, toastWithAction }                                 from './ui.js';
+import { toast, toastWithAction, esc }                            from './ui.js';
 import { setCurIdx }                                              from './app.js';
 import { updateStats }                                            from './renderer.js';
+import { saveTrackNow }                                           from './library.js';
+import { CFG }                                                    from './cfg.js';
 
 // ── État interne ──────────────────────────────────────────────────────────────
 let _missingPaths = new Set();
@@ -35,7 +37,7 @@ export async function checkOrphans() {
   try {
     missing = await Promise.race([
       invoke('check_paths', { paths }),
-      new Promise((_, rej) => setTimeout(() => rej(new Error('check_paths timeout')), 10000)),
+      new Promise((_, rej) => setTimeout(() => rej(new Error('check_paths timeout')), CFG.ORPHAN_CHECK_TIMEOUT_MS)),
     ]);
   } catch(e) {
     console.warn('[checkOrphans] check_paths failed:', e);
@@ -53,14 +55,11 @@ export async function checkOrphans() {
     ? '1 fichier manquant dans la bibliothèque'
     : `${n} fichiers manquants dans la bibliothèque`;
 
-  toastWithAction(label, 'warning', 'Gérer', () => _openOrphanDialog(orphanTracks), 10000);
+  toastWithAction(label, 'warning', 'Gérer', () => _openOrphanDialog(orphanTracks), CFG.ORPHAN_CHECK_TIMEOUT_MS);
 }
 
 // ── Privé ─────────────────────────────────────────────────────────────────────
-
-function _esc(str) {
-  return (str || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-}
+// CQ-8 : esc() supprimé — utiliser esc() importé depuis ui.js (même logique, partagée)
 
 // P2-6 : Dialog interactif avec relocalisation par piste
 async function _openOrphanDialog(orphanTracks) {
@@ -74,12 +73,12 @@ async function _openOrphanDialog(orphanTracks) {
   bg.className = 'modal-bg orphan-modal-bg';
 
   const buildRows = () => fresh.map(t =>
-    '<li class="orphan-item" data-track-id="' + _esc(t.id) + '">' +
+    '<li class="orphan-item" data-track-id="' + esc(t.id) + '">' +
       '<div class="orphan-item-info">' +
-        '<span class="orphan-title">' + _esc(t.name) + '</span>' +
-        '<span class="orphan-path">' + _esc(t.path) + '</span>' +
+        '<span class="orphan-title">' + esc(t.name) + '</span>' +
+        '<span class="orphan-path">' + esc(t.path) + '</span>' +
       '</div>' +
-      '<button class="orphan-relocate-btn" data-track-id="' + _esc(t.id) + '">Relocaliser</button>' +
+      '<button class="orphan-relocate-btn" data-track-id="' + esc(t.id) + '">Relocaliser</button>' +
     '</li>'
   ).join('');
 
@@ -94,13 +93,19 @@ async function _openOrphanDialog(orphanTracks) {
       '</div>' +
     '</div>';
 
+  const _prevFocus = document.activeElement;
   document.body.appendChild(bg);
-  requestAnimationFrame(() => bg.classList.add('on'));
+  requestAnimationFrame(() => {
+    bg.classList.add('on');
+    const firstFocusable = bg.querySelector('button, [tabindex="0"]');
+    firstFocusable?.focus();
+  });
 
   const close = () => {
     bg.classList.add('modal-closing');
     bg.addEventListener('animationend', () => bg.remove(), { once: true });
-    setTimeout(() => bg.remove(), 400);
+    setTimeout(() => bg.remove(), CFG.MODAL_CLOSE_MS);
+    _prevFocus?.focus();
   };
 
   bg.querySelector('.orphan-close-btn').addEventListener('click', close);
@@ -122,7 +127,7 @@ async function _openOrphanDialog(orphanTracks) {
     if (!track) return;
     const row = btn.closest('.orphan-item');
     await _relocateOrphan(track, row, btn);
-    if (_missingPaths.size === 0) setTimeout(close, 600);
+    if (_missingPaths.size === 0) setTimeout(close, CFG.RELOCATE_SUCCESS_MS);
   });
 }
 
@@ -143,6 +148,14 @@ async function _relocateOrphan(track, rowEl, btnEl) {
     btnEl.textContent = prevLabel;
     return;
   }
+  // SEC-4 : valider l'extension du fichier sélectionné avant toute mutation
+  const _pickedExt = newPath.replace(/\\/g, '/').split('/').pop().split('.').pop().toLowerCase();
+  const _AUDIO_EXTS = ['mp3','flac','aac','m4a','ogg','opus','wav','wma','aiff','ape','alac'];
+  if (!_AUDIO_EXTS.includes(_pickedExt)) {
+    toast('Type de fichier non reconnu — choisissez un fichier audio', 'warning');
+    btnEl.disabled = false; btnEl.textContent = prevLabel;
+    return;
+  }
 
   const oldPath = track.path;  // sauvegarder avant mutation
   const tracks = get('tracks');
@@ -151,7 +164,7 @@ async function _relocateOrphan(track, rowEl, btnEl) {
     tracks[idx].path     = newPath;
     tracks[idx].url      = convertFileSrc(newPath);
     tracks[idx].metaDone = false;
-    await dput('tracks', tracks[idx]).catch(e => console.warn('[orphans] dput:', e));
+    await saveTrackNow(tracks[idx]);
   }
 
   _missingPaths.delete(oldPath);  // supprime l'ancien chemin manquant
@@ -172,7 +185,7 @@ async function _deleteOrphans(orphanTracks) {
   const tracks = get('tracks');
 
   const toRemove = orphanTracks
-    .map(t => trackIdx(t))
+    .map(t => trackIdx(t.id))
     .filter(i => i >= 0);
   toRemove.sort((a, b) => b - a);
 
@@ -191,12 +204,13 @@ async function _deleteOrphans(orphanTracks) {
     else if (get('curIdx') > idx) { setCurIdx(get('curIdx') - 1); }
   }
 
-  await Promise.all(idsToDelete.map(id => ddel('tracks', id).catch(() => {})));
+  await Promise.all(idsToDelete.map(id => ddel('tracks', id).catch(e => console.warn('[orphans] IDB delete failed:', e))));
 
   const liked = get('liked');
   idsToDelete.forEach(id => liked.delete(id));
 
   rebuildTrackIdxMap();
+  notify('tracks'); // tracks[] muté en place → force-notify sans changer la référence
   _missingPaths.clear();
 
   invalidateFilterCache();

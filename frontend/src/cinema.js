@@ -17,7 +17,7 @@ import { fmt, extEmoji }                     from './utils.js';
 import { eqCtx, eqAnalyser, masterGainNode, setMasterGain } from './eq.js'; // réutiliser le graphe EQ existant
 import { i18n }                               from './i18n.js';
 import { get }                                from './store.js';
-import { getFiltered }                        from './search.js';
+import { getFiltered, filteredIdx }            from './search.js';
 import { audio, toggleLike, next, prev }      from './player.js';
 import { radioActive, stopRadio, startRadio, getRadioQueue } from './radio.js';
 import { toast }                                        from './ui.js';
@@ -53,9 +53,14 @@ let _cinArtRGBTarget = [255,255,255]; // couleur cible
 let _cinArtRGBCur    = [255,255,255]; // couleur affichée (LERP)
 const _LERP_K        = 0.06;          // vitesse de transition (~16 frames → 50% done)
 let _kbVariant  = 0;                  // variante Ken Burns courante (0-3)
+let _lastCinIdx = -1;                 // dernier curIdx vu dans updateCinema — détecte le changement de piste
 
 // Horloge
 let _clockInterval = null;
+
+// Timers pour l'animation de swap pochette — stockés pour annulation dans closeCinema()
+let _cinSwapOutTimer = null;
+let _cinSwapInTimer  = null;
 
 // ── Constantes ──────────────────────────────────────────────
 // ── Modes d'arrière-plan disponibles ────────────────────────
@@ -135,7 +140,7 @@ export function applyCinemaBg() {
   _ambientColors = null;
   // Vider le canvas immédiatement à chaque switch (évite interférence entre modes)
   if (cinBg?.getContext) {
-    const c = cinBg.getContext('2d');
+    const c = _cinBgCtx || cinBg.getContext('2d');
     c.clearRect(0, 0, cinBg.width || 1, cinBg.height || 1);
   }
   // ambient : gradient multi-radial complet. amoled : halo minimaliste (même boucle RAF).
@@ -158,6 +163,12 @@ let _ambientT       = 0;      // animation time in ms — persists across tracks
 let _ambientColors  = null;   // { cT, cL, cR } — rebuilt each track change
 let _ambientCross   = null;   // { snapshot, start, dur } — active cross-fade
 let _frameCount     = 0;      // frame counter for ambient 30fps cap
+let _ambientGen     = 0;      // génération courante — incrémentée à chaque _stopAmbientAnim() pour invalider les loops orphelins
+
+// Vignette gradient cache — recréé uniquement si W ou H changent (évite createRadialGradient/frame)
+let _vignetteGrad = null;
+let _vignetteW    = 0;
+let _vignetteH    = 0;
 
 // ── Ambient colour helpers ──────────────────────────────────────
 
@@ -263,6 +274,7 @@ function _buildAmbientColors() {
 
 /** Stop the breathing animation loop and clear any pending cross-fade. */
 function _stopAmbientAnim() {
+  _ambientGen++; // invalider tous les loops RAF orphelins
   if (_ambientAnimRaf) { cancelAnimationFrame(_ambientAnimRaf); _ambientAnimRaf = null; }
   _ambientCross = null;
 }
@@ -272,8 +284,10 @@ function _stopAmbientAnim() {
  * t = animation time in ms — drives all sinusoidal drifts.
  */
 function _renderAmbientFrame(t, canvas, ctx) {
-  const W = canvas.width  || window.innerWidth  || 1280;
-  const H = canvas.height || window.innerHeight || 800;
+  // FIX HiDPI : le contexte est transformé via setTransform(dpr,…) → coordonnées en pixels CSS.
+  // Utiliser innerWidth/innerHeight (CSS px) et non canvas.width/height (pixels physiques).
+  const W = window.innerWidth  || 1280;
+  const H = window.innerHeight || 800;
   if (!ctx) return;
 
   // ── Mode AMOLED : halo coloré minimaliste (réutilise la boucle ambient) ──
@@ -371,21 +385,29 @@ function _renderAmbientFrame(t, canvas, ctx) {
   ctx.globalAlpha = 1;
   ctx.globalCompositeOperation = 'source-over';
 
-  // ── Vignette bords ───────────────────────────────────────────
-  const vg = ctx.createRadialGradient(W / 2, H / 2, H * .18, W / 2, H / 2, H * .88);
-  vg.addColorStop(0,    'rgba(0,0,0,0)');
-  vg.addColorStop(0.65, 'rgba(0,0,0,.08)');
-  vg.addColorStop(1,    'rgba(0,0,0,.62)');
-  ctx.fillStyle = vg; ctx.fillRect(0, 0, W, H);
+  // ── Vignette bords — gradient mis en cache (recréé uniquement si W ou H changent) ──
+  if (!_vignetteGrad || W !== _vignetteW || H !== _vignetteH) {
+    _vignetteGrad = ctx.createRadialGradient(W / 2, H / 2, H * .18, W / 2, H / 2, H * .88);
+    _vignetteGrad.addColorStop(0,    'rgba(0,0,0,0)');
+    _vignetteGrad.addColorStop(0.65, 'rgba(0,0,0,.08)');
+    _vignetteGrad.addColorStop(1,    'rgba(0,0,0,.62)');
+    _vignetteW = W;
+    _vignetteH = H;
+  }
+  ctx.fillStyle = _vignetteGrad; ctx.fillRect(0, 0, W, H);
 }
 
 /** Start the continuous breathing animation RAF loop. No-op if already running. */
 function _startAmbientAnim() {
   if (_ambientAnimRaf) return;
+  const myGen = _ambientGen; // capturer le token de génération courante
   let last = performance.now();
   function loop(now) {
+    // Guard génération : si _stopAmbientAnim() a été appelé depuis, ce loop est orphelin
+    if (myGen !== _ambientGen) return;
     // Boucle active en mode 'ambient' ET 'amoled' (halo minimaliste dans _renderAmbientFrame)
-    if ((cinemaBg !== 'ambient' && cinemaBg !== 'amoled') || !cinemaOpen) {
+    if ((cinemaBg !== 'ambient' && cinemaBg !== 'amoled') || !cinemaOpen || document.hidden) {
+      last = now;  // prevent time-jump on resume (BUG-D3A-7)
       _ambientAnimRaf = null;
       return;
     }
@@ -398,8 +420,14 @@ function _startAmbientAnim() {
     last = now;
     const canvas = document.getElementById('cinema-bg');
     if (!canvas) { _ambientAnimRaf = null; return; }
-    // Cache le contexte 2D — getContext() une seule fois tant que le canvas est le même
-    if (!_cinBgCtx || _cinBgCtx.canvas !== canvas) _cinBgCtx = canvas.getContext('2d');
+    // Cache le contexte 2D — getContext() une seule fois tant que le canvas est le même.
+    // FIX HiDPI : si le cache est invalide, ré-appliquer setTransform après getContext().
+    if (!_cinBgCtx || _cinBgCtx.canvas !== canvas) {
+      _cinBgCtx = canvas.getContext('2d');
+      const _dpr = window.devicePixelRatio || 1;
+      _cinBgCtx.setTransform(_dpr, 0, 0, _dpr, 0, 0);
+      _vignetteGrad = null; // gradient lié au ctx précédent — invalider
+    }
     _renderAmbientFrame(_ambientT, canvas, _cinBgCtx);
     // ── Cross-fade overlay — draw old snapshot fading out ────────
     if (_ambientCross) {
@@ -409,8 +437,10 @@ function _startAmbientAnim() {
       // et ralentit aux extrêmes → moins de "boue" chromatique lors du cross-fade.
       // easeOutCubic parcourait 58% en 30% du temps → instabilité visible sur couleurs contrastées.
       const ease = p < 0.5 ? 2 * p * p : 1 - Math.pow(-2 * p + 2, 2) / 2;
+      // FIX HiDPI : ctx est transformé en CSS px → dessiner le snapshot aux dimensions CSS.
+      const _cW = window.innerWidth || 1280, _cH = window.innerHeight || 800;
       _cinBgCtx.globalAlpha = 1 - ease;
-      _cinBgCtx.drawImage(snapshot, 0, 0, canvas.width, canvas.height);
+      _cinBgCtx.drawImage(snapshot, 0, 0, _cW, _cH);
       _cinBgCtx.globalAlpha = 1;
       if (p >= 1) _ambientCross = null;
     }
@@ -423,8 +453,13 @@ function _updateAmbientGradient() {
   const canvas = document.getElementById('cinema-bg');
   if (!canvas || !canvas.getContext) return;
 
-  const W = window.innerWidth  || 1280;
-  const H = window.innerHeight || 800;
+  const dpr = window.devicePixelRatio || 1;
+  const W   = window.innerWidth  || 1280;
+  const H   = window.innerHeight || 800;
+  // FIX HiDPI : le backing store doit être en pixels physiques.
+  // Sans ça, le canvas est rendu en pixels CSS 1:1 → flou sur écrans 2×.
+  const PW  = Math.round(W * dpr);
+  const PH  = Math.round(H * dpr);
 
   // Mode AMOLED : halo coloré simple, animé via le même loop RAF qu'ambient.
   // Il n'a pas besoin de _ambientColors (utilise _cinArtRGB directement).
@@ -432,8 +467,11 @@ function _updateAmbientGradient() {
   // d'être appelée → canvas vide en mode AMOLED. On isole le cas AMOLED ici.
   if (cinemaBg === 'amoled') {
     _stopAmbientAnim();
-    canvas.width  = W;
-    canvas.height = H;
+    canvas.width  = PW;
+    canvas.height = PH;
+    _cinBgCtx = canvas.getContext('2d');
+    _cinBgCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    _vignetteGrad = null; // invalider — nouveau ctx ou canvas redimensionné
     // Pas de _buildAmbientColors ni de cross-fade pour AMOLED
     _startAmbientAnim();
     return;
@@ -445,13 +483,16 @@ function _updateAmbientGradient() {
   let snapshot = null;
   if (_ambientColors && canvas.width > 0 && canvas.height > 0) {
     snapshot = document.createElement('canvas');
-    snapshot.width = W; snapshot.height = H;
-    snapshot.getContext('2d').drawImage(canvas, 0, 0, W, H);
+    snapshot.width = PW; snapshot.height = PH;
+    snapshot.getContext('2d').drawImage(canvas, 0, 0, PW, PH);
   }
 
   _stopAmbientAnim();
-  canvas.width  = W;
-  canvas.height = H;
+  canvas.width  = PW;
+  canvas.height = PH;
+  _cinBgCtx = canvas.getContext('2d');
+  _cinBgCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  _vignetteGrad = null; // invalider — nouveau ctx ou canvas redimensionné
   _ambientColors = _buildAmbientColors();
 
   if (snapshot) {
@@ -476,7 +517,7 @@ window.addEventListener('resize', () => {
   if (!cinemaOpen) return;
   clearTimeout(_resizeTimer);
   _resizeTimer = setTimeout(() => {
-    if (cinemaBg === 'ambient') applyCinemaBg();
+    if (cinemaBg === 'ambient' || cinemaBg === 'amoled') applyCinemaBg();
   }, 200);
 });
 
@@ -590,6 +631,7 @@ function _onCinWheel(e) {
 }
 
 export function openCinema() {
+  if (cinemaOpen) return;
   cinemaOpen = true;
   const overlay = document.getElementById('cinema-overlay');
   if (!overlay) return;
@@ -603,7 +645,7 @@ export function openCinema() {
   _cinTd   = document.getElementById('cinema-td');
   // Synchroniser le slider volume avec l'état courant de l'audio
   const volSlider = document.getElementById('cinema-vol');
-  if (volSlider) volSlider.value = audio ? audio.volume : 1;
+  if (volSlider) volSlider.value = (typeof masterGainNode !== 'undefined' && masterGainNode) ? masterGainNode.gain.value : (audio ? audio.volume : 1);
   applyCinemaBg();
   updateCinema();
   _startClock();
@@ -649,9 +691,12 @@ export function closeCinema() {
   document.removeEventListener('keydown',  _onCinKey);
   _aw?.removeEventListener('dblclick', _onArtDblClick);
   if (cinemaHideTimer) { clearTimeout(cinemaHideTimer); cinemaHideTimer = null; } // Bug 5 fix
+  clearTimeout(_cinSwapOutTimer); _cinSwapOutTimer = null;
+  clearTimeout(_cinSwapInTimer);  _cinSwapInTimer  = null;
   // Libérer les refs cachées
   _cinFill = _cinTc = _cinTd = null;
   _lastCinArt = null; // reset pour forcer le swap à la prochaine ouverture
+  _lastCinIdx = -1;   // reset pour détecter le changement de piste à la prochaine ouverture
   _stopKenBurns();
   _stopAmbientAnim();
   _ambientColors = null;
@@ -758,9 +803,32 @@ export function updateCinema() {
   const artist = t ? (t.artistFull || t.artist || '–') : '–';
   const art    = t ? (t.art || null) : null;
 
+  // ARCH-5 : Réinitialiser l'état interne lors d'un changement de piste.
+  // Snap immédiat de la couleur LERP vers la nouvelle cible — évite les artefacts visuels
+  // de couleur résiduelle de la piste précédente dans le visualiseur spectrum.
+  const _trackChanged = curIdx !== _lastCinIdx;
+  _lastCinIdx = curIdx;
+  if (_trackChanged) {
+    // Snap couleur LERP → couleur cible immédiatement (pas de fondu depuis l'ancienne piste)
+    _cinArtRGBCur[0] = _cinArtRGBTarget[0];
+    _cinArtRGBCur[1] = _cinArtRGBTarget[1];
+    _cinArtRGBCur[2] = _cinArtRGBTarget[2];
+    // Effacer le canvas visualiseur pour éviter les artefacts de persistance entre pistes
+    const vizCanvas = document.getElementById('cinema-viz');
+    if (vizCanvas) {
+      const vCtx = vizCanvas.getContext('2d');
+      if (vCtx) vCtx.clearRect(0, 0, vizCanvas.width, vizCanvas.height);
+    }
+  }
+
   // Mettre à jour la couleur dominante pour le visualiseur (même logique que viz.js/_vizRGB)
   // Fallback : lire la CSS var --art-color posée par applyArtColor() dans app.js
   _updateCinArtRGB(t);
+  // Après _updateCinArtRGB, si la piste a changé, synchroniser aussi _cinArtRGBCur avec la nouvelle valeur
+  if (_trackChanged) {
+    const parts = _cinArtRGB.split(',').map(Number);
+    _cinArtRGBCur[0] = parts[0]; _cinArtRGBCur[1] = parts[1]; _cinArtRGBCur[2] = parts[2];
+  }
   // Propager --cin-rgb → teinte CSS du sous-titre artiste et album
   document.getElementById('cinema-overlay')?.style.setProperty('--cin-rgb', _cinArtRGB);
 
@@ -793,11 +861,12 @@ export function updateCinema() {
 
       // Fonction de swap-in partagée entre premier chargement et changement de piste
       const _doSwapIn = () => {
+        if (!cinemaOpen) return;
         if (img) { img.src = art; img.style.display = 'block'; }
         if (artWrap) {
           artWrap.classList.remove('cin-swap-out', 'cin-swap');
           requestAnimationFrame(() => artWrap.classList.add('cin-swap'));
-          setTimeout(() => artWrap.classList.remove('cin-swap'), 440);
+          _cinSwapInTimer = setTimeout(() => artWrap.classList.remove('cin-swap'), 440);
         }
         _startKenBurns(); // nouvelle piste → nouvelle direction Ken Burns
         if (cinemaBg === 'ambient' || cinemaBg === 'amoled') _updateAmbientGradient();
@@ -806,7 +875,7 @@ export function updateCinema() {
       if (hadArt && artWrap) {
         // Animation sortante (120ms) puis entrante — transition bi-directionnelle
         artWrap.classList.add('cin-swap-out');
-        setTimeout(_doSwapIn, 120);
+        _cinSwapOutTimer = setTimeout(_doSwapIn, 120);
       } else {
         // Premier chargement : pas d'animation sortante, swap immédiat
         _doSwapIn();
@@ -842,7 +911,7 @@ export function updateCinema() {
   _updateNextTrack();
 
   // Sync volume slider + icône (muet / bas / haut)
-  const vol = audio.volume;
+  const vol = (typeof masterGainNode !== 'undefined' && masterGainNode) ? masterGainNode.gain.value : audio.volume;
   const muted = audio.muted || vol === 0;
   const volSlider = document.getElementById('cinema-vol');
   if (volSlider && !volSlider.matches(':active')) volSlider.value = vol;
@@ -884,13 +953,13 @@ export function toggleCinemaFullscreen() {
 }
 
 // ── Radio depuis le cinéma ───────────────────────────────────
-export function toggleCinemaRadio() {
+export async function toggleCinemaRadio() {
   if (radioActive) {
-    stopRadio();
+    await stopRadio();
   } else {
     const t = get('tracks')?.[get('curIdx')]; // Phase 4
     if (!t) { toast?.(i18n('radio_no_seed'), 'warning'); return; }
-    startRadio(t.id);
+    await startRadio(t.id);
   }
   updateCinema();
 }
@@ -899,14 +968,16 @@ export function toggleCinemaRadio() {
 const _FS_ICON_EXPAND  = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>`;
 const _FS_ICON_COMPRESS = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><polyline points="4 14 10 14 10 20"/><polyline points="20 10 14 10 14 4"/><line x1="10" y1="14" x2="3" y2="21"/><line x1="21" y1="3" x2="14" y2="10"/></svg>`;
 
-document.addEventListener('fullscreenchange', () => {
+const _onFullscreenChange = () => {
+  if (!cinemaOpen) return;
   const full = !!document.fullscreenElement;
   const btn  = document.getElementById('cinema-fs-btn');
   if (!btn) return;
   btn.classList.toggle('on', full);
   btn.innerHTML = full ? _FS_ICON_COMPRESS : _FS_ICON_EXPAND;
   btn.title = full ? i18n('t_cin_fs_exit') : i18n('t_cin_fs_enter');
-});
+};
+document.addEventListener('fullscreenchange', _onFullscreenChange);
 
 // ═══════════════════════════════════════════════════════════
 // ── Horloge idle ─────────────────────────────────────────────
@@ -1024,10 +1095,11 @@ function _startViz() {
   let _specGradRGB  = '',   _specGradMidY = -1;
 
   function draw() {
-    _cinVizRaf = requestAnimationFrame(draw);
+    if (!cinemaOpen) return;
+    if (document.hidden) { _cinVizRaf = requestAnimationFrame(draw); return; } // BUG-D3A-2: skip render when tab hidden, keep RAF alive
     const w = canvas.clientWidth, h = canvas.clientHeight;
     // Bug 7 fix : skip si le canvas n'est pas encore rendu (dimensions nulles).
-    if (w === 0 || h === 0) return;
+    if (w === 0 || h === 0) { _cinVizRaf = requestAnimationFrame(draw); return; }
     if (w !== cw || h !== ch) {
       canvas.width  = Math.round(w * dpr);
       canvas.height = Math.round(h * dpr);
@@ -1076,6 +1148,8 @@ function _startViz() {
         _specGradBot.addColorStop(1,    `rgba(${_lerpRGB},1)`);
       }
 
+      // Set glow fillStyle once before the loop — rgb() with no alpha (globalAlpha handles per-bar opacity)
+      const _glowFill = `rgb(${_lerpRGB})`;
       for (let i = 0; i < barCount; i++) {
         const t   = i / barCount;
         const bin = Math.round(Math.pow(2, logMin + t * (logMax - logMin)));
@@ -1095,18 +1169,22 @@ function _startViz() {
           ctx.fillStyle = _specGradBot; ctx.fillRect(x, midY + gap, bww, bh);
         }
         ctx.globalAlpha = 1;
-        // Glow (après reset globalAlpha — alpha précis par fillStyle)
+        // Glow — fillStyle set once before loop (rgb, no alpha); globalAlpha handles per-bar opacity
         if (v > 0.25) {
-          ctx.fillStyle = `rgba(${_lerpRGB},${(v * 0.14).toFixed(2)})`;
+          ctx.fillStyle   = _glowFill;
+          ctx.globalAlpha = Math.round(v * 14) / 100;
           const gx = x - 3, gbw = bww + 6;
           ctx.fillRect(gx, midY - bh - gap - 2, gbw, bh + 4);
           ctx.fillRect(gx, midY + gap - 2,       gbw, bh + 4);
+          ctx.globalAlpha = 1;
         }
       }
       ctx.globalAlpha = 1; // assure l'état propre après la boucle
       // Ligne centrale subtile
-      ctx.fillStyle = `rgba(${_lerpRGB},0.12)`;
+      ctx.globalAlpha = 0.12;
+      ctx.fillStyle = `rgb(${_lerpRGB})`;
       ctx.fillRect(0, midY - 1, w, 2);
+      ctx.globalAlpha = 1;
 
     } else {
       // ── Mode standard (blur/ambient/amoled) : barres logarithmiques en bas ──
@@ -1114,28 +1192,30 @@ function _startViz() {
       const bw = w / barCount;
       const totalBins = analyser.frequencyBinCount;
       const logMin = Math.log2(1), logMax = Math.log2(totalBins * 0.65);
+      ctx.fillStyle = `rgb(${_lerpRGB})`; // set once — no per-bar string alloc (globalAlpha handles per-bar opacity)
       for (let i = 0; i < barCount; i++) {
         const t   = i / barCount;
         const bin = Math.round(Math.pow(2, logMin + t * (logMax - logMin)));
         const v   = data[Math.min(bin, totalBins - 1)] / 255;
         const bh  = Math.max(2, v * h * 0.45);
         const a   = 0.07 + v * 0.38;
-        // Pas de toFixed() — évite 56+56 allocs string/frame (modes ambient/amoled)
-        ctx.fillStyle = `rgba(${_lerpRGB},${a})`;
+        ctx.globalAlpha = a;
         ctx.beginPath();
         if (ctx.roundRect) ctx.roundRect(i * bw + 1, h - bh, bw - 2, bh, [3, 3, 0, 0]);
         else               ctx.rect(i * bw + 1, h - bh, bw - 2, bh);
         ctx.fill();
         // Reflet (miroir atténué)
         if (v > 0.15) {
-          ctx.fillStyle = `rgba(${_lerpRGB},${a * 0.25})`;
+          ctx.globalAlpha = a * 0.25;
           ctx.beginPath();
           if (ctx.roundRect) ctx.roundRect(i * bw + 1, h, bw - 2, bh * 0.3, [0, 0, 3, 3]);
           else               ctx.rect(i * bw + 1, h, bw - 2, bh * 0.3);
           ctx.fill();
         }
       }
+      ctx.globalAlpha = 1; // restore after loop
     }
+    _cinVizRaf = requestAnimationFrame(draw);
   }
 
   // PERF : pré-allouer hors du loop draw — évite new Uint8Array(128) à chaque frame
@@ -1195,7 +1275,7 @@ function _updateNextTrack() {
   const filtered = getFiltered();
   if (filtered && filtered.length) {
     const curTrack = tracks[curIdx];
-    const posInFiltered = filtered.indexOf(curTrack); // indexOf track OBJET, pas index entier
+    const posInFiltered = filteredIdx(curTrack); // O(1) via posMap
     nt = posInFiltered >= 0 && posInFiltered + 1 < filtered.length ? filtered[posInFiltered + 1] : null;
   } else {
     nt = curIdx + 1 < tracks.length ? tracks[curIdx + 1] : null;
@@ -1215,6 +1295,13 @@ function _updateNextTrack() {
     else          imgEl.style.display = 'none';
   }
 }
+
+// ── Visibilité onglet — relancer le loop ambient si l'onglet redevient visible ──
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden && cinemaOpen && (cinemaBg === 'ambient' || cinemaBg === 'amoled')) {
+    _startAmbientAnim();
+  }
+});
 
 // ── Barre de progression cinéma (click pour seek) ───────────
 document.addEventListener('DOMContentLoaded', function() {

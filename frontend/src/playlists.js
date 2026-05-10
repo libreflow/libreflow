@@ -639,7 +639,7 @@ export function showPlQuickPop(e, trackId) {
   const playlists = get('playlists');
   if (!playlists.length) { openNewPlaylistModal(trackId); return; }
   pop.innerHTML = `<div class="pqp-head">${i18n('pl_add_to_hd')}</div>` +
-    playlists.map(pl => `
+    playlists.filter(pl => !pl.smart).map(pl => `
       <div class="pqp-item" data-action="pqp-add" data-pl-id="${pl.id}">
         ${pl.smart
           ? `<svg viewBox="0 0 24 24" width="12" height="12" fill="currentColor" stroke="none" style="color:#f59e0b;flex-shrink:0"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>`
@@ -1318,6 +1318,10 @@ export async function deletePlaylist(e, plId) {
 export async function addTrackToPlaylist(trackId, plId) {
   const pl = get('playlists').find(p => p.id === plId);
   if (!pl) return;
+  if (pl?.smart) {
+    toast(i18n('t_smart_readonly') || 'Les playlists intelligentes ne peuvent pas être modifiées manuellement.', 'warning');
+    return;
+  }
   const sid = String(trackId);
   if (pl.trackIds.some(id => String(id) === sid)) { toast(i18n('t_already_in'), 'warning'); return; }
   pl.trackIds.push(sid);
@@ -1330,6 +1334,10 @@ export async function addTrackToPlaylist(trackId, plId) {
 export function removeTrackFromPlaylist(trackId, plId) {
   const pl = get('playlists').find(p=>p.id===plId);
   if (!pl || !pl.trackIds) return;
+  if (pl?.smart) {
+    toast(i18n('t_smart_readonly') || 'Les playlists intelligentes ne peuvent pas être modifiées manuellement.', 'warning');
+    return;
+  }
   // UNDO-PL FIX : mémoriser la position avant suppression pour permettre l'annulation
   const removedIdx = pl.trackIds.indexOf(trackId);
   if (removedIdx === -1) return; // trackId absent — rien à faire

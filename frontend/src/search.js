@@ -25,6 +25,7 @@ import { get } from './store.js';
 // ── Collator partagé (P3) ────────────────────────────────────────────────────
 // Une seule instance — la construction est coûteuse (~2ms selon le moteur JS).
 export const _coll = new Intl.Collator('fr', { sensitivity: 'base', ignorePunctuation: true });
+/** @type {(a: string | undefined | null, b: string | undefined | null) => number} */
 const _compare = (a, b) => _coll.compare(a || '', b || '');
 
 // ── Map id → index (projection exacte de tracks[]) ───────────────────────────
@@ -60,6 +61,7 @@ export function trackIdx(idOrTrack) {
 
 // ── Cache getFiltered (P4 / P7) ───────────────────────────────────────────────
 // posMap : Map<Track, position_dans_result> pour filteredIdx O(1)
+/** @type {{ sig: string | null, result: Track[] | null, posMap: Map<string, number> | null }} */
 const _GF = { sig: null, result: null, posMap: null };
 
 /**
@@ -67,7 +69,10 @@ const _GF = { sig: null, result: null, posMap: null };
  * @returns {void}
  */
 export function invalidateFilterCache() {
-  _GF.sig = null;
+  _GF.sig = '';
+  // BUG-D3B-1 FIX: clear per-track NLC cache so stale search strings don't survive tag edits/rescans
+  const tracks = get('tracks');
+  for (let i = 0; i < tracks.length; i++) delete tracks[i]._nlc;
 }
 
 // ── Normalisation de genres ───────────────────────────────────────────────────
@@ -139,35 +144,45 @@ export const GENRE_ALIASES = Object.freeze({
 export function _normalizeGenre(g) {
   if (!g) return '';
   const key = g.toLowerCase().trim().replace(/\s+/g, ' ');
+  // @ts-ignore — dynamic key lookup on frozen object, safe at runtime
   return GENRE_ALIASES[key] || key;
 }
 
 // ── Filtrage par query ────────────────────────────────────────────────────────
 
-/** Filtre une liste de pistes par query multi-termes insensible à la casse. */
+/**
+ * Filtre une liste de pistes par query multi-termes insensible à la casse.
+ * @param {Track[]} tracks
+ * @param {string} query
+ * @returns {Track[]}
+ */
 function _filterByQuery(tracks, query) {
   const q = query.trim().toLowerCase();
   if (!q) return tracks;
   const parts = q.split(/\s+/).filter(Boolean);
   return tracks.filter(t => {
-    const hay = [
-      t.name || '', t.artist || '', t.artistFull || '',
-      t.album || '', t.genre || '',
-    ].join(' ').toLowerCase();
+    if (!t._nlc) t._nlc = [t.name || '', t.artist || '', t.artistFull || '', t.album || '', t.genre || ''].join(' ').toLowerCase();
+    const hay = t._nlc;
     return parts.every(p => hay.includes(p));
   });
 }
 
 // ── Tri ───────────────────────────────────────────────────────────────────────
 
-/** Trie une copie de `src` selon `sort`. Ne mute jamais la source. */
+/**
+ * Trie une copie de `src` selon `sort`. Ne mute jamais la source.
+ * @param {Track[]} src
+ * @param {string} sort
+ * @param {string[]} recentPlays
+ * @returns {Track[]}
+ */
 function _sortTracks(src, sort, recentPlays) {
   if (sort === 'recent') {
     // P9 : construire une Map id→position depuis recentPlays pour le tri O(1)
     const order = new Map((recentPlays || []).map((id, i) => [id, i]));
     return [...src].sort((a, b) => {
-      const ia = order.has(a.id) ? order.get(a.id) : 1e9;
-      const ib = order.has(b.id) ? order.get(b.id) : 1e9;
+      const ia = order.has(a.id) ? /** @type {number} */ (order.get(a.id)) : 1e9;
+      const ib = order.has(b.id) ? /** @type {number} */ (order.get(b.id)) : 1e9;
       if (ia !== ib) return ia - ib;
       return _compare(a.name, b.name);
     });
@@ -210,15 +225,17 @@ export function getFiltered() {
   const drillFrom   = get('drillFrom')   || '';
   const curPlId     = get('curPlId')     || null;
   const recentPlays = get('recentPlays') || [];
-  const plSort      = get('plSort')      || 'manual';
-  const liked       = get('liked');
+  const plSort          = get('plSort')          || 'manual';
+  const albumDetailSort = (view === 'album-detail') ? (get('albumDetailSort') || 'track') : '';
+  const liked           = get('liked');
 
   // Signature de cache — inclure toutes les dimensions qui peuvent changer le résultat
   const tracksSig   = tracks.length + '|' + (tracks[tracks.length - 1]?.id || '');
   const likedSig    = (view === 'liked') ? (liked?.size ?? 0) : '';
   const recentSig   = (sort === 'recent') ? recentPlays.slice(0, 20).join(',') : '';
-  const sig = `${sort}\0${query}\0${view}\0${drillKey}\0${drillFrom}\0${curPlId}\0${plSort}\0${tracksSig}\0${likedSig}\0${recentSig}`;
+  const sig = `${sort}\0${albumDetailSort}\0${query}\0${view}\0${drillKey}\0${drillFrom}\0${curPlId}\0${plSort}\0${tracksSig}\0${likedSig}\0${recentSig}`;
 
+  // @ts-ignore — result is always Track[] when sig matches (null only on first call)
   if (_GF.sig === sig) return _GF.result;
 
   // ── Filtrage par vue ──────────────────────────────────────────────────────
@@ -244,8 +261,9 @@ export function getFiltered() {
     const playlists = get('playlists') || [];
     const pl = playlists.find(p => p.id === curPlId);
     if (pl) {
-      const byId = new Map(tracks.map(t => [t.id, t]));
-      src = pl.trackIds.filter(id => byId.has(id)).map(id => byId.get(id));
+      src = /** @type {Track[]} */ (pl.trackIds
+        .filter(id => _trackIdxMap.has(id))
+        .map(id => tracks[_trackIdxMap.get(id)]));
     } else {
       src = [];
     }
@@ -269,6 +287,18 @@ export function getFiltered() {
   let result;
   if (isManualPlaylist || isRecentView) {
     result = filtered; // ordre préservé (playlist manuelle ou récentes)
+  } else if (view === 'album-detail') {
+    // Tri indépendant du tri global — albumDetailSort ('track' | 'az')
+    if (albumDetailSort === 'az') {
+      result = [...filtered].sort((a, b) => _compare(a.name || '', b.name || ''));
+    } else {
+      // 'track' : par numéro de tag, nulls en dernier, puis par nom
+      result = [...filtered].sort((a, b) => {
+        const ta = a.track ?? 9999;
+        const tb = b.track ?? 9999;
+        return ta !== tb ? ta - tb : _compare(a.name || '', b.name || '');
+      });
+    }
   } else {
     result = _sortTracks(filtered, sort, recentPlays);
   }

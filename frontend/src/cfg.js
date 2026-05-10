@@ -18,10 +18,16 @@ export const CFG = Object.freeze({
   VIRT_BUFFER:               8,   // lignes buffer virtual scroll de chaque côté
   VIRT_ROW_H:               48,   // px — hauteur d'une ligne piste
   VIRT_GRP_H:               28,   // px — hauteur d'un en-tête de groupe
-  TAG_LOAD_CONCURRENCY:      4,   // pistes chargées en parallèle (tags async)
+  TAG_LOAD_CONCURRENCY:      8,   // pistes chargées en parallèle (OPT : read_tags Rust = I/O léger)
   PLAYLOG_MAX_ENTRIES:    2000,   // max entrées dans playlog IDB
   SLEEP_FADE_SECS:          30,   // secondes de fondu avant sleep timer
   IPC_TIMEOUT_MS:        15000,   // ms — timeout global pour les appels IPC Tauri
+  ORPHAN_CHECK_TIMEOUT_MS: 10000, // ms — timeout pour la vérification des pistes orphelines
+  MODAL_CLOSE_MS:          400,   // ms — durée d'animation de fermeture des modals
+  RELOCATE_SUCCESS_MS:     600,   // ms — délai d'affichage avant fermeture après relocalisation réussie
+  WATCH_DEBOUNCE_MS:       500,   // ms — debounce sur watch-new-files (SEC-10 rate-limit)
+  SHORT_TRACK_MIN_SECS:     20,   // s  — durée min d'une piste valide (< = ignorée)
+  RG_GAIN_CAP:           3.162,   // gain linéaire max ReplayGain ≈ +10 dB (B1 fix)
 });
 
 export const SORTS = ['az', 'za', 'artist', 'album', 'recent'];

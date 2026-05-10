@@ -41,7 +41,7 @@ import { updateMiniOverlayProgress } from './minioverlay.js';
 import { clearQueueOverride, queueOpen,
          renderQueue }                            from './queue.js';
 import { updateCinemaProgress }                   from './cinema.js';
-import { SPEEDS, SPEED_LBLS }                     from './cfg.js';
+import { CFG, SPEEDS, SPEED_LBLS }                from './cfg.js';
 import { getFiltered, filteredIdx, trackIdx, _trackIdxMap, invalidateFilterCache } from './search.js';
 import { toast }                                        from './ui.js';
 import { saveCfg, saveCfgNow } from './app.js';
@@ -335,16 +335,38 @@ export async function playAt(filteredIdx, { skipScroll = false, keepQueue = fals
   }
 }
 
+// BUG-D1-8 FIX: track whether audioNext was mid-crossfade when paused so we can resume it
+let _crossfadeWasActive = false;
+
 /** @returns {void} */
 export function togglePlay() {
   if (curIdx < 0) { if (getFiltered().length) playAt(0); return; }
-  audio.paused ? (ensureEQResumed(), audio.play().catch(() => {})) : audio.pause();
+  if (audio.paused) {
+    ensureEQResumed();
+    audio.play().catch(() => {});
+    // BUG-D1-8 FIX: resume audioNext if it was paused mid-crossfade
+    if (_crossfadeWasActive && audioNext && audioNext.src && audioNext.src !== location.href) {
+      audioNext.play().catch(() => {});
+    }
+    _crossfadeWasActive = false;
+  } else {
+    // BUG-D1-8 FIX: pause audioNext if crossfade is active so fade-in doesn't continue silently
+    const cfActive = !!(cfFadeTimer || cfNextTimer || _cfRafId);
+    if (cfActive && audioNext && !audioNext.paused) {
+      audioNext.pause();
+      _crossfadeWasActive = true;
+    } else {
+      _crossfadeWasActive = false;
+    }
+    audio.pause();
+  }
 }
 
 /** @returns {void} */
 export function prev() {
   if (audio.currentTime > 3) { audio.currentTime = 0; return; }
   if (repeat === 'one') {
+    clearCrossfadeTimers(); // BUG-D1-2 FIX: clear lingering crossfade timers before replay
     audio.currentTime = 0; ensureEQResumed(); audio.play().catch(() => {}); return;
   }
   const tracks = get('tracks'); // Phase 4
@@ -413,7 +435,8 @@ export function prev() {
     return;
   }
   if (fi < 0) return; // Piste hors filtre actif ou rien ne joue (curIdx < 0) — aucune navigation possible
-  if (fi > 0) playAt(fi - 1); else if (repeat === 'all') playAt(fl.length - 1);
+  // BUG-D1-3 FIX: guard fl.length > 0 before wrap-around to avoid playAt(-1) on empty filtered list
+  if (fi > 0) playAt(fi - 1); else if (repeat === 'all' && fl.length > 0) playAt(fl.length - 1);
 }
 
 // manual=true  → appel explicite (bouton, clavier, media key) : ignore repeat='one'
@@ -424,6 +447,7 @@ export function prev() {
  */
 export function next(manual = false) {
   if (repeat === 'one' && !manual) {
+    clearCrossfadeTimers(); // BUG-D1-2 FIX: clear lingering crossfade timers before replay
     audio.currentTime = 0; ensureEQResumed(); audio.play().catch(() => {}); return;
   }
 
@@ -717,7 +741,26 @@ export function setCrossfade(sec) {
 
 /** @returns {void} */
 export function initCrossfadeAudio() {
-  if (audioNext && audioNextSource) return;
+  // BUG-D1-10 FIX: if audioNext exists but is in a non-ended state (e.g. was already playing
+  // mid-crossfade before clearCrossfadeTimers was called and immediately re-called), tear it
+  // down cleanly rather than trying to re-use a potentially stale MediaElementSource.
+  if (audioNext && audioNextSource) {
+    // Already fully wired — skip re-init only if the AudioContext is still valid
+    if (eqCtx && eqCtx.state !== 'closed') return;
+    // AudioContext is closed/invalid — fall through to rebuild below
+    try { audioNextSource?.disconnect(); } catch {}
+    try { audioNextGain?.disconnect(); } catch {}
+    try { audioNextRgGain?.disconnect(); } catch {}
+    audioNext.pause(); audioNext.src = '';
+    audioNext = null; audioNextSource = null; audioNextGain = null; audioNextRgGain = null;
+  }
+
+  // BUG-D1-10 FIX: if audioNext exists but source was never created (partial init), reset it
+  if (audioNext && !audioNextSource) {
+    audioNext.pause(); audioNext.src = '';
+    audioNext = null;
+  }
+
   audioNext = new Audio();
   audioNext.crossOrigin = 'anonymous';
   audioNext.preload = 'auto';
@@ -729,7 +772,16 @@ export function initCrossfadeAudio() {
   //   audioNextRgGain : compensation ReplayGain (valeur stable, définie au lancement du CF)
   //   audioNextGain   : fondu 0→1 pur (forme cosinus)
   if (!eqCtx) initEQ();
-  if (eqCtx && !audioNextSource) {
+  // ARCH-10: réagir aux suspensions/interruptions de l'AudioContext (tab cachée, sleep OS,
+  // politique autoplay) — évite le silence silencieux sans intervention de l'utilisateur.
+  if (eqCtx && !eqCtx.onstatechange) {
+    eqCtx.onstatechange = () => {
+      if (eqCtx.state === 'suspended' || eqCtx.state === 'interrupted') {
+        ensureEQResumed();
+      }
+    };
+  }
+  if (eqCtx && eqCtx.state !== 'closed' && !audioNextSource) {
     try {
       audioNextSource = eqCtx.createMediaElementSource(audioNext);
       audioNextRgGain = eqCtx.createGain();
@@ -744,7 +796,13 @@ export function initCrossfadeAudio() {
       } else {
         audioNextGain.connect(eqCtx.destination);
       }
-    } catch(e) { console.warn('[crossfade initAudio]', e); }
+    } catch(e) {
+      // BUG-D1-10 FIX: catch InvalidStateError or other AudioNode creation failures
+      console.warn('[crossfade initAudio]', e);
+      // Tear down the partially-created element to avoid leaking a source-less Audio node
+      if (audioNext) { audioNext.pause(); audioNext.src = ''; audioNext = null; }
+      audioNextSource = null; audioNextGain = null; audioNextRgGain = null;
+    }
   }
 }
 
@@ -876,7 +934,8 @@ export function checkCrossfade() {
     }, startDelay);
 
     const durationMs = crossfadeDur * 1000;
-    const rgGainVal  = (rgEnabled && nextTrack.rgGain) ? Math.min(10, nextTrack.rgGain) : 1;
+    // B1 FIX : != null pour accepter rgGain=0 (niveau cible atteint) ; cap 3.162 ≈ +10 dB max
+    const rgGainVal  = (rgEnabled && nextTrack.rgGain != null) ? Math.min(CFG.RG_GAIN_CAP, nextTrack.rgGain) : 1;
 
     // DSP-7: appliquer la compensation RG sur le nœud dédié (stable, indépendant du fondu)
     if (audioNextRgGain && eqCtx) {

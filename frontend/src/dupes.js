@@ -11,10 +11,10 @@
 import { esc, normTag }                              from './utils.js';
 import { ddel }                                      from './db.js';
 import { i18n }                                      from './i18n.js';
-import { get }                                       from './store.js';
+import { get, notify }                               from './store.js';
 import { emit, EVENTS }                              from './bus.js';
 import { trackIdx, _trackIdxMap, rebuildTrackIdxMap, invalidateFilterCache } from './search.js';
-import { audio }                                     from './player.js';
+import { audio, adjustShuffleQAfterDelete }           from './player.js';
 import { toast, confirmAction }                                        from './ui.js';
 import { setCurIdx } from './app.js';
 import { updateStats } from './renderer.js';
@@ -80,19 +80,21 @@ export async function removeDupeTrack(id, gi, ti) {
     if (t.art && t.art.startsWith('blob:')) try { URL.revokeObjectURL(t.art); } catch {}
     if (t.url && t.url.startsWith('blob:')) try { URL.revokeObjectURL(t.url); } catch {}
     tracks.splice(idx, 1);
+    adjustShuffleQAfterDelete(idx); // BUG-D2-2 FIX: sync shuffle queue after splice
     // liked migré Set<id> : suppression directe, pas de shift d'indices
     get('liked').delete(t.id);
     if (get('curIdx') === idx) { audio.pause(); setCurIdx(-1); }
     else if (get('curIdx') > idx) setCurIdx(get('curIdx') - 1);
   }
   // Persister la suppression en IDB — sinon la piste réapparaît au redémarrage
-  await ddel('tracks', t.id).catch(() => {});
+  await ddel('tracks', t.id).catch(e => console.warn('[dupes] IDB delete failed:', e));
   // Mettre à jour le groupe
   if (dupesGroups[gi]) {
     dupesGroups[gi].splice(ti, 1);
     if (dupesGroups[gi].length < 2) dupesGroups.splice(gi, 1);
   }
-  rebuildTrackIdxMap(); // RÈGLE CRITIQUE : après tout tracks.splice()
+  rebuildTrackIdxMap(); // RÈGLE CRITIQUE : après tout tracks.splice(), AVANT notify
+  notify('tracks');     // BUG-D2-2 FIX: notify subscribers after map rebuild
   _renderDupes();
   invalidateFilterCache(); emit(EVENTS.FILTER_CHANGED, {}); emit(EVENTS.RENDER_LIB, {}); updateStats();
 }
@@ -105,10 +107,11 @@ export async function deleteAllDupes() {
   // puis trier décroissant et splicer. Sans ça, _trackIdxMap devient stale
   // après le 1er splice → trackIdx() retourne de mauvais indices → mauvaises pistes supprimées.
   const toRemove = [];
+  const toRemoveSet = new Set();
   for (const group of dupesGroups) {
     for (let i = 1; i < group.length; i++) {
       const idx = trackIdx(group[i].id);
-      if (idx >= 0 && !toRemove.includes(idx)) toRemove.push(idx);
+      if (idx >= 0 && !toRemoveSet.has(idx)) { toRemoveSet.add(idx); toRemove.push(idx); }
     }
   }
   toRemove.sort((a, b) => b - a); // décroissant : splice haute→basse, indices stables
@@ -122,18 +125,20 @@ export async function deleteAllDupes() {
     if (tracks[idx].art && tracks[idx].art.startsWith('blob:')) try { URL.revokeObjectURL(tracks[idx].art); } catch {}
     if (tracks[idx].url && tracks[idx].url.startsWith('blob:')) try { URL.revokeObjectURL(tracks[idx].url); } catch {}
     tracks.splice(idx, 1);
+    adjustShuffleQAfterDelete(idx); // BUG-D2-4 FIX: sync shuffle queue after each splice (indices sorted desc, so idx is stable)
     if (get('curIdx') === idx) { audio.pause(); setCurIdx(-1); }
     else if (get('curIdx') > idx) setCurIdx(get('curIdx') - 1);
     removed++;
   }
 
   // Persister toutes les suppressions en IDB en parallèle
-  await Promise.all(idsToDelete.map(id => ddel('tracks', id).catch(() => {})));
+  await Promise.all(idsToDelete.map(id => ddel('tracks', id).catch(e => console.warn('[dupes] IDB delete failed:', e))));
 
   // liked migré Set<id> : supprimer directement les IDs supprimés
   const liked = get('liked'); // Phase 4
   idsToDelete.forEach(id => liked.delete(id));
-  rebuildTrackIdxMap(); // RÈGLE CRITIQUE : après suppression en lot
+  rebuildTrackIdxMap(); // RÈGLE CRITIQUE : après suppression en lot, AVANT notify
+  notify('tracks');     // BUG-D2-4 FIX: notify subscribers after batch splice + map rebuild
   dupesGroups = [];
   _renderDupes();
   invalidateFilterCache(); emit(EVENTS.FILTER_CHANGED, {}); emit(EVENTS.RENDER_LIB, {}); updateStats();

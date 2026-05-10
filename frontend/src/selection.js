@@ -19,10 +19,10 @@ import { VIRT }                                         from './virt.js';
 import { ddel }                                         from './db.js';
 import { invoke, convertFileSrc }                       from './ipc.js';
 import { i18n }                                         from './i18n.js';
-import { get }                                          from './store.js';
+import { get, subscribe }                               from './store.js';
 import { emit, EVENTS }                                 from './bus.js';
 import { getFiltered, _trackIdxMap, rebuildTrackIdxMap, invalidateFilterCache } from './search.js';
-import { audio, resetShuffleQ }                         from './player.js';
+import { audio, resetShuffleQ, clearCrossfadeTimers }   from './player.js';
 import { saveTrackNow }                                 from './library.js';
 import { toast, toastWithAction }                                        from './ui.js';
 import { saveCfg, setCurIdx, setTracks, setLiked, updateBar } from './app.js';
@@ -34,6 +34,14 @@ export let selection     = new Set(); // trackIds sélectionnés
 export let selectionMode = false;     // actif = affiche les checkboxes
 let _selAnchorId         = null;      // anchor pour Shift+click
 let _bteCoverPath        = null;      // chemin absolu de l'image choisie pour le batch cover
+
+// ── Invalidation automatique de la sélection ─────────────────
+// Quand tracks[] change (scan, suppression, import…), les IDs sélectionnés
+// peuvent ne plus exister → vider la sélection pour éviter des opérations
+// en lot sur des pistes fantômes.
+subscribe('tracks', () => {
+  if (selectionMode || selection.size > 0) clearSelection();
+});
 
 // ── Mode sélection ────────────────────────────────────────────
 
@@ -51,7 +59,7 @@ export function clearSelection() {
   // Retirer .selected uniquement sur les éléments visibles (pas besoin de renderLib complet)
   document.querySelectorAll('.tr.selected').forEach(el => el.classList.remove('selected'));
   // Invalider le cache filtre (selection peut affecter certaines vues) sans re-render coûteux
-  VIRT._lastSig = '';
+  VIRT._lastListSig = '';
 }
 
 export function updateSelBar() {
@@ -156,8 +164,9 @@ export async function selAddBatch(plId) {
   const pl = get('playlists').find(p => p.id === plId);
   if (!pl) return;
   let added = 0;
+  const existingIds = new Set(pl.trackIds.map(String));
   for (const id of ids) {
-    if (!pl.trackIds.map(String).includes(id)) { pl.trackIds.push(id); added++; }
+    if (!existingIds.has(id)) { pl.trackIds.push(id); existingIds.add(id); added++; }
   }
   // Persister d'abord, puis vider la sélection (B9)
   await savePlaylists();
@@ -177,7 +186,7 @@ export function selToggleLike() {
     else { liked.add(id); likedCount++; }
   }
   saveCfg();
-  // clearSelection d'abord (reset VIRT._lastSig), puis renderLib une seule fois
+  // clearSelection d'abord (reset VIRT._lastListSig), puis renderLib une seule fois
   clearSelection();
   invalidateFilterCache(); emit(EVENTS.FILTER_CHANGED, {});
   emit(EVENTS.RENDER_LIB, {});
@@ -201,6 +210,8 @@ export function selRemove() {
 
   // Vérifier si la piste en cours de lecture est dans la sélection supprimée
   const playingDeleted = ids.has(tracks[get('curIdx')]?.id);
+  // BUG-D2-8 FIX: clear lingering crossfade timers before batch delete when playing track is removed
+  if (playingDeleted) clearCrossfadeTimers();
   // Rebuild tracks sans les pistes supprimées
   const newTracks = tracks.filter(t => !ids.has(t.id));
   // liked est Set<string> d'IDs — filtrer directement sans recalcul d'indices
@@ -224,7 +235,7 @@ export function selRemove() {
       if (t.url && t.url.startsWith('blob:')) try { URL.revokeObjectURL(t.url); } catch {}
       if (t.art && t.art.startsWith('blob:')) try { URL.revokeObjectURL(t.art); } catch {}
     }
-    for (const id of ids) ddel('tracks', id).catch(() => {});
+    for (const id of ids) ddel('tracks', id).catch(e => console.warn('[selection] IDB delete failed:', e));
   }, UNDO_MS);
 
   invalidateFilterCache(); emit(EVENTS.FILTER_CHANGED, {}); clearSelection(); emit(EVENTS.RENDER_LIB, {}); updateStats();
@@ -380,7 +391,10 @@ export async function confirmBatchTagEdit() {
     if (!t) continue;
 
     // Appliquer uniquement les champs renseignés
-    if (hasYear)   t.year        = yearVal;
+    // BUG-D2-9 FIX: only write year when yearVal is a valid parsed integer (not null).
+    // yearVal is null when the user types an invalid/out-of-range value — writing null would
+    // silently destroy existing year metadata on every selected track.
+    if (hasYear && yearVal !== null) t.year = yearVal;
     if (hasArtist) {
       t.artistFull = artistRaw;
       t.artist     = mainArtist(artistRaw) || artistRaw;

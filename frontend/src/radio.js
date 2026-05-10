@@ -20,7 +20,7 @@ import { esc, fmt }                           from './utils.js';
 import { CFG }                                from './cfg.js';
 import { i18n }                               from './i18n.js';
 import { get }                                from './store.js';
-import { getFiltered, _trackIdxMap }          from './search.js';
+import { getFiltered, filteredIdx, _trackIdxMap } from './search.js';
 import { audio, playAt }                      from './player.js';
 import { toast, confirmAction }                                        from './ui.js';
 import { setView } from './views.js';
@@ -44,6 +44,7 @@ export function getRadioSeedId() { return radioSeedId; }
 export function initRadioSeedId(id) { if (id) radioSeedId = id; }
 let radioQueue            = [];
 let _radioPlayedIds       = new Set();
+let _radioStopInProgress  = false; // guard anti-concurrence pour stopRadio (async)
 
 // ── Progress bar live (rv-prog-fill) ─────────────────────────
 // NOTE : la mise à jour de rv-prog-fill est gérée directement par le handler
@@ -55,7 +56,7 @@ function _installRvProgUpdate() { /* no-op — géré par app.js */ }
 
 // ── Scoring ──────────────────────────────────────────────────
 
-function radioScore(seed, candidate, recentCountMap) {
+function radioScore(seed, candidate, recentCountMap, recentSlice, recentWindow, likedSet) {
   if (candidate.id === seed.id) return -1;
   let score = 0;
 
@@ -74,7 +75,8 @@ function radioScore(seed, candidate, recentCountMap) {
   // 2. ARTISTE (30 pts)
   const sArt = (seed.artist || '').toLowerCase().trim();
   const cArt = (candidate.artist || '').toLowerCase().trim();
-  if (sArt && sArt !== 'artiste inconnu' && cArt && cArt !== 'artiste inconnu') {
+  const _unknownArtistLC = i18n('unknown_artist').toLowerCase(); // BUG-M1 FIX : était hardcodé 'artiste inconnu' — casse en EN
+  if (sArt && sArt !== _unknownArtistLC && cArt && cArt !== _unknownArtistLC) {
     if (sArt === cArt) score += 30;
     else if (sArt.split(' ')[0] === cArt.split(' ')[0]) score += 10;
   }
@@ -97,9 +99,6 @@ function radioScore(seed, candidate, recentCountMap) {
   //   → 500 titres : 30 (inchangé) | 50 titres : 20 | 15 titres : 6
   // La pénalité max reste window × 0.7 (≤ 21), cohérente avec l'ancienne valeur sur
   // grandes bibliothèques mais drastiquement réduite sur petites.
-  const _libSize     = get('tracks').length; // Phase 4
-  const recentWindow = Math.min(30, Math.max(5, Math.floor(_libSize * 0.4)));
-  const recentSlice  = get('recentPlays').slice(0, recentWindow);
   const recentPos    = recentSlice.indexOf(candidate.id);
   if (recentPos >= 0) {
     // Pénalité décroissante proportionnelle : joué très récemment = fortement pénalisé
@@ -111,7 +110,7 @@ function radioScore(seed, candidate, recentCountMap) {
   }
 
   // 5. BONUS likes (+8 pts)
-  if (get('liked').has(candidate?.id)) score += 8; // Phase 4
+  if (likedSet.has(candidate?.id)) score += 8;
 
   // 6. Pénalité même album
   if (seed.album && candidate.album && seed.album === candidate.album) score -= 8;
@@ -122,18 +121,27 @@ function radioScore(seed, candidate, recentCountMap) {
   return score;
 }
 
-function buildRadioQueue(seedTrack, excludeIds = new Set()) {
+async function buildRadioQueue(seedTrack, excludeIds = new Set()) {
   const tracks = get('tracks'); // Phase 4
   if (tracks.length < 2) return [];
   // Précalculer les compteurs d'écoutes (évite O(n×m) dans radioScore)
   const recentCountMap = new Map();
   for (const id of get('recentPlays')) recentCountMap.set(id, (recentCountMap.get(id) || 0) + 1);
 
+  // PERF2-01/02 : hisser les calculs coûteux hors de la boucle de scoring
+  const _libSize     = tracks.length;
+  const recentWindow = Math.min(30, Math.max(5, Math.floor(_libSize * 0.4)));
+  const _rawRecent   = get('recentPlays') || [];
+  const recentSlice  = _rawRecent.filter(id => _trackIdxMap.has(id)).slice(0, recentWindow);
+  const likedSet     = get('liked');
+
   // Tous les candidats scorés (hors seed et exclus)
-  const allScored = tracks
+  const _candidates = tracks
     .filter(t => t.id !== seedTrack.id && !excludeIds.has(t.id))
-    .map(t => ({ t, s: radioScore(seedTrack, t, recentCountMap) }))
-    .sort((a, b) => b.s - a.s);
+    .map(t => ({ t, s: radioScore(seedTrack, t, recentCountMap, recentSlice, recentWindow, likedSet) }));
+  // PERF-7 : yield avant le tri pour libérer le thread principal (~10ms sur 5000 objets)
+  await new Promise(r => setTimeout(r, 0));
+  const allScored = _candidates.sort((a, b) => b.s - a.s);
 
   // Filtre optimiste : préférer les titres à score >= 0 (pas récemment joués)
   // FALLBACK : si tous les scores sont négatifs (bibliothèque petite / tout récemment joué),
@@ -163,10 +171,8 @@ function buildRadioQueue(seedTrack, excludeIds = new Set()) {
   }
 
   // ── Injection découverte : ~20% de titres peu/pas écoutés récemment ──
-  // Utiliser la même fenêtre calibrée que radioScore pour la cohérence.
-  const _rLibSize  = tracks.length;
-  const _rWin      = Math.min(30, Math.max(5, Math.floor(_rLibSize * 0.4)));
-  const recentSet  = new Set(get('recentPlays').slice(0, _rWin));
+  // Réutiliser recentWindow et recentSlice déjà calculés ci-dessus (PERF2-02).
+  const recentSet  = new Set(recentSlice);
   const DISCO_SLOTS   = Math.max(1, Math.floor(RADIO_SIZE * 0.2));
   const discoveryPool = tracks
     .filter(t =>
@@ -223,21 +229,21 @@ export async function startRadio(trackId) {
 
   radioActive     = true;
   radioSeedId     = seed.id;
-  radioQueue      = buildRadioQueue(seed);
+  radioQueue      = await buildRadioQueue(seed);
   _radioPlayedIds = new Set([seed.id]);
 
   _syncRadioButtons(true);
   _radioSyncManualQueue();
 
   if (curIdx < 0 || tracks[curIdx]?.id !== seed.id) {
-    const fi = getFiltered().findIndex(x => x.id === seed.id);
+    const fi = filteredIdx(seed);
     if (fi >= 0) { playAt(fi); }
     else {
       // Le seed n'est pas dans la vue filtrée courante → basculer sur "Tous les titres"
       // et attendre que _withVT + la transition CSS soient terminées (≥ 250ms) avant playAt.
       setView('all', document.getElementById('ni-all'));
       setTimeout(() => {
-        const fi2 = getFiltered().findIndex(x => x.id === seed.id);
+        const fi2 = filteredIdx(seed);
         if (fi2 >= 0) playAt(fi2);
       }, 320); // 320ms > durée max de _withVT (~250ms) + marge de sécurité
     }
@@ -246,6 +252,9 @@ export async function startRadio(trackId) {
 }
 
 export async function stopRadio() {
+  if (_radioStopInProgress) return; // guard : empêche deux appels concurrents pendant l'await
+  _radioStopInProgress = true;
+  try {
   // Confirmation si la file contient encore des titres
   if (radioActive && radioQueue.length > 0) {
     const n  = radioQueue.length;
@@ -268,6 +277,9 @@ export async function stopRadio() {
   // Si on est sur la vue radio, retour à Tous les titres
   if (get('view') === 'radio') {
     setView('all', document.getElementById('ni-all'));
+  }
+  } finally {
+    _radioStopInProgress = false;
   }
 }
 
@@ -302,11 +314,11 @@ function _radioSyncManualQueue() {
   );
 }
 
-export function radioRefillQueue() {
+export async function radioRefillQueue() {
   if (!radioActive) return;
   const tracks = get('tracks'); // Phase 4
   const curIdx = get('curIdx');
-  if (tracks.length < 3) { stopRadio(); return; }
+  if (tracks.length < 3) { resetRadio(); return; }
   const cur = tracks[curIdx];
   if (!cur) return;
 
@@ -330,16 +342,20 @@ export function radioRefillQueue() {
     }
 
     const exclude = new Set([..._radioPlayedIds, ...radioQueue.map(t => t.id)]);
-    const extra   = buildRadioQueue(cur, exclude).slice(0, RADIO_SIZE - radioQueue.length);
+    const extra   = (await buildRadioQueue(cur, exclude)).slice(0, RADIO_SIZE - radioQueue.length);
     radioQueue.push(...extra);
   }
 
   if ((get('manualQueue')?.length ?? 0) < 3) {
     _radioSyncManualQueue();
   }
-  // Mettre à jour les UIs dépendantes de la queue
-  _syncRadioLibBar(true);
-  if (get('view') === 'radio') renderRadioView();
+  // Mettre à jour les UIs dépendantes de la queue — différé après le retour
+  // synchrone de radioRefillQueue() pour éviter un reflow synchrone dans la
+  // chaîne de callback player.js (BUG-D3A-5).
+  requestAnimationFrame(() => {
+    _syncRadioLibBar(true);
+    if (get('view') === 'radio') renderRadioView();
+  });
 }
 
 // ── Sync boutons radio (cinéma + sidebar nav) ─────────────────
@@ -479,16 +495,25 @@ export async function radioSaveAsPlaylist() {
   if (!ids.length) { toast(i18n('radio_pl_empty'), 'warning'); return; }
 
   const name = i18n('radio_pl_name', seed ? seed.name : 'Mix');
-  const pl = { id: 'pl_' + Date.now(), name, trackIds: ids };
+  const pl = { id: 'pl_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8), name, trackIds: ids }; // BUG-m2 FIX : suffixe aléatoire pour éviter collision si sauvegardé 2× dans la même ms
   get('playlists').push(pl);
-  await savePlaylists();
+  try {
+    await savePlaylists();
+  } catch (e) {
+    // Roll back : retirer la playlist ajoutée optimistiquement si la sauvegarde échoue
+    const playlists = get('playlists');
+    const idx = playlists.indexOf(pl);
+    if (idx >= 0) playlists.splice(idx, 1);
+    toast(i18n('radio_save_error') || 'Erreur lors de la sauvegarde', 'error');
+    return;
+  }
   renderPlNav();
   setupPlNavDrop();
   setView('playlist', document.getElementById('ni-pl-' + pl.id), pl.id);
   toast(i18n('radio_pl_saved', name, ids.length), 'success');
 }
 
-export function radioRegenerateFromCurrent() {
+export async function radioRegenerateFromCurrent() {
   if (!radioActive) return;
   if (get('curIdx') < 0) {
     toast?.(i18n('radio_regen_need'), 'warning');
@@ -498,7 +523,7 @@ export function radioRegenerateFromCurrent() {
   if (!cur) return;
   radioSeedId     = cur.id;
   _radioPlayedIds = new Set([cur.id]);
-  radioQueue      = buildRadioQueue(cur);
+  radioQueue      = await buildRadioQueue(cur);
   _radioSyncManualQueue();
   _syncRadioLibBar(true);
   if (get('view') === 'radio') renderRadioView();
@@ -515,7 +540,7 @@ export function playRadioTrackAt(idx) {
   const t = radioQueue[idx];
   // Marquer les titres sautés comme lus
   for (let i = 0; i < idx; i++) _radioPlayedIds.add(radioQueue[i].id);
-  const fi = getFiltered().findIndex(x => x.id === t.id);
+  const fi = filteredIdx(t);
   if (fi >= 0) {
     playAt(fi);
     if (get('view') === 'radio') renderRadioView();

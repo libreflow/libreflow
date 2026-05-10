@@ -2,14 +2,23 @@
 // Utilitaires UI purs : toasts, modal de confirmation.
 // Extrait de app.js (Phase 6).
 //
-// Aucune dépendance vers d'autres modules LibreFlow — importable partout
-// sans risque de dépendance circulaire.
+// AUCUNE dépendance vers d'autres modules LibreFlow — i18n.js importe toast depuis
+// ui.js, donc tout import de i18n.js ici créerait un cycle bidirectionnel.
+// Pour les libellés localisés, les appelants passent des chaînes déjà traduites.
 //
 // Exports publics :
-//   toast(msg, type)                               — notification temporaire
-//   toastWithAction(msg, type, label, onAction, dur) — toast avec bouton undo
-//   confirmAction(title, body, okLabel, okStyle)   — modal confirm → Promise<boolean>
-//   resolveConfirm(result)                         — résout la modal depuis handlers.js
+//   toast(msg, type)                                    — notification temporaire
+//   toastWithAction(msg, type, label, onAction, dur)    — toast avec bouton undo
+//   confirmAction(title, body, okLabel, okStyle)        — modal confirm → Promise<boolean>
+//   resolveConfirm(result)                              — résout la modal depuis handlers.js
+//   promptAction(title, defaultVal, okLabel, cancelLabel) — saisie texte → Promise<string|null>
+
+// ── Utilitaire sécurité ───────────────────────────────────────────────────
+
+/** Escape HTML special characters including quotes. Use for any user-provided content in HTML attributes or text nodes. */
+export function esc(str) {
+  return (str || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
 
 // ── Constantes ────────────────────────────────────────────────────────────
 
@@ -20,7 +29,7 @@ const _TOAST_ICONS = {
   warning: `<svg viewBox="0 0 10 10" fill="#fff" width="9" height="9"><path d="M5 1.5L9 8.5H1Z" fill="none" stroke="#fff" stroke-width="1.4"/><rect x="4.3" y="4" width="1.4" height="2.5" rx=".7"/><circle cx="5" cy="7.3" r=".65"/></svg>`,
   loading: `<svg viewBox="0 0 10 10" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round" width="9" height="9"><path d="M5 1.5A3.5 3.5 0 1 1 1.7 3.7"/></svg>`,
 };
-const _TOAST_DUR = { info: 3000, success: 2600, error: 4200, warning: 3600, loading: 120000 };
+const _TOAST_DUR = { info: 3000, success: 2600, error: 8000, warning: 6000, loading: 120000 };
 
 // ── Toast ─────────────────────────────────────────────────────────────────
 
@@ -38,7 +47,8 @@ export function toast(m, type = 'info') {
 
   const el = document.createElement('div');
   el.className = `t-item t-${type}`;
-  el.innerHTML = `<span class="t-icon">${icon}</span><span class="t-msg">${m}</span><span class="t-bar"></span>`;
+  el.innerHTML = `<span class="t-icon">${icon}</span><span class="t-msg"></span><span class="t-bar"></span>`;
+  el.querySelector('.t-msg').textContent = m;
   shelf.appendChild(el);
 
   const bar = el.querySelector('.t-bar');
@@ -56,6 +66,14 @@ export function toast(m, type = 'info') {
     const msgEl = el.querySelector('.t-msg');
     if (msgEl) msgEl.textContent = newMsg;
   };
+  if (type === 'error' || type === 'warning') {
+    const closeBtn = document.createElement('button');
+    closeBtn.className = 't-close';
+    closeBtn.textContent = '×';
+    closeBtn.setAttribute('aria-label', 'Fermer');
+    closeBtn.addEventListener('click', (e) => { e.stopPropagation(); clearTimeout(timer); remove(); });
+    el.appendChild(closeBtn);
+  }
   const timer = setTimeout(remove, dur);
   el.addEventListener('click', () => { clearTimeout(timer); remove(); });
   return remove;
@@ -78,7 +96,8 @@ export function toastWithAction(m, type = 'info', label, onAction, dur) {
 
   const el = document.createElement('div');
   el.className = `t-item t-${type}`;
-  el.innerHTML = `<span class="t-icon">${icon}</span><span class="t-msg">${m}</span><button class="t-action">${label}</button><span class="t-bar"></span>`;
+  el.innerHTML = `<span class="t-icon">${icon}</span><span class="t-msg"></span><button class="t-action">${label}</button><span class="t-bar"></span>`;
+  el.querySelector('.t-msg').textContent = m;
   shelf.appendChild(el);
 
   const bar = el.querySelector('.t-bar');
@@ -104,10 +123,36 @@ export function toastWithAction(m, type = 'info', label, onAction, dur) {
   return remove;
 }
 
+// ── Focus trap ────────────────────────────────────────────────────────────
+
+/**
+ * Confine le focus Tab à l'intérieur d'un conteneur modal.
+ * @param {HTMLElement} containerEl
+ * @returns {Function} Fonction de cleanup pour retirer le listener
+ */
+function _trapFocus(containerEl) {
+  const focusable = 'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])';
+  const handler = (e) => {
+    if (e.key !== 'Tab') return;
+    const els = [...containerEl.querySelectorAll(focusable)].filter(el => !el.disabled && el.offsetParent !== null);
+    if (!els.length) return;
+    const first = els[0], last = els[els.length - 1];
+    if (e.shiftKey) {
+      if (document.activeElement === first) { e.preventDefault(); last.focus(); }
+    } else {
+      if (document.activeElement === last) { e.preventDefault(); first.focus(); }
+    }
+  };
+  containerEl.addEventListener('keydown', handler);
+  return () => containerEl.removeEventListener('keydown', handler);
+}
+
 // ── Confirm modal ─────────────────────────────────────────────────────────
 
 /** Callback interne résolvant la Promise en cours. */
 let _confirmResolve = () => {};
+/** Cleanup du focus trap de la modal confirm. */
+let _confirmTrapCleanup = () => {};
 
 /**
  * Affiche la modal de confirmation et retourne une Promise<boolean>.
@@ -123,16 +168,23 @@ export function confirmAction(title, body, okLabel = 'Confirmer', okStyle = 'dan
     const elT   = document.getElementById('confirm-modal-title');
     const elB   = document.getElementById('confirm-modal-body');
     const okBtn = document.getElementById('confirm-modal-ok');
+    if (!bg || !elT || !elB || !okBtn) { resolve(false); return; }
     elT.textContent   = title;
+    // body is trusted HTML — callers must use esc() for user-provided content
     elB.innerHTML     = body;
     okBtn.textContent = okLabel;
     okBtn.className   = `mbtn ${okStyle}`;
+    const _prevFocus  = document.activeElement;
     _confirmResolve = (result) => {
       bg.classList.remove('on');
       _confirmResolve = () => {};
+      _confirmTrapCleanup();
+      _confirmTrapCleanup = () => {};
+      _prevFocus?.focus();
       resolve(result);
     };
     bg.classList.add('on');
+    _confirmTrapCleanup = _trapFocus(document.getElementById('confirm-modal'));
     setTimeout(() => okBtn.focus(), 50);
   });
 }
@@ -148,36 +200,43 @@ export function resolveConfirm(result) {
 
 /**
  * Modal de saisie texte (remplace window.prompt — incompatible Tauri v2).
- * @param {string} title       — Titre de la modal
- * @param {string} defaultVal  — Valeur pré-remplie
- * @param {string} okLabel     — Libellé bouton confirmer
+ * @param {string} title        — Titre de la modal
+ * @param {string} defaultVal   — Valeur pré-remplie
+ * @param {string} okLabel      — Libellé bouton confirmer
+ * @param {string} cancelLabel  — Libellé bouton annuler (le caller passe i18n('btn_cancel'))
  * @returns {Promise<string|null>} — Valeur saisie, ou null si annulé
  */
-export function promptAction(title, defaultVal = '', okLabel = 'OK') {
+export function promptAction(title, defaultVal = '', okLabel = 'OK', cancelLabel = 'Annuler') {
   return new Promise(resolve => {
-    // Créer la modal à la volée
+    const _prevFocus = document.activeElement;
     const bg = document.createElement('div');
-    bg.className = 'modal-bg prompt-modal-bg';
+    bg.className = 'prompt-bg prompt-modal-bg';
+    bg.setAttribute('role', 'dialog');
+    bg.setAttribute('aria-modal', 'true');
     bg.innerHTML = `
-      <div class="modal prompt-modal" role="dialog" aria-modal="true">
+      <div class="modal prompt-modal">
         <div class="modal-title"></div>
         <input class="prompt-input" type="text" />
         <div class="modal-actions">
-          <button class="mbtn secondary prompt-cancel">${'Annuler'}</button>
+          <button class="mbtn secondary prompt-cancel"></button>
           <button class="mbtn primary prompt-ok"></button>
         </div>
       </div>`;
     document.body.appendChild(bg);
 
-    const input   = bg.querySelector('.prompt-input');
-    const okBtn   = bg.querySelector('.prompt-ok');
+    const input     = bg.querySelector('.prompt-input');
+    const okBtn     = bg.querySelector('.prompt-ok');
     const cancelBtn = bg.querySelector('.prompt-cancel');
     bg.querySelector('.modal-title').textContent = title;
-    okBtn.textContent = okLabel;
+    okBtn.textContent     = okLabel;
+    cancelBtn.textContent = cancelLabel;
     input.value = defaultVal;
 
+    const removeTrap = _trapFocus(bg);
     const finish = (val) => {
+      removeTrap();
       bg.remove();
+      _prevFocus?.focus();
       resolve(val);
     };
 

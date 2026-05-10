@@ -15,6 +15,7 @@ import { CFG }                               from './cfg.js';
 import { get }                               from './store.js';
 import { saveTrack }                         from './library.js';
 import { saveCfg } from './app.js';
+import { invoke } from './ipc.js'; // BUG-M2 FIX : allow_asset_dir avant fetch(t.url)
 
 // ── État (exporté comme live bindings) ────────────────────────
 export let rgEnabled    = true;
@@ -105,6 +106,11 @@ export async function analyzeAndApplyRG() {
       return;
     }
 
+    // BUG-M2 FIX : en production, asset:// nécessite que le scope soit accordé avant fetch()
+    if (t.path) {
+      const _dir = t.path.replace(/[/\\][^/\\]+$/, '');
+      invoke('allow_asset_dir', { path: _dir }).catch(() => {});
+    }
     const resp = await fetch(t.url);
     if (_rgAnalysisId !== myId) return; // piste changée pendant le download
     // Guard Content-Length : l'estimation par durée (40 Ko/s) sous-estime les FLAC/WAV
@@ -120,10 +126,12 @@ export async function analyzeAndApplyRG() {
 
     // CORRUPT-2 : t.duration peut être NaN (tag manquant) → OfflineAudioContext(1, NaN) → RangeError
     const _dur = isFinite(t.duration) && t.duration > 0 ? t.duration : 30;
-    const offline = new OfflineAudioContext(1, Math.round(44100 * Math.min(30, _dur)), 44100);
-    const srcBuf  = await offline.decodeAudioData(arrayBuf);
+    const offline = new OfflineAudioContext(2, Math.round(44100 * Math.min(30, _dur)), 44100);
+    let srcBuf    = await offline.decodeAudioData(arrayBuf);
     arrayBuf = null; // MEM-2 — libère ~30 MB avant le rendu offline (GC ne peut pas le faire avant)
     if (_rgAnalysisId !== myId) return;
+
+    const nch = Math.min(srcBuf.numberOfChannels, 2); // cap at 2 — BS.1770 uses L+R only
 
     const src = offline.createBufferSource();
     src.buffer = srcBuf;
@@ -149,15 +157,19 @@ export async function analyzeAndApplyRG() {
     rlbFilter.connect(offline.destination);
     src.start(0);
     const rendered = await offline.startRendering();
+    src.disconnect(); // release node from graph
+    src.buffer = null; // release AudioBuffer reference from source node
     if (_rgAnalysisId !== myId) return;
 
     // LUFS-K (ungated) = -0.691 + 10·log10(mean_square)
     // Formule BS.1770 : l'offset -0.691 compense la pondération fréquentielle K.
     // Équivalent à 20·log10(rms) - 0.691 ; légèrement différent du RMS brut.
     let sumSq = 0;
-    const data = rendered.getChannelData(0);
-    for (let i = 0; i < data.length; i++) sumSq += data[i] * data[i];
-    const meanSq   = sumSq / data.length;
+    for (let ch = 0; ch < nch; ch++) {
+      const chData = rendered.getChannelData(ch);
+      for (let i = 0; i < chData.length; i++) sumSq += chData[i] * chData[i];
+    }
+    const meanSq = sumSq / (rendered.length * nch);
     const lufs     = meanSq > 0 ? -0.691 + 10 * Math.log10(meanSq) : -70;
     const gainDB   = rgTargetLUFS - lufs;
     t.rgGain       = Math.max(0.1, Math.min(3.162, Math.pow(10, gainDB / 20))); // max +10 dB — évite le clipping sur les pistes très faibles
@@ -168,6 +180,7 @@ export async function analyzeAndApplyRG() {
     let _peak = 0;
     for (let i = 0; i < _pcm.length; i++) { const a = Math.abs(_pcm[i]); if (a > _peak) _peak = a; }
     t.rgPeak = Math.min(1.0, _peak);
+    srcBuf = null; // allow GC of the 30 MB AudioBuffer
     applyRGGain(t.rgGain);
     saveTrack(t); // persister en IDB pour ne pas recalculer au prochain démarrage
   } catch {

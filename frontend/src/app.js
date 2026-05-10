@@ -9,7 +9,7 @@ import { audio, playAt, prev, next, togglePlay, buildQ,
          checkCrossfade, setManualQueue, resetShuffleQ,
          adjustShuffleQAfterDelete, setBootVizState }       from './player.js';
 import { emit, on, EVENTS }                                from './bus.js';
-import { get, set, subscribe, setBatch }                   from './store.js';
+import { get, set, notify, subscribe, setBatch }           from './store.js';
 import { CFG, SORTS, SLBLS, SPEEDS, SPEED_LBLS } from './cfg.js';
 import { openDB, tx, dget, dall, dput, ddel, DB } from './db.js';
 import { readTags, extractColor, GENRE_ARTISTS, GENRE_KEYWORDS, guessGenre } from './tags.js';
@@ -35,7 +35,7 @@ import { toggleMiniOverlay, syncMiniOverlay, updateMiniOverlayProgress, initMini
 import { rgEnabled, rgTargetLUFS, initRgState, initRG, setReplayGain, setRGTarget, analyzeAndApplyRG, applyRGGain, cancelRgAnalysis } from './replaygain.js';
 import { openTagEditor, saveTagEdit, cancelTagEdit } from './tagedit.js';
 import { toast, toastWithAction, confirmAction, resolveConfirm, initRipple } from './ui.js';
-import { checkForUpdate } from './updater.js';
+import { checkForUpdate, checkForUpdateManual } from './updater.js';
 import { getFiltered, filteredIdx, rebuildTrackIdxMap, trackIdx, invalidateFilterCache,
          _trackIdxMap }    from './search.js';
 import { openFolder, loadTagsAndDurations, loadTagsBg, rescanTags,
@@ -146,8 +146,9 @@ function validYear(y) {
 let tracks  = [];       // full track array
 let liked   = new Set();
 let curIdx  = -1;
-let shuffle = false;    // shuffleQ est dans player.js
-let repeat  = 'none';  // none | all | one
+let shuffle    = false;    // shuffleQ est dans player.js
+let repeat     = 'none';  // none | all | one
+let _autoUpdate = true;
 let sort    = 'az';
 let view    = 'all';
 let drillKey         = '';
@@ -262,6 +263,44 @@ on(EVENTS.RENDER_LIB, () => renderLib());
  * renderLib() efface tout et affiche le vrai contenu quand les données arrivent.
  * @param {string} [savedView] — valeur de cfg.view au dernier arrêt
  */
+/**
+ * Initialise la langue, le mode d'affichage et les widgets UI communs au boot,
+ * que la bibliothèque soit chargée (cfgObj non null) ou que l'écran de bienvenue
+ * soit affiché (cfgObj null ou incomplet). Extrait pour éliminer la duplication
+ * entre les deux branches du boot (PERF-BOOT Fix B).
+ * @param {object|null} cfgObj — objet cfg tel que lu depuis IDB (peut être null)
+ */
+function _applyBootUI(cfgObj) {
+  applyLang();
+  setMode(getDisplayMode());
+  document.getElementById('pc-shuf')?.classList.toggle('on', shuffle);
+  document.getElementById('pc-shuf')?.setAttribute('aria-pressed', String(shuffle));
+  document.getElementById('pc-rep')?.classList.toggle('on', repeat !== 'none');
+  document.getElementById('pc-rep')?.setAttribute('aria-pressed', String(repeat !== 'none'));
+  if (getWatchPath()) updateWatchUI();
+  setTimeout(updateVolSlider, 100);
+  if (playbackSpeed !== 1) setSpeed(playbackSpeed);
+  const rgChk = document.getElementById('rg-enabled');
+  if (rgChk) rgChk.checked = rgEnabled;
+  const rgSlider = document.getElementById('rg-target');
+  if (rgSlider) rgSlider.value = rgTargetLUFS;
+  const rgLbl = document.getElementById('rg-target-lbl');
+  if (rgLbl) rgLbl.textContent = rgTargetLUFS + ' LUFS';
+  const autoUpdateChk = document.getElementById('auto-update-chk');
+  if (autoUpdateChk) {
+    _autoUpdate = cfgObj?.autoUpdate !== false;
+    autoUpdateChk.checked = _autoUpdate;
+    autoUpdateChk.addEventListener('change', () => {
+      _autoUpdate = autoUpdateChk.checked;
+      saveCfg();
+    });
+  }
+  const checkUpdateBtn = document.getElementById('check-update-btn');
+  if (checkUpdateBtn) {
+    checkUpdateBtn.addEventListener('click', () => checkForUpdateManual(checkUpdateBtn));
+  }
+}
+
 async function boot() {
   // R-2 : health check IDB — si la DB est corrompue ou bloquée, openDB() rejette.
   // Sans ce try/catch, l'erreur part en UnhandledPromiseRejection → crash silencieux.
@@ -387,38 +426,46 @@ async function boot() {
   if (saved && saved.length > 0) {
     // FIX BUG 4: tracks from DB have no blob URL → must be loaded on demand
     // We store them but flag them as needing file load
-    tracks = saved.map(r => {
-      // Re-apply mainArtist on load to fix any old bad data in DB
-      const artistFull = r.artistFull || r.artist || i18n('unknown_artist');
-      const artist     = mainArtist(artistFull) || artistFull;
-      return {
-        id: r.id, name: r.name,
-        artist,            // canonical main artist
-        artistFull,        // full string incl. featuring
-        album: r.album,
-        ext: r.ext, path: r.path, duration: r.duration,
-        dateAdded: r.dateAdded,
-        // ART-IDB : artBuf (ArrayBuffer) depuis IDB v5+ ; artB64 en compat anciens enregistrements
-        art: r.artBuf
-          ? URL.createObjectURL(new Blob([r.artBuf], { type: r.artMime || 'image/jpeg' }))
-          : (r.artB64 || null),
-        _artBuf:  r.artBuf  || null,
-        _artMime: r.artMime || null,
-        artColor: r.artColor || null,
-        url: null, file: null,
-        genre: r.genre || null,
-        year:  validYear(r.year),
-        track: r.track || null,
-        liked: false, metaDone: true,
-        noArt:      r.noArt     || false,
-        rgGain:     r.rgGain    != null ? r.rgGain    : undefined,
-        // C-3 : propriétés audio techniques
-        bitrate:    r.bitrate    != null ? r.bitrate    : null,
-        sampleRate: r.sampleRate != null ? r.sampleRate : null,
-        channels:   r.channels   != null ? r.channels   : null,
-        bitDepth:   r.bitDepth   != null ? r.bitDepth   : null,
-      };
-    });
+    // PERF-BOOT : traitement par tranches de 500 — évite le blocage main-thread sur grandes bibliothèques
+    const _BOOT_CHUNK = 500;
+    const _tracksArr = [];
+    for (let _bi = 0; _bi < saved.length; _bi += _BOOT_CHUNK) {
+      const _slice = saved.slice(_bi, _bi + _BOOT_CHUNK);
+      for (const r of _slice) {
+        // Re-apply mainArtist on load to fix any old bad data in DB
+        const artistFull = r.artistFull || r.artist || i18n('unknown_artist');
+        const artist     = mainArtist(artistFull) || artistFull;
+        _tracksArr.push({
+          id: r.id, name: r.name,
+          artist,            // canonical main artist
+          artistFull,        // full string incl. featuring
+          album: r.album,
+          ext: r.ext, path: r.path, duration: r.duration,
+          dateAdded: r.dateAdded,
+          // ART-IDB : artBuf (ArrayBuffer) depuis IDB v5+ ; artB64 en compat anciens enregistrements
+          art: r.artBuf
+            ? URL.createObjectURL(new Blob([r.artBuf], { type: r.artMime || 'image/jpeg' }))
+            : (r.artB64 || null),
+          _artBuf:  r.artBuf  || null,
+          _artMime: r.artMime || null,
+          artColor: r.artColor || null,
+          url: null, file: null,
+          genre: r.genre || null,
+          year:  validYear(r.year),
+          track: r.track || null,
+          liked: false, metaDone: true,
+          noArt:      r.noArt     || false,
+          rgGain:     r.rgGain    != null ? r.rgGain    : undefined,
+          // C-3 : propriétés audio techniques
+          bitrate:    r.bitrate    != null ? r.bitrate    : null,
+          sampleRate: r.sampleRate != null ? r.sampleRate : null,
+          channels:   r.channels   != null ? r.channels   : null,
+          bitDepth:   r.bitDepth   != null ? r.bitDepth   : null,
+        });
+      }
+      if (_bi + _BOOT_CHUNK < saved.length) await new Promise(res => setTimeout(res, 0));
+    }
+    tracks = _tracksArr;
     set('tracks', tracks); emit(EVENTS.LIBRARY_UPDATED, { tracks }); // Jalon 3/4
     rebuildTrackIdxMap(); // FIX #3 — doit précéder updateStats() et renderLib()
 
@@ -433,6 +480,9 @@ async function boot() {
     // Reconstruire liked par IDs si disponible (robuste aux réordres)
     updateStats();
     renderLib();
+    // UX-3 : masquer le spinner de boot après le premier rendu de la bibliothèque
+    const _bootSpinner = document.getElementById('boot-spinner');
+    if (_bootSpinner) _bootSpinner.style.display = 'none';
     showView('lib');
     // Queue persist — restaurer après rebuildTrackIdxMap (IDs validés contre _trackIdxMap)
     if (cfg?.queueState?.ids?.length) restoreQueueState(cfg.queueState);
@@ -477,29 +527,7 @@ async function boot() {
     // MINOR-1 FIX : applyLang() / setMode() / sync UI AVANT le await BOOT-1.
     // Avant ce fix, ces appels venaient après le bloc if/else → bloqués jusqu'à 5s
     // si le fichier audio de reprise était lent à répondre (NAS, fichier manquant).
-    applyLang();
-    setMode(getDisplayMode());
-    document.getElementById('pc-shuf')?.classList.toggle('on', shuffle);
-    document.getElementById('pc-shuf')?.setAttribute('aria-pressed', String(shuffle));
-    document.getElementById('pc-rep')?.classList.toggle('on', repeat !== 'none');
-    document.getElementById('pc-rep')?.setAttribute('aria-pressed', String(repeat !== 'none'));
-    if (getWatchPath()) updateWatchUI();
-    setTimeout(updateVolSlider, 100);
-    if (playbackSpeed !== 1) setSpeed(playbackSpeed);
-    const rgChk = document.getElementById('rg-enabled');
-    if (rgChk) rgChk.checked = rgEnabled;
-    const rgSlider = document.getElementById('rg-target');
-    if (rgSlider) rgSlider.value = rgTargetLUFS;
-    const rgLbl = document.getElementById('rg-target-lbl');
-    if (rgLbl) rgLbl.textContent = rgTargetLUFS + ' LUFS';
-    const autoUpdateChk = document.getElementById('auto-update-chk');
-    if (autoUpdateChk) {
-      autoUpdateChk.checked = cfg.autoUpdate !== false;
-      autoUpdateChk.addEventListener('change', () => {
-        cfg.autoUpdate = autoUpdateChk.checked;
-        saveCfg();
-      });
-    }
+    _applyBootUI(cfg);
 
     // ── Restaurer la dernière piste et position ──────────────────────────
     if (cfg && cfg.curTrackId) {
@@ -540,32 +568,12 @@ async function boot() {
   } else {
     showView('welcome');
     // Apply language + UI even on welcome screen
-    applyLang();
-    setMode(getDisplayMode());
-    document.getElementById('pc-shuf')?.classList.toggle('on', shuffle);
-    document.getElementById('pc-shuf')?.setAttribute('aria-pressed', String(shuffle));
-    document.getElementById('pc-rep')?.classList.toggle('on', repeat !== 'none');
-    document.getElementById('pc-rep')?.setAttribute('aria-pressed', String(repeat !== 'none'));
-    if (getWatchPath()) updateWatchUI();
-    setTimeout(updateVolSlider, 100);
-    if (playbackSpeed !== 1) setSpeed(playbackSpeed);
-    const rgChk2 = document.getElementById('rg-enabled');
-    if (rgChk2) rgChk2.checked = rgEnabled;
-    const rgSlider2 = document.getElementById('rg-target');
-    if (rgSlider2) rgSlider2.value = rgTargetLUFS;
-    const rgLbl2 = document.getElementById('rg-target-lbl');
-    if (rgLbl2) rgLbl2.textContent = rgTargetLUFS + ' LUFS';
-    const autoUpdateChk2 = document.getElementById('auto-update-chk');
-    if (autoUpdateChk2) {
-      autoUpdateChk2.checked = cfg.autoUpdate !== false;
-      autoUpdateChk2.addEventListener('change', () => {
-        cfg.autoUpdate = autoUpdateChk2.checked;
-        saveCfg();
-      });
-    }
+    _applyBootUI(cfg);
+    // UX-3 : masquer le spinner de boot même si la bibliothèque est vide
+    document.getElementById('boot-spinner')?.remove();
   }
   // Vérifier les mises à jour 10s après le boot (non bloquant, silencieux si pas configuré)
-  if (cfg.autoUpdate !== false) {
+  if (_autoUpdate) {
     setTimeout(() => checkForUpdate().catch(() => {}), 10_000);
   }
 
@@ -749,7 +757,7 @@ async function _onDrop(e){
     const t={id:crypto.randomUUID?crypto.randomUUID():Math.random().toString(36).slice(2)+Date.now(),name:file.name.replace(/\.[^.]+$/,'').replace(/[-_]+/g,' ').trim(),artist:i18n('unknown_artist'),artistFull:i18n('unknown_artist'),album:'',ext,path:file.webkitRelativePath||file.name,duration:dur,dateAdded:Date.now(),art:null,artColor:null,url,file,metaDone:false};
     newTracks.push(t); document.getElementById('sn').textContent=newTracks.length;
   }
-  tracks.push(...newTracks); set('tracks', tracks); emit(EVENTS.LIBRARY_UPDATED, { tracks }); rebuildTrackIdxMap(); invalidateFilter(); updateStats(); renderLib(); showView('lib');
+  tracks.push(...newTracks); set('tracks', tracks); rebuildTrackIdxMap(); notify('tracks'); emit(EVENTS.LIBRARY_UPDATED, { tracks }); invalidateFilter(); updateStats(); renderLib(); showView('lib');
   toast(i18n('t_files_added', newTracks.length), 'success');
   newTracks.forEach(t=>loadTagsBg(t));
 }
@@ -763,7 +771,15 @@ document.addEventListener('keydown', e=>{
     if (srch) { showView('lib'); srch.focus(); srch.select(); }
     return;
   }
-  if (e.target.tagName==='INPUT') return;
+  if (['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target.tagName)) return;
+  const _anyModalOpen =
+    document.getElementById('pl-modal-bg')?.classList.contains('on') ||
+    document.getElementById('modal-bg')?.classList.contains('on') ||
+    document.getElementById('confirm-modal-bg')?.classList.contains('on') ||
+    document.getElementById('settings-panel')?.classList.contains('on') ||
+    document.querySelector('.orphan-modal-bg.on') !== null ||
+    document.querySelector('.ctx-menu') !== null;
+  if (_anyModalOpen) return;
   // Bloquer tous les raccourcis pendant l'édition inline de métadonnées
   if (document.querySelector('.tr.editing')) return;
   // Laisser cinema.js gérer les raccourcis quand le mode cinéma est ouvert
@@ -887,7 +903,7 @@ async function _doSaveCfg() {
       heatPeriod:  getHeatPeriod(),
       queueState:  getQueueState(),
       radioSeedId: radioActive ? getRadioSeedId() : null,
-      autoUpdate: cfg.autoUpdate !== false,
+      autoUpdate: _autoUpdate,
     }, 'state');
   } catch (e) {
     console.warn('[_doSaveCfg] IDB save failed — config non persistée:', e);
@@ -953,6 +969,24 @@ function waitForTauri(cb, n = 0) {
   else if (n < 200) { setTimeout(() => waitForTauri(cb, n + 1), 25); }
   else { console.warn('[LibreFlow] __TAURI__ non disponible'); cb(); }
 }
+
+// ARCH-4 : Global error boundary — attrape les exceptions non gérées et les rejections de promesse
+// pour éviter un crash silencieux de l'UI. Affiché en toast 'error' pour informer l'utilisateur.
+window.addEventListener('error', (e) => {
+  if (e.filename && !e.filename.includes('LibreFlow') && !e.filename.includes('localhost')) return; // ignorer les erreurs d'extensions tierces
+  console.error('[LibreFlow] Uncaught error:', e.error || e.message);
+  const msg = e.error?.message || e.message || 'Erreur inconnue';
+  toast(`Erreur inattendue : ${msg}`, 'error');
+});
+window.addEventListener('unhandledrejection', (e) => {
+  const reason = e.reason;
+  // Éviter de re-toaster les erreurs déjà loguées (ex: boot IDB)
+  if (reason && reason._alreadyToasted) return;
+  console.error('[LibreFlow] Unhandled rejection:', reason);
+  const msg = reason?.message || String(reason) || 'Erreur asynchrone';
+  toast(`Erreur asynchrone : ${msg}`, 'error');
+  e.preventDefault(); // empêche l'affichage dans la console DevTools (déjà logué)
+});
 
 waitForTauri(() => {
   boot().catch(e => console.error('[LibreFlow] boot failed:', e)); // FIX #19
@@ -1110,6 +1144,9 @@ export function updateBar() {
 
   // Phase 1 : feedback visuel critique — même frame que l'event (INP-1)
   document.title = `${t.name} — ${t.artistFull || t.artist || i18n('unknown_artist')} · LibreFlow`;
+  // UX-5 : mettre à jour la région ARIA live pour les lecteurs d'écran
+  const _npLive = document.getElementById('np-live');
+  if (_npLive) _npLive.textContent = `${t.name} — ${t.artistFull || t.artist || i18n('unknown_artist')}`;
   _setupMarquee(document.getElementById('pl-n'), t.name);
   _setupMarquee(document.getElementById('pl-a'), t.artistFull || t.artist || i18n('unknown_artist'));
   const img = document.getElementById('pl-img'), em = document.getElementById('pl-em');
@@ -1203,6 +1240,7 @@ export function confirmClear() {
 }
 export function closeModal() {
   const bg = document.getElementById('modal-bg');
+  if (!bg) return; // W9 FIX : guard contre l'absence du DOM element
   bg.classList.add('modal-closing');
   bg.addEventListener('animationend', () => {
     bg.classList.remove('on', 'modal-closing');
@@ -1253,6 +1291,7 @@ export async function clearLibrary() {
   // Fermer tous les panneaux ouverts avant de vider l'état (évite l'affichage de données périmées)
   closeNowPlaying();
   closeQueue();
+  clearQueueOverride();
   closeEQ();
   if (cinemaOpen) closeCinema();
   // FIX #21/#22 — annuler les timers de retry artwork et orphelins
@@ -1260,16 +1299,18 @@ export async function clearLibrary() {
   clearTimeout(_orphansTimer);  _orphansTimer  = null;
   // Annuler le batch IDB en attente (cancelTrackBatch → library.js)
   cancelTrackBatch();
-  // Révoquer tous les blob URLs pour libérer la mémoire
+  cancelPlayLogFlush();
+  setPlayLog([]);
+  // Révoquer tous les blob URLs pour libérer la mémoire (B4 FIX : guard blob: — data: URIs ne doivent pas être révoquées)
   for (const t of tracks) {
-    if (t.url)  try { URL.revokeObjectURL(t.url);  } catch {}
-    if (t.art)  try { URL.revokeObjectURL(t.art);  } catch {}
+    if (t.url && t.url.startsWith('blob:'))  try { URL.revokeObjectURL(t.url);  } catch {}
+    if (t.art && t.art.startsWith('blob:'))  try { URL.revokeObjectURL(t.art);  } catch {}
   }
-  tracks  = []; set('tracks', []); rebuildTrackIdxMap(); invalidateFilter(); // INVARIANT : map must stay in sync; caches filter/album/artist
+  tracks  = []; set('tracks', tracks); rebuildTrackIdxMap(); notify('tracks'); invalidateFilter(); // INVARIANT : map must stay in sync; store gets same ref as local var so openFolder mutations stay visible to updateBar()
   liked   = new Set(); set('liked', liked);
-  playlists = []; set('playlists', []); recentPlays = []; set('recentPlays', []);
+  playlists = []; set('playlists', playlists); recentPlays = []; set('recentPlays', recentPlays);
   curPlId = null; set('curPlId', null);
-  plFolders = []; set('plFolders', []); recentPls = []; set('recentPls', []);
+  plFolders = []; set('plFolders', plFolders); recentPls = []; set('recentPls', recentPls);
   renderPlNav();
   curIdx  = -1; set('curIdx', -1);
   shuffle = false; set('shuffle', false); resetShuffleQ();
@@ -1333,11 +1374,18 @@ export async function clearLibrary() {
       store.transaction.oncomplete = ok;
       store.transaction.onerror   = e => fail(e.target.error);
     });
+    await new Promise((ok, fail) => {
+      const store = tx('playlog', 'readwrite');
+      store.clear().onerror = e => fail(e.target.error);
+      store.transaction.oncomplete = ok;
+      store.transaction.onerror   = e => fail(e.target.error);
+    });
     await _doSaveCfg();
   } catch(e) { console.warn('[clearLibrary] DB error:', e); }
   // Réinitialiser radio, crossfade, watchfolder
   resetRadio();
   clearCrossfadeTimers();
+  cancelSleepTimer(true); // BUG-D1-13 FIX: cancel sleep timer so it can't fire on an empty library
   stopWatchFolder();
   // Réinitialiser l'état de vue et de drill (évite le flash de contenu périmé au retour)
   view = 'all'; set('view', 'all');

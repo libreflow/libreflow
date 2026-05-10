@@ -17,13 +17,16 @@ import { emit, EVENTS }                                from './bus.js';
 import { DB, dput }                                   from './db.js';
 import { invoke, invokeRetry, convertFileSrc }        from './ipc.js';
 import { i18n }                                       from './i18n.js';
-import { readTags, extractColor, guessGenre }         from './tags.js';
+import { extractColor, guessGenre }                   from './tags.js';
 import { rgEnabled }                                  from './replaygain.js';
 import { CFG }                                        from './cfg.js';
 import { normTag, mainArtist, fmtd }                  from './utils.js';
+
+// ── Security ──────────────────────────────────────────────────────────────────
+const ART_MIME_ALLOWLIST = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/bmp', 'image/tiff'];
 import { adjustShuffleQAfterDelete }                  from './player.js';
 import { VIRT }                                       from './virt.js';
-import { get, set }                                   from './store.js'; // Phase 4
+import { get, set, notify }                           from './store.js'; // Phase 4
 import { toast, toastWithAction }                                        from './ui.js';
 import { setCurIdx, updateBar } from './app.js';
 import { setView, showView } from './views.js';
@@ -37,9 +40,23 @@ function _validYear(y) {
   return (Number.isInteger(n) && n >= 1900 && n <= 2100) ? n : null;
 }
 
+/**
+ * SEC-5 : Valide et tronque un champ tag textuel provenant d'un fichier externe.
+ * Protège contre les chaînes excessivement longues issues de fichiers malformés.
+ * @param {unknown} val — valeur brute de l'IPC
+ * @param {number} [maxLen=500] — longueur max autorisée
+ * @returns {string | null}
+ */
+function _sanitizeTagStr(val, maxLen = 500) {
+  if (typeof val !== 'string') return null;
+  const trimmed = val.trim().slice(0, maxLen);
+  return trimmed || null;
+}
+
 // ── État interne ──────────────────────────────────────────────────────────────
-let _saveTrackBatch  = new Map();  // Map<id, Track> — pistes à flush
-let _saveTrackTimer  = null;       // debounce timer
+let _saveTrackBatch    = new Map();  // Map<id, Track> — pistes à flush
+let _saveTrackTimer    = null;       // debounce timer
+let _saveTrackMaxTimer = null;       // garantit un flush toutes les 2s sous charge continue
 let _scanInProgress  = false;      // RACE-1 : guard contre les openFolder() concurrents
 
 // ── openFolder ────────────────────────────────────────────────────────────────
@@ -51,8 +68,15 @@ export async function openFolder() {
   if (_scanInProgress) { toast(i18n('t_scan_in_progress') || 'Scan déjà en cours…', 'warning'); return; }
   const result = await invoke('open_folder');
   if (!result) return;
-  const { files } = result;
+  const { folder, files } = result;
   if (!files.length) { toast(i18n('t_no_audio'), 'warning'); return; }
+
+  // IPC-ASSET : accorder l'accès asset:// au dossier sélectionné (obligatoire en build prod).
+  // En dev, Tauri est permissif — en production, le scope doit être explicitement accordé via
+  // app.asset_protocol_scope().allow_directory() côté Rust, ce que fait allow_asset_dir.
+  // Fire-and-forget : le scan crée les URL avec convertFileSrc ; l'accès sera prêt
+  // avant que l'utilisateur puisse cliquer sur Lire (le scan prend ≥ quelques ms).
+  if (folder) invoke('allow_asset_dir', { path: folder }).catch(e => console.warn('[allow_asset_dir]', e));
 
   _scanInProgress = true;
   try {
@@ -60,8 +84,8 @@ export async function openFolder() {
   const elSn  = document.getElementById('sn');
   const elSf  = document.getElementById('sf');
   const elBar = document.getElementById('scan-bar');
-  elSn.textContent = '0';
-  elSf.textContent = `${files.length} fichiers détectés…`;
+  if (elSn) elSn.textContent = '0';
+  if (elSf) elSf.textContent = `${files.length} fichiers détectés…`;
   if (elBar) elBar.style.width = '0%';
 
   const byPath = new Map(get('tracks').map(t => [t.path, t])); // Phase 4
@@ -96,8 +120,8 @@ export async function openFolder() {
     };
     newTracks.push(t);
     loaded++;
-    elSn.textContent = loaded;
-    if (loaded % 50 === 0 || loaded <= 10) { elSn.classList.remove('pop'); void elSn.offsetWidth; elSn.classList.add('pop'); }
+    if (elSn) elSn.textContent = String(loaded);
+    if (elSn && (loaded % 50 === 0 || loaded <= 10)) { elSn.classList.remove('pop'); void elSn.offsetWidth; elSn.classList.add('pop'); }
     if (loaded % YIELD_EVERY === 0 || loaded === newPaths.length) {
       const pct = Math.round(loaded / newPaths.length * 100);
       if (elBar) elBar.style.width = pct + '%';
@@ -107,7 +131,7 @@ export async function openFolder() {
         const etaMs = (newPaths.length - loaded) / rate;
         const etaS  = Math.ceil(etaMs / 1000);
         const etaStr = etaS >= 60 ? `${Math.floor(etaS/60)}m ${etaS%60}s` : `${etaS}s`;
-        elSf.textContent = `${loaded} / ${newPaths.length} • ETA ~${etaStr}`;
+        if (elSf) elSf.textContent = `${loaded} / ${newPaths.length} • ETA ~${etaStr}`;
       }
       await new Promise(r => setTimeout(r, 0));
     }
@@ -122,7 +146,7 @@ export async function openFolder() {
 
   const _tracksArr = get('tracks');
   _tracksArr.push(...newTracks);
-  set('tracks', _tracksArr); // notifier les subscribers (mutation in-place sinon invisible)
+  notify('tracks'); // BUG-C2 FIX : push() = mutation in-place → notify() force-notifie malgré same ref
   emit(EVENTS.LIBRARY_UPDATED, { tracks: _tracksArr }); // cohérence avec app.js drag-drop
   rebuildTrackIdxMap(); // Phase 4
   invalidateFilterCache(); emit(EVENTS.FILTER_CHANGED, {}); VIRT._lastListSig = '';
@@ -145,42 +169,38 @@ export async function openFolder() {
  * Utilise asset:// URL pour les durées (très rapide, sans IPC).
  */
 export async function loadTagsAndDurations(newTracks) {
-  const DUR_CONCURRENCY = 4;
+  const DUR_CONCURRENCY = CFG.TAG_LOAD_CONCURRENCY; // OPT-4 : CFG au lieu de 4 hardcodé
   const _tagsLoadingId  = 'tags-loading-' + Date.now();
   const _sbStats = document.getElementById('sb-stats');
   if (_sbStats) _sbStats.insertAdjacentHTML('beforeend',
     ` <span id="${_tagsLoadingId}" style="opacity:.5;font-size:10px">· chargement…</span>`);
+  let _skippedCount = 0;
 
   async function loadOne(t) {
-    // 1. Durée via Audio sur l'URL asset://
-    if (t._durPending && t.url) {
-      const dur = await new Promise(res => {
-        const tmp = new Audio();
-        tmp.preload = 'metadata';
-        tmp.src = t.url;
-        const cleanup = val => { tmp.src = ''; tmp.load(); res(val); };
-        tmp.addEventListener('loadedmetadata', () => cleanup(tmp.duration || 0), { once: true });
-        tmp.addEventListener('error',           () => cleanup(0),                 { once: true });
-        setTimeout(() => cleanup(0), 1500);
-      });
+    // OPT-1 : read_tags remplace read_audio_props + read_file + JS readTags() + read_audio_props×2
+    // 3 IPC et jusqu'à 50 Mo de transfert → 1 IPC, transfert limité à la pochette (~200 Ko)
+    if (t._durPending && t.path) {
+      const rustTags = await invoke('read_tags', { path: t.path }).catch(() => null);
+      const dur = rustTags?.duration_secs ?? 0;
       t.duration    = dur;
       t._durPending = false;
       if (dur > 0 && dur < 20) {
         // Piste trop courte — supprimer
         const idx = trackIdx(t.id);
         if (idx > -1) {
-          // liked migré Set<id> : suppression directe, pas de shift d'indices
-          get('liked').delete(t.id); // Phase 4
+          get('liked').delete(t.id);
           setCurIdx(get('curIdx') > idx ? get('curIdx') - 1 : get('curIdx') === idx ? -1 : get('curIdx'));
           adjustShuffleQAfterDelete(idx);
-          const _tracks = get('tracks'); // Phase 4
+          const _tracks = get('tracks');
           if (_tracks[idx].art  && _tracks[idx].art.startsWith('blob:'))  try { URL.revokeObjectURL(_tracks[idx].art);  } catch {}
           if (_tracks[idx].url  && _tracks[idx].url.startsWith('blob:'))  try { URL.revokeObjectURL(_tracks[idx].url);  } catch {}
           _tracks.splice(idx, 1);
           rebuildTrackIdxMap();
-          set('tracks', _tracks); // notifier les subscribers après splice
+          notify('tracks');
           emit(EVENTS.LIBRARY_UPDATED, { tracks: _tracks });
           invalidateFilterCache(); emit(EVENTS.FILTER_CHANGED, {});
+          _skippedCount++;
+          console.warn('[library] Piste ignorée — durée < 20s :', t.name || t.path);
         }
         return;
       }
@@ -196,17 +216,20 @@ export async function loadTagsAndDurations(newTracks) {
         }
         if (durEl) durEl.textContent = fmtd(dur);
       }
-      VIRT._lastSig = '';
+      VIRT._lastListSig = '';
+      // OPT-1 : passer rustTags pré-chargés pour éviter tout IPC supplémentaire dans loadTagsBg
+      await loadTagsBg(t, rustTags);
     }
-    // 2. Tags ID3
-    await loadTagsBg(t);
   }
 
   for (let i = 0; i < newTracks.length; i += DUR_CONCURRENCY) {
     await Promise.all(newTracks.slice(i, i + DUR_CONCURRENCY).map(t => loadOne(t)));
-    await new Promise(r => setTimeout(r, 20));
+    await new Promise(r => setTimeout(r, 0)); // OPT-3 : yield event loop, délai artificiel supprimé
   }
   if (_saveTrackTimer) { clearTimeout(_saveTrackTimer); await flushTrackBatch(); }
+  if (_skippedCount > 0) {
+    toast(i18n('t_short_tracks_skipped', _skippedCount), 'warning');
+  }
   document.getElementById(_tagsLoadingId)?.remove();
   scheduleStatsUpdate();
 
@@ -227,72 +250,107 @@ export async function loadTagsAndDurations(newTracks) {
 
 // ── loadTagsBg ────────────────────────────────────────────────────────────────
 /**
- * Lit les tags ID3 d'un track en arrière-plan via IPC (évite CORS avec fetch).
+ * Lit les tags d'un track via read_tags (Rust/lofty) — 1 IPC, pas de transfert du fichier complet.
+ * Accepte optionnellement des rustTags pré-chargés par loadOne() pour éviter tout IPC supplémentaire.
  * Patch l'élément DOM et sauvegarde en IDB si les métadonnées changent.
+ * @param {import('./types.js').Track} t
+ * @param {import('./ipc.js').TrackTags | null} [rustTags]
  */
-export async function loadTagsBg(t) {
-  if (!t.file && t.path) {
+export async function loadTagsBg(t, rustTags = null) {
+  // OPT-1 : si pas de tags pré-chargés (cas rescan), charger via read_tags
+  if (!rustTags && t.path) {
+    let _ipcTimeoutId;
     try {
-      const _ipcTimeout = new Promise((_, rej) =>
-        setTimeout(() => rej(new Error('IPC timeout')), CFG.IPC_TIMEOUT_MS)
-      );
-      const b64 = await Promise.race([invokeRetry('read_file', { path: t.path }), _ipcTimeout]);
-      if (!_trackIdxMap.has(t.id)) return;
-      if (!b64) { t.metaDone = true; saveTracks(t); return; }
-      const u8  = Uint8Array.from(atob(b64), c => c.charCodeAt(0)); // P10 — évite la boucle manuelle
-      const name = t.path.replace(/\\/g, '/').split('/').pop();
-      const ext  = name.split('.').pop().toLowerCase();
-      t.file = new File([u8.buffer], name, { type: 'audio/' + ext });
-    } catch {
+      const _ipcTimeout = new Promise((_, rej) => {
+        _ipcTimeoutId = setTimeout(() => rej(new Error('IPC timeout')), CFG.IPC_TIMEOUT_MS);
+      });
+      rustTags = /** @type {any} */ (await Promise.race([
+        invokeRetry('read_tags', { path: t.path }),
+        _ipcTimeout,
+      ]));
+    } catch (e) {
+      console.warn('[library] read_tags failed for', t.name, ':', e);
+      // UX-16 : ne pas spammer si c'est un timeout/retry — on toast uniquement en cas d'erreur réelle
+      if (e && e.message !== 'IPC timeout') {
+        toast(`${i18n('t_tags_read_error') || 'Impossible de lire les tags'} : ${t.name}`, 'warning');
+      }
       t.metaDone = true; saveTracks(t); return;
+    } finally {
+      clearTimeout(_ipcTimeoutId);
     }
   }
-  if (!t.file) { t.metaDone = true; saveTracks(t); return; }
+  if (!_trackIdxMap.has(t.id)) return;
+  if (!rustTags) { t.metaDone = true; saveTracks(t); return; }
+
+  // B3 FIX : pistes courtes importées via watchfolder (sans _durPending) sauvées en IDB
+  // → les supprimer avant tout traitement. _durPending=true = déjà géré par loadTagsAndDurations.
+  if (!t._durPending) {
+    const _bgDur = rustTags.duration_secs ?? 0;
+    if (_bgDur > 0 && _bgDur < CFG.SHORT_TRACK_MIN_SECS) {
+      const _bidx = trackIdx(t.id);
+      if (_bidx > -1) {
+        const _bTracks = get('tracks');
+        if (_bTracks[_bidx]?.url && _bTracks[_bidx].url.startsWith('blob:'))
+          try { URL.revokeObjectURL(_bTracks[_bidx].url); } catch {}
+        if (_bTracks[_bidx]?.art && _bTracks[_bidx].art.startsWith('blob:'))
+          try { URL.revokeObjectURL(_bTracks[_bidx].art); } catch {}
+        setCurIdx(get('curIdx') > _bidx ? get('curIdx') - 1 : get('curIdx') === _bidx ? -1 : get('curIdx'));
+        adjustShuffleQAfterDelete(_bidx);
+        _bTracks.splice(_bidx, 1);
+        rebuildTrackIdxMap();
+        notify('tracks');
+        invalidateFilterCache();
+        emit(EVENTS.FILTER_CHANGED, {});
+        console.warn('[loadTagsBg] Piste ignorée — durée < 20s :', t.name || t.path);
+      }
+      return; // ne pas sauvegarder en IDB
+    }
+  }
+
   try {
-    // C-3 : lire tags ET propriétés audio en parallèle (même fichier, I/O indépendants)
-    const [tags, props] = await Promise.all([
-      readTags(t.file),
-      invoke('read_audio_props', { path: t.path }).catch(() => null),
-    ]);
-    if (!_trackIdxMap.has(t.id)) return;
     let changed = false;
-    const ntitle      = normTag(tags.title);
-    const nartistFull = normTag(tags.artist);
+    // SEC-5 : valider et tronquer les champs textuels avant tout traitement
+    const ntitle      = normTag(_sanitizeTagStr(rustTags.title));
+    const nartistFull = normTag(_sanitizeTagStr(rustTags.artist));
     const nartist     = mainArtist(nartistFull);
-    const nalbum      = normTag(tags.album);
+    const nalbum      = normTag(_sanitizeTagStr(rustTags.album));
     if (ntitle      && ntitle      !== t.name)       { t.name       = ntitle;       changed = true; delete t._nlc; }
-    if (nartistFull && nartistFull !== t.artistFull) { t.artistFull = nartistFull;  changed = true; }
-    if (nartist     && nartist     !== t.artist)     { t.artist     = nartist;      changed = true; delete t._artistKey; delete t._alc; }
-    if (nalbum      && nalbum      !== t.album)      { t.album      = nalbum;       changed = true; delete t._albumKey;  delete t._ablc; }
-    const ngenre = normTag(tags.genre);
-    if (ngenre && ngenre !== t.genre) { t.genre = ngenre; changed = true; delete t._glc; delete t._genreParts; }
+    if (nartistFull && nartistFull !== t.artistFull) { t.artistFull = nartistFull;  changed = true; delete t._nlc; }
+    if (nartist     && nartist     !== t.artist)     { t.artist     = nartist;      changed = true; delete t._nlc; delete t._artistKey; delete t._alc; }
+    if (nalbum      && nalbum      !== t.album)      { t.album      = nalbum;       changed = true; delete t._nlc; delete t._albumKey;  delete t._ablc; }
+    const ngenre = normTag(_sanitizeTagStr(rustTags.genre));
+    if (ngenre && ngenre !== t.genre) { t.genre = ngenre; changed = true; delete t._nlc; delete t._glc; delete t._genreParts; }
     if (!t.genre) { const guessed = guessGenre(t); if (guessed) { t.genre = guessed; changed = true; } }
     // Mettre à jour l'année — y compris la vider si le tag est absent/epoch (nettoyage des 1970 parasites)
-    { const ny = _validYear(tags.year); if (ny !== (t.year ?? null)) { t.year = ny; changed = true; } }
-    if (tags.track && tags.track !== t.track) { t.track = tags.track; changed = true; }
-    if (tags.picture) {
+    { const ny = _validYear(rustTags.year); if (ny !== (t.year ?? null)) { t.year = ny; changed = true; } }
+    if (rustTags.track && rustTags.track !== t.track) { t.track = rustTags.track; changed = true; }
+    // Cover : décodage base64 → ArrayBuffer → blob URL
+    if (rustTags.cover_base64) {
       if (t.art && t.art.startsWith('blob:')) try { URL.revokeObjectURL(t.art); } catch {}
-      // Garder les bytes bruts — stockage IDB direct (ArrayBuffer), plus de base64 round-trip
-      const buf = tags.picture instanceof ArrayBuffer ? tags.picture : tags.picture.buffer;
-      t._artBuf  = buf;
-      t._artMime = tags.picMime || 'image/jpeg';
+      const mime = ART_MIME_ALLOWLIST.includes(rustTags.cover_mime) ? rustTags.cover_mime : 'image/jpeg';
+      const u8 = Uint8Array.from(atob(rustTags.cover_base64), c => c.charCodeAt(0));
+      t._artBuf  = u8.buffer;
+      t._artMime = mime;
       t._b64     = null; // invalider tout cache base64 existant
-      const blob = new Blob([buf], { type: t._artMime });
-      t.art = URL.createObjectURL(blob);
-      t.artColor = await extractColor(t.art).catch(() => null);
-      if (!_trackIdxMap.has(t.id)) { URL.revokeObjectURL(t.art); return; }
-      changed = true;
+      const blob = new Blob([t._artBuf], { type: mime });
+      t.art   = URL.createObjectURL(blob);
       t.noArt = false;
+      changed = true;
+      // OPT-2 : extractColor fire-and-forget — ne bloque plus le batch critique
+      const artUrl = t.art;
+      extractColor(artUrl).then(color => {
+        if (!_trackIdxMap.has(t.id)) return;
+        t.artColor = color;
+        saveTracks(t);
+      }).catch(() => {});
     } else {
       t.noArt = true;
     }
-    // C-3 : stocker les propriétés audio (bitrate, sampleRate, channels, bitDepth)
-    if (props) {
-      if (props.bitrate     != null) { t.bitrate     = props.bitrate;      changed = true; }
-      if (props.sample_rate != null) { t.sampleRate  = props.sample_rate;  changed = true; }
-      if (props.channels    != null) { t.channels    = props.channels;     changed = true; }
-      if (props.bit_depth   != null) { t.bitDepth    = props.bit_depth;    changed = true; }
-    }
+    // Propriétés audio techniques (bitrate, sampleRate, channels, bitDepth)
+    if (rustTags.bitrate     != null) { t.bitrate    = rustTags.bitrate;      changed = true; }
+    if (rustTags.sample_rate != null) { t.sampleRate = rustTags.sample_rate;  changed = true; }
+    if (rustTags.channels    != null) { t.channels   = rustTags.channels;     changed = true; }
+    if (rustTags.bit_depth   != null) { t.bitDepth   = rustTags.bit_depth;    changed = true; }
     t.metaDone = true;
     if (changed) patchTrackEl(t.id);
     if (trackIdx(t.id) === get('curIdx')) updateBar();
@@ -315,7 +373,7 @@ export async function rescanTags() {
   const _tracks = get('tracks'); // Phase 4
   if (!_tracks.length) { toast(i18n('t_rescan_empty'), 'warning'); return; }
   toast(i18n('t_rescan_start'));
-  const CONCURRENCY = 4;
+  const CONCURRENCY = CFG.TAG_LOAD_CONCURRENCY;
   let count = 0;
   for (const t of _tracks) { t.metaDone = false; t.file = null; }
   for (let i = 0; i < _tracks.length; i += CONCURRENCY) {
@@ -326,7 +384,7 @@ export async function rescanTags() {
       const t = batch[j], b = before[j];
       if (t.name !== b.name || t.artist !== b.artist || t.album !== b.album || t.genre !== b.genre) count++;
     }
-    await new Promise(r => setTimeout(r, 20));
+    await new Promise(r => setTimeout(r, 0)); // yield event loop
   }
   if (_saveTrackTimer) { clearTimeout(_saveTrackTimer); await flushTrackBatch(); }
   invalidateFilterCache(); emit(EVENTS.FILTER_CHANGED, {}); emit(EVENTS.RENDER_LIB, {}); updateStats();
@@ -346,7 +404,8 @@ async function _resolveArtBuf(t) {
   if (!t.art)    return null;
   // Migration : ancienne IDB avec data: URL base64
   if (t.art.startsWith('data:')) {
-    const mime = t.art.match(/data:([^;]+)/)?.[1] || 'image/jpeg';
+    const rawMime = t.art.match(/data:([^;]+)/)?.[1] || 'image/jpeg';
+    const mime = ART_MIME_ALLOWLIST.includes(rawMime) ? rawMime : 'image/jpeg';
     const b64  = t.art.split(',')[1];
     if (!b64) return null;
     const arr  = Uint8Array.from(atob(b64), c => c.charCodeAt(0)); // P10 — évite la boucle manuelle
@@ -360,7 +419,7 @@ async function _resolveArtBuf(t) {
       const resp = await fetch(t.art);
       const blob = await resp.blob();
       t._artBuf  = await blob.arrayBuffer();
-      t._artMime = blob.type || 'image/jpeg';
+      t._artMime = ART_MIME_ALLOWLIST.includes(blob.type) ? blob.type : 'image/jpeg';
       return { buf: t._artBuf, mime: t._artMime };
     } catch { return null; }
   }
@@ -428,6 +487,13 @@ export function saveTracks(...ts) {
   ts.forEach(t => _saveTrackBatch.set(t.id, t));
   if (_saveTrackTimer) clearTimeout(_saveTrackTimer);
   _saveTrackTimer = setTimeout(flushTrackBatch, CFG.TRACK_SAVE_DEBOUNCE);
+  if (!_saveTrackMaxTimer) {
+    _saveTrackMaxTimer = setTimeout(async () => {
+      _saveTrackMaxTimer = null;
+      if (_saveTrackTimer) { clearTimeout(_saveTrackTimer); _saveTrackTimer = null; }
+      await flushTrackBatch();
+    }, 2000);
+  }
 }
 
 /**
@@ -436,7 +502,8 @@ export function saveTracks(...ts) {
  * réécrites après le vidage de la bibliothèque (race condition timer).
  */
 export function cancelTrackBatch() {
-  if (_saveTrackTimer) { clearTimeout(_saveTrackTimer); _saveTrackTimer = null; }
+  if (_saveTrackTimer)    { clearTimeout(_saveTrackTimer);    _saveTrackTimer    = null; }
+  if (_saveTrackMaxTimer) { clearTimeout(_saveTrackMaxTimer); _saveTrackMaxTimer = null; }
   _saveTrackBatch.clear();
 }
 
