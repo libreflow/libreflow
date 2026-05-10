@@ -1,0 +1,87 @@
+name: Release
+
+# Déclenché uniquement sur un tag vX.X.X poussé manuellement
+# ex : git tag v1.2.0 && git push origin v1.2.0
+on:
+  push:
+    tags:
+      - 'v[0-9]*'
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    environment: libreflow          # lit TAURI_SIGNING_PRIVATE_KEY + PASSWORD
+    permissions:
+      contents: write               # requis pour créer/modifier des releases GitHub
+
+    steps:
+      # ── Checkout ─────────────────────────────────────────────────────────────
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # ── Node.js ──────────────────────────────────────────────────────────────
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      # ── Rust ─────────────────────────────────────────────────────────────────
+      - name: Setup Rust (stable)
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust target/
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: './src-tauri -> target'
+
+      # ── Dépendances JS ───────────────────────────────────────────────────────
+      - name: Install npm dependencies
+        run: npm ci
+
+      # ── Build Tauri ──────────────────────────────────────────────────────────
+      # createUpdaterArtifacts: true dans tauri.conf.json génère :
+      #   *.nsis.zip          — archive de l'installeur (pour le updater)
+      #   *.nsis.zip.sig      — signature minisign
+      #   latest.json         — metadata Tauri (version, URL, sig)
+      - name: Build Tauri (Windows x64)
+        run: npm run tauri build
+        env:
+          TAURI_SIGNING_PRIVATE_KEY:          ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+
+      # ── Collecte des artefacts ───────────────────────────────────────────────
+      - name: Collect release artifacts
+        shell: bash
+        run: |
+          mkdir -p release-artifacts
+
+          # Installeur NSIS (.exe)
+          cp src-tauri/target/release/bundle/nsis/*.exe \
+             release-artifacts/ 2>/dev/null || true
+
+          # Archive updater + signature (.nsis.zip / .nsis.zip.sig)
+          cp src-tauri/target/release/bundle/nsis/*.nsis.zip \
+             release-artifacts/ 2>/dev/null || true
+          cp src-tauri/target/release/bundle/nsis/*.nsis.zip.sig \
+             release-artifacts/ 2>/dev/null || true
+
+          # latest.json — peut se trouver dans nsis/ ou à la racine de bundle/
+          find src-tauri/target/release/bundle -name "latest.json" \
+               -exec cp {} release-artifacts/ \;
+
+          echo "── Artefacts générés ──────────────────"
+          ls -lh release-artifacts/
+
+      # ── GitHub Release ───────────────────────────────────────────────────────
+      # softprops/action-gh-release crée la release et uploade tous les fichiers.
+      # Le Worker Cloudflare fetche latest.json depuis ces assets pour servir
+      # les mises à jour au client Tauri.
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: "LibreFlow ${{ github.ref_name }}"
+          draft: false
+          prerelease: false
+          generate_release_notes: true   # changelog auto depuis les commits
+          files: release-artifacts/*
