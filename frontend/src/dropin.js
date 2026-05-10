@@ -3,24 +3,26 @@
 // Extrait de app.js (CQ-2 — réduction du module god).
 //
 // Dépendances :
-//   import  : get, set, notify (store.js)
+//   import  : get             (store.js)
 //   import  : emit, EVENTS     (bus.js)
 //   import  : i18n             (i18n.js)
 //   import  : toast            (ui.js)
-//   import  : rebuildTrackIdxMap, invalidateFilterCache (search.js)
-//   import  : invalidateGenreGridSig                    (genres.js)
-//   import  : loadTagsBg                               (library.js)
-//   import  : updateStats, renderLib                   (renderer.js)
-//   import  : showView                                 (views.js)
+//   import  : invalidateFilterCache (search.js)
+//   import  : pushTracks            (state.js)       ARCH-3
+//   import  : invalidateGenreGridSig (genres.js)
+//   import  : loadTagsBg            (library.js)
+//   import  : updateStats, renderLib (renderer.js)
+//   import  : showView              (views.js)
 //
 // Exports publics :
 //   initDrop
 
-import { get, set, notify }                            from './store.js';
+import { get }                                         from './store.js';
 import { emit, EVENTS }                                from './bus.js';
 import { i18n }                                        from './i18n.js';
 import { toast }                                       from './ui.js';
-import { rebuildTrackIdxMap, invalidateFilterCache }   from './search.js';
+import { invalidateFilterCache }                        from './search.js';
+import { pushTracks }                                   from './state.js';
 import { invalidateGenreGridSig }                      from './genres.js';
 import { loadTagsBg }                                  from './library.js';
 import { updateStats, renderLib }                      from './renderer.js';
@@ -139,11 +141,8 @@ async function _onDrop(e) {
     if (snEl) snEl.textContent = newTracks.length;
   }
 
-  tracks.push(...newTracks);
-  set('tracks', tracks);
-  rebuildTrackIdxMap();
-  notify('tracks');
-  emit(EVENTS.LIBRARY_UPDATED, { tracks });
+  pushTracks(newTracks); // ARCH-3 : push + rebuildTrackIdxMap + notify (rebuild avant notify ✓)
+  emit(EVENTS.LIBRARY_UPDATED, { tracks: get('tracks') });
   // Équivalent de invalidateFilter() (app.js) sans dépendance circulaire
   invalidateFilterCache();
   invalidateGenreGridSig();

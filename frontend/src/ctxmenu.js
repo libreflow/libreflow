@@ -16,14 +16,14 @@
 import { esc }                                          from './utils.js';
 import { ddel }                                         from './db.js';
 import { i18n }                                         from './i18n.js';
-import { get, notify }                                  from './store.js';
+import { get }                                          from './store.js';
 import { emit, EVENTS }                                 from './bus.js';
-import { trackIdx, _trackIdxMap, rebuildTrackIdxMap, invalidateFilterCache } from './search.js';
+import { trackIdx, _trackIdxMap, invalidateFilterCache } from './search.js';
 import { addToQueueNext, addToQueueEnd }                        from './queue.js';
 import { audio }                                        from './player.js';
 import { toast, confirmAction }                                        from './ui.js';
 import { saveCfg }                  from './cfgsave.js';
-import { setCurIdx, setCtxTrackId } from './state.js';
+import { setCurIdx, setCtxTrackId, removeTrackAt } from './state.js';
 import { adjustShuffleQAfterDelete } from './player.js';
 import { updateStats, drillDown } from './renderer.js';
 import { openNewPlaylistModal, removeTrackFromPlaylist, savePlaylists } from './playlists.js';
@@ -284,16 +284,11 @@ export async function ctxDeleteTrack() {
   // MEM-1/MEM-2 FIX : révoquer art ET url blob avant le splice (url = drag-drop tracks)
   if (t.art && t.art.startsWith('blob:')) try { URL.revokeObjectURL(t.art); } catch {}
   if (t.url && t.url.startsWith('blob:')) try { URL.revokeObjectURL(t.url); } catch {}
-  get('tracks').splice(ti, 1);
-  // BUG-2 FIX : ajuster la shuffleQ AVANT setCurIdx — les indices sont encore valides
-  // ici. Sans ce call, shuffleQ contient des indices décalés/invalides → prochaine piste
-  // en shuffle fausse ou silent fail sur un index hors tableau.
+  // ⚠ adjustShuffleQAfterDelete et setCurIdx AVANT removeTrackAt — utilisent l'index original
   adjustShuffleQAfterDelete(ti);
-  // Ajuster curIdx si nécessaire
   if (get('curIdx') === ti) { audio.pause(); setCurIdx(-1); emit(EVENTS.TRACK_CHANGE, { track: null, idx: -1 }); }
   else if (get('curIdx') > ti) setCurIdx(get('curIdx') - 1);
-  rebuildTrackIdxMap(); // RÈGLE CRITIQUE : après tout tracks.splice()
-  notify('tracks'); // BUG-C2 FIX : splice() in-place → force-notifie les subscribers (tagedit cache, etc.)
+  removeTrackAt(ti); // ARCH-3 : splice + rebuildTrackIdxMap + notify (rebuild avant notify ✓)
   // Retirer le titre de toutes les playlists qui le référencent
   let playlistsChanged = false;
   get('playlists').forEach(pl => {

@@ -12,7 +12,7 @@
  *           saveTrack, saveTracks, saveTrackNow, flushTrackBatch.
  */
 
-import { _trackIdxMap, rebuildTrackIdxMap, trackIdx, invalidateFilterCache } from './search.js';
+import { _trackIdxMap, trackIdx, invalidateFilterCache } from './search.js';
 import { emit, EVENTS }                                from './bus.js';
 import { DB, dput, dget }                             from './db.js';
 import { invoke, invokeRetry, convertFileSrc }        from './ipc.js';
@@ -26,9 +26,9 @@ import { normTag, mainArtist, fmtd }                  from './utils.js';
 const ART_MIME_ALLOWLIST = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/bmp', 'image/tiff'];
 import { adjustShuffleQAfterDelete }                  from './player.js';
 import { VIRT }                                       from './virt.js';
-import { get, set, notify }                           from './store.js'; // Phase 4
+import { get, set }                                   from './store.js'; // Phase 4
 import { toast, toastWithAction }                                        from './ui.js';
-import { setCurIdx } from './state.js';
+import { setCurIdx, pushTracks, removeTrackAt } from './state.js';
 import { updateBar } from './playerbar.js';
 import { setView, showView } from './views.js';
 import { updateStats, scheduleStatsUpdate, patchTrackEl } from './renderer.js';
@@ -145,11 +145,8 @@ export async function openFolder() {
     showView('lib'); toast(i18n('t_already_imported'), 'info'); return;
   }
 
-  const _tracksArr = get('tracks');
-  _tracksArr.push(...newTracks);
-  notify('tracks'); // BUG-C2 FIX : push() = mutation in-place → notify() force-notifie malgré same ref
-  emit(EVENTS.LIBRARY_UPDATED, { tracks: _tracksArr }); // cohérence avec app.js drag-drop
-  rebuildTrackIdxMap(); // Phase 4
+  pushTracks(newTracks); // ARCH-3 : push + rebuildTrackIdxMap + notify (rebuild avant notify ✓)
+  emit(EVENTS.LIBRARY_UPDATED, { tracks: get('tracks') }); // cohérence avec app.js drag-drop
   invalidateFilterCache(); emit(EVENTS.FILTER_CHANGED, {}); VIRT._lastListSig = '';
   updateStats();
   setView('all', document.getElementById('ni-all'));
@@ -191,14 +188,12 @@ export async function loadTagsAndDurations(newTracks) {
         if (idx > -1) {
           get('liked').delete(t.id);
           setCurIdx(get('curIdx') > idx ? get('curIdx') - 1 : get('curIdx') === idx ? -1 : get('curIdx'));
-          adjustShuffleQAfterDelete(idx);
+          adjustShuffleQAfterDelete(idx); // ⚠ AVANT removeTrackAt — utilise l'index original
           const _tracks = get('tracks');
           if (_tracks[idx].art  && _tracks[idx].art.startsWith('blob:'))  try { URL.revokeObjectURL(_tracks[idx].art);  } catch {}
           if (_tracks[idx].url  && _tracks[idx].url.startsWith('blob:'))  try { URL.revokeObjectURL(_tracks[idx].url);  } catch {}
-          _tracks.splice(idx, 1);
-          rebuildTrackIdxMap();
-          notify('tracks');
-          emit(EVENTS.LIBRARY_UPDATED, { tracks: _tracks });
+          removeTrackAt(idx); // ARCH-3 : splice + rebuildTrackIdxMap + notify (rebuild avant notify ✓)
+          emit(EVENTS.LIBRARY_UPDATED, { tracks: get('tracks') });
           invalidateFilterCache(); emit(EVENTS.FILTER_CHANGED, {});
           _skippedCount++;
           console.warn('[library] Piste ignorée — durée < 20s :', t.name || t.path);
@@ -296,10 +291,8 @@ export async function loadTagsBg(t, rustTags = null) {
         if (_bTracks[_bidx]?.art && _bTracks[_bidx].art.startsWith('blob:'))
           try { URL.revokeObjectURL(_bTracks[_bidx].art); } catch {}
         setCurIdx(get('curIdx') > _bidx ? get('curIdx') - 1 : get('curIdx') === _bidx ? -1 : get('curIdx'));
-        adjustShuffleQAfterDelete(_bidx);
-        _bTracks.splice(_bidx, 1);
-        rebuildTrackIdxMap();
-        notify('tracks');
+        adjustShuffleQAfterDelete(_bidx); // ⚠ AVANT removeTrackAt — utilise l'index original
+        removeTrackAt(_bidx); // ARCH-3 : splice + rebuildTrackIdxMap + notify (rebuild avant notify ✓)
         invalidateFilterCache();
         emit(EVENTS.FILTER_CHANGED, {});
         console.warn('[loadTagsBg] Piste ignorée — durée < 20s :', t.name || t.path);

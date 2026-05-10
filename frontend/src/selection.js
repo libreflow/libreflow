@@ -20,12 +20,12 @@ import { invoke, convertFileSrc }                       from './ipc.js';
 import { i18n }                                         from './i18n.js';
 import { get, subscribe }                               from './store.js';
 import { emit, EVENTS }                                 from './bus.js';
-import { getFiltered, _trackIdxMap, rebuildTrackIdxMap, invalidateFilterCache } from './search.js';
+import { getFiltered, _trackIdxMap, invalidateFilterCache } from './search.js';
 import { audio, resetShuffleQ, clearCrossfadeTimers }   from './player.js';
 import { saveTrackNow }                                 from './library.js';
 import { toast, toastWithAction }                                        from './ui.js';
 import { saveCfg }                        from './cfgsave.js';
-import { setCurIdx, setTracks, setLiked } from './state.js';
+import { setCurIdx, setTracks, setLiked, replaceTracks } from './state.js';
 import { updateBar }                       from './playerbar.js';
 import { updateStats } from './renderer.js';
 import { savePlaylists, renderPlNav, openNewPlaylistModal } from './playlists.js';
@@ -218,7 +218,7 @@ export function selRemove() {
   // liked est Set<string> d'IDs — filtrer directement sans recalcul d'indices
   const newLiked  = new Set([...liked].filter(id => !ids.has(id)));
   // NE PAS révoquer les blob URLs maintenant — on attend la fin de la fenêtre undo
-  setTracks(newTracks); rebuildTrackIdxMap();
+  replaceTracks(newTracks); // ARCH-3 : set + rebuildTrackIdxMap atomique
   setLiked(newLiked);
   // Piste en cours supprimée → stopper la lecture et invalider curIdx
   if (playingDeleted) { audio.pause(); audio.src = ''; setCurIdx(-1); }
@@ -245,7 +245,7 @@ export function selRemove() {
     undone = true;
     clearTimeout(idbTimer);
     // Restaurer l'état complet
-    setTracks(oldTracks); rebuildTrackIdxMap();
+    replaceTracks(oldTracks); // ARCH-3 : set + rebuildTrackIdxMap atomique (undo)
     setLiked(oldLiked);
     resetShuffleQ();
     invalidateFilterCache(); emit(EVENTS.FILTER_CHANGED, {}); emit(EVENTS.RENDER_LIB, {}); updateStats();

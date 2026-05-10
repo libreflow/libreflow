@@ -96,8 +96,9 @@ export function toastWithAction(m, type = 'info', label, onAction, dur) {
 
   const el = document.createElement('div');
   el.className = `t-item t-${type}`;
-  el.innerHTML = `<span class="t-icon">${icon}</span><span class="t-msg"></span><button class="t-action">${label}</button><span class="t-bar"></span>`;
+  el.innerHTML = `<span class="t-icon">${icon}</span><span class="t-msg"></span><button class="t-action"></button><span class="t-bar"></span>`;
   el.querySelector('.t-msg').textContent = m;
+  el.querySelector('.t-action').textContent = label; // SEC-1 : label via textContent, jamais innerHTML
   shelf.appendChild(el);
 
   const bar = el.querySelector('.t-bar');
