@@ -21,10 +21,10 @@ import { emit, EVENTS }                                 from './bus.js';
 import { trackIdx, _trackIdxMap, invalidateFilterCache } from './search.js';
 import { addToQueueNext, addToQueueEnd }                        from './queue.js';
 import { audio }                                        from './player.js';
-import { toast, confirmAction }                                        from './ui.js';
+import { toast, confirmAction, toastWithAction }                        from './ui.js';
 import { saveCfg }                  from './cfgsave.js';
-import { setCurIdx, setCtxTrackId, removeTrackAt } from './state.js';
-import { adjustShuffleQAfterDelete } from './player.js';
+import { setCurIdx, setCtxTrackId, removeTrackAt, replaceTracks } from './state.js';
+import { adjustShuffleQAfterDelete, resetShuffleQ } from './player.js';
 import { updateStats, drillDown } from './renderer.js';
 import { openNewPlaylistModal, removeTrackFromPlaylist, savePlaylists } from './playlists.js';
 import { openSmartPlaylistModal } from './smartplaylist.js';
@@ -279,30 +279,68 @@ export async function ctxDeleteTrack() {
   );
   if (!ok) return;
   const ti = trackIdx(t.id);
+
+  // ── Snapshot pour undo ──────────────────────────────────────────────────────
+  const oldTracks  = [...get('tracks')]; // spread — nouvelle ref, différente de l'array muté in-place
+  const wasLiked   = get('liked').has(t.id);
+  const oldCurIdx  = get('curIdx');
+  // Snapshot des playlists affectées pour restaurer l'ordre exact en cas d'undo
+  const affectedPlSnapshots = [];
+  get('playlists').forEach(pl => {
+    if (pl.trackIds?.includes(t.id)) affectedPlSnapshots.push({ pl, ids: [...pl.trackIds] });
+  });
+  const playlistsChanged = affectedPlSnapshots.length > 0;
+
+  // ── Suppression immédiate (UI) ──────────────────────────────────────────────
   // liked est maintenant Set<string> d'IDs — pas de décalage d'indices nécessaire
   get('liked').delete(t.id);
-  // MEM-1/MEM-2 FIX : révoquer art ET url blob avant le splice (url = drag-drop tracks)
-  if (t.art && t.art.startsWith('blob:')) try { URL.revokeObjectURL(t.art); } catch {}
-  if (t.url && t.url.startsWith('blob:')) try { URL.revokeObjectURL(t.url); } catch {}
+  // NE PAS révoquer les blob URLs maintenant — différé après la fenêtre undo (MEM-1/MEM-2)
   // ⚠ adjustShuffleQAfterDelete et setCurIdx AVANT removeTrackAt — utilisent l'index original
   adjustShuffleQAfterDelete(ti);
   if (get('curIdx') === ti) { audio.pause(); setCurIdx(-1); emit(EVENTS.TRACK_CHANGE, { track: null, idx: -1 }); }
   else if (get('curIdx') > ti) setCurIdx(get('curIdx') - 1);
   removeTrackAt(ti); // ARCH-3 : splice + rebuildTrackIdxMap + notify (rebuild avant notify ✓)
   // Retirer le titre de toutes les playlists qui le référencent
-  let playlistsChanged = false;
   get('playlists').forEach(pl => {
     if (!pl.trackIds) return;
-    const before = pl.trackIds.length;
     pl.trackIds = pl.trackIds.filter(id => id !== t.id);
-    if (pl.trackIds.length !== before) playlistsChanged = true;
   });
-  // Persist : supprimer de IndexedDB + sauver cfg et playlists
-  await ddel('tracks', t.id);
-  saveCfg();
-  if (playlistsChanged) savePlaylists();
+  saveCfg(); // persiste curIdx + liked immédiatement
   invalidateFilterCache(); emit(EVENTS.FILTER_CHANGED, {}); emit(EVENTS.RENDER_LIB, {}); updateStats();
-  toast(i18n('ctx_deleted_toast', t.name) || `🗑 « ${t.name} » supprimé`, 'info');
+
+  // ── Différer la suppression IDB pour permettre l'annulation ────────────────
+  const UNDO_MS = 5000;
+  let undone = false;
+  const idbTimer = setTimeout(async () => {
+    if (undone) return;
+    // Révoquer les blob URLs maintenant que la fenêtre undo est expirée (MEM-1/MEM-2)
+    if (t.art && t.art.startsWith('blob:')) try { URL.revokeObjectURL(t.art); } catch {}
+    if (t.url && t.url.startsWith('blob:')) try { URL.revokeObjectURL(t.url); } catch {}
+    await ddel('tracks', t.id);
+    if (playlistsChanged) savePlaylists();
+  }, UNDO_MS);
+
+  toastWithAction(
+    i18n('ctx_deleted_toast', t.name) || `🗑 « ${t.name} » supprimé`,
+    'info',
+    i18n('te_cancel') || 'Annuler',
+    () => {
+      undone = true;
+      clearTimeout(idbTimer);
+      // Restaurer l'état complet
+      replaceTracks(oldTracks); // ARCH-3 : set + rebuildTrackIdxMap atomique (undo)
+      if (wasLiked) get('liked').add(t.id);
+      if (oldCurIdx >= 0 && oldCurIdx < oldTracks.length) setCurIdx(oldCurIdx);
+      // Restaurer les playlists dans leur état original (ordre préservé)
+      for (const { pl, ids } of affectedPlSnapshots) pl.trackIds = ids;
+      resetShuffleQ();
+      invalidateFilterCache(); emit(EVENTS.FILTER_CHANGED, {}); emit(EVENTS.RENDER_LIB, {}); updateStats();
+      saveCfg();
+      if (playlistsChanged) savePlaylists();
+      toast(i18n('t_sel_undo_delete') || 'Suppression annulée', 'info');
+    },
+    UNDO_MS
+  );
 }
 
 // ── F-7 — Écriture ReplayGain dans les tags fichier ──────────────────────────
