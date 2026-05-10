@@ -15,7 +15,7 @@
 
 import { eqAnalyser, eqCtx } from './eq.js';
 import { audio }               from './player.js';
-import { saveCfg } from './app.js';
+import { saveCfg } from './cfgsave.js';
 
 /* ── Mode ─────────────────────────────────────────────────── */
 let vizMode    = 'bars'; // 'bars' | 'oscilloscope' | 'circle'

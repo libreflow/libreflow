@@ -44,9 +44,9 @@ import { updateCinemaProgress }                   from './cinema.js';
 import { CFG, SPEEDS, SPEED_LBLS }                from './cfg.js';
 import { getFiltered, filteredIdx, trackIdx, _trackIdxMap, invalidateFilterCache } from './search.js';
 import { toast }                                        from './ui.js';
-import { saveCfg, saveCfgNow } from './app.js';
-import { scrollToCurrentTrack } from './renderer.js';
-import { _allPlayerUI } from './app.js';
+import { saveCfg, saveCfgNow } from './cfgsave.js';
+import { scrollToCurrentTrack }  from './renderer.js';
+import { _allPlayerUI }           from './allplayerui.js';
 
 // Boot viz state (remplace window._pendingVizMode/_pendingVizDisabled)
 /** @type {string | null} */

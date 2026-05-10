@@ -2,9 +2,8 @@
 // Multi-sélection de pistes : mode sélection, opérations en lot.
 // Extrait de app.js.
 //
-// Remaining window.* : setCurIdx, setLiked, setTracks (app.js local sync),
-//   toast, toastWithAction, saveCfg, savePlaylists, renderPlNav, renderLib,
-//   updateStats, invalidateFilter, openNewPlaylistModal, updateBar (app.js).
+// Remaining window.* : toast, toastWithAction, savePlaylists, renderPlNav, renderLib,
+//   updateStats, invalidateFilter, openNewPlaylistModal.
 //
 // Exports publics :
 //   selection     (live Set — lu par renderTrackRow dans app.js)
@@ -25,7 +24,9 @@ import { getFiltered, _trackIdxMap, rebuildTrackIdxMap, invalidateFilterCache } 
 import { audio, resetShuffleQ, clearCrossfadeTimers }   from './player.js';
 import { saveTrackNow }                                 from './library.js';
 import { toast, toastWithAction }                                        from './ui.js';
-import { saveCfg, setCurIdx, setTracks, setLiked, updateBar } from './app.js';
+import { saveCfg }                        from './cfgsave.js';
+import { setCurIdx, setTracks, setLiked } from './state.js';
+import { updateBar }                       from './playerbar.js';
 import { updateStats } from './renderer.js';
 import { savePlaylists, renderPlNav, openNewPlaylistModal } from './playlists.js';
 

@@ -83,8 +83,9 @@ import { _showSkeletonRows,
          playById, patchActiveTrack, patchPlayState, patchTrackEl,
          scheduleStatsUpdate, updateStats,
          _withVT, animateViewChange, scrollToCurrentTrack } from './renderer.js';
-// Wrapper : met à jour le mini-player Tauri ET l'overlay in-page simultanément.
-export function _allPlayerUI() { updateMiniPlayer(); syncMiniOverlay(); }
+// ── allplayerui.js (ARCH-1) ──────────────────────────────────────────────────
+import { _allPlayerUI } from './allplayerui.js';
+export { _allPlayerUI }; // re-export pour handlers.js
 import { showCtxMenu, closeCtxMenu, ctxToggleLike, ctxDeleteTrack, ctxEditTags, ctxGoToArtist, ctxGoToAlbum, ctxNewPlaylist, ctxRemoveFromPlaylist, ctxSmartPlaylist, ctxPlayNext, ctxAddToQueueEnd, ctxCopyInfo } from './ctxmenu.js';
 import { initDrop } from './dropin.js';
 import { initShortcuts } from './shortcuts.js';
@@ -92,6 +93,12 @@ import { confirmClear, closeModal } from './modal.js';
 export { confirmClear, closeModal }; // re-export pour handlers.js
 import { updateBar, updateVolSlider, setupMarquee } from './playerbar.js';
 export { updateBar, updateVolSlider }; // re-exports pour library.js, selection.js, tagedit.js, handlers.js
+// ── cfgsave.js (ARCH-1) ──────────────────────────────────────────────────────
+import { saveCfg, saveCfgNow } from './cfgsave.js';
+export { saveCfg, saveCfgNow }; // re-exports pour cinema.js, ctxmenu.js, player.js, etc.
+// ── state.js (ARCH-1) ────────────────────────────────────────────────────────
+import { setCurIdx, setTracks, setLiked, setCtxTrackId } from './state.js';
+export { setCurIdx, setTracks, setLiked, setCtxTrackId }; // re-exports (backward compat)
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -179,7 +186,7 @@ let query   = '';
 // _coll → search.js (importé ci-dessus)
 // radioActive, radioSeedId, radioQueue, _radioPlayedIds → radio.js
 // _lastNotifTrackId → playerbar.js (moved CQ-2)
-let _saveCfgTimer     = null;
+// _saveCfgTimer → cfgsave.js (moved ARCH-1)
 let _retryArtTimer    = null; // FIX #21 — annulable dans clearLibrary()
 let _orphansTimer     = null; // FIX #22 — annulable dans clearLibrary()
 // _pqpTrackId, _dragTrackId → playlists.js
@@ -221,6 +228,10 @@ subscribe('manualQueue',     v => { manualQueue     = v; });
 subscribe('recentPlays',     v => { recentPlays     = v; });
 subscribe('playbackSpeed',   v => { playbackSpeed   = v; });
 subscribe('crossfadeDur',    v => { crossfadeDur    = v; });
+// ARCH-1 — state.js setters write to store only; subscriptions keep local vars in sync
+subscribe('liked',        v => { liked      = v; });
+subscribe('tracks',       v => { tracks     = v; });
+subscribe('ctxTrackId',   v => { ctxTrackId = v; });
 // Jalon 5 — sync des vars locales depuis le store (genres.js, future extraction)
 subscribe('drillFrom',        v => { drillFrom        = v; });
 subscribe('drillDisplayName', v => { drillDisplayName = v; });
@@ -295,9 +306,11 @@ function _applyBootUI(cfgObj) {
   const autoUpdateChk = document.getElementById('auto-update-chk');
   if (autoUpdateChk) {
     _autoUpdate = cfgObj?.autoUpdate !== false;
+    set('autoUpdate', _autoUpdate); // ARCH-1 : sync store → cfgsave.js peut lire via get()
     autoUpdateChk.checked = _autoUpdate;
     autoUpdateChk.addEventListener('change', () => {
       _autoUpdate = autoUpdateChk.checked;
+      set('autoUpdate', _autoUpdate); // ARCH-1 : sync store
       saveCfg();
     });
   }
@@ -602,11 +615,10 @@ async function boot() {
     // Bug #20 fix : catch silencieux remplacé par un log d'avertissement.
     // return explicite pour confirmer la résolution (utile pour onCloseRequested + await).
     try {
-      // 1. cfg (curTrackId, curPos, liked, volume, shuffle, repeat…)
-      if (_saveCfgTimer) { clearTimeout(_saveCfgTimer); _saveCfgTimer = null; }
+      // 1. cfg (curTrackId, curPos, liked, volume, shuffle, repeat…) — flush via cfgsave.js
       // 2. Toutes les saves en parallèle — allSettled garantit qu'aucune rejection ne coupe les autres
       await Promise.allSettled([
-        _doSaveCfg(),
+        saveCfgNow(),
         flushTrackBatch(),
         flushPlayLog(),
       ]);
@@ -708,76 +720,8 @@ initShortcuts({ updateVolSlider, closeModal, cycleSpeed });
 
 // _flushTrackBatch, saveTrack, saveTracks, saveTrackNow → library.js
 
-/**
- * Flush application state to IndexedDB immediately (debounced variant: saveCfg).
- * Serialises the current value of all persistent settings — sort, view, liked,
- * theme, lang, crossfade, ReplayGain, playback speed, EQ, watch folder, etc.
- *
- * @returns {Promise<void>}
- */
-// Debounce pour les appels fréquents (changement de piste, crossfade…)
-export function saveCfgNow() {
-  if (_saveCfgTimer) { clearTimeout(_saveCfgTimer); _saveCfgTimer = null; }
-  return _doSaveCfg(); // FIX #13 — retourner la Promise
-}
-export function saveCfg() {
-  if (_saveCfgTimer) clearTimeout(_saveCfgTimer);
-  _saveCfgTimer = setTimeout(_doSaveCfg, CFG.CFG_SAVE_DEBOUNCE);
-}
-async function _doSaveCfg() {
-  _saveCfgTimer = null;
-  if (!DB) return; // DB pas encore ouverte (ex: premier démarrage avant boot())
-  try {
-    const likedIds = [...liked]; // liked est déjà un Set<string> d'IDs
-    const curTrackId = curIdx >= 0 && tracks[curIdx] ? tracks[curIdx].id : null;
-    const curPos     = curTrackId && audio.duration > 0
-      ? Math.floor(audio.currentTime)
-      : 0;
-
-    // ── État supplémentaire — cohérence Spotify/Deezer ────────────────────
-    const volEl     = document.getElementById('vol');
-    const volume    = volEl ? Math.round(parseFloat(volEl.value) * 100) / 100 : 1;
-    const tlist     = document.getElementById('tlist');
-    const scrollTop = tlist ? Math.round(tlist.scrollTop) : 0;
-    const ovEl      = document.getElementById('mp-ov');
-    const miniOvOpen = ovEl ? ovEl.classList.contains('on') : false;
-    // Position de l'overlay : mémoriser seulement si elle a été déplacée (left défini)
-    const miniOvPos = (ovEl && ovEl.style.left && ovEl.style.left !== '')
-      ? { x: parseInt(ovEl.style.left) || 0, y: parseInt(ovEl.style.top) || 0 }
-      : null;
-    // Inclure les vues drill-down dans la sauvegarde (artist-detail, album-detail, genre-detail)
-    const _allViews = ['all','liked','albums','artists','genres','recent','playlist','stats','album-detail','artist-detail','genre-detail'];
-
-    await dput('cfg', {
-      likedIds, sort,
-      view: (_allViews.includes(view) ? view : 'all'),
-      recentPlays: recentPlays.slice(0,50),
-      lang: getLang(), theme: getTheme(), dynColor: getDynColor(), crossfadeDur, displayMode: getDisplayMode(), rgEnabled, rgTargetLUFS,
-      playbackSpeed, cinemaBg,
-      shuffle, repeat, albumSort, artistSort, genreSort, albumDetailSort,
-      eqEnabled, eqGains: eqNodes.length ? eqNodes.map(n => n.gain.value) : null,
-      eqPreset: getActiveEqPreset(),
-      vizMode: getVizMode(), vizEnabled: getVizEnabled(), vinylSpin: getVinylSpin(),
-      eqAutoMode, eqProfiles: getEQProfiles(),
-      watchPath: getWatchPath(),
-      curTrackId, curPos,
-      miniPos: getMiniPos() ?? null,
-      // Nouveaux champs
-      volume, curPlId: curPlId || null, scrollTop,
-      miniOvOpen, miniOvPos,
-      drillKey: drillKey ?? '', drillFrom: drillFrom ?? '', drillDisplayName: drillDisplayName ?? '',
-      // S91 — Vague A : organisation playlists
-      plFolders, recentPls,
-      // Persist modules
-      heatPeriod:  getHeatPeriod(),
-      queueState:  getQueueState(),
-      radioSeedId: radioActive ? getRadioSeedId() : null,
-      autoUpdate: _autoUpdate,
-    }, 'state');
-  } catch (e) {
-    console.warn('[_doSaveCfg] IDB save failed — config non persistée:', e);
-  }
-}
+// ══ saveCfg / saveCfgNow / _doSaveCfg → cfgsave.js (ARCH-1) ══════════════════
+// Imported at the top of this file and re-exported as saveCfg / saveCfgNow.
 
 // ══ PLAYLISTS → playlists.js ══════════════════════════════════════════════
 // savePlaylists, trapFocus, renderPlHero, setPlSort,
@@ -1104,12 +1048,6 @@ export async function clearLibrary() {
   toast(i18n('t_cleared'), 'success');
 }
 
-// ── State mutation helpers (exported for satellite modules) ───────────────────────
-/** Sync curIdx in both local state and store. Used by dupes, ctxmenu, library, selection. */
-export function setCurIdx(v)     { curIdx = v; set('curIdx', v); }
-/** Sync liked in both local state and store. Used by selection. */
-export function setLiked(v)      { liked  = v; set('liked',  v); }
-/** Sync tracks in both local state and store. Used by selection. */
-export function setTracks(v)     { tracks = v; set('tracks', v); }
-/** Sync ctxTrackId (context menu target). Used by ctxmenu.js. */
-export function setCtxTrackId(v) { ctxTrackId = v; set('ctxTrackId', v); }
+// ── State mutation helpers → state.js (ARCH-1) ────────────────────────────────
+// setCurIdx / setLiked / setTracks / setCtxTrackId imported from state.js + re-exported above.
+// app.js local vars stay in sync via subscribe() callbacks (lines above).

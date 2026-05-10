@@ -21,7 +21,7 @@ import { get, subscribe }               from './store.js'; // Phase 4
 import { emit, EVENTS }               from './bus.js';
 import { toast }                                        from './ui.js';
 import { _trackIdxMap, trackIdx, invalidateFilterCache } from './search.js';
-import { updateBar } from './app.js';
+import { updateBar } from './playerbar.js';
 import { saveTrackNow } from './library.js';
 import { queueOpen, renderQueue } from './queue.js';
 

@@ -16,7 +16,7 @@ import { trackIdx, rebuildTrackIdxMap, invalidateFilterCache }    from './search
 import { VIRT }                                                   from './virt.js';
 import { audio }                                                  from './player.js';
 import { toast, toastWithAction, esc }                            from './ui.js';
-import { setCurIdx }                                              from './app.js';
+import { setCurIdx }                                              from './state.js';
 import { updateStats }                                            from './renderer.js';
 import { saveTrackNow }                                           from './library.js';
 import { CFG }                                                    from './cfg.js';

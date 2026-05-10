@@ -44,7 +44,7 @@ import { closeCtxMenu }          from './ctxmenu.js';
 import { openSmartPlaylistModal, switchPlTab } from './smartplaylist.js';
 import { clearSelection }        from './selection.js';
 import { invalidateFilterCache } from './search.js';
-import { saveCfg } from './app.js';
+import { saveCfg } from './cfgsave.js';
 import { setView } from './views.js';
 import { renderPlaylistsGrid } from './renderer.js';
 import { playPlaylistFrom, shufflePlaylist } from './app.js';

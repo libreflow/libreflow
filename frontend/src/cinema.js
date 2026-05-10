@@ -4,7 +4,8 @@
 //
 // Dépendances :
 //   import  : fmt, extEmoji  (utils.js)
-//   window  : audio, curIdx, tracks, liked, shuffle, repeat, getFiltered (getters), saveCfg, toast
+//   import  : saveCfg (cfgsave.js), updateVolSlider (playerbar.js)
+//   window  : audio, curIdx, tracks, liked, shuffle, repeat, getFiltered (getters), toast
 //
 // Exports publics (utilisés par app.js) :
 //   cinemaOpen, cinemaBg
@@ -16,12 +17,13 @@
 import { fmt, extEmoji }                     from './utils.js';
 import { eqCtx, eqAnalyser, masterGainNode, setMasterGain } from './eq.js'; // réutiliser le graphe EQ existant
 import { i18n }                               from './i18n.js';
-import { get }                                from './store.js';
+import { get, set }                           from './store.js';
 import { getFiltered, filteredIdx }            from './search.js';
 import { audio, toggleLike, next, prev }      from './player.js';
 import { radioActive, stopRadio, startRadio, getRadioQueue } from './radio.js';
 import { toast }                                        from './ui.js';
-import { saveCfg, updateVolSlider } from './app.js';
+import { saveCfg }                   from './cfgsave.js';
+import { updateVolSlider }            from './playerbar.js';
 
 // ── State ───────────────────────────────────────────────────
 export let cinemaOpen     = false;
@@ -95,12 +97,12 @@ const NOISE_OVERLAY_OPACITY    = 0.055; // opacité overlay grain AMOLED
 
 /** Initialise cinemaBg depuis la config au démarrage (pas de side-effects DOM/saveCfg). */
 export function initCinemaBg(mode) {
-  if (CINEMA_BG_MODES.includes(mode)) cinemaBg = mode;
+  if (CINEMA_BG_MODES.includes(mode)) { cinemaBg = mode; set('cinemaBg', mode); }
 }
 
 export function setCinemaBg(mode) {
   if (!CINEMA_BG_MODES.includes(mode)) return;
-  cinemaBg = mode;
+  cinemaBg = mode; set('cinemaBg', mode);
   applyCinemaBg();
   syncCinemaBgSettings();
   saveCfg();
@@ -119,6 +121,7 @@ export function syncCinemaBgSettings() {
 export function cycleCinemaBg() {
   const cur = CINEMA_BG_MODES.indexOf(cinemaBg);
   cinemaBg  = CINEMA_BG_MODES[(cur + 1) % CINEMA_BG_MODES.length];
+  set('cinemaBg', cinemaBg);
   applyCinemaBg();
   syncCinemaBgSettings();
   saveCfg();

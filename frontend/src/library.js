@@ -28,7 +28,8 @@ import { adjustShuffleQAfterDelete }                  from './player.js';
 import { VIRT }                                       from './virt.js';
 import { get, set, notify }                           from './store.js'; // Phase 4
 import { toast, toastWithAction }                                        from './ui.js';
-import { setCurIdx, updateBar } from './app.js';
+import { setCurIdx } from './state.js';
+import { updateBar } from './playerbar.js';
 import { setView, showView } from './views.js';
 import { updateStats, scheduleStatsUpdate, patchTrackEl } from './renderer.js';
 import { setReplayGain } from './replaygain.js';

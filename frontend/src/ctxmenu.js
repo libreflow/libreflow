@@ -2,11 +2,9 @@
 // Menu contextuel (clic droit sur une piste).
 // Extrait de app.js.
 //
-// Remaining window.* : ctxTrackId (get/set — synchro locale app.js),
-//   toast, confirmAction, saveCfg, savePlaylists, invalidateFilter, renderLib,
+// Remaining window.* : toast, confirmAction, savePlaylists, invalidateFilter, renderLib,
 //   updateStats, openTagEditor, openNewPlaylistModal, openSmartPlaylistModal,
-//   addTrackToPlaylist, removeTrackFromPlaylist, drillDown,
-//   addToQueueNext, addToQueueEnd, setLiked, setCurIdx (app.js).
+//   addTrackToPlaylist, removeTrackFromPlaylist, drillDown, addToQueueNext, addToQueueEnd.
 //
 // Exports publics :
 //   showCtxMenu, closeCtxMenu,
@@ -24,7 +22,8 @@ import { trackIdx, _trackIdxMap, rebuildTrackIdxMap, invalidateFilterCache } fro
 import { addToQueueNext, addToQueueEnd }                        from './queue.js';
 import { audio }                                        from './player.js';
 import { toast, confirmAction }                                        from './ui.js';
-import { saveCfg, setCurIdx, setCtxTrackId } from './app.js';
+import { saveCfg }                  from './cfgsave.js';
+import { setCurIdx, setCtxTrackId } from './state.js';
 import { adjustShuffleQAfterDelete } from './player.js';
 import { updateStats, drillDown } from './renderer.js';
 import { openNewPlaylistModal, removeTrackFromPlaylist, savePlaylists } from './playlists.js';

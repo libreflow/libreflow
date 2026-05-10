@@ -4,8 +4,7 @@
  * couleur dynamique pochette, raccourcis clavier, et sync des boutons viz.
  *
  * Dépendances : store.js, eq.js, queue.js, i18n.js, cinema.js, viz.js
- * Circulaire-safe : saveCfg / _allPlayerUI importés depuis app.js
- *   (même pattern que player.js — Vite résout les cycles ES module sur les fonctions)
+ * ARCH-1 : saveCfg depuis cfgsave.js, _allPlayerUI depuis allplayerui.js (deps circulaires brisées).
  */
 
 import { get, set }                                      from './store.js';
@@ -14,8 +13,8 @@ import { queueOpen, closeQueue }                         from './queue.js';
 import { getLang, i18n }                                 from './i18n.js';
 import { syncCinemaBgSettings, updateCinArtColor }       from './cinema.js';
 import { updateVizColor, getVizMode, getVizEnabled }     from './viz.js';
-// Circulaire-safe — résolu par Vite pour les exports de fonctions
-import { saveCfg, _allPlayerUI }                         from './app.js';
+import { saveCfg }       from './cfgsave.js';
+import { _allPlayerUI } from './allplayerui.js';
 
 // ── État local ────────────────────────────────────────────────────────────────
 let _theme          = 'blue';

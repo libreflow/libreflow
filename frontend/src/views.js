@@ -6,26 +6,33 @@
  * Lectures d'état via get() — toujours à jour (les mutations appellent set()).
  * Écritures via set() — les subscriptions dans app.js maintiennent les vars locales.
  *
- * Circulaire-safe : saveCfg / invalidateFilter importés depuis app.js.
+ * ARCH-1 : saveCfg depuis cfgsave.js, invalidateFilter inliné (bus+search+genres).
  */
 
 import { get, set, subscribe }                                        from './store.js';
 import { CFG, SORTS, SLBLS }                                         from './cfg.js';
 import { i18n }                                                       from './i18n.js';
+import { emit, EVENTS }                                              from './bus.js';
 import { eqOpen, closeEQ }                                           from './eq.js';
 import { queueOpen, closeQueue }                                     from './queue.js';
 import { VIRT }                                                       from './virt.js';
-import { getFiltered, _trackIdxMap }                                 from './search.js';
+import { getFiltered, _trackIdxMap, invalidateFilterCache }         from './search.js';
 import { buildQ, clearRvProgFill }                                   from './player.js';
 import { _withVT, renderLib, renderAlbumsGrid, renderArtistsGrid,
          renderPlaylistsGrid }                                        from './renderer.js';
-import { renderGenresGrid, setContentView }                          from './genres.js';
+import { renderGenresGrid, setContentView, invalidateGenreGridSig } from './genres.js';
 import { renderStats }                                               from './stats.js';
 import { renderRadioView, syncRadioLibBar }                          from './radio.js';
 import { openNewPlaylistModal }                                      from './playlists.js';
 import { openSmartPlaylistModal }                                    from './smartplaylist.js';
-// Circulaire-safe (Vite résout les cycles ES module sur les fonctions)
-import { saveCfg, invalidateFilter }                                  from './app.js';
+import { saveCfg }                                                   from './cfgsave.js';
+
+// Inline helper — équivalent de app.js:invalidateFilter() (ARCH-1, no circular dep)
+function invalidateFilter() {
+  invalidateFilterCache();
+  invalidateGenreGridSig();
+  emit(EVENTS.FILTER_CHANGED, {});
+}
 
 // ── Helpers d'état ────────────────────────────────────────────────────────────
 // Toutes les lectures passent par get() — les mutations set() maintiennent le store à jour.

@@ -2,8 +2,7 @@
 // Détection et suppression de doublons dans la bibliothèque.
 // Extrait de app.js.
 //
-// Remaining window.* : setCurIdx (synchro locale app.js),
-//   confirmAction, invalidateFilter, renderLib, updateStats, toast (app.js).
+// Remaining window.* : confirmAction, invalidateFilter, renderLib, updateStats, toast (app.js).
 //
 // Exports publics :
 //   detectDupes, removeDupeTrack, deleteAllDupes, closeDupes
@@ -16,7 +15,7 @@ import { emit, EVENTS }                              from './bus.js';
 import { trackIdx, _trackIdxMap, rebuildTrackIdxMap, invalidateFilterCache } from './search.js';
 import { audio, adjustShuffleQAfterDelete }           from './player.js';
 import { toast, confirmAction }                                        from './ui.js';
-import { setCurIdx } from './app.js';
+import { setCurIdx } from './state.js';
 import { updateStats } from './renderer.js';
 
 // ── État interne ──────────────────────────────────────────────

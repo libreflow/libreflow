@@ -2,7 +2,7 @@
 // ReplayGain : analyse de volume et normalisation automatique.
 // Extrait de app.js.
 //
-// Remaining window.* : window.saveCfg (app.js, pas encore extrait).
+// Aucun import depuis app.js (ARCH-1 — deps circulaires brisées).
 //
 // Exports publics :
 //   rgEnabled     (live bool — lu dans app.js crossfade + playback handlers)
@@ -14,7 +14,7 @@ import { eqCtx, eqSource, eqNodes, audioOutGain, initEQ } from './eq.js';
 import { CFG }                               from './cfg.js';
 import { get }                               from './store.js';
 import { saveTrack }                         from './library.js';
-import { saveCfg } from './app.js';
+import { saveCfg } from './cfgsave.js';
 import { invoke } from './ipc.js'; // BUG-M2 FIX : allow_asset_dir avant fetch(t.url)
 
 // ── État (exporté comme live bindings) ────────────────────────
