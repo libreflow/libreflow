@@ -12,6 +12,11 @@ dist
 dist-ssr
 *.local
 
+# Clés de signature minisign (ne jamais committer)
+*.key
+*.key.pub
+%USERPROFILE%/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
