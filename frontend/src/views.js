@@ -454,7 +454,7 @@ export function statsGoToArtist(displayName) {
   _withVT(() => {
     const key = displayName.toLowerCase().replace(/[^\w\s]/g, '').replace(/\s+/g, ' ').trim();
     set('view', 'artists');
-    invalidateFilterCache();
+    invalidateFilter(); // émet FILTER_CHANGED + invalide genre grid (correctif rev-3a)
     renderArtistsGrid();
     requestAnimationFrame(() => drillDown('artists', key, displayName));
   });
@@ -464,7 +464,7 @@ export function statsGoToArtist(displayName) {
 export function statsGoToAlbum(albumKey, displayName) {
   _withVT(() => {
     set('view', 'albums');
-    invalidateFilterCache();
+    invalidateFilter(); // émet FILTER_CHANGED + invalide genre grid (correctif rev-3a)
     renderAlbumsGrid();
     requestAnimationFrame(() => drillDown('albums', albumKey, displayName));
   });

@@ -32,6 +32,9 @@ export function setLiked(v)      { set('liked',      v); }
  * Sync tracks dans app.js et dans le store réactif.
  * Utilisé par : selection.js.
  * @param {object[]} v
+ * ⚠ INVARIANT : tout appelant DOIT appeler rebuildTrackIdxMap() immédiatement après
+ *   pour maintenir _trackIdxMap en sync avec tracks[]. Ne pas omettre cette étape
+ *   sous peine de corrompre silencieusement tous les lookups par ID.
  */
 export function setTracks(v)     { set('tracks',     v); }
 
