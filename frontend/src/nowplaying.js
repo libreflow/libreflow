@@ -58,7 +58,7 @@ async function _loadTechInfo(path) {
     const info = await invoke('read_audio_props', { path });
     _techInfoCache.set(path, info);
     return info;
-  } catch { return null; }
+  } catch(e) { console.warn('[nowplaying] read_audio_props IPC failed for', path, ':', e); return null; }
 }
 
 // ── Render ────────────────────────────────────────────────────────────────────

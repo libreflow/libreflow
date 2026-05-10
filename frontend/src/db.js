@@ -119,4 +119,33 @@ const ddel = (s,k) => Promise.race([_idbTimeout(8000), new Promise((ok,fail) => 
   r.onerror   = () => fail(r.error);
 })]);
 
+// ── Storage quota ─────────────────────────────────────────────
+
+/**
+ * Returns navigator.storage.estimate() or null if the API is unavailable.
+ * Usage: { usage: bytes, quota: bytes }
+ * @returns {Promise<StorageEstimate|null>}
+ */
+export async function getStorageEstimate() {
+  if (!navigator.storage?.estimate) return null;
+  try { return await navigator.storage.estimate(); } catch { return null; }
+}
+
+/**
+ * Returns true if the error is a storage quota exceeded error.
+ * Covers Chrome (QuotaExceededError), Firefox (NS_ERROR_DOM_QUOTA_REACHED),
+ * and Safari / WebKit variants.
+ * @param {unknown} e
+ * @returns {boolean}
+ */
+export function isQuotaError(e) {
+  if (!e) return false;
+  const name = /** @type {any} */(e)?.name ?? '';
+  const code = /** @type {any} */(e)?.code ?? 0;
+  return name === 'QuotaExceededError'
+    || name === 'NS_ERROR_DOM_QUOTA_REACHED'
+    || code === 22   // legacy DOMException QUOTA_EXCEEDED_ERR
+    || (typeof name === 'string' && name.toLowerCase().includes('quota'));
+}
+
 export { openDB, tx, dget, dall, dput, ddel };

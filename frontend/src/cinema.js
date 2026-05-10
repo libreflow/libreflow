@@ -252,7 +252,7 @@ function _sampleArtColors() {
       left:  _regionAvg(tc, 0,  by, hw, bh),   // bottom-left
       right: _regionAvg(tc, hw, by, hw, bh),   // bottom-right
     };
-  } catch { return null; }
+  } catch(e) { console.warn('[cinema] _sampleArtColors failed (canvas taint ou image manquante):', e); return null; }
 }
 
 /** Extract and boost 3 ambient colours from artwork (or fallback to _cinArtRGB). */

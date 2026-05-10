@@ -124,7 +124,7 @@ export async function updateMiniPlayer() {
       }
       artForMini = `data:${mime};base64,${btoa(binary)}`;
       t._b64 = artForMini;
-    } catch { artForMini = null; }
+    } catch(e) { console.warn('[miniplayer] art base64 conversion failed:', e); artForMini = null; }
   }
   // await garantit que le mutex Rust est écrit avant que toggleMiniPlayer continue
   await invoke('mini_update', { data: { ...base,

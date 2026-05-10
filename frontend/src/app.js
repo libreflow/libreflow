@@ -11,7 +11,7 @@ import { audio, playAt, prev, next, togglePlay, buildQ,
 import { emit, on, EVENTS }                                from './bus.js';
 import { get, set, notify, subscribe, setBatch }           from './store.js';
 import { CFG, SORTS, SLBLS, SPEEDS, SPEED_LBLS } from './cfg.js';
-import { openDB, tx, dget, dall, dput, ddel, DB } from './db.js';
+import { openDB, tx, dget, dall, dput, ddel, DB, getStorageEstimate } from './db.js';
 import { readTags, extractColor, GENRE_ARTISTS, GENRE_KEYWORDS, guessGenre } from './tags.js';
 import { LANGS, i18n, initLang, getLang, applyLang, setLang } from './i18n.js';
 import { cinemaOpen, cinemaBg, initCinemaBg, toggleCinema, openCinema, closeCinema, updateCinema, updateCinemaProgress, setCinemaBg, cycleCinemaBg, applyCinemaBg, syncCinemaBgSettings, updateCinemaBgBtn, toggleCinemaFullscreen, CINEMA_BG_MODES, CINEMA_BG_LABELS, updateCinArtColor } from './cinema.js';
@@ -340,6 +340,23 @@ async function boot() {
       </div>`);
     return;
   }
+  // ARCH-7 : vérifier le quota IDB au boot — avertir si > 80% utilisé
+  getStorageEstimate().then(est => {
+    if (!est || !est.quota) return;
+    const pct = est.usage / est.quota;
+    if (pct > 0.9) {
+      toast(
+        `Stockage utilisé à ${Math.round(pct * 100)}% — libérez de l'espace disque pour éviter la perte de données.`,
+        'error'
+      );
+    } else if (pct > 0.8) {
+      toast(
+        `Stockage utilisé à ${Math.round(pct * 100)}% — pensez à libérer de l'espace disque.`,
+        'warning'
+      );
+    }
+  }).catch(() => {});
+
   // Load config
   const cfg = await dget('cfg','state').catch(()=>null);
   if (cfg) {

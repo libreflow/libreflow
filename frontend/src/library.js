@@ -14,7 +14,7 @@
 
 import { _trackIdxMap, trackIdx, invalidateFilterCache } from './search.js';
 import { emit, EVENTS }                                from './bus.js';
-import { DB, dput, dget }                             from './db.js';
+import { DB, dput, dget, isQuotaError }               from './db.js';
 import { invoke, invokeRetry, convertFileSrc }        from './ipc.js';
 import { i18n }                                       from './i18n.js';
 import { extractColor, guessGenre }                   from './tags.js';
@@ -431,7 +431,7 @@ async function _resolveArtBuf(t) {
       t._artBuf  = await blob.arrayBuffer();
       t._artMime = ART_MIME_ALLOWLIST.includes(blob.type) ? blob.type : 'image/jpeg';
       return { buf: t._artBuf, mime: t._artMime };
-    } catch { return null; }
+    } catch(e) { console.warn('[library] _resolveArtBuf blob fetch failed (URL révoquée?):', e); return null; }
   }
   return null;
 }
@@ -470,15 +470,48 @@ export async function flushTrackBatch() {
 
   const validRecords = records.filter(Boolean);
   if (!validRecords.length) return;
-  try {
+
+  /** Exécute une transaction IDB de type readwrite pour écrire les records donnés. */
+  async function _writeTx(recs) {
     const transaction = DB.transaction('tracks', 'readwrite');
     const store = transaction.objectStore('tracks');
-    for (const rec of validRecords) store.put(rec);
+    for (const rec of recs) store.put(rec);
     await new Promise((ok, fail) => {
       transaction.oncomplete = ok;
       transaction.onerror   = () => fail(transaction.error);
     });
-  } catch(e) { console.warn('[flushTrackBatch]', e); }
+  }
+
+  try {
+    await _writeTx(validRecords);
+  } catch(e) {
+    if (isQuotaError(e)) {
+      // ARCH-7 : quota IDB dépassé — réessayer sans artBuf (artwork sacrifié, métadonnées préservées)
+      console.warn('[flushTrackBatch] Quota IDB dépassé — retry sans artwork', e);
+      const stripped = validRecords.map(r => ({ ...r, artBuf: null, artMime: null }));
+      try {
+        await _writeTx(stripped);
+        // Invalider le flag _hasArt sur les tracks concernées pour éviter des retentatives IDB
+        for (const rec of stripped) {
+          const idx = _trackIdxMap.get(rec.id);
+          if (idx != null) { const t = get('tracks')[idx]; if (t) { t._hasArt = false; t.noArt = true; } }
+        }
+        toast(
+          i18n('t_idb_quota_artwork') || 'Stockage presque plein — artwork non sauvegardé. Libérez de l\'espace disque.',
+          'warning'
+        );
+      } catch(e2) {
+        console.error('[flushTrackBatch] Quota IDB critique — métadonnées non sauvegardées', e2);
+        toast(
+          i18n('t_idb_quota_critical') || 'Stockage plein — données non sauvegardées. Libérez de l\'espace disque immédiatement.',
+          'error'
+        );
+      }
+    } else {
+      console.warn('[flushTrackBatch] Erreur IDB inattendue:', e);
+      toast(i18n('t_idb_write_error') || 'Erreur d\'écriture IDB — relancez l\'application si le problème persiste.', 'error');
+    }
+  }
 }
 
 /**

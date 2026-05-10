@@ -183,9 +183,10 @@ export async function analyzeAndApplyRG() {
     srcBuf = null; // allow GC of the 30 MB AudioBuffer
     applyRGGain(t.rgGain);
     saveTrack(t); // persister en IDB pour ne pas recalculer au prochain démarrage
-  } catch {
+  } catch(e) {
     // AUDIO-1 FIX : format non décodable — appliquer gain neutre explicitement.
     // Sans ça, rgGainNode conserve le gain du titre précédent (risque de saturation soudaine).
+    console.warn('[replaygain] analyzeAndApplyRG failed (format non décodable ou interrompu):', e);
     if (_rgAnalysisId === myId) {
       t.rgGain = 1.0;
       applyRGGain(1.0);

@@ -28,7 +28,7 @@
 
 import { get }                                        from './store.js';
 import { CFG }                                        from './cfg.js';
-import { DB, dput }                                   from './db.js';
+import { DB, dput, isQuotaError }                     from './db.js';
 import { audio }                                      from './player.js';
 import { getLang }                                    from './i18n.js';
 import { getTheme, getDynColor, getDisplayMode,
@@ -142,6 +142,11 @@ async function _doSaveCfg() {
       autoUpdate,
     }, 'state');
   } catch (e) {
-    console.warn('[cfgsave] IDB save failed — config non persistée:', e);
+    if (isQuotaError(e)) {
+      // ARCH-7 : quota IDB — cfg est petit, si ça échoue c'est vraiment critique
+      console.error('[cfgsave] Quota IDB dépassé — configuration non persistée:', e);
+    } else {
+      console.warn('[cfgsave] IDB save failed — config non persistée:', e);
+    }
   }
 }
