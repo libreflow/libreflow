@@ -1,0 +1,27 @@
+# LibreFlow — Cloudflare Worker configuration
+# Docs : https://developers.cloudflare.com/workers/wrangler/configuration/
+#
+# Déploiement initial :
+#   1. npm install -g wrangler
+#   2. wrangler login
+#   3. wrangler secret put GITHUB_TOKEN    ← coller le fine-grained PAT GitHub
+#   4. wrangler deploy
+#
+# Le Worker sera disponible à :
+#   https://libreflow-update.YOUR_ACCOUNT.workers.dev
+#
+# Renseigner cette URL dans tauri.conf.json → plugins.updater.endpoints[0]
+
+name              = "libreflow-update"
+main              = "worker.js"
+compatibility_date = "2024-09-23"
+
+# Pas de KV ni D1 — le Worker est stateless (cache HTTP uniquement)
+
+[observability]
+enabled = true   # Logs disponibles dans le dashboard Cloudflare Workers
+
+# Optionnel : domaine custom (ex. updates.libreflow.app)
+# [[routes]]
+# pattern = "updates.libreflow.app/*"
+# zone_name = "libreflow.app"
