@@ -16,7 +16,7 @@ import { esc, extEmoji, fmtd }            from './utils.js';
 import { eqOpen, closeEQ }                from './eq.js';
 import { i18n }                           from './i18n.js';
 import { get, set }                       from './store.js';
-import { getFiltered, _trackIdxMap,
+import { getFiltered, filteredIdx, _trackIdxMap,
          invalidateFilterCache }          from './search.js';
 import { playAt }                         from './player.js';
 import { closeSettings } from './settings.js';
@@ -54,9 +54,9 @@ function _buildNaturalUpcoming() {
   const curIdx  = get('curIdx');
   const tracks  = get('tracks');
   const overSet = new Set(_queueOverride || []);
-  const curId   = curIdx >= 0 ? tracks[curIdx]?.id : null;
-  // curId = null → startFl = -1 → loop starts at 0 → shows full filtered list
-  const startFl = curId ? fl.findIndex(x => x.id === curId) : -1;
+  const curTrack = curIdx >= 0 ? tracks[curIdx] : null;
+  // curTrack = null → startFl = -1 → loop starts at 0 → shows full filtered list
+  const startFl = curTrack ? filteredIdx(curTrack) : -1;
   const result  = [];
   for (let i = startFl + 1; i < fl.length && result.length < 50; i++) {
     if (!overSet.has(fl[i].id)) result.push(fl[i]);
@@ -185,6 +185,7 @@ export function closeQueue() {
 // ── Rendu ────────────────────────────────────────────────────
 
 export function renderQueue() {
+  if (!queueOpen) return;
   initQueueDrag(); // idempotent — guard dataset.dragInit prévient les doubles enregistrements
   const el     = document.getElementById('queue-list');
   const tracks = get('tracks');
@@ -221,8 +222,8 @@ export function renderQueue() {
   // repeat='all' : compléter la section naturelle si peu de pistes et pas d'override
   if (!_queueOverride && repeat === 'all' && natural.length < 20 && curIdx >= 0) {
     const fl       = getFiltered();
-    const curId    = tracks[curIdx]?.id;
-    const startFl  = fl.findIndex(x => x.id === curId);
+    const curTrack = tracks[curIdx];
+    const startFl  = curTrack ? filteredIdx(curTrack) : -1;
     const naturalSet = new Set(natural.map(t => t.id));
     for (let i = 0; i < fl.length && natural.length < 20; i++) {
       if (i !== startFl && !naturalSet.has(fl[i].id)) {
@@ -243,38 +244,43 @@ export function renderQueue() {
 
   // ── Section "Prochainement" (queue explicite) ─────────────
   if (explicit.length) {
-    html += `<div class="queue-section-header">
+    html += `<div class="queue-section-header" role="presentation">
       <span class="queue-section-label">Prochainement (${explicit.length})</span>
-      <button class="queue-clear-btn" data-action="clear-queue">✕ tout</button>
+      <button class="queue-clear-btn" data-action="clear-queue" aria-label="Vider la file d'attente">✕ tout</button>
     </div>`;
+    // A11Y-03: role=listitem + aria-label pour chaque item (remove button labeled)
     html += explicit.map((t, i) => {
-      const artHTML = t.art ? `<img src="${t.art}" alt="">` : extEmoji(t.ext);
-      return `<div class="queue-item queue-item--explicit" data-id="${t.id}" data-qi="${i}">
-        <div class="q-drag-handle"><svg viewBox="0 0 6 14" aria-hidden="true" width="10" height="14"><circle cx="2" cy="2" r="1.2"/><circle cx="5" cy="2" r="1.2"/><circle cx="2" cy="7" r="1.2"/><circle cx="5" cy="7" r="1.2"/><circle cx="2" cy="12" r="1.2"/><circle cx="5" cy="12" r="1.2"/></svg></div>
-        <div class="q-art">${artHTML}</div>
+      const artHTML  = t.art ? `<img src="${t.art}" alt="">` : extEmoji(t.ext);
+      const itemLbl  = `${t.name}${t.artistFull || t.artist ? ' — ' + (t.artistFull || t.artist) : ''}`;
+      const rmvLbl   = `Retirer ${t.name} de la file d'attente`;
+      return `<div class="queue-item queue-item--explicit" role="listitem" tabindex="0" aria-label="${esc(itemLbl)}" data-id="${t.id}" data-qi="${i}">
+        <div class="q-drag-handle" aria-hidden="true"><svg viewBox="0 0 6 14" aria-hidden="true" width="10" height="14"><circle cx="2" cy="2" r="1.2"/><circle cx="5" cy="2" r="1.2"/><circle cx="2" cy="7" r="1.2"/><circle cx="5" cy="7" r="1.2"/><circle cx="2" cy="12" r="1.2"/><circle cx="5" cy="12" r="1.2"/></svg></div>
+        <div class="q-art" aria-hidden="true">${artHTML}</div>
         <div class="q-info">
           <div class="q-name">${esc(t.name)}</div>
           <div class="q-artist">${esc(t.artistFull || t.artist || '–')}</div>
         </div>
-        <div class="q-dur">${fmtd(t.duration)}</div>
-        <button class="queue-remove-btn" data-action="remove-from-queue" data-track-id="${t.id}" title="Retirer">✕</button>
+        <div class="q-dur" aria-hidden="true">${fmtd(t.duration)}</div>
+        <button class="queue-remove-btn" data-action="remove-from-queue" data-track-id="${t.id}" aria-label="${esc(rmvLbl)}" title="Retirer"><span aria-hidden="true">✕</span></button>
       </div>`;
     }).join('');
   }
 
   // ── Section "À suivre" (naturelle) ──────────────────────
   if (natural.length) {
-    html += `<div class="queue-section-divider">À suivre : ${esc(_getQueueSource())}</div>`;
+    html += `<div class="queue-section-divider" role="presentation">À suivre : ${esc(_getQueueSource())}</div>`;
+    // A11Y-03: role=listitem + aria-label pour chaque item naturel
     html += natural.slice(0, 50).map((t, i) => {
       const artHTML = t.art ? `<img src="${t.art}" alt="">` : extEmoji(t.ext);
-      return `<div class="queue-item queue-item--natural" data-id="${t.id}" data-ni="${i}"
+      const itemLbl = `${t.name}${t.artistFull || t.artist ? ' — ' + (t.artistFull || t.artist) : ''}`;
+      return `<div class="queue-item queue-item--natural" role="listitem" tabindex="0" aria-label="${esc(itemLbl)}" data-id="${t.id}" data-ni="${i}"
           data-action="play-queue-item" data-track-id="${t.id}">
-        <div class="q-art">${artHTML}</div>
+        <div class="q-art" aria-hidden="true">${artHTML}</div>
         <div class="q-info">
           <div class="q-name">${esc(t.name)}</div>
           <div class="q-artist">${esc(t.artistFull || t.artist || '–')}</div>
         </div>
-        <div class="q-dur">${fmtd(t.duration)}</div>
+        <div class="q-dur" aria-hidden="true">${fmtd(t.duration)}</div>
       </div>`;
     }).join('');
   }
@@ -494,8 +500,8 @@ export function playQueueItem(id) {
   if (_ptrState) return;
   const t = (_trackIdxMap.has(id) ? get('tracks')[_trackIdxMap.get(id)] : undefined);
   if (!t) return;
-  const fi = getFiltered().findIndex(x => x.id === t.id);
-  if (fi >= 0) { playAt(fi); return; }
+  const fi = filteredIdx(t);
+  if (fi >= 0) { removeFromQueue(id); playAt(fi, { keepQueue: true }); return; }
   // UX-QUEUE-1 FIX : piste hors vue courante → basculer vers 'all' et jouer
   // Couvre : filtre actif, vue "liked" (piste non aimée), vue "playlist" (piste absente)
   const srch = document.getElementById('srch');
@@ -510,9 +516,10 @@ export function playQueueItem(id) {
   emit(EVENTS.FILTER_CHANGED, {});
   emit(EVENTS.RENDER_LIB, {});
   toast(i18n('t_queue_filter_cleared') || 'Vue réinitialisée pour jouer ce titre', 'info');
+  removeFromQueue(id);
   requestAnimationFrame(() => {
-    const fi2 = getFiltered().findIndex(x => x.id === t.id);
-    if (fi2 >= 0) playAt(fi2);
+    const fi2 = filteredIdx(t);
+    if (fi2 >= 0) playAt(fi2, { keepQueue: true });
   });
 }
 

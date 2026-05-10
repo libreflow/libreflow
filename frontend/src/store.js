@@ -113,7 +113,7 @@ function _notify(key, val) {
   if (!set) return;
   _notifying.add(key);
   try {
-    for (const cb of [...set]) {
+    for (const cb of set) {
       try { cb(val); } catch (e) { console.error('[store] subscriber error', key, e); queueMicrotask(() => { throw e; }); }
     }
   } finally {

@@ -9,7 +9,7 @@
  * Circulaire-safe : saveCfg / invalidateFilter importés depuis app.js.
  */
 
-import { get, set }                                                  from './store.js';
+import { get, set, subscribe }                                        from './store.js';
 import { CFG, SORTS, SLBLS }                                         from './cfg.js';
 import { i18n }                                                       from './i18n.js';
 import { eqOpen, closeEQ }                                           from './eq.js';
@@ -35,11 +35,61 @@ function _v()  { return get('view') || 'all'; }
 function _s()  { return get('sort') || 'az'; }
 function _q()  { return get('query') || ''; }
 
+// ── Visibilité boutons tri — réagit à TOUT changement de vue (setView ET drillDown) ──────
+// drillDown() appelle set('view') directement sans passer par setView() → la logique de
+// visibilité des boutons tri doit être attachée au store, pas à setView() seulement.
+const _NO_MAIN_VIEWS = new Set(['albums','artists','genres','stats','recent','playlist','radio','playlists','album-detail','artist-detail','genre-detail','now-playing']);
+
+function _syncSortBtns(v) {
+  const mainSortBtn = document.getElementById('main-sort-btn');
+  if (mainSortBtn) mainSortBtn.style.display = _NO_MAIN_VIEWS.has(v) ? 'none' : '';
+
+  const albumDetailSortBtn = document.getElementById('album-detail-sort-btn');
+  if (albumDetailSortBtn) {
+    const show = v === 'album-detail';
+    albumDetailSortBtn.style.display = show ? '' : 'none';
+    if (show) {
+      const ads = get('albumDetailSort') || 'track';
+      const span = albumDetailSortBtn.querySelector('span');
+      if (span) span.textContent = ads === 'track' ? i18n('sort_by_track_lbl') : i18n('sort_az');
+      albumDetailSortBtn.title = i18n(ads === 'track' ? 'sort_btn_track_num' : 'sort_btn_az_ttl');
+    }
+  }
+}
+
+// S'abonner au store — déclenché par set('view') quel que soit l'appelant
+subscribe('view', _syncSortBtns);
+
+// ── INP — Renders de grilles différés ─────────────────────────────────────────
+// renderAlbumsGrid / renderArtistsGrid / renderGenresGrid / renderPlaylistsGrid
+// construisent la totalité du HTML synchronement (O(n_tracks) + O(m log m) sort
+// + innerHTML ~400 cards ≈ 80–200ms bloquants → INP > 200ms pour de grandes biblio).
+//
+// Fix : on diffère le render lourd via setTimeout(0) — le browser peut peindre
+// l'état intermédiaire (nav active, titre de vue, View Transition) AVANT de
+// construire les cards. L'INP est ainsi limité au travail léger (< 20ms).
+//
+// _gridRenderToken : annule un render périmé si l'utilisateur change de vue
+// rapidement (ex. clic rapide albums → artistes → albums).
+let _gridRenderToken = 0;
+
+/**
+ * Diffère `renderFn` au prochain tick en annulant toute invocation précédente.
+ * @param {Function} renderFn
+ */
+function _deferGridRender(renderFn) {
+  const token = ++_gridRenderToken;
+  setTimeout(() => {
+    if (token !== _gridRenderToken) return; // render périmé — ignorer
+    renderFn();
+  }, 0);
+}
+
 // ══ VUE BRUTE (sans VT) ══════════════════════════════════════════════════════
 
 /** Bascule vers une vue sans View Transition — utilisé en interne pour éviter l'imbrication. */
 export function _showViewRaw(v) {
-  const map = { welcome: 'vw', wlc: 'vw', scan: 'vscan', lib: 'vlib', stats: 'vstats', radio: 'vradio' };
+  const map = { welcome: 'vw', wlc: 'vw', scan: 'vscan', lib: 'vlib', stats: 'vstats', radio: 'vradio', 'now-playing': 'vnp' };
   const next = document.getElementById(map[v] || 'vlib');
   if (!next) return;
 
@@ -57,6 +107,11 @@ export function _showViewRaw(v) {
   }
 
   next.classList.add('on');
+  // Animation d'entrée en fallback non-VT (VT API gère le cross-fade quand disponible)
+  if (prev && prev !== next && typeof document.startViewTransition !== 'function') {
+    next.classList.add('view-enter');
+    next.addEventListener('animationend', () => next.classList.remove('view-enter'), { once: true });
+  }
 }
 
 export function showView(v) {
@@ -85,13 +140,13 @@ export function goHome() {
 
 // ══ RECHERCHE ══════════════════════════════════════════════════════════════════
 
-function _setSrchDisabled(disabled, placeholder) {
+function _setSrchDisabled(disabled) {
   const wrap = document.querySelector('.srch');
   const inp  = document.getElementById('srch');
   if (!wrap || !inp) return;
   wrap.style.display = '';
   inp.disabled = disabled;
-  inp.placeholder = placeholder;
+  inp.placeholder = disabled ? i18n('srch_disabled') : i18n('srch_ph');
   wrap.style.opacity = disabled ? '0.45' : '';
   wrap.style.pointerEvents = disabled ? 'none' : '';
   // ERG-1 : vider le champ + réinitialiser query quand on désactive (stats/radio)
@@ -105,6 +160,11 @@ function _setSrchDisabled(disabled, placeholder) {
 }
 
 let _searchDebounceTimer = null;
+
+/** Annule le debounce de recherche en cours (ex: drill-down depuis renderer.js). */
+export function cancelSearchDebounce() {
+  if (_searchDebounceTimer) { clearTimeout(_searchDebounceTimer); _searchDebounceTimer = null; }
+}
 
 function _updateSrchBadge(count) {
   let badge = document.getElementById('srch-badge');
@@ -163,30 +223,30 @@ export function nextAlbumSort() {
   const cur = get('albumSort') || 'name';
   const next = orders[(orders.indexOf(cur) + 1) % orders.length];
   set('albumSort', next);
-  const labels = { name: 'A–Z', count: 'Titres', duration: 'Durée', year: 'Année' };
+  const labels = { name: i18n('sort_az'), count: i18n('sort_count_lbl'), duration: i18n('pl_sort_duration'), year: i18n('sort_year_lbl') };
   const btn = document.getElementById('album-sort-btn');
   if (btn) btn.textContent = labels[next];
-  renderLib(); saveCfg();
+  renderAlbumsGrid(); saveCfg();
 }
 
 export function nextArtistSort() {
   const cur = get('artistSort') || 'name';
   const next = cur === 'name' ? 'count' : 'name';
   set('artistSort', next);
-  const labels = { name: 'A–Z', count: 'Titres' };
+  const labels = { name: i18n('sort_az'), count: i18n('sort_count_lbl') };
   const btn = document.getElementById('artist-sort-btn');
   if (btn) btn.textContent = labels[next];
-  renderLib(); saveCfg();
+  renderArtistsGrid(); saveCfg();
 }
 
 export function nextGenreSort() {
   const cur = get('genreSort') || 'count';
   const next = cur === 'count' ? 'name' : 'count';
   set('genreSort', next);
-  const labels = { count: 'Titres', name: 'A–Z' };
+  const labels = { count: i18n('sort_count_lbl'), name: i18n('sort_az') };
   const btn = document.getElementById('genre-sort-btn');
   if (btn) btn.textContent = labels[next];
-  renderLib(); saveCfg();
+  renderGenresGrid(); saveCfg();
 }
 
 // ══ CHANGEMENT DE VUE ════════════════════════════════════════════════════════
@@ -204,6 +264,7 @@ export function setView(v, btn, plId) {
     set('drillKey', '');
     set('drillFrom', '');
     set('drillDisplayName', '');
+    document.getElementById('drill-header')?.remove();
 
     if (v === 'playlist') {
       const pid = plId || null;
@@ -226,8 +287,9 @@ export function setView(v, btn, plId) {
     // RACE-3 FIX : reconstruire le shuffleQ quand la vue change pendant le shuffle
     if (get('shuffle')) buildQ();
 
-    VIRT._lastListSig = '';
-    VIRT._lastSig = '';
+    VIRT._lastListSig   = '';
+    VIRT._lastWindowSig = '';
+    VIRT._lastScrollTop = null;
 
     document.querySelectorAll('.ni').forEach(b => {
       b.classList.remove('on');
@@ -255,16 +317,17 @@ export function setView(v, btn, plId) {
     const pl = playlists.find(p => p.id === plId);
     const lbl = {
       all: i18n('lib_all'), liked: i18n('lib_liked'), artists: i18n('lib_artists'),
-      albums: i18n('lib_albums'), genres: 'Genres', recent: i18n('lib_recent'),
-      playlist: pl ? pl.name : i18n('pl_new'), radio: '📻 Radio',
+      albums: i18n('lib_albums'), genres: i18n('lib_genres'), recent: i18n('lib_recent'),
+      playlist: pl ? pl.name : i18n('pl_new'), radio: i18n('lib_radio'),
       playlists: i18n('nav_playlists'),
     };
-    document.getElementById('vhtitle').textContent = lbl[v] || 'Bibliothèque';
+    const vhtitleEl = document.getElementById('vhtitle');
+    if (vhtitleEl) vhtitleEl.textContent = lbl[v] || i18n('sb_group_lib');
 
     // Boutons de tri contextuels
     const albumSortBtn = document.getElementById('album-sort-btn');
     const mainSortBtn  = document.getElementById('main-sort-btn');
-    const NO_MAIN_SORT = ['albums', 'artists', 'genres', 'stats', 'recent', 'playlist', 'radio', 'playlists'];
+    const NO_MAIN_SORT = ['albums', 'artists', 'genres', 'stats', 'recent', 'playlist', 'radio', 'playlists', 'album-detail', 'artist-detail', 'genre-detail'];
     if (mainSortBtn) mainSortBtn.style.display = NO_MAIN_SORT.includes(v) ? 'none' : '';
     if (albumSortBtn) albumSortBtn.style.display = (v === 'albums') ? '' : 'none';
 
@@ -273,22 +336,24 @@ export function setView(v, btn, plId) {
       artistSortBtn = document.createElement('button');
       artistSortBtn.id = 'artist-sort-btn';
       artistSortBtn.className = 'sort-btn';
-      artistSortBtn.title = 'Trier les artistes';
       artistSortBtn.onclick = nextArtistSort;
       mainSortBtn?.parentNode?.insertBefore(artistSortBtn, mainSortBtn.nextSibling);
     }
+    artistSortBtn.title = i18n('sort_btn_artists');
     artistSortBtn.style.display = (v === 'artists') ? '' : 'none';
+    artistSortBtn.textContent = i18n(get('artistSort') === 'count' ? 'sort_count_lbl' : 'sort_az');
 
     let genreSortBtn = document.getElementById('genre-sort-btn');
     if (!genreSortBtn) {
       genreSortBtn = document.createElement('button');
       genreSortBtn.id = 'genre-sort-btn';
       genreSortBtn.className = 'sort-btn';
-      genreSortBtn.title = 'Trier les genres';
       genreSortBtn.onclick = nextGenreSort;
       mainSortBtn?.parentNode?.insertBefore(genreSortBtn, mainSortBtn.nextSibling);
     }
+    genreSortBtn.title = i18n('sort_btn_genres');
     genreSortBtn.style.display = (v === 'genres') ? '' : 'none';
+    genreSortBtn.textContent = i18n(get('genreSort') === 'name' ? 'sort_az' : 'sort_count_lbl');
 
     let albumDetailSortBtn = document.getElementById('album-detail-sort-btn');
     if (!albumDetailSortBtn) {
@@ -299,18 +364,18 @@ export function setView(v, btn, plId) {
         const cur = get('albumDetailSort') || 'track';
         const next = cur === 'track' ? 'az' : 'track';
         set('albumDetailSort', next);
-        albumDetailSortBtn.title = next === 'track' ? 'Trié par n° de piste' : 'Trié A–Z';
-        albumDetailSortBtn.querySelector('span').textContent = next === 'track' ? '# Piste' : 'A–Z';
-        invalidateFilter(); VIRT._lastListSig = ''; renderLib();
+        albumDetailSortBtn.title = i18n(next === 'track' ? 'sort_btn_track_num' : 'sort_btn_az_ttl');
+        albumDetailSortBtn.querySelector('span').textContent = next === 'track' ? i18n('sort_by_track_lbl') : i18n('sort_az');
+        invalidateFilter(); VIRT._lastListSig = ''; renderLib(); saveCfg();
       };
-      albumDetailSortBtn.innerHTML = '<span># Piste</span>';
-      albumDetailSortBtn.title = 'Trié par n° de piste';
+      albumDetailSortBtn.innerHTML = `<span>${i18n('sort_by_track_lbl')}</span>`;
+      albumDetailSortBtn.title = i18n('sort_btn_track_num');
       mainSortBtn?.parentNode?.insertBefore(albumDetailSortBtn, mainSortBtn);
     }
     albumDetailSortBtn.style.display = (v === 'album-detail') ? '' : 'none';
     if (v === 'album-detail') {
       const ads = get('albumDetailSort') || 'track';
-      albumDetailSortBtn.querySelector('span').textContent = ads === 'track' ? '# Piste' : 'A–Z';
+      albumDetailSortBtn.querySelector('span').textContent = ads === 'track' ? i18n('sort_by_track_lbl') : i18n('sort_az');
     }
 
     let plNewBtn = document.getElementById('pl-new-btn');
@@ -338,25 +403,29 @@ export function setView(v, btn, plId) {
 
     // Dispatch vers la vue
     const tracks = get('tracks') || [];
-    if (v === 'albums')    { syncRadioLibBar(); _showViewRaw('lib'); renderAlbumsGrid();    saveCfg(); return; }
-    if (v === 'artists')   { syncRadioLibBar(); _showViewRaw('lib'); renderArtistsGrid();   saveCfg(); return; }
-    if (v === 'genres')    { syncRadioLibBar(); _showViewRaw('lib'); renderGenresGrid();    saveCfg(); return; }
-    if (v === 'playlists') { syncRadioLibBar(); _showViewRaw('lib'); renderPlaylistsGrid(); saveCfg(); return; }
+    // INP FIX : renders de grilles différés → le pointer event se termine < 20ms,
+    // le browser peint immédiatement, le contenu arrive dans la task suivante (~0ms après).
+    if (v === 'albums')    { syncRadioLibBar(); _showViewRaw('lib'); saveCfg(); _deferGridRender(renderAlbumsGrid);    return; }
+    if (v === 'artists')   { syncRadioLibBar(); _showViewRaw('lib'); saveCfg(); _deferGridRender(renderArtistsGrid);   return; }
+    if (v === 'genres')    { syncRadioLibBar(); _showViewRaw('lib'); saveCfg(); _deferGridRender(renderGenresGrid);    return; }
+    if (v === 'playlists') { syncRadioLibBar(); _showViewRaw('lib'); saveCfg(); _deferGridRender(renderPlaylistsGrid); return; }
     if (v === 'stats') {
-      _setSrchDisabled(true, 'Recherche non disponible ici');
+      _setSrchDisabled(true);
       _showViewRaw('stats');
       renderStats(tracks, _trackIdxMap);
       saveCfg(); return;
     }
     if (v === 'radio') {
-      _setSrchDisabled(true, 'Recherche non disponible ici');
+      _setSrchDisabled(true);
       // renderRadioView() va rebuilder innerHTML → invalider le cache DOM
       clearRvProgFill();
       _showViewRaw('radio'); renderRadioView(); saveCfg(); return;
     }
-    _setSrchDisabled(false, 'Rechercher…');
+    _setSrchDisabled(false);
     syncRadioLibBar();
-    if (tracks.length || v === 'playlist') { _showViewRaw('lib'); renderLib(); }
+    const _tl = document.getElementById('tlist');
+    if (_tl) _tl.scrollTop = 0;
+    _showViewRaw('lib'); renderLib();
     saveCfg();
   }); // fin _withVT
 }

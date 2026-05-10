@@ -17,7 +17,7 @@ import { extEmoji, esc, mainArtist } from './utils.js';
 import { VIRT }                       from './virt.js';
 import { invoke }                     from './ipc.js';
 import { i18n }                       from './i18n.js';
-import { get }                         from './store.js'; // Phase 4
+import { get, subscribe }               from './store.js'; // Phase 4
 import { emit, EVENTS }               from './bus.js';
 import { toast }                                        from './ui.js';
 import { _trackIdxMap, trackIdx, invalidateFilterCache } from './search.js';
@@ -26,9 +26,17 @@ import { saveTrackNow } from './library.js';
 import { queueOpen, renderQueue } from './queue.js';
 
 // ── État interne ──────────────────────────────────────────────
-let _editingTrackId  = null;
-let _tagKeyHandler   = null; // BUG FIX 4 : stocké au niveau module, pas sur l'élément DOM
-                              // (le virt-scroll peut remplacer l'élément pendant l'édition)
+let _editingTrackId     = null;
+let _tagKeyHandler      = null; // BUG FIX 4 : stocké au niveau module, pas sur l'élément DOM
+                                 // (le virt-scroll peut remplacer l'élément pendant l'édition)
+let _stopClickHandler   = null; // SEC: remplace setAttribute('onclick',...) — no inline handlers
+let _outsideClickActive = false; // BUG-3 : évite double listener mousedown si openTagEditor appelé 2× rapidement
+
+// Cache datalists — invalidé sur mutation tracks (évite 15 allocations × n pistes par ouverture)
+let _dlArtistsCache = null;
+let _dlAlbumsCache  = null;
+let _dlGenresCache  = null;
+subscribe('tracks', () => { _dlArtistsCache = _dlAlbumsCache = _dlGenresCache = null; });
 
 // ── Éditeur ───────────────────────────────────────────────────
 
@@ -44,11 +52,11 @@ export function openTagEditor(trackId) {
 
   _editingTrackId = trackId;
   el.classList.add('editing');
-  // Désactiver les handlers inline pendant l'édition (évite de lancer/mettre en pause la lecture)
-  el.dataset.savedOnclick = el.getAttribute('onclick') || '';
-  el.setAttribute('onclick', 'event.stopPropagation()');
+  // Bloquer les clics/dblclics pendant l'édition sans inline handler
   el.removeAttribute('ondblclick');
-  el.removeAttribute('onkeydown'); // espace ne doit pas déclencher playById via bubbling
+  el.removeAttribute('onkeydown');
+  _stopClickHandler = (e) => e.stopPropagation();
+  el.addEventListener('click', _stopClickHandler);
 
   const _lTitle  = i18n('te_title');
   const _lArtist = i18n('te_artist');
@@ -60,16 +68,18 @@ export function openTagEditor(trackId) {
   const _lSave   = i18n('te_save');
   const _lCancel = i18n('te_cancel');
 
-  // UX-TAG-1 : datalist suggestions depuis la bibliothèque courante
-  const _tracks = get('tracks');
-  const _dlArtists = [...new Set(_tracks.map(x => x.artistFull || x.artist).filter(Boolean))].sort().slice(0, 200);
-  const _dlAlbums  = [...new Set(_tracks.map(x => x.album).filter(Boolean))].sort().slice(0, 200);
-  const _dlGenres  = [...new Set(_tracks.map(x => x.genre).filter(Boolean))].sort().slice(0, 100);
+  // UX-TAG-1 : datalist suggestions depuis la bibliothèque courante (lazy cache — invalidé par subscribe)
+  if (!_dlArtistsCache) _dlArtistsCache = [...new Set(get('tracks').map(x => x.artistFull || x.artist).filter(Boolean))].sort().slice(0, 200);
+  if (!_dlAlbumsCache)  _dlAlbumsCache  = [...new Set(get('tracks').map(x => x.album).filter(Boolean))].sort().slice(0, 200);
+  if (!_dlGenresCache)  _dlGenresCache  = [...new Set(get('tracks').map(x => x.genre).filter(Boolean))].sort().slice(0, 100);
+  const _dlArtists = _dlArtistsCache;
+  const _dlAlbums  = _dlAlbumsCache;
+  const _dlGenres  = _dlGenresCache;
   const _dlOpts = (arr) => arr.map(v => `<option value="${esc(v)}">`).join('');
 
   el.innerHTML = `
     <div class="tart">${t.art
-      ? `<img src="${t.art}" alt="" onerror="this.style.display='none'">`
+      ? `<img src="${esc(t.art)}" alt="">`
       : `<span class="tart-ph">${extEmoji(t.ext)}</span>`}
     </div>
     <div class="tag-edit-form">
@@ -78,7 +88,9 @@ export function openTagEditor(trackId) {
       <datalist id="te-dl-genre">${_dlOpts(_dlGenres)}</datalist>
       <div class="tag-edit-row">
         <label class="tag-edit-lbl" for="te-name">${_lTitle}</label>
-        <input class="tag-edit-inp" id="te-name"   value="${esc(t.name)}"                     placeholder="${_lTitle}" autocomplete="off">
+        <!-- A11Y-08: aria-describedby pointe vers le message d'erreur (vide à l'ouverture) -->
+        <input class="tag-edit-inp" id="te-name" value="${esc(t.name)}" placeholder="${_lTitle}" autocomplete="off" aria-describedby="te-name-error">
+        <span id="te-name-error" role="alert" class="sr-only"></span>
       </div>
       <div class="tag-edit-row">
         <label class="tag-edit-lbl" for="te-artist">${_lArtist}</label>
@@ -111,8 +123,13 @@ export function openTagEditor(trackId) {
       })()}
     </div>`;
 
+  // Masquer l'artwork si l'image échoue à charger (sans inline onerror)
+  const _artImg = el.querySelector('.tart img');
+  if (_artImg) _artImg.addEventListener('error', () => { _artImg.style.display = 'none'; }, { once: true });
+
   // Focus sur le champ titre
   setTimeout(() => {
+    if (!_editingTrackId) return;
     const inp = document.getElementById('te-name');
     if (inp) { inp.focus(); inp.select(); }
   }, 30);
@@ -126,15 +143,19 @@ export function openTagEditor(trackId) {
 
   // BUG FIX 5 : enregistrer le listener mousedown ici (once:true) au lieu
   // d'un listener global permanent qui tourne même sans éditeur ouvert
+  // BUG-3 : guard contre double enregistrement si openTagEditor appelé 2× rapidement
+  if (_outsideClickActive) return;
+  _outsideClickActive = true;
   document.addEventListener('mousedown', function _onOutsideClick(e) {
-    if (!_editingTrackId) return;
+    if (!_editingTrackId) { _outsideClickActive = false; return; }
     const editorEl = document.getElementById('tr-' + _editingTrackId);
-    if (!editorEl) { _editingTrackId = null; return; }
+    if (!editorEl) { _editingTrackId = null; _outsideClickActive = false; return; }
     if (editorEl.contains(e.target)) {
       // re-enregistrer pour le prochain clic (once:true consommé)
       document.addEventListener('mousedown', _onOutsideClick, { once: true });
       return;
     }
+    _outsideClickActive = false;
     cancelTagEdit();
   }, { once: true });
 }
@@ -152,9 +173,19 @@ export async function saveTagEdit(trackId) {
   const track  = (() => { const v = parseInt(document.getElementById('te-track')?.value || ''); return (Number.isInteger(v) && v >= 1 && v <= 999)   ? v : null; })();
 
   if (!name) {
-    document.getElementById('te-name')?.focus();
+    // A11Y-08: signaler le champ invalide au screen reader via aria-invalid + message d'erreur
+    const nameInp  = document.getElementById('te-name');
+    const nameErr  = document.getElementById('te-name-error');
+    if (nameInp) nameInp.setAttribute('aria-invalid', 'true');
+    if (nameErr) nameErr.textContent = i18n('te_required') || 'Le titre est requis.';
+    nameInp?.focus();
     return;
   }
+  // A11Y-08: effacer l'état d'erreur si le titre est valide
+  const _nameInp = document.getElementById('te-name');
+  const _nameErr = document.getElementById('te-name-error');
+  if (_nameInp) _nameInp.removeAttribute('aria-invalid');
+  if (_nameErr) _nameErr.textContent = '';
 
   // Appliquer les modifications en mémoire
   const _unknownArtist = i18n('unknown_artist');
@@ -199,7 +230,7 @@ export async function saveTagEdit(trackId) {
   if (queueOpen) renderQueue(); // rafraîchir la file si ouverte (cohérence affichage)
 
   // Mettre à jour la barre de lecture si c'est la piste en cours
-  if (trackIdx(t) === get('curIdx')) updateBar();
+  if (trackIdx(t.id) === get('curIdx')) updateBar();
 
   if (writeResult) {
     // Écriture fichier échouée → avertissement (les modifs restent dans l'IDB)
@@ -216,6 +247,7 @@ export function cancelTagEdit() {
   const el = document.getElementById('tr-' + trackId);
   _cleanTagEditor(el);
   _editingTrackId = null;
+  _outsideClickActive = false;
   // Bug #10 fix : si la piste a été supprimée pendant l'édition (ex. suppression depuis
   // le menu contextuel), ne pas invalider le cache ni ré-émettre RENDER_LIB avec un ID
   // fantôme — ça provoquait un re-render inutile avec un _trackIdxMap stale.
@@ -229,15 +261,15 @@ export function cancelTagEdit() {
 function _cleanTagEditor(el) {
   // BUG FIX 4 : utiliser le handler stocké au niveau module (l'élément DOM peut avoir été
   // remplacé par le virt-scroll — chercher l'élément frais via l'ID)
+  const freshEl = _editingTrackId ? document.getElementById('tr-' + _editingTrackId) : null;
   if (_tagKeyHandler) {
-    const freshEl = _editingTrackId ? document.getElementById('tr-' + _editingTrackId) : null;
     if (freshEl) freshEl.removeEventListener('keydown', _tagKeyHandler);
     _tagKeyHandler = null;
   }
+  if (_stopClickHandler) {
+    if (freshEl) freshEl.removeEventListener('click', _stopClickHandler);
+    _stopClickHandler = null;
+  }
   if (!el) return;
   el.classList.remove('editing');
-  if (el.dataset.savedOnclick !== undefined) {
-    el.setAttribute('onclick', el.dataset.savedOnclick);
-    delete el.dataset.savedOnclick;
-  }
 }

@@ -30,6 +30,10 @@ import { updateBreadcrumb, updateStats }                    from './renderer.js'
 // ── Cache de signature ────────────────────────────────────────────────────────
 let _genreGridSig = null;
 
+// ── Caches emoji / couleur (évite le scan O(n) répété pour le même genre) ────
+const _emojiCache = new Map();
+const _colorCache = new Map();
+
 /** Invalider le cache de la grille genres (appelé par invalidateFilter() dans app.js). */
 export function invalidateGenreGridSig() { _genreGridSig = null; }
 
@@ -113,9 +117,15 @@ const GENRE_DISPLAY_NAMES = {
  */
 export function _genreGetEmoji(key) {
   const n = key.toLowerCase();
-  if (GENRE_EMOJIS[n]) return GENRE_EMOJIS[n];
-  for (const [k, e] of Object.entries(GENRE_EMOJIS)) { if (n.includes(k)) return e; }
-  return '🎵';
+  if (_emojiCache.has(n)) return _emojiCache.get(n);
+  let result;
+  if (GENRE_EMOJIS[n]) result = GENRE_EMOJIS[n];
+  else {
+    result = '🎵';
+    for (const [k, e] of Object.entries(GENRE_EMOJIS)) { if (n.includes(k)) { result = e; break; } }
+  }
+  _emojiCache.set(n, result);
+  return result;
 }
 
 /**
@@ -127,13 +137,23 @@ export function _genreGetEmoji(key) {
  */
 export function _genreGetColor(key) {
   const n = key.toLowerCase();
-  if (GENRE_COLORS[n]) return GENRE_COLORS[n];
-  for (const [k, c] of Object.entries(GENRE_COLORS)) { if (n.includes(k)) return c; }
-  // Gradient déterministe basé sur hash djb2 (genres hors-liste)
-  let h = 0;
-  for (let i = 0; i < key.length; i++) h = (h * 31 + key.charCodeAt(i)) & 0xfffff;
-  const hue = h % 360;
-  return `linear-gradient(135deg, hsl(${hue},28%,9%) 0%, hsl(${hue},60%,32%) 100%)`;
+  if (_colorCache.has(n)) return _colorCache.get(n);
+  let result;
+  if (GENRE_COLORS[n]) {
+    result = GENRE_COLORS[n];
+  } else {
+    result = null;
+    for (const [k, c] of Object.entries(GENRE_COLORS)) { if (n.includes(k)) { result = c; break; } }
+    if (result === null) {
+      // Gradient déterministe basé sur hash djb2 (genres hors-liste)
+      let h = 0;
+      for (let i = 0; i < n.length; i++) h = (h * 31 + n.charCodeAt(i)) & 0xfffff;
+      const hue = h % 360;
+      result = `linear-gradient(135deg, hsl(${hue},28%,9%) 0%, hsl(${hue},60%,32%) 100%)`;
+    }
+  }
+  _colorCache.set(n, result);
+  return result;
 }
 
 function _genreFormatDur(secs) {
@@ -191,6 +211,7 @@ export function renderGenresGrid() {
           name:        displayName,
           count:       0,
           arts:        [],
+          artsSet:     new Set(),
           totalDur:    0,
           artistCount: new Map(),
           variants:    new Set(),
@@ -200,7 +221,7 @@ export function renderGenresGrid() {
       ge.count++;
       ge.totalDur += t.duration || 0;
       if (t.artist) ge.artistCount.set(t.artist, (ge.artistCount.get(t.artist) || 0) + 1);
-      if (t.art && ge.arts.length < 4 && !ge.arts.includes(t.art)) ge.arts.push(t.art);
+      if (t.art && ge.arts.length < 4 && !ge.artsSet.has(t.art)) { ge.artsSet.add(t.art); ge.arts.push(t.art); }
       const rawLc = part.toLowerCase();
       if (rawLc !== key) ge.variants.add(part);
     }
@@ -239,7 +260,7 @@ export function renderGenresGrid() {
 
     const variantCount = g.variants.size;
     const variantTip   = variantCount > 0
-      ? [...g.variants].slice(0, 4).map(esc).join(', ')
+      ? Array.from(g.variants).slice(0, 4).map(esc).join(', ')
       : '';
     const variantBadge = variantCount > 0
       ? `<div class="genre-variants-badge" title="${variantTip}">+${variantCount}</div>`
@@ -284,9 +305,14 @@ export function drillGenre(key, displayName) {
   setContentView('list');
   const ag = document.getElementById('album-grid');
   const rg = document.getElementById('artist-grid');
+  const pg = document.getElementById('playlist-grid');
   if (ag) ag.style.display = 'none';
   if (rg) rg.style.display = 'none';
-  document.getElementById('vhtitle').textContent = displayName;
+  if (pg) pg.style.display = 'none';
+  const vhtitle = document.getElementById('vhtitle');
+  if (vhtitle) vhtitle.textContent = displayName;
+  const _tl = document.getElementById('tlist');
+  if (_tl) _tl.scrollTop = 0;
   emit(EVENTS.RENDER_LIB, {});
 }
 

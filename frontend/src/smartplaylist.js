@@ -201,7 +201,7 @@ function _triggerRulesPreview() {
 
 // ── Évaluation des règles ─────────────────────────────────────
 
-function _evalRule(t, rule, playCountMap) {
+function _evalRule(t, rule, playCountMap, likedSet) {
   const { field, op, value } = rule;
   const val = (value ?? '').toString().toLowerCase().trim();
 
@@ -237,7 +237,7 @@ function _evalRule(t, rule, playCountMap) {
       break;
     }
     case 'liked': {
-      const isLiked = get('liked').has(t.id);
+      const isLiked = (likedSet ?? get('liked')).has(t.id);
       if (op === 'is') return value === 'true' ? isLiked : !isLiked;
       break;
     }
@@ -256,7 +256,7 @@ function _evalRule(t, rule, playCountMap) {
       if (op === 'lt') return (t.dateAdded || 0) > cutoff;       // added within N days
       if (op === 'eq') {
         const d = Math.round((Date.now() - (t.dateAdded || 0)) / 86400000);
-        return d === parseInt(val) || 0;
+        return d === (parseInt(val) || 0);
       }
       break;
     }
@@ -290,10 +290,17 @@ function _buildRulesTracks() {
   if (!rules.length) return [];
 
   const pcMap = _buildPlayCountMap();
+  const likedSet = get('liked');
 
+  const matchAll = combinator === 'all';
   const matched = tracks.filter(t => {
-    const results = rules.map(r => _evalRule(t, r, pcMap));
-    return combinator === 'all' ? results.every(Boolean) : results.some(Boolean);
+    if (matchAll) {
+      for (const r of rules) { if (!_evalRule(t, r, pcMap, likedSet)) return false; }
+      return true;
+    } else {
+      for (const r of rules) { if (_evalRule(t, r, pcMap, likedSet)) return true; }
+      return false;
+    }
   });
 
   return matched.slice(0, maxSize);
@@ -328,10 +335,14 @@ function _doPreviewRules() {
 // ── Onglets du modal playlist ─────────────────────────────────
 
 export function switchPlTab(tab) {
-  document.getElementById('pl-panel-manual').style.display = tab==='manual' ? '' : 'none';
-  document.getElementById('pl-panel-smart').style.display  = tab==='smart'  ? '' : 'none';
-  document.getElementById('pl-tab-manual').classList.toggle('active', tab==='manual');
-  document.getElementById('pl-tab-smart').classList.toggle('active',  tab==='smart');
+  const panelManual = document.getElementById('pl-panel-manual');
+  const panelSmart  = document.getElementById('pl-panel-smart');
+  const tabManual   = document.getElementById('pl-tab-manual');
+  const tabSmart    = document.getElementById('pl-tab-smart');
+  if (panelManual) panelManual.style.display = tab==='manual' ? '' : 'none';
+  if (panelSmart)  panelSmart.style.display  = tab==='smart'  ? '' : 'none';
+  if (tabManual)   tabManual.classList.toggle('active', tab==='manual');
+  if (tabSmart)    tabSmart.classList.toggle('active',  tab==='smart');
 }
 
 export function openSmartPlaylistModal(seedTrackId) {
@@ -388,7 +399,7 @@ export function smartSeedSearch(q) {
   const res = document.getElementById('smart-seed-results');
   if (!q.trim()) { res.style.display = 'none'; return; }
   const hits = tracks.filter(t =>
-    t.name.toLowerCase().includes(q.toLowerCase()) ||
+    (t.name || '').toLowerCase().includes(q.toLowerCase()) ||
     (t.artist||'').toLowerCase().includes(q.toLowerCase())
   ).slice(0, 8);
   if (!hits.length) { res.style.display = 'none'; return; }
@@ -471,16 +482,21 @@ export function smartPreview() {
   if (_smartMode === 'rules') { _doPreviewRules(); return; }
   if (!_smartSeedId) { toast(i18n('t_smart_seed_first'), 'warning'); return; }
   const result = _buildSmartTracks();
-  document.getElementById('smart-preview-count').textContent = result.length + ' titre' + (result.length!==1?'s':'');
-  document.getElementById('smart-preview-list').innerHTML = result.slice(0,8).map((t,i) => `
-    <div class="smart-prev-item">
-      <span style="font-size:10px;color:var(--t3);min-width:16px;text-align:right">${i+1}</span>
-      <span class="spn">${esc(t.name)}</span>
-      <span class="spa">${esc(t.artist||'')}</span>
-      ${t.id===_smartSeedId ? '<span class="spi">seed</span>' : ''}
-    </div>`).join('') +
-    (result.length>8 ? `<div style="padding:5px 10px;font-size:11px;color:var(--t3);text-align:center">+ ${result.length-8} autre${result.length-8>1?'s':''}…</div>` : '');
-  document.getElementById('smart-preview').style.display = 'block';
+  const countEl = document.getElementById('smart-preview-count');
+  const listEl  = document.getElementById('smart-preview-list');
+  const prev    = document.getElementById('smart-preview');
+  if (countEl) countEl.textContent = result.length + ' titre' + (result.length!==1?'s':'');
+  if (listEl) {
+    listEl.innerHTML = result.slice(0,8).map((t,i) => `
+      <div class="smart-prev-item">
+        <span style="font-size:10px;color:var(--t3);min-width:16px;text-align:right">${i+1}</span>
+        <span class="spn">${esc(t.name)}</span>
+        <span class="spa">${esc(t.artist||'')}</span>
+        ${t.id===_smartSeedId ? '<span class="spi">seed</span>' : ''}
+      </div>`).join('') +
+      (result.length>8 ? `<div style="padding:5px 10px;font-size:11px;color:var(--t3);text-align:center">+ ${result.length-8} autre${result.length-8>1?'s':''}…</div>` : '');
+  }
+  if (prev) prev.style.display = 'block';
 }
 
 export async function confirmSmartPlaylist() {
@@ -538,11 +554,18 @@ export async function regenerateSmartPlaylist(plId) {
     const maxSize    = crit.size || 20;
     const tracks     = get('tracks');
     const pcMap      = _buildPlayCountMap();
+    const likedSet   = get('liked');
     const rules      = _smartRules.filter(r => r.value !== '' || r.field === 'liked' || r.field === 'format');
     if (!rules.length) { toast(i18n('t_smart_no_regen'), 'warning'); _smartMode = 'seed'; return; }
+    const _matchAll  = combinator === 'all';
     const matched = tracks.filter(t => {
-      const results = rules.map(r => _evalRule(t, r, pcMap));
-      return combinator === 'all' ? results.every(Boolean) : results.some(Boolean);
+      if (_matchAll) {
+        for (const r of rules) { if (!_evalRule(t, r, pcMap, likedSet)) return false; }
+        return true;
+      } else {
+        for (const r of rules) { if (_evalRule(t, r, pcMap, likedSet)) return true; }
+        return false;
+      }
     }).slice(0, maxSize);
     if (!matched.length) { toast(i18n('t_smart_no_regen'), 'warning'); _smartMode = 'seed'; return; }
     pl.trackIds  = matched.map(t => t.id);

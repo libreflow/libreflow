@@ -12,7 +12,6 @@
 //     propre au lieu de hang silencieux
 
 use notify::{Config, Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
-use std::path::Path;
 use std::sync::Mutex;
 use tauri::{AppHandle, Emitter, Manager};
 
@@ -30,10 +29,20 @@ pub struct WatchState(pub Mutex<Option<RecommendedWatcher>>);
 /// Émet l'événement Tauri `"watch-new-files"` (payload: Vec<String>) sur création de fichier audio.
 #[tauri::command]
 pub fn watch_folder_start(app: AppHandle, path: String) -> Result<(), String> {
-    // Arrêter le watcher précédent (drop = arrêt automatique)
-    if let Some(state) = app.try_state::<WatchState>() {
-        *state.0.lock().map_err(|e| e.to_string())? = None;
+    // Valider et canonicaliser le chemin avant de démarrer le watcher
+    let dir = std::path::Path::new(&path);
+    if !dir.is_dir() {
+        return Err(format!("watch_folder_start: pas un dossier valide — {path}"));
     }
+    let canon = std::fs::canonicalize(dir)
+        .map_err(|e| format!("watch_folder_start: chemin invalide — {e}"))?;
+    if !crate::commands::is_safe_dir(&canon) {
+        return Err(format!("watch_folder_start: répertoire système refusé — {path}"));
+    }
+
+    // Arrêter le watcher précédent (drop = arrêt automatique)
+    let state = app.state::<WatchState>();
+    *state.0.lock().map_err(|e| e.to_string())? = None;
 
     let app_clone = app.clone();
 
@@ -69,13 +78,11 @@ pub fn watch_folder_start(app: AppHandle, path: String) -> Result<(), String> {
     .map_err(|e| format!("Erreur init watcher : {e}"))?;
 
     watcher
-        .watch(Path::new(&path), RecursiveMode::Recursive)
+        .watch(&canon, RecursiveMode::Recursive)
         .map_err(|e| format!("Erreur démarrage surveillance : {e}"))?;
 
     // Stocker pour maintenir le watcher en vie
-    if let Some(state) = app.try_state::<WatchState>() {
-        *state.0.lock().map_err(|e| e.to_string())? = Some(watcher);
-    }
+    *state.0.lock().map_err(|e| e.to_string())? = Some(watcher);
 
     Ok(())
 }
@@ -83,8 +90,7 @@ pub fn watch_folder_start(app: AppHandle, path: String) -> Result<(), String> {
 /// Arrête la surveillance (drop du watcher).
 #[tauri::command]
 pub fn watch_folder_stop(app: AppHandle) -> Result<(), String> {
-    if let Some(state) = app.try_state::<WatchState>() {
-        *state.0.lock().map_err(|e| e.to_string())? = None;
-    }
+    let state = app.state::<WatchState>();
+    *state.0.lock().map_err(|e| e.to_string())? = None;
     Ok(())
 }

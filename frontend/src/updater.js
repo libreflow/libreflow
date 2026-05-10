@@ -27,7 +27,6 @@ import { toast, toastWithAction } from './ui.js';
  */
 export async function checkForUpdate() {
   try {
-    // API officielle via withGlobalTauri — retourne null si aucune mise à jour
     const update = await window.__TAURI__.updater.check();
     if (!update) return;
 
@@ -37,10 +36,34 @@ export async function checkForUpdate() {
       'info',
       i18n('t_update_install'),
       () => _installUpdate(update),
-      0   // durée = infinie jusqu'à action utilisateur
+      0
     );
   } catch {
     // Silencieux — endpoint non configuré, pas de réseau, clé invalide, etc.
+  }
+}
+
+export async function checkForUpdateManual(btn) {
+  const span = btn?.querySelector('span') ?? btn;
+  if (btn) { btn.disabled = true; if (span) span.textContent = i18n('t_update_checking'); }
+  try {
+    const update = await window.__TAURI__.updater.check();
+    if (!update) {
+      toast(i18n('t_update_uptodate'), 'success', 3000);
+    } else {
+      const version = update.version ?? '?';
+      toastWithAction(
+        i18n('t_update_available', version),
+        'info',
+        i18n('t_update_install'),
+        () => _installUpdate(update),
+        0
+      );
+    }
+  } catch {
+    toast(i18n('t_update_error', '?'), 'error', 4000);
+  } finally {
+    if (btn) { btn.disabled = false; if (span) span.textContent = i18n('t_update_check_btn'); }
   }
 }
 

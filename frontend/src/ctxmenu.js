@@ -18,7 +18,7 @@
 import { esc }                                          from './utils.js';
 import { ddel }                                         from './db.js';
 import { i18n }                                         from './i18n.js';
-import { get }                                          from './store.js';
+import { get, notify }                                  from './store.js';
 import { emit, EVENTS }                                 from './bus.js';
 import { trackIdx, _trackIdxMap, rebuildTrackIdxMap, invalidateFilterCache } from './search.js';
 import { addToQueueNext, addToQueueEnd }                        from './queue.js';
@@ -34,11 +34,41 @@ import { invoke }        from './ipc.js';
 
 // ── Context menu (right-click on track) ──────────────────────
 
+// A11Y-01: module-level state for focus management + keyboard navigation
+let _ctxTrigger    = null; // élément qui a ouvert le menu (restauré au close)
+let _ctxKeyHandler = null; // handler clavier actif sur #ctx-menu
+
+/** Navigation clavier dans le menu contextuel (flèches haut/bas + Enter/Space). */
+function _setupCtxKeyNav(menu) {
+  if (_ctxKeyHandler) menu.removeEventListener('keydown', _ctxKeyHandler);
+  _ctxKeyHandler = (e) => {
+    if (e.code === 'ArrowDown' || e.code === 'ArrowUp') {
+      e.preventDefault();
+      const items = [...menu.querySelectorAll('[role="menuitem"]')].filter(el => el.style.display !== 'none');
+      const idx   = items.indexOf(document.activeElement);
+      const next  = e.code === 'ArrowDown'
+        ? items[(idx + 1) % items.length]
+        : items[(idx - 1 + items.length) % items.length];
+      next?.focus();
+    } else if (e.code === 'Enter' || e.code === 'Space') {
+      const cur = document.activeElement;
+      if (cur && cur.closest('#ctx-menu') && cur.getAttribute('role') === 'menuitem') {
+        e.preventDefault();
+        cur.click();
+      }
+    }
+  };
+  menu.addEventListener('keydown', _ctxKeyHandler);
+}
+
 export function showCtxMenu(e, trackId) {
   e.preventDefault(); e.stopPropagation();
   setCtxTrackId(trackId);
   const t = (_trackIdxMap.has(trackId) ? get('tracks')[_trackIdxMap.get(trackId)] : undefined);
   const menu = document.getElementById('ctx-menu');
+  if (!menu) return;
+  // A11Y-01: stocker l'élément déclencheur pour restaurer le focus à la fermeture
+  _ctxTrigger = document.activeElement instanceof HTMLElement ? document.activeElement : null;
 
   // Titre de la piste en en-tête
   const nameEl = document.getElementById('ctx-track-name');
@@ -74,9 +104,10 @@ export function showCtxMenu(e, trackId) {
   // à la prochaine régénération automatique).
   const plItems = document.getElementById('ctx-pl-items');
   if (plItems) {
+    // A11Y-01: items dynamiques — role="menuitem" tabindex="-1" requis pour la navigation clavier
     plItems.innerHTML = get('playlists').filter(pl => !pl.smart).map(pl => `
-      <div class="ctx-item" data-action="add-track-to-pl" data-track-id="${esc(trackId)}" data-pl-id="${esc(pl.id)}">
-        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/></svg>
+      <div class="ctx-item" role="menuitem" tabindex="-1" data-action="add-track-to-pl" data-track-id="${esc(trackId)}" data-pl-id="${esc(pl.id)}">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/></svg>
         ${esc(pl.name)}
       </div>`).join('');
   }
@@ -106,11 +137,28 @@ export function showCtxMenu(e, trackId) {
   // Adapter l'origine de l'animation au coin le plus proche du curseur
   menu.style.transformOrigin = `${flipX ? 'right' : 'left'} ${flipY ? 'bottom' : 'top'}`;
   menu.classList.add('on');
+
+  // A11Y-01: navigation clavier + focus sur le premier item visible
+  _setupCtxKeyNav(menu);
+  setTimeout(() => {
+    const first = [...menu.querySelectorAll('[role="menuitem"]')].find(el => el.style.display !== 'none');
+    first?.focus();
+  }, 30);
 }
 
 export function closeCtxMenu() {
-  document.getElementById('ctx-menu').classList.remove('on');
+  const menu = document.getElementById('ctx-menu');
+  menu?.classList.remove('on');
   setCtxTrackId(null);
+  // A11Y-01: nettoyer le handler clavier et restaurer le focus à l'élément déclencheur
+  if (_ctxKeyHandler && menu) {
+    menu.removeEventListener('keydown', _ctxKeyHandler);
+    _ctxKeyHandler = null;
+  }
+  if (_ctxTrigger) {
+    _ctxTrigger.focus();
+    _ctxTrigger = null;
+  }
 }
 
 document.addEventListener('click', e => {
@@ -118,7 +166,7 @@ document.addEventListener('click', e => {
   if (menu && !menu.contains(e.target)) closeCtxMenu();
 });
 document.addEventListener('keydown', e => {
-  if (e.code === 'Escape' && document.getElementById('ctx-menu').classList.contains('on')) {
+  if (e.code === 'Escape' && document.getElementById('ctx-menu')?.classList.contains('on')) {
     e.stopImmediatePropagation(); closeCtxMenu();
   }
 });
@@ -201,17 +249,17 @@ export function ctxGoToArtist() {
   closeCtxMenu();
   const unknownArtist = i18n('unknown_artist') || 'Artiste inconnu';
   if (!t || !t.artist || t.artist === unknownArtist || t.artist === 'Unknown Artist') return;
-  const fuzzyKey    = t.artist.toLowerCase().replace(/[^\w\s]/g,'').replace(/\s+/g,' ').trim();
+  const rawKey      = t.artist.toLowerCase(); // BUG-C1 FIX : clé exacte — search.js fait un match exact, pas fuzzy
   const displayName = t.artistFull || t.artist; // nom propre pour le titre de vue + breadcrumb
-  drillDown('artists', fuzzyKey, displayName);
+  drillDown('artists', rawKey, displayName);
 }
 
 export function ctxGoToAlbum() {
   const t = (_trackIdxMap.has(get('ctxTrackId')) ? get('tracks')[_trackIdxMap.get(get('ctxTrackId'))] : undefined);
   closeCtxMenu();
   if (!t || !t.album) return;
-  const fuzzyKey = t.album.toLowerCase().replace(/[^\w\s]/g,'').replace(/\s+/g,' ').trim();
-  drillDown('albums', fuzzyKey, t.album); // t.album = nom d'affichage correct
+  const rawKey = t.album.toLowerCase(); // BUG-C1 FIX : clé exacte — search.js fait un match exact, pas fuzzy
+  drillDown('albums', rawKey, t.album); // t.album = nom d'affichage correct
 }
 
 export async function ctxDeleteTrack() {
@@ -222,7 +270,7 @@ export async function ctxDeleteTrack() {
   const _unknownArtist = i18n('unknown_artist') || 'Artiste inconnu';
   const _artist = (t.artistFull || t.artist || '').replace(/</g, '&lt;');
   const _artHtml = t.art
-    ? `<img src="${esc(t.art)}" alt="" style="width:40px;height:40px;border-radius:6px;object-fit:cover;flex-shrink:0;vertical-align:middle" onerror="this.style.display='none'">`
+    ? `<img src="${esc(t.art)}" alt="" style="width:40px;height:40px;border-radius:6px;object-fit:cover;flex-shrink:0;vertical-align:middle">`
     : `<span style="width:40px;height:40px;border-radius:6px;background:var(--bg4);display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;font-size:18px">🎵</span>`;
   const _trackPreview = `<div style="display:flex;align-items:center;gap:10px;padding:8px 10px;background:var(--bg3);border-radius:8px;margin-bottom:10px">${_artHtml}<div style="min-width:0"><div style="font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(t.name)}</div>${_artist && _artist !== _unknownArtist ? `<div style="font-size:.82em;opacity:.7;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${_artist}</div>` : ''}</div></div>`;
   const ok = await confirmAction(
@@ -231,7 +279,7 @@ export async function ctxDeleteTrack() {
     i18n('ctx_delete_btn') || 'Supprimer'
   );
   if (!ok) return;
-  const ti = trackIdx(t);
+  const ti = trackIdx(t.id);
   // liked est maintenant Set<string> d'IDs — pas de décalage d'indices nécessaire
   get('liked').delete(t.id);
   // MEM-1/MEM-2 FIX : révoquer art ET url blob avant le splice (url = drag-drop tracks)
@@ -246,6 +294,7 @@ export async function ctxDeleteTrack() {
   if (get('curIdx') === ti) { audio.pause(); setCurIdx(-1); emit(EVENTS.TRACK_CHANGE, { track: null, idx: -1 }); }
   else if (get('curIdx') > ti) setCurIdx(get('curIdx') - 1);
   rebuildTrackIdxMap(); // RÈGLE CRITIQUE : après tout tracks.splice()
+  notify('tracks'); // BUG-C2 FIX : splice() in-place → force-notifie les subscribers (tagedit cache, etc.)
   // Retirer le titre de toutes les playlists qui le référencent
   let playlistsChanged = false;
   get('playlists').forEach(pl => {

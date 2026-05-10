@@ -21,6 +21,7 @@
     "@fontsource/syne": "^5.2.7",
     "@tauri-apps/cli": "^2.10.1",
     "acorn": "^8.16.0",
+    "typescript": "^6.0.3",
     "vite": "^6.2.0"
   }
 }

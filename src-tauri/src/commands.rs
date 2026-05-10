@@ -67,10 +67,33 @@ pub struct WriteReplaygainData {
 
 #[derive(Serialize)]
 pub struct AudioProps {
-    pub bitrate:     Option<u32>,
-    pub sample_rate: Option<u32>,
-    pub channels:    Option<u8>,
-    pub bit_depth:   Option<u8>,
+    pub bitrate:      Option<u32>,
+    pub sample_rate:  Option<u32>,
+    pub channels:     Option<u8>,
+    pub bit_depth:    Option<u8>,
+    pub file_size:    Option<u64>,  // bytes
+    pub duration_secs: Option<f64>,
+}
+
+/// Retourne tous les champs utiles d'un fichier audio en un seul passage lofty.
+/// Remplace read_file (fichier complet en base64) + JS readTags() + read_audio_props×2 :
+/// 3 IPC et jusqu'à 50 Mo de transfert → 1 IPC, transfert limité à la pochette (~200 Ko).
+#[derive(Serialize, Default)]
+pub struct TrackTags {
+    pub title:         Option<String>,
+    pub artist:        Option<String>,
+    pub album:         Option<String>,
+    pub genre:         Option<String>,
+    pub year:          Option<u32>,
+    pub track:         Option<u32>,
+    pub cover_base64:  Option<String>,
+    pub cover_mime:    Option<String>,
+    pub bitrate:       Option<u32>,
+    pub sample_rate:   Option<u32>,
+    pub channels:      Option<u8>,
+    pub bit_depth:     Option<u8>,
+    pub duration_secs: Option<f64>,
+    pub file_size:     Option<u64>,
 }
 
 // ── Helpers internes ──────────────────────────────────────────────────────────
@@ -80,6 +103,44 @@ fn is_audio(path: &Path) -> bool {
         .and_then(|e| e.to_str())
         .map(|e| AUDIO_EXTS.contains(&e.to_lowercase().as_str()))
         .unwrap_or(false)
+}
+
+/// Vérifie qu'un chemin n'est pas une racine système dangereuse.
+pub(crate) fn is_safe_dir(path: &Path) -> bool {
+    use std::path::Component;
+
+    // Rejeter racine Unix bare "/"
+    if path == Path::new("/") { return false; }
+
+    // Rejeter les racines de lecteur Windows : C:\, D:\, etc.
+    // Un chemin racine Windows = Prefix(C:) + RootDir, sans aucun composant supplémentaire.
+    {
+        let mut comps = path.components();
+        let first  = comps.next();
+        let second = comps.next();
+        let third  = comps.next();
+        if matches!(first, Some(Component::Prefix(_)))
+            && matches!(second, Some(Component::RootDir))
+            && third.is_none()
+        {
+            return false;
+        }
+    }
+
+    // Rejeter chemins Unix système connus
+    let blocked = &[
+        "/etc", "/usr", "/bin", "/sbin", "/lib", "/boot",
+        "/dev", "/proc", "/sys", "/root", "/var/log", "/var/run",
+    ];
+    let path_str = path.to_string_lossy().to_lowercase();
+    if blocked.iter().any(|b| path_str == *b || path_str.starts_with(&format!("{}/", b))) {
+        return false;
+    }
+
+    // Exiger au moins un composant non-root (depth > 1 sur Unix, > 2 sur Windows)
+    if path.components().count() <= 1 { return false; }
+
+    true
 }
 
 /// Scan récursif synchrone d'un dossier — retourne tous les fichiers audio trouvés.
@@ -118,9 +179,13 @@ pub fn open_folder(app: AppHandle) -> Result<Option<OpenFolderResult>, String> {
     };
 
     let folder_str = folder_path.to_string();
-    let dir = PathBuf::from(&folder_str);
+    let canon = fs::canonicalize(&folder_str)
+        .map_err(|e| format!("open_folder: résolution du chemin échouée — {e}"))?;
+    if !is_safe_dir(&canon) {
+        return Err(format!("open_folder: chemin système refusé — {folder_str}"));
+    }
 
-    let raw_paths = scan_dir(&dir);
+    let raw_paths = scan_dir(&canon);
     let files: Vec<String> = raw_paths
         .into_par_iter()
         .filter_map(|p| p.to_str().map(String::from))
@@ -137,7 +202,12 @@ pub fn scan_folder(path: String) -> Result<Vec<String>, String> {
     if !dir.is_dir() {
         return Err(format!("Pas un dossier valide : {path}"));
     }
-    let raw_paths = scan_dir(dir);
+    let canon = fs::canonicalize(dir)
+        .map_err(|e| format!("scan_folder: résolution du chemin échouée — {e}"))?;
+    if !is_safe_dir(&canon) {
+        return Err(format!("scan_folder: chemin système refusé — {path}"));
+    }
+    let raw_paths = scan_dir(&canon);
     let files = raw_paths
         .into_par_iter()
         .filter_map(|p| p.to_str().map(String::from))
@@ -149,7 +219,26 @@ pub fn scan_folder(path: String) -> Result<Vec<String>, String> {
 /// Utilisé pour charger les fichiers audio afin de lire leurs tags via JS.
 #[tauri::command]
 pub fn read_file(path: String) -> Result<String, String> {
-    let data = fs::read(&path).map_err(|e| format!("read_file({path}): {e}"))?;
+    let p = Path::new(&path);
+    if !is_audio(p) {
+        return Err(format!("read_file: extension non autorisée — {path}"));
+    }
+    let canon = fs::canonicalize(p)
+        .map_err(|e| format!("read_file: chemin invalide — {e}"))?;
+    if !is_audio(&canon) {
+        return Err(format!("read_file: extension non autorisée après résolution — {path}"));
+    }
+    if let Some(parent) = canon.parent() {
+        if !is_safe_dir(parent) {
+            return Err(format!("read_file: répertoire système refusé — {path}"));
+        }
+    }
+    const MAX_SIZE: u64 = 500 * 1024 * 1024; // 500 MB
+    let meta = fs::metadata(&canon).map_err(|e| format!("read_file: métadonnées — {e}"))?;
+    if meta.len() > MAX_SIZE {
+        return Err(format!("read_file: fichier trop volumineux ({} octets)", meta.len()));
+    }
+    let data = fs::read(&canon).map_err(|e| format!("read_file({path}): {e}"))?;
     Ok(general_purpose::STANDARD.encode(&data))
 }
 
@@ -168,29 +257,50 @@ pub fn check_paths(paths: Vec<String>) -> Vec<String> {
         .collect()
 }
 
-/// Retourne les propriétés audio d'un fichier (bitrate, sample rate, canaux, bit depth).
+/// Retourne les propriétés audio d'un fichier (bitrate, sample rate, canaux, bit depth, taille).
+/// Async avec spawn_blocking pour éviter de bloquer le thread Tauri sur les gros fichiers.
 #[tauri::command]
-pub fn read_audio_props(path: String) -> Result<AudioProps, String> {
-    let tagged_file = Probe::open(Path::new(&path))
-        .map_err(|e| format!("Probe::open({path}): {e}"))?
-        .read()
-        .map_err(|e| format!("read({path}): {e}"))?;
-
-    let props = tagged_file.properties();
-    Ok(AudioProps {
-        bitrate:     props.overall_bitrate(),
-        sample_rate: props.sample_rate(),
-        channels:    props.channels(),
-        bit_depth:   props.bit_depth(),
+pub async fn read_audio_props(path: String) -> Option<AudioProps> {
+    tokio::task::spawn_blocking(move || {
+        let p = Path::new(&path);
+        if !is_audio(p) { return None; }
+        let canon = std::fs::canonicalize(p).ok()?;
+        if !is_audio(&canon) { return None; }
+        let file_size = std::fs::metadata(&canon).map(|m| m.len()).ok();
+        let tagged = Probe::open(&canon)
+            .ok()?
+            .guess_file_type()
+            .ok()?
+            .read()
+            .ok()?;
+        let props = tagged.properties();
+        let duration_secs = {
+            let d = props.duration().as_secs_f64();
+            if d > 0.0 { Some(d) } else { None }
+        };
+        Some(AudioProps {
+            bitrate:      props.overall_bitrate(),
+            sample_rate:  props.sample_rate(),
+            channels:     props.channels(),
+            bit_depth:    props.bit_depth(),
+            file_size,
+            duration_secs,
+        })
     })
+    .await
+    .unwrap_or(None)
 }
 
 /// Autorise l'accès au protocole asset:// pour un dossier donné à l'exécution.
 /// Appelé après la sélection d'un dossier de surveillance pour étendre le scope.
 #[tauri::command]
 pub fn allow_asset_dir(app: AppHandle, path: String) -> Result<(), String> {
+    let dir = Path::new(&path);
+    if !dir.is_dir() || !is_safe_dir(dir) {
+        return Err(format!("allow_asset_dir: chemin refusé — {path}"));
+    }
     app.asset_protocol_scope()
-        .allow_directory(Path::new(&path), true)
+        .allow_directory(dir, true)
         .map(|_| ())
         .map_err(|e| e.to_string())
 }
@@ -219,97 +329,227 @@ pub fn pick_audio_file(app: AppHandle) -> Option<String> {
 
 // ── Commandes : tags audio ────────────────────────────────────────────────────
 
+/// Lit les tags audio et les propriétés techniques d'un fichier en un seul passage lofty.
+/// Remplace : read_file (fichier complet en base64) + JS readTags() + read_audio_props×2.
+/// Gain : 3 IPC et jusqu'à 50 Mo de transfert → 1 IPC, uniquement la pochette (~200 Ko).
+#[tauri::command]
+pub async fn read_tags(path: String) -> Option<TrackTags> {
+    tokio::task::spawn_blocking(move || {
+        let p = Path::new(&path);
+        if !is_audio(p) { return None; }
+        let canon = std::fs::canonicalize(p).ok()?;
+        if !is_audio(&canon) { return None; }
+        if let Some(parent) = canon.parent() {
+            if !is_safe_dir(parent) { return None; }
+        }
+        let file_size = std::fs::metadata(&canon).map(|m| m.len()).ok();
+
+        let tagged = Probe::open(&canon)
+            .ok()?
+            .guess_file_type()
+            .ok()?
+            .read()
+            .ok()?;
+
+        // Extraire les propriétés audio dans un bloc pour libérer l'emprunt avant primary_tag
+        let (duration_secs, bitrate, sample_rate, channels, bit_depth) = {
+            let props = tagged.properties();
+            let d = props.duration().as_secs_f64();
+            (
+                if d > 0.0 { Some(d) } else { None },
+                props.overall_bitrate(),
+                props.sample_rate(),
+                props.channels(),
+                props.bit_depth(),
+            )
+        };
+
+        let (title, artist, album, genre, year, track, cover_base64, cover_mime) =
+            tagged.primary_tag()
+                .map(|tag| {
+                    let title  = tag.title().map(|s| s.into_owned());
+                    let artist = tag.artist().map(|s| s.into_owned());
+                    let album  = tag.album().map(|s| s.into_owned());
+                    let genre  = tag.genre().map(|s| s.into_owned());
+                    let year   = tag.year();
+                    let track  = tag.track();
+                    // Pochette : CoverFront en priorité, sinon première image disponible.
+                    // Limite 2 Mo : évite de transférer des pochettes hi-res en base64.
+                    const MAX_COVER: usize = 2 * 1024 * 1024;
+                    let (cover_b64, cover_m) = tag.pictures()
+                        .iter()
+                        .find(|pic| pic.pic_type() == PictureType::CoverFront)
+                        .or_else(|| tag.pictures().first())
+                        .filter(|pic| pic.data().len() <= MAX_COVER)
+                        .map(|pic| {
+                            let b64 = general_purpose::STANDARD.encode(pic.data());
+                            let mime = match pic.mime_type() {
+                                Some(MimeType::Png)  => "image/png",
+                                Some(MimeType::Gif)  => "image/gif",
+                                Some(MimeType::Bmp)  => "image/bmp",
+                                Some(MimeType::Tiff) => "image/tiff",
+                                _                    => "image/jpeg",
+                            };
+                            (Some(b64), Some(mime.to_string()))
+                        })
+                        .unwrap_or((None, None));
+                    (title, artist, album, genre, year, track, cover_b64, cover_m)
+                })
+                .unwrap_or_default();
+
+        Some(TrackTags {
+            title, artist, album, genre, year, track,
+            cover_base64, cover_mime,
+            bitrate, sample_rate, channels, bit_depth,
+            duration_secs, file_size,
+        })
+    })
+    .await
+    .unwrap_or(None)
+}
+
 /// Écrit les métadonnées textuelles (titre, artiste, album, genre, année, piste)
 /// dans un fichier audio via lofty.  Les erreurs sont non-fatales côté JS.
 #[tauri::command]
-pub fn write_tags(data: WriteTagsData) -> Result<(), String> {
-    let path = Path::new(&data.path);
-    let mut tagged_file = Probe::open(path)
-        .map_err(|e| format!("Probe::open: {e}"))?
-        .read()
-        .map_err(|e| format!("read: {e}"))?;
+pub async fn write_tags(data: WriteTagsData) -> Result<(), String> {
+    tokio::task::spawn_blocking(move || {
+        let path = Path::new(&data.path);
+        if !is_audio(path) {
+            return Err(format!("write_tags: extension non autorisée — {}", data.path));
+        }
+        let canon = fs::canonicalize(path)
+            .map_err(|e| format!("write_tags: chemin invalide — {e}"))?;
+        if !is_audio(&canon) {
+            return Err(format!("write_tags: extension non autorisée après résolution — {}", data.path));
+        }
+        let mut tagged_file = Probe::open(&canon)
+            .map_err(|e| format!("Probe::open: {e}"))?
+            .read()
+            .map_err(|e| format!("read: {e}"))?;
 
-    {
-        let tag = get_or_create_primary_tag(&mut tagged_file)?;
-        tag.set_title(data.title);
-        tag.set_artist(data.artist);
-        tag.set_album(data.album);
-        tag.set_genre(data.genre);
-        if let Some(year) = data.year  { tag.set_year(year); }
-        if let Some(track) = data.track_number { tag.set_track(track); }
-    }
+        {
+            let tag = get_or_create_primary_tag(&mut tagged_file)?;
+            tag.set_title(data.title);
+            tag.set_artist(data.artist);
+            tag.set_album(data.album);
+            tag.set_genre(data.genre);
+            if let Some(year) = data.year  { tag.set_year(year); }
+            if let Some(track) = data.track_number { tag.set_track(track); }
+        }
 
-    tagged_file
-        .save_to_path(path, WriteOptions::default())
-        .map_err(|e| format!("save: {e}"))
+        tagged_file
+            .save_to_path(&canon, WriteOptions::default())
+            .map_err(|e| format!("save: {e}"))
+    })
+    .await
+    .unwrap_or_else(|e| Err(format!("write_tags: spawn_blocking paniqué — {e}")))
 }
 
 /// Écrit une image de pochette dans un fichier audio.
 /// `audio_path` = chemin du fichier audio, `image_path` = chemin de l'image source.
 #[tauri::command]
-pub fn write_cover(data: WriteCoverData) -> Result<(), String> {
-    let image_data = fs::read(&data.image_path)
-        .map_err(|e| format!("Lecture image ({}) : {e}", data.image_path))?;
+pub async fn write_cover(data: WriteCoverData) -> Result<(), String> {
+    tokio::task::spawn_blocking(move || {
+        let audio_path = Path::new(&data.audio_path);
+        if !is_audio(audio_path) {
+            return Err(format!("write_cover: audio path non autorisé — {}", data.audio_path));
+        }
+        let canon_audio = fs::canonicalize(audio_path)
+            .map_err(|e| format!("write_cover: chemin audio invalide — {e}"))?;
+        if !is_audio(&canon_audio) {
+            return Err(format!("write_cover: extension audio non autorisée après résolution — {}", data.audio_path));
+        }
+        const IMAGE_EXTS: &[&str] = &["png", "jpg", "jpeg", "webp", "bmp", "gif", "tiff", "tif"];
+        let image_path_raw = Path::new(&data.image_path);
+        let image_ext_raw = image_path_raw
+            .extension()
+            .and_then(|e| e.to_str())
+            .map(|e| e.to_lowercase());
+        if !image_ext_raw.as_deref().map(|e| IMAGE_EXTS.contains(&e)).unwrap_or(false) {
+            return Err(format!("write_cover: image path non autorisé — {}", data.image_path));
+        }
+        let canon_image = fs::canonicalize(image_path_raw)
+            .map_err(|e| format!("write_cover: chemin image invalide — {e}"))?;
+        let canon_image_ext = canon_image
+            .extension()
+            .and_then(|e| e.to_str())
+            .map(|e| e.to_lowercase());
+        if !canon_image_ext.as_deref().map(|e| IMAGE_EXTS.contains(&e)).unwrap_or(false) {
+            return Err(format!("write_cover: extension image non autorisée après résolution — {}", data.image_path));
+        }
 
-    let mime = match Path::new(&data.image_path)
-        .extension()
-        .and_then(|e| e.to_str())
-        .map(|e| e.to_lowercase())
-        .as_deref()
-    {
-        Some("png")  => MimeType::Png,
-        Some("jpg") | Some("jpeg") => MimeType::Jpeg,
-        Some("bmp")  => MimeType::Bmp,
-        Some("gif")  => MimeType::Gif,
-        Some("tiff") | Some("tif") => MimeType::Tiff,
-        _            => MimeType::Unknown("image/webp".into()),
-    };
+        let image_data = fs::read(&canon_image)
+            .map_err(|e| format!("Lecture image ({}) : {e}", data.image_path))?;
 
-    let picture = Picture::new_unchecked(
-        PictureType::CoverFront,
-        Some(mime),
-        None,
-        image_data,
-    );
+        // lofty n'a pas de variant MimeType::Webp — MimeType::Unknown est la représentation correcte.
+        let mime = match canon_image_ext.as_deref() {
+            Some("png")  => MimeType::Png,
+            Some("jpg") | Some("jpeg") => MimeType::Jpeg,
+            Some("bmp")  => MimeType::Bmp,
+            Some("gif")  => MimeType::Gif,
+            Some("tiff") | Some("tif") => MimeType::Tiff,
+            _            => MimeType::Unknown("image/webp".into()),
+        };
 
-    let audio_path = Path::new(&data.audio_path);
-    let mut tagged_file = Probe::open(audio_path)
-        .map_err(|e| format!("Probe::open: {e}"))?
-        .read()
-        .map_err(|e| format!("read: {e}"))?;
+        let picture = Picture::new_unchecked(
+            PictureType::CoverFront,
+            Some(mime),
+            None,
+            image_data,
+        );
 
-    {
-        let tag = get_or_create_primary_tag(&mut tagged_file)?;
-        tag.remove_picture_type(PictureType::CoverFront);
-        tag.push_picture(picture);
-    }
+        let mut tagged_file = Probe::open(&canon_audio)
+            .map_err(|e| format!("Probe::open: {e}"))?
+            .read()
+            .map_err(|e| format!("read: {e}"))?;
 
-    tagged_file
-        .save_to_path(audio_path, WriteOptions::default())
-        .map_err(|e| format!("save: {e}"))
+        {
+            let tag = get_or_create_primary_tag(&mut tagged_file)?;
+            tag.remove_picture_type(PictureType::CoverFront);
+            tag.push_picture(picture);
+        }
+
+        tagged_file
+            .save_to_path(&canon_audio, WriteOptions::default())
+            .map_err(|e| format!("save: {e}"))
+    })
+    .await
+    .unwrap_or_else(|e| Err(format!("write_cover: spawn_blocking paniqué — {e}")))
 }
 
 /// Écrit les tags ReplayGain (gain en dB et peak normalisé) dans un fichier audio.
 #[tauri::command]
-pub fn write_replaygain_tags(data: WriteReplaygainData) -> Result<(), String> {
-    let path = Path::new(&data.path);
-    let mut tagged_file = Probe::open(path)
-        .map_err(|e| format!("Probe::open: {e}"))?
-        .read()
-        .map_err(|e| format!("read: {e}"))?;
+pub async fn write_replaygain_tags(data: WriteReplaygainData) -> Result<(), String> {
+    tokio::task::spawn_blocking(move || {
+        let path = Path::new(&data.path);
+        if !is_audio(path) {
+            return Err(format!("write_replaygain_tags: extension non autorisée — {}", data.path));
+        }
+        let canon = fs::canonicalize(path)
+            .map_err(|e| format!("write_replaygain_tags: chemin invalide — {e}"))?;
+        if !is_audio(&canon) {
+            return Err(format!("write_replaygain_tags: extension non autorisée après résolution — {}", data.path));
+        }
+        let mut tagged_file = Probe::open(&canon)
+            .map_err(|e| format!("Probe::open: {e}"))?
+            .read()
+            .map_err(|e| format!("read: {e}"))?;
 
-    let gain_str = format!("{:+.2} dB", data.gain_db);
-    let peak_str = format!("{:.6}", data.peak);
+        let gain_str = format!("{:+.2} dB", data.gain_db);
+        let peak_str = format!("{:.6}", data.peak);
 
-    {
-        let tag = get_or_create_primary_tag(&mut tagged_file)?;
-        tag.insert_text(ItemKey::ReplayGainTrackGain, gain_str);
-        tag.insert_text(ItemKey::ReplayGainTrackPeak, peak_str);
-    }
+        {
+            let tag = get_or_create_primary_tag(&mut tagged_file)?;
+            tag.insert_text(ItemKey::ReplayGainTrackGain, gain_str);
+            tag.insert_text(ItemKey::ReplayGainTrackPeak, peak_str);
+        }
 
-    tagged_file
-        .save_to_path(path, WriteOptions::default())
-        .map_err(|e| format!("save: {e}"))
+        tagged_file
+            .save_to_path(&canon, WriteOptions::default())
+            .map_err(|e| format!("save: {e}"))
+    })
+    .await
+    .unwrap_or_else(|e| Err(format!("write_replaygain_tags: spawn_blocking paniqué — {e}")))
 }
 
 // ── Commandes : notifications OS ─────────────────────────────────────────────
@@ -319,10 +559,12 @@ pub fn write_replaygain_tags(data: WriteReplaygainData) -> Result<(), String> {
 #[tauri::command]
 pub fn notify_track(app: AppHandle, data: NotifyTrackData) -> Result<(), String> {
     use tauri_plugin_notification::NotificationExt;
+    let title  = data.title.chars().take(100).collect::<String>();
+    let artist = data.artist.chars().take(100).collect::<String>();
     app.notification()
         .builder()
-        .title(&data.title)
-        .body(&data.artist)
+        .title(&title)
+        .body(&artist)
         .show()
         .map_err(|e| e.to_string())
 }
@@ -396,6 +638,7 @@ pub fn taskbar_set_has_tracks(has_tracks: bool) {
 
 /// Ouvre les DevTools du WebView (F12 côté JS).
 /// Disponible uniquement en debug (feature "devtools" dans Cargo.toml).
+#[cfg(debug_assertions)]
 #[tauri::command]
 pub fn open_devtools(app: AppHandle) {
     if let Some(win) = app.get_webview_window("main") {

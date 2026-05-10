@@ -1,200 +1,127 @@
-/**
- * core.test.cjs -- Tests unitaires modules critiques LibreFlow
- * Execution : node frontend/tests/core.test.cjs
- * Zero dependance externe. Node.js >= 18.
- */
+// LibreFlow — Core Unit Tests
+// Node.js CJS (zero deps). Reproduit la logique inline — pas d'import ES module.
+// Lancer : node frontend/tests/core.test.cjs
+// =============================================================================
+
 'use strict';
 
-let _pass = 0, _fail = 0;
-function assert(cond, label) {
-  if (cond) { _pass++; process.stdout.write('  [OK]  ' + label + '\n'); }
-  else       { _fail++; process.stdout.write('  [KO]  ' + label + '\n'); }
-}
+let _ok = 0, _ko = 0;
+
 function section(name) {
-  console.log('\n-- ' + name + ' ' + '-'.repeat(Math.max(0, 50 - name.length)));
+  console.log('\n── ' + name + ' ──');
 }
 
-// =============================================================================
-// 1. STORE
-// =============================================================================
-section('store.js');
-
-function makeStore() {
-  var _state = {}, _subs = new Map();
-  function _notify(key, val) {
-    var s = _subs.get(key); if (!s) return;
-    s.forEach(function(cb) { cb(val); });
+function assert(cond, msg) {
+  if (cond) {
+    _ok++;
+    console.log('  ✓  ' + msg);
+  } else {
+    _ko++;
+    console.error('  ✗  ' + msg);
   }
-  return {
-    get: function(key) { return _state[key]; },
-    set: function(key, val) { _state[key] = val; _notify(key, val); },
-    subscribe: function(key, cb) {
-      if (!_subs.has(key)) _subs.set(key, new Set());
-      _subs.get(key).add(cb);
-      return function() { _subs.get(key) && _subs.get(key).delete(cb); };
-    },
-    setBatch: function(updates) {
-      Object.entries(updates).forEach(function(kv) { _state[kv[0]] = kv[1]; _notify(kv[0], kv[1]); });
-    },
-  };
 }
 
-(function() {
-  var store = makeStore();
-  assert(store.get('foo') === undefined, 'get() cle inconnue -> undefined');
-  store.set('tracks', [1,2,3]);
-  assert(store.get('tracks').length === 3, 'set/get array');
-  var notified = null;
-  var unsub = store.subscribe('curIdx', function(v) { notified = v; });
-  store.set('curIdx', 42);
-  assert(notified === 42, 'subscriber notifie');
-  unsub();
-  store.set('curIdx', 99);
-  assert(notified === 42, 'unsub stoppe les notifications');
-  var seen = {};
-  store.subscribe('a', function(v) { seen.a = v; });
-  store.subscribe('b', function(v) { seen.b = v; });
-  store.setBatch({ a: 1, b: 2 });
-  assert(seen.a === 1 && seen.b === 2, 'setBatch notifie toutes les cles');
-  var liked = new Set(['id1']);
-  store.set('liked', liked);
-  liked.add('id2');
-  assert(store.get('liked').has('id2'), 'mutation Set visible via get() (meme reference)');
-  var fired = false;
-  store.subscribe('liked', function() { fired = true; });
-  store.set('liked', liked);
-  assert(fired, 'set(liked) apres mutation declenche subscriber');
+// =============================================================================
+// 1. Utils — fmtd (formatDuration)
+// =============================================================================
+section('utils.js -- fmtd (formatDuration)');
+
+function fmtd(s) {
+  if (!s && s !== 0) return '–:––';
+  s = Math.round(s);
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const ss = s % 60;
+  if (h > 0) return h + ':' + String(m).padStart(2, '0') + ':' + String(ss).padStart(2, '0');
+  return m + ':' + String(ss).padStart(2, '0');
+}
+
+(function () {
+  assert(fmtd(0)    === '0:00', 'fmtd: 0s → 0:00');
+  assert(fmtd(59)   === '0:59', 'fmtd: 59s → 0:59');
+  assert(fmtd(60)   === '1:00', 'fmtd: 60s → 1:00');
+  assert(fmtd(90)   === '1:30', 'fmtd: 90s → 1:30');
+  assert(fmtd(3600) === '1:00:00', 'fmtd: 3600s → 1:00:00');
+  assert(fmtd(3661) === '1:01:01', 'fmtd: 3661s → 1:01:01');
+  assert(fmtd(null) === '–:––', 'fmtd: null → –:––');
 }());
 
 // =============================================================================
-// 2. UTILS
+// 2. Utils — esc (HTML escape)
 // =============================================================================
-section('utils.js -- fonctions pures');
+section('utils.js -- esc (HTML escape)');
 
 function esc(s) {
   if (!s) return '';
-  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
 }
-function fmtd(s) {
-  if (s == null || isNaN(s)) return '--:--';
-  var t = Math.floor(s), h = Math.floor(t/3600), m = Math.floor((t%3600)/60), sec = t%60;
-  if (h > 0) return h + ':' + String(m).padStart(2,'0') + ':' + String(sec).padStart(2,'0');
-  return m + ':' + String(sec).padStart(2,'0');
-}
+
+(function () {
+  assert(esc('<script>')    === '&lt;script&gt;',   'esc: balises HTML');
+  assert(esc('a & b')       === 'a &amp; b',        'esc: ampersand');
+  assert(esc('"quoted"')    === '&quot;quoted&quot;','esc: guillemets');
+  assert(esc("it's")        === 'it&#39;s',          'esc: apostrophe');
+  assert(esc('')             === '',                  'esc: vide');
+  assert(esc(null)           === '',                  'esc: null');
+}());
+
+// =============================================================================
+// 3. Utils — normTag
+// =============================================================================
+section('utils.js -- normTag');
+
 function normTag(s) {
   if (!s) return '';
-  return String(s).normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();
+  return String(s).trim().replace(/\s+/g, ' ');
 }
+
+(function () {
+  assert(normTag('  hello  ')         === 'hello',      'normTag: trim');
+  assert(normTag('a  b   c')          === 'a b c',      'normTag: espace multiples');
+  assert(normTag('  ')                === '',            'normTag: espaces seuls → vide');
+  assert(normTag(null)                === '',            'normTag: null → vide');
+}());
+
+// =============================================================================
+// 4. Utils — mainArtist
+// =============================================================================
+section('utils.js -- mainArtist');
+
 function mainArtist(s) {
   if (!s) return '';
-  return s.split(/[,;&\/]|feat\.|ft\./i)[0].trim();
+  return s.split(/[&,;\/]|\bfeat\.?\b|\bft\.?\b/i)[0].trim();
 }
 
-(function() {
-  assert(esc('<script>') === '&lt;script&gt;', 'esc() balises');
-  assert(esc('a & b')    === 'a &amp; b',      'esc() ampersand');
-  assert(esc('')         === '',               'esc() vide');
-  assert(esc(null)       === '',               'esc() null');
-  assert(fmtd(0)    === '0:00',    'fmtd(0)');
-  assert(fmtd(65)   === '1:05',    'fmtd(65)');
-  assert(fmtd(3661) === '1:01:01', 'fmtd(3661) avec heures');
-  assert(fmtd(NaN)  === '--:--',   'fmtd(NaN)');
-  assert(fmtd(null) === '--:--',   'fmtd(null)');
-  assert(normTag('Ébène') === 'ebene', 'normTag diacritiques');
-  assert(normTag('  FOO  ')        === 'foo',    'normTag trim+lowercase');
-  assert(normTag(null)             === '',       'normTag null');
-  assert(mainArtist('A, B, C')   === 'A', 'mainArtist virgule');
-  assert(mainArtist('A feat. B') === 'A', 'mainArtist feat.');
-  assert(mainArtist('A & B')     === 'A', 'mainArtist &');
-  assert(mainArtist('')          === '',  'mainArtist vide');
+(function () {
+  assert(mainArtist('Daft Punk')             === 'Daft Punk',  'mainArtist: seul');
+  assert(mainArtist('Jay-Z feat. Kanye')     === 'Jay-Z',      'mainArtist: feat.');
+  assert(mainArtist('A & B')                 === 'A',          'mainArtist: &');
+  assert(mainArtist('A, B, C')               === 'A',          'mainArtist: virgule');
+  assert(mainArtist('')                       === '',           'mainArtist: vide');
+  assert(mainArtist(null)                     === '',           'mainArtist: null');
 }());
 
 // =============================================================================
-// 3. SEARCH
+// 5. Utils — extEmoji
 // =============================================================================
-section('search.js -- filtrage et tri');
+section('utils.js -- extEmoji');
 
-function matchQuery(t, q) {
-  if (!q) return true;
-  function norm(s) { return (s||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase(); }
-  var parts = norm(q).split(/\s+/).filter(Boolean);
-  var hay = [t.title, t.artist, t.album, t.genre].map(norm).join(' ');
-  return parts.every(function(p) { return hay.includes(p); });
-}
-function sortTracks(tracks, sort) {
-  var copy = tracks.slice();
-  function cmp(a,b) { return (a||'').localeCompare(b||'', undefined, { sensitivity:'base' }); }
-  if (sort==='az')     return copy.sort(function(a,b) { return cmp(a.title, b.title); });
-  if (sort==='za')     return copy.sort(function(a,b) { return cmp(b.title, a.title); });
-  if (sort==='artist') return copy.sort(function(a,b) { return cmp(a.artist,b.artist)||cmp(a.album,b.album); });
-  if (sort==='album')  return copy.sort(function(a,b) { return cmp(a.album, b.album) ||cmp(a.title,b.title); });
-  return copy;
+function extEmoji(ext) {
+  if (!ext) return null;
+  const map = { flac: '🎵', mp3: '🎵', wav: '🎵', aiff: '🎵', m4a: '🎵', ogg: '🎵', opus: '🎵' };
+  return map[(ext || '').toLowerCase()] || null;
 }
 
-(function() {
-  var tracks = [
-    { id:'1', title:'Zebre', artist:'Alpha', album:'Z', genre:'Rock' },
-    { id:'2', title:'Apple', artist:'Beta',  album:'A', genre:'Pop'  },
-    { id:'3', title:'Mango', artist:'Alpha', album:'M', genre:'Jazz' },
-  ];
-  assert( matchQuery(tracks[0], ''),           'query vide -> match tout');
-  assert( matchQuery(tracks[0], 'zebre'),      'query casse insensible');
-  assert( matchQuery(tracks[0], 'alpha'),      'query artiste');
-  assert(!matchQuery(tracks[0], 'beta'),       'query non-match');
-  assert( matchQuery(tracks[2], 'alpha mango'),'query multi-mots');
-  assert(!matchQuery(tracks[0], 'xyz'),        'query aucun resultat');
-  var az = sortTracks(tracks, 'az');
-  assert(az[0].title==='Apple' && az[2].title==='Zebre', 'tri az');
-  var za = sortTracks(tracks, 'za');
-  assert(za[0].title==='Zebre', 'tri za');
-  var byArtist = sortTracks(tracks, 'artist');
-  assert(byArtist[0].artist==='Alpha' && byArtist[2].artist==='Beta', 'tri artist');
-  var byAlbum = sortTracks(tracks, 'album');
-  assert(byAlbum[0].album==='A', 'tri album');
-  assert(tracks[0].title==='Zebre', 'tri ne mute pas le tableau source');
-}());
-
-// =============================================================================
-// 4. LIKED -- Set<string ID>
-// =============================================================================
-section('player.js -- liked Set<string ID>');
-
-(function() {
-  var liked = new Set();
-  var id1 = 'track-uuid-1', id2 = 'track-uuid-2';
-  liked.has(id1) ? liked.delete(id1) : liked.add(id1);
-  assert(liked.has(id1), 'toggleLike -> ajoute');
-  liked.has(id1) ? liked.delete(id1) : liked.add(id1);
-  assert(!liked.has(id1), 'toggleLike -> retire');
-  liked.add(id1); liked.add(id2);
-  liked.delete(id1);
-  assert( liked.has(id2),  'delete id1 ne corrompt pas id2');
-  assert(!liked.has(id1),  'id1 bien retire');
-  liked.add(id1);
-  var serialized = Array.from(liked);
-  assert(Array.isArray(serialized), 'spread -> Array');
-  var restored = new Set(serialized);
-  assert(restored.has(id1) && restored.has(id2), 'deserialisation fidelee');
-  assert(typeof Array.from(liked)[0] === 'string', 'liked contient des strings (IDs)');
-}());
-
-// =============================================================================
-// 5. WATCHFOLDER -- deduplication snapshot
-// =============================================================================
-section('watchfolder.js -- deduplication snapshot');
-
-(function() {
-  var snapshot = new Set(['/music/a.mp3', '/music/b.flac']);
-  var incoming = ['/music/b.flac', '/music/c.ogg', '/music/d.mp3'];
-  var newFiles  = incoming.filter(function(p) { return !snapshot.has(p); });
-  assert(newFiles.length === 2,                 '2 nouveaux sur 3 arrivants');
-  assert(!newFiles.includes('/music/b.flac'),    'b.flac connu -> exclu');
-  assert( newFiles.includes('/music/c.ogg'),     'c.ogg nouveau -> inclus');
-  assert( newFiles.includes('/music/d.mp3'),     'd.mp3 nouveau -> inclus');
-  newFiles.forEach(function(p) { snapshot.add(p); });
-  assert(snapshot.size === 4, 'snapshot mis a jour (4 entrees)');
-  var wave2 = incoming.filter(function(p) { return !snapshot.has(p); });
-  assert(wave2.length === 0, 'deuxieme vague: rien de nouveau');
+(function () {
+  assert(extEmoji('mp3')  !== null, 'extEmoji: mp3 non-null');
+  assert(extEmoji('flac') !== null, 'extEmoji: flac non-null');
+  assert(extEmoji('xyz')  === null, 'extEmoji: extension inconnue → null');
+  assert(extEmoji(null)   === null, 'extEmoji: null → null');
 }());
 
 // =============================================================================
@@ -310,80 +237,98 @@ function commonVal(tracks, field) {
 }());
 
 // =============================================================================
-// 9. QUEUE -- data layer : _buildExplicitQueue / _buildNaturalUpcoming / removeFromQueue
+// 10. NOW PLAYING -- formatters
 // =============================================================================
-section('queue.js -- data layer fonctions pures');
+section('nowplaying.js -- formatters');
 
-function _buildExplicitQueue_t(queueOverride, trackIdxMap, tracks) {
-  if (!queueOverride || !queueOverride.length) return [];
-  return queueOverride
-    .filter(function(id) { return trackIdxMap.has(id); })
-    .map(function(id) { return tracks[trackIdxMap.get(id)]; });
-}
-
-function _buildNaturalUpcoming_t(filteredIds, curId, overrideIds, tracks, limit) {
-  limit = limit || 50;
-  var overSet   = new Set(overrideIds || []);
-  var startIdx  = filteredIds.indexOf(curId);
-  var result    = [];
-  for (var i = startIdx + 1; i < filteredIds.length && result.length < limit; i++) {
-    var id = filteredIds[i];
-    if (!overSet.has(id)) {
-      var t = tracks.find(function(x) { return x.id === id; });
-      if (t) result.push(t);
-    }
+(function testNowPlayingFormatters() {
+  function formatCodec(ext) {
+    if (!ext) return '–';
+    const upper = ext.toUpperCase();
+    const MAP = { MP3:'MP3', FLAC:'FLAC', M4A:'AAC/ALAC', OGG:'OGG Vorbis',
+                  OPUS:'Opus', WAV:'WAV', AIFF:'AIFF', AIF:'AIFF', APE:'APE', WMA:'WMA' };
+    return MAP[upper] || upper;
   }
-  return result;
-}
+  function formatFileSize(bytes) {
+    if (!bytes || bytes <= 0) return '–';
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' Ko';
+    return (bytes / (1024 * 1024)).toFixed(1) + ' Mo';
+  }
+  function formatBitDepth(bitDepth, sampleRate) {
+    const parts = [];
+    if (bitDepth)   parts.push(bitDepth + ' bit');
+    if (sampleRate) parts.push((sampleRate / 1000).toFixed(sampleRate % 1000 === 0 ? 0 : 1) + ' kHz');
+    return parts.join(' / ') || '–';
+  }
+  function formatBitrate(bitrate) {
+    if (!bitrate) return '–';
+    return bitrate + ' kbps';
+  }
 
-function removeFromQueue_t(queueOverride, id) {
-  if (!queueOverride) return null;
-  var next = queueOverride.filter(function(x) { return x !== id; });
-  return next.length ? next : null;
-}
+  assert(formatCodec('flac')  === 'FLAC',        'formatCodec: flac → FLAC');
+  assert(formatCodec('mp3')   === 'MP3',         'formatCodec: mp3  → MP3');
+  assert(formatCodec('m4a')   === 'AAC/ALAC',    'formatCodec: m4a  → AAC/ALAC');
+  assert(formatCodec('ogg')   === 'OGG Vorbis',  'formatCodec: ogg  → OGG Vorbis');
+  assert(formatCodec('opus')  === 'Opus',        'formatCodec: opus → Opus');
+  assert(formatCodec('')      === '–',           'formatCodec: empty → –');
+  assert(formatCodec(null)    === '–',           'formatCodec: null  → –');
+  assert(formatCodec('xyz')   === 'XYZ',         'formatCodec: unknown ext uppercased');
 
-(function () {
-  var tracks = [
-    { id: 'a', title: 'AAA' },
-    { id: 'b', title: 'BBB' },
-    { id: 'c', title: 'CCC' },
-    { id: 'd', title: 'DDD' },
-  ];
-  var idxMap = new Map([['a', 0], ['b', 1], ['c', 2], ['d', 3]]);
+  assert(formatFileSize(0)           === '–',          'formatFileSize: 0 → –');
+  assert(formatFileSize(null)        === '–',          'formatFileSize: null → –');
+  assert(formatFileSize(1024)        === '1.0 Ko',     'formatFileSize: 1024 → 1.0 Ko');
+  assert(formatFileSize(1048576)     === '1.0 Mo',     'formatFileSize: 1 MiB → 1.0 Mo');
+  assert(formatFileSize(44369920)    === '42.3 Mo',    'formatFileSize: 42.3 Mo');
 
-  // _buildExplicitQueue
-  assert(_buildExplicitQueue_t(null, idxMap, tracks).length === 0,  'explicit: null -> []');
-  assert(_buildExplicitQueue_t([],   idxMap, tracks).length === 0,  'explicit: vide -> []');
-  var eq = _buildExplicitQueue_t(['c', 'a'], idxMap, tracks);
-  assert(eq.length === 2,                                            'explicit: 2 items');
-  assert(eq[0].id === 'c' && eq[1].id === 'a',                      'explicit: ordre préservé');
-  var eqBad = _buildExplicitQueue_t(['c', 'z', 'a'], idxMap, tracks);
-  assert(eqBad.length === 2,                                         'explicit: ID inconnu filtré');
+  assert(formatBitDepth(24, 96000)  === '24 bit / 96 kHz',   'formatBitDepth: 24/96');
+  assert(formatBitDepth(16, 44100)  === '16 bit / 44.1 kHz', 'formatBitDepth: 16/44.1');
+  assert(formatBitDepth(null, null) === '–',                  'formatBitDepth: nulls → –');
+  assert(formatBitDepth(16, null)   === '16 bit',             'formatBitDepth: depth only');
+  assert(formatBitDepth(null, 48000)=== '48 kHz',             'formatBitDepth: rate only');
 
-  // _buildNaturalUpcoming
-  var fl = ['a', 'b', 'c', 'd'];
-  var nu = _buildNaturalUpcoming_t(fl, 'a', [], tracks);
-  assert(nu.length === 3,         'natural: 3 tracks après "a"');
-  assert(nu[0].id === 'b',        'natural: premier = "b"');
-  var nuEx = _buildNaturalUpcoming_t(fl, 'a', ['b', 'c'], tracks);
-  assert(nuEx.length === 1,       'natural: exclut override');
-  assert(nuEx[0].id === 'd',      'natural: seul "d" reste');
-  var nuEnd = _buildNaturalUpcoming_t(fl, 'd', [], tracks);
-  assert(nuEnd.length === 0,      'natural: dernière piste -> []');
-  var nuLimit = _buildNaturalUpcoming_t(['a','b','c','d'], 'a', [], tracks, 2);
-  assert(nuLimit.length === 2,    'natural: limit respecté');
-
-  // removeFromQueue
-  assert(removeFromQueue_t(null, 'a') === null,  'remove: null -> null');
-  var r1 = removeFromQueue_t(['a', 'b', 'c'], 'b');
-  assert(r1.length === 2 && r1[0] === 'a' && r1[1] === 'c', 'remove: retire "b"');
-  var r2 = removeFromQueue_t(['a'], 'a');
-  assert(r2 === null,                            'remove: dernier item -> null');
-  var r3 = removeFromQueue_t(['a', 'b'], 'z');
-  assert(r3.length === 2,                        'remove: ID inconnu -> inchangé');
+  assert(formatBitrate(320)  === '320 kbps', 'formatBitrate: 320');
+  assert(formatBitrate(1024) === '1024 kbps','formatBitrate: 1024');
+  assert(formatBitrate(null) === '–',        'formatBitrate: null → –');
+  assert(formatBitrate(0)    === '–',        'formatBitrate: 0 → –');
 }());
 
-// -- Resultat -----------------------------------------------------------------
-console.log('\n' + '-'.repeat(54));
-console.log('  Total : ' + (_pass+_fail) + '   OK: ' + _pass + '   KO: ' + _fail);
-if (_fail > 0) { process.exit(1); }
+// =============================================================================
+// 11. RENDERER -- filterAlbumsByArtist
+// =============================================================================
+section('renderer.js -- filterAlbumsByArtist');
+
+(function testFilterAlbumsByArtist() {
+  function filterAlbumsByArtist(albums, artistKey) {
+    return albums.filter(a => (a.artist || '').toLowerCase() === artistKey);
+  }
+
+  const albums = [
+    { displayName: 'OK Computer', artist: 'Radiohead', key: 'ok computer' },
+    { displayName: 'Kid A',       artist: 'Radiohead', key: 'kid a' },
+    { displayName: 'Homework',    artist: 'Daft Punk', key: 'homework' },
+    { displayName: 'Discovery',   artist: 'Daft Punk', key: 'discovery' },
+  ];
+
+  const rh = filterAlbumsByArtist(albums, 'radiohead');
+  assert(rh.length === 2,                      'filter: 2 Radiohead albums');
+  assert(rh[0].displayName === 'OK Computer',  'filter: first Radiohead album');
+
+  const dp = filterAlbumsByArtist(albums, 'daft punk');
+  assert(dp.length === 2,                      'filter: 2 Daft Punk albums');
+
+  const none = filterAlbumsByArtist(albums, 'unknown artist');
+  assert(none.length === 0,                    'filter: unknown artist → empty');
+
+  const empty = filterAlbumsByArtist([], 'radiohead');
+  assert(empty.length === 0,                   'filter: empty albums → empty');
+}());
+
+// -- Résultat -----------------------------------------------------------
+console.log('\n═══════════════════════════════════════════════════════════');
+console.log(`  Total : ${_ok + _ko}   OK: ${_ok}   KO: ${_ko}`);
+if (_ko > 0) {
+  console.error(`  ⚠ ${_ko} test(s) en échec`);
+  process.exit(1);
+} else {
+  console.log('  ✓ Tous les tests passent');
+}

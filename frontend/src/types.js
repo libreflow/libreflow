@@ -45,11 +45,18 @@
 
 /**
  * @typedef {Object} Playlist
- * @property {string}   id
- * @property {string}   name
- * @property {string[]} trackIds
- * @property {string}   [folderId]
- * @property {number}   [created]
+ * @property {string}    id
+ * @property {string}    name
+ * @property {string[]}  trackIds
+ * @property {string}    [folderId]
+ * @property {number}    [created]
+ * @property {boolean}                    [smart]
+ * @property {boolean}                    [pinned]
+ * @property {PlSortKey}                  [sort]
+ * @property {string}                     [coverB64]
+ * @property {Record<string, unknown>}    [criteria]
+ * @property {string}                     [seedId]
+ * @property {number}                     [createdAt]
  */
 
 /**
@@ -69,7 +76,7 @@
 
 /**
  * @typedef {'none'|'all'|'one'} RepeatMode
- * @typedef {'all'|'albums'|'artists'|'genres'|'playlists'|'stats'|'radio'|'playlist'|'recent'|'liked'} ViewMode
+ * @typedef {'all'|'albums'|'artists'|'genres'|'genre-detail'|'album-detail'|'artist-detail'|'playlists'|'stats'|'radio'|'playlist'|'recent'|'liked'} ViewMode
  * @typedef {'az'|'za'|'artist'|'album'|'duration'|'recent'} SortKey
  * @typedef {'dark'|'light'} DisplayMode
  * @typedef {'name'|'count'|'duration'} AlbumSortKey

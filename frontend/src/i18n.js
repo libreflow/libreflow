@@ -6,7 +6,6 @@
 
 import { toast }        from './ui.js';
 import { emit, EVENTS } from './bus.js';
-import { saveCfgNow } from './app.js';
 import { applyTheme } from './settings.js';
 import { setCrossfade } from './player.js';
 import { updateStats } from './renderer.js';
@@ -24,13 +23,14 @@ export const LANGS = {
     nav_stats:      'Statistiques',
     nav_playlists:  'Playlists',
     sb_group_lib:      'Bibliothèque',
-    sb_group_explore:  'Explorer',
+    sb_group_explore:  'Parcourir',
     sb_group_discover: 'Découvrir',
     // Sidebar
     sb_empty:       'Aucune musique importée',
     sb_tracks:      (n) => `<b>${n}</b> titre${n!==1?'s':''}`,
     sb_artists:     (n) => `<b>${n}</b> artiste${n!==1?'s':''}`,
     sb_albums:      (n) => `<b>${n}</b> album${n!==1?'s':''}`,
+    n_tracks:       'titres',
     btn_scan:       'Scanner un dossier',
     btn_clear:      'Vider la bibliothèque',
     // Welcome
@@ -55,13 +55,23 @@ export const LANGS = {
     lib_liked:      'Favoris',
     lib_artists:    'Artistes',
     lib_albums:     'Albums',
+    lib_genres:     'Genres',
+    lib_radio:      'Radio',
     lib_recent:     'Récemment écoutés',
     srch_ph:        'Rechercher…',
+    srch_disabled:  'Recherche non disponible',
     sort_az:        'A–Z',
     sort_za:        'Z–A',
     sort_artist:    'Artiste',
     sort_album:     'Album',
     sort_recent:    'Récent',
+    sort_count_lbl:    'Titres',
+    sort_year_lbl:     'Année',
+    sort_btn_artists:  'Trier les artistes',
+    sort_btn_genres:   'Trier les genres',
+    sort_btn_track_num:'Trié par n° de piste',
+    sort_btn_az_ttl:   'Trié A–Z',
+    sort_by_track_lbl: '# Piste',
     // Player
     tb_minimize:    'Réduire',
     tb_maximize:    'Agrandir',
@@ -74,6 +84,7 @@ export const LANGS = {
     pc_repeat:      'Répétition [R]',
     pc_play:        'Play/Pause [Espace]',
     // Empty states
+    no_results:     'Aucun résultat',
     empty_lib_h:    'Bibliothèque vide',
     empty_lib_s:    'Clique sur « Scanner un dossier »',
     empty_search_h: 'Aucun résultat',
@@ -200,8 +211,9 @@ export const LANGS = {
     t_no_loaded:    'Aucun fichier audio chargé',
     t_not_found:    '⚠ Fichier introuvable — rescannes le dossier',
     t_decode_err:   '⚠ Fichier corrompu — impossible de le lire',
-    t_playback_err:  '⚠ Erreur de lecture — passage au suivant',
-    t_play_start_err:(msg) => `⚠ Impossible de lire : ${msg}`,
+    t_playback_err:   '⚠ Erreur de lecture — passage au suivant',
+    t_consec_errors:  '⚠ Trop d\'erreurs consécutives — lecture stoppée',
+    t_play_start_err: (msg) => `⚠ Impossible de lire : ${msg}`,
     t_drag_hint:     'Glisse des MP3, FLAC, AAC…',
     t_cleared:       '🗑️ Bibliothèque vidée',
     t_pl_deleted:    'Playlist supprimée',
@@ -258,6 +270,7 @@ export const LANGS = {
     t_already_imported: 'Tous les fichiers sont déjà dans la bibliothèque',
     t_rg_prompt:        (n) => `${n} nouvelle${n!==1?'s':''} piste${n!==1?'s':''} sans normalisation du volume`,
     t_rg_enable_btn:    'Activer ReplayGain',
+    t_short_tracks_skipped: (n) => `${n} piste${n!==1?'s':''} ignorée${n!==1?'s':''} — durée < 20 s`,
     t_recognized:   (n) => `${n} titres reconnus`,
     t_files_added:  (n) => `✅ ${n} fichier${n!==1?'s':''} ajouté${n!==1?'s':''}`,
     t_added_to:     (name) => `✅ Ajouté à « ${name} »`,
@@ -395,6 +408,9 @@ export const LANGS = {
     t_update_progress:     (pct) => `⬇ Téléchargement… ${pct}%`,
     t_update_installing:   '⚙ Installation en cours…',
     t_update_error:        (e) => `❌ Erreur de mise à jour : ${e}`,
+    t_update_uptodate:     '✅ LibreFlow est à jour',
+    t_update_checking:     '🔍 Vérification…',
+    t_update_check_btn:    'Vérifier maintenant',
     // Tag editor labels
     te_title:              'Titre',
     te_artist:             'Artiste',
@@ -487,6 +503,9 @@ export const LANGS = {
     set_shortcuts_label:     'Aide & raccourcis',
     set_shortcuts_btn:       'Afficher',
     set_reset_section:       'Réinitialisation',
+    set_updates_section:     'Mises à jour',
+    set_update_auto_label:   'Vérifier les mises à jour au lancement',
+    set_update_manual_label: 'Vérifier manuellement',
     set_cache_label:         'Vider les caches',
     set_cache_sub:           "Supprime toutes les données de l'application (bibliothèque, config, playlists, historique) puis redémarre",
     set_cache_btn:           'Vider les caches',
@@ -588,12 +607,13 @@ export const LANGS = {
     nav_stats:      'Statistics',
     nav_playlists:  'Playlists',
     sb_group_lib:      'Library',
-    sb_group_explore:  'Explore',
+    sb_group_explore:  'Browse',
     sb_group_discover: 'Discover',
     sb_empty:       'No music imported',
     sb_tracks:      (n) => `<b>${n}</b> track${n!==1?'s':''}`,
     sb_artists:     (n) => `<b>${n}</b> artist${n!==1?'s':''}`,
     sb_albums:      (n) => `<b>${n}</b> album${n!==1?'s':''}`,
+    n_tracks:       'tracks',
     btn_scan:       'Scan a folder',
     btn_clear:      'Clear library',
     wlc_title:      'Welcome to LibreFlow',
@@ -615,13 +635,23 @@ export const LANGS = {
     lib_liked:      'Favorites',
     lib_artists:    'Artists',
     lib_albums:     'Albums',
+    lib_genres:     'Genres',
+    lib_radio:      'Radio',
     lib_recent:     'Recently played',
     srch_ph:        'Search…',
+    srch_disabled:  'Search unavailable',
     sort_az:        'A–Z',
     sort_za:        'Z–A',
     sort_artist:    'Artist',
     sort_album:     'Album',
     sort_recent:    'Recent',
+    sort_count_lbl:    'Tracks',
+    sort_year_lbl:     'Year',
+    sort_btn_artists:  'Sort artists',
+    sort_btn_genres:   'Sort genres',
+    sort_btn_track_num:'Sorted by track number',
+    sort_btn_az_ttl:   'Sorted A–Z',
+    sort_by_track_lbl: '# Track',
     tb_minimize:    'Minimize',
     tb_maximize:    'Maximize',
     tb_restore:     'Restore',
@@ -632,6 +662,7 @@ export const LANGS = {
     pc_next:        'Next [→]',
     pc_repeat:      'Repeat [R]',
     pc_play:        'Play/Pause [Space]',
+    no_results:     'No results',
     empty_lib_h:    'Empty library',
     empty_lib_s:    'Click "Scan a folder" to get started',
     empty_search_h: 'No results',
@@ -752,8 +783,9 @@ export const LANGS = {
     t_no_loaded:    'No audio files loaded',
     t_not_found:    '⚠ File not found — rescan the folder',
     t_decode_err:   '⚠ Corrupt file — cannot decode',
-    t_playback_err:  '⚠ Playback error — skipping to next',
-    t_play_start_err:(msg) => `⚠ Cannot play: ${msg}`,
+    t_playback_err:   '⚠ Playback error — skipping to next',
+    t_consec_errors:  '⚠ Too many consecutive errors — playback stopped',
+    t_play_start_err: (msg) => `⚠ Cannot play: ${msg}`,
     t_drag_hint:     'Drop MP3, FLAC, AAC…',
     t_cleared:       '🗑️ Library cleared',
     t_pl_deleted:    'Playlist deleted',
@@ -810,6 +842,7 @@ export const LANGS = {
     t_already_imported: 'All files are already in your library',
     t_rg_prompt:        (n) => `${n} new track${n!==1?'s':''} without volume normalization`,
     t_rg_enable_btn:    'Enable ReplayGain',
+    t_short_tracks_skipped: (n) => `${n} track${n!==1?'s':''} skipped — duration < 20 s`,
     t_recognized:   (n) => `${n} track${n!==1?'s':''} recognized`,
     t_files_added:  (n) => `✅ ${n} file${n!==1?'s':''} added`,
     t_added_to:     (name) => `✅ Added to "${name}"`,
@@ -947,6 +980,9 @@ export const LANGS = {
     t_update_progress:     (pct) => `⬇ Downloading… ${pct}%`,
     t_update_installing:   '⚙ Installing…',
     t_update_error:        (e) => `❌ Update error: ${e}`,
+    t_update_uptodate:     '✅ LibreFlow is up to date',
+    t_update_checking:     '🔍 Checking…',
+    t_update_check_btn:    'Check now',
     // Tag editor labels
     te_title:              'Title',
     te_artist:             'Artist',
@@ -1039,6 +1075,9 @@ export const LANGS = {
     set_shortcuts_label:     'Help & shortcuts',
     set_shortcuts_btn:       'Show',
     set_reset_section:       'Reset',
+    set_updates_section:     'Updates',
+    set_update_auto_label:   'Check for updates on launch',
+    set_update_manual_label: 'Check manually',
     set_cache_label:         'Clear caches',
     set_cache_sub:           'Removes all application data (library, config, playlists, history) and restarts',
     set_cache_btn:           'Clear caches',
@@ -1181,8 +1220,8 @@ export function applyLang() {
   const setBtnText = (sel, key, isId = false) => {
     const el = isId ? document.getElementById(sel) : document.querySelector(sel);
     if (!el) return;
-    let last = null;
-    el.childNodes.forEach(n => { if (n.nodeType === 3) last = n; });
+    /** @type {Text | null} */ let last = null;
+    el.childNodes.forEach(n => { if (n.nodeType === 3) last = /** @type {Text} */ (n); });
     if (last) last.textContent = ' ' + i18n(key);
     else el.appendChild(document.createTextNode(' ' + i18n(key)));
   };
@@ -1260,8 +1299,8 @@ export function applyLang() {
   setText('ctx-remove-lbl', 'pl_remove', true);
   const ctxNewPl = document.getElementById('ctx-new-pl-item');
   if (ctxNewPl) {
-    let last = null;
-    ctxNewPl.childNodes.forEach(n => { if (n.nodeType === 3) last = n; });
+    /** @type {Text | null} */ let last = null;
+    ctxNewPl.childNodes.forEach(n => { if (n.nodeType === 3) last = /** @type {Text} */ (n); });
     if (last) last.textContent = ' ' + i18n('ctx_new_pl');
   }
 

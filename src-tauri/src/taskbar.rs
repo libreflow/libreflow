@@ -19,7 +19,7 @@ use windows::{
             ReleaseDC, SelectObject, HBITMAP, HBRUSH, HDC, HGDIOBJ, HPEN, PS_SOLID,
         },
         System::Com::{
-            CoCreateInstance, CoInitializeEx, CLSCTX_ALL, COINIT_APARTMENTTHREADED,
+            CoCreateInstance, CoInitializeEx, CoUninitialize, CLSCTX_ALL, COINIT_APARTMENTTHREADED,
         },
         UI::{
             Controls::{
@@ -46,6 +46,18 @@ fn lock_recover<T>(m: &'static Mutex<T>) -> std::sync::MutexGuard<'static, T> {
         eprintln!("[taskbar] mutex poisonné — récupération gracieuse");
         poison.into_inner()
     })
+}
+
+// ── RAII guard COM ─────────────────────────────────────────────────────────
+// Appelle CoUninitialize() au drop, équilibrant chaque CoInitializeEx réussi
+// (S_OK ou S_FALSE) sur le même thread. N'est jamais créé si CoInitializeEx
+// renvoie RPC_E_CHANGED_MODE (COM déjà initialisé avec un autre modèle de
+// concurrence) — dans ce cas ok() renvoie None et aucun drop n'a lieu.
+struct ComGuard;
+impl Drop for ComGuard {
+    fn drop(&mut self) {
+        unsafe { CoUninitialize(); }
+    }
 }
 
 // ── Identifiants boutons ────────────────────────────────────────────────────
@@ -112,7 +124,8 @@ unsafe fn setup_impl(hwnd_raw: isize, app: AppHandle) {
     // data = 0 : le subclass_proc n'a plus besoin de l'AppHandle (il utilise BTN_TX).
     let _ = SetWindowSubclass(hwnd, Some(subclass_proc), SUBCLASS_UID, 0);
 
-    let _ = CoInitializeEx(None, COINIT_APARTMENTTHREADED);
+    // Doit être appelé depuis le thread principal STA — ITaskbarList3 est STA-only.
+    let _coinit_guard = CoInitializeEx(None, COINIT_APARTMENTTHREADED).ok().map(|_| ComGuard);
     let Ok(tb3) = CoCreateInstance::<_, ITaskbarList3>(&TaskbarList, None, CLSCTX_ALL)
         else { return; };
     if tb3.HrInit().is_err() { return; }
@@ -126,6 +139,7 @@ unsafe fn setup_impl(hwnd_raw: isize, app: AppHandle) {
 }
 
 /// Reconstruit l'image list et met à jour les boutons.
+/// Doit être appelé depuis le thread principal STA — ITaskbarList3 est STA-only.
 unsafe fn refresh_toolbar() {
     let hwnd_raw = *lock_recover(&MAIN_HWND);
     if hwnd_raw == 0 { return; }
@@ -134,7 +148,7 @@ unsafe fn refresh_toolbar() {
     let playing    = *lock_recover(&PLAYING);
     let has_tracks = *lock_recover(&HAS_TRACKS);
 
-    let _ = CoInitializeEx(None, COINIT_APARTMENTTHREADED);
+    let _coinit_guard = CoInitializeEx(None, COINIT_APARTMENTTHREADED).ok().map(|_| ComGuard);
     let Ok(tb3) = CoCreateInstance::<_, ITaskbarList3>(&TaskbarList, None, CLSCTX_ALL)
         else { return; };
     if tb3.HrInit().is_err() { return; }
@@ -152,12 +166,25 @@ unsafe fn swap_il(new_il: HIMAGELIST) {
     let old_raw = {
         let mut g = lock_recover(&CUR_IL);
         let old = *g;
-        *g = new_il.0 as isize;
+        *g = new_il.0;
         old
     };
     if old_raw != 0 {
         // Ignorer le résultat — handle peut déjà être invalide après recréation du taskbar
         let _ = ImageList_Destroy(HIMAGELIST(old_raw));
+    }
+}
+
+/// Libère la dernière HIMAGELIST — à appeler à l'arrêt de l'application.
+pub fn cleanup() {
+    let raw = {
+        let mut g = lock_recover(&CUR_IL);
+        let v = *g;
+        *g = 0;
+        v
+    };
+    if raw != 0 {
+        unsafe { let _ = ImageList_Destroy(HIMAGELIST(raw)); }
     }
 }
 
@@ -187,12 +214,14 @@ fn mk_buttons(playing: bool, has_tracks: bool) -> [THUMBBUTTON; 3] {
 }
 
 fn thumb_btn(id: u32, img: u32, tip: &str, flags: THUMBBUTTONFLAGS) -> THUMBBUTTON {
-    let mut tb = THUMBBUTTON::default();
-    tb.dwMask  = THB_BITMAP | THB_FLAGS | THB_TOOLTIP;
-    tb.iId     = id;
-    tb.iBitmap = img;
-    tb.dwFlags = flags;
     let wide: Vec<u16> = tip.encode_utf16().collect();
+    let mut tb = THUMBBUTTON {
+        dwMask:  THB_BITMAP | THB_FLAGS | THB_TOOLTIP,
+        iId:     id,
+        iBitmap: img,
+        dwFlags: flags,
+        ..THUMBBUTTON::default()
+    };
     let n = wide.len().min(tb.szTip.len() - 1);
     tb.szTip[..n].copy_from_slice(&wide[..n]);
     tb

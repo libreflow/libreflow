@@ -11,7 +11,7 @@
 //   exportM3U, exportXSPF, importM3U
 
 import { i18n } from './i18n.js';
-import { get }  from './store.js'; // Phase 4
+import { get, set }  from './store.js'; // Phase 4
 import { _trackIdxMap, getFiltered } from './search.js';
 import { toast } from './ui.js';
 import { setView } from './views.js';
@@ -42,7 +42,7 @@ export function exportM3U() {
     const dur    = Math.round(t.duration) || 0;
     const artist = t.artistFull || t.artist || i18n('unknown_artist');
     lines.push('#EXTINF:' + dur + ',' + artist + ' - ' + t.name);
-    lines.push(t.path);
+    lines.push(t.path.replace(/\\/g, '/'));
   }
   const blob = new Blob([lines.join('\n')], { type: 'audio/x-mpegurl' });
   const url  = URL.createObjectURL(blob);
@@ -126,86 +126,101 @@ export async function importM3U() {
   document.body.appendChild(input);
 
   input.onchange = async function(e) {
-    const file = e.target.files[0];
-    if (!file) return;
-    const text = await file.text();
+    try {
+      const file = e.target.files[0];
+      if (!file) return;
+      const text = await file.text();
 
-    // Parser M3U : extraire chemins + métadonnées EXTINF
-    const lines   = text.split(/\r?\n/);
-    const entries = [];
-    let pendingInfo = null;
-    for (const raw of lines) {
-      const l = raw.trim();
-      if (!l) continue;
-      if (l.startsWith('#EXTINF:')) {
-        const m = l.match(/^#EXTINF:(-?\d+),(.*)$/);
-        if (m) {
-          const dur  = parseInt(m[1]);
-          const info = m[2];
-          const dash = info.indexOf(' - ');
-          pendingInfo = dash > 0
-            ? { duration: dur, artist: info.slice(0, dash).trim(), title: info.slice(dash + 3).trim() }
-            : { duration: dur, title: info.trim() };
+      // Parser M3U : extraire chemins + métadonnées EXTINF
+      const lines   = text.split(/\r?\n/);
+      const entries = [];
+      let pendingInfo = null;
+      for (const raw of lines) {
+        const l = raw.trim();
+        if (!l) continue;
+        if (l.startsWith('#EXTINF:')) {
+          const m = l.match(/^#EXTINF:(-?\d+),(.*)$/);
+          if (m) {
+            const dur  = parseInt(m[1]);
+            const info = m[2];
+            const dash = info.indexOf(' - ');
+            pendingInfo = dash > 0
+              ? { duration: dur, artist: info.slice(0, dash).trim(), title: info.slice(dash + 3).trim() }
+              : { duration: dur, title: info.trim() };
+          }
+          continue;
         }
-        continue;
+        if (l.startsWith('#')) continue;
+        entries.push({ path: l, ...pendingInfo });
+        pendingInfo = null;
       }
-      if (l.startsWith('#')) continue;
-      entries.push({ path: l, ...pendingInfo });
-      pendingInfo = null;
-    }
 
-    if (!entries.length) { toast(i18n('t_m3u_invalid'), 'warning'); return; }
+      if (!entries.length) { toast(i18n('t_m3u_invalid'), 'warning'); return; }
 
-    const tracks       = get('tracks'); // Phase 4
-    // BUG FIX : filtrer les pistes sans chemin avant le Map — t.path null → TypeError .replace()
-    const tracksWithPath = tracks.filter(t => t.path);
-    const byPath = new Map(tracksWithPath.map(t => [t.path.replace(/\\/g, '/'), t]));
-    const byName = new Map(tracksWithPath.map(t => [t.path.replace(/\\/g, '/').split('/').pop().toLowerCase(), t]));
+      // Rejeter les chemins contenant des traversals de répertoire (..)
+      const safeEntries = entries.filter(e => {
+        const segs = e.path.replace(/\\/g, '/').split('/');
+        return !segs.some(s => s === '..' || s === '.');
+      });
+      if (!safeEntries.length) { toast(i18n('t_m3u_invalid'), 'warning'); return; }
 
-    const matchedIds = [];
-    const newPaths   = [];
+      const tracks       = get('tracks'); // Phase 4
+      // BUG FIX : filtrer les pistes sans chemin avant le Map — t.path null → TypeError .replace()
+      const tracksWithPath = tracks.filter(t => t.path);
+      const byPath = new Map(tracksWithPath.map(t => [t.path.replace(/\\/g, '/'), t]));
+      const byName = new Map(tracksWithPath.map(t => [t.path.replace(/\\/g, '/').split('/').pop().toLowerCase(), t]));
 
-    for (const entry of entries) {
-      const normalized = entry.path.replace(/\\/g, '/');
-      const basename   = normalized.split('/').pop().toLowerCase();
-      const found = byPath.get(normalized) || byName.get(basename);
-      if (found) {
-        matchedIds.push(found.id);
-      } else {
-        newPaths.push(entry.path);
-      }
-    }
+      const matchedIds = [];
+      const newPaths   = [];
 
-    // Importer les fichiers manquants si possible
-    let importedCount = 0;
-    if (newPaths.length) {
-      const AUDIO_EXTS = new Set(['mp3', 'flac', 'aac', 'm4a', 'ogg', 'opus', 'wav', 'wma', 'aiff', 'ape', 'alac']);
-      const validNew = newPaths.filter(p => AUDIO_EXTS.has(p.split('.').pop().toLowerCase()));
-      if (validNew.length) {
-        importedCount = await importPaths(validNew);
-        const tracksNow = get('tracks'); // Phase 4 — relire après importPaths
-        for (const p of validNew) {
-          const norm = p.replace(/\\/g, '/');
-          const t = tracksNow.find(tk => tk.path && tk.path.replace(/\\/g, '/') === norm);
-          if (t && !matchedIds.includes(t.id)) matchedIds.push(t.id);
+      for (const entry of safeEntries) {
+        const normalized = entry.path.replace(/\\/g, '/');
+        const basename   = normalized.split('/').pop().toLowerCase();
+        const found = byPath.get(normalized) || byName.get(basename);
+        if (found) {
+          matchedIds.push(found.id);
+        } else {
+          newPaths.push(entry.path);
         }
       }
+
+      // Importer les fichiers manquants si possible
+      let importedCount = 0;
+      if (newPaths.length) {
+        const AUDIO_EXTS = new Set(['mp3', 'flac', 'aac', 'm4a', 'ogg', 'opus', 'wav', 'wma', 'aiff', 'ape', 'alac']);
+        const validNew = newPaths.filter(p => AUDIO_EXTS.has(p.split('.').pop().toLowerCase()));
+        if (validNew.length) {
+          importedCount = await importPaths(validNew);
+          const tracksNow = get('tracks'); // Phase 4 — relire après importPaths
+          for (const p of validNew) {
+            const norm = p.replace(/\\/g, '/');
+            const t = tracksNow.find(tk => tk.path && tk.path.replace(/\\/g, '/') === norm);
+            if (t && !matchedIds.includes(t.id)) matchedIds.push(t.id);
+          }
+        }
+      }
+
+      if (!matchedIds.length) { toast(i18n('t_m3u_no_tracks'), 'warning'); return; }
+
+      const plName = file.name.replace(/\.m3u8?$/i, '').replace(/[-_]+/g, ' ').trim() || 'Playlist importée';
+      const newPl  = { id: 'pl_' + Date.now(), name: plName, trackIds: matchedIds };
+      const playlists = get('playlists');
+      playlists.push(newPl);
+      set('playlists', playlists);
+      await savePlaylists();
+      renderPlNav();
+      setupPlNavDrop();
+
+      const skipped = safeEntries.length - matchedIds.length;
+      toast(i18n('t_m3u_imported', plName, matchedIds.length, importedCount, skipped), 'success');
+
+      setView('playlist', document.getElementById('ni-pl-' + newPl.id), newPl.id);
+    } catch (err) {
+      toast(i18n('t_m3u_import_error') || 'Erreur lors de l\'import M3U', 'error');
+      console.warn('[m3u] importM3U error:', err);
+    } finally {
+      input.remove();
     }
-
-    if (!matchedIds.length) { toast(i18n('t_m3u_no_tracks'), 'warning'); return; }
-
-    const plName = file.name.replace(/\.m3u8?$/i, '').replace(/[-_]+/g, ' ').trim() || 'Playlist importée';
-    const newPl  = { id: 'pl_' + Date.now(), name: plName, trackIds: matchedIds };
-    get('playlists').push(newPl);
-    await savePlaylists();
-    renderPlNav();
-    setupPlNavDrop();
-
-    const skipped = entries.length - matchedIds.length;
-    toast(i18n('t_m3u_imported', plName, matchedIds.length, importedCount, skipped), 'success');
-
-    setView('playlist', document.getElementById('ni-pl-' + newPl.id), newPl.id);
-    input.remove();
   };
   input.click();
 }

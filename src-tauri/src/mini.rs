@@ -1,10 +1,10 @@
 // mini.rs — Mini-player Tauri
 
 use serde_json::Value;
-use std::sync::Mutex;
 use tauri::{AppHandle, Emitter, Manager, WebviewWindowBuilder};
 
-pub struct MiniState(pub Mutex<Option<Value>>);
+pub struct MiniState(pub tokio::sync::Mutex<Option<Value>>);
+pub struct MiniOpenGuard(pub(crate) tokio::sync::Mutex<()>);
 
 #[tauri::command]
 pub async fn mini_toggle(app: AppHandle) -> Result<(), String> {
@@ -18,12 +18,19 @@ pub async fn mini_toggle(app: AppHandle) -> Result<(), String> {
 
 /// Ouvre le mini-player centré en bas de l'écran.
 /// Appelé aussi depuis commands.rs lors de la réduction de la fenêtre principale.
-/// BUG FIX M2 : vérification d'existence atomique avant création pour éviter double-open
+/// Protégé contre le TOCTOU : un mutex tokio sérialise les appels concurrents afin qu'un seul
+/// appel puisse passer le check `get_webview_window` et appeler `create_mini_window`.
+/// Panique immédiatement si `MiniOpenGuard` n'est pas géré (fail-fast à l'initialisation).
 pub async fn open_mini(app: &AppHandle) -> Result<(), String> {
-    // Si déjà ouvert, juste le ramener au premier plan
-    if let Some(existing) = app.get_webview_window("mini") {
-        let _ = existing.show();
-        let _ = existing.set_focus();
+    let guard = app.state::<MiniOpenGuard>();
+    let _lock = guard.0.lock().await;
+    do_open(app)
+}
+
+fn do_open(app: &AppHandle) -> Result<(), String> {
+    if let Some(w) = app.get_webview_window("mini") {
+        let _ = w.show();
+        let _ = w.set_focus();
         return Ok(());
     }
     create_mini_window(app)
@@ -100,12 +107,7 @@ pub async fn mini_close(app: AppHandle) -> Result<(), String> {
 
 #[tauri::command]
 pub async fn mini_update(app: AppHandle, data: Value) -> Result<(), String> {
-    if let Some(state) = app.try_state::<MiniState>() {
-        match state.0.lock() {
-            Ok(mut lock) => *lock = Some(data.clone()),
-            Err(e)       => eprintln!("[mini_update] mutex poisonné : {e}"),
-        }
-    }
+    *app.state::<MiniState>().0.lock().await = Some(data.clone());
     if let Some(win) = app.get_webview_window("mini") {
         let _ = win.emit("mini-update", &data);
     }
@@ -122,16 +124,5 @@ pub async fn mini_progress(app: AppHandle, data: Value) -> Result<(), String> {
 
 #[tauri::command]
 pub async fn mini_get_state(app: AppHandle) -> Option<Value> {
-    // BUG FIX M1 : récupération explicite du mutex empoisonné au lieu de discard silencieux.
-    // BUG FIX E2 : bind le résultat du match dans une variable locale `x` pour satisfaire
-    // le borrow checker (le temporaire MutexGuard doit être droppé avant la fin du bloc).
-    let state = app.try_state::<MiniState>()?;
-    let x = match state.0.lock() {
-        Ok(guard)  => guard.clone(),
-        Err(poison) => {
-            eprintln!("[mini_get_state] mutex empoisonné, récupération des données");
-            poison.into_inner().clone()
-        }
-    };
-    x
+    app.state::<MiniState>().0.lock().await.clone()
 }

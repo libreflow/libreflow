@@ -5,7 +5,9 @@
 /** @import { Track } from './types.js' */
 
 /**
- * @typedef {{ title?: string, artist?: string, album?: string, cover_base64?: string }} TagResult
+ * @typedef {{ title?: string, artist?: string, album?: string, genre?: string, year?: number, track?: number, cover_base64?: string, cover_mime?: string, bitrate?: number, sample_rate?: number, channels?: number, bit_depth?: number, duration_secs?: number, file_size?: number }} TrackTags
+ * @typedef {{ bitrate?: number, sample_rate?: number, channels?: number, bit_depth?: number }} AudioProps
+ * @typedef {{ folder: string, files: string[] }} OpenFolderResult
  */
 
 /** @type {Promise<void> | null} */
@@ -25,18 +27,25 @@ function _waitTauriReady() {
   }));
 }
 
-/**
- * @overload
- * @param {'scan_folder'} cmd
- * @param {{ path: string }} args
- * @returns {Promise<Track[]>}
- */
-/**
- * @overload
- * @param {'read_tags'} cmd
- * @param {{ path: string }} args
- * @returns {Promise<TagResult>}
- */
+/** @overload @param {'scan_folder'} cmd @param {{ path: string }} args @returns {Promise<Track[]>} */
+/** @overload @param {'read_tags'} cmd @param {{ path: string }} args @returns {Promise<TrackTags>} */
+/** @overload @param {'open_folder'} cmd @returns {Promise<OpenFolderResult | null>} */
+/** @overload @param {'check_paths'} cmd @param {{ paths: string[] }} args @returns {Promise<string[]>} */
+/** @overload @param {'read_audio_props'} cmd @param {{ path: string }} args @returns {Promise<AudioProps>} */
+/** @overload @param {'write_tags'} cmd @param {{ data: { path: string, title: string, artist: string, album: string, genre: string, year: number|null, track_number: number|null } }} args @returns {Promise<void>} */
+/** @overload @param {'write_cover'} cmd @param {{ data: { audio_path: string, image_path: string } }} args @returns {Promise<void>} */
+/** @overload @param {'write_replaygain_tags'} cmd @param {{ data: { path: string, gain_db: number, peak: number } }} args @returns {Promise<void>} */
+/** @overload @param {'notify_track'} cmd @param {{ data: { title: string, artist: string, art?: string|null } }} args @returns {Promise<void>} */
+/** @overload @param {'win_set_title'} cmd @param {{ title: string }} args @returns {Promise<void>} */
+/** @overload @param {'taskbar_set_playing'} cmd @param {{ playing: boolean }} args @returns {Promise<void>} */
+/** @overload @param {'taskbar_set_has_tracks'} cmd @param {{ has_tracks: boolean }} args @returns {Promise<void>} */
+/** @overload @param {'mini_update'} cmd @param {{ data: Record<string, unknown> }} args @returns {Promise<void>} */
+/** @overload @param {'mini_progress'} cmd @param {{ data: Record<string, unknown> }} args @returns {Promise<void>} */
+/** @overload @param {'allow_asset_dir'} cmd @param {{ path: string }} args @returns {Promise<void>} */
+/** @overload @param {'watch_folder_start'} cmd @param {{ path: string }} args @returns {Promise<void>} */
+/** @overload @param {'pick_audio_file'} cmd @returns {Promise<string | null>} */
+/** @overload @param {'pick_image'} cmd @returns {Promise<string | null>} */
+/** @overload @param {'win_close'|'win_minimize'|'win_maximize'|'mini_toggle'|'mini_close'|'watch_folder_stop'|'open_devtools'} cmd @returns {Promise<void>} */
 /**
  * @param {string} cmd
  * @param {Record<string, unknown>} [args]
@@ -97,7 +106,8 @@ async function invokeRetry(cmd, args, maxRetries = 3) {
       return await invoke(cmd, args);
     } catch (err) {
       if (attempt === maxRetries - 1) throw err;
-      await new Promise(r => setTimeout(r, delay));
+      const jitter = delay * (0.8 + Math.random() * 0.4);
+      await new Promise(r => setTimeout(r, jitter));
       delay *= 2;
     }
   }

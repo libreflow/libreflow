@@ -33,6 +33,7 @@ async function openDB() {
     };
     r.onsuccess = e => ok(e.target.result);
     r.onerror   = () => fail(r.error);
+    r.onblocked = () => fail(new Error('IDB bloqué — fermer les autres instances de LibreFlow'));
   });
 }
 

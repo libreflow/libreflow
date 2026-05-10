@@ -22,7 +22,7 @@
 import { get, set }                                          from './store.js';
 import { emit, EVENTS }                                      from './bus.js';
 import { getFiltered, filteredIdx, trackIdx,
-         _trackIdxMap, invalidateFilterCache }               from './search.js';
+         _trackIdxMap, invalidateFilterCache, _coll }        from './search.js';
 import { VIRT, virtBuildRows, virtIdxAtScroll,
          virtTotalH, virtOffsetOf }                          from './virt.js';
 import { esc, fmtd, extEmoji, fmt }                         from './utils.js';
@@ -31,33 +31,66 @@ import { CFG }                                               from './cfg.js';
 
 // Imports circulaires — OK en ES modules (appelés à l'exécution, pas à l'init)
 import { playAt }                                            from './player.js';
+import { cancelSearchDebounce }                              from './views.js';
 
 // ── État interne ──────────────────────────────────────────────────────────────
-let _statsTimer = null;      // debounce updateStats
-let _plHero     = null;      // référence au #pl-hero courant (FIX-B1)
+let _statsTimer   = null;    // debounce updateStats
+let _plHero       = null;    // référence au #pl-hero courant (FIX-B1)
+let _activeRowEl  = null;    // I-1: cache du dernier élément .tr.act
+
+// C-1: caches memoïsés pour _getAlbumMap / _getArtistMap
+let _albumMapCache  = null;
+let _artistMapCache = null;
+
+// Restore art-loaded fade-in without inline onload (load events don't bubble → capture phase)
+document.addEventListener('load', (e) => {
+  if (e.target?.classList?.contains('art-img')) e.target.classList.add('art-loaded');
+}, true);
 
 // ── Helpers inline ────────────────────────────────────────────────────────────
 
-/** Wraps matching parts of `text` with <mark> for search highlighting. */
-export function hlText(text, query) {
+/** Escapes special regex characters in a string. */
+function escapeRegex(s) {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/** Wraps matching parts of `text` with <mark> for search highlighting.
+ *  Regex is applied on the raw text first, then each segment is HTML-escaped
+ *  individually so that marks are never inserted inside HTML entities.
+ *  @param {string}  text  - Raw text to highlight
+ *  @param {string}  query - Search query string
+ *  @param {RegExp}  [re]  - M-2: optional pre-compiled regex (avoids re-creation per call) */
+export function hlText(text, query, re) {
   if (!text) return '';
   if (!query) return esc(text);
-  const re = new RegExp('(' + query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ')', 'gi');
-  return esc(text).replace(re, '<mark>$1</mark>');
+  const r = re || new RegExp(`(${escapeRegex(query)})`, 'gi');
+  // Split the raw text around matches using sentinel bytes, then escape each part.
+  return text.replace(r, '\x00$1\x01').split('\x00').map((seg, i) => {
+    if (i === 0) return esc(seg);
+    const parts = seg.split('\x01');
+    return `<mark>${esc(parts[0])}</mark>${esc(parts[1] || '')}`;
+  }).join('');
 }
 
 /** Génère le HTML d'un placeholder d'artwork (lettre initiale). */
 export function artPlaceholder(t) {
   const letter = t.name?.[0]?.toUpperCase() || '♪';
-  const color  = t.artColor ? ` style="background:${t.artColor}"` : '';
+  const ART_COLOR_RE = /^rgb\(\s*\d{1,3}\s*,\s*\d{1,3}\s*,\s*\d{1,3}\s*\)$/;
+  const color = (t.artColor && ART_COLOR_RE.test(t.artColor))
+    ? ` style="background:${esc(t.artColor)}"`
+    : '';
   return `<div class="tart-ph" aria-hidden="true"${color}><span class="tart-init">${extEmoji(t.ext) || letter}</span></div>`;
 }
 
 /** Génère le bouton ♥ Like pour une piste. */
-export function makeLikeBtn(t) {
-  const liked = get('liked');
-  const on    = liked?.has(t.id);
-  return `<button class="tlk${on ? ' on' : ''}" data-action="likeat" data-track-id="${esc(t.id)}" aria-pressed="${!!on}" aria-label="${i18n('a11y_like') || 'Like'}" tabindex="-1"><svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg></button>`;
+export function makeLikeBtn(t, liked) {
+  liked = liked ?? get('liked');
+  const on  = liked?.has(t.id);
+  // A11Y-06: label dynamique selon l'état (like_label / unlike_label) — annonce correctement l'état au screen reader
+  const lbl = on
+    ? (i18n('unlike_label') || 'Retirer des favoris')
+    : (i18n('like_label')   || 'Ajouter aux favoris');
+  return `<button class="tlk${on ? ' on' : ''}" data-action="likeat" data-track-id="${esc(t.id)}" aria-pressed="${!!on}" aria-label="${esc(lbl)}" tabindex="-1"><svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg></button>`;
 }
 
 /** Génère le bouton + Ajouter à une playlist pour une piste. */
@@ -66,20 +99,8 @@ export function makeAddBtn(t) {
   return `<button class="tr-add-btn" data-action="show-pl-qpop" data-track-id="${esc(t.id)}" title="${esc(lbl)}" aria-label="${esc(lbl)}" tabindex="-1"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></button>`;
 }
 
-/** Génère le badge qualité audio (LOSSLESS / bitrate) pour une piste. */
-export function makeEqHTML(t) {
-  if (!t) return '';
-  const ext = (t.ext || '').toLowerCase();
-  const lossless = ['flac', 'alac', 'aiff', 'aif', 'wav', 'ape'].includes(ext);
-  if (lossless) {
-    const bd  = t.bitDepth  ? `${t.bitDepth}bit` : '';
-    const sr  = t.sampleRate ? `${(t.sampleRate / 1000).toFixed(1)}kHz` : '';
-    const tip = [bd, sr].filter(Boolean).join(' · ');
-    return `<span class="badge-lossless" title="${esc(tip)}">LOSSLESS</span>`;
-  }
-  if (t.bitrate) return `<span class="badge-tech">${t.bitrate}</span>`;
-  return '';
-}
+/** Génère le badge qualité audio — masqué dans la liste, visible uniquement dans Now Playing. */
+export function makeEqHTML(_t) { return ''; }
 
 // ── thtml — génère le HTML d'une ligne piste ─────────────────────────────────
 // A11Y-3 : role="listitem" tabindex="0" aria-label
@@ -89,34 +110,45 @@ export function makeEqHTML(t) {
  * Génère le HTML d'une ligne piste pour le virtual scroll.
  * @param {Track}  t       - Piste
  * @param {number} fi      - Index dans la liste filtrée courante
- * @param {object} [opts]  - { active, liked, query }
+ * @param {object} [opts]  - { active, liked, query, isAlbumDetail, hlRe }
+ *   isAlbumDetail — M-1: pré-calculé par l'appelant pour éviter get() dans la boucle
+ *   hlRe          — M-2: regex pré-compilée pour la recherche (évite new RegExp par appel)
  */
-export function thtml(t, fi, { active = false, liked = false, query = '' } = {}) {
+export function thtml(t, fi, { active = false, liked = false, likedSet, query = '', isAlbumDetail: _isAlbumDetail, albumDetailSort: _albumDetailSort, hlRe } = {}) {
   // Artwork — img avec fade-in (.art-img → .art-loaded au onload) OU placeholder
   const artInner = t.art
-    ? `<img class="art-img" src="${esc(t.art)}" alt="" aria-hidden="true" onload="this.classList.add('art-loaded')">`
+    ? `<img class="art-img" src="${esc(t.art)}" alt="" aria-hidden="true">`
     : artPlaceholder(t);
 
-  const classes  = ['tr', active ? 'act' : ''].filter(Boolean).join(' ');
+  // M-1: utiliser la valeur pré-calculée si fournie, sinon fallback sur get() (compatibilité standalone)
+  const isAlbumDetail   = _isAlbumDetail   ?? (get('view') === 'album-detail');
+  const albumDetailSort = _albumDetailSort  ?? (isAlbumDetail ? (get('albumDetailSort') || 'track') : null);
+  const trackNum = isAlbumDetail
+    // tri A-Z → numéro séquentiel (position 1-N) ; tri 'track' → numéro de tag (ou position si absent)
+    ? `<div class="tr-num">${albumDetailSort === 'az' ? (fi + 1) : (t.track ?? fi + 1)}</div>`
+    : '';
+
+  const classes  = ['tr', active ? 'act' : '', isAlbumDetail ? 'tr--album-detail' : ''].filter(Boolean).join(' ');
   const ariaLbl  = [t.name, t.artistFull || t.artist].filter(Boolean).join(' — ');
 
   return `<div class="${classes}" id="tr-${esc(t.id)}" data-track-id="${esc(t.id)}" data-fi="${fi}"
   data-action="track-click" role="listitem" tabindex="0" aria-label="${esc(ariaLbl)}"
   draggable="true" data-drag-action="track-drag">
-  <div class="tart">
+  ${trackNum}<div class="tart">
     ${artInner}
     <button class="tart-hover-play" data-action="play-track" data-track-id="${esc(t.id)}" tabindex="-1" aria-label="${i18n('play') || 'Lire'}">
       <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true"><polygon points="5,3 19,12 5,21"/></svg>
     </button>
   </div>
   <div class="ti">
-    <div class="tn">${hlText(t.name || '', query)}</div>
-    <div class="ts">${hlText(t.artistFull || t.artist || '', query)}</div>
+    <div class="tn">${hlText(t.name || '', query, hlRe)}</div>
+    <div class="ts">${hlText(t.artistFull || t.artist || '', query, hlRe)}</div>
   </div>
+  <div class="ta">${esc(t.album || '')}</div>
   <div class="tr-r">
     ${makeEqHTML(t)}
     <span class="tdur">${fmtd(t.duration)}</span>
-    ${makeLikeBtn(t)}
+    ${makeLikeBtn(t, likedSet)}
     ${makeAddBtn(t)}
   </div>
 </div>`;
@@ -134,10 +166,18 @@ export function virtRenderWindow(fl) {
   const view  = get('view')  || 'all';
 
   // Construire les descripteurs de lignes si la signature a changé
-  const sig = `${fl.length}|${sort}|${query}|${view}`;
+  const midId = fl[fl.length >> 1]?.id || '';
+  const sig = `${fl.length}|${sort}|${query}|${view}|${fl[0]?.id||''}|${midId}|${fl[fl.length-1]?.id||''}`;
   if (VIRT._lastListSig !== sig) {
     VIRT._rows        = virtBuildRows(fl, { sort, query, view });
     VIRT._lastListSig = sig;
+    // I-2: construire la Map fi→rowIdx pour O(1) lookup dans scrollToCurrentTrack
+    const fiMap = new Map();
+    for (let i = 0; i < VIRT._rows.length; i++) {
+      const r = VIRT._rows[i];
+      if (r.type === 'tr') fiMap.set(r.fi, i);
+    }
+    VIRT._fiToRowIdx = fiMap;
   }
 
   const rows     = VIRT._rows;
@@ -152,10 +192,14 @@ export function virtRenderWindow(fl) {
   const visibleCount = Math.ceil(viewH / Math.min(VIRT.ROW_H, VIRT.GRP_H)) + 1;
   const endIdx       = Math.min(rows.length, firstVisible + visibleCount + VIRT.BUFFER);
 
+  // Delta check — ne pas reconstruire le DOM si la fenêtre et la piste active n'ont pas changé
+  const curIdx  = get('curIdx');
+  const _windowSig = `${startIdx}|${endIdx}|${curIdx}`;
+  if (VIRT._lastWindowSig === _windowSig) return;
+  VIRT._lastWindowSig = _windowSig;
+
   VIRT._startIdx = startIdx;
   VIRT._endIdx   = endIdx;
-
-  const curIdx  = get('curIdx');
   const tracks  = get('tracks');
   const liked   = get('liked');
   const curTrack = curIdx >= 0 ? tracks[curIdx] : null;
@@ -164,6 +208,12 @@ export function virtRenderWindow(fl) {
   const totalH  = virtTotalH(rows);
   const botH    = Math.max(0, totalH - virtOffsetOf(rows, endIdx));
 
+  // M-1: hoist isAlbumDetail + albumDetailSort — évite un get() par ligne dans la boucle
+  const isAlbumDetail   = view === 'album-detail';
+  const albumDetailSort = isAlbumDetail ? (get('albumDetailSort') || 'track') : null;
+  // M-2: pré-compiler la regex de recherche une seule fois avant la boucle
+  const hlRe = query ? new RegExp(`(${escapeRegex(query)})`, 'gi') : null;
+
   let html = `<div class="virt-sp" style="height:${topH}px" aria-hidden="true"></div>`;
 
   for (let i = startIdx; i < endIdx; i++) {
@@ -171,12 +221,13 @@ export function virtRenderWindow(fl) {
     if (row.type === 'grp') {
       let hint = '';
       if (row.artistHint) hint = ` <span class="grp-artist">${esc(row.artistHint)}</span>`;
-      html += `<div class="tr-grp" style="height:${VIRT.GRP_H}px" aria-hidden="true">${esc(row.key)}${hint}</div>`;
+      const cls = row.key.length === 1 ? 'tr-grp tr-grp--alpha' : 'tr-grp';
+      html += `<div class="${cls}" style="height:${VIRT.GRP_H}px" aria-hidden="true">${esc(row.key)}${hint}</div>`;
     } else {
       const t       = row.track;
       const isActive = curTrack?.id === t.id;
       const isLiked  = liked?.has(t.id) ?? false;
-      html += thtml(t, row.fi, { active: isActive, liked: isLiked, query });
+      html += thtml(t, row.fi, { active: isActive, liked: isLiked, likedSet: liked, query, isAlbumDetail, albumDetailSort, hlRe });
     }
   }
 
@@ -189,6 +240,8 @@ export function virtRenderWindow(fl) {
   });
 
   listEl.innerHTML = html;
+  // I-1: le DOM a été entièrement reconstruit — invalider la référence de ligne active cachée
+  _activeRowEl = null;
 }
 
 /** Attache le handler de scroll virtual au conteneur de la liste. */
@@ -209,6 +262,167 @@ export function virtAttachScroll(listEl) {
   listEl.addEventListener('scroll', onScroll, { passive: true });
 }
 
+// ── Private album / artist helpers ───────────────────────────────────────────
+
+/** Construit la liste des entrées album depuis tracks[]. */
+function _getAlbumMap() {
+  // C-1: retourner le cache si disponible
+  if (_albumMapCache) return _albumMapCache;
+
+  const tracks = get('tracks') || [];
+  const map = new Map();
+  for (const t of tracks) {
+    const key = t.album || '';
+    if (!map.has(key)) {
+      map.set(key, {
+        key,
+        displayName:   key,
+        artist:        t.artist || '',
+        art:           null,
+        count:         0,
+        totalDuration: 0,
+        year:          (t.year && t.year !== 1970) ? t.year : null,
+      });
+    }
+    const a = map.get(key);
+    a.count++;
+    a.totalDuration += t.duration || 0;
+    if (t.art && !a.art) a.art = t.art;
+    if (t.year && t.year !== 1970 && !a.year) a.year = t.year;
+  }
+  _albumMapCache = [...map.values()];
+  return _albumMapCache;
+}
+
+/** Construit la liste des entrées artiste depuis tracks[]. */
+function _getArtistMap() {
+  // C-1: retourner le cache si disponible
+  if (_artistMapCache) return _artistMapCache;
+
+  const tracks = get('tracks') || [];
+  const map = new Map();
+  for (const t of tracks) {
+    const key = t.artist || '';
+    if (!map.has(key)) {
+      map.set(key, { key, displayName: key, art: null, count: 0 });
+    }
+    const a = map.get(key);
+    a.count++;
+    if (t.art && !a.art) a.art = t.art;
+  }
+  _artistMapCache = [...map.values()];
+  return _artistMapCache;
+}
+
+// ── Drill header ──────────────────────────────────────────────────────────────
+
+function _getOrCreateDrillHeader() {
+  let el = document.getElementById('drill-header');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'drill-header';
+    const tlist = document.getElementById('tlist');
+    tlist?.parentNode?.insertBefore(el, tlist);
+  }
+  return el;
+}
+
+function _removeDrillHeader() {
+  document.getElementById('drill-header')?.remove();
+}
+
+function renderDrillHeader(view, key) {
+  if (view === 'album-detail') {
+    const albums = _getAlbumMap();
+    const entry  = albums.find(a => a.key === key);
+    if (!entry) { _removeDrillHeader(); return; }
+
+    const el   = _getOrCreateDrillHeader();
+    const artH = entry.art
+      ? `<img src="${esc(entry.art)}" class="dh-art" alt="">`
+      : `<div class="dh-art dh-art-ph"></div>`;
+    const mins      = Math.floor((entry.totalDuration || 0) / 60);
+    const artistKey = entry.artist || '';
+
+    el.className = 'drill-header';
+    el.innerHTML = `
+      <div class="dh-left">${artH}</div>
+      <div class="dh-meta">
+        <div class="dh-name">${esc(entry.displayName)}</div>
+        <div class="dh-sub">
+          ${entry.artist
+            ? `<button class="dh-artist-link" data-action="dh-drill-artist"
+                 data-artist-key="${esc(artistKey)}"
+                 data-artist-name="${esc(entry.artist)}">${esc(entry.artist)}</button>`
+            : ''}
+          ${entry.year ? `<span>${entry.year}</span>` : ''}
+          <span>${entry.count} titre${entry.count > 1 ? 's' : ''}</span>
+          ${mins > 0 ? `<span>${mins} min</span>` : ''}
+        </div>
+        <div class="dh-actions">
+          <!-- A11Y-13: aria-label sur les boutons icône-texte du drill header -->
+          <button class="dh-btn dh-play" data-action="dh-play-all" aria-label="Lire tout"><span aria-hidden="true">▶</span> Lire tout</button>
+          <button class="dh-btn dh-shuf" data-action="dh-shuffle-all" aria-label="Mélanger"><span aria-hidden="true">⤮</span> Mélanger</button>
+        </div>
+      </div>`;
+    return;
+  }
+
+  if (view === 'artist-detail') {
+    const artists = _getArtistMap();
+    const entry   = artists.find(a => a.key === key);
+    if (!entry) { _removeDrillHeader(); return; }
+
+    const keyLc = key.toLowerCase();
+    const albums = _getAlbumMap()
+      .filter(a => (a.artist || '').toLowerCase() === keyLc)
+      .sort((a, b) => (b.year || 0) - (a.year || 0))
+      .slice(0, 20);
+
+    const el   = _getOrCreateDrillHeader();
+    const artH = entry.art
+      ? `<img src="${esc(entry.art)}" class="dh-art dh-art-circle" alt="">`
+      : `<div class="dh-art dh-art-ph dh-art-circle"></div>`;
+
+    const albumCards = albums.map(a => {
+      const cardArt = a.art
+        ? `<img src="${esc(a.art)}" class="dh-mini-art" alt="">`
+        : `<div class="dh-mini-art dh-mini-art-ph"></div>`;
+      return `<button class="dh-mini-card" data-action="dh-drill-album"
+                data-album-key="${esc(a.key)}" data-album-name="${esc(a.displayName)}">
+        ${cardArt}
+        <div class="dh-mini-name">${esc(a.displayName)}</div>
+        ${a.year ? `<div class="dh-mini-year">${a.year}</div>` : ''}
+      </button>`;
+    }).join('');
+
+    el.className = 'drill-header drill-header--artist';
+    el.innerHTML = `
+      <div class="dh-left">${artH}</div>
+      <div class="dh-meta">
+        <div class="dh-name">${esc(entry.displayName)}</div>
+        <div class="dh-sub">
+          <span>${albums.length} album${albums.length > 1 ? 's' : ''}</span>
+          <span>${entry.count} titre${entry.count > 1 ? 's' : ''}</span>
+        </div>
+        <div class="dh-actions">
+          <!-- A11Y-13: aria-label sur les boutons icône-texte du drill header -->
+          <button class="dh-btn dh-play" data-action="dh-play-all" aria-label="Lire tout"><span aria-hidden="true">▶</span> Lire tout</button>
+          <button class="dh-btn dh-shuf" data-action="dh-shuffle-all" aria-label="Mélanger"><span aria-hidden="true">⤮</span> Mélanger</button>
+        </div>
+      </div>
+      ${albums.length > 0 ? `
+        <div class="dh-albums-section">
+          <div class="dh-albums-title">Albums</div>
+          <div class="dh-albums-mini">${albumCards}</div>
+        </div>` : ''}`;
+    return;
+  }
+
+  // Toutes les autres vues : supprimer le header si présent
+  _removeDrillHeader();
+}
+
 // ── renderLib ─────────────────────────────────────────────────────────────────
 
 /** Reconstruit la vue liste de la bibliothèque (virtual scroll).
@@ -216,14 +430,52 @@ export function virtAttachScroll(listEl) {
 export function renderLib() {
   const fl = getFiltered();
 
-  // Invalider le cache de virt pour forcer un rebuild
-  VIRT._lastListSig = '';
+  // Invalider les caches de virt pour forcer un rebuild complet
+  VIRT._lastListSig   = '';
+  VIRT._lastWindowSig = '';
+  VIRT._fiToRowIdx    = null;  // I-2: invalider la map fi→rowIdx
+  // C-1: invalider les caches memoïsés album/artist (tracks[] peut avoir changé)
+  _albumMapCache  = null;
+  _artistMapCache = null;
 
   virtRenderWindow(fl);
 
   // (Re)attacher le scroll
   const listEl = document.getElementById('tlist');
   virtAttachScroll(listEl);
+
+  // État vide : afficher un message contextuel quand la liste est vide
+  if (!fl.length && listEl) {
+    const _view   = get('view')     || 'all';
+    const _query  = get('query')    || '';
+    const _drill  = get('drillKey') || '';
+    const _tracks = get('tracks')   || [];
+    let _ico = '', _h = '', _s = '';
+    if (_query) {
+      // Recherche sans résultat
+      _ico = '🔍'; _h = i18n('empty_search_h'); _s = i18n('empty_search_s');
+    } else if (!_tracks.length) {
+      // Bibliothèque entièrement vide — quel que soit l'onglet courant
+      _ico = '🎵'; _h = i18n('empty_lib_h');     _s = i18n('empty_lib_s');
+    } else if (_view === 'liked') {
+      _ico = '♥';  _h = i18n('empty_liked_h');   _s = i18n('empty_liked_s');
+    } else if (_view === 'recent') {
+      _ico = '⏱';  _h = i18n('empty_recent_h');  _s = i18n('empty_recent_s');
+    } else if (_view === 'playlist') {
+      _ico = '📋'; _h = i18n('empty_pl_h');       _s = i18n('empty_pl_s');
+    } else if (_drill || _view === 'album-detail' || _view === 'artist-detail') {
+      _ico = '🎵'; _h = i18n('empty_drill_h');    _s = i18n('empty_drill_s');
+    }
+    if (_h) {
+      listEl.innerHTML = `<div class="empty"><div class="empty-ico">${_ico}</div>`
+        + `<div class="empty-h">${esc(_h)}</div><div class="empty-s">${esc(_s)}</div></div>`;
+    }
+  }
+
+  // Drill header pour album-detail / artist-detail
+  const view     = get('view')     || 'all';
+  const drillKey = get('drillKey') || '';
+  renderDrillHeader(view, drillKey);
 
   scheduleStatsUpdate();
 }
@@ -272,19 +524,20 @@ export function renderAlbumsGrid() {
   if (pg) pg.style.display = 'none';
 
   // Construire la map albums
+  const queryLc = query ? query.toLowerCase() : '';
   const albumMap = new Map();
   for (const t of tracks) {
     const key = t.album || '';
-    if (query && !key.toLowerCase().includes(query.toLowerCase()) &&
-        !(t.artist || '').toLowerCase().includes(query.toLowerCase())) continue;
+    if (queryLc && !key.toLowerCase().includes(queryLc) &&
+        !(t.artist || '').toLowerCase().includes(queryLc)) continue;
     if (!albumMap.has(key)) {
-      albumMap.set(key, { name: key, artist: t.artist || '', arts: [], count: 0, totalDur: 0, year: t.year || null });
+      albumMap.set(key, { name: key, artist: t.artist || '', arts: [], count: 0, totalDur: 0, year: (t.year && t.year !== 1970) ? t.year : null });
     }
     const a = albumMap.get(key);
     a.count++;
     a.totalDur += t.duration || 0;
     if (t.art && a.arts.length < 1) a.arts.push(t.art);
-    if (t.year && !a.year) a.year = t.year;
+    if (t.year && t.year !== 1970 && !a.year) a.year = t.year;
   }
 
   let albums = [...albumMap.values()];
@@ -293,10 +546,13 @@ export function renderAlbumsGrid() {
   if (albumSort === 'count')    albums.sort((a, b) => b.count - a.count);
   else if (albumSort === 'duration') albums.sort((a, b) => b.totalDur - a.totalDur);
   else if (albumSort === 'year') albums.sort((a, b) => (b.year || 0) - (a.year || 0));
-  else albums.sort((a, b) => (a.name || '').localeCompare(b.name || '', 'fr', { sensitivity: 'base' }));
+  else albums.sort((a, b) => _coll.compare(a.name || '', b.name || ''));
 
   if (!albums.length) {
-    grid.innerHTML = `<div class="grid-empty">${esc(i18n('no_results') || 'Aucun résultat')}</div>`;
+    const isLibEmpty = !tracks.length && !query;
+    grid.innerHTML = isLibEmpty
+      ? `<div class="grid-empty"><div class="empty-h">${esc(i18n('empty_lib_h'))}</div><div class="empty-s">${esc(i18n('empty_lib_s'))}</div></div>`
+      : `<div class="grid-empty">${esc(i18n('no_results') || 'Aucun résultat')}</div>`;
     return;
   }
 
@@ -346,11 +602,12 @@ export function renderArtistsGrid() {
   if (ag) ag.style.display = 'none';
   if (pg) pg.style.display = 'none';
 
+  const queryLc = query ? query.toLowerCase() : '';
   const artistMap = new Map();
   for (const t of tracks) {
     const key = t.artist || '';
-    if (query && !key.toLowerCase().includes(query.toLowerCase()) &&
-        !(t.name || '').toLowerCase().includes(query.toLowerCase())) continue;
+    if (queryLc && !key.toLowerCase().includes(queryLc) &&
+        !(t.name || '').toLowerCase().includes(queryLc)) continue;
     if (!artistMap.has(key)) {
       artistMap.set(key, { name: key, arts: [], count: 0, albumCount: new Set() });
     }
@@ -362,10 +619,13 @@ export function renderArtistsGrid() {
 
   let artists = [...artistMap.values()];
   if (artistSort === 'count') artists.sort((a, b) => b.count - a.count);
-  else artists.sort((a, b) => (a.name || '').localeCompare(b.name || '', 'fr', { sensitivity: 'base' }));
+  else artists.sort((a, b) => _coll.compare(a.name || '', b.name || ''));
 
   if (!artists.length) {
-    grid.innerHTML = `<div class="grid-empty">${esc(i18n('no_results') || 'Aucun résultat')}</div>`;
+    const isLibEmpty = !tracks.length && !query;
+    grid.innerHTML = isLibEmpty
+      ? `<div class="grid-empty"><div class="empty-h">${esc(i18n('empty_lib_h'))}</div><div class="empty-s">${esc(i18n('empty_lib_s'))}</div></div>`
+      : `<div class="grid-empty">${esc(i18n('no_results') || 'Aucun résultat')}</div>`;
     return;
   }
 
@@ -414,21 +674,25 @@ export function renderPlaylistsGrid() {
   if (ag) ag.style.display = 'none';
   if (rg) rg.style.display = 'none';
 
-  const filtered = query
-    ? playlists.filter(p => (p.name || '').toLowerCase().includes(query.toLowerCase()))
+  const queryLc = query ? query.toLowerCase() : '';
+  const filtered = queryLc
+    ? playlists.filter(p => (p.name || '').toLowerCase().includes(queryLc))
     : playlists;
 
   if (!filtered.length) {
-    grid.innerHTML = `<div class="pl-grid-empty">${esc(i18n('no_results') || 'Aucune playlist')}</div>`;
+    grid.innerHTML = `<div class="pl-grid-empty">`
+      + `<div class="empty-h">${esc(i18n('pl_empty'))}</div>`
+      + `<div class="empty-s">${esc(i18n('pl_empty_s'))}</div></div>`;
     return;
   }
 
-  const byId = new Map(tracks.map(t => [t.id, t]));
-
+  // I-4: utilise _trackIdxMap (déjà disponible en module) au lieu d'allouer une nouvelle Map
   // FIX-B6 : data-pl-id n'est placé QU'UNE FOIS (sur le div.card root, pas sur le bouton interne)
   grid.innerHTML = filtered.map(pl => {
     // Mosaïque 4 arts
-    const plTracks = (pl.trackIds || []).slice(0, 4).map(id => byId.get(id)).filter(Boolean);
+    const plTracks = (pl.trackIds || []).slice(0, 4)
+      .map(id => tracks[_trackIdxMap.get(id)])
+      .filter(Boolean);
     const arts = plTracks.map(t => t.art).filter(Boolean).slice(0, 4);
     let artHtml;
     if (pl.coverB64) {
@@ -441,7 +705,7 @@ export function renderPlaylistsGrid() {
       artHtml = `<div class="card-art-ph" aria-hidden="true">🎵</div>`;
     }
 
-    const smartBadge = pl.smart ? `<span class="smart-badge" title="${i18n('smart_playlist') || 'Smart'}">✦</span>` : '';
+    const smartBadge = pl.smart ? `<span class="smart-badge" title="${esc(i18n('smart_playlist') || 'Smart')}">✦</span>` : '';
     const pinBadge   = pl.pinned ? `<span class="pin-badge" aria-hidden="true">📌</span>` : '';
     const count = (pl.trackIds || []).length;
 
@@ -471,6 +735,7 @@ export function renderPlaylistsGrid() {
  *  @param {string} from        - 'albums' | 'artists'
  *  @param {string} displayName - Nom d'affichage (propre, avec casse d'origine) */
 export function drillDown(from, key, displayName) {
+  cancelSearchDebounce(); // annule tout debounce de recherche en cours avant de drill
   set('drillKey',         key);
   set('drillFrom',        from);
   set('drillDisplayName', displayName || key);
@@ -479,15 +744,20 @@ export function drillDown(from, key, displayName) {
                  : 'artist-detail';
   set('view', viewName);
   invalidateFilterCache();
+  // C-1: invalider les caches album/artist quand les filtres changent
+  _albumMapCache  = null;
+  _artistMapCache = null;
   emit(EVENTS.FILTER_CHANGED, {});
 
   // Masquer les grilles, basculer en vue liste
   const ag = document.getElementById('album-grid');
   const rg = document.getElementById('artist-grid');
   const pg = document.getElementById('playlist-grid');
+  const gg = document.getElementById('genre-grid');
   if (ag) ag.style.display = 'none';
   if (rg) rg.style.display = 'none';
   if (pg) pg.style.display = 'none';
+  if (gg) gg.style.display = 'none';
 
   // Définir data-view='list' sur content-area
   const ca = document.getElementById('content-area');
@@ -502,6 +772,9 @@ export function drillDown(from, key, displayName) {
   if (bc) bc.style.display = '';
   updateBreadcrumb();
 
+  const _tl = document.getElementById('tlist');
+  if (_tl) _tl.scrollTop = 0;
+  VIRT._lastScrollTop = null;
   emit(EVENTS.RENDER_LIB, {});
 }
 
@@ -636,14 +909,24 @@ export function patchActiveTrack() {
   const tracks   = get('tracks') || [];
   const curTrack = curIdx >= 0 ? tracks[curIdx] : null;
 
-  // Retirer .act / .playing-row de tous les éléments
-  document.querySelectorAll('.tr.act').forEach(el => {
-    el.classList.remove('act', 'playing-row');
-  });
+  // I-1: retirer .act de la ligne précédente via la référence cachée si elle est encore dans le DOM
+  if (_activeRowEl?.isConnected) {
+    _activeRowEl.classList.remove('act', 'playing-row');
+  } else {
+    // Fallback : le DOM a changé depuis la dernière fois — balayage complet
+    document.querySelectorAll('.tr.act').forEach(el => {
+      el.classList.remove('act', 'playing-row');
+    });
+  }
+  _activeRowEl = null;
 
   if (curTrack) {
     const el = document.querySelector(`.tr[data-track-id="${CSS.escape(curTrack.id)}"]`);
-    if (el) el.classList.add('act');
+    if (el) {
+      el.classList.add('act');
+      // I-1: mémoriser la référence pour le prochain appel
+      _activeRowEl = el;
+    }
   }
 }
 
@@ -656,6 +939,8 @@ export function patchPlayState(playing) {
 
 /** Remplace le DOM d'une seule ligne piste (ex: après un tag edit). */
 export function patchTrackEl(id) {
+  _albumMapCache  = null;
+  _artistMapCache = null;
   const el = document.querySelector(`.tr[data-track-id="${CSS.escape(id)}"]`);
   if (!el) return; // hors viewport — ignoré (prochain virtRenderWindow le prendra)
 
@@ -666,7 +951,7 @@ export function patchTrackEl(id) {
   const t      = tracks[idx];
   if (!t) return;
 
-  const fi    = parseInt(el.dataset.fi || '0', 10);
+  const fi    = filteredIdx(t); // recalcul frais — évite un dataset stale
   const liked = get('liked');
   const query = get('query') || '';
   const curIdx = get('curIdx');
@@ -681,17 +966,23 @@ export function patchTrackEl(id) {
 
 /** Met à jour les compteurs de la bibliothèque (#lib-stats). */
 export function updateStats() {
-  const tracks   = get('tracks') || [];
-  const el       = document.getElementById('lib-stats');
-  if (!el) return;
+  const tracks = get('tracks') || [];
 
-  const fl       = getFiltered();
-  const total    = fl.length;
-  const totalDur = fl.reduce((s, t) => s + (t.duration || 0), 0);
-
-  const countStr = `${total} ${i18n('n_tracks') || 'titre' + (total !== 1 ? 's' : '')}`;
-  const durStr   = totalDur > 0 ? ' · ' + fmtd(totalDur) : '';
-  el.textContent = countStr + durStr;
+  // #sb-stats — sidebar (HTML avec counts en gras)
+  const sbEl = document.getElementById('sb-stats');
+  if (sbEl) {
+    if (tracks.length === 0) {
+      sbEl.innerHTML = i18n('sb_empty');
+    } else {
+      const artistCount = _getArtistMap().length;
+      const albumCount  = _getAlbumMap().length;
+      sbEl.innerHTML = [
+        i18n('sb_tracks',  tracks.length),
+        artistCount > 0 ? i18n('sb_artists', artistCount) : '',
+        albumCount  > 0 ? i18n('sb_albums',  albumCount)  : '',
+      ].filter(Boolean).join(' · ');
+    }
+  }
 }
 
 /** Planifie une mise à jour des stats après le délai de debounce. */
@@ -723,10 +1014,16 @@ export function animateViewChange() {
   const ca = document.getElementById('content-area');
   if (!ca) return;
   ca.classList.remove('view-in');
-  // Forcer le reflow avant d'ajouter la classe d'animation
-  void ca.offsetWidth;
-  ca.classList.add('view-in');
-  ca.addEventListener('animationend', () => ca.classList.remove('view-in'), { once: true });
+  // C-4: double-rAF — évite le reflow synchrone forcé; re-query dans l'inner rAF
+  // pour ne pas agir sur un nœud détaché si une transition DOM survient entre les deux ticks
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      const live = document.getElementById('content-area');
+      if (!live) return;
+      live.classList.add('view-in');
+      live.addEventListener('animationend', () => live.classList.remove('view-in'), { once: true });
+    });
+  });
 }
 
 // ── Scroll to current track ───────────────────────────────────────────────────
@@ -747,12 +1044,9 @@ export function scrollToCurrentTrack() {
   const rows = VIRT._rows;
   if (!rows || !rows.length) return;
 
-  // Trouver l'index de ligne pour cette position filtrée
-  let rowIdx = -1;
-  for (let i = 0; i < rows.length; i++) {
-    if (rows[i].type === 'tr' && rows[i].fi === fi) { rowIdx = i; break; }
-  }
-  if (rowIdx < 0) return;
+  // I-2: lookup O(1) via la Map fi→rowIdx construite dans virtRenderWindow
+  const rowIdx = VIRT._fiToRowIdx?.get(fi);
+  if (rowIdx == null) return;
 
   const listEl = document.getElementById('tlist');
   if (!listEl) return;

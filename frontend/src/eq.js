@@ -136,6 +136,7 @@ export function initEQ() {
   if (!audio) { console.warn('[eq] <audio> introuvable'); return; }
 
   try {
+    // @ts-ignore — webkitAudioContext est non-standard (Safari/WebKit) mais présent dans Tauri WebView
     eqCtx = new (window.AudioContext || window.webkitAudioContext)();
   } catch (e) {
     console.warn('[eq] AudioContext non disponible', e);

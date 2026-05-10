@@ -8,8 +8,11 @@ mod watch;
 mod taskbar;
 
 use tauri::{Emitter, Manager, WindowEvent};
+use tauri::Listener;
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
 use tauri_plugin_window_state::Builder as WindowStateBuilder;
+
+static MINI_CLOSE_SEQ: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
 
 fn main() {
     tauri::Builder::default()
@@ -20,6 +23,7 @@ fn main() {
         .plugin(WindowStateBuilder::default().build())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(mini::MiniState(Default::default()))
+        .manage(mini::MiniOpenGuard(tokio::sync::Mutex::new(())))
         .manage(watch::WatchState(Default::default()))
         .invoke_handler(tauri::generate_handler![
             commands::open_folder,
@@ -48,6 +52,8 @@ fn main() {
             commands::allow_asset_dir,
             commands::check_paths,
             commands::read_audio_props,
+            commands::read_tags,
+            #[cfg(debug_assertions)]
             commands::open_devtools,
         ])
         .setup(|app| {
@@ -95,6 +101,26 @@ fn main() {
                                 let is_minimized = main.is_minimized().unwrap_or(true);
                                 if !is_minimized {
                                     if let Some(mini_win) = app.get_webview_window("mini") {
+                                        let token = MINI_CLOSE_SEQ
+                                            .fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+                                            .to_string();
+                                        let (tx, rx) = tokio::sync::oneshot::channel::<()>();
+                                        let tx = std::sync::Arc::new(std::sync::Mutex::new(Some(tx)));
+                                        let tx2 = tx.clone();
+                                        let token2 = token.clone();
+                                        let eid = app.listen("mini-pos-saved", move |e| {
+                                            if e.payload().trim_matches('"') == token2 {
+                                                if let Ok(mut g) = tx2.lock() {
+                                                    if let Some(s) = g.take() { let _ = s.send(()); }
+                                                }
+                                            }
+                                        });
+                                        let _ = mini_win.emit("mini-will-close", &token);
+                                        let _ = tokio::time::timeout(
+                                            std::time::Duration::from_millis(300),
+                                            rx,
+                                        ).await;
+                                        app.unlisten(eid);
                                         let _ = mini_win.close();
                                     }
                                 }
@@ -113,6 +139,10 @@ fn main() {
                             };
                             let _ = w.emit("win-state", state_str);
                         }
+                    }
+                    WindowEvent::Destroyed => {
+                        #[cfg(target_os = "windows")]
+                        taskbar::cleanup();
                     }
                     _ => {}
                 }

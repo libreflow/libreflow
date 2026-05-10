@@ -74,7 +74,9 @@ export function renderStats(tracks, trackIdxMap) {
   // ── Base metrics ─────────────────────────────────────────
   const totalPlays    = playLog.length;
   const totalListened = playLog.reduce((s, e) => s + (e.dur || 0), 0);
-  const artistCount   = new Set(tracks.map(t => t.artist).filter(Boolean)).size;
+  const _artistSet = new Set();
+  for (const t of tracks) { if (t.artist) _artistSet.add(t.artist); }
+  const artistCount = _artistSet.size;
 
   // ── Tendances (7j courants vs 7j précédents) ─────────────
   const week1Start = now - 7  * DAY;
@@ -82,7 +84,7 @@ export function renderStats(tracks, trackIdxMap) {
   let playsW1 = 0, playsW2 = 0, listenW1 = 0, listenW2 = 0;
   for (const e of playLog) {
     if (!e.ts) continue; // guard : entrée corrompue sans timestamp
-    const ts = Math.floor(e.ts / 1000); // µs → ms
+    const ts = Math.floor(e.ts / 1000); // µs → ms (playlog stocke en µs pour unicité IDB)
     if (ts >= week1Start)                 { playsW1++; listenW1 += e.dur || 0; }
     else if (ts >= week2Start)            { playsW2++; listenW2 += e.dur || 0; }
   }
@@ -121,7 +123,7 @@ export function renderStats(tracks, trackIdxMap) {
   const artistMonthCounts = {};
   for (const e of playLog) {
     if (!e.ts) continue; // guard : entrée corrompue sans timestamp
-    const ts = Math.floor(e.ts / 1000);
+    const ts = Math.floor(e.ts / 1000); // µs → ms
     if (ts < monthAgo) continue;
     const t = trackIdxMap.has(e.id) ? tracks[trackIdxMap.get(e.id)] : null;
     if (!t) continue;
@@ -136,7 +138,7 @@ export function renderStats(tracks, trackIdxMap) {
   const heatCounts = new Array(_heatPeriod).fill(0);
   for (const e of playLog) {
     if (!e.ts) continue; // guard : entrée corrompue sans timestamp
-    const ago = Math.floor((now - Math.floor(e.ts / 1000)) / DAY); // µs → ms → jours
+    const ago = Math.floor((now - Math.floor(e.ts / 1000)) / DAY); // µs → ms avant division
     if (ago >= 0 && ago < _heatPeriod) heatCounts[_heatPeriod - 1 - ago]++;
   }
   const maxDay = Math.max(1, ...heatCounts);
@@ -201,7 +203,7 @@ export function renderStats(tracks, trackIdxMap) {
         ${topTracks.map(({ t, n }, i) => `
         <div class="stats-top-row" data-action="play-track" data-track-id="${t.id}">
           <span class="stats-rank${i < 3 ? ' top3' : ''}">${i + 1}</span>
-          ${t.art ? `<img class="stats-top-art" src="${t.art}" alt="">` : `<div class="stats-top-art" style="display:flex;align-items:center;justify-content:center;font-size:14px">${extEmoji(t.ext)}</div>`}
+          ${t.art ? `<img class="stats-top-art" src="${esc(t.art)}" alt="">` : `<div class="stats-top-art" style="display:flex;align-items:center;justify-content:center;font-size:14px">${extEmoji(t.ext)}</div>`}
           <div class="stats-top-info">
             <div class="stats-top-name">${esc(t.name)}</div>
             <div class="stats-top-artist">${esc(t.artistFull || t.artist || '')}</div>
@@ -336,7 +338,7 @@ export function renderStats(tracks, trackIdxMap) {
             <div class="stats-top-row" data-action="play-track" data-track-id="${t.id}">
               <span class="stats-rank${i < 3 ? ' top3' : ''}">${i + 1}</span>
               ${t.art
-                ? `<img class="stats-top-art" src="${t.art}" alt="">`
+                ? `<img class="stats-top-art" src="${esc(t.art)}" alt="">`
                 : `<div class="stats-top-art" style="display:flex;align-items:center;justify-content:center;font-size:14px">${extEmoji(t.ext)}</div>`}
               <div class="stats-top-info">
                 <div class="stats-top-name">${esc(t.name)}</div>
