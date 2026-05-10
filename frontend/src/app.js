@@ -58,7 +58,9 @@ import {
   onPlCoverSelected, clearPlCover, trapFocus,
   _plHeroInlineRename, _plNavInlineRename,
   _attachPlaylistReorder, _detachPlaylistReorder,
+  playPlaylistFrom, playPlaylistDirect, shufflePlaylist,
 } from './playlists.js';
+export { playPlaylistFrom, playPlaylistDirect, shufflePlaylist }; // re-export (handlers.js backward compat)
 
 import { initWaveform, wfLoad, wfClear } from './waveform.js';
 import { toggleNowPlaying, closeNowPlaying, updateNowPlaying } from './nowplaying.js';
@@ -74,7 +76,9 @@ import {
 import {
   _showViewRaw, showView, goHome, setView, onSearch, nextSort,
   nextAlbumSort, nextArtistSort, nextGenreSort,
+  statsGoToGenre, statsGoToArtist, statsGoToAlbum,
 } from './views.js';
+export { statsGoToGenre, statsGoToArtist, statsGoToAlbum }; // re-export (backward compat)
 import { _showSkeletonRows,
          virtRenderWindow, virtAttachScroll,
          renderLib, renderAlbumsGrid, renderArtistsGrid, renderPlaylistsGrid,
@@ -660,50 +664,8 @@ export function invalidateFilter() {
   invalidateGenreGridSig();   // genres.js (Jalon 5)
   emit(EVENTS.FILTER_CHANGED, {}); // Jalon 4 — signal "dirty" : subscribers appellent getFiltered()
 }
-export function playPlaylistFrom(fi) {
-  // Si une recherche est active, ignorer le filtre et jouer depuis la liste complète
-  // (comportement attendu : "Lire tout" joue tout, pas seulement les résultats de recherche)
-  if (get('query')) {
-    set('query', '');
-    invalidateFilter();
-    const el = document.getElementById('srch');
-    if (el) el.value = '';
-    const clr = document.getElementById('srch-clear');
-    if (clr) clr.style.display = 'none';
-  }
-  const fl = getFiltered();
-  if (!fl.length) return;
-  playAt(Math.min(fi, fl.length - 1));
-}
-/**
- * Lire une playlist directement depuis la sidebar sans changer de vue.
- * Si la vue courante n'est pas la playlist visée, bascule vers elle puis joue.
- */
-export function playPlaylistDirect(plId, event) {
-  if (event) event.stopPropagation();
-  const navBtn = document.getElementById('ni-pl-' + plId);
-  // Basculer vers la playlist (met à jour curPlId + invalide le filtre, sync)
-  setView('playlist', navBtn, plId);
-  // getFiltered() est maintenant correct — jouer le premier titre
-  requestAnimationFrame(() => playPlaylistFrom(0));
-}
-export async function shufflePlaylist() {
-  const fl = getFiltered();
-  if (!fl.length) return;
-  const ri = Math.floor(Math.random() * fl.length);
-  // Attendre playAt pour que curIdx et le cache soient à jour avant buildQ()
-  await playAt(ri);
-  shuffle = true;
-  set('shuffle', true);
-  const _shufBtn = document.getElementById('pc-shuf');
-  _shufBtn?.classList.add('on');
-  _shufBtn?.setAttribute('aria-pressed', 'true');
-  const _cinShufBtn = document.getElementById('cinema-shuf');
-  _cinShufBtn?.classList.add('on');
-  _cinShufBtn?.setAttribute('aria-pressed', 'true');
-  buildQ(); // buildQ() utilise maintenant getFiltered() avec le bon curIdx
-  _allPlayerUI();
-}
+// ══ playPlaylistFrom / playPlaylistDirect / shufflePlaylist → playlists.js (ARCH-1) ═
+// Imported above from playlists.js and re-exported for backward compat.
 
 // ══ Drag & Drop → dropin.js (CQ-2) ═════════════════════════════
 // Logique extraite dans dropin.js ; initDrop() appelé dans DOMContentLoaded ci-dessous.
@@ -856,38 +818,14 @@ if (_contentArea) {
 // ── Toast riche — type : 'info' | 'success' | 'error' | 'warning' ──
 // toast / toastWithAction / _TOAST_ICONS / _TOAST_DUR → ui.js (Phase 6)
 
-/**
- * Navigue depuis le panneau Stats vers la vue genre-detail.
- * Appelé par le click sur une barre de genre dans stats.js.
- */
-export function statsGoToGenre(key, displayName) {
-  _withVT(() => {
-    _showViewRaw('lib');
-    drillGenre(key, displayName); // drillGenre importée depuis genres.js
-  });
-}
+// ══ statsGoToGenre / statsGoToArtist / statsGoToAlbum → views.js (ARCH-1) ════
+// Imported above from views.js and re-exported for backward compat.
+
 /** Jouer un album ou artiste depuis sa card grid (hover play button). */
 export function playCardByKey(from, key, displayName) {
   _withVT(() => {
     drillDown(from, key, displayName);
     setTimeout(() => playPlaylistFrom(0), 80);
-  });
-}
-export function statsGoToArtist(displayName) {
-  _withVT(() => {
-    const key = displayName.toLowerCase().replace(/[^\w\s]/g, '').replace(/\s+/g, ' ').trim();
-    set('view', 'artists');
-    invalidateFilterCache();
-    renderArtistsGrid();
-    requestAnimationFrame(() => drillDown('artists', key, displayName));
-  });
-}
-export function statsGoToAlbum(albumKey, displayName) {
-  _withVT(() => {
-    set('view', 'albums');
-    invalidateFilterCache();
-    renderAlbumsGrid();
-    requestAnimationFrame(() => drillDown('albums', albumKey, displayName));
   });
 }
 

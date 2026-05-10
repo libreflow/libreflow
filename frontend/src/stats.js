@@ -9,7 +9,7 @@
 import { playLog } from './playlog.js';
 import { esc, extEmoji, fmtDuration } from './utils.js';
 import { getLang, i18n } from './i18n.js';
-import { statsGoToGenre, statsGoToArtist } from './app.js';
+import { statsGoToGenre, statsGoToArtist } from './views.js'; // ARCH-1 — no longer from app.js
 
 // ── État UI persistent entre re-renders ───────────────────────
 let _heatPeriod        = 30;   // 7 | 30 | 90 jours

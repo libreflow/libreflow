@@ -14,11 +14,8 @@
 //   selection.js    : clearSelection
 //   search.js       : invalidateFilterCache
 //
-//   saveCfg()          — circular (app.js)
-//   window.setView()          — circular (app.js)
-//   renderPlaylistsGrid() — circular (app.js)
-//   window.shufflePlaylist()  — circular (app.js)
-//   window.playPlaylistFrom() — circular (app.js)
+//   ARCH-1: saveCfg (cfgsave.js), playPlaylistFrom/shufflePlaylist/playPlaylistDirect
+//           moved INTO playlists.js — no more app.js circular dep.
 //
 // Exports publics :
 //   savePlaylists, renderPlNav, setupPlNavDrop
@@ -43,11 +40,59 @@ import { toast, toastWithAction, confirmAction, promptAction } from './ui.js';
 import { closeCtxMenu }          from './ctxmenu.js';
 import { openSmartPlaylistModal, switchPlTab } from './smartplaylist.js';
 import { clearSelection }        from './selection.js';
-import { invalidateFilterCache } from './search.js';
-import { saveCfg } from './cfgsave.js';
-import { setView } from './views.js';
-import { renderPlaylistsGrid } from './renderer.js';
-import { playPlaylistFrom, shufflePlaylist } from './app.js';
+import { invalidateFilterCache, getFiltered } from './search.js';
+import { invalidateGenreGridSig }              from './genres.js';
+import { saveCfg }                             from './cfgsave.js';
+import { setView }                             from './views.js';
+import { renderPlaylistsGrid }                 from './renderer.js';
+import { playAt, buildQ }                      from './player.js';
+import { _allPlayerUI }                        from './allplayerui.js';
+
+// ── Inline helper (mirrors app.js:invalidateFilter — ARCH-1) ──────────────────
+function invalidateFilter() {
+  invalidateFilterCache();
+  invalidateGenreGridSig();
+  emit(EVENTS.FILTER_CHANGED, {});
+}
+
+// ── Play helpers (moved from app.js — ARCH-1) ─────────────────────────────────
+
+export function playPlaylistFrom(fi) {
+  if (get('query')) {
+    set('query', '');
+    invalidateFilter();
+    const el = document.getElementById('srch');
+    if (el) el.value = '';
+    const clr = document.getElementById('srch-clear');
+    if (clr) clr.style.display = 'none';
+  }
+  const fl = getFiltered();
+  if (!fl.length) return;
+  playAt(Math.min(fi, fl.length - 1));
+}
+
+export function playPlaylistDirect(plId, event) {
+  if (event) event.stopPropagation();
+  const navBtn = document.getElementById('ni-pl-' + plId);
+  setView('playlist', navBtn, plId);
+  requestAnimationFrame(() => playPlaylistFrom(0));
+}
+
+export async function shufflePlaylist() {
+  const fl = getFiltered();
+  if (!fl.length) return;
+  const ri = Math.floor(Math.random() * fl.length);
+  await playAt(ri);
+  set('shuffle', true); // app.js subscribe keeps its local var in sync
+  const _shufBtn = document.getElementById('pc-shuf');
+  _shufBtn?.classList.add('on');
+  _shufBtn?.setAttribute('aria-pressed', 'true');
+  const _cinShufBtn = document.getElementById('cinema-shuf');
+  _cinShufBtn?.classList.add('on');
+  _cinShufBtn?.setAttribute('aria-pressed', 'true');
+  buildQ();
+  _allPlayerUI();
+}
 
 // ── État local du module ──────────────────────────────────────────────────────
 let plModalMode       = 'new';  // 'new' | 'rename'

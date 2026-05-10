@@ -19,8 +19,9 @@ import { VIRT }                                                       from './vi
 import { getFiltered, _trackIdxMap, invalidateFilterCache }         from './search.js';
 import { buildQ, clearRvProgFill }                                   from './player.js';
 import { _withVT, renderLib, renderAlbumsGrid, renderArtistsGrid,
-         renderPlaylistsGrid }                                        from './renderer.js';
-import { renderGenresGrid, setContentView, invalidateGenreGridSig } from './genres.js';
+         renderPlaylistsGrid, drillDown }                            from './renderer.js';
+import { renderGenresGrid, setContentView, invalidateGenreGridSig,
+         drillGenre }                                               from './genres.js';
 import { renderStats }                                               from './stats.js';
 import { renderRadioView, syncRadioLibBar }                          from './radio.js';
 import { openNewPlaylistModal }                                      from './playlists.js';
@@ -435,4 +436,36 @@ export function setView(v, btn, plId) {
     _showViewRaw('lib'); renderLib();
     saveCfg();
   }); // fin _withVT
+}
+
+// ── Stats navigation helpers (moved from app.js — ARCH-1) ────────────────────
+// stats.js now imports these directly instead of from app.js.
+
+/** Navigue depuis le panneau Stats vers la vue genre-detail. */
+export function statsGoToGenre(key, displayName) {
+  _withVT(() => {
+    _showViewRaw('lib');
+    drillGenre(key, displayName);
+  });
+}
+
+/** Navigue depuis le panneau Stats vers la vue artist-detail. */
+export function statsGoToArtist(displayName) {
+  _withVT(() => {
+    const key = displayName.toLowerCase().replace(/[^\w\s]/g, '').replace(/\s+/g, ' ').trim();
+    set('view', 'artists');
+    invalidateFilterCache();
+    renderArtistsGrid();
+    requestAnimationFrame(() => drillDown('artists', key, displayName));
+  });
+}
+
+/** Navigue depuis le panneau Stats vers la vue album-detail. */
+export function statsGoToAlbum(albumKey, displayName) {
+  _withVT(() => {
+    set('view', 'albums');
+    invalidateFilterCache();
+    renderAlbumsGrid();
+    requestAnimationFrame(() => drillDown('albums', albumKey, displayName));
+  });
 }
