@@ -86,6 +86,12 @@ import { _showSkeletonRows,
 // Wrapper : met à jour le mini-player Tauri ET l'overlay in-page simultanément.
 export function _allPlayerUI() { updateMiniPlayer(); syncMiniOverlay(); }
 import { showCtxMenu, closeCtxMenu, ctxToggleLike, ctxDeleteTrack, ctxEditTags, ctxGoToArtist, ctxGoToAlbum, ctxNewPlaylist, ctxRemoveFromPlaylist, ctxSmartPlaylist, ctxPlayNext, ctxAddToQueueEnd, ctxCopyInfo } from './ctxmenu.js';
+import { initDrop } from './dropin.js';
+import { initShortcuts } from './shortcuts.js';
+import { confirmClear, closeModal } from './modal.js';
+export { confirmClear, closeModal }; // re-export pour handlers.js
+import { updateBar, updateVolSlider, setupMarquee } from './playerbar.js';
+export { updateBar, updateVolSlider }; // re-exports pour library.js, selection.js, tagedit.js, handlers.js
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -172,7 +178,7 @@ let query   = '';
 // ══ Variables déclarées ici pour éviter ReferenceError (utilisées avant leur section) ══
 // _coll → search.js (importé ci-dessus)
 // radioActive, radioSeedId, radioQueue, _radioPlayedIds → radio.js
-let _lastNotifTrackId = null;
+// _lastNotifTrackId → playerbar.js (moved CQ-2)
 let _saveCfgTimer     = null;
 let _retryArtTimer    = null; // FIX #21 — annulable dans clearLibrary()
 let _orphansTimer     = null; // FIX #22 — annulable dans clearLibrary()
@@ -687,150 +693,13 @@ export async function shufflePlaylist() {
   _allPlayerUI();
 }
 
-// ══ Drag & Drop ═════════════════════════════════
-let drago = null;
-// Compteur dragenter/dragleave — évite le flickering sur WebView2
-// (e.relatedTarget est parfois null même en intra-fenêtre sur Windows)
-let _dragDepth = 0;
-// FIX DRAG-MODULE : handlers déclarés ici pour être définis avant DOMContentLoaded,
-// mais attachés dans DOMContentLoaded (après drago = getElementById).
-function _onDragEnter(e){ e.preventDefault(); _dragDepth++; if (drago) drago.classList.add('on'); }
-function _onDragOver(e) { e.preventDefault(); }
-function _onDragLeave(e){ _dragDepth = Math.max(0, _dragDepth - 1); if (drago && _dragDepth === 0) drago.classList.remove('on'); }
-async function _onDrop(e){
-  e.preventDefault(); _dragDepth = 0; if (drago) drago.classList.remove('on');
-  const EXTS=new Set(['mp3','flac','aac','m4a','ogg','opus','wav','wma','aiff','ape','alac']);
-  const items = [...e.dataTransfer.items];
-  const allFiles = [];
+// ══ Drag & Drop → dropin.js (CQ-2) ═════════════════════════════
+// Logique extraite dans dropin.js ; initDrop() appelé dans DOMContentLoaded ci-dessous.
 
-  // Support dossiers via DataTransferItem API
-  async function traverseEntry(entry) {
-    if (entry.isFile) {
-      await new Promise(res => entry.file(f => { allFiles.push(f); res(); }));
-    } else if (entry.isDirectory) {
-      const reader = entry.createReader();
-      // readEntries() retourne max 100 entrées à la fois — boucler jusqu'au tableau vide
-      const readAll = () => new Promise(res => {
-        const batch = [];
-        const readBatch = () => {
-          reader.readEntries(async entries => {
-            if (!entries.length) { res(batch); return; }
-            batch.push(...entries);
-            readBatch(); // continuer jusqu'à la fin
-          }, (err) => { console.warn('[drop] readEntries error', err); res(batch); }); // FIX #10
-        };
-        readBatch();
-      });
-      const allEntries = await readAll();
-      for (const sub of allEntries) await traverseEntry(sub);
-    }
-  }
-
-  if (items.length && items[0].webkitGetAsEntry) {
-    for (const item of items) {
-      const entry = item.webkitGetAsEntry();
-      if (entry) await traverseEntry(entry);
-    }
-  } else {
-    allFiles.push(...e.dataTransfer.files);
-  }
-
-  const audioFiles = allFiles.filter(f => EXTS.has(f.name.split('.').pop().toLowerCase()));
-  if (!audioFiles.length) { toast(i18n('t_drag_hint'), 'warning'); return; }
-
-  showView('scan');
-  const newTracks=[];
-  for (const file of audioFiles) {
-    // Dédup : comparer les basenames (file.webkitRelativePath est toujours vide en drag-drop Tauri).
-    // Fonctionne pour t.path = nom seul (drag-drop) ou chemin complet (scan dossier).
-    const _dnL = file.name.toLowerCase();
-    if (tracks.some(t => t.path.split(/[/\\]/).pop().toLowerCase() === _dnL)) continue;
-    const ext=file.name.split('.').pop().toUpperCase();
-    const url=URL.createObjectURL(file);
-    const dur=await new Promise(res=>{
-      const a=new Audio(); a.preload='metadata'; a.src=url;
-      const done=(v)=>{ a.src=''; a.load(); res(v); }; // BUG FIX F5 : libérer l'Audio temporaire
-      a.addEventListener('loadedmetadata',()=>done(a.duration||0),{once:true});
-      a.addEventListener('error',()=>done(0),{once:true});
-      setTimeout(()=>done(a.duration||0),3000);
-    });
-    const t={id:crypto.randomUUID?crypto.randomUUID():Math.random().toString(36).slice(2)+Date.now(),name:file.name.replace(/\.[^.]+$/,'').replace(/[-_]+/g,' ').trim(),artist:i18n('unknown_artist'),artistFull:i18n('unknown_artist'),album:'',ext,path:file.webkitRelativePath||file.name,duration:dur,dateAdded:Date.now(),art:null,artColor:null,url,file,metaDone:false};
-    newTracks.push(t); document.getElementById('sn').textContent=newTracks.length;
-  }
-  tracks.push(...newTracks); set('tracks', tracks); rebuildTrackIdxMap(); notify('tracks'); emit(EVENTS.LIBRARY_UPDATED, { tracks }); invalidateFilter(); updateStats(); renderLib(); showView('lib');
-  toast(i18n('t_files_added', newTracks.length), 'success');
-  newTracks.forEach(t=>loadTagsBg(t));
-}
-
-// ══ Keyboard shortcuts ═══════════════════════════
-document.addEventListener('keydown', e=>{
-  // Ctrl+F : focus recherche — intercepté avant le guard INPUT/cinéma
-  if (e.ctrlKey && e.key.toLowerCase() === 'f') {
-    e.preventDefault();
-    const srch = document.getElementById('srch');
-    if (srch) { showView('lib'); srch.focus(); srch.select(); }
-    return;
-  }
-  if (['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target.tagName)) return;
-  const _anyModalOpen =
-    document.getElementById('pl-modal-bg')?.classList.contains('on') ||
-    document.getElementById('modal-bg')?.classList.contains('on') ||
-    document.getElementById('confirm-modal-bg')?.classList.contains('on') ||
-    document.getElementById('settings-panel')?.classList.contains('on') ||
-    document.querySelector('.orphan-modal-bg.on') !== null ||
-    document.querySelector('.ctx-menu') !== null;
-  if (_anyModalOpen) return;
-  // Bloquer tous les raccourcis pendant l'édition inline de métadonnées
-  if (document.querySelector('.tr.editing')) return;
-  // Laisser cinema.js gérer les raccourcis quand le mode cinéma est ouvert
-  if (cinemaOpen) return;
-  if (e.code==='Space')      { e.preventDefault(); togglePlay(); }
-  if (e.code==='ArrowRight') { e.preventDefault(); next(true); }
-  if (e.code==='ArrowLeft')  { e.preventDefault(); prev(); }
-  if (e.code==='ArrowUp')    { e.preventDefault(); const _cur=masterGainNode?masterGainNode.gain.value:audio.volume; const v=Math.min(1,_cur+0.05); setMasterGain(v); const vel=document.getElementById('vol'); if(vel){vel.value=v; updateVolSlider(vel);} }
-  if (e.code==='ArrowDown')  { e.preventDefault(); const _cur=masterGainNode?masterGainNode.gain.value:audio.volume; const v=Math.max(0,_cur-0.05); setMasterGain(v); const vel=document.getElementById('vol'); if(vel){vel.value=v; updateVolSlider(vel);} }
-  if (e.key.toLowerCase()==='s') toggleShuffle();
-  if (e.key.toLowerCase()==='r') toggleRepeat();
-  if (e.key === '/') { document.getElementById('srch')?.focus(); e.preventDefault(); } // FIX #25
-  if (e.key.toLowerCase()==='f' && !e.ctrlKey && !e.altKey && !cinemaOpen) toggleLike();
-  if (e.key.toLowerCase()==='m' && !e.ctrlKey && !e.altKey) toggleMiniPlayer();
-  if (e.key.toLowerCase()==='i' && !e.ctrlKey && !e.altKey) toggleMiniOverlay();
-  if (e.code==='Escape') {
-    if (cinemaOpen) { closeCinema(); return; }
-    if (isShortcutsOpen()) { closeShortcuts(); return; }
-    if (document.getElementById('pl-modal-bg')?.classList.contains('on')) { closePlModal(); return; } // FIX #26
-    if (document.getElementById('modal-bg')?.classList.contains('on')) { closeModal(); return; }
-    if (document.getElementById('confirm-modal-bg')?.classList.contains('on')) { document.querySelector('#confirm-modal .mbtn.cancel')?.click(); return; }
-    if (document.getElementById('ctx-menu')?.classList.contains('on')) { closeCtxMenu(); return; } // FIX #26
-    if (eqOpen) { closeEQ(); return; }
-    if (queueOpen) { closeQueue(); return; }
-    if (document.getElementById('settings-panel')?.classList.contains('on')) { closeSettings(); return; } // FIX #27
-    const srch = document.getElementById('srch');
-    if (srch.value) {
-      // BUG FIX : _searchDebounceTimer est une var privée de views.js (non exportée) →
-      // ReferenceError en strict mode ES module. Le timer views.js expirera seul (no-op
-      // puisque query sera déjà vide). Pas besoin de le clearTimeout ici.
-      srch.value = ''; set('query', ''); invalidateFilter(); renderLib();
-      const clr = document.getElementById('srch-clear');
-      if (clr) clr.style.display = 'none';
-      return;
-    }
-  }
-  if (e.code==='F11')        { e.preventDefault(); if (window.__TAURI__) invoke('win_maximize'); }
-  if (e.code==='F12' && import.meta.env.DEV) { e.preventDefault(); if (window.__TAURI__) invoke('open_devtools'); }
-  if (e.key.toLowerCase()==='c' && !e.ctrlKey && !e.altKey) toggleCinema();
-  // Note : 'b' (cycleCinemaBg) et 'f' (toggleCinemaFullscreen) en mode cinéma sont gérés
-  // par _onCinKey dans cinema.js — ces guards `&& cinemaOpen` seraient inatteignables ici
-  // car le `if (cinemaOpen) return` ci-dessus les bloque.
-  if (e.key.toLowerCase()==='d' && !e.ctrlKey) detectDupes();
-  if (e.key.toLowerCase()==='x' && !e.ctrlKey && !e.altKey) cycleSpeed();
-  if (e.key.toLowerCase()==='v' && !e.ctrlKey && !e.altKey) {
-    const _vmodes = ['bars', 'oscilloscope', 'circle'];
-    setVizMode(_vmodes[(_vmodes.indexOf(getVizMode()) + 1) % _vmodes.length]);
-    _syncVizBtns(true);
-  }
-  if (e.key === '?') toggleShortcuts();
-});
+// ══ Keyboard shortcuts → shortcuts.js (CQ-2) ════════════════════
+// Handler attaché ici après définition de updateVolSlider, closeModal, cycleSpeed
+// (fonctions injectées comme callbacks pour éviter la dépendance circulaire).
+initShortcuts({ updateVolSlider, closeModal, cycleSpeed });
 
 // ══ Persistence ═════════════════════════════════
 
@@ -953,15 +822,8 @@ export function cycleSpeed() {
 
 // setSpeed → player.js
 
-// FIX DRAG-MODULE : drago + listeners attachés dans DOMContentLoaded (garantit que drago
-// est défini avant tout événement drag — évite la race module-level vs DOM)
-document.addEventListener('DOMContentLoaded', () => {
-  drago = document.getElementById('drago');
-  document.addEventListener('dragenter', _onDragEnter);
-  document.addEventListener('dragover',  _onDragOver);
-  document.addEventListener('dragleave', _onDragLeave);
-  document.addEventListener('drop',      _onDrop);
-});
+// FIX DRAG-MODULE → dropin.js : initDrop() résout #drago + attache les listeners après DOMContentLoaded
+document.addEventListener('DOMContentLoaded', () => { initDrop(); });
 
 // Attendre __TAURI__ avant de démarrer (fix build MSI)
 function waitForTauri(cb, n = 0) {
@@ -1085,175 +947,12 @@ export function statsGoToAlbum(albumKey, displayName) {
   });
 }
 
-// ── Volume slider visual sync ──────────────────────────────────────────────
-// Met à jour le remplissage CSS du slider et le tooltip vol-tip.
-// Appelé depuis : oninput inline, touches fléchées, mini-cmd, boot (setTimeout).
-// `el` peut être l'élément slider ou undefined (fallback sur #vol).
-let _volHideTimer = 0;
-export function updateVolSlider(el) {
-  const vel = (el instanceof Element) ? el : document.getElementById('vol');
-  if (!vel) return;
-  const pct = Math.round(+vel.value * 100);
-  vel.style.background = `linear-gradient(to right, var(--g) ${pct}%, var(--bg5) ${pct}%)`;
-  const tip = document.getElementById('vol-tip');
-  if (tip) {
-    tip.textContent = pct + '%';
-    // UX-10 : afficher/masquer le tooltip avec classe .on
-    tip.classList.add('on');
-    clearTimeout(_volHideTimer);
-    _volHideTimer = setTimeout(() => tip.classList.remove('on'), 1200);
-  }
-}
+// ── Volume slider, marquee, now-playing bar → playerbar.js (CQ-2) ────────────
+// updateVolSlider(), setupMarquee(), updateBar() extraits dans playerbar.js.
+// Re-exportés ci-dessus pour les consommateurs existants (handlers.js, library.js…).
 
-// ── Marquee — défilement smooth des titres/artistes longs ─────────────────
-// Annuler les RAF orphelins si updateBar() est rappelé avant la fin du frame
-// (ex. changement de piste rapide). Sans ça, le callback orphelin accède à un span
-// qui n'est plus dans le DOM et tente de lui appliquer des styles inutilement.
-const _mqRafMap = new Map();
-function _setupMarquee(container, text) {
-  if (!container) return;
-  const prevRaf = _mqRafMap.get(container);
-  if (prevRaf !== undefined) { cancelAnimationFrame(prevRaf); _mqRafMap.delete(container); }
-  container.textContent = '';
-  const span = document.createElement('span');
-  span.className = 'mq';
-  span.textContent = text;
-  container.appendChild(span);
-  const rafId = requestAnimationFrame(() => {
-    _mqRafMap.delete(container);
-    if (!span.isConnected) return;
-    const overflow = span.scrollWidth - container.offsetWidth;
-    if (overflow > 4) {
-      const shift = -(overflow + 24);
-      const dur   = Math.max(6, Math.abs(shift) / 38);
-      span.style.setProperty('--mq-shift', `${shift}px`);
-      span.style.setProperty('--mq-dur',   `${dur}s`);
-      span.classList.add('mq-on');
-    }
-  });
-  _mqRafMap.set(container, rafId);
-}
-
-// ── Now-playing bar update ─────────────────────────────────────────────────
-// Met à jour le panneau inférieur (titre, artiste, pochette, like, icône)
-// et déclenche en Phase 2 les mises à jour lourdes (couleur, waveform, cinéma, notif).
-export function updateBar() {
-  if (curIdx < 0) return;
-  const t = tracks[curIdx];
-  if (!t) return; // guard : curIdx hors bornes (ex. clearLibrary pendant un event en queue)
-
-  // Phase 1 : feedback visuel critique — même frame que l'event (INP-1)
-  document.title = `${t.name} — ${t.artistFull || t.artist || i18n('unknown_artist')} · LibreFlow`;
-  // UX-5 : mettre à jour la région ARIA live pour les lecteurs d'écran
-  const _npLive = document.getElementById('np-live');
-  if (_npLive) _npLive.textContent = `${t.name} — ${t.artistFull || t.artist || i18n('unknown_artist')}`;
-  _setupMarquee(document.getElementById('pl-n'), t.name);
-  _setupMarquee(document.getElementById('pl-a'), t.artistFull || t.artist || i18n('unknown_artist'));
-  const img = document.getElementById('pl-img'), em = document.getElementById('pl-em');
-  if (t.art) { img.src = t.art; img.style.display = 'block'; em.style.display = 'none'; animateArtChange(); }
-  else       { img.style.display = 'none'; em.style.display = ''; em.innerHTML = extEmoji(t.ext); }
-  const _isLikedNow = liked.has(t.id);
-  document.getElementById('pl-lk').classList.toggle('on', _isLikedNow);
-  document.getElementById('pl-lk').setAttribute('aria-pressed', String(_isLikedNow));
-  document.getElementById('cinema-lk')?.classList.toggle('on', _isLikedNow);
-  document.getElementById('cinema-lk')?.setAttribute('aria-pressed', String(_isLikedNow));
-  // Heart-beat : piste déjà aimée qui devient active → pulse unique
-  if (_isLikedNow && t.id !== _lastNotifTrackId) {
-    const _hb = document.getElementById('pl-lk');
-    if (_hb) {
-      void _hb.offsetWidth;
-      _hb.classList.remove('popping');
-      requestAnimationFrame(() => {
-        _hb.classList.add('popping');
-        _hb.addEventListener('animationend', () => _hb.classList.remove('popping'), { once: true });
-      });
-    }
-  }
-  setIcon(!audio.paused);
-  refreshQueueBadge();
-  const _shouldNotify = t.id !== _lastNotifTrackId;
-  if (_shouldNotify) _lastNotifTrackId = t.id;
-
-  // Phase 2 : opérations lourdes — différées après le premier paint
-  requestAnimationFrame(() => setTimeout(() => {
-    if (t.artColor) applyArtColor(t.artColor);
-    else if (t.art) extractColor(t.art).then(c => { if (c) { t.artColor = c; applyArtColor(c); } }).catch(() => {});
-    else clearArtColor();
-    _updateArtBlur(t.art || null);
-    wfLoad(t.id, t.url);
-    if (cinemaOpen) updateCinema();
-    if (_shouldNotify) {
-      // ART-IDB : base64 généré lazily depuis _artBuf (fire-and-forget, pas bloquant)
-      (async () => {
-        let artUrl = null;
-        if (t._b64) {
-          artUrl = t._b64;
-        } else if (t.art && t.art.startsWith('data:')) {
-          artUrl = t.art;
-        } else if (t._artBuf) {
-          artUrl = await new Promise(res => {
-            const fr = new FileReader();
-            fr.onload = () => res(fr.result);
-            fr.readAsDataURL(new Blob([t._artBuf], { type: t._artMime || 'image/jpeg' }));
-          });
-          t._b64 = artUrl; // cache pour le prochain changement de piste
-        }
-        invoke('notify_track', { data: { title: t.name, artist: t.artistFull || t.artist || '', art: artUrl } }).catch(() => {});
-      })();
-      updateMediaSession(t);
-    }
-    if (queueOpen) renderQueue();
-  }, 0));
-}
-
-// ── Modal de confirmation "vider la bibliothèque" ─────────────────────────
-let _modalPrevFocus = null;
-let _modalFocusTrap = null;
-
-const _MODAL_FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
-
-function _buildModalFocusTrap(dialogEl) {
-  return function(e) {
-    if (e.key !== 'Tab') return;
-    const els = [...dialogEl.querySelectorAll(_MODAL_FOCUSABLE)]
-      .filter(el => el.offsetWidth > 0 || el.offsetHeight > 0);
-    if (!els.length) return;
-    const first = els[0], last = els[els.length - 1];
-    if (e.shiftKey && document.activeElement === first) {
-      e.preventDefault(); last.focus();
-    } else if (!e.shiftKey && document.activeElement === last) {
-      e.preventDefault(); first.focus();
-    }
-  };
-}
-
-export function confirmClear() {
-  if (!tracks.length) return;
-  _modalPrevFocus = document.activeElement;
-  document.getElementById('modal-bg').classList.add('on');
-  const modal = document.getElementById('modal');
-  if (modal && !_modalFocusTrap) {
-    _modalFocusTrap = _buildModalFocusTrap(modal);
-    modal.addEventListener('keydown', _modalFocusTrap);
-    setTimeout(() => modal.querySelector('.mbtn.cancel')?.focus(), 50);
-  }
-}
-export function closeModal() {
-  const bg = document.getElementById('modal-bg');
-  if (!bg) return; // W9 FIX : guard contre l'absence du DOM element
-  bg.classList.add('modal-closing');
-  bg.addEventListener('animationend', () => {
-    bg.classList.remove('on', 'modal-closing');
-  }, { once: true });
-  setTimeout(() => bg.classList.remove('on', 'modal-closing'), 250);
-  const modal = document.getElementById('modal');
-  if (modal && _modalFocusTrap) {
-    modal.removeEventListener('keydown', _modalFocusTrap);
-    _modalFocusTrap = null;
-  }
-  _modalPrevFocus?.focus();
-  _modalPrevFocus = null;
-}
+// ── Modal de confirmation "vider la bibliothèque" → modal.js (CQ-2) ──────────
+// confirmClear(), closeModal() extraits dans modal.js ; re-exportés ci-dessus.
 
 export async function clearAppCache() {
   const ok = await confirmAction(
@@ -1320,14 +1019,14 @@ export async function clearLibrary() {
   artistSort = 'name'; set('artistSort', 'name');
   genreSort = 'count'; set('genreSort', 'count');
   albumDetailSort = 'track'; set('albumDetailSort', 'track');
-  _lastNotifTrackId = null;
+  // (_lastNotifTrackId dans playerbar.js se réinitialise naturellement au prochain updateBar)
   // Arrêter l'audio
   audio.pause();
   audio.src = '';
   // Réinitialiser la barre player
   document.title = 'LibreFlow';
-  _setupMarquee(document.getElementById('pl-n'), '–');
-  _setupMarquee(document.getElementById('pl-a'), '–');
+  setupMarquee(document.getElementById('pl-n'), '–');
+  setupMarquee(document.getElementById('pl-a'), '–');
   wfClear();
   _updateArtBlur(null);
   clearArtColor(); // réinitialise --art-color, --g, --g-rgb, --gd, --gg
