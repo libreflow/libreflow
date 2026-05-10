@@ -601,7 +601,7 @@ body:hover .sys-btns { opacity: 1; }
 
 <!-- Couches de fond (de bas en haut : ambient → art → overlay) -->
 <canvas id="ambient-canvas"></canvas>
-<div id="art-bg">
+<div id="art-bg" aria-hidden="true">
   <img id="art-img" alt="">
   <div class="art-em" id="art-em">
     <svg viewBox="0 0 24 24"><path d="M9 18V5l12-2v13M9 18c0 1.1-.9 2-2 2s-2-.9-2-2 .9-2 2-2 2 .9 2 2zm12 0c0 1.1-.9 2-2 2s-2-.9-2-2 .9-2 2-2 2 .9 2 2z"/></svg>
@@ -645,11 +645,11 @@ body:hover .sys-btns { opacity: 1; }
   <!-- Info piste -->
   <div class="info">
     <div class="track-name-row">
-      <div class="track-name" id="track-name" title="Double-cliquer pour restaurer">–</div>
+      <div class="track-name" id="track-name" tabindex="0" role="button" aria-label="Restaurer la fenêtre principale" title="Double-cliquer pour restaurer">–</div>
     </div>
     <div class="radio-artist-row">
       <div class="radio-badge" id="radio-badge" style="display:none">
-        <span class="radio-badge-dot"></span>RADIO
+        <span class="radio-badge-dot" aria-hidden="true"></span>RADIO
       </div>
       <div class="track-artist" id="track-artist">–</div>
     </div>
@@ -1147,6 +1147,10 @@ waitForTauri(() => {
     $('pbar-fill').style.transform = `scaleX(${(e.payload.progress || 0) / 100})`;
     $('ptime').textContent = e.payload.time || '0:00';
   },                                                            { target: { kind: 'Any' } }).then(u => _unlisteners.push(u));
+  listen('mini-will-close', async (e) => {
+    try { await _savePos(); } catch {}
+    try { await emit('mini-pos-saved', e.payload); } catch {}
+  }, { target: { kind: 'Any' } }).then(u => _unlisteners.push(u));
   window.addEventListener('pagehide', () => {
     _savePos(); // best-effort : sauvegarde position avant fermeture (cas focus main)
     _unlisteners.forEach(u => { try { u(); } catch {} });
@@ -1195,8 +1199,11 @@ waitForTauri(() => {
   $('btn-shuf').addEventListener('click',   () => send('toggle-shuffle'));
   $('btn-rep').addEventListener('click',    () => send('toggle-repeat'));
 
-  // Double-clic titre → restaurer
+  // Double-clic ou Enter/Space sur le titre → restaurer
   $('track-name').addEventListener('dblclick', () => invoke('mini_close').catch(() => {}));
+  $('track-name').addEventListener('keydown', e => {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); invoke('mini_close').catch(() => {}); }
+  });
 
   // Seek — drag complet (pointerdown + move + up)
   {

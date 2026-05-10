@@ -25,9 +25,37 @@ let _vinylSpin      = false;
 let _shortcutsOpen  = false;
 let _currentArtColor = null;
 
+// A11Y-05: focus management + focus trap pour le panneau settings
+let _settingsTrigger   = null; // élément qui a ouvert le panneau (restauré au close)
+let _settingsFocusTrap = null; // handler Tab trap dans #settings-box
+
+/** Sélecteur d'éléments focusables pertinents dans le panneau settings. */
+const _FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
+function _setupSettingsFocusTrap(box) {
+  if (_settingsFocusTrap) box.removeEventListener('keydown', _settingsFocusTrap);
+  _settingsFocusTrap = (e) => {
+    if (e.code !== 'Tab') return;
+    const focusable = [...box.querySelectorAll(_FOCUSABLE)].filter(el => {
+      const r = el.getBoundingClientRect();
+      return r.width > 0 && r.height > 0;
+    });
+    if (!focusable.length) return;
+    const first = focusable[0];
+    const last  = focusable[focusable.length - 1];
+    if (e.shiftKey && document.activeElement === first) {
+      e.preventDefault(); last.focus();
+    } else if (!e.shiftKey && document.activeElement === last) {
+      e.preventDefault(); first.focus();
+    }
+  };
+  box.addEventListener('keydown', _settingsFocusTrap);
+}
+
 // Art-blur background
 const _artBlurImg = document.getElementById('art-blur-img');
 let _artBlurPrev  = null;
+let _artBlurTimer = null;
 
 // ── Initialisation depuis boot() ──────────────────────────────────────────────
 /**
@@ -67,12 +95,15 @@ export function openSettings() {
   if (eqOpen)    closeEQ();
   if (queueOpen) closeQueue();
   const panel = document.getElementById('settings-panel');
+  if (!panel) return;
+  // A11Y-05: sauvegarder l'élément qui a déclenché l'ouverture pour le restaurer à la fermeture
+  _settingsTrigger = document.activeElement instanceof HTMLElement ? document.activeElement : null;
   panel.classList.remove('closing');
   panel.classList.add('on');
-  document.getElementById('tbt-settings').classList.add('active');
+  document.getElementById('tbt-settings')?.classList.add('active');
   switchSetTab('appearance');
-  document.getElementById('lang-fr').classList.toggle('on', getLang() === 'fr');
-  document.getElementById('lang-en').classList.toggle('on', getLang() === 'en');
+  document.getElementById('lang-fr')?.classList.toggle('on', getLang() === 'fr');
+  document.getElementById('lang-en')?.classList.toggle('on', getLang() === 'en');
   // Sync dynColor buttons
   const _dynOn  = document.getElementById('dyn-on-btn');
   const _dynOff = document.getElementById('dyn-off-btn');
@@ -85,19 +116,44 @@ export function openSettings() {
   if (_vOff) { _vOff.classList.toggle('on', !_vinylSpin); _vOff.setAttribute('aria-pressed', String(!_vinylSpin)); }
   syncCinemaBgSettings();
   _syncVizBtns();
+  // A11Y-05: mettre en place le piège de focus et déplacer le focus sur le bouton Fermer
+  const box = document.getElementById('settings-box');
+  if (box) _setupSettingsFocusTrap(box);
+  setTimeout(() => {
+    document.querySelector('#settings-box .set-close')?.focus();
+  }, 50);
 }
 
 export function closeSettings() {
   const panel = document.getElementById('settings-panel');
+  if (!panel) return;
+  // A11Y-05: supprimer le piège de focus avant l'animation
+  const box = document.getElementById('settings-box');
+  if (_settingsFocusTrap && box) {
+    box.removeEventListener('keydown', _settingsFocusTrap);
+    _settingsFocusTrap = null;
+  }
   panel.classList.add('closing');
-  panel.addEventListener('animationend', () => {
+  // BUG-M3 FIX : animationend peut ne jamais se déclencher si l'animation est désactivée
+  // (prefers-reduced-motion, GPU désactivé, transition CSS absente) → fallback 400ms
+  let _closeHandled = false;
+  const _onClose = () => {
+    if (_closeHandled) return;
+    _closeHandled = true;
     panel.classList.remove('on', 'closing');
-  }, { once: true });
-  document.getElementById('tbt-settings').classList.remove('active');
+    // A11Y-05: restaurer le focus à l'élément déclencheur après la fermeture de l'animation
+    if (_settingsTrigger) {
+      _settingsTrigger.focus();
+      _settingsTrigger = null;
+    }
+  };
+  panel.addEventListener('animationend', _onClose, { once: true });
+  setTimeout(_onClose, 400); // fallback si animationend ne se déclenche jamais
+  document.getElementById('tbt-settings')?.classList.remove('active');
 }
 
 document.addEventListener('keydown', e => {
-  if (e.code === 'Escape' && document.getElementById('settings-panel').classList.contains('on')) {
+  if (e.code === 'Escape' && document.getElementById('settings-panel')?.classList.contains('on')) {
     e.stopImmediatePropagation();
     closeSettings();
   }
@@ -231,7 +287,8 @@ export function _updateArtBlur(src) {
   }
   _artBlurImgEl.classList.remove('ab-on');
   const expectedSrc = src;
-  setTimeout(() => {
+  clearTimeout(_artBlurTimer);
+  _artBlurTimer = setTimeout(() => {
     if (_artBlurPrev !== expectedSrc) return;
     _artBlurImgEl.src = src;
     _artBlurImgEl.onload = () => {
@@ -254,7 +311,7 @@ export function animateArtChange() {
 
 export function closeShortcuts() {
   _shortcutsOpen = false;
-  document.getElementById('shortcuts-panel').classList.remove('open');
+  document.getElementById('shortcuts-panel')?.classList.remove('open');
 }
 
 export function toggleShortcuts() {
@@ -263,7 +320,7 @@ export function toggleShortcuts() {
     if (eqOpen)    closeEQ();
     if (queueOpen) closeQueue();
   }
-  document.getElementById('shortcuts-panel').classList.toggle('open', _shortcutsOpen);
+  document.getElementById('shortcuts-panel')?.classList.toggle('open', _shortcutsOpen);
 }
 
 // ══ THÈME CLAIR / SOMBRE ════════════════════════════════════════════════════
@@ -283,6 +340,9 @@ export function setMode(mode) {
     b.classList.toggle('on', isActive);
     b.setAttribute('aria-pressed', String(isActive));
   });
+  // Toolbar toggle button — reflète le mode actif pour les lecteurs d'écran
+  const modeBtn = document.getElementById('mode-toggle-btn');
+  if (modeBtn) modeBtn.setAttribute('aria-pressed', mode === 'light' ? 'true' : 'false');
   saveCfg();
 }
 

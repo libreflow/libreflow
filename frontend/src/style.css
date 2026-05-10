@@ -23,6 +23,36 @@
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
+/* ── Accessibilité — skip link + sr-only ─────────────────────────────────── */
+.skip-link {
+  position: fixed;
+  top: -100%;
+  left: 6px;
+  z-index: 9999;
+  padding: 8px 16px;
+  background: var(--g);
+  color: #fff;
+  font-weight: 600;
+  font-size: 14px;
+  border-radius: 6px;
+  text-decoration: none;
+  transition: top .15s ease;
+}
+.skip-link:focus { top: 6px; }
+
+/* Visually hidden but accessible to screen readers */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 /* ── Typed custom property — active les transitions CSS sur --art-color ── */
 @property --art-color {
   syntax: '<color>';
@@ -57,8 +87,8 @@
 
   /* Texte — hiérarchie claire */
   --t:   #f0ece4;     /* Primary — titres */
-  --t2:  #a09890;     /* Secondary — artistes */
-  --t3:  #5c5854;     /* Tertiary — metadata */
+  --t2:  #b8ada5;     /* Secondary — artistes  (A11Y-04: ~5.4:1 on #080808) */
+  --t3:  #837d79;     /* Tertiary — metadata   (A11Y-04: ~4.6:1 on #080808) */
   --t4:  #2e2e2e;     /* Ghost — invisible par défaut */
 
   /* États — sémantique partagée (toasts, trends, stop/delete) */
@@ -92,7 +122,7 @@
   --tb: 38px;
   --sb: 260px;
   --sb-sm: 54px;   /* sidebar compacte icônes-only (< 720px) */
-  --pb: 88px;
+  --pb: 96px;
 
   /* Spacing — 2px grid */
   --sp-nano:  1px;   /* séparateurs fins, gaps d'un pixel */
@@ -148,14 +178,14 @@
   --art-cinema:    42px;   /* miniature cinéma inline */
   --art-empty:     48px;   /* icône état vide */
   --art-settings:  54px;   /* artwork panneau settings */
-  --art-player:    56px;   /* pochette player bar */
+  --art-player:    72px;   /* pochette player bar */
   --art-avatar:    58px;   /* avatar profil circulaire */
   --art-ring:      60px;   /* anneau spinner chargement */
   --art-card:      64px;   /* artwork playlist / album card */
   --art-hero-sm:   88px;   /* hero cover — responsive sm */
   --art-cover:    100px;   /* cover placeholder modal */
   --art-hero:     148px;   /* hero cover — taille pleine */
-  --art-list:      52px;   /* colonne artwork dans rangée track (grid) */
+  --art-list:      56px;   /* colonne artwork dans rangée track (grid) */
 
   /* Éléments structurels — tracks & sliders */
   --track-h-xs: 2px;   /* indicateurs fins, tab active line */
@@ -462,7 +492,7 @@
   --shadow-act-bar:   inset 3px 0 0 var(--g); /* barre active gauche */
   --shadow-tab-top:   inset 0 2px 0 0 var(--g); /* onglet actif haut */
   --shadow-tab-bot:   inset 0 -2px 0 0 var(--g); /* onglet actif bas */
-  --shadow-tr-focus:  inset 0 0 0 2px var(--g); /* track focus ring */
+  --shadow-tr-focus:  inset 0 0 0 2px var(--g), inset 0 0 0 4px rgba(255,255,255,0.18); /* A11Y-22: colored ring + white inner layer */
   --shadow-tr-above:  0 -2px 0 var(--g); /* drag drop above */
   --shadow-tr-below:  0 2px 0 var(--g); /* drag drop below */
 
@@ -632,8 +662,8 @@ html[data-mode="light"] {
   --bg5: #d0d5df;   /* bordures */
   --bg6: #b0b8c8;   /* bordures fortes, scrollbar */
   --t:   #0f1117;   /* texte principal */
-  --t2:  #3a4050;   /* texte secondaire */
-  --t3:  #7a8099;   /* texte tertiaire */
+  --t2:  #3a4050;   /* texte secondaire (~7.8:1 on #f0f2f5 — OK) */
+  --t3:  #5a6080;   /* texte tertiaire  (A11Y-12: ~5.4:1 on #f0f2f5) */
   --t4:  #c8ccda;   /* placeholder */
   --sep: rgba(0,0,0,.07);
   --player-shadow: 0 -1px 0 rgba(0,0,0,.08), 0 -4px 20px rgba(0,0,0,.06);
@@ -1320,7 +1350,7 @@ button { cursor: pointer; }
 }
 
 .tr {
-  display: grid; grid-template-columns: var(--art-list) 1fr auto;
+  display: grid; grid-template-columns: var(--art-list) 1fr minmax(0, 12em) auto;
   align-items: center; gap: var(--sp-3);
   padding: var(--sp-1h) var(--sp-2h) var(--sp-1h) var(--sp-2);
   min-height: 48px; /* doit correspondre à VIRT_ROW_H dans cfg.js */
@@ -1343,8 +1373,8 @@ button { cursor: pointer; }
   animation: rowBreath 3.2s ease-in-out infinite;
 }
 @keyframes rowBreath {
-  0%, 100% { background: linear-gradient(90deg, rgba(var(--g-rgb),.10) 0%, transparent 55%); }
-  50%       { background: linear-gradient(90deg, rgba(var(--g-rgb),.17) 0%, transparent 55%); }
+  0%, 100% { background: linear-gradient(90deg, color-mix(in srgb, var(--art-color, var(--g)) 12%, transparent) 0%, transparent 55%); }
+  50%       { background: linear-gradient(90deg, color-mix(in srgb, var(--art-color, var(--g)) 20%, transparent) 0%, transparent 55%); }
 }
 .tr.act .tn  { color: var(--t); font-weight: 600; }
 
@@ -1443,6 +1473,8 @@ button { cursor: pointer; }
 .tart-hover-play:focus-visible svg { transform: scale(1.2); }
 .tart-hover-play:active svg        { transform: scale(.88); transition-duration: 70ms; }
 .tr:hover .tart-hover-play         { opacity: 1; }
+/* A11Y — rendre le bouton visible quand il reçoit le focus clavier (sinon opacity:0 = invisible) */
+.tart-hover-play:focus-visible     { opacity: 1; background: rgba(0,0,0,.48); }
 
 /* Hiérarchie texte — primary / secondary / tertiary */
 .ti   { min-width: 0; }
@@ -1469,6 +1501,23 @@ html[data-mode="light"] mark.srch-hl { background: rgba(var(--g-rgb), .22); }
    justify-content: flex-end ancre les boutons à droite — quand patchPlayState remplace le
    contenu (eq vs tdur+like), la colonne reste toujours 124px (width fixe, flex-shrink:0). */
 .tr-r { display: flex; align-items: center; gap: var(--sp-1); width: var(--tr-r-w); flex-shrink: 0; justify-content: flex-end; }
+
+/* ── Colonne album dans track list ───────────────────────── */
+.ta {
+  font-size: var(--fs-sm);
+  color: var(--t3);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  letter-spacing: var(--ls-slight);
+}
+
+@media (max-width: 900px) {
+  .ta { display: none; }
+  .tr { grid-template-columns: var(--art-list) 1fr auto; }
+}
+
 .tdur {
   font-size: var(--fs-sm); color: var(--t3); white-space: nowrap;
   font-variant-numeric: tabular-nums; min-width: var(--time-min-w); text-align: right;
@@ -1486,6 +1535,8 @@ html[data-mode="light"] mark.srch-hl { background: rgba(var(--g-rgb), .22); }
 .tlk:hover        { color: var(--g) !important; opacity: 1 !important; }
 .tlk.on           { color: var(--g); opacity: 1; filter: drop-shadow(var(--dropshadow-tlk)); }
 .tlk:active       { transform: scale(1.3); }
+/* A11Y — visible au focus clavier (sinon opacity:0 = bouton like introuvable au clavier) */
+.tlk:focus-visible { opacity: 1; color: var(--t3); }
 .tlk svg          { width: var(--icon-sm); height: var(--icon-sm); fill: currentColor; }
 
 /* Bouton ajouter à playlist — visible seulement au hover */
@@ -1497,6 +1548,8 @@ html[data-mode="light"] mark.srch-hl { background: rgba(var(--g-rgb), .22); }
 }
 .tr:hover .tr-add-btn    { color: var(--t3); opacity: 1; }
 .tr-add-btn:hover        { color: var(--g) !important; background: var(--bg4); opacity: 1 !important; }
+/* A11Y — visible au focus clavier */
+.tr-add-btn:focus-visible { opacity: 1; color: var(--t3); background: var(--bg4); }
 .tr-add-btn svg          { width: var(--icon-sm); height: var(--icon-sm); stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; }
 
 /* Bouton édition tags — visible au hover */
@@ -1508,6 +1561,8 @@ html[data-mode="light"] mark.srch-hl { background: rgba(var(--g-rgb), .22); }
 }
 .tr:hover .tr-edit-btn   { color: var(--t3); opacity: 0.7; }
 .tr-edit-btn:hover       { color: var(--g) !important; background: var(--bg4); opacity: 1 !important; }
+/* A11Y — visible au focus clavier */
+.tr-edit-btn:focus-visible { opacity: 0.7; color: var(--t3); background: var(--bg4); }
 .tr-edit-btn svg         { width: var(--icon-xs); height: var(--icon-xs); stroke: currentColor; }
 
 /* Drag & drop */
@@ -1540,9 +1595,11 @@ html[data-mode="light"] mark.srch-hl { background: rgba(var(--g-rgb), .22); }
   background: var(--bg2); border: var(--border-w-sm) solid var(--bg4); border-radius: var(--r-card);
   padding: var(--sp-3); cursor: pointer;
   transition: background var(--dur-fast) ease, transform var(--dur-mid) var(--spring-soft), box-shadow var(--dur-mid) ease, border-color var(--dur-fast) ease;
-  will-change: transform;
+  /* PERF : will-change retiré du base — créait un layer GPU pour chaque carte visible en
+     permanence. Déplacé dans :hover pour n'allouer le layer qu'au moment pertinent. */
 }
 .card:hover  {
+  will-change: transform;  /* PERF : allocation GPU uniquement pendant le hover */
   background: var(--bg3); border-color: rgba(var(--g-rgb),.2);
   transform: translateY(calc(-1 * var(--sp-1))) scale(1.012);
   box-shadow: var(--shadow-pl-list);
@@ -1562,6 +1619,17 @@ html[data-mode="light"] mark.srch-hl { background: rgba(var(--g-rgb), .22); }
   box-shadow: var(--shadow-art);
 }
 .card-art img { width: 100%; height: 100%; object-fit: cover; display: block; }
+/* Gradient overlay on card artwork hover */
+.card-art::after {
+  content: '';
+  position: absolute; inset: 0;
+  background: linear-gradient(to top, rgba(0,0,0,.55) 0%, transparent 55%);
+  opacity: 0;
+  transition: opacity var(--dur-card, .2s) ease;
+  pointer-events: none;
+  z-index: 0;
+}
+.card:hover .card-art::after { opacity: 1; }
 /* Hover play overlay sur les cartes album/artiste */
 .card-play-btn {
   position: absolute; inset: 0; border: none; cursor: pointer;
@@ -1616,16 +1684,24 @@ html[data-mode="light"] mark.srch-hl { background: rgba(var(--g-rgb), .22); }
 
 /* ── Virtual scroll — spacers & group headers ────────────── */
 .virt-sp  { flex-shrink: 0; }
-.tr-grp   {
+.tr-grp {
   display: flex; align-items: center; gap: var(--sp-2);
-  padding: 0 var(--sp-2h);
-  font-size: var(--fs-xs); font-weight: 700; color: var(--t3);
+  padding: 0 var(--sp-2h) 0 var(--sp-2);
+  font-size: var(--fs-xs); font-weight: 600;
+  color: var(--t4);
   letter-spacing: var(--ls-caps); text-transform: uppercase;
-  border-bottom: var(--border-w-sm) solid var(--bg4);
   position: sticky; top: 0; z-index: 2;
   background: var(--bg1);
 }
-.grp-artist { font-weight: 400; color: var(--t3); text-transform: none; letter-spacing: 0; }
+.tr-grp--alpha {
+  display: grid;
+  grid-template-columns: var(--art-list) 1fr;
+  gap: var(--sp-3);
+  align-items: center;
+  font-weight: 700;
+  text-align: center;
+}
+.grp-artist { font-weight: 400; color: var(--t4); text-transform: none; letter-spacing: 0; }
 
 /* ── Grid empty state (albums / artistes) ────────────────── */
 .grid-empty {
@@ -2015,7 +2091,7 @@ html[data-mode="light"] mark.srch-hl { background: rgba(var(--g-rgb), .22); }
   /* Semi-transparent pour laisser transparaître le fond art blur */
   background:
     radial-gradient(ellipse 70% 140% at 8% 110%,
-      color-mix(in srgb, var(--art-color) 8%, transparent) 0%,
+      color-mix(in srgb, var(--art-color) 12%, transparent) 0%,
       transparent 50%),
     rgba(10,10,10,0.82);
   backdrop-filter: blur(var(--blur-12)) saturate(1.2);
@@ -2320,8 +2396,7 @@ html[data-mode="light"] #pbar-wave.wf-loading {
   background-size: 200% 100%;
   animation: wf-shimmer 1.4s ease infinite;
 }
-/* Quand la waveform est visible, masquer le fill plat (garder le thumb) */
-.pbar.wf-on .pfill { background: transparent !important; box-shadow: none !important; }
+/* wf-on : la waveform canvas reste derrière le pfill (z-index 1 < 2) — pfill toujours visible */
 
 /* Tooltip temps au survol waveform */
 
@@ -2344,6 +2419,9 @@ html[data-mode="light"] #pbar-wave.wf-loading {
 .vslider { -webkit-appearance: none; width: var(--slider-w); height: var(--track-h); border-radius: var(--r-xs); background: var(--bg5); outline: none; cursor: pointer; }
 .vslider::-webkit-slider-thumb { -webkit-appearance: none; width: var(--icon-xs); height: var(--icon-xs); border-radius: 50%; background: var(--g); box-shadow: var(--shadow-vslider); transition: transform var(--ease), background var(--ease); }
 .vslider:hover::-webkit-slider-thumb { transform: scale(1.25); }
+/* A11Y-SLIDER-1 — focus clavier : halo autour de la piste + scale du thumb */
+.vslider:focus-visible { box-shadow: 0 0 0 2px var(--g), 0 0 0 4px rgba(var(--g-rgb), .18); }
+.vslider:focus-visible::-webkit-slider-thumb { transform: scale(1.3); }
 
 .pl-queue-btn {
   background: none; border: none; color: var(--t3);
@@ -2473,7 +2551,7 @@ html[data-mode="light"] .sleep-custom-inp:focus { border-color: var(--g); backgr
 .tag-edit-form { display: flex; flex-direction: column; gap: var(--sp-1); padding: var(--sp-1) var(--sp-2) var(--sp-2); flex: 1; min-width: 0; }
 .tag-edit-row  { display: flex; gap: var(--sp-1h); align-items: center; }
 .tag-edit-inp  { background: var(--bg4); border: var(--border-w-sm) solid var(--bg5); border-radius: var(--r); padding: var(--sp-1) var(--sp-2); color: var(--t); font-size: var(--fs-caption); outline: none; min-width: 0; transition: border-color var(--ease); flex: 1; }
-.tag-edit-inp:focus   { border-color: var(--g); }
+.tag-edit-inp:focus   { border-color: var(--g); box-shadow: 0 0 0 2px color-mix(in srgb, var(--g) 35%, transparent); }
 .tag-edit-inp::placeholder { color: var(--t3); }
 .tag-edit-lbl  { font-size: var(--fs-xs); color: var(--t3); font-weight: 600; white-space: nowrap; width: var(--tag-lbl-w); text-align: right; flex-shrink: 0; }
 .tag-edit-actions { display: flex; gap: var(--sp-1h); justify-content: flex-end; margin-top: var(--sp-1); align-items: center; }
@@ -2717,7 +2795,30 @@ html[data-mode="light"] .sleep-custom-inp:focus { border-color: var(--g); backgr
 /* ── Dialog fichiers manquants (P2-6) ── */
 #confirm-modal:has(.orphan-list) { max-width: var(--modal-orphan-max); }
 
-/* Modal custom créé dynamiquement par orphans.js */
+/* Modal générique créée dynamiquement (promptAction dans ui.js) */
+/* NOTE : classe .prompt-bg (PAS .modal-bg) pour éviter la collision avec
+   orphans.js qui utilise className = 'modal-bg orphan-modal-bg' — si on
+   avait nommé cette classe .modal-bg, les règles .modal-bg.on .modal
+   auraient animé le inner .modal de l'orphan dialog ET le animationend
+   aurait pu déclencher prématurément le close() de l'orphan modal. */
+.prompt-bg {
+  position: fixed; inset: 0; z-index: calc(var(--z-modal) + 100);
+  background: var(--scrim);
+  backdrop-filter: blur(var(--blur-6)) saturate(.8);
+  -webkit-backdrop-filter: blur(var(--blur-6)) saturate(.8);
+  display: flex; align-items: center; justify-content: center;
+  visibility: hidden; opacity: 0; pointer-events: none;
+  transition: opacity var(--dur-fast), visibility var(--dur-fast);
+}
+.prompt-bg.on { visibility: visible; opacity: 1; pointer-events: auto; }
+.prompt-bg.on .modal { animation: modalBoxIn var(--dur-mid) var(--spring-soft) both; }
+.prompt-modal { background: var(--glass-surface); border: var(--border-w-sm) solid var(--border-2); border-radius: var(--r3); padding: var(--sp-7) var(--sp-7) var(--sp-5h); max-width: var(--text-sf-max); width: 90vw; box-shadow: var(--shadow-xl); display: flex; flex-direction: column; gap: var(--sp-3); }
+.modal-title { font-size: var(--fs-base); font-weight: 700; font-family: var(--font-display); letter-spacing: var(--ls-display); }
+.prompt-input { background: var(--bg3); border: var(--border-w-sm) solid var(--border-2); border-radius: var(--r); padding: var(--sp-2) var(--sp-3); color: var(--t); font-size: var(--fs-md); outline: none; }
+.prompt-input:focus { border-color: var(--g); }
+.modal-actions { display: flex; gap: var(--sp-2); justify-content: flex-end; }
+
+/* Modal custom créée dynamiquement par orphans.js */
 .orphan-modal-bg {
   position: fixed; inset: 0; z-index: var(--z-modal);
   background: var(--scrim);
@@ -2904,7 +3005,7 @@ html[data-mode="light"] .bte-cover-clear    { background: var(--bg3); border-col
 
 .pl-modal-h    { font-size: var(--fs-subhead); font-weight: 700; margin-bottom: var(--sp-3h); }
 .pl-modal-inp  { width: 100%; background: var(--bg4); border: var(--border-w-md) solid var(--bg5); border-radius: var(--r); padding: var(--sp-2q) var(--sp-3); color: var(--t); font-size: var(--fs-md); outline: none; transition: border-color var(--ease); }
-.pl-modal-inp:focus   { border-color: var(--g); }
+.pl-modal-inp:focus   { border-color: var(--g); box-shadow: 0 0 0 2px color-mix(in srgb, var(--g) 35%, transparent); }
 .pl-modal-inp.shake   { animation: t-spin .1s linear 4; border-color: var(--red); }
 .pl-modal-btns { display: flex; gap: var(--sp-2); justify-content: flex-end; margin-top: var(--sp-3h); align-items: center; }
 .pl-modal-inp select { appearance: none; }
@@ -2954,6 +3055,7 @@ html[data-mode="light"] .bte-cover-clear    { background: var(--bg3); border-col
 .ni-pl.has-cover .pl-icon { background: transparent !important; border: none !important; padding: 0; overflow: hidden; }
 .ni-pl.has-cover .pl-icon .pl-cover-img { width: 100%; height: 100%; border-radius: inherit; }
 .ni-pl.has-cover.on .pl-icon { box-shadow: var(--shadow-pl-icon); }
+.ni-pl.has-cover .pl-icon { width: 28px; height: 28px; border-radius: var(--r-sm); }
 
 /* S90 — Drag & drop reorder des playlists */
 .ni-pl.pl-dragging { opacity: .45; }
@@ -3252,6 +3354,13 @@ html[data-mode="light"] .bte-cover-clear    { background: var(--bg3); border-col
 }
 /* Première section : pas de marge supérieure */
 .sb-nav .sb-section-lbl:first-child { margin-top: 0; padding-top: var(--sp-1h); }
+/* Séparateur discret entre groupes nav (ex: avant Statistiques) */
+.sb-sep {
+  height: var(--sep-h);
+  background: var(--sep);
+  margin: var(--sp-1h) var(--sp-3);
+  opacity: .45;
+}
 .sb-section-lbl button {
   background: none; border: none; color: var(--t3);
   width: var(--icon-3xl); height: var(--icon-3xl); cursor: pointer;
@@ -3588,7 +3697,7 @@ html[data-mode="light"] .pl-folder-h:hover .pl-folder-count { background: var(--
   transition: transform var(--ease), background var(--ease);
 }
 .toggle-wrap input:checked + .toggle-slider            { background: var(--g); }
-.toggle-wrap input:checked + .toggle-slider::before    { transform: translateX(18px); background: #fff; }
+.toggle-wrap input:checked + .toggle-slider::before    { transform: translateX(18px); background: var(--c-white); } /* TOKEN-1: #fff → var(--c-white) */
 .toggle-wrap input:focus-visible + .toggle-slider      { outline: var(--border-w-lg) solid var(--g); outline-offset: 2px; }
 
 .lang-toggle  { display: flex; background: var(--bg4); border-radius: var(--r); padding: var(--sp-1q); gap: var(--sp-micro); }
@@ -3604,7 +3713,12 @@ html[data-mode="light"] .pl-folder-h:hover .pl-folder-count { background: var(--
 
 .crossfade-row   { display: flex; align-items: center; gap: var(--sp-2h); }
 .cf-slider       { -webkit-appearance: none; appearance: none; flex: 1; height: var(--track-h-md); border-radius: var(--r-xs); background: linear-gradient(to right, var(--g) 0%, var(--g) var(--cf-pct, 0%), var(--bg5) var(--cf-pct, 0%)); outline: none; }
-.cf-slider::-webkit-slider-thumb { -webkit-appearance: none; width: var(--icon-md); height: var(--icon-md); border-radius: 50%; background: var(--g); box-shadow: var(--shadow-cf-thumb); }
+.cf-slider::-webkit-slider-thumb { -webkit-appearance: none; width: var(--icon-md); height: var(--icon-md); border-radius: 50%; background: var(--g); box-shadow: var(--shadow-cf-thumb); transition: transform var(--ease); }
+/* CONSISTENCY-1 — hover thumb manquant (vslider l'avait, cf-slider non) */
+.cf-slider:hover::-webkit-slider-thumb { transform: scale(1.2); }
+/* A11Y-SLIDER-2 — focus clavier crossfade */
+.cf-slider:focus-visible { outline: none; box-shadow: 0 0 0 2px var(--g), 0 0 0 4px rgba(var(--g-rgb), .18); }
+.cf-slider:focus-visible::-webkit-slider-thumb { transform: scale(1.25); }
 .cf-val          { font-size: var(--fs-caption); color: var(--t2); min-width: var(--cfg-val-min); text-align: right; }
 
 .mp-toggle-btn       { display: flex; align-items: center; gap: var(--sp-2); background: var(--bg3); border: none; border-radius: var(--r); padding: var(--sp-2) var(--sp-3h); color: var(--t2); font-size: var(--fs-caption); font-weight: 600; width: 100%; transition: background var(--ease), color var(--ease); }
@@ -4720,6 +4834,8 @@ html[data-mode="light"] .eq-auto-btn {
   transition: height var(--dur-fast) ease;
 }
 .cinema-vol-slider:hover { height: var(--cinema-vol-hover-h); }
+/* A11Y-SLIDER-3 — focus clavier cinéma (fond semi-opaque blanc, pas de --g qui serait trop contrasté) */
+.cinema-vol-slider:focus-visible { box-shadow: 0 0 0 2px rgba(255,255,255,.7); }
 .cinema-vol-slider::-webkit-slider-thumb {
   -webkit-appearance: none; appearance: none;
   width: var(--icon-sm); height: var(--icon-sm); border-radius: 50%;
@@ -4917,7 +5033,7 @@ kbd              { display: inline-flex; align-items: center; justify-content: c
   box-shadow: var(--shadow-md), var(--shadow-sep-ring);
   opacity: 0; pointer-events: none;
   transition: opacity var(--dur-mid) ease, transform var(--dur-mid) var(--spring-soft);
-  z-index: 90; white-space: nowrap; backdrop-filter: blur(var(--blur-12));
+  z-index: var(--z-sticky); white-space: nowrap; backdrop-filter: blur(var(--blur-12)); /* TOKEN-2: 90 → var(--z-sticky) */
 }
 #sel-bar.on  { opacity: 1; pointer-events: all; transform: translateX(-50%) translateY(0); }
 #sel-count   { font-size: var(--fs-caption); font-weight: 700; color: var(--t); padding-right: var(--sp-micro); }
@@ -4932,6 +5048,8 @@ kbd              { display: inline-flex; align-items: center; justify-content: c
 .sel-action:hover { background: var(--bg4); color: var(--t); border-color: var(--sep); }
 .sel-action.danger       { color: var(--t3); }
 .sel-action.danger:hover { background: rgba(var(--red-rgb),.12); color: var(--red); border-color: rgba(var(--red-rgb),.25); }
+/* Action supprimer isolée visuellement à droite — séparée des actions sûres */
+.sel-action--delete { margin-left: var(--sp-2); padding-left: var(--sp-2h); border-left: var(--border-w-sm) solid var(--sep); }
 .sel-close {
   background: none; border: none; color: var(--t3); cursor: pointer;
   width: var(--icon-28); height: var(--icon-28); display: flex; align-items: center; justify-content: center;
@@ -5389,9 +5507,10 @@ html[data-mode="light"] .badge-tech {
 .pcplay:hover,
 .pcplay:active { animation: none; }  /* désactiver pendant interaction directe */
 
-/* 4b. Logo sidebar — glow discret pendant la lecture */
+/* 4b. Logo sidebar — glow discret adapté à la couleur de l'artwork en lecture */
 .sb-dot.playing .sb-dot-logo {
   animation: logopulse var(--anim-glow) ease-in-out infinite;
+  filter: drop-shadow(0 0 6px color-mix(in srgb, var(--art-color, var(--g)) 60%, var(--g) 40%));
 }
 
 /* 5. Stat cards — Syne + letter-spacing → fusionnés dans .stat-card-val principal */
@@ -5967,5 +6086,484 @@ html[data-mode="light"] .rv-start-btn  { background: var(--g); }
   /* Reduced motion */
   @media (prefers-reduced-motion: reduce) {
     .ni > span { transition: none; }
+  }
+}
+
+/* ══ POLISH v6 — Creative : énergie + directionnalité ══════════
+   Règles additives uniquement — aucune règle existante modifiée.
+   Chaque bloc surcharge ciblée via la cascade CSS normale.
+   prefers-reduced-motion : toutes les animations désactivées.
+   ══════════════════════════════════════════════════════════════ */
+
+/* 1. Track row — halo latéral sur l'indicateur ::before ────────
+   Le trait d'accent gauche gagne un glow coloré au hover pour
+   un retour tactile plus fort (Creative → motion-driven). */
+.tr::before {
+  transition: background var(--dur-fast) ease,
+              top         var(--dur-fast) ease,
+              bottom      var(--dur-fast) ease,
+              box-shadow  var(--dur-fast) ease;
+}
+.tr:hover::before {
+  box-shadow: 2px 0 8px rgba(var(--g-rgb), .4);
+}
+
+/* 2. Navigation — dégradé directionnel au hover ─────────────────
+   Remplace `background: var(--sep)` par un gradient avec teinte
+   accentuée sur le bord gauche : directionnalité + énergie.
+   NB : `html[data-mode="light"] .ni:hover` garde sa valeur plate. */
+.ni:hover {
+  background: linear-gradient(
+    90deg,
+    rgba(var(--g-rgb), .10) 0%,
+    var(--sep) 60%
+  );
+}
+
+/* 3. Cartes album / artiste — accent diagonal au hover ──────────
+   Fond passe d'un `var(--bg3)` plat à un gradient 135° avec
+   légère teinte accent : Creative "block-based & vibrant". */
+.card:hover {
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--g) 8%, var(--bg3)) 0%,
+    var(--bg3) 65%
+  );
+}
+
+/* 4. Genre cards — micro-lift du nom au hover ───────────────────
+   Le nom de genre remonte de 3 px (translateY) pour un sentiment
+   de soulèvement et de profondeur. Transition ajoutée sur
+   .genre-name (ne surcharge aucune règle de transform existante). */
+.genre-name {
+  transition: transform var(--dur-fast) ease;
+}
+.genre-card:hover .genre-name {
+  transform: translateY(-3px);
+}
+
+/* ── Respect des préférences de mouvement ──────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  .tr::before                    { transition: background var(--dur-fast) ease; }
+  .genre-name                    { transition: none; }
+  .genre-card:hover .genre-name  { transform: none; }
+}
+
+/* ── Now Playing View (#vnp) ──────────────────────────────────────────────── */
+
+#vnp {
+  position: relative;
+  overflow: hidden;
+  display: none;
+}
+
+#vnp.on {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding-bottom: calc(var(--pb) - var(--tb));
+}
+
+.vnp-bg {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  background-color: var(--art-color, var(--bg));
+  background-size: cover;
+  background-position: center;
+  /* background-image injected inline by _renderNowPlaying() */
+  filter: blur(var(--blur-60)) saturate(1.6) brightness(0.8);
+  transform: scale(1.15);
+  transition: background-color var(--anim-art, .6s) ease;
+}
+
+#vnp::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  background: rgba(0,0,0,.38);
+  transition: background var(--dur-slow, .3s) ease;
+  pointer-events: none;
+}
+
+#vnp {
+  --vnp-text:  #f0ece4;
+  --vnp-text2: rgba(240,236,228,.7);
+}
+
+#vnp.art-light {
+  --vnp-text:  #1a1a1a;
+  --vnp-text2: rgba(26,26,26,.65);
+}
+
+#vnp.art-light::after {
+  background: rgba(255,255,255,.38);
+}
+
+.vnp-back {
+  position: absolute;
+  top: var(--sp-6, 24px);
+  left: var(--sp-6, 24px);
+  z-index: 3;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(255,255,255,.12);
+  color: var(--vnp-text);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  backdrop-filter: blur(8px);
+  transition: background .15s ease, color .15s ease;
+}
+
+.vnp-back:hover {
+  background: rgba(255,255,255,.22);
+}
+
+.vnp-full-btn {
+  position: absolute;
+  top: var(--sp-6, 24px);
+  right: var(--sp-6, 24px);
+  z-index: 3;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(255,255,255,.12);
+  color: var(--vnp-text);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  backdrop-filter: blur(8px);
+  transition: background .15s ease;
+}
+
+.vnp-full-btn:hover {
+  background: rgba(255,255,255,.22);
+}
+
+/* ── NP fullscreen : sidebar masquée ──────────────────────────────────────── */
+#app.np-full {
+  --sb: 0px;
+}
+#app.np-full #sb {
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.vnp-bottom {
+  position: absolute;
+  bottom: var(--sp-6, 24px);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--sp-3, 12px);
+  padding: 0 var(--sp-6, 24px) var(--sp-6, 24px);
+  width: 100%;
+  max-width: 480px;
+  text-align: center;
+}
+
+.vnp-art-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  z-index: 2;
+}
+
+.vnp-art {
+  width: 320px;
+  height: 320px;
+  max-width: 70vw;
+  max-height: 40vh;
+  aspect-ratio: 1;
+  object-fit: cover;
+  border-radius: var(--r-card, 12px);
+  box-shadow: 0 24px 64px rgba(0,0,0,.5);
+}
+
+.vnp-art-ph {
+  width: 320px;
+  height: 320px;
+  max-width: 70vw;
+  max-height: 40vh;
+  aspect-ratio: 1;
+  background: var(--bg3);
+  border-radius: var(--r-card, 12px);
+}
+
+.vnp-info {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--sp-2, 8px);
+  width: 100%;
+}
+
+.vnp-title {
+  font-size: var(--fs-lg2, 1.35rem);
+  font-weight: 700;
+  line-height: 1.2;
+  color: var(--vnp-text);
+  letter-spacing: -0.01em;
+}
+
+.vnp-artist {
+  font-size: var(--fs-md, 1rem);
+  color: var(--vnp-text2);
+}
+
+.vnp-album {
+  font-size: var(--fs-sm, .875rem);
+  color: var(--vnp-text2);
+}
+
+.vnp-lk {
+  background: none;
+  border: none;
+  color: var(--vnp-text2);
+  cursor: pointer;
+  padding: var(--sp-2, 8px);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: color .15s ease;
+}
+
+.vnp-lk:hover { color: var(--vnp-text); }
+.vnp-lk.active { color: var(--g); }
+
+
+.vnp-tech {
+  display: flex;
+  gap: var(--sp-2, 8px);
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.vnp-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 8px;
+  border-radius: var(--r-pill, 999px);
+  background: rgba(255,255,255,.12);
+  backdrop-filter: blur(4px);
+  font-size: var(--fs-xs, .75rem);
+  font-weight: 500;
+  color: var(--vnp-text);
+  letter-spacing: .03em;
+}
+
+.vnp-links {
+  display: flex;
+  gap: var(--sp-3, 12px);
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.vnp-link {
+  background: none;
+  border: 1px solid rgba(255,255,255,.2);
+  border-radius: var(--r-pill, 999px);
+  color: var(--vnp-text2);
+  font-size: var(--fs-sm, .875rem);
+  padding: 5px 14px;
+  cursor: pointer;
+  transition: background .15s ease, color .15s ease;
+}
+
+.vnp-link:hover {
+  background: rgba(255,255,255,.12);
+  color: var(--vnp-text);
+}
+
+/* ── Drill Header (album-detail / artist-detail) ─────────────────────────── */
+#drill-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 20px;
+  padding: 20px 20px 16px;
+  background: linear-gradient(to bottom, var(--bg2), transparent);
+  flex-shrink: 0;
+}
+.dh-art {
+  width: 120px;
+  height: 120px;
+  border-radius: var(--r);
+  object-fit: cover;
+  flex-shrink: 0;
+}
+.dh-art-circle { border-radius: 50%; }
+.dh-art-ph { background: var(--bg3); }
+.dh-meta {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.dh-name {
+  font-size: 22px;
+  font-weight: 800;
+  color: var(--t1);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.dh-sub {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--t2);
+  align-items: center;
+}
+.dh-sub span { white-space: nowrap; }
+.dh-sub span + span::before { content: '·'; margin-right: 6px; }
+.dh-artist-link {
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--t1);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.dh-artist-link:hover { color: var(--g); }
+.dh-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+}
+.dh-btn {
+  padding: 8px 18px;
+  border-radius: 99px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  border: none;
+  transition: opacity .15s;
+}
+.dh-btn:hover { opacity: .85; }
+.dh-play { background: var(--g); color: #fff; }
+.dh-shuf { background: var(--bg3); color: var(--t1); border: 1px solid var(--bg5); }
+
+/* Artist drill: albums section */
+.drill-header--artist { flex-wrap: wrap; }
+.dh-albums-section {
+  width: 100%;
+  padding: 0 20px 16px;
+}
+.dh-albums-title {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .07em;
+  text-transform: uppercase;
+  color: var(--t3);
+  margin-bottom: 10px;
+}
+.dh-albums-mini {
+  display: flex;
+  gap: 12px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+  scrollbar-width: thin;
+}
+.dh-mini-card {
+  background: none;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+  width: 88px;
+  padding: 8px;
+  border-radius: var(--r);
+  transition: background .15s;
+}
+.dh-mini-card:hover { background: var(--bg3); }
+.dh-mini-art {
+  width: 72px;
+  height: 72px;
+  border-radius: var(--r);
+  object-fit: cover;
+}
+.dh-mini-art-ph { background: var(--bg4); }
+.dh-mini-name {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--t1);
+  text-align: center;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  width: 100%;
+}
+.dh-mini-year {
+  font-size: 10px;
+  color: var(--t3);
+}
+
+/* Track number in album-detail rows */
+.tr-num {
+  width: 28px;
+  flex-shrink: 0;
+  text-align: right;
+  font-size: 12px;
+  color: var(--t3);
+  font-variant-numeric: tabular-nums;
+  padding-right: 4px;
+  align-self: center;
+}
+.tr--album-detail          { display: flex; align-items: center; }
+.tr--album-detail .ti      { flex: 1; min-width: 0; } /* compense le manque de 1fr (grid → flex) */
+
+/* ══ RESPONSIVE — Compact layout pour narrower windows (≤ 640px) ════
+   Drill header artwork réduit (120→80px), font-size ajusté (22→17px).
+   Grilles d'album/artiste/genre réduites pour 2 colonnes serrées.
+   ═══════════════════════════════════════════════════════════════════ */
+@media (max-width: 640px) {
+  #drill-header {
+    gap: var(--sp-3);
+    padding: 14px 14px 12px;
+  }
+  .dh-art {
+    width: 80px;
+    height: 80px;
+  }
+  .dh-name {
+    font-size: 17px;
+  }
+  .dh-btn {
+    padding: 6px 14px;
+    font-size: 12px;
+  }
+  .dh-actions {
+    margin-top: 6px;
+  }
+
+  #album-grid,
+  #artist-grid {
+    padding: var(--sp-3);
+    gap: var(--sp-3);
+    --card-min-w: 150px;
+  }
+  #genre-grid {
+    padding: var(--sp-3);
+    gap: var(--sp-3);
   }
 }

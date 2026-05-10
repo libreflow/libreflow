@@ -36,7 +36,7 @@
 
 import { esc }                  from './utils.js';
 import { i18n }                  from './i18n.js';
-import { get, set }              from './store.js';
+import { get, set, notify }      from './store.js';
 import { emit, EVENTS }          from './bus.js';
 import { DB }                    from './db.js';
 import { toast, toastWithAction, confirmAction, promptAction } from './ui.js';
@@ -57,8 +57,10 @@ let _dragPlId         = null;   // playlist en cours de drag (sidebar réorganis
 let _plCtxClose       = null;   // listener mousedown pour fermer le ctx-menu playlist
 let _plCtxEscClose    = null;   // listener keydown Escape pour fermer le ctx-menu playlist
 let _plModalPrevFocus = null;   // focus à restaurer après fermeture du modal
+let _plModalFocusTrap = null;   // keydown handler Tab-trap dans #pl-modal
 let _plModalCoverB64  = null;   // cover en cours d'édition dans le modal
 let _plModalBusy      = false;  // guard anti double-submit confirmPlaylistModal
+let _plNavDropInit    = false;  // setupPlNavDrop one-shot (flag module vs DOM node)
 
 /** Setter pour smartplaylist.js (window.setPlModalMode). */
 export function setPlModalMode(v) { plModalMode = v; }
@@ -85,7 +87,7 @@ function _attachPlCtxClose(menu) {
 
 export async function savePlaylists() {
   const playlists = get('playlists');
-  set('playlists', playlists); emit(EVENTS.PLAYLIST_CHANGED, { playlists }); // Jalon 3/4
+  notify('playlists'); emit(EVENTS.PLAYLIST_CHANGED, { playlists }); // BUG-M4 FIX : mutation in-place → notify() (set() ignore same-ref)
   try {
     // Transaction atomique : clear + écriture en un seul commit
     // Évite la perte de données si l'app crashe entre clear() et les dput() individuels
@@ -440,9 +442,16 @@ export function renderPlNav() {
     parts.push(recents.map(_plNavItemHTML).join(''));
   }
 
-  // Dossiers
+  // Dossiers — regroupement O(N+F) au lieu de O(N×F)
+  const byFolder = new Map();
+  for (const p of visible) {
+    if (p.folderId && !p.pinned) {
+      if (!byFolder.has(p.folderId)) byFolder.set(p.folderId, []);
+      byFolder.get(p.folderId).push(p);
+    }
+  }
   for (const folder of plFolders) {
-    const inside = visible.filter(p => p.folderId === folder.id && !p.pinned);
+    const inside = byFolder.get(folder.id) || [];
     const collapsed = !!folder.collapsed;
     parts.push(`
       <div class="pl-folder${collapsed?' collapsed':''}" data-folder-id="${folder.id}">
@@ -483,7 +492,7 @@ export async function renamePlFolder(folderId) {
   const f = plFolders.find(x => x.id === folderId);
   if (!f) return;
   // S157 FIX-3 : modal cohérent (window.prompt natif est bloquant en Tauri v2)
-  const name = await promptAction(i18n('pl_folder_rename_prompt'), f.name, i18n('pl_rename_btn'));
+  const name = await promptAction(i18n('pl_folder_rename_prompt'), f.name, i18n('pl_rename_btn'), i18n('btn_cancel'));
   if (!name) return;
   f.name = name;
   saveCfg();
@@ -763,8 +772,7 @@ export function _attachPlaylistReorder(tlist) {
 
     // Remove from source position, insert at target
     // Calculer la position cible AVANT le splice (le splice décale les indices)
-    let insertAt = toIdx;
-    if (!insertBefore) insertAt = toIdx; // toIdx déjà incrémenté ci-dessus pour "après"
+    let insertAt = toIdx; // BUG-m1 FIX : ligne morte supprimée (toIdx déjà incrémenté ci-dessus)
     // Compenser le décalage causé par la suppression de fromIdx
     if (fromIdx < insertAt) insertAt--;
     // Éviter no-op : si insertAt === fromIdx, l'ordre n'a pas changé
@@ -803,8 +811,8 @@ export function onPlNavDragStart(e, plId) {
 // Appelé une seule fois à l'init — idempotent grâce au flag _initialized.
 export function setupPlNavDrop() {
   const nav = document.getElementById('pl-list-nav');
-  if (!nav || nav._plDropInit) return;
-  nav._plDropInit = true;
+  if (!nav || _plNavDropInit) return;
+  _plNavDropInit = true;
 
   nav.addEventListener('dragover', e => {
     // Priorité 1 : drag d'une playlist vers un dossier
@@ -893,7 +901,7 @@ export function setupPlNavDrop() {
       if (fromIdx === toIdx) return;
       const [moved] = playlists.splice(fromIdx, 1);
       playlists.splice(toIdx, 0, moved);
-      set('playlists', playlists); // notifier subscribers — mutation in-place sinon invisible
+      // BUG-M4 FIX : ne pas appeler set() ici — savePlaylists() appelle notify() qui force-notifie
       await savePlaylists();
       renderPlNav();
       return;
@@ -989,6 +997,23 @@ export function clearPlCover() {
   if (inp) inp.value = '';
 }
 
+const _PL_FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
+function _buildPlFocusTrap(dialogEl) {
+  return function(e) {
+    if (e.key !== 'Tab') return;
+    const els = [...dialogEl.querySelectorAll(_PL_FOCUSABLE)]
+      .filter(el => el.offsetWidth > 0 || el.offsetHeight > 0);
+    if (!els.length) return;
+    const first = els[0], last = els[els.length - 1];
+    if (e.shiftKey && document.activeElement === first) {
+      e.preventDefault(); last.focus();
+    } else if (!e.shiftKey && document.activeElement === last) {
+      e.preventDefault(); first.focus();
+    }
+  };
+}
+
 export function openNewPlaylistModal(preTrackId) {
   _plModalPrevFocus = document.activeElement;
   plModalMode = 'new';
@@ -1005,6 +1030,11 @@ export function openNewPlaylistModal(preTrackId) {
   if (tabs) tabs.style.display = '';
   document.getElementById('pl-modal-bg').classList.add('on');
   switchPlTab('manual');
+  const plModal = document.getElementById('pl-modal');
+  if (plModal && !_plModalFocusTrap) {
+    _plModalFocusTrap = _buildPlFocusTrap(plModal);
+    plModal.addEventListener('keydown', _plModalFocusTrap);
+  }
   setTimeout(() => document.getElementById('pl-modal-inp').focus(), 50);
 }
 
@@ -1122,6 +1152,11 @@ export function openRenamePlaylistModal(plId) {
   document.getElementById('pl-panel-manual').style.display = '';
   document.getElementById('pl-panel-smart').style.display  = 'none';
   document.getElementById('pl-modal-bg').classList.add('on');
+  const plModalR = document.getElementById('pl-modal');
+  if (plModalR && !_plModalFocusTrap) {
+    _plModalFocusTrap = _buildPlFocusTrap(plModalR);
+    plModalR.addEventListener('keydown', _plModalFocusTrap);
+  }
   setTimeout(() => {
     const inp = document.getElementById('pl-modal-inp');
     inp.focus(); inp.select();
@@ -1152,6 +1187,11 @@ export function closePlModal() {
   _renderPlCoverPreview();
   const coverInp = document.getElementById('pl-cover-file');
   if (coverInp) coverInp.value = '';
+  const plModal = document.getElementById('pl-modal');
+  if (plModal && _plModalFocusTrap) {
+    plModal.removeEventListener('keydown', _plModalFocusTrap);
+    _plModalFocusTrap = null;
+  }
   _plModalPrevFocus?.focus();
   _plModalPrevFocus = null;
 }
@@ -1246,7 +1286,7 @@ export async function deletePlaylist(e, plId) {
     set('playlists', get('playlists').filter(p => p.id !== plId));
     await savePlaylists();
     const curPlId = get('curPlId');
-    if (curPlId === plId) setView('all', document.getElementById('ni-all'));
+    if (curPlId === plId) { setView('all', document.getElementById('ni-all')); set('curPlId', null); }
     renderPlNav();
     toast(i18n('t_pl_deleted'), 'success');
   } else {
@@ -1254,7 +1294,7 @@ export async function deletePlaylist(e, plId) {
     const plSnapshot = { ...pl, trackIds: [...(pl.trackIds || [])] };
     set('playlists', get('playlists').filter(p => p.id !== plId));
     const curPlId = get('curPlId');
-    if (curPlId === plId) setView('all', document.getElementById('ni-all'));
+    if (curPlId === plId) { setView('all', document.getElementById('ni-all')); set('curPlId', null); }
     renderPlNav();
 
     let undone = false;
@@ -1267,7 +1307,7 @@ export async function deletePlaylist(e, plId) {
       undone = true;
       clearTimeout(saveTimer);
       get('playlists').push(plSnapshot);
-      set('playlists', get('playlists'));
+      notify('playlists'); // BUG-M4 FIX : push() in-place → notify() (set() ignore same-ref)
       savePlaylists().catch(() => {});
       renderPlNav();
       toast(i18n('t_undo_done') || 'Annulé', 'info');
@@ -1279,7 +1319,7 @@ export async function addTrackToPlaylist(trackId, plId) {
   const pl = get('playlists').find(p => p.id === plId);
   if (!pl) return;
   const sid = String(trackId);
-  if (pl.trackIds.map(String).includes(sid)) { toast(i18n('t_already_in'), 'warning'); return; }
+  if (pl.trackIds.some(id => String(id) === sid)) { toast(i18n('t_already_in'), 'warning'); return; }
   pl.trackIds.push(sid);
   await savePlaylists();
   renderPlNav();

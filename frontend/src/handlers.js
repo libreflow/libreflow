@@ -18,7 +18,7 @@
 // Export : registerHandlers() — à appeler UNE SEULE FOIS au boot (main.js)
 
 import { togglePlay, prev, next, toggleShuffle, toggleRepeat, toggleLike,
-         likeat }                                             from './player.js';
+         likeat, playAt }                                     from './player.js';
 import { toggleQueue, closeQueue, playQueueItem,
          addToQueueNext, addToQueueEnd,
          removeFromQueue, clearExplicitQueue }                 from './queue.js';
@@ -50,7 +50,7 @@ import { openFolder, rescanTags }                              from './library.j
 import { toggleWatchFolder }                                   from './watchfolder.js';
 import { setVizMode, setVizEnabled, getVizEnabled }            from './viz.js';
 import { resolveConfirm }                                      from './ui.js';
-import { audio, setCrossfade }                                 from './player.js';
+import { setCrossfade }                                        from './player.js';
 import { importM3U, exportM3U, exportXSPF }                    from './m3u.js';
 import { invoke }                                              from './ipc.js';
 import { cycleSpeed, closeModal, clearLibrary, confirmClear, clearAppCache, updateVolSlider, playPlaylistFrom, shufflePlaylist, playPlaylistDirect, playCardByKey, saveCfg } from './app.js';
@@ -60,6 +60,11 @@ import { setCinemaBg, toggleCinemaRadio }                      from './cinema.js
 import { rescanGenres, drillGenre }                            from './genres.js';
 import { setLang }                                             from './i18n.js';
 import { playById, scrollToCurrentTrack, drillDown }           from './renderer.js';
+import { getFiltered }                                         from './search.js';
+
+// ── Module state ──────────────────────────────────────────────────────────
+let _registered = false;  // Guard against double-registration during HMR
+
 import { closePlModal, clearPlCover,
          confirmPlaylistModal, onPlCoverSelected,
          openNewPlaylistModal, openRenamePlaylistModal,
@@ -82,7 +87,9 @@ import { switchPlTab, smartPreview,
 import { setReplayGain, setRGTarget }                          from './replaygain.js';
 import { openTagEditor, saveTagEdit, cancelTagEdit }            from './tagedit.js';
 import { setHeatPeriod }                                       from './stats.js';
-import { get }                                                 from './store.js';
+import { get, set }                                            from './store.js';
+import { toggleNowPlaying, closeNowPlaying,
+         toggleNowPlayingFullscreen }                          from './nowplaying.js';
 
 // ── Registre d'actions ────────────────────────────────────────────────────
 
@@ -100,14 +107,27 @@ const _ACTIONS = {
   'toggle-mini-player':    ()    => toggleMiniPlayer(),
   'toggle-mini-overlay':   ()    => toggleMiniOverlay(),
 
+  // ── Now Playing ───────────────────────────────────────────
+  'toggle-now-playing':    ()    => toggleNowPlaying(),
+  'close-now-playing':     ()    => closeNowPlaying(),
+  'toggle-np-full':        ()    => toggleNowPlayingFullscreen(),
+  'np-drill-album':        btn  => { closeNowPlaying(); drillDown('albums',  btn.dataset.albumKey,  btn.dataset.albumName);  },
+  'np-drill-artist':       btn  => { closeNowPlaying(); drillDown('artists', btn.dataset.artistKey, btn.dataset.artistName); },
+
+  // ── Drill header ──────────────────────────────────────────
+  'dh-play-all':    ()    => { const fl = getFiltered(); if (fl.length) playAt(0); },
+  'dh-shuffle-all': ()    => { set('shuffle', true); const fl = getFiltered(); if (fl.length) playAt(0); },
+  'dh-drill-album':  btn  => drillDown('albums',  btn.dataset.albumKey,  btn.dataset.albumName),
+  'dh-drill-artist': btn  => drillDown('artists', btn.dataset.artistKey, btn.dataset.artistName),
+
   // ── Queue ─────────────────────────────────────────────────
-  'toggle-queue':          ()    => toggleQueue(),
+  'toggle-queue':          ()    => { closeNowPlaying(); toggleQueue(); },
   'close-queue':           ()    => closeQueue(),
   'clear-queue':           ()    => clearExplicitQueue(),
   'remove-from-queue':     btn  => { removeFromQueue(btn.dataset.trackId); },
 
   // ── EQ ────────────────────────────────────────────────────
-  'toggle-eq':             ()    => toggleEQ(),
+  'toggle-eq':             ()    => { closeNowPlaying(); toggleEQ(); },
   'close-eq':              ()    => closeEQ(),
   'eq-preset':             btn  => applyEQPreset(btn.dataset.preset),
   'toggle-eq-auto':        ()    => toggleEQAutoMode(),
@@ -495,14 +515,20 @@ function _handleDragStart(e) {
 /**
  * Enregistre les delegated listeners sur document.
  * A appeler UNE SEULE FOIS au boot (main.js).
+ * @returns {Function} cleanup — retire tous les listeners (utile pour les tests)
  */
 export function registerHandlers() {
-  document.addEventListener('click',       _handleClick);
-  document.addEventListener('click',       _handleBackdropClick);
-  document.addEventListener('input',       _handleInput);
-  document.addEventListener('change',      _handleInput);
-  document.addEventListener('dblclick',    _handleDblClick);
-  document.addEventListener('contextmenu', _handleContextMenu);
-  document.addEventListener('keydown',     _handleKeydown);
-  document.addEventListener('dragstart',   _handleDragStart);
+  if (_registered) { console.warn('[handlers] registerHandlers() called more than once'); return () => {}; }
+  _registered = true;
+  const ac = new AbortController();
+  const { signal } = ac;
+  document.addEventListener('click',       _handleClick,        { signal });
+  document.addEventListener('click',       _handleBackdropClick, { signal });
+  document.addEventListener('input',       _handleInput,        { signal });
+  document.addEventListener('change',      _handleInput,        { signal });
+  document.addEventListener('dblclick',    _handleDblClick,     { signal });
+  document.addEventListener('contextmenu', _handleContextMenu,  { signal });
+  document.addEventListener('keydown',     _handleKeydown,      { signal });
+  document.addEventListener('dragstart',   _handleDragStart,    { signal });
+  return () => ac.abort();
 }

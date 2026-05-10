@@ -1,6 +1,7 @@
 [package]
 name = "libreflow"
 version = "1.1.0"
+license = "MIT"
 edition = "2021"
 
 [lib]

@@ -61,6 +61,7 @@ import {
 } from './playlists.js';
 
 import { initWaveform, wfLoad, wfClear } from './waveform.js';
+import { toggleNowPlaying, closeNowPlaying, updateNowPlaying } from './nowplaying.js';
 import {
   initSettingsVars, getTheme, getDynColor, getDisplayMode, getVinylSpin, isShortcutsOpen,
   switchSetTab, openSettings, closeSettings,
@@ -420,6 +421,15 @@ async function boot() {
     });
     set('tracks', tracks); emit(EVENTS.LIBRARY_UPDATED, { tracks }); // Jalon 3/4
     rebuildTrackIdxMap(); // FIX #3 — doit précéder updateStats() et renderLib()
+
+    // IPC-ASSET : restaurer l'accès asset:// pour chaque dossier parent unique des pistes
+    // chargées depuis l'IDB. En production, le scope asset:// est remis à zéro à chaque
+    // lancement — sans ce call, audio.src = asset://... échoue avec MEDIA_ERR_SRC_NOT_SUPPORTED.
+    // allow_directory(recursive=true) couvre tous les sous-dossiers → O(dossiers distincts) appels.
+    const _assetDirs = [...new Set(
+      tracks.map(t => t.path ? t.path.replace(/[/\\][^/\\]+$/, '') : null).filter(Boolean)
+    )];
+    _assetDirs.forEach(dir => invoke('allow_asset_dir', { path: dir }).catch(() => {}));
     // Reconstruire liked par IDs si disponible (robuste aux réordres)
     updateStats();
     renderLib();
@@ -482,6 +492,14 @@ async function boot() {
     if (rgSlider) rgSlider.value = rgTargetLUFS;
     const rgLbl = document.getElementById('rg-target-lbl');
     if (rgLbl) rgLbl.textContent = rgTargetLUFS + ' LUFS';
+    const autoUpdateChk = document.getElementById('auto-update-chk');
+    if (autoUpdateChk) {
+      autoUpdateChk.checked = cfg.autoUpdate !== false;
+      autoUpdateChk.addEventListener('change', () => {
+        cfg.autoUpdate = autoUpdateChk.checked;
+        saveCfg();
+      });
+    }
 
     // ── Restaurer la dernière piste et position ──────────────────────────
     if (cfg && cfg.curTrackId) {
@@ -537,9 +555,19 @@ async function boot() {
     if (rgSlider2) rgSlider2.value = rgTargetLUFS;
     const rgLbl2 = document.getElementById('rg-target-lbl');
     if (rgLbl2) rgLbl2.textContent = rgTargetLUFS + ' LUFS';
+    const autoUpdateChk2 = document.getElementById('auto-update-chk');
+    if (autoUpdateChk2) {
+      autoUpdateChk2.checked = cfg.autoUpdate !== false;
+      autoUpdateChk2.addEventListener('change', () => {
+        cfg.autoUpdate = autoUpdateChk2.checked;
+        saveCfg();
+      });
+    }
   }
   // Vérifier les mises à jour 10s après le boot (non bloquant, silencieux si pas configuré)
-  setTimeout(() => checkForUpdate().catch(() => {}), 10_000);
+  if (cfg.autoUpdate !== false) {
+    setTimeout(() => checkForUpdate().catch(() => {}), 10_000);
+  }
 
   listen('win-state', (e) => { const s = e.payload;
     document.getElementById('tbt-max').title = (s==='maximized'||s==='fullscreen') ? i18n('tb_restore') : i18n('tb_maximize');
@@ -705,10 +733,10 @@ async function _onDrop(e){
   showView('scan');
   const newTracks=[];
   for (const file of audioFiles) {
-    // DRAG-1 FIX : file.webkitRelativePath est toujours vide en drag-drop Tauri.
-    // Comparer en priorité par chemin exact, puis par basename seul pour les fichiers
-    // déjà importés via watchfolder (leur t.path est un chemin OS complet).
-    { const _dn = file.name; const _dnL = _dn.toLowerCase(); if (tracks.some(t => t.path === (file.webkitRelativePath || _dn) || t.path.split(/[/\\]/).pop().toLowerCase() === _dnL)) continue; }
+    // Dédup : comparer les basenames (file.webkitRelativePath est toujours vide en drag-drop Tauri).
+    // Fonctionne pour t.path = nom seul (drag-drop) ou chemin complet (scan dossier).
+    const _dnL = file.name.toLowerCase();
+    if (tracks.some(t => t.path.split(/[/\\]/).pop().toLowerCase() === _dnL)) continue;
     const ext=file.name.split('.').pop().toUpperCase();
     const url=URL.createObjectURL(file);
     const dur=await new Promise(res=>{
@@ -755,6 +783,8 @@ document.addEventListener('keydown', e=>{
     if (cinemaOpen) { closeCinema(); return; }
     if (isShortcutsOpen()) { closeShortcuts(); return; }
     if (document.getElementById('pl-modal-bg')?.classList.contains('on')) { closePlModal(); return; } // FIX #26
+    if (document.getElementById('modal-bg')?.classList.contains('on')) { closeModal(); return; }
+    if (document.getElementById('confirm-modal-bg')?.classList.contains('on')) { document.querySelector('#confirm-modal .mbtn.cancel')?.click(); return; }
     if (document.getElementById('ctx-menu')?.classList.contains('on')) { closeCtxMenu(); return; } // FIX #26
     if (eqOpen) { closeEQ(); return; }
     if (queueOpen) { closeQueue(); return; }
@@ -771,7 +801,7 @@ document.addEventListener('keydown', e=>{
     }
   }
   if (e.code==='F11')        { e.preventDefault(); if (window.__TAURI__) invoke('win_maximize'); }
-  if (e.code==='F12')        { e.preventDefault(); if (window.__TAURI__) invoke('open_devtools'); }
+  if (e.code==='F12' && import.meta.env.DEV) { e.preventDefault(); if (window.__TAURI__) invoke('open_devtools'); }
   if (e.key.toLowerCase()==='c' && !e.ctrlKey && !e.altKey) toggleCinema();
   // Note : 'b' (cycleCinemaBg) et 'f' (toggleCinemaFullscreen) en mode cinéma sont gérés
   // par _onCinKey dans cinema.js — ces guards `&& cinemaOpen` seraient inatteignables ici
@@ -834,12 +864,12 @@ async function _doSaveCfg() {
     const _allViews = ['all','liked','albums','artists','genres','recent','playlist','stats','album-detail','artist-detail','genre-detail'];
 
     await dput('cfg', {
-      likedIds, sort: get('sort') ?? sort, // FIX #14 — ?? pour ne pas écraser '' ou 0
-      view: (_allViews.includes(get('view') || view) ? (get('view') || view) : 'all'),
+      likedIds, sort,
+      view: (_allViews.includes(view) ? view : 'all'),
       recentPlays: recentPlays.slice(0,50),
       lang: getLang(), theme: getTheme(), dynColor: getDynColor(), crossfadeDur, displayMode: getDisplayMode(), rgEnabled, rgTargetLUFS,
       playbackSpeed, cinemaBg,
-      shuffle, repeat, albumSort, artistSort, genreSort, albumDetailSort: get('albumDetailSort') ?? albumDetailSort, // FIX #14
+      shuffle, repeat, albumSort, artistSort, genreSort, albumDetailSort,
       eqEnabled, eqGains: eqNodes.length ? eqNodes.map(n => n.gain.value) : null,
       eqPreset: getActiveEqPreset(),
       vizMode: getVizMode(), vizEnabled: getVizEnabled(), vinylSpin: getVinylSpin(),
@@ -848,15 +878,16 @@ async function _doSaveCfg() {
       curTrackId, curPos,
       miniPos: getMiniPos() ?? null,
       // Nouveaux champs
-      volume, curPlId: (get('curPlId') !== undefined ? get('curPlId') : curPlId) || null, scrollTop,
+      volume, curPlId: curPlId || null, scrollTop,
       miniOvOpen, miniOvPos,
-      drillKey: (get('drillKey') ?? drillKey) ?? '', drillFrom: (get('drillFrom') ?? drillFrom) ?? '', drillDisplayName: (get('drillDisplayName') ?? drillDisplayName) ?? '', // FIX #14
+      drillKey: drillKey ?? '', drillFrom: drillFrom ?? '', drillDisplayName: drillDisplayName ?? '',
       // S91 — Vague A : organisation playlists
       plFolders, recentPls,
       // Persist modules
       heatPeriod:  getHeatPeriod(),
       queueState:  getQueueState(),
       radioSeedId: radioActive ? getRadioSeedId() : null,
+      autoUpdate: cfg.autoUpdate !== false,
     }, 'state');
   } catch (e) {
     console.warn('[_doSaveCfg] IDB save failed — config non persistée:', e);
@@ -1140,11 +1171,35 @@ export function updateBar() {
 
 // ── Modal de confirmation "vider la bibliothèque" ─────────────────────────
 let _modalPrevFocus = null;
+let _modalFocusTrap = null;
+
+const _MODAL_FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
+function _buildModalFocusTrap(dialogEl) {
+  return function(e) {
+    if (e.key !== 'Tab') return;
+    const els = [...dialogEl.querySelectorAll(_MODAL_FOCUSABLE)]
+      .filter(el => el.offsetWidth > 0 || el.offsetHeight > 0);
+    if (!els.length) return;
+    const first = els[0], last = els[els.length - 1];
+    if (e.shiftKey && document.activeElement === first) {
+      e.preventDefault(); last.focus();
+    } else if (!e.shiftKey && document.activeElement === last) {
+      e.preventDefault(); first.focus();
+    }
+  };
+}
 
 export function confirmClear() {
   if (!tracks.length) return;
   _modalPrevFocus = document.activeElement;
   document.getElementById('modal-bg').classList.add('on');
+  const modal = document.getElementById('modal');
+  if (modal && !_modalFocusTrap) {
+    _modalFocusTrap = _buildModalFocusTrap(modal);
+    modal.addEventListener('keydown', _modalFocusTrap);
+    setTimeout(() => modal.querySelector('.mbtn.cancel')?.focus(), 50);
+  }
 }
 export function closeModal() {
   const bg = document.getElementById('modal-bg');
@@ -1153,6 +1208,11 @@ export function closeModal() {
     bg.classList.remove('on', 'modal-closing');
   }, { once: true });
   setTimeout(() => bg.classList.remove('on', 'modal-closing'), 250);
+  const modal = document.getElementById('modal');
+  if (modal && _modalFocusTrap) {
+    modal.removeEventListener('keydown', _modalFocusTrap);
+    _modalFocusTrap = null;
+  }
   _modalPrevFocus?.focus();
   _modalPrevFocus = null;
 }
@@ -1190,6 +1250,11 @@ export async function clearAppCache() {
 
 export async function clearLibrary() {
   closeModal();
+  // Fermer tous les panneaux ouverts avant de vider l'état (évite l'affichage de données périmées)
+  closeNowPlaying();
+  closeQueue();
+  closeEQ();
+  if (cinemaOpen) closeCinema();
   // FIX #21/#22 — annuler les timers de retry artwork et orphelins
   clearTimeout(_retryArtTimer); _retryArtTimer = null;
   clearTimeout(_orphansTimer);  _orphansTimer  = null;
@@ -1200,7 +1265,7 @@ export async function clearLibrary() {
     if (t.url)  try { URL.revokeObjectURL(t.url);  } catch {}
     if (t.art)  try { URL.revokeObjectURL(t.art);  } catch {}
   }
-  tracks  = []; set('tracks', []); rebuildTrackIdxMap(); // INVARIANT : map must stay in sync after tracks mutation
+  tracks  = []; set('tracks', []); rebuildTrackIdxMap(); invalidateFilter(); // INVARIANT : map must stay in sync; caches filter/album/artist
   liked   = new Set(); set('liked', liked);
   playlists = []; set('playlists', []); recentPlays = []; set('recentPlays', []);
   curPlId = null; set('curPlId', null);
@@ -1210,6 +1275,11 @@ export async function clearLibrary() {
   shuffle = false; set('shuffle', false); resetShuffleQ();
   repeat  = 'none'; set('repeat', 'none');
   query   = ''; set('query', '');
+  albumSort = 'name'; set('albumSort', 'name');
+  artistSort = 'name'; set('artistSort', 'name');
+  genreSort = 'count'; set('genreSort', 'count');
+  albumDetailSort = 'track'; set('albumDetailSort', 'track');
+  _lastNotifTrackId = null;
   // Arrêter l'audio
   audio.pause();
   audio.src = '';
@@ -1219,6 +1289,7 @@ export async function clearLibrary() {
   _setupMarquee(document.getElementById('pl-a'), '–');
   wfClear();
   _updateArtBlur(null);
+  clearArtColor(); // réinitialise --art-color, --g, --g-rgb, --gd, --gg
   document.getElementById('pl-img').style.display = 'none';
   document.getElementById('pl-em').style.display  = '';
   document.getElementById('pl-em').innerHTML      = '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>';
@@ -1238,20 +1309,49 @@ export async function clearLibrary() {
   document.getElementById('cinema-rep')?.classList.remove('on');
   document.getElementById('cinema-rep')?.setAttribute('aria-pressed', 'false');
   setIcon(false);
+  // Barre de recherche — vider le champ DOM et masquer le badge/bouton clear
+  const _srch = document.getElementById('srch');
+  if (_srch) _srch.value = '';
+  const _srchClr = document.getElementById('srch-clear');
+  if (_srchClr) _srchClr.style.display = 'none';
+  document.getElementById('srch-badge')?.remove();
   // Stats sidebar
   document.getElementById('sb-stats').innerHTML  = i18n('sb_empty');
   const _btnClear = document.getElementById('btn-clear');
   if (_btnClear) _btnClear.disabled = true;
   // Vider IndexedDB
   try {
-    await new Promise((ok,_) => { const r = tx('tracks','readwrite').clear(); r.onsuccess = ok; });
-    await new Promise((ok,_) => { const r = tx('playlists','readwrite').clear(); r.onsuccess = ok; });
+    await new Promise((ok, fail) => {
+      const store = tx('tracks', 'readwrite');
+      store.clear().onerror = e => fail(e.target.error);
+      store.transaction.oncomplete = ok;
+      store.transaction.onerror   = e => fail(e.target.error);
+    });
+    await new Promise((ok, fail) => {
+      const store = tx('playlists', 'readwrite');
+      store.clear().onerror = e => fail(e.target.error);
+      store.transaction.oncomplete = ok;
+      store.transaction.onerror   = e => fail(e.target.error);
+    });
     await _doSaveCfg();
   } catch(e) { console.warn('[clearLibrary] DB error:', e); }
   // Réinitialiser radio, crossfade, watchfolder
   resetRadio();
   clearCrossfadeTimers();
   stopWatchFolder();
+  // Réinitialiser l'état de vue et de drill (évite le flash de contenu périmé au retour)
+  view = 'all'; set('view', 'all');
+  drillKey = ''; set('drillKey', '');
+  drillFrom = ''; set('drillFrom', '');
+  drillDisplayName = ''; set('drillDisplayName', '');
+  document.getElementById('drill-header')?.remove();
+  // Vider les grilles et la liste de pistes pour éviter le flash de contenu périmé
+  const _tlistClr = document.getElementById('tlist');
+  if (_tlistClr) _tlistClr.innerHTML = '';
+  ['album-grid', 'artist-grid', 'playlist-grid'].forEach(id => {
+    const g = document.getElementById(id);
+    if (g) g.innerHTML = '';
+  });
   // Retour à l'écran d'accueil
   showView('wlc');
   toast(i18n('t_cleared'), 'success');

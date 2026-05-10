@@ -159,6 +159,25 @@ if (pbar) {
   pbar.addEventListener('mouseleave', () => {
     if (!seeking) _seekTip?.classList.remove('on');
   });
+
+  pbar.addEventListener('keydown', (e) => {
+    const dur = audio.duration;
+    if (!dur) return;
+    const step = e.shiftKey ? 30 : 5;
+    if (e.key === 'ArrowRight') {
+      e.preventDefault(); e.stopPropagation();
+      audio.currentTime = Math.min(dur, audio.currentTime + step);
+    } else if (e.key === 'ArrowLeft') {
+      e.preventDefault(); e.stopPropagation();
+      audio.currentTime = Math.max(0, audio.currentTime - step);
+    } else if (e.key === 'Home') {
+      e.preventDefault();
+      audio.currentTime = 0;
+    } else if (e.key === 'End') {
+      e.preventDefault();
+      audio.currentTime = dur;
+    }
+  });
 }
 
 // ── Playback state — initialisé depuis le store ───────────────────────────────
@@ -191,10 +210,20 @@ let audioNextGain          = null;  // fade-in 0→1 (crossfade shape)
 let audioNextRgGain        = null;  // DSP-7: compensation ReplayGain indépendante
 let _gaplessNextIdx        = -1;
 
+// ── Courbes de crossfade précalculées (constantes module — évite la réallocation) ──
+const CURVE_LEN      = 128;
+const FADE_IN_CURVE  = new Float32Array(CURVE_LEN + 1);
+const FADE_OUT_CURVE = new Float32Array(CURVE_LEN + 1);
+for (let _i = 0; _i <= CURVE_LEN; _i++) {
+  FADE_IN_CURVE[_i]  = Math.sin((_i / CURVE_LEN) * Math.PI / 2); // 0→1 cosinus pur
+  FADE_OUT_CURVE[_i] = Math.cos((_i / CURVE_LEN) * Math.PI / 2); // 1→0 cosinus pur
+}
+
 // Flags session
 let _playLock              = false;
 let _audioErrSrc           = '';
 let _audioErrCount         = 0;
+let _consecErrCount        = 0;  // AUDIO-2 : circuit-breaker — reset sur 'playing', stoppe à 10
 let _lastPosSave           = 0;
 let _queueEndedToastShown  = false;
 let _recentFilterToastShown= false;
@@ -236,7 +265,6 @@ export async function ensureUrl(t) {
  * @returns {void}
  */
 export function setIcon(playing) {
-  // @ts-ignore — non-standard Tauri command, handled by generic fallback
   invoke('taskbar_set_playing', { playing }).catch(() => {});
   // @ts-ignore — audio element guaranteed present in LibreFlow DOM (index.html)
   document.getElementById('ico-play').style.display  = playing ? 'none' : '';
@@ -299,7 +327,6 @@ export async function playAt(filteredIdx, { skipScroll = false, keepQueue = fals
     // Mettre à jour le titre de la fenêtre : "Titre — Artiste | LibreFlow"
     // @ts-ignore — filter(Boolean) narrows to string[] at runtime; join returns string
     const _wTitle = [t.name, t.artistFull || t.artist].filter(Boolean).join(' — ');
-    // @ts-ignore — invoke overload mismatch; custom Tauri command with string payload
     invoke('win_set_title', { title: _wTitle ? `${_wTitle} | LibreFlow` : 'LibreFlow' }).catch(() => {});
     if (!skipScroll) setTimeout(() => scrollToCurrentTrack(), 50);
     if (rgEnabled) analyzeAndApplyRG();
@@ -385,6 +412,7 @@ export function prev() {
     // Pas d'historique (première piste jouée en shuffle) : ne rien faire
     return;
   }
+  if (fi < 0) return; // Piste hors filtre actif ou rien ne joue (curIdx < 0) — aucune navigation possible
   if (fi > 0) playAt(fi - 1); else if (repeat === 'all') playAt(fl.length - 1);
 }
 
@@ -412,7 +440,7 @@ export function next(manual = false) {
       setTimeout(() => toast(i18n('t_queue_ended'), 'info'), 400);
     }
     const _tq = tracks[ni];
-    const fl  = getFiltered();
+    getFiltered(); // warm cache for filteredIdx O(1)
     const fi  = filteredIdx(_tq); // P4 — O(1)
     if (fi >= 0) { playAt(fi); return; }
     if (tracks[ni]) {
@@ -440,7 +468,7 @@ export function next(manual = false) {
       const ni = /** @type {number} */ (manualQueue.shift());
       set('manualQueue', [...manualQueue]);
       const _tq2 = tracks[ni];
-      const fl   = getFiltered();
+      getFiltered(); // warm cache for filteredIdx O(1)
       const fi   = filteredIdx(_tq2); // P4 — O(1)
       if (fi >= 0) { playAt(fi); return; }
       if (tracks[ni]) {
@@ -466,7 +494,7 @@ export function next(manual = false) {
     // @ts-ignore — shuffleQ.length guard ensures shift() is defined
     const ni = /** @type {number} */ (shuffleQ.shift());
     const _ts = tracks[ni];
-    const fl  = getFiltered();
+    getFiltered(); // warm cache for filteredIdx O(1)
     const fi  = filteredIdx(_ts); // P4 — O(1)
     if (fi >= 0) { playAt(fi); return; }
     if (tracks[ni]) {
@@ -528,10 +556,14 @@ export function next(manual = false) {
  */
 export function buildQ() {
   const fl = getFiltered();
-  shuffleQ = fl
+  const arr = fl
     .map(t => trackIdx(t.id))
-    .filter(i => i >= 0 && i !== curIdx)
-    .sort(() => Math.random() - 0.5);
+    .filter(i => i >= 0 && i !== curIdx);
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  shuffleQ = arr;
 }
 
 /** @returns {void} */
@@ -592,6 +624,19 @@ export function toggleLike() {
     btn.classList.add('popping');
     btn.addEventListener('animationend', () => btn.classList.remove('popping'), { once: true });
   });
+  // NowPlaying panel like button — classe 'active' (pas 'on'), SVG fill aussi
+  const npBtn = document.querySelector('.np-lk');
+  if (npBtn) {
+    npBtn.classList.toggle('active', isLiked);
+    npBtn.setAttribute('aria-pressed', String(isLiked));
+    const svg = npBtn.querySelector('svg');
+    if (svg) svg.setAttribute('fill', isLiked ? 'currentColor' : 'none');
+    npBtn.classList.remove('popping');
+    // @ts-ignore — npBtn is HTMLElement at runtime, Element type lacks offsetWidth
+    void npBtn.offsetWidth;
+    npBtn.classList.add('popping');
+    npBtn.addEventListener('animationend', () => npBtn.classList.remove('popping'), { once: true });
+  }
   invalidateFilterCache(); emit(EVENTS.FILTER_CHANGED, {}); // Jalon 4
   if (get('view') === 'liked') emit(EVENTS.RENDER_LIB, {}); // Jalon 4
   saveCfgNow();
@@ -841,28 +886,18 @@ export function checkCrossfade() {
 
     // ── Fade-in via AudioParam (equal-power, 0→1 pur — RG géré par audioNextRgGain) ─
     if (audioNextGain && eqCtx) {
-      const CURVE_LEN    = 128;
-      const fadeInCurve  = new Float32Array(CURVE_LEN + 1);
-      for (let k = 0; k <= CURVE_LEN; k++) {
-        fadeInCurve[k] = Math.sin((k / CURVE_LEN) * Math.PI / 2); // 0→1 cosinus pur
-      }
       audioNextGain.gain.cancelScheduledValues(eqCtx.currentTime);
       audioNextGain.gain.setValueAtTime(0, eqCtx.currentTime);
-      audioNextGain.gain.setValueCurveAtTime(fadeInCurve, eqCtx.currentTime, crossfadeDur);
+      audioNextGain.gain.setValueCurveAtTime(FADE_IN_CURVE, eqCtx.currentTime, crossfadeDur);
     }
 
     // ── DSP-6 : Fade-out via audioOutGain (sample-accurate, AudioParam) ────
     // Remplace le rAF audio.volume loop — plus propre, synchronisé avec le fade-in.
     // Skippé si sleepFading (le masterGainNode gère déjà la baisse de volume globale).
     if (!sleepFading && audioOutGain && eqCtx) {
-      const CURVE_LEN     = 128;
-      const fadeOutCurve  = new Float32Array(CURVE_LEN + 1);
-      for (let k = 0; k <= CURVE_LEN; k++) {
-        fadeOutCurve[k] = Math.cos((k / CURVE_LEN) * Math.PI / 2); // 1→0 cosinus pur
-      }
       audioOutGain.gain.cancelScheduledValues(eqCtx.currentTime);
       audioOutGain.gain.setValueAtTime(1.0, eqCtx.currentTime);
-      audioOutGain.gain.setValueCurveAtTime(fadeOutCurve, eqCtx.currentTime, crossfadeDur);
+      audioOutGain.gain.setValueCurveAtTime(FADE_OUT_CURVE, eqCtx.currentTime, crossfadeDur);
     }
 
     // ── Transition finale ─────────────────────────────────────────────────
@@ -1102,10 +1137,20 @@ audio.addEventListener('error', () => {
   console.warn('[audio:error] code', code, audio.error?.message ?? '', audio.src.slice(-60));
   if (audio.src !== _audioErrSrc) { _audioErrSrc = audio.src; _audioErrCount = 0; }
   _audioErrCount++;
-  // Skipper au suivant une seule fois par src — évite la boucle infinie
-  if (_audioErrCount === 1) setTimeout(() => { if (audio.paused) next(); }, 350);
-  else console.warn('[audio:error] erreur répétée sur la même src — pas de skip supplémentaire');
+  // Skipper au suivant une seule fois par src — évite la boucle infinie sur même fichier
+  if (_audioErrCount === 1) {
+    _consecErrCount++;
+    if (_consecErrCount >= 10) {
+      // AUDIO-2 : circuit-breaker — bibliothèque entièrement corrompue → stoppe
+      _consecErrCount = 0;
+      toast(i18n('t_consec_errors'), 'error');
+      return;
+    }
+    setTimeout(() => { if (audio.paused) next(); }, 350);
+  } else console.warn('[audio:error] erreur répétée sur la même src — pas de skip supplémentaire');
 });
+
+audio.addEventListener('playing', () => { _consecErrCount = 0; }); // AUDIO-2 : reset sur lecture réussie
 
 audio.addEventListener('timeupdate', () => {
   if (!audio.duration) return;

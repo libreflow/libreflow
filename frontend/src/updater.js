@@ -10,9 +10,10 @@
 //   2. `plugins.updater.endpoints`  dans tauri.conf.json  (URL GitHub Releases)
 //   3. Variable d'env TAURI_SIGNING_PRIVATE_KEY au moment du build
 //      → GitHub Actions secret : Settings > Secrets > TAURI_SIGNING_PRIVATE_KEY
+//
+// Note : les plugins sont accessibles via window.__TAURI__ (withGlobalTauri: true).
+// Aucune dépendance npm (@tauri-apps/plugin-updater / plugin-process) requise.
 
-import { Channel }          from '@tauri-apps/api/core';
-import { invoke }           from './ipc.js';
 import { i18n }             from './i18n.js';
 import { toast, toastWithAction } from './ui.js';
 
@@ -20,11 +21,15 @@ import { toast, toastWithAction } from './ui.js';
  * Vérifie si une mise à jour est disponible.
  * Affiche un toast avec un bouton "Installer" si une nouvelle version est trouvée.
  * Silencieux en cas d'erreur (endpoint non configuré, pas de réseau, etc.).
+ *
+ * BUG-9 FIXED : migration de invoke('plugin:updater|check') vers
+ *               window.__TAURI__.updater.check() (API officielle).
  */
 export async function checkForUpdate() {
   try {
-    const update = await invoke('plugin:updater|check');
-    if (!update?.available) return;
+    // API officielle via withGlobalTauri — retourne null si aucune mise à jour
+    const update = await window.__TAURI__.updater.check();
+    if (!update) return;
 
     const version = update.version ?? '?';
     toastWithAction(
@@ -41,18 +46,23 @@ export async function checkForUpdate() {
 
 // ── Téléchargement + installation avec progress ──────────────────────────────
 
+/**
+ * BUG-10 FIXED : suppression des arguments non documentés (bytes, timeout, proxy,
+ *                onEvent) — utilisation de update.downloadAndInstall(onEvent).
+ * BUG-11 FIXED : ajout de window.__TAURI__.process.relaunch() après installation
+ *                (le plugin ne relance pas automatiquement).
+ */
 async function _installUpdate(update) {
   let downloaded  = 0;
   let total       = 0;
 
   // Toast vivant — utilise la méthode .update() ajoutée en P2-3
-  // BUG FIX : 'loading' (120 000 ms) au lieu de 'info' + 0 (3 e arg ignoré → 3 000 ms).
-  // toast() ne prend que 2 params — la durée longue garantit l'affichage pendant tout le dl.
+  // 'loading' (120 000 ms) garantit l'affichage pendant tout le téléchargement.
   const t = toast(i18n('t_update_downloading'), 'loading');
 
   try {
-    const channel = new Channel();
-    channel.onmessage = (event) => {
+    // API officielle : downloadAndInstall(onEvent) sans arguments parasites
+    await update.downloadAndInstall((event) => {
       if (event.event === 'Started') {
         total = event.data?.contentLength ?? 0;
       } else if (event.event === 'Progress') {
@@ -64,20 +74,10 @@ async function _installUpdate(update) {
       } else if (event.event === 'Finished') {
         t?.update?.(i18n('t_update_installing'));
       }
-    };
-
-    await invoke('plugin:updater|download_and_install', {
-      url:       update.url,
-      signature: update.signature,
-      version:   update.version,
-      headers:   update.headers ?? {},
-      bytes:     null,
-      timeout:   null,
-      proxy:     null,
-      onEvent:   channel,
     });
 
-    // Le plugin déclenche un relaunch automatique — on ne devrait pas arriver ici
+    // Relaunch explicite requis — le plugin n'effectue pas de redémarrage automatique
+    await window.__TAURI__.process.relaunch();
   } catch (e) {
     toast(i18n('t_update_error', String(e)), 'error');
   }

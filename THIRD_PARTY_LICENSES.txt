@@ -1,0 +1,37 @@
+THIRD-PARTY LICENSES (JavaScript / npm)
+========================================
+
+This file documents third-party software distributed with LibreFlow.
+
+idb (MIT License)
+  Author: Jake Archibald
+  Source: https://github.com/jakearchibald/idb
+
+vite (MIT License)
+  Author: Evan You and contributors
+  Source: https://github.com/vitejs/vite
+
+acorn (MIT License)
+  Author: Marijn Haverbeke and contributors
+  Source: https://github.com/acornjs/acorn
+
+@tauri-apps/api (MIT OR Apache-2.0)
+  Author: Tauri Programme within The Commons Conservancy
+  Source: https://github.com/tauri-apps/tauri
+
+
+FONTS (SIL Open Font License 1.1)
+===================================
+
+DM Sans — Copyright (c) 2014, The DM Sans Project Authors
+Syne — Copyright (c) 2019, The Syne Project Authors
+Inter — Copyright (c) 2020, The Inter Project Authors
+
+Full license text for each font is in the LICENSES/ directory:
+  LICENSES/dm-sans.txt
+  LICENSES/inter.txt
+  LICENSES/syne.txt
+
+The SIL Open Font License 1.1 permits use, study, modification, and
+redistribution of the fonts, provided the license and copyright notices
+are preserved. The fonts may not be sold by themselves.
