@@ -143,6 +143,12 @@ export function initEQ() {
     return;
   }
 
+  eqCtx.onstatechange = () => {
+    if (eqCtx.state === 'suspended' || eqCtx.state === 'interrupted') {
+      ensureEQResumed();
+    }
+  };
+
   // ── Singleton MediaElementSource ──────────────────────────────────────────
   if (!audio._src) {
     eqSource = eqCtx.createMediaElementSource(audio);
@@ -221,9 +227,11 @@ export function initEQ() {
 }
 
 // ── ensureEQResumed ───────────────────────────────────────────────────────────
-/** Relance l'AudioContext si suspendu (autoplay policy). */
+/** Relance l'AudioContext si suspendu ou interrompu (autoplay policy, OS interrupt). */
 export function ensureEQResumed() {
-  if (eqCtx?.state === 'suspended') eqCtx.resume().catch(e => console.warn('[EQ] AudioContext resume failed:', e));
+  if (eqCtx && (eqCtx.state === 'suspended' || eqCtx.state === 'interrupted')) {
+    eqCtx.resume().catch(() => {});
+  }
 }
 
 // ── setMasterGain ─────────────────────────────────────────────────────────────
