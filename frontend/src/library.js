@@ -14,7 +14,7 @@
 
 import { _trackIdxMap, rebuildTrackIdxMap, trackIdx, invalidateFilterCache } from './search.js';
 import { emit, EVENTS }                                from './bus.js';
-import { DB, dput }                                   from './db.js';
+import { DB, dput, dget }                             from './db.js';
 import { invoke, invokeRetry, convertFileSrc }        from './ipc.js';
 import { i18n }                                       from './i18n.js';
 import { extractColor, guessGenre }                   from './tags.js';
@@ -334,8 +334,9 @@ export async function loadTagsBg(t, rustTags = null) {
       t._artMime = mime;
       t._b64     = null; // invalider tout cache base64 existant
       const blob = new Blob([t._artBuf], { type: mime });
-      t.art   = URL.createObjectURL(blob);
-      t.noArt = false;
+      t.art     = URL.createObjectURL(blob);
+      t.noArt   = false;
+      t._hasArt = true;  // ARCH-2 : marquer comme ayant une artwork (flag lazy loader)
       changed = true;
       // OPT-2 : extractColor fire-and-forget — ne bloque plus le batch critique
       const artUrl = t.art;
@@ -345,7 +346,8 @@ export async function loadTagsBg(t, rustTags = null) {
         saveTracks(t);
       }).catch(() => {});
     } else {
-      t.noArt = true;
+      t.noArt   = true;
+      t._hasArt = false; // ARCH-2 : aucune artwork → désactiver le chargement paresseux
     }
     // Propriétés audio techniques (bitrate, sampleRate, channels, bitDepth)
     if (rustTags.bitrate     != null) { t.bitrate    = rustTags.bitrate;      changed = true; }
@@ -402,6 +404,20 @@ export async function rescanTags() {
  */
 async function _resolveArtBuf(t) {
   if (t._artBuf) return { buf: t._artBuf, mime: t._artMime || 'image/jpeg' };
+  // ARCH-2/PERF-1 : artwork paresseux — art existe en IDB mais pas encore chargé en RAM.
+  // Lire depuis IDB pour éviter d'écraser artBuf avec null lors du flush (flushTrackBatch).
+  // Après ce fetch, _artBuf est mis en cache pour éviter les lectures IDB répétées.
+  if (t._hasArt && !t.noArt && !t.art) {
+    try {
+      const rec = await dget('tracks', t.id);
+      if (rec?.artBuf) {
+        t._artBuf  = rec.artBuf;
+        t._artMime = ART_MIME_ALLOWLIST.includes(rec.artMime) ? rec.artMime : 'image/jpeg';
+        return { buf: t._artBuf, mime: t._artMime };
+      }
+    } catch(e) { console.warn('[_resolveArtBuf] IDB fallback failed for', t.id, e); }
+    return null;
+  }
   if (!t.art)    return null;
   // Migration : ancienne IDB avec data: URL base64
   if (t.art.startsWith('data:')) {

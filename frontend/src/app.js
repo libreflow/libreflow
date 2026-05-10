@@ -465,11 +465,12 @@ async function boot() {
           album: r.album,
           ext: r.ext, path: r.path, duration: r.duration,
           dateAdded: r.dateAdded,
-          // ART-IDB : artBuf (ArrayBuffer) depuis IDB v5+ ; artB64 en compat anciens enregistrements
-          art: r.artBuf
-            ? URL.createObjectURL(new Blob([r.artBuf], { type: r.artMime || 'image/jpeg' }))
-            : (r.artB64 || null),
-          _artBuf:  r.artBuf  || null,
+          // ARCH-2/PERF-1 : artwork chargé paresseusement via artLoader.js (LRU 60 entrées).
+          // On stocke uniquement un flag booléen au boot pour éviter 200-400 MB de RAM.
+          // artLoader.prefetchArts() est appelé par virtRenderWindow() après chaque rendu.
+          art:      null,
+          _hasArt:  !!(r.artBuf || r.artB64),
+          _artBuf:  null,
           _artMime: r.artMime || null,
           artColor: r.artColor || null,
           url: null, file: null,

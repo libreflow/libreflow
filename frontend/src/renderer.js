@@ -28,6 +28,7 @@ import { VIRT, virtBuildRows, virtIdxAtScroll,
 import { esc, fmtd, extEmoji, fmt }                         from './utils.js';
 import { i18n }                                              from './i18n.js';
 import { CFG }                                               from './cfg.js';
+import { prefetchArts }                                      from './artLoader.js';
 
 // Imports circulaires — OK en ES modules (appelés à l'exécution, pas à l'init)
 import { playAt }                                            from './player.js';
@@ -242,6 +243,16 @@ export function virtRenderWindow(fl) {
   listEl.innerHTML = html;
   // I-1: le DOM a été entièrement reconstruit — invalider la référence de ligne active cachée
   _activeRowEl = null;
+
+  // ARCH-2/PERF-1 : précharger l'artwork des pistes visibles (lazy loading)
+  const _artBatch = [];
+  for (let _ai = startIdx; _ai < endIdx; _ai++) {
+    const _ar = rows[_ai];
+    if (_ar.type === 'tr' && _ar.track._hasArt && !_ar.track.art && !_ar.track.noArt) {
+      _artBatch.push(_ar.track);
+    }
+  }
+  if (_artBatch.length) prefetchArts(_artBatch);
 }
 
 /** Attache le handler de scroll virtual au conteneur de la liste. */
