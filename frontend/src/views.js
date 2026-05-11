@@ -28,6 +28,7 @@ import { renderRadioView, syncRadioLibBar }                          from './rad
 import { openNewPlaylistModal, renderPlHero }                        from './playlists.js';
 import { openSmartPlaylistModal }                                    from './smartplaylist.js';
 import { saveCfg }                                                   from './cfgsave.js';
+import { clearSelection }                                            from './selection.js';
 
 // Inline helper — équivalent de app.js:invalidateFilter() (ARCH-1, no circular dep)
 function invalidateFilter() {
@@ -263,6 +264,8 @@ export function nextGenreSort() {
 export function setView(v, btn, plId) {
   // Annuler le debounce de recherche en cours
   if (_searchDebounceTimer) { clearTimeout(_searchDebounceTimer); _searchDebounceTimer = null; }
+  // Nettoyer la sélection active avant tout changement de vue (BUG-1 FIX)
+  clearSelection();
 
   _withVT(() => {
     // BUG-10 FIX : fermer les popups flottants lors d'un changement de vue
@@ -293,6 +296,14 @@ export function setView(v, btn, plId) {
     }
 
     invalidateFilter();
+    // BUG-2 FIX : vider la recherche lors d'un changement de vue top-level (cohérent avec goHome)
+    const _srch = document.getElementById('srch');
+    if (_srch && _srch.value) {
+      _srch.value = '';
+      onSearch('');
+      const _clr = document.getElementById('srch-clear');
+      if (_clr) _clr.style.display = 'none';
+    }
     // RACE-3 FIX : reconstruire le shuffleQ quand la vue change pendant le shuffle
     if (get('shuffle')) buildQ();
 

@@ -10,6 +10,7 @@ import { get, set }        from './store.js';
 import { esc }             from './utils.js';
 import { closeQueue }      from './queue.js';
 import { closeEQ }         from './eq.js';
+import { clearSelection }  from './selection.js';
 
 export let nowPlayingOpen = false;
 let _prevView    = 'all';
@@ -121,6 +122,7 @@ export async function openNowPlaying() {
   _prevView = get('view') || 'all';
   closeQueue();
   closeEQ();
+  clearSelection(); // BUG-9 FIX : vider la sélection avant d'entrer en Now Playing
   _showViewRaw('now-playing');
   set('view', 'now-playing');
   nowPlayingOpen = true;
