@@ -48,7 +48,13 @@ pub fn watch_folder_start(app: AppHandle, path: String) -> Result<(), String> {
 
     let mut watcher = RecommendedWatcher::new(
         move |res: notify::Result<Event>| {
-            let Ok(event) = res else { return };
+            let event = match res {
+                Ok(e) => e,
+                Err(e) => {
+                    eprintln!("[watch] watcher error: {:?}", e);
+                    return;
+                }
+            };
 
             // Filtrer : uniquement les créations et renommages (déplacement vers le dossier)
             let is_create = matches!(

@@ -17,6 +17,7 @@ use serde::{Deserialize, Serialize};
 use std::{fs, path::Path, path::PathBuf};
 use tauri::{AppHandle, Manager};
 use tauri_plugin_dialog::DialogExt;
+use tokio::time::{timeout, Duration};
 
 // ── Constantes ────────────────────────────────────────────────────────────────
 
@@ -332,80 +333,90 @@ pub fn pick_audio_file(app: AppHandle) -> Option<String> {
 /// Lit les tags audio et les propriétés techniques d'un fichier en un seul passage lofty.
 /// Remplace : read_file (fichier complet en base64) + JS readTags() + read_audio_props×2.
 /// Gain : 3 IPC et jusqu'à 50 Mo de transfert → 1 IPC, uniquement la pochette (~200 Ko).
+/// Un timeout de 8 s protège contre les fichiers corrompus qui bloquent Probe::open().
 #[tauri::command]
-pub async fn read_tags(path: String) -> Option<TrackTags> {
-    tokio::task::spawn_blocking(move || {
-        let p = Path::new(&path);
-        if !is_audio(p) { return None; }
-        let canon = std::fs::canonicalize(p).ok()?;
-        if !is_audio(&canon) { return None; }
-        if let Some(parent) = canon.parent() {
-            if !is_safe_dir(parent) { return None; }
-        }
-        let file_size = std::fs::metadata(&canon).map(|m| m.len()).ok();
+pub async fn read_tags(path: String) -> Result<Option<TrackTags>, String> {
+    let path_clone = path.clone();
+    let result = timeout(
+        Duration::from_secs(8),
+        tokio::task::spawn_blocking(move || {
+            let p = Path::new(&path);
+            if !is_audio(p) { return None; }
+            let canon = std::fs::canonicalize(p).ok()?;
+            if !is_audio(&canon) { return None; }
+            if let Some(parent) = canon.parent() {
+                if !is_safe_dir(parent) { return None; }
+            }
+            let file_size = std::fs::metadata(&canon).map(|m| m.len()).ok();
 
-        let tagged = Probe::open(&canon)
-            .ok()?
-            .guess_file_type()
-            .ok()?
-            .read()
-            .ok()?;
+            let tagged = Probe::open(&canon)
+                .ok()?
+                .guess_file_type()
+                .ok()?
+                .read()
+                .ok()?;
 
-        // Extraire les propriétés audio dans un bloc pour libérer l'emprunt avant primary_tag
-        let (duration_secs, bitrate, sample_rate, channels, bit_depth) = {
-            let props = tagged.properties();
-            let d = props.duration().as_secs_f64();
-            (
-                if d > 0.0 { Some(d) } else { None },
-                props.overall_bitrate(),
-                props.sample_rate(),
-                props.channels(),
-                props.bit_depth(),
-            )
-        };
+            // Extraire les propriétés audio dans un bloc pour libérer l'emprunt avant primary_tag
+            let (duration_secs, bitrate, sample_rate, channels, bit_depth) = {
+                let props = tagged.properties();
+                let d = props.duration().as_secs_f64();
+                (
+                    if d > 0.0 { Some(d) } else { None },
+                    props.overall_bitrate(),
+                    props.sample_rate(),
+                    props.channels(),
+                    props.bit_depth(),
+                )
+            };
 
-        let (title, artist, album, genre, year, track, cover_base64, cover_mime) =
-            tagged.primary_tag()
-                .map(|tag| {
-                    let title  = tag.title().map(|s| s.into_owned());
-                    let artist = tag.artist().map(|s| s.into_owned());
-                    let album  = tag.album().map(|s| s.into_owned());
-                    let genre  = tag.genre().map(|s| s.into_owned());
-                    let year   = tag.year();
-                    let track  = tag.track();
-                    // Pochette : CoverFront en priorité, sinon première image disponible.
-                    // Limite 2 Mo : évite de transférer des pochettes hi-res en base64.
-                    const MAX_COVER: usize = 2 * 1024 * 1024;
-                    let (cover_b64, cover_m) = tag.pictures()
-                        .iter()
-                        .find(|pic| pic.pic_type() == PictureType::CoverFront)
-                        .or_else(|| tag.pictures().first())
-                        .filter(|pic| pic.data().len() <= MAX_COVER)
-                        .map(|pic| {
-                            let b64 = general_purpose::STANDARD.encode(pic.data());
-                            let mime = match pic.mime_type() {
-                                Some(MimeType::Png)  => "image/png",
-                                Some(MimeType::Gif)  => "image/gif",
-                                Some(MimeType::Bmp)  => "image/bmp",
-                                Some(MimeType::Tiff) => "image/tiff",
-                                _                    => "image/jpeg",
-                            };
-                            (Some(b64), Some(mime.to_string()))
-                        })
-                        .unwrap_or((None, None));
-                    (title, artist, album, genre, year, track, cover_b64, cover_m)
-                })
-                .unwrap_or_default();
+            let (title, artist, album, genre, year, track, cover_base64, cover_mime) =
+                tagged.primary_tag()
+                    .map(|tag| {
+                        let title  = tag.title().map(|s| s.into_owned());
+                        let artist = tag.artist().map(|s| s.into_owned());
+                        let album  = tag.album().map(|s| s.into_owned());
+                        let genre  = tag.genre().map(|s| s.into_owned());
+                        let year   = tag.year();
+                        let track  = tag.track();
+                        // Pochette : CoverFront en priorité, sinon première image disponible.
+                        // Limite 2 Mo : évite de transférer des pochettes hi-res en base64.
+                        const MAX_COVER: usize = 2 * 1024 * 1024;
+                        let (cover_b64, cover_m) = tag.pictures()
+                            .iter()
+                            .find(|pic| pic.pic_type() == PictureType::CoverFront)
+                            .or_else(|| tag.pictures().first())
+                            .filter(|pic| pic.data().len() <= MAX_COVER)
+                            .map(|pic| {
+                                let b64 = general_purpose::STANDARD.encode(pic.data());
+                                let mime = match pic.mime_type() {
+                                    Some(MimeType::Png)  => "image/png",
+                                    Some(MimeType::Gif)  => "image/gif",
+                                    Some(MimeType::Bmp)  => "image/bmp",
+                                    Some(MimeType::Tiff) => "image/tiff",
+                                    _                    => "image/jpeg",
+                                };
+                                (Some(b64), Some(mime.to_string()))
+                            })
+                            .unwrap_or((None, None));
+                        (title, artist, album, genre, year, track, cover_b64, cover_m)
+                    })
+                    .unwrap_or_default();
 
-        Some(TrackTags {
-            title, artist, album, genre, year, track,
-            cover_base64, cover_mime,
-            bitrate, sample_rate, channels, bit_depth,
-            duration_secs, file_size,
-        })
-    })
-    .await
-    .unwrap_or(None)
+            Some(TrackTags {
+                title, artist, album, genre, year, track,
+                cover_base64, cover_mime,
+                bitrate, sample_rate, channels, bit_depth,
+                duration_secs, file_size,
+            })
+        }),
+    )
+    .await;
+
+    match result {
+        Err(_elapsed) => Err(format!("read_tags timeout: {:?}", path_clone)),
+        Ok(Err(join_err)) => Err(format!("read_tags join error: {join_err}")),
+        Ok(Ok(inner)) => Ok(inner),
+    }
 }
 
 /// Écrit les métadonnées textuelles (titre, artiste, album, genre, année, piste)
@@ -480,6 +491,20 @@ pub async fn write_cover(data: WriteCoverData) -> Result<(), String> {
 
         let image_data = fs::read(&canon_image)
             .map_err(|e| format!("Lecture image ({}) : {e}", data.image_path))?;
+
+        // Magic-byte MIME validation — no new crate needed
+        let ext = canon_image_ext.as_deref().unwrap_or("");
+        let mime_ok = match ext {
+            "jpg" | "jpeg" => image_data.starts_with(&[0xFF, 0xD8, 0xFF]),
+            "png"          => image_data.starts_with(&[0x89, 0x50, 0x4E, 0x47]),
+            "webp"         => image_data.len() >= 12 && &image_data[8..12] == b"WEBP",
+            _              => true, // unknown ext — pass through
+        };
+        if !mime_ok {
+            return Err(format!(
+                "write_cover: file magic bytes do not match extension {:?}", ext
+            ));
+        }
 
         // lofty n'a pas de variant MimeType::Webp — MimeType::Unknown est la représentation correcte.
         let mime = match canon_image_ext.as_deref() {
