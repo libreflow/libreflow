@@ -42,6 +42,7 @@ let _activeRowEl  = null;    // I-1: cache du dernier élément .tr.act
 // C-1: caches memoïsés pour _getAlbumMap / _getArtistMap
 let _albumMapCache  = null;
 let _artistMapCache = null;
+let _tracksSig = ''; // content hash for selective map invalidation
 
 // Restore art-loaded fade-in without inline onload (load events don't bubble → capture phase)
 document.addEventListener('load', (e) => {
@@ -53,6 +54,15 @@ document.addEventListener('load', (e) => {
 /** Escapes special regex characters in a string. */
 function escapeRegex(s) {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/** Cheap change-tracking signature for tracks[].
+ *  Detects adds, removes, and full clears without iterating the whole array.
+ *  Returns 'empty' when the array is empty (distinct from the initial '' value
+ *  so the very first renderLib() always triggers a rebuild). */
+function _computeTracksSig(tracks) {
+  if (!tracks.length) return 'empty';
+  return `${tracks.length}:${tracks[0].id}:${tracks[tracks.length - 1].id}`;
 }
 
 /** Wraps matching parts of `text` with <mark> for search highlighting.
@@ -482,9 +492,15 @@ export function renderLib() {
   VIRT._lastListSig   = '';
   VIRT._lastWindowSig = '';
   VIRT._fiToRowIdx    = null;  // I-2: invalider la map fi→rowIdx
-  // C-1: invalider les caches memoïsés album/artist (tracks[] peut avoir changé)
-  _albumMapCache  = null;
-  _artistMapCache = null;
+  // C-1: invalider les caches memoïsés album/artist uniquement si tracks[] a changé
+  // Évite un rebuild coûteux à chaque navigation (tri, filtre, drill) sur la même lib.
+  const _tracks   = get('tracks') || [];
+  const _newSig   = _computeTracksSig(_tracks);
+  if (_newSig !== _tracksSig) {
+    _tracksSig      = _newSig;
+    _albumMapCache  = null;
+    _artistMapCache = null;
+  }
 
   virtRenderWindow(fl);
 
@@ -807,6 +823,9 @@ export function drillDown(from, key, displayName) {
   set('view', viewName);
   invalidateFilterCache();
   // C-1: invalider les caches album/artist quand les filtres changent
+  // Réinitialiser _tracksSig pour que renderLib() reconstruise les maps même si
+  // la signature de tracks[] n'a pas changé (le contexte de filtre a changé).
+  _tracksSig      = '';
   _albumMapCache  = null;
   _artistMapCache = null;
   emit(EVENTS.FILTER_CHANGED, {});
@@ -1001,6 +1020,7 @@ export function patchPlayState(playing) {
 
 /** Remplace le DOM d'une seule ligne piste (ex: après un tag edit). */
 export function patchTrackEl(id) {
+  _tracksSig      = '';
   _albumMapCache  = null;
   _artistMapCache = null;
   const el = document.querySelector(`.tr[data-track-id="${CSS.escape(id)}"]`);
