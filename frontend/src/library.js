@@ -178,7 +178,7 @@ export async function loadTagsAndDurations(newTracks) {
     // OPT-1 : read_tags remplace read_audio_props + read_file + JS readTags() + read_audio_props×2
     // 3 IPC et jusqu'à 50 Mo de transfert → 1 IPC, transfert limité à la pochette (~200 Ko)
     if (t._durPending && t.path) {
-      const rustTags = await invoke('read_tags', { path: t.path }).catch(() => null);
+      const rustTags = await invokeRetry('read_tags', { path: t.path }).catch(() => null);
       const dur = rustTags?.duration_secs ?? 0;
       t.duration    = dur;
       t._durPending = false;
@@ -214,14 +214,17 @@ export async function loadTagsAndDurations(newTracks) {
       }
       VIRT._lastListSig = '';
       // OPT-1 : passer rustTags pré-chargés pour éviter tout IPC supplémentaire dans loadTagsBg
-      await loadTagsBg(t, rustTags);
+      return await loadTagsBg(t, rustTags);
     }
   }
 
+  let _timedOutCount = 0;
   for (let i = 0; i < newTracks.length; i += DUR_CONCURRENCY) {
-    await Promise.all(newTracks.slice(i, i + DUR_CONCURRENCY).map(t => loadOne(t)));
+    const results = await Promise.all(newTracks.slice(i, i + DUR_CONCURRENCY).map(t => loadOne(t)));
+    for (const r of results) { if (r === 'timeout') _timedOutCount++; }
     await new Promise(r => setTimeout(r, 0)); // OPT-3 : yield event loop, délai artificiel supprimé
   }
+  if (_timedOutCount > 0) toast(i18n('err_tag_timeout', _timedOutCount), 'warning');
   if (_saveTrackTimer) { clearTimeout(_saveTrackTimer); await flushTrackBatch(); }
   if (_skippedCount > 0) {
     toast(i18n('t_short_tracks_skipped', _skippedCount), 'warning');
@@ -270,7 +273,9 @@ export async function loadTagsBg(t, rustTags = null) {
       if (e && e.message !== 'IPC timeout') {
         toast(`${i18n('t_tags_read_error') || 'Impossible de lire les tags'} : ${t.name}`, 'warning');
       }
-      t.metaDone = true; saveTracks(t); return;
+      t.metaDone = true; saveTracks(t);
+      const _wasTimeout = e && e.message === 'IPC timeout';
+      return _wasTimeout ? 'timeout' : undefined;
     } finally {
       clearTimeout(_ipcTimeoutId);
     }
@@ -371,17 +376,20 @@ export async function rescanTags() {
   toast(i18n('t_rescan_start'));
   const CONCURRENCY = CFG.TAG_LOAD_CONCURRENCY;
   let count = 0;
+  let _rescanTimedOut = 0;
   for (const t of _tracks) { t.metaDone = false; t.file = null; }
   for (let i = 0; i < _tracks.length; i += CONCURRENCY) {
     const batch  = _tracks.slice(i, i + CONCURRENCY).filter(t => t.path);
     const before = batch.map(t => ({ name: t.name, artist: t.artist, album: t.album, genre: t.genre }));
-    await Promise.all(batch.map(t => loadTagsBg(t)));
+    const results = await Promise.all(batch.map(t => loadTagsBg(t)));
+    for (const r of results) { if (r === 'timeout') _rescanTimedOut++; }
     for (let j = 0; j < batch.length; j++) {
       const t = batch[j], b = before[j];
       if (t.name !== b.name || t.artist !== b.artist || t.album !== b.album || t.genre !== b.genre) count++;
     }
     await new Promise(r => setTimeout(r, 0)); // yield event loop
   }
+  if (_rescanTimedOut > 0) toast(i18n('err_tag_timeout', _rescanTimedOut), 'warning');
   if (_saveTrackTimer) { clearTimeout(_saveTrackTimer); await flushTrackBatch(); }
   invalidateFilterCache(); emit(EVENTS.FILTER_CHANGED, {}); emit(EVENTS.RENDER_LIB, {}); updateStats();
   toast(i18n('t_rescan_done', count), 'success');

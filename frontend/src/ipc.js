@@ -105,7 +105,12 @@ async function invokeRetry(cmd, args, maxRetries = 3) {
       // @ts-ignore — invokeRetry passes generic string cmd, overloads handle specific commands
       return await invoke(cmd, args);
     } catch (err) {
-      if (attempt === maxRetries - 1) throw err;
+      if (attempt === maxRetries - 1) {
+        const argsSnippet = args ? JSON.stringify(args).slice(0, 120) : '(none)';
+        const detail = `[ipc] ${cmd} failed after ${maxRetries} retries: ${err?.message ?? err}`;
+        console.warn(detail, '| args:', argsSnippet);
+        throw Object.assign(new Error(detail), { cause: err });
+      }
       const jitter = delay * (0.8 + Math.random() * 0.4);
       await new Promise(r => setTimeout(r, jitter));
       delay *= 2;

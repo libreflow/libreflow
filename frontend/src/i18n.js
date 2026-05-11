@@ -599,6 +599,8 @@ export const LANGS = {
     stats_unknown_genre:   'Inconnu',
     // IDB quota error
     err_quota:             'Espace disque insuffisant — données non sauvegardées',
+    // IPC tag timeout
+    err_tag_timeout:       (n) => `${n} piste${n!==1?'s':''} sans métadonnées (délai dépassé)`,
   },
   en: {
     nav_all:        'All tracks',
@@ -1174,6 +1176,8 @@ export const LANGS = {
     stats_unknown_genre:   'Unknown',
     // IDB quota error
     err_quota:             'Not enough disk space — data not saved',
+    // IPC tag timeout
+    err_tag_timeout:       (n) => `${n} track${n!==1?'s':''} missing metadata (timeout)`,
   }
 };
 
