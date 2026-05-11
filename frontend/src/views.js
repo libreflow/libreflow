@@ -16,15 +16,16 @@ import { emit, EVENTS }                                              from './bus
 import { eqOpen, closeEQ }                                           from './eq.js';
 import { queueOpen, closeQueue }                                     from './queue.js';
 import { VIRT }                                                       from './virt.js';
-import { getFiltered, _trackIdxMap, invalidateFilterCache }         from './search.js';
+import { getFiltered, _trackIdxMap, invalidateFilterCache,
+         wasFuzzySearch }                                            from './search.js';
 import { buildQ, clearRvProgFill }                                   from './player.js';
 import { _withVT, renderLib, renderAlbumsGrid, renderArtistsGrid,
-         renderPlaylistsGrid, drillDown }                            from './renderer.js';
+         renderPlaylistsGrid, drillDown, updatePlActionBar }         from './renderer.js';
 import { renderGenresGrid, setContentView, invalidateGenreGridSig,
          drillGenre }                                               from './genres.js';
 import { renderStats }                                               from './stats.js';
 import { renderRadioView, syncRadioLibBar }                          from './radio.js';
-import { openNewPlaylistModal }                                      from './playlists.js';
+import { openNewPlaylistModal, renderPlHero }                        from './playlists.js';
 import { openSmartPlaylistModal }                                    from './smartplaylist.js';
 import { saveCfg }                                                   from './cfgsave.js';
 
@@ -183,7 +184,7 @@ function _updateSrchBadge(count) {
     document.querySelector('.srch')?.appendChild(badge);
   }
   const show = count > 0 && !!_q();
-  badge.textContent = show ? String(count) : '';
+  badge.textContent = show ? (wasFuzzySearch() ? '≈ ' + String(count) : String(count)) : '';
   badge.classList.toggle('on', show);
 }
 
@@ -434,6 +435,19 @@ export function setView(v, btn, plId) {
     const _tl = document.getElementById('tlist');
     if (_tl) _tl.scrollTop = 0;
     _showViewRaw('lib'); renderLib();
+    // Playlist hero + barre d'action (play / shuffle / ••• → supprimer)
+    if (v === 'playlist') {
+      const _fl  = getFiltered();
+      const _pls = get('playlists') || [];
+      const _pl  = _pls.find(p => p.id === (plId || get('curPlId')));
+      renderPlHero(_pl, _fl);
+      updatePlActionBar();
+    } else {
+      // Nettoyer les éléments propres à la vue playlist quand on la quitte
+      document.getElementById('pl-action-bar')?.remove();
+      document.getElementById('pl-col-header')?.remove();
+      if (document.getElementById('pl-hero')) renderPlHero(null);
+    }
     saveCfg();
   }); // fin _withVT
 }

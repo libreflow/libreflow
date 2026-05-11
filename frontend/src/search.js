@@ -22,6 +22,24 @@
 
 import { get, subscribe } from './store.js';
 
+// ── Trigram helpers ───────────────────────────────────────────────────────────
+
+/** Returns Set of all 3-char trigrams from a string. */
+function _trigrams(str) {
+  const s = str.replace(/\s+/g, ' ').trim();
+  const t = new Set();
+  for (let i = 0; i <= s.length - 3; i++) t.add(s.slice(i, i + 3));
+  return t;
+}
+
+/** Jaccard similarity between two trigram Sets. 0–1. */
+function _trigramScore(a, b) {
+  if (!a.size || !b.size) return 0;
+  let inter = 0;
+  for (const g of a) if (b.has(g)) inter++;
+  return inter / (a.size + b.size - inter);
+}
+
 // ── Collator partagé (P3) ────────────────────────────────────────────────────
 // Une seule instance — la construction est coûteuse (~2ms selon le moteur JS).
 export const _coll = new Intl.Collator('fr', { sensitivity: 'base', ignorePunctuation: true });
@@ -72,7 +90,10 @@ export function invalidateFilterCache() {
   _GF.sig = '';
   // BUG-D3B-1 FIX: clear per-track NLC cache so stale search strings don't survive tag edits/rescans
   const tracks = get('tracks');
-  for (let i = 0; i < tracks.length; i++) delete tracks[i]._nlc;
+  for (let i = 0; i < tracks.length; i++) {
+    delete tracks[i]._nlc;
+    delete tracks[i]._trigrams;
+  }
 }
 
 // ── Store subscriber : auto-invalidation du cache NLC lors d'un changement de tracks ──
@@ -170,6 +191,7 @@ function _filterByQuery(tracks, query) {
   const parts = q.split(/\s+/).filter(Boolean);
   return tracks.filter(t => {
     if (!t._nlc) t._nlc = [t.name || '', t.artist || '', t.artistFull || '', t.album || '', t.genre || ''].join(' ').toLowerCase();
+    if (!t._trigrams) t._trigrams = _trigrams(t._nlc);
     const hay = t._nlc;
     return parts.every(p => hay.includes(p));
   });
@@ -218,6 +240,12 @@ function _sortTracks(src, sort, recentPlays) {
 }
 
 // ── getFiltered ───────────────────────────────────────────────────────────────
+
+/** True when the last getFiltered() call used the trigram fuzzy fallback. */
+let _lastWasFuzzy = false;
+
+/** Returns true if the last getFiltered() call used fuzzy (trigram) matching. */
+export function wasFuzzySearch() { return _lastWasFuzzy; }
 
 /**
  * Retourne la liste de pistes filtrées + triées pour la vue et le tri courants.
@@ -284,7 +312,40 @@ export function getFiltered() {
   }
 
   // ── Filtrage par query ────────────────────────────────────────────────────
-  let filtered = query ? _filterByQuery(src, query) : src;
+  let filtered;
+  if (!query) {
+    _lastWasFuzzy = false;
+    filtered = src;
+  } else {
+    const exactMatches = _filterByQuery(src, query);
+    if (exactMatches.length > 0) {
+      _lastWasFuzzy = false;
+      filtered = exactMatches;
+    } else if (query.trim().length >= 3) {
+      // Fuzzy fallback — trigram Jaccard similarity
+      const FUZZY_THRESHOLD = 0.4;
+      const qTrigrams = _trigrams(query.toLowerCase().replace(/\s+/g, ' ').trim());
+      const fuzzy = tracks
+        .filter(t => {
+          if (!t._trigrams) t._trigrams = _trigrams(t._nlc || '');
+          return _trigramScore(qTrigrams, t._trigrams) >= FUZZY_THRESHOLD;
+        })
+        .sort((a, b) => _trigramScore(qTrigrams, b._trigrams) - _trigramScore(qTrigrams, a._trigrams));
+      _lastWasFuzzy = fuzzy.length > 0;
+      // Cache result directly and return — skip normal sort since results are ordered by score
+      if (_lastWasFuzzy) {
+        const posMap = new Map(fuzzy.map((t, i) => [t.id, i]));
+        _GF.sig    = sig;
+        _GF.result = fuzzy;
+        _GF.posMap = posMap;
+        return fuzzy;
+      }
+      filtered = exactMatches; // empty, no fuzzy hits either
+    } else {
+      _lastWasFuzzy = false;
+      filtered = exactMatches;
+    }
+  }
 
   // ── Tri ───────────────────────────────────────────────────────────────────
   // Playlist en mode 'manual' sans query : conserver l'ordre de la playlist.
