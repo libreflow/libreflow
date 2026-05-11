@@ -366,6 +366,7 @@ export const LANGS = {
     pl_queue_title:       "File d'attente",
     pl_eq_title:          'Égaliseur',
     pl_speed_title:       'Vitesse de lecture [X]',
+    spd_label:            (n) => 'Vitesse : ' + n + 'x',
     pl_sleep_title:       'Minuterie sommeil',
     pl_radio_title:       'Radio intelligente',
     // Sleep menu
@@ -943,6 +944,7 @@ export const LANGS = {
     pl_queue_title:       'Queue',
     pl_eq_title:          'Equalizer',
     pl_speed_title:       'Playback speed [X]',
+    spd_label:            (n) => 'Speed: ' + n + 'x',
     pl_sleep_title:       'Sleep timer',
     pl_radio_title:       'Smart radio',
     // Sleep menu

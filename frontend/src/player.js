@@ -718,6 +718,9 @@ export function setSpeed(speed) {
   }
   updateMediaSessionState();
   saveCfg();
+  // A11Y-SPEED-LIVE: announce new speed to screen readers via aria-live region
+  const liveEl = document.getElementById('np-speed-live');
+  if (liveEl) liveEl.textContent = i18n('spd_label', speed);
 }
 
 // ── Crossfade ─────────────────────────────────────────────────────────────────

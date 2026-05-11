@@ -92,6 +92,7 @@ import { _allPlayerUI } from './allplayerui.js';
 export { _allPlayerUI }; // re-export pour handlers.js
 import { showCtxMenu, closeCtxMenu, ctxToggleLike, ctxDeleteTrack, ctxEditTags, ctxGoToArtist, ctxGoToAlbum, ctxNewPlaylist, ctxRemoveFromPlaylist, ctxSmartPlaylist, ctxPlayNext, ctxAddToQueueEnd, ctxCopyInfo } from './ctxmenu.js';
 import { initDrop } from './dropin.js';
+import { initKeyNav } from './keynav.js';
 import { initShortcuts } from './shortcuts.js';
 import { confirmClear, closeModal } from './modal.js';
 export { confirmClear, closeModal }; // re-export pour handlers.js
@@ -780,6 +781,7 @@ waitForTauri(() => {
   initMediaSession(); // Contrôles Windows 11 SMTC / taskbar
   initMiniOverlayDrag(); // Drag du mini-player overlay in-page
   initRipple(); // Ripple feedback sur boutons et lignes
+  initKeyNav(); // A11Y: roving tabindex arrow-key navigation in track list
 
   // Commandes depuis le mini-player (fenêtre séparée)
   // BUG FIX F6 : stocker l'unlistener mini-cmd avec les autres (voir boot())

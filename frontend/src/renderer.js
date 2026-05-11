@@ -111,11 +111,12 @@ export function makeEqHTML(_t) { return ''; }
  * Génère le HTML d'une ligne piste pour le virtual scroll.
  * @param {Track}  t       - Piste
  * @param {number} fi      - Index dans la liste filtrée courante
- * @param {object} [opts]  - { active, liked, query, isAlbumDetail, hlRe }
+ * @param {object} [opts]  - { active, liked, query, isAlbumDetail, hlRe, isTabStop }
  *   isAlbumDetail — M-1: pré-calculé par l'appelant pour éviter get() dans la boucle
  *   hlRe          — M-2: regex pré-compilée pour la recherche (évite new RegExp par appel)
+ *   isTabStop     — A11Y-ROVING: true → tabindex="0", false/undefined → tabindex="-1"
  */
-export function thtml(t, fi, { active = false, liked = false, likedSet, query = '', isAlbumDetail: _isAlbumDetail, albumDetailSort: _albumDetailSort, hlRe } = {}) {
+export function thtml(t, fi, { active = false, liked = false, likedSet, query = '', isAlbumDetail: _isAlbumDetail, albumDetailSort: _albumDetailSort, hlRe, isTabStop = false } = {}) {
   // Artwork — img avec fade-in (.art-img → .art-loaded au onload) OU placeholder
   const artInner = t.art
     ? `<img class="art-img" src="${esc(t.art)}" alt="" aria-hidden="true">`
@@ -131,9 +132,11 @@ export function thtml(t, fi, { active = false, liked = false, likedSet, query = 
 
   const classes  = ['tr', active ? 'act' : '', isAlbumDetail ? 'tr--album-detail' : ''].filter(Boolean).join(' ');
   const ariaLbl  = [t.name, t.artistFull || t.artist].filter(Boolean).join(' — ');
+  // A11Y-ROVING: roving tabindex — seul le tab stop courant reçoit tabindex="0"
+  const tabIdx   = isTabStop ? '0' : '-1';
 
   return `<div class="${classes}" id="tr-${esc(t.id)}" data-track-id="${esc(t.id)}" data-fi="${fi}"
-  data-action="track-click" role="listitem" tabindex="0" aria-label="${esc(ariaLbl)}"
+  data-action="track-click" role="listitem" tabindex="${tabIdx}" aria-label="${esc(ariaLbl)}"
   draggable="true" data-drag-action="track-drag">
   ${trackNum}<div class="tart">
     ${artInner}
@@ -215,6 +218,32 @@ export function virtRenderWindow(fl) {
   // M-2: pré-compiler la regex de recherche une seule fois avant la boucle
   const hlRe = query ? new RegExp(`(${escapeRegex(query)})`, 'gi') : null;
 
+  // A11Y-ROVING: déterminer quel fi reçoit tabindex="0"
+  // La piste courante (curTrack) est le tab stop si elle est dans la liste filtrée.
+  // Sinon, la première ligne de piste visible reçoit tabindex="0".
+  let tabStopFi = -1;
+  if (curTrack) {
+    // Chercher le fi de la piste courante dans la fenêtre rendue
+    for (let i = startIdx; i < endIdx; i++) {
+      if (rows[i].type === 'tr' && rows[i].track.id === curTrack.id) {
+        tabStopFi = rows[i].fi;
+        break;
+      }
+    }
+    // Si la piste courante n'est pas dans la fenêtre, chercher dans tous les rows
+    if (tabStopFi < 0) {
+      for (let i = 0; i < rows.length; i++) {
+        if (rows[i].type === 'tr' && rows[i].track.id === curTrack.id) {
+          tabStopFi = rows[i].fi;
+          break;
+        }
+      }
+    }
+  }
+  // Si aucune piste courante ou piste courante absente de la liste filtrée :
+  // le premier tr rendu reçoit tabindex="0"
+  let firstTrFiFound = false;
+
   let html = `<div class="virt-sp" style="height:${topH}px" aria-hidden="true"></div>`;
 
   for (let i = startIdx; i < endIdx; i++) {
@@ -228,7 +257,15 @@ export function virtRenderWindow(fl) {
       const t       = row.track;
       const isActive = curTrack?.id === t.id;
       const isLiked  = liked?.has(t.id) ?? false;
-      html += thtml(t, row.fi, { active: isActive, liked: isLiked, likedSet: liked, query, isAlbumDetail, albumDetailSort, hlRe });
+      // A11Y-ROVING: tabindex="0" pour la piste courante, ou pour le premier tr si aucune courante
+      let isTabStop = false;
+      if (tabStopFi >= 0) {
+        isTabStop = (row.fi === tabStopFi);
+      } else if (!firstTrFiFound) {
+        isTabStop = true;
+        firstTrFiFound = true;
+      }
+      html += thtml(t, row.fi, { active: isActive, liked: isLiked, likedSet: liked, query, isAlbumDetail, albumDetailSort, hlRe, isTabStop });
     }
   }
 
@@ -462,20 +499,31 @@ export function renderLib() {
     const _drill  = get('drillKey') || '';
     const _tracks = get('tracks')   || [];
     let _ico = '', _h = '', _s = '';
+    const _svg = (d) => `<svg viewBox="0 0 24 24" fill="none" style="fill:none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">${d}</svg>`;
+    const _libEmpty = !_tracks.length;
     if (_query) {
       // Recherche sans résultat
-      _ico = '🔍'; _h = i18n('empty_search_h'); _s = i18n('empty_search_s');
-    } else if (!_tracks.length) {
-      // Bibliothèque entièrement vide — quel que soit l'onglet courant
-      _ico = '🎵'; _h = i18n('empty_lib_h');     _s = i18n('empty_lib_s');
+      _ico = _svg(`<circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>`);
+      _h = i18n('empty_search_h'); _s = i18n('empty_search_s');
     } else if (_view === 'liked') {
-      _ico = '♥';  _h = i18n('empty_liked_h');   _s = i18n('empty_liked_s');
+      _ico = _svg(`<path d="M20.42 4.58a5.4 5.4 0 0 0-7.65 0L12 5.35l-.77-.77a5.4 5.4 0 0 0-7.65 7.65l.77.77L12 20.77l7.65-7.77.77-.77a5.4 5.4 0 0 0 0-7.65z"/>`);
+      _h = i18n(_libEmpty ? 'empty_lib_h' : 'empty_liked_h');
+      _s = i18n(_libEmpty ? 'empty_lib_s' : 'empty_liked_s');
     } else if (_view === 'recent') {
-      _ico = '⏱';  _h = i18n('empty_recent_h');  _s = i18n('empty_recent_s');
+      _ico = _svg(`<path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="16.5" y1="13.5" x2="12" y2="13"/>`);
+      _h = i18n(_libEmpty ? 'empty_lib_h' : 'empty_recent_h');
+      _s = i18n(_libEmpty ? 'empty_lib_s' : 'empty_recent_s');
     } else if (_view === 'playlist') {
-      _ico = '📋'; _h = i18n('empty_pl_h');       _s = i18n('empty_pl_s');
+      _ico = _svg(`<line x1="3" y1="6" x2="14" y2="6"/><line x1="3" y1="12" x2="14" y2="12"/><line x1="3" y1="18" x2="10" y2="18"/><polygon points="17 10 23 14 17 18"/>`);
+      _h = i18n(_libEmpty ? 'empty_lib_h' : 'empty_pl_h');
+      _s = i18n(_libEmpty ? 'empty_lib_s' : 'empty_pl_s');
     } else if (_drill || _view === 'album-detail' || _view === 'artist-detail') {
-      _ico = '🎵'; _h = i18n('empty_drill_h');    _s = i18n('empty_drill_s');
+      _ico = _svg(`<rect x="2.5" y="2.5" width="19" height="19" rx="3"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.5"/>`);
+      _h = i18n('empty_drill_h'); _s = i18n('empty_drill_s');
+    } else {
+      // Vue générique (all, albums, artists, genres…)
+      _ico = _svg(`<path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/>`);
+      _h = i18n('empty_lib_h'); _s = i18n('empty_lib_s');
     }
     if (_h) {
       listEl.innerHTML = `<div class="empty"><div class="empty-ico">${_ico}</div>`
@@ -561,9 +609,10 @@ export function renderAlbumsGrid() {
 
   if (!albums.length) {
     const isLibEmpty = !tracks.length && !query;
+    const _alb = `<svg viewBox="0 0 24 24" fill="none" style="fill:none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="2.5" width="19" height="19" rx="3"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.5"/></svg>`;
     grid.innerHTML = isLibEmpty
-      ? `<div class="grid-empty"><div class="empty-h">${esc(i18n('empty_lib_h'))}</div><div class="empty-s">${esc(i18n('empty_lib_s'))}</div></div>`
-      : `<div class="grid-empty">${esc(i18n('no_results') || 'Aucun résultat')}</div>`;
+      ? `<div class="grid-empty"><div class="empty-ico">${_alb}</div><div class="empty-h">${esc(i18n('empty_lib_h'))}</div><div class="empty-s">${esc(i18n('empty_lib_s'))}</div></div>`
+      : `<div class="grid-empty"><div class="empty-ico">${_alb}</div>${esc(i18n('no_results') || 'Aucun résultat')}</div>`;
     return;
   }
 
@@ -634,9 +683,10 @@ export function renderArtistsGrid() {
 
   if (!artists.length) {
     const isLibEmpty = !tracks.length && !query;
+    const _art = `<svg viewBox="0 0 24 24" fill="none" style="fill:none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>`;
     grid.innerHTML = isLibEmpty
-      ? `<div class="grid-empty"><div class="empty-h">${esc(i18n('empty_lib_h'))}</div><div class="empty-s">${esc(i18n('empty_lib_s'))}</div></div>`
-      : `<div class="grid-empty">${esc(i18n('no_results') || 'Aucun résultat')}</div>`;
+      ? `<div class="grid-empty"><div class="empty-ico">${_art}</div><div class="empty-h">${esc(i18n('empty_lib_h'))}</div><div class="empty-s">${esc(i18n('empty_lib_s'))}</div></div>`
+      : `<div class="grid-empty"><div class="empty-ico">${_art}</div>${esc(i18n('no_results') || 'Aucun résultat')}</div>`;
     return;
   }
 
@@ -691,7 +741,8 @@ export function renderPlaylistsGrid() {
     : playlists;
 
   if (!filtered.length) {
-    grid.innerHTML = `<div class="pl-grid-empty">`
+    const _pl = `<svg viewBox="0 0 24 24" fill="none" style="fill:none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="6" x2="14" y2="6"/><line x1="3" y1="12" x2="14" y2="12"/><line x1="3" y1="18" x2="10" y2="18"/><polygon points="17 10 23 14 17 18"/></svg>`;
+    grid.innerHTML = `<div class="pl-grid-empty"><div class="empty-ico">${_pl}</div>`
       + `<div class="empty-h">${esc(i18n('pl_empty'))}</div>`
       + `<div class="empty-s">${esc(i18n('pl_empty_s'))}</div></div>`;
     return;

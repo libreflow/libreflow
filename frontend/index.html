@@ -91,7 +91,7 @@
       <span data-i18n="nav_liked">Favoris</span>
     </button>
     <button class="ni" id="ni-recent" data-action="set-view" data-view="recent">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9.5"/><polyline points="12 6 12 12 16 14"/></svg>
+      <svg viewBox="0 0 24 24" fill="none" style="fill:none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="16.5" y1="13.5" x2="12" y2="13"/></svg>
       <span data-i18n="nav_recent">Récemment écoutés</span>
     </button>
     <button class="ni" id="ni-playlists" data-action="set-view" data-view="playlists">
@@ -107,7 +107,7 @@
       <span data-i18n="nav_artists">Artistes</span>
     </button>
     <button class="ni" id="ni-albums" data-action="set-view" data-view="albums">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="12" cy="12" r="9.5"/><circle cx="12" cy="12" r="3.5"/><circle cx="12" cy="12" r="1" fill="currentColor" stroke="none"/></svg>
+      <svg viewBox="0 0 24 24" fill="none" style="fill:none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="2.5" width="19" height="19" rx="3"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.5"/></svg>
       <span data-i18n="nav_albums">Albums</span>
     </button>
     <button class="ni ni-radio" id="ni-radio" data-action="set-view" data-view="radio">
@@ -296,6 +296,7 @@
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M5 14a7 7 0 1 1 14 0"/><path d="M12 14 9 8.5"/><circle cx="12" cy="14" r="1.5" fill="currentColor" stroke="none"/></svg>
         <span class="speed-lbl">1×</span>
       </button>
+      <span id="np-speed-live" aria-live="polite" class="sr-only"></span>
       <div id="sleep-indicator" data-action="toggle-sleep" title="" data-i18n-title="pl_sleep_title" data-i18n-aria="aria_sleep" role="button" aria-label="Minuterie sommeil">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 15"/></svg>
         <span id="sleep-countdown"></span>

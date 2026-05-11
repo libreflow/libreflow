@@ -33,6 +33,42 @@ const VIRT = {
   _lastSig:   '',
   _lastListSig: '',
   _lastScrollTop: null, // suivi de direction pour les animations d'entrée
+
+  /**
+   * Scroll #tlist so that the row at filtered-index `fi` is visible.
+   * Uses _fiToRowIdx (O(1)) → virtOffsetOf (O(1)) to compute the pixel target.
+   * Safe to call before rows are built (no-op in that case).
+   * @param {number} fi - Index in the filtered track list (data-fi attribute)
+   */
+  scrollToIdx(fi) {
+    const listEl = document.getElementById('tlist');
+    if (!listEl) return;
+    const rows = this._rows;
+    if (!rows || !rows.length) return;
+
+    // Resolve fi → rowIdx via the pre-built Map (O(1)); fall back to linear scan
+    let rowIdx = this._fiToRowIdx?.get(fi);
+    if (rowIdx == null) {
+      for (let i = 0; i < rows.length; i++) {
+        if (rows[i].type === 'tr' && rows[i].fi === fi) { rowIdx = i; break; }
+      }
+    }
+    if (rowIdx == null) return;
+
+    const offset  = (this._offsets && this._offsets[rowIdx]) ? this._offsets[rowIdx] : rowIdx * this.ROW_H;
+    const rowH    = this.ROW_H;
+    const viewH   = listEl.clientHeight;
+    const scrollT = listEl.scrollTop;
+
+    // Already fully visible — no scroll needed
+    if (offset >= scrollT && offset + rowH <= scrollT + viewH) return;
+
+    const targetTop = Math.max(0, offset - (viewH / 2) + (rowH / 2));
+    listEl.scrollTo({
+      top:      targetTop,
+      behavior: Math.abs(scrollT - targetTop) < window.innerHeight * 3 ? 'smooth' : 'instant',
+    });
+  },
 };
 
 function virtBuildRows(fl, { sort = 'az', query = '', view = 'all' } = {}) {
