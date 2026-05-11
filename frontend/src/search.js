@@ -20,7 +20,7 @@
 
 /** @import { Track } from './types.js' */
 
-import { get } from './store.js';
+import { get, subscribe } from './store.js';
 
 // ── Collator partagé (P3) ────────────────────────────────────────────────────
 // Une seule instance — la construction est coûteuse (~2ms selon le moteur JS).
@@ -74,6 +74,14 @@ export function invalidateFilterCache() {
   const tracks = get('tracks');
   for (let i = 0; i < tracks.length; i++) delete tracks[i]._nlc;
 }
+
+// ── Store subscriber : auto-invalidation du cache NLC lors d'un changement de tracks ──
+// Déclenché par set/setBatch (changement de référence) ET par notify('tracks')
+// (mutation in-place). Élimine les résultats de recherche périmés après édition
+// de tags ou rescan sans dépendre des appelants pour appeler invalidateFilterCache().
+subscribe('tracks', () => {
+  invalidateFilterCache();
+});
 
 // ── Normalisation de genres ───────────────────────────────────────────────────
 

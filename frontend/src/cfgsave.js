@@ -30,7 +30,7 @@ import { get }                                        from './store.js';
 import { CFG }                                        from './cfg.js';
 import { DB, dput, isQuotaError }                     from './db.js';
 import { audio }                                      from './player.js';
-import { getLang }                                    from './i18n.js';
+import { getLang, i18n }                              from './i18n.js';
 import { getTheme, getDynColor, getDisplayMode,
          getVinylSpin }                               from './settings.js';
 import { rgEnabled, rgTargetLUFS }                    from './replaygain.js';
@@ -44,6 +44,7 @@ import { getMiniPos }                                 from './miniplayer.js';
 import { getHeatPeriod }                              from './stats.js';
 import { getQueueState }                              from './queue.js';
 import { radioActive, getRadioSeedId }               from './radio.js';
+import { toast }                                      from './ui.js';
 
 // ── Debounce timer (module-local) ─────────────────────────────────────────────
 let _saveCfgTimer = null;
@@ -145,6 +146,7 @@ async function _doSaveCfg() {
     if (isQuotaError(e)) {
       // ARCH-7 : quota IDB — cfg est petit, si ça échoue c'est vraiment critique
       console.error('[cfgsave] Quota IDB dépassé — configuration non persistée:', e);
+      toast(i18n('err_quota'), 'error');
     } else {
       console.warn('[cfgsave] IDB save failed — config non persistée:', e);
     }

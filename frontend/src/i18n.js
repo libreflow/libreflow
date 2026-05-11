@@ -531,6 +531,7 @@ export const LANGS = {
     radio_regen_done:     (name) => `📻 Radio regénérée depuis « ${name} »`,
     radio_pl_name:        (name) => `📻 Radio – ${name}`,
     radio_pl_saved:       (name, n) => `💾 Playlist « ${name} » créée — ${n} titre${n>1?'s':''}`,
+    radio_pl_see:         'Voir →',
     radio_pl_empty:       'Aucun titre à sauvegarder',
     radio_track_nf:       'Titre introuvable dans la bibliothèque',
     radio_empty_title:    'Aucune radio en cours',
@@ -596,6 +597,8 @@ export const LANGS = {
     stats_no_history:      (date) => `Aucun historique pour le ${date}`,
     stats_plays:           (n) => `${n} écoute${n!==1?'s':''}`,
     stats_unknown_genre:   'Inconnu',
+    // IDB quota error
+    err_quota:             'Espace disque insuffisant — données non sauvegardées',
   },
   en: {
     nav_all:        'All tracks',
@@ -1103,6 +1106,7 @@ export const LANGS = {
     radio_regen_done:     (name) => `📻 Radio regenerated from "${name}"`,
     radio_pl_name:        (name) => `📻 Radio – ${name}`,
     radio_pl_saved:       (name, n) => `💾 Playlist "${name}" created — ${n} track${n>1?'s':''}`,
+    radio_pl_see:         'View →',
     radio_pl_empty:       'No tracks to save',
     radio_track_nf:       'Track not found in library',
     radio_empty_title:    'No radio playing',
@@ -1168,6 +1172,8 @@ export const LANGS = {
     stats_no_history:      (date) => `No history for ${date}`,
     stats_plays:           (n) => `${n} play${n!==1?'s':''}`,
     stats_unknown_genre:   'Unknown',
+    // IDB quota error
+    err_quota:             'Not enough disk space — data not saved',
   }
 };
 
