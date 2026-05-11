@@ -15,6 +15,7 @@ import { syncCinemaBgSettings, updateCinArtColor }       from './cinema.js';
 import { updateVizColor, getVizMode, getVizEnabled }     from './viz.js';
 import { saveCfg }       from './cfgsave.js';
 import { _allPlayerUI } from './allplayerui.js';
+import { $id, $input, $select } from './dom.js';
 
 // ── État local ────────────────────────────────────────────────────────────────
 let _theme          = 'blue';
@@ -52,7 +53,7 @@ function _setupSettingsFocusTrap(box) {
 }
 
 // Art-blur background
-const _artBlurImg = document.getElementById('art-blur-img');
+const _artBlurImg = $id('art-blur-img');
 let _artBlurPrev  = null;
 let _artBlurTimer = null;
 
@@ -81,7 +82,7 @@ export function isShortcutsOpen() { return _shortcutsOpen; }
 /** Bascule sur un onglet du panneau settings (tab bar). */
 export function switchSetTab(tab) {
   document.querySelectorAll('.set-page').forEach(p => p.classList.remove('on'));
-  const page = document.getElementById('set-page-' + tab);
+  const page = $id('set-page-' + tab);
   if (page) page.classList.add('on');
   document.querySelectorAll('.set-tab-btn').forEach(b => {
     const isActive = b.dataset.tab === tab;
@@ -93,30 +94,30 @@ export function switchSetTab(tab) {
 export function openSettings() {
   if (eqOpen)    closeEQ();
   if (queueOpen) closeQueue();
-  const panel = document.getElementById('settings-panel');
+  const panel = $id('settings-panel');
   if (!panel) return;
   // A11Y-05: sauvegarder l'élément qui a déclenché l'ouverture pour le restaurer à la fermeture
   _settingsTrigger = document.activeElement instanceof HTMLElement ? document.activeElement : null;
   panel.classList.remove('closing');
   panel.classList.add('on');
-  document.getElementById('tbt-settings')?.classList.add('active');
+  $id('tbt-settings')?.classList.add('active');
   switchSetTab('appearance');
-  document.getElementById('lang-fr')?.classList.toggle('on', getLang() === 'fr');
-  document.getElementById('lang-en')?.classList.toggle('on', getLang() === 'en');
+  $id('lang-fr')?.classList.toggle('on', getLang() === 'fr');
+  $id('lang-en')?.classList.toggle('on', getLang() === 'en');
   // Sync dynColor buttons
-  const _dynOn  = document.getElementById('dyn-on-btn');
-  const _dynOff = document.getElementById('dyn-off-btn');
+  const _dynOn  = $id('dyn-on-btn');
+  const _dynOff = $id('dyn-off-btn');
   if (_dynOn)  { _dynOn.classList.toggle('on',  _dynColor);  _dynOn.setAttribute('aria-pressed',  String(_dynColor)); }
   if (_dynOff) { _dynOff.classList.toggle('on', !_dynColor); _dynOff.setAttribute('aria-pressed', String(!_dynColor)); }
   // Sync vinyl spin buttons
-  const _vOn  = document.getElementById('vinyl-on-btn');
-  const _vOff = document.getElementById('vinyl-off-btn');
+  const _vOn  = $id('vinyl-on-btn');
+  const _vOff = $id('vinyl-off-btn');
   if (_vOn)  { _vOn.classList.toggle('on',  _vinylSpin);  _vOn.setAttribute('aria-pressed',  String(_vinylSpin)); }
   if (_vOff) { _vOff.classList.toggle('on', !_vinylSpin); _vOff.setAttribute('aria-pressed', String(!_vinylSpin)); }
   syncCinemaBgSettings();
   _syncVizBtns();
   // A11Y-05: mettre en place le piège de focus et déplacer le focus sur le bouton Fermer
-  const box = document.getElementById('settings-box');
+  const box = $id('settings-box');
   if (box) _setupSettingsFocusTrap(box);
   setTimeout(() => {
     document.querySelector('#settings-box .set-close')?.focus();
@@ -124,10 +125,10 @@ export function openSettings() {
 }
 
 export function closeSettings() {
-  const panel = document.getElementById('settings-panel');
+  const panel = $id('settings-panel');
   if (!panel) return;
   // A11Y-05: supprimer le piège de focus avant l'animation
-  const box = document.getElementById('settings-box');
+  const box = $id('settings-box');
   if (_settingsFocusTrap && box) {
     box.removeEventListener('keydown', _settingsFocusTrap);
     _settingsFocusTrap = null;
@@ -148,11 +149,11 @@ export function closeSettings() {
   };
   panel.addEventListener('animationend', _onClose, { once: true });
   setTimeout(_onClose, 400); // fallback si animationend ne se déclenche jamais
-  document.getElementById('tbt-settings')?.classList.remove('active');
+  $id('tbt-settings')?.classList.remove('active');
 }
 
 document.addEventListener('keydown', e => {
-  if (e.code === 'Escape' && document.getElementById('settings-panel')?.classList.contains('on')) {
+  if (e.code === 'Escape' && $id('settings-panel')?.classList.contains('on')) {
     e.stopImmediatePropagation();
     closeSettings();
   }
@@ -175,7 +176,7 @@ export const THEME_RGB = {
 function _applyThemeVars(t) {
   document.documentElement.setAttribute('data-theme', t);
   document.documentElement.style.setProperty('--g-rgb', THEME_RGB[t] || '59,130,246');
-  const artWrap = document.getElementById('pl-art');
+  const artWrap = $id('pl-art');
   if (artWrap) artWrap.style.setProperty('--ring-color', THEME_COLORS[t] || '#3b82f6');
 }
 
@@ -192,8 +193,8 @@ export function setTheme(t) {
 }
 
 function _applyDynColorUI() {
-  const onBtn  = document.getElementById('dyn-on-btn');
-  const offBtn = document.getElementById('dyn-off-btn');
+  const onBtn  = $id('dyn-on-btn');
+  const offBtn = $id('dyn-off-btn');
   if (onBtn)  { onBtn.classList.toggle('on',  !!_dynColor);  onBtn.setAttribute('aria-pressed', String(!!_dynColor)); }
   if (offBtn) { offBtn.classList.toggle('on', !_dynColor);  offBtn.setAttribute('aria-pressed', String(!_dynColor)); }
   if (!_dynColor) {
@@ -209,8 +210,8 @@ function _applyDynColorUI() {
 export function setVinylSpin(v) {
   _vinylSpin = !!v;
   document.documentElement.classList.toggle('vinyl-spin', _vinylSpin);
-  const onBtn  = document.getElementById('vinyl-on-btn');
-  const offBtn = document.getElementById('vinyl-off-btn');
+  const onBtn  = $id('vinyl-on-btn');
+  const offBtn = $id('vinyl-off-btn');
   if (onBtn)  { onBtn.classList.toggle('on',  _vinylSpin);  onBtn.setAttribute('aria-pressed', String(_vinylSpin)); }
   if (offBtn) { offBtn.classList.toggle('on', !_vinylSpin); offBtn.setAttribute('aria-pressed', String(!_vinylSpin)); }
   saveCfg();
@@ -252,7 +253,7 @@ export function applyArtColor(color) {
   }
   updateVizColor(color);
   updateCinArtColor(color);
-  const artWrap = document.getElementById('pl-art');
+  const artWrap = $id('pl-art');
   if (artWrap) {
     artWrap.classList.add('pl-art-glow', 'glow-on');
     artWrap.style.setProperty('--ring-color', THEME_COLORS[_theme] || '#3b82f6');
@@ -269,7 +270,7 @@ export function clearArtColor() {
   document.documentElement.style.removeProperty('--gg');
   updateVizColor(null);
   updateCinArtColor(null);
-  const artWrap = document.getElementById('pl-art');
+  const artWrap = $id('pl-art');
   if (artWrap) artWrap.classList.remove('glow-on');
 }
 
@@ -297,7 +298,7 @@ export function _updateArtBlur(src) {
 }
 
 export function animateArtChange() {
-  const img = document.getElementById('pl-img');
+  const img = $id('pl-img');
   if (!img) return;
   img.classList.remove('art-change');
   requestAnimationFrame(() => requestAnimationFrame(() => {
@@ -310,7 +311,7 @@ export function animateArtChange() {
 
 export function closeShortcuts() {
   _shortcutsOpen = false;
-  document.getElementById('shortcuts-panel')?.classList.remove('open');
+  $id('shortcuts-panel')?.classList.remove('open');
 }
 
 export function toggleShortcuts() {
@@ -319,7 +320,7 @@ export function toggleShortcuts() {
     if (eqOpen)    closeEQ();
     if (queueOpen) closeQueue();
   }
-  document.getElementById('shortcuts-panel')?.classList.toggle('open', _shortcutsOpen);
+  $id('shortcuts-panel')?.classList.toggle('open', _shortcutsOpen);
 }
 
 // ══ THÈME CLAIR / SOMBRE ════════════════════════════════════════════════════
@@ -328,19 +329,19 @@ export function setMode(mode) {
   _displayMode = mode;
   set('displayMode', mode);
   document.documentElement.setAttribute('data-mode', mode);
-  const icoDark  = document.getElementById('ico-mode-dark');
-  const icoLight = document.getElementById('ico-mode-light');
+  const icoDark  = $id('ico-mode-dark');
+  const icoLight = $id('ico-mode-light');
   if (icoDark)  icoDark.style.display  = mode === 'dark'  ? '' : 'none';
   if (icoLight) icoLight.style.display = mode === 'light' ? '' : 'none';
   ['mode-dark-btn', 'mode-light-btn'].forEach(id => {
-    const b = document.getElementById(id);
+    const b = $id(id);
     if (!b) return;
     const isActive = (id === 'mode-dark-btn') ? mode === 'dark' : mode === 'light';
     b.classList.toggle('on', isActive);
     b.setAttribute('aria-pressed', String(isActive));
   });
   // Toolbar toggle button — reflète le mode actif pour les lecteurs d'écran
-  const modeBtn = document.getElementById('mode-toggle-btn');
+  const modeBtn = $id('mode-toggle-btn');
   if (modeBtn) modeBtn.setAttribute('aria-pressed', mode === 'light' ? 'true' : 'false');
   saveCfg();
 }
@@ -356,13 +357,13 @@ export function _syncVizBtns(save = false) {
   const enabled = getVizEnabled();
   const ids = { bars: 'set-viz-bars', oscilloscope: 'set-viz-oscilloscope', circle: 'set-viz-circle' };
   Object.entries(ids).forEach(([m, id]) => {
-    const btn = document.getElementById(id);
+    const btn = $id(id);
     if (!btn) return;
     const active = m === mode;
     btn.classList.toggle('on', active);
     btn.setAttribute('aria-pressed', String(active));
   });
-  const toggleBtn = document.getElementById('set-viz-toggle');
+  const toggleBtn = $id('set-viz-toggle');
   if (toggleBtn) {
     toggleBtn.classList.toggle('on', enabled);
     toggleBtn.setAttribute('aria-pressed', String(enabled));
@@ -370,7 +371,7 @@ export function _syncVizBtns(save = false) {
     if (span) span.setAttribute('data-i18n', enabled ? 'set_viz_on' : 'set_viz_off');
     if (span) span.textContent = i18n(enabled ? 'set_viz_on' : 'set_viz_off');
   }
-  const shapeGroup = document.getElementById('set-viz-shape-group');
+  const shapeGroup = $id('set-viz-shape-group');
   if (shapeGroup) shapeGroup.style.opacity = enabled ? '' : '0.35';
   if (save) saveCfg();
 }

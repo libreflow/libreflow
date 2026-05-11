@@ -24,6 +24,7 @@ import { _trackIdxMap, trackIdx, invalidateFilterCache } from './search.js';
 import { updateBar } from './playerbar.js';
 import { saveTrackNow } from './library.js';
 import { queueOpen, renderQueue } from './queue.js';
+import { $id } from './dom.js';
 
 // ── État interne ──────────────────────────────────────────────
 let _editingTrackId     = null;
@@ -244,7 +245,7 @@ export async function saveTagEdit(trackId) {
 export function cancelTagEdit() {
   if (!_editingTrackId) return;
   const trackId = _editingTrackId;
-  const el = document.getElementById('tr-' + trackId);
+  const el = $id('tr-' + trackId);
   _cleanTagEditor(el);
   _editingTrackId = null;
   _outsideClickActive = false;
@@ -261,7 +262,7 @@ export function cancelTagEdit() {
 function _cleanTagEditor(el) {
   // BUG FIX 4 : utiliser le handler stocké au niveau module (l'élément DOM peut avoir été
   // remplacé par le virt-scroll — chercher l'élément frais via l'ID)
-  const freshEl = _editingTrackId ? document.getElementById('tr-' + _editingTrackId) : null;
+  const freshEl = _editingTrackId ? $id('tr-' + _editingTrackId) : null;
   if (_tagKeyHandler) {
     if (freshEl) freshEl.removeEventListener('keydown', _tagKeyHandler);
     _tagKeyHandler = null;
