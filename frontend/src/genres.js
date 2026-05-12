@@ -20,7 +20,7 @@
 import { esc }                                              from './utils.js';
 import { i18n }                                            from './i18n.js';
 import { get, set }                                        from './store.js';
-import { emit, EVENTS }                                    from './bus.js';
+import { emit, on, EVENTS }                                from './bus.js';
 import { _normalizeGenre, _coll, invalidateFilterCache }   from './search.js';
 import { guessGenre }                                      from './tags.js';
 import { saveTracks }                                      from './library.js';
@@ -33,6 +33,7 @@ let _genreGridSig = null;
 // ── Caches emoji / couleur (évite le scan O(n) répété pour le même genre) ────
 const _emojiCache = new Map();
 const _colorCache = new Map();
+let _autoGenreTimer = null;
 
 /** Invalider le cache de la grille genres (appelé par invalidateFilter() dans app.js). */
 export function invalidateGenreGridSig() { _genreGridSig = null; }
@@ -318,12 +319,12 @@ export function drillGenre(key, displayName) {
 
 // ══ Rescan genres ══════════════════════════════════════════════════════════════
 
-export async function rescanGenres(force = false) {
+export async function rescanGenres(force = false, silent = false) {
   const tracks = get('tracks');
-  if (!tracks.length) { toast(i18n('t_genre_lib_empty'), 'warning'); return; }
+  if (!tracks.length) { if (!silent) toast(i18n('t_genre_lib_empty'), 'warning'); return; }
   const toProcess = force ? tracks : tracks.filter(t => !t.genre);
-  if (!toProcess.length) { toast(i18n('t_genre_all_done'), 'success'); return; }
-  toast(i18n('t_genre_start', toProcess.length, force));
+  if (!toProcess.length) { if (!silent) toast(i18n('t_genre_all_done'), 'success'); return; }
+  if (!silent) toast(i18n('t_genre_start', toProcess.length, force));
 
   // Passe 1 — heuristique tags (instantané, par chunks pour ne pas bloquer l'UI)
   const CHUNK = 200;
@@ -339,7 +340,13 @@ export async function rescanGenres(force = false) {
   }
   invalidateFilterCache(); emit(EVENTS.FILTER_CHANGED, {}); emit(EVENTS.RENDER_LIB, {}); updateStats();
 
-  if (countHeuristic > 0) {
+  if (!silent && countHeuristic > 0) {
     toast(i18n('t_genre_done', countHeuristic), 'success');
   }
 }
+
+// ── Auto-detect genres after library updates (silent, non-force) ──────────────
+on(EVENTS.LIBRARY_UPDATED, () => {
+  clearTimeout(_autoGenreTimer);
+  _autoGenreTimer = setTimeout(() => rescanGenres(false, true), 1500);
+});
