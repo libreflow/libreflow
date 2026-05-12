@@ -842,7 +842,8 @@ html[data-mode="light"] .genre-badge { background:rgba(0,0,0,.10); border-color:
 
 /* ── Menu contextuel ── */
 /* background/border automatiques via --glass-panel / --border-3 */
-html[data-mode="light"] #ctx-menu     { backdrop-filter:none; -webkit-backdrop-filter:none; box-shadow:var(--shadow-ctx-lt); }
+html[data-mode="light"] #ctx-menu,
+html[data-mode="light"] #pl-ctx-menu  { backdrop-filter:none; -webkit-backdrop-filter:none; box-shadow:var(--shadow-ctx-lt); }
 html[data-mode="light"] .ctx-head     { color:var(--t); border-bottom:var(--border-w-sm) solid var(--sep); }
 html[data-mode="light"] .ctx-item                { color:var(--t2); }
 html[data-mode="light"] .ctx-item:hover          { background:var(--bg4); color:var(--t); }
@@ -3401,7 +3402,8 @@ html[data-mode="light"] .bte-cover-clear    { background: var(--bg3); border-col
 .pl-folder-drop { background: rgba(var(--g-rgb),.08) !important; border-radius: var(--r); }
 
 /* ═══ MENU CONTEXTUEL ════════════════════════════════════════ */
-#ctx-menu {
+#ctx-menu,
+#pl-ctx-menu {
   position: fixed;
   background: var(--glass-panel);
   border: var(--border-w-sm) solid var(--border-3);
@@ -3421,7 +3423,8 @@ html[data-mode="light"] .bte-cover-clear    { background: var(--bg3); border-col
     visibility 0ms   var(--dur-menu); /* délai sortie = durée fade */
   pointer-events: none;
 }
-#ctx-menu.on {
+#ctx-menu.on,
+#pl-ctx-menu.on {
   opacity: 1;
   visibility: visible;
   transform: none;
