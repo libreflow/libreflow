@@ -393,6 +393,7 @@ export async function rescanTags() {
   if (_saveTrackTimer) { clearTimeout(_saveTrackTimer); await flushTrackBatch(); }
   invalidateFilterCache(); emit(EVENTS.FILTER_CHANGED, {}); emit(EVENTS.RENDER_LIB, {}); updateStats();
   toast(i18n('t_rescan_done', count), 'success');
+  emit(EVENTS.LIBRARY_UPDATED, { tracks: get('tracks') });
 }
 
 
