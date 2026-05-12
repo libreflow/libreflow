@@ -82,6 +82,111 @@ static PLAYING:         Mutex<bool>                    = Mutex::new(false);
 static HAS_TRACKS:      Mutex<bool>                    = Mutex::new(false);
 static BTN_TX:          OnceLock<mpsc::Sender<String>> = OnceLock::new();
 
+// ── COM thread ───────────────────────────────────────────────────────────────
+//
+// Thread OS dédié (STA). Crée ITaskbarList3 une fois, le garde vivant,
+// traite les commandes via PostThreadMessageW → GetMessageW.
+
+fn com_thread_loop(main_hwnd_raw: isize) {
+    // Initialiser COM STA sur ce thread (sera uninit à la sortie via guard)
+    struct ComGuard;
+    impl Drop for ComGuard { fn drop(&mut self) { unsafe { CoUninitialize(); } } }
+    let _com = unsafe { CoInitializeEx(None, COINIT_APARTMENTTHREADED).ok().map(|_| ComGuard) };
+
+    // Enregistrer le thread ID pour que les autres threads puissent nous poster
+    let thread_id = unsafe { GetCurrentThreadId() };
+    COM_THREAD_ID.set(thread_id).ok();
+
+    // Créer ITaskbarList3 une fois, le garder vivant toute la durée du thread
+    let tb3 = unsafe {
+        let Ok(tb3) = CoCreateInstance::<_, ITaskbarList3>(&TaskbarList, None, CLSCTX_ALL)
+            else { return; };
+        if tb3.HrInit().is_err() { return; }
+        tb3
+    };
+
+    let main_hwnd    = HWND(main_hwnd_raw as *mut _);
+    let mut playing    = *lock_recover(&PLAYING);
+    let mut has_tracks = *lock_recover(&HAS_TRACKS);
+    let mut cur_il_raw: isize = 0; // HIMAGELIST courante (0 = aucune)
+    let mut buttons_added = false;
+
+    // Helper local : détruire l'ancienne image list et en stocker une nouvelle
+    let mut set_il = |new_il: HIMAGELIST, cur: &mut isize| {
+        if *cur != 0 { unsafe { let _ = ImageList_Destroy(HIMAGELIST(*cur)); } }
+        *cur = new_il.0;
+    };
+
+    // Message loop — reçoit les CMD_* postés via PostThreadMessageW
+    loop {
+        let mut msg = MSG::default();
+        let ret = unsafe { GetMessageW(&mut msg, HWND(std::ptr::null_mut()), 0, 0) };
+        // GetMessageW retourne 0 sur WM_QUIT, -1 sur erreur
+        match ret.0 {
+            0 | -1 => break,
+            _ => {}
+        }
+
+        match msg.message {
+            // ── Initialiser ou réinitialiser la toolbar (ex: taskbar restart) ──
+            CMD_INIT | CMD_TASKBAR_CREATED => {
+                // Relire l'état courant depuis les statics (écrit par update_*)
+                playing    = *lock_recover(&PLAYING);
+                has_tracks = *lock_recover(&HAS_TRACKS);
+                let il = unsafe { build_image_list(playing) };
+                set_il(il, &mut cur_il_raw);
+                unsafe {
+                    if cur_il_raw != 0 {
+                        let _ = tb3.ThumbBarSetImageList(main_hwnd, HIMAGELIST(cur_il_raw));
+                    }
+                    let _ = tb3.ThumbBarAddButtons(main_hwnd, &mk_buttons(playing, has_tracks));
+                }
+                buttons_added = true;
+            }
+
+            // ── Mise à jour play/pause ──
+            CMD_PLAY_STATE => {
+                playing = msg.wParam.0 != 0;
+                *lock_recover(&PLAYING) = playing;
+                if buttons_added {
+                    let il = unsafe { build_image_list(playing) };
+                    set_il(il, &mut cur_il_raw);
+                    unsafe {
+                        if cur_il_raw != 0 {
+                            let _ = tb3.ThumbBarSetImageList(main_hwnd, HIMAGELIST(cur_il_raw));
+                        }
+                        let _ = tb3.ThumbBarUpdateButtons(main_hwnd, &mk_buttons(playing, has_tracks));
+                    }
+                }
+            }
+
+            // ── Mise à jour présence de pistes (enable/disable) ──
+            CMD_HAS_TRACKS => {
+                has_tracks = msg.wParam.0 != 0;
+                *lock_recover(&HAS_TRACKS) = has_tracks;
+                if buttons_added {
+                    unsafe {
+                        let _ = tb3.ThumbBarUpdateButtons(main_hwnd, &mk_buttons(playing, has_tracks));
+                    }
+                }
+            }
+
+            // ── Arrêt propre ──
+            CMD_QUIT => break,
+
+            // ── Tout autre message : ignorer (pas de fenêtre propre) ──
+            _ => {}
+        }
+    }
+
+    // Nettoyer l'image list résiduelle
+    if cur_il_raw != 0 {
+        unsafe { let _ = ImageList_Destroy(HIMAGELIST(cur_il_raw)); }
+    }
+    // tb3 droppé ici → ITaskbarList3::Release() automatique
+    // _com droppé ici → CoUninitialize() automatique
+}
+
 // ── API publique ─────────────────────────────────────────────────────────────
 
 /// Initialise la thumbnail toolbar. Appelé une seule fois depuis main.rs au setup.
