@@ -113,7 +113,7 @@ fn com_thread_loop(main_hwnd_raw: isize) {
     let mut buttons_added = false;
 
     // Helper local : détruire l'ancienne image list et en stocker une nouvelle
-    let mut set_il = |new_il: HIMAGELIST, cur: &mut isize| {
+    let set_il = |new_il: HIMAGELIST, cur: &mut isize| {
         if *cur != 0 { unsafe { let _ = ImageList_Destroy(HIMAGELIST(*cur)); } }
         *cur = new_il.0;
     };
@@ -261,7 +261,7 @@ unsafe fn setup_impl(hwnd_raw: isize, main_win: WebviewWindow, app: AppHandle) {
     });
 
     // ── Subclass différé ──────────────────────────────────────────────────
-    let once = Arc::new(std::sync::Once::new());
+    let once = Arc::new(Once::new());
     let once2 = once.clone();
     main_win.on_window_event(move |_event| {
         once2.call_once(|| {
