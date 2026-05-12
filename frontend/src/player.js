@@ -439,6 +439,53 @@ export function prev() {
   if (fi > 0) playAt(fi - 1); else if (repeat === 'all' && fl.length > 0) playAt(fl.length - 1);
 }
 
+/**
+ * Retourne la prochaine piste sans modifier l'état (peek pur).
+ * Respecte : file manuelle > radio > repeat:one > shuffle > séquentiel.
+ * @returns {import('./types.js').Track | null}
+ */
+export function peekNext() {
+  const tracks = get('tracks');
+  if (!tracks?.length || curIdx < 0) return null;
+
+  // File manuelle (priorité maximale)
+  if (manualQueue.length) {
+    const ni = /** @type {number} */ (manualQueue[0]); // peek, pas shift
+    return tracks[ni] ?? null;
+  }
+
+  // Radio active → première de la file radio (Track objects)
+  if (radioActive) {
+    const rq = getRadioQueue();
+    return rq?.[0] ?? null;
+  }
+
+  // Repeat:one → rejoue la piste courante
+  if (repeat === 'one') return tracks[curIdx] ?? null;
+
+  // Shuffle
+  if (shuffle && shuffleQ.length) {
+    const ni = /** @type {number} */ (shuffleQ[0]); // peek, pas shift
+    return tracks[ni] ?? null;
+  }
+
+  // Séquentiel — cas spécial sort:recent (même logique que next())
+  if (get('sort') === 'recent' && get('view') === 'all') {
+    const ni = curIdx + 1;
+    if (ni < tracks.length) return tracks[ni];
+    return repeat === 'all' ? tracks[0] : null;
+  }
+
+  // Séquentiel standard via vue filtrée
+  const fl = getFiltered();
+  const t  = tracks[curIdx];
+  if (!t) return null;
+  const fi = filteredIdx(t);
+  if (fi < 0) return null;
+  if (fi + 1 < fl.length) return fl[fi + 1];
+  return (repeat === 'all' && fl.length > 0) ? fl[0] : null;
+}
+
 // manual=true  → appel explicite (bouton, clavier, media key) : ignore repeat='one'
 // manual=false → appel automatique depuis 'ended' : respecte repeat='one'
 /**
