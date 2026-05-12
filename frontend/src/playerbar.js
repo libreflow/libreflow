@@ -24,7 +24,8 @@
 import { get }                                      from './store.js';
 import { i18n }                                     from './i18n.js';
 import { invoke }                                   from './ipc.js';
-import { audio, setIcon, updateMediaSession }       from './player.js';
+import { audio, setIcon, updateMediaSession,
+         peekNext }                                 from './player.js';
 import { refreshQueueBadge, queueOpen, renderQueue } from './queue.js';
 import { cinemaOpen, updateCinema }                  from './cinema.js';
 import { animateArtChange, applyArtColor, clearArtColor,
@@ -173,4 +174,37 @@ export function updateBar() {
     }
     if (queueOpen) renderQueue();
   }, 0));
+}
+
+// ── Next-preview mini-card ────────────────────────────────────────────────────
+
+/**
+ * Peuple la mini-card #next-preview au mouseenter du bouton ⏭.
+ * L'affichage est géré par CSS #btn-next:hover — pas de manipulation de classe ici.
+ */
+export function initNextPreview() {
+  const btn      = document.getElementById('btn-next');
+  const artEl    = document.getElementById('np-art');
+  const emEl     = document.getElementById('np-em');
+  const nameEl   = btn?.querySelector('.np-name');
+  const artistEl = btn?.querySelector('.np-artist');
+  if (!btn || !artEl || !emEl || !nameEl || !artistEl) return;
+
+  btn.addEventListener('mouseenter', () => {
+    const t = peekNext();
+    if (!t) return;
+    nameEl.textContent   = t.name || '';
+    artistEl.textContent = t.artistFull || t.artist || '';
+    if (t.art) {
+      artEl.src           = t.art;
+      artEl.style.display = '';
+      emEl.textContent    = '';
+      emEl.style.display  = 'none';
+    } else {
+      artEl.src           = '';
+      artEl.style.display = 'none';
+      emEl.textContent    = extEmoji(t.ext);
+      emEl.style.display  = '';
+    }
+  });
 }

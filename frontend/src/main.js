@@ -14,7 +14,9 @@
 
 import './app.js';
 import { registerHandlers } from './handlers.js';
+import { initNextPreview }  from './playerbar.js';
 registerHandlers();
+initNextPreview();
 
 // R-1 — handler global : capte les rejections non gérées pour éviter
 // les erreurs silencieuses (ex. IPC timeout, decode fail, DB reject).
