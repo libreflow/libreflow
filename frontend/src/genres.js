@@ -346,7 +346,7 @@ export async function rescanGenres(force = false, silent = false) {
 }
 
 // ── Auto-detect genres after library updates (silent, non-force) ──────────────
-on(EVENTS.LIBRARY_UPDATED, () => {
+on(EVENTS.LIBRARY_UPDATED, (_payload) => {
   clearTimeout(_autoGenreTimer);
   _autoGenreTimer = setTimeout(() => rescanGenres(false, true), 1500);
 });
