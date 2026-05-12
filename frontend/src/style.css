@@ -1326,6 +1326,28 @@ button { cursor: pointer; }
   letter-spacing: var(--ls-micro);
 }
 
+/* ── Dupes badge (header bibliothèque) ─────────────── */
+.dupes-badge {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 9px 3px 7px;
+  border-radius: 20px;
+  border: 1px solid rgba(234,179,8,.35);
+  background: rgba(234,179,8,.10);
+  color: rgb(234,179,8);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background var(--dur-fast, .15s) var(--smooth, ease),
+              opacity var(--dur-fast, .15s) var(--smooth, ease);
+  flex-shrink: 0;
+}
+.dupes-badge:hover {
+  background: rgba(234,179,8,.22);
+}
+
 /* Recherche */
 .srch {
   display: flex; align-items: center; gap: var(--sp-1d);
