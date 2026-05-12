@@ -530,5 +530,19 @@ export function registerHandlers() {
   document.addEventListener('contextmenu', _handleContextMenu,  { signal });
   document.addEventListener('keydown',     _handleKeydown,      { signal });
   document.addEventListener('dragstart',   _handleDragStart,    { signal });
+
+  // Wheel volume — molette sur #vol → ±2% par tick (même pattern que cinema.js _onCinWheel)
+  const _volEl = document.getElementById('vol');
+  if (_volEl) {
+    _volEl.addEventListener('wheel', e => {
+      e.preventDefault();
+      const cur = +_volEl.value;
+      const v   = Math.min(1, Math.max(0, cur + (e.deltaY < 0 ? 0.02 : -0.02)));
+      _volEl.value = String(v);
+      setMasterGain(v);
+      updateVolSlider(_volEl);
+    }, { passive: false });
+  }
+
   return () => ac.abort();
 }
