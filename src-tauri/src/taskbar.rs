@@ -16,7 +16,9 @@ use windows::{
         Graphics::Gdi::{
             CreateBitmap, CreateCompatibleBitmap, CreateCompatibleDC, CreatePen,
             CreateSolidBrush, DeleteDC, DeleteObject, FillRect, GetDC, Polygon,
-            ReleaseDC, SelectObject, HBITMAP, HBRUSH, HDC, HGDIOBJ, HPEN, PS_SOLID,
+            ReleaseDC, SelectObject, SetBrushOrgEx, SetStretchBltMode, StretchBlt,
+            HBITMAP, HBRUSH, HDC, HGDIOBJ, HPEN, PS_SOLID, SRCCOPY,
+            STRETCH_BLT_MODE,
         },
         System::Com::{
             CoCreateInstance, CoInitializeEx, CoUninitialize, CLSCTX_ALL, COINIT_APARTMENTTHREADED,
@@ -253,39 +255,57 @@ unsafe fn build_image_list(playing: bool) -> HIMAGELIST {
 // la couleur de l'icône système (blanc en mode sombre, gris en mode clair).
 
 unsafe fn make_icon<F: Fn(HDC)>(draw_fn: F) -> HICON {
-    let s = ICON_SIZE;
+    let s  = ICON_SIZE;      // 24 – taille finale dans l'image list
+    let s2 = ICON_SIZE * 2;  // 48 – supersampling 2× pour anti-aliasing
+
+    // Créer les deux DCs + bitmaps avant de relâcher le screen DC
     let hdc_screen = GetDC(HWND(std::ptr::null_mut()));
-    let mem_dc     = CreateCompatibleDC(hdc_screen);
-    let color_bm   = CreateCompatibleBitmap(hdc_screen, s, s);
+    let draw_dc  = CreateCompatibleDC(hdc_screen);
+    let draw_bm  = CreateCompatibleBitmap(hdc_screen, s2, s2);
+    let color_dc = CreateCompatibleDC(hdc_screen);
+    let color_bm = CreateCompatibleBitmap(hdc_screen, s, s);
     ReleaseDC(HWND(std::ptr::null_mut()), hdc_screen);
 
-    let old_bm = SelectObject(mem_dc, HGDIOBJ(color_bm.0));
+    // ── Dessiner à 2× dans draw_dc ────────────────────────────────
+    let old_draw_bm = SelectObject(draw_dc, HGDIOBJ(draw_bm.0));
 
-    // Fond entièrement noir (deviendra transparent dans la thumbnail toolbar)
     let black_brush: HBRUSH = CreateSolidBrush(COLORREF(0x0000_0000));
-    let full_rect = RECT { left: 0, top: 0, right: s, bottom: s };
-    FillRect(mem_dc, &full_rect, black_brush);
+    let full_rect = RECT { left: 0, top: 0, right: s2, bottom: s2 };
+    FillRect(draw_dc, &full_rect, black_brush);
     let _ = DeleteObject(HGDIOBJ(black_brush.0));
 
-    // Stylet et brosse blancs pour les formes
     let white_pen:   HPEN   = CreatePen(PS_SOLID, 0, COLORREF(0x00FF_FFFF));
     let white_brush: HBRUSH = CreateSolidBrush(COLORREF(0x00FF_FFFF));
-    let old_pen  = SelectObject(mem_dc, HGDIOBJ(white_pen.0));
-    let old_brsh = SelectObject(mem_dc, HGDIOBJ(white_brush.0));
+    let old_pen  = SelectObject(draw_dc, HGDIOBJ(white_pen.0));
+    let old_brsh = SelectObject(draw_dc, HGDIOBJ(white_brush.0));
 
-    draw_fn(mem_dc);
+    draw_fn(draw_dc);
 
-    SelectObject(mem_dc, old_pen);
-    SelectObject(mem_dc, old_brsh);
+    SelectObject(draw_dc, old_pen);
+    SelectObject(draw_dc, old_brsh);
     let _ = DeleteObject(HGDIOBJ(white_pen.0));
     let _ = DeleteObject(HGDIOBJ(white_brush.0));
-    SelectObject(mem_dc, old_bm);
-    let _ = DeleteDC(mem_dc);
 
+    // ── Réduire 48×48 → 24×24 avec HALFTONE (anti-aliasing) ──────
+    // HALFTONE = 4 : moyenne pondérée des pixels sources → bords lisses
+    // SetBrushOrgEx est requis par MSDN après SetStretchBltMode(HALFTONE)
+    let old_color_bm = SelectObject(color_dc, HGDIOBJ(color_bm.0));
+    SetStretchBltMode(color_dc, STRETCH_BLT_MODE(4));
+    let _ = SetBrushOrgEx(color_dc, 0, 0, None);
+    let _ = StretchBlt(color_dc, 0, 0, s, s, draw_dc, 0, 0, s2, s2, SRCCOPY);
+    SelectObject(color_dc, old_color_bm);
+    let _ = DeleteDC(color_dc);
+
+    // Nettoyer le DC de dessin
+    SelectObject(draw_dc, old_draw_bm);
+    let _ = DeleteObject(HGDIOBJ(draw_bm.0));
+    let _ = DeleteDC(draw_dc);
+
+    // ── Créer l'HICON depuis color_bm ─────────────────────────────
     // Masque monochrome tout à zéro = zones opaques partout
     let mask_bm: HBITMAP = CreateBitmap(s, s, 1, 1, None);
     let ii = ICONINFO {
-        fIcon: BOOL(1),
+        fIcon:    BOOL(1),
         xHotspot: 0,
         yHotspot: 0,
         hbmMask:  mask_bm,
@@ -298,66 +318,66 @@ unsafe fn make_icon<F: Fn(HDC)>(draw_fn: F) -> HICON {
 }
 
 // ⏮ Précédent : barre verticale gauche + triangle pointant à gauche
+// Coordonnées à 2× (espace 48×48) — downscalé à 24×24 avec HALFTONE
 unsafe fn make_icon_prev() -> HICON {
     make_icon(|dc| {
-        // Barre verticale gauche (3 px de large, marges 3px)
         let bar = [
-            POINT { x: 3,  y: 3  }, POINT { x: 6,  y: 3  },
-            POINT { x: 6,  y: 21 }, POINT { x: 3,  y: 21 },
+            POINT { x: 6,  y: 6  }, POINT { x: 12, y: 6  },
+            POINT { x: 12, y: 42 }, POINT { x: 6,  y: 42 },
         ];
         let _ = Polygon(dc, &bar);
-        // Triangle pointe à gauche (apex x=7, base x=21)
         let tri = [
-            POINT { x: 21, y: 3  },
-            POINT { x: 21, y: 21 },
-            POINT { x: 7,  y: 12 },
+            POINT { x: 42, y: 6  },
+            POINT { x: 42, y: 42 },
+            POINT { x: 14, y: 24 },
         ];
         let _ = Polygon(dc, &tri);
     })
 }
 
 // ▶ Lecture : triangle pointant à droite, centré
+// Coordonnées à 2× (espace 48×48)
 unsafe fn make_icon_play() -> HICON {
     make_icon(|dc| {
         let tri = [
-            POINT { x: 4,  y: 2  },
-            POINT { x: 4,  y: 22 },
-            POINT { x: 21, y: 12 },
+            POINT { x: 7,  y: 6  },
+            POINT { x: 7,  y: 42 },
+            POINT { x: 41, y: 24 },
         ];
         let _ = Polygon(dc, &tri);
     })
 }
 
 // ⏸ Pause : deux barres verticales
+// Coordonnées à 2× (espace 48×48)
 unsafe fn make_icon_pause() -> HICON {
     make_icon(|dc| {
         let b1 = [
-            POINT { x: 4,  y: 3  }, POINT { x: 9,  y: 3  },
-            POINT { x: 9,  y: 21 }, POINT { x: 4,  y: 21 },
+            POINT { x: 8,  y: 6  }, POINT { x: 18, y: 6  },
+            POINT { x: 18, y: 42 }, POINT { x: 8,  y: 42 },
         ];
         let _ = Polygon(dc, &b1);
         let b2 = [
-            POINT { x: 15, y: 3  }, POINT { x: 20, y: 3  },
-            POINT { x: 20, y: 21 }, POINT { x: 15, y: 21 },
+            POINT { x: 30, y: 6  }, POINT { x: 40, y: 6  },
+            POINT { x: 40, y: 42 }, POINT { x: 30, y: 42 },
         ];
         let _ = Polygon(dc, &b2);
     })
 }
 
 // ⏭ Suivant : triangle pointant à droite + barre verticale droite
+// Coordonnées à 2× (espace 48×48)
 unsafe fn make_icon_next() -> HICON {
     make_icon(|dc| {
-        // Triangle pointe à droite (apex x=17, base x=3)
         let tri = [
-            POINT { x: 3,  y: 3  },
-            POINT { x: 3,  y: 21 },
-            POINT { x: 17, y: 12 },
+            POINT { x: 6,  y: 6  },
+            POINT { x: 6,  y: 42 },
+            POINT { x: 34, y: 24 },
         ];
         let _ = Polygon(dc, &tri);
-        // Barre verticale droite
         let bar = [
-            POINT { x: 18, y: 3  }, POINT { x: 21, y: 3  },
-            POINT { x: 21, y: 21 }, POINT { x: 18, y: 21 },
+            POINT { x: 36, y: 6  }, POINT { x: 42, y: 6  },
+            POINT { x: 42, y: 42 }, POINT { x: 36, y: 42 },
         ];
         let _ = Polygon(dc, &bar);
     })
