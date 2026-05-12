@@ -93,10 +93,6 @@ fn com_thread_loop(main_hwnd_raw: isize) {
     impl Drop for ComGuard { fn drop(&mut self) { unsafe { CoUninitialize(); } } }
     let _com = unsafe { CoInitializeEx(None, COINIT_APARTMENTTHREADED).ok().map(|_| ComGuard) };
 
-    // Enregistrer le thread ID pour que les autres threads puissent nous poster
-    let thread_id = unsafe { GetCurrentThreadId() };
-    COM_THREAD_ID.set(thread_id).ok();
-
     // Créer ITaskbarList3 une fois, le garder vivant toute la durée du thread
     let tb3 = unsafe {
         let Ok(tb3) = CoCreateInstance::<_, ITaskbarList3>(&TaskbarList, None, CLSCTX_ALL)
@@ -104,6 +100,11 @@ fn com_thread_loop(main_hwnd_raw: isize) {
         if tb3.HrInit().is_err() { return; }
         tb3
     };
+
+    // Only register the thread ID after ITaskbarList3 is confirmed ready.
+    // Callers check COM_THREAD_ID.get() before posting — if it's None, they skip silently.
+    let thread_id = unsafe { GetCurrentThreadId() };
+    COM_THREAD_ID.set(thread_id).ok();
 
     let main_hwnd    = HWND(main_hwnd_raw as *mut _);
     let mut playing    = *lock_recover(&PLAYING);
@@ -135,13 +136,13 @@ fn com_thread_loop(main_hwnd_raw: isize) {
                 has_tracks = *lock_recover(&HAS_TRACKS);
                 let il = unsafe { build_image_list(playing) };
                 set_il(il, &mut cur_il_raw);
-                unsafe {
+                let ok = unsafe {
                     if cur_il_raw != 0 {
                         let _ = tb3.ThumbBarSetImageList(main_hwnd, HIMAGELIST(cur_il_raw));
                     }
-                    let _ = tb3.ThumbBarAddButtons(main_hwnd, &mk_buttons(playing, has_tracks));
-                }
-                buttons_added = true;
+                    tb3.ThumbBarAddButtons(main_hwnd, &mk_buttons(playing, has_tracks)).is_ok()
+                };
+                buttons_added = ok;
             }
 
             // ── Mise à jour play/pause ──
