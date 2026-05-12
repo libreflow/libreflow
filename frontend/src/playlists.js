@@ -231,7 +231,17 @@ export function renderPlHero(pl, fl) {
            title="${i18n('pl_rename_title')} (double-clic)"
            data-pl-hero-id="${esc(pl.id)}">${esc(pl.name)}</div>
       <div class="pl-hero-stats">${stats}</div>
-    </div>`;
+    </div>
+    <button class="pl-hero-more"
+            data-action="show-cur-pl-menu"
+            title="${i18n('pl_more')}"
+            aria-label="${i18n('pl_more')}">
+      <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+        <circle cx="5"  cy="12" r="1.5" fill="currentColor"/>
+        <circle cx="12" cy="12" r="1.5" fill="currentColor"/>
+        <circle cx="19" cy="12" r="1.5" fill="currentColor"/>
+      </svg>
+    </button>`;
 
   // FIX : annuler l'exit animation si on rouvre rapidement une autre playlist
   hero.classList.remove('leaving');
@@ -463,9 +473,7 @@ export function renderPlNav() {
     .slice(0, 5);
 
   // Section 3 : Dossiers + playlists hors dossier
-  // N'exclure de "Toutes" que les playlists RÉELLEMENT affichées dans "Récentes"
-  // S157 FIX-7 : seuil arbitraire >= 2 supprimé — afficher dès qu'il y a au moins 1 récente
-  const shownRecentIds = recents.length >= 1 ? new Set(recents.map(p => p.id)) : new Set();
+  const shownRecentIds = new Set();
   const folderIds = new Set(plFolders.map(f => f.id));
   const ungroupedOrNoFolder = visible.filter(p =>
     !p.pinned &&
@@ -479,12 +487,6 @@ export function renderPlNav() {
   if (pinned.length) {
     parts.push(`<div class="pl-nav-section-h">${i18n('pl_section_pinned')}</div>`);
     parts.push(pinned.map(_plNavItemHTML).join(''));
-  }
-
-  // S157 FIX-7 : seuil arbitraire supprimé (avant : >= 2)
-  if (recents.length >= 1) {
-    parts.push(`<div class="pl-nav-section-h">${i18n('pl_section_recent')}</div>`);
-    parts.push(recents.map(_plNavItemHTML).join(''));
   }
 
   // Dossiers — regroupement O(N+F) au lieu de O(N×F)
@@ -515,14 +517,6 @@ export function renderPlNav() {
         </div>
       </div>
     `);
-  }
-
-  // Autres playlists (hors dossier, non épinglées)
-  if (ungroupedOrNoFolder.length) {
-    if (plFolders.length || pinned.length || recents.length >= 1) {
-      parts.push(`<div class="pl-nav-section-h">${i18n('pl_section_all')}</div>`);
-    }
-    parts.push(ungroupedOrNoFolder.map(_plNavItemHTML).join(''));
   }
 
   el.innerHTML = parts.join('');

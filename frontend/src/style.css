@@ -3291,6 +3291,29 @@ html[data-mode="light"] .bte-cover-clear    { background: var(--bg3); border-col
 .ni-pl .pl-more:focus-visible { outline: var(--focus-ring); outline-offset: var(--sp-nano); color: var(--t3); }
 .ni-pl .pl-more svg    { width: var(--icon-sm); height: var(--icon-sm); fill: currentColor; }
 
+/* Bouton ⋯ dans le hero playlist */
+.pl-hero-more {
+  position: absolute;
+  top: var(--sp-2);
+  right: var(--sp-2);
+  background: var(--bg3);
+  border: none;
+  border-radius: var(--r-sm);
+  color: var(--t3);
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity var(--ease), background var(--ease), color var(--ease);
+}
+#pl-hero:hover .pl-hero-more,
+.pl-hero-more:focus-visible { opacity: 1; }
+.pl-hero-more:hover { background: var(--bg4); color: var(--t); }
+.pl-hero-more svg  { width: 16px; height: 16px; fill: currentColor; pointer-events: none; }
+
 /* Context menu smart playlist item */
 .ctx-item.smart { color: var(--amber); }
 .ctx-item.smart:hover { background: rgba(245,158,11,.1); }
@@ -3534,6 +3557,7 @@ html[data-mode="light"] .bte-cover-clear    { background: var(--bg3); border-col
   gap: var(--sp-5);
   padding: var(--sp-5) var(--sp-6) var(--sp-4);
   flex-shrink: 0;
+  position: relative;
   /* Teinte ambiante depuis la pochette en lecture (même pattern que #vlib et #tb) */
   background: linear-gradient(160deg,
     color-mix(in srgb, var(--art-color) 22%, var(--bg3)) 0%,
