@@ -1925,6 +1925,10 @@ html[data-mode="light"] mark.srch-hl { background: rgba(var(--g-rgb), .22); }
   font-size: var(--fs-disp-lg); opacity: .22;
   animation: emptyFloat 4s ease-in-out infinite;
 }
+.empty-ico svg {
+  width: var(--fs-disp-lg); height: var(--fs-disp-lg);
+  display: block;
+}
 @keyframes emptyFloat {
   0%, 100% { transform: translateY(0);    opacity: .22; }
   50%       { transform: translateY(calc(-1 * var(--sp-1d))); opacity: .30; }
@@ -2402,6 +2406,64 @@ html[data-mode="light"] mark.srch-hl { background: rgba(var(--g-rgb), .22); }
 .vslider { -webkit-appearance: none; width: var(--slider-w); height: var(--track-h); border-radius: var(--r-xs); background: var(--bg5); outline: none; cursor: pointer; }
 .vslider::-webkit-slider-thumb { -webkit-appearance: none; width: var(--icon-xs); height: var(--icon-xs); border-radius: 50%; background: var(--g); box-shadow: var(--shadow-vslider); transition: transform var(--ease), background var(--ease); }
 .vslider:hover::-webkit-slider-thumb { transform: scale(1.25); }
+
+/* ── What's next mini-card (hover ⏭) ────────────────────────── */
+#btn-next { position: relative; }
+
+#next-preview {
+  position: absolute;
+  bottom: calc(100% + var(--sp-2));
+  left: 50%;
+  transform: translateX(-50%) translateY(var(--sp-1));
+  background: var(--bg3);
+  border: var(--border-w-sm) solid var(--sep);
+  border-radius: var(--r2);
+  padding: var(--sp-2) var(--sp-3);
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2h);
+  min-width: 160px;
+  max-width: 220px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--dur-tooltip) var(--smooth),
+              transform var(--dur-tooltip) var(--spring-soft);
+  box-shadow: var(--shadow-sm-tip);
+  z-index: var(--z-tooltip);
+  white-space: nowrap;
+}
+/* pointer-events:auto : capture le curseur pour maintenir :hover actif quand
+   le curseur glisse du bouton vers la card (qui flotte au-dessus). */
+#btn-next:hover #next-preview {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+  pointer-events: auto;
+}
+#next-preview img, .np-em {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--r-xs);
+  flex-shrink: 0;
+  object-fit: cover;
+  font-size: 20px;
+  line-height: 32px;
+  text-align: center;
+}
+.np-info { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.np-name {
+  font-size: var(--fs-xs);
+  color: var(--t);
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.np-artist {
+  font-size: var(--fs-2xs);
+  color: var(--t3);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 /* A11Y-SLIDER-1 — focus clavier : halo autour de la piste + scale du thumb */
 .vslider:focus-visible { box-shadow: 0 0 0 2px var(--g), 0 0 0 4px rgba(var(--g-rgb), .18); }
 .vslider:focus-visible::-webkit-slider-thumb { transform: scale(1.3); }
@@ -5285,7 +5347,7 @@ html.vt-running .cge > *   { animation: none !important; }
   60%  { filter: blur(0); }
   to   { opacity: 1; transform: none; filter: blur(0); }
 }
-.card { animation: cardIn var(--dur-card-in) var(--decelerate) both; }
+.card { animation: cardIn var(--dur-card-in) var(--decelerate) backwards; }
 .card:nth-child(1)  { animation-delay: 0ms; }
 .card:nth-child(2)  { animation-delay: 25ms; }
 .card:nth-child(3)  { animation-delay: 50ms; }
@@ -5296,7 +5358,7 @@ html.vt-running .cge > *   { animation: none !important; }
 .card:nth-child(8)  { animation-delay: 175ms; }
 
 /* ── Genre cards ─────────────────────────────────────────── */
-.genre-card { animation: cardIn var(--dur-card-in) var(--decelerate) both; }
+.genre-card { animation: cardIn var(--dur-card-in) var(--decelerate) backwards; }
 .genre-card:nth-child(1) { animation-delay: 0ms; }
 .genre-card:nth-child(2) { animation-delay: 30ms; }
 .genre-card:nth-child(3) { animation-delay: 60ms; }
