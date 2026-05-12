@@ -2439,7 +2439,7 @@ html[data-mode="light"] mark.srch-hl { background: rgba(var(--g-rgb), .22); }
   transform: translateX(-50%) translateY(0);
   pointer-events: auto;
 }
-#next-preview img, .np-em {
+#next-preview img, #next-preview .np-em {
   width: 32px;
   height: 32px;
   border-radius: var(--r-xs);
