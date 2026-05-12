@@ -191,31 +191,59 @@ fn com_thread_loop(main_hwnd_raw: isize) {
 // ── API publique ─────────────────────────────────────────────────────────────
 
 /// Initialise la thumbnail toolbar. Appelé une seule fois depuis main.rs au setup.
-pub fn setup(hwnd_raw: isize, app: AppHandle) {
-    unsafe { setup_impl(hwnd_raw, app) }
+pub fn setup(main_win: WebviewWindow, app: AppHandle) {
+    if let Ok(hwnd) = main_win.hwnd() {
+        let hwnd_raw = hwnd.0 as isize;
+        unsafe { setup_impl(hwnd_raw, main_win, app) }
+    } else {
+        eprintln!("[taskbar] hwnd() introuvable — thumbnail toolbar désactivée");
+    }
 }
 
 /// Met à jour l'icône Play/Pause.
 pub fn update_play_state(playing: bool) {
     *lock_recover(&PLAYING) = playing;
-    unsafe { refresh_toolbar() }
+    if let Some(&tid) = COM_THREAD_ID.get() {
+        unsafe {
+            let _ = PostThreadMessageW(
+                tid, CMD_PLAY_STATE, WPARAM(playing as usize), LPARAM(0),
+            );
+        }
+    }
 }
 
 /// Active/désactive les boutons selon la présence de pistes.
 pub fn update_has_tracks(has: bool) {
     *lock_recover(&HAS_TRACKS) = has;
-    unsafe { refresh_toolbar() }
+    if let Some(&tid) = COM_THREAD_ID.get() {
+        unsafe {
+            let _ = PostThreadMessageW(
+                tid, CMD_HAS_TRACKS, WPARAM(has as usize), LPARAM(0),
+            );
+        }
+    }
+}
+
+/// Arrête proprement le COM thread. Appelé sur WindowEvent::Destroyed.
+pub fn cleanup() {
+    if let Some(&tid) = COM_THREAD_ID.get() {
+        unsafe {
+            let _ = PostThreadMessageW(tid, CMD_QUIT, WPARAM(0), LPARAM(0));
+        }
+    }
 }
 
 // ── Implémentation ───────────────────────────────────────────────────────────
 
-unsafe fn setup_impl(hwnd_raw: isize, app: AppHandle) {
-    let hwnd = HWND(hwnd_raw as *mut _);
+unsafe fn setup_impl(hwnd_raw: isize, main_win: WebviewWindow, app: AppHandle) {
     *lock_recover(&MAIN_HWND) = hwnd_raw;
 
-    // Canal mpsc : seul try_send (non-bloquant, sans allocation) sera appelé depuis
-    // le Win32 message-loop thread → aucun risque de panique à travers la FFI boundary.
-    // Le receiver tourne dans le runtime Tokio et peut appeler win.emit() sans restriction.
+    // ── Enregistrer le message WM_TASKBARBUTTONCREATED ────────────────────
+    let msg_name: Vec<u16> = "TaskbarButtonCreated\0".encode_utf16().collect();
+    let tbc_msg = RegisterWindowMessageW(windows::core::PCWSTR(msg_name.as_ptr()));
+    if tbc_msg != 0 { TASKBAR_BTN_MSG.set(tbc_msg).ok(); }
+
+    // ── Canal mpsc : boutons cliqués → Tokio → JS ─────────────────────────
     let (tx, mut rx) = mpsc::channel::<String>(8);
     BTN_TX.set(tx).ok();
     let app_for_rx = app.clone();
@@ -227,59 +255,34 @@ unsafe fn setup_impl(hwnd_raw: isize, app: AppHandle) {
         }
     });
 
-    // Sous-classer la fenêtre pour intercepter WM_COMMAND des boutons thumbnail.
-    // data = 0 : le subclass_proc n'a plus besoin de l'AppHandle (il utilise BTN_TX).
-    let _ = SetWindowSubclass(hwnd, Some(subclass_proc), SUBCLASS_UID, 0);
+    // ── Spawner le COM thread ─────────────────────────────────────────────
+    std::thread::spawn(move || {
+        com_thread_loop(hwnd_raw);
+    });
 
-    // Doit être appelé depuis le thread principal STA — ITaskbarList3 est STA-only.
-    let _coinit_guard = CoInitializeEx(None, COINIT_APARTMENTTHREADED).ok().map(|_| ComGuard);
-    let Ok(tb3) = CoCreateInstance::<_, ITaskbarList3>(&TaskbarList, None, CLSCTX_ALL)
-        else { return; };
-    if tb3.HrInit().is_err() { return; }
-
-    let playing    = *lock_recover(&PLAYING);
-    let has_tracks = *lock_recover(&HAS_TRACKS);
-    let il = build_image_list(playing);
-    swap_il(il);
-    let _ = tb3.ThumbBarSetImageList(hwnd, cur_il());
-    let _ = tb3.ThumbBarAddButtons(hwnd, &mk_buttons(playing, has_tracks));
-}
-
-/// Reconstruit l'image list et met à jour les boutons.
-/// Doit être appelé depuis le thread principal STA — ITaskbarList3 est STA-only.
-unsafe fn refresh_toolbar() {
-    let hwnd_raw = *lock_recover(&MAIN_HWND);
-    if hwnd_raw == 0 { return; }
-    let hwnd = HWND(hwnd_raw as *mut _);
-
-    let playing    = *lock_recover(&PLAYING);
-    let has_tracks = *lock_recover(&HAS_TRACKS);
-
-    let _coinit_guard = CoInitializeEx(None, COINIT_APARTMENTTHREADED).ok().map(|_| ComGuard);
-    let Ok(tb3) = CoCreateInstance::<_, ITaskbarList3>(&TaskbarList, None, CLSCTX_ALL)
-        else { return; };
-    if tb3.HrInit().is_err() { return; }
-
-    let il = build_image_list(playing);
-    swap_il(il);                                           // détruit l'ancienne
-    let _ = tb3.ThumbBarSetImageList(hwnd, cur_il());
-    let _ = tb3.ThumbBarUpdateButtons(hwnd, &mk_buttons(playing, has_tracks));
+    // ── Subclass différé ──────────────────────────────────────────────────
+    let once = Arc::new(std::sync::Once::new());
+    let once2 = once.clone();
+    main_win.on_window_event(move |_event| {
+        once2.call_once(|| {
+            let hwnd = HWND(hwnd_raw as *mut _);
+            let _ = SetWindowSubclass(hwnd, Some(subclass_proc), SUBCLASS_UID, 0);
+            if let Some(&tid) = COM_THREAD_ID.get() {
+                let _ = PostThreadMessageW(tid, CMD_INIT, WPARAM(0), LPARAM(0));
+            } else {
+                eprintln!("[taskbar] COM thread pas encore prêt au premier window event");
+            }
+        });
+    });
 }
 
 // ── Boutons ──────────────────────────────────────────────────────────────────
 
 fn mk_buttons(playing: bool, has_tracks: bool) -> [THUMBBUTTON; 3] {
-    let nav_flags = if has_tracks {
-        THBF_ENABLED | THBF_NOBACKGROUND
-    } else {
-        THBF_DISABLED | THBF_NOBACKGROUND
-    };
-    let play_flags = if has_tracks {
-        THBF_ENABLED | THBF_NOBACKGROUND
-    } else {
-        THBF_DISABLED | THBF_NOBACKGROUND
-    };
-    let play_tip = if playing { "Pause" } else { "Play" };
+    // Sans THBF_NOBACKGROUND : Windows affiche le highlight de survol natif (cercle).
+    let nav_flags  = if has_tracks { THBF_ENABLED } else { THBF_DISABLED };
+    let play_flags = if has_tracks { THBF_ENABLED } else { THBF_DISABLED };
+    let play_tip   = if playing { "Pause" } else { "Play" };
     [
         thumb_btn(BTN_PREV, IMG_PREV, "Previous", nav_flags),
         thumb_btn(BTN_PLAY, IMG_PLAY, play_tip,   play_flags),
@@ -390,66 +393,62 @@ unsafe fn make_icon<F: Fn(HDC)>(draw_fn: F) -> HICON {
 }
 
 // ⏮ Précédent : barre verticale gauche + triangle pointant à gauche
-// Coordonnées à 2× (espace 48×48) — downscalé à 24×24 avec HALFTONE
 unsafe fn make_icon_prev() -> HICON {
     make_icon(|dc| {
         let bar = [
-            POINT { x: 6,  y: 6  }, POINT { x: 12, y: 6  },
-            POINT { x: 12, y: 42 }, POINT { x: 6,  y: 42 },
+            POINT { x: 8,  y: 8  }, POINT { x: 14, y: 8  },
+            POINT { x: 14, y: 40 }, POINT { x: 8,  y: 40 },
         ];
         let _ = Polygon(dc, &bar);
         let tri = [
-            POINT { x: 42, y: 6  },
-            POINT { x: 42, y: 42 },
-            POINT { x: 14, y: 24 },
+            POINT { x: 40, y: 8  },
+            POINT { x: 40, y: 40 },
+            POINT { x: 16, y: 24 },
         ];
         let _ = Polygon(dc, &tri);
     })
 }
 
-// ▶ Lecture : triangle pointant à droite, centré
-// Coordonnées à 2× (espace 48×48)
+// ▶ Lecture : triangle pointant à droite, optiquement centré
 unsafe fn make_icon_play() -> HICON {
     make_icon(|dc| {
         let tri = [
-            POINT { x: 7,  y: 6  },
-            POINT { x: 7,  y: 42 },
-            POINT { x: 41, y: 24 },
+            POINT { x: 10, y: 8  },
+            POINT { x: 10, y: 40 },
+            POINT { x: 40, y: 24 },
         ];
         let _ = Polygon(dc, &tri);
     })
 }
 
-// ⏸ Pause : deux barres verticales
-// Coordonnées à 2× (espace 48×48)
+// ⏸ Pause : deux barres verticales égales, marges équilibrées
 unsafe fn make_icon_pause() -> HICON {
     make_icon(|dc| {
         let b1 = [
-            POINT { x: 8,  y: 6  }, POINT { x: 18, y: 6  },
-            POINT { x: 18, y: 42 }, POINT { x: 8,  y: 42 },
+            POINT { x: 9,  y: 8  }, POINT { x: 19, y: 8  },
+            POINT { x: 19, y: 40 }, POINT { x: 9,  y: 40 },
         ];
         let _ = Polygon(dc, &b1);
         let b2 = [
-            POINT { x: 30, y: 6  }, POINT { x: 40, y: 6  },
-            POINT { x: 40, y: 42 }, POINT { x: 30, y: 42 },
+            POINT { x: 29, y: 8  }, POINT { x: 39, y: 8  },
+            POINT { x: 39, y: 40 }, POINT { x: 29, y: 40 },
         ];
         let _ = Polygon(dc, &b2);
     })
 }
 
-// ⏭ Suivant : triangle pointant à droite + barre verticale droite
-// Coordonnées à 2× (espace 48×48)
+// ⏭ Suivant : triangle pointant à droite + barre verticale droite (miroir de Prev)
 unsafe fn make_icon_next() -> HICON {
     make_icon(|dc| {
         let tri = [
-            POINT { x: 6,  y: 6  },
-            POINT { x: 6,  y: 42 },
-            POINT { x: 34, y: 24 },
+            POINT { x: 8,  y: 8  },
+            POINT { x: 8,  y: 40 },
+            POINT { x: 32, y: 24 },
         ];
         let _ = Polygon(dc, &tri);
         let bar = [
-            POINT { x: 36, y: 6  }, POINT { x: 42, y: 6  },
-            POINT { x: 42, y: 42 }, POINT { x: 36, y: 42 },
+            POINT { x: 34, y: 8  }, POINT { x: 40, y: 8  },
+            POINT { x: 40, y: 40 }, POINT { x: 34, y: 40 },
         ];
         let _ = Polygon(dc, &bar);
     })
@@ -465,6 +464,7 @@ unsafe extern "system" fn subclass_proc(
     _uid: usize,
     _data: usize,
 ) -> LRESULT {
+    // ── Clics boutons thumbnail ──
     if msg == WM_COMMAND {
         let btn_id = (wparam.0 & 0xFFFF) as u32;
         let key = match btn_id {
@@ -474,13 +474,21 @@ unsafe extern "system" fn subclass_proc(
             _        => None,
         };
         if let Some(k) = key {
-            // try_send est non-bloquant et sans panique → sûr depuis un callback Win32 FFI.
-            // Le receiver Tokio (spawné dans setup_impl) appellera win.emit() côté async.
             if let Some(tx) = BTN_TX.get() {
                 let _ = tx.try_send(k.to_string());
             }
             return LRESULT(0);
         }
     }
+
+    // ── Redémarrage taskbar → recréer les boutons ──
+    if let Some(&tbc_msg) = TASKBAR_BTN_MSG.get() {
+        if tbc_msg != 0 && msg == tbc_msg {
+            if let Some(&tid) = COM_THREAD_ID.get() {
+                let _ = PostThreadMessageW(tid, CMD_TASKBAR_CREATED, WPARAM(0), LPARAM(0));
+            }
+        }
+    }
+
     DefSubclassProc(hwnd, msg, wparam, lparam)
 }

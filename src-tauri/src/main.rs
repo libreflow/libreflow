@@ -79,9 +79,7 @@ fn main() {
             #[cfg(target_os = "windows")]
             {
                 if let Some(main_win_tb) = app.get_webview_window("main") {
-                    if let Ok(hwnd) = main_win_tb.hwnd() {
-                        taskbar::setup(hwnd.0 as isize, app.handle().clone());
-                    }
+                    taskbar::setup(main_win_tb, app.handle().clone());
                 } else {
                     eprintln!("[taskbar] fenêtre main introuvable — thumbnail toolbar désactivée");
                 }
