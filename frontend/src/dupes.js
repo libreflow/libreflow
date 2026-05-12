@@ -11,7 +11,7 @@ import { esc, normTag }                              from './utils.js';
 import { ddel }                                      from './db.js';
 import { i18n }                                      from './i18n.js';
 import { get, notify }                               from './store.js';
-import { emit, EVENTS }                              from './bus.js';
+import { emit, on, EVENTS }                          from './bus.js';
 import { trackIdx, _trackIdxMap, rebuildTrackIdxMap, invalidateFilterCache } from './search.js';
 import { audio, adjustShuffleQAfterDelete }           from './player.js';
 import { toast, confirmAction }                                        from './ui.js';
@@ -20,12 +20,12 @@ import { updateStats } from './renderer.js';
 
 // ── État interne ──────────────────────────────────────────────
 let dupesGroups = [];
+let _autoDupesTimer = null;
 
 // ── Détection ────────────────────────────────────────────────
 
-export function detectDupes() {
-  // Grouper par clé fuzzy : titre normalisé + artiste principal
-  const tracks = get('tracks'); // Phase 4 — store alimenté depuis Jalon 3
+function _computeDupeGroups() {
+  const tracks = get('tracks');
   const map = new Map();
   for (const t of tracks) {
     const key = normTag(t.name).toLowerCase().replace(/[^\w\s]/g,'').replace(/\s+/g,' ').trim()
@@ -35,8 +35,25 @@ export function detectDupes() {
     map.get(key).push(t);
   }
   dupesGroups = [...map.values()].filter(g => g.length > 1);
+}
+
+export function detectDupes() {
+  _computeDupeGroups();
   _renderDupes();
   document.getElementById('dupes-panel').classList.add('open');
+}
+
+export function getDupesCount() { return dupesGroups.length; }
+
+export function updateDupesBadge() {
+  const badge = document.getElementById('dupes-badge');
+  const countEl = document.getElementById('dupes-badge-count');
+  if (!badge || !countEl) return;
+  const n = dupesGroups.length;
+  countEl.textContent = String(n);
+  badge.style.display = n > 0 ? '' : 'none';
+  badge.setAttribute('aria-label',
+    n === 1 ? '1 doublon détecté' : `${n} doublons détectés`);
 }
 
 function _renderDupes() {
@@ -95,6 +112,7 @@ export async function removeDupeTrack(id, gi, ti) {
   rebuildTrackIdxMap(); // RÈGLE CRITIQUE : après tout tracks.splice(), AVANT notify
   notify('tracks');     // BUG-D2-2 FIX: notify subscribers after map rebuild
   _renderDupes();
+  updateDupesBadge();
   invalidateFilterCache(); emit(EVENTS.FILTER_CHANGED, {}); emit(EVENTS.RENDER_LIB, {}); updateStats();
 }
 
@@ -140,6 +158,7 @@ export async function deleteAllDupes() {
   notify('tracks');     // BUG-D2-4 FIX: notify subscribers after batch splice + map rebuild
   dupesGroups = [];
   _renderDupes();
+  updateDupesBadge();
   invalidateFilterCache(); emit(EVENTS.FILTER_CHANGED, {}); emit(EVENTS.RENDER_LIB, {}); updateStats();
   toast(i18n('t_dupes_deleted', removed), 'success');
 }
@@ -147,3 +166,12 @@ export async function deleteAllDupes() {
 export function closeDupes() {
   document.getElementById('dupes-panel').classList.remove('open');
 }
+
+// ── Auto-compute dupes after library updates ──────────────────────────────────
+on(EVENTS.LIBRARY_UPDATED, (_payload) => {
+  clearTimeout(_autoDupesTimer);
+  _autoDupesTimer = setTimeout(() => {
+    _computeDupeGroups();
+    updateDupesBadge();
+  }, 3000);
+});
