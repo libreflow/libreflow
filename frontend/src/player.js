@@ -472,8 +472,11 @@ export function peekNext() {
   // Séquentiel — cas spécial sort:recent (même logique que next())
   if (get('sort') === 'recent' && get('view') === 'all') {
     const ni = curIdx + 1;
-    if (ni < tracks.length) return tracks[ni];
-    return repeat === 'all' ? tracks[0] : null;
+    if (ni < tracks.length) {
+      const _tn = tracks[ni];
+      if (filteredIdx(_tn) >= 0) return _tn;
+    }
+    return (repeat === 'all' && tracks.length > 0) ? tracks[0] : null;
   }
 
   // Séquentiel standard via vue filtrée
