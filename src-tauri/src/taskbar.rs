@@ -101,10 +101,13 @@ fn com_thread_loop(main_hwnd_raw: isize) {
         tb3
     };
 
-    // Only register the thread ID after ITaskbarList3 is confirmed ready.
-    // Callers check COM_THREAD_ID.get() before posting — if it's None, they skip silently.
+    // Register thread ID only after ITaskbarList3 is confirmed ready, then self-post
+    // CMD_INIT so the message loop triggers initialization at a guaranteed safe time.
+    // This eliminates the race where the on_window_event Once closure fires before this
+    // thread has published its ID — the Once now only installs the subclass.
     let thread_id = unsafe { GetCurrentThreadId() };
     COM_THREAD_ID.set(thread_id).ok();
+    unsafe { let _ = PostThreadMessageW(thread_id, CMD_INIT, WPARAM(0), LPARAM(0)); }
 
     let main_hwnd    = HWND(main_hwnd_raw as *mut _);
     let mut playing    = *lock_recover(&PLAYING);
@@ -266,12 +269,11 @@ unsafe fn setup_impl(hwnd_raw: isize, main_win: WebviewWindow, app: AppHandle) {
     main_win.on_window_event(move |_event| {
         once2.call_once(|| {
             let hwnd = HWND(hwnd_raw as *mut _);
+            // Install subclass so WM_COMMAND (button clicks) and
+            // WM_TASKBARBUTTONCREATED (taskbar restart) are intercepted.
+            // CMD_INIT is self-posted by com_thread_loop once it's ready —
+            // no race with COM_THREAD_ID here.
             let _ = SetWindowSubclass(hwnd, Some(subclass_proc), SUBCLASS_UID, 0);
-            if let Some(&tid) = COM_THREAD_ID.get() {
-                let _ = PostThreadMessageW(tid, CMD_INIT, WPARAM(0), LPARAM(0));
-            } else {
-                eprintln!("[taskbar] COM thread pas encore prêt au premier window event");
-            }
         });
     });
 }
