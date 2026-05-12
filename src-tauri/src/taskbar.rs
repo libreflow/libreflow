@@ -5,9 +5,9 @@
 #![cfg(target_os = "windows")]
 #![allow(non_snake_case, unsafe_code, clippy::cast_ptr_alignment)]
 
-use std::sync::{Mutex, OnceLock};
+use std::sync::{Arc, Mutex, Once, OnceLock};
 
-use tauri::{AppHandle, Emitter, Manager};
+use tauri::{AppHandle, Emitter, Manager, WebviewWindow};
 use tokio::sync::mpsc;
 
 use windows::{
@@ -17,11 +17,14 @@ use windows::{
             CreateBitmap, CreateCompatibleBitmap, CreateCompatibleDC, CreatePen,
             CreateSolidBrush, DeleteDC, DeleteObject, FillRect, GetDC, Polygon,
             ReleaseDC, SelectObject, SetBrushOrgEx, SetStretchBltMode, StretchBlt,
-            HBITMAP, HBRUSH, HDC, HGDIOBJ, HPEN, PS_SOLID, SRCCOPY,
-            STRETCH_BLT_MODE,
+            HBITMAP, HBRUSH, HDC, HGDIOBJ, HPEN, PS_SOLID, SRCCOPY, STRETCH_BLT_MODE,
         },
-        System::Com::{
-            CoCreateInstance, CoInitializeEx, CoUninitialize, CLSCTX_ALL, COINIT_APARTMENTTHREADED,
+        System::{
+            Com::{
+                CoCreateInstance, CoInitializeEx, CoUninitialize,
+                CLSCTX_ALL, COINIT_APARTMENTTHREADED,
+            },
+            Threading::GetCurrentThreadId,
         },
         UI::{
             Controls::{
@@ -30,11 +33,13 @@ use windows::{
             },
             Shell::{
                 DefSubclassProc, ITaskbarList3, SetWindowSubclass, TaskbarList,
-                THUMBBUTTON, THUMBBUTTONFLAGS, THBF_DISABLED, THBF_ENABLED, THBF_NOBACKGROUND,
+                THUMBBUTTON, THUMBBUTTONFLAGS, THBF_DISABLED, THBF_ENABLED,
                 THB_BITMAP, THB_FLAGS, THB_TOOLTIP,
             },
             WindowsAndMessaging::{
-                CreateIconIndirect, DestroyIcon, HICON, ICONINFO, WM_COMMAND,
+                CreateIconIndirect, DestroyIcon, GetMessageW,
+                HICON, ICONINFO, MSG, PostThreadMessageW, RegisterWindowMessageW,
+                WM_COMMAND,
             },
         },
     },
@@ -50,38 +55,32 @@ fn lock_recover<T>(m: &'static Mutex<T>) -> std::sync::MutexGuard<'static, T> {
     })
 }
 
-// ── RAII guard COM ─────────────────────────────────────────────────────────
-// Appelle CoUninitialize() au drop, équilibrant chaque CoInitializeEx réussi
-// (S_OK ou S_FALSE) sur le même thread. N'est jamais créé si CoInitializeEx
-// renvoie RPC_E_CHANGED_MODE (COM déjà initialisé avec un autre modèle de
-// concurrence) — dans ce cas ok() renvoie None et aucun drop n'a lieu.
-struct ComGuard;
-impl Drop for ComGuard {
-    fn drop(&mut self) {
-        unsafe { CoUninitialize(); }
-    }
-}
-
 // ── Identifiants boutons ────────────────────────────────────────────────────
-const BTN_PREV: u32 = 0x4001;
-const BTN_PLAY: u32 = 0x4002;
-const BTN_NEXT: u32 = 0x4003;
+const BTN_PREV:     u32 = 0x4001;
+const BTN_PLAY:     u32 = 0x4002;
+const BTN_NEXT:     u32 = 0x4003;
 
 const IMG_PREV: u32 = 0;
 const IMG_PLAY: u32 = 1;
 const IMG_NEXT: u32 = 2;
 
-const SUBCLASS_UID: usize = 0x4C46_0001; // "LF" taskbar
-const ICON_SIZE:    i32   = 24;           // 24×24 pour une meilleure lisibilité
+const SUBCLASS_UID: usize = 0x4C46_0001;
+const ICON_SIZE:    i32   = 24;
+
+// Messages internes vers le COM thread (WM_USER range 0x0400..0x7FFF)
+const CMD_INIT:            u32 = 0x0401; // initialiser la toolbar
+const CMD_PLAY_STATE:      u32 = 0x0402; // wparam = 1 (playing) ou 0 (paused)
+const CMD_HAS_TRACKS:      u32 = 0x0403; // wparam = 1 (has tracks) ou 0 (empty)
+const CMD_TASKBAR_CREATED: u32 = 0x0404; // taskbar redémarré, refaire AddButtons
+const CMD_QUIT:            u32 = 0x0405; // arrêter le thread COM
 
 // ── État global ─────────────────────────────────────────────────────────────
-static MAIN_HWND:  Mutex<isize> = Mutex::new(0);
-static CUR_IL:     Mutex<isize> = Mutex::new(0); // HIMAGELIST courante (raw handle)
-static PLAYING:    Mutex<bool>  = Mutex::new(false);
-static HAS_TRACKS: Mutex<bool>  = Mutex::new(false);
-
-// Canal mpsc pour pont FFI → Tokio (try_send non-bloquant depuis Win32 callback)
-static BTN_TX: OnceLock<mpsc::Sender<String>> = OnceLock::new();
+static MAIN_HWND:       Mutex<isize>                   = Mutex::new(0);
+static COM_THREAD_ID:   OnceLock<u32>                  = OnceLock::new();
+static TASKBAR_BTN_MSG: OnceLock<u32>                  = OnceLock::new();
+static PLAYING:         Mutex<bool>                    = Mutex::new(false);
+static HAS_TRACKS:      Mutex<bool>                    = Mutex::new(false);
+static BTN_TX:          OnceLock<mpsc::Sender<String>> = OnceLock::new();
 
 // ── API publique ─────────────────────────────────────────────────────────────
 
@@ -159,39 +158,6 @@ unsafe fn refresh_toolbar() {
     swap_il(il);                                           // détruit l'ancienne
     let _ = tb3.ThumbBarSetImageList(hwnd, cur_il());
     let _ = tb3.ThumbBarUpdateButtons(hwnd, &mk_buttons(playing, has_tracks));
-}
-
-// ── Gestion HIMAGELIST ───────────────────────────────────────────────────────
-
-/// Remplace la HIMAGELIST courante et détruit l'ancienne (fix memory leak).
-unsafe fn swap_il(new_il: HIMAGELIST) {
-    let old_raw = {
-        let mut g = lock_recover(&CUR_IL);
-        let old = *g;
-        *g = new_il.0;
-        old
-    };
-    if old_raw != 0 {
-        // Ignorer le résultat — handle peut déjà être invalide après recréation du taskbar
-        let _ = ImageList_Destroy(HIMAGELIST(old_raw));
-    }
-}
-
-/// Libère la dernière HIMAGELIST — à appeler à l'arrêt de l'application.
-pub fn cleanup() {
-    let raw = {
-        let mut g = lock_recover(&CUR_IL);
-        let v = *g;
-        *g = 0;
-        v
-    };
-    if raw != 0 {
-        unsafe { let _ = ImageList_Destroy(HIMAGELIST(raw)); }
-    }
-}
-
-fn cur_il() -> HIMAGELIST {
-    HIMAGELIST(*lock_recover(&CUR_IL))
 }
 
 // ── Boutons ──────────────────────────────────────────────────────────────────
