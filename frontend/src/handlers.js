@@ -541,7 +541,7 @@ export function registerHandlers() {
       _volEl.value = String(v);
       setMasterGain(v);
       updateVolSlider(_volEl);
-    }, { passive: false });
+    }, { passive: false, signal });
   }
 
   return () => ac.abort();
