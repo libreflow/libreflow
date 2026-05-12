@@ -236,7 +236,7 @@ export function renderPlHero(pl, fl) {
             data-action="show-cur-pl-menu"
             title="${i18n('pl_more')}"
             aria-label="${i18n('pl_more')}">
-      <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+      <svg viewBox="0 0 24 24" aria-hidden="true">
         <circle cx="5"  cy="12" r="1.5" fill="currentColor"/>
         <circle cx="12" cy="12" r="1.5" fill="currentColor"/>
         <circle cx="19" cy="12" r="1.5" fill="currentColor"/>
