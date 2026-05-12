@@ -191,6 +191,11 @@
   <div class="view" id="vlib">
     <div class="vh">
       <div class="vh-title" id="vhtitle" role="heading" aria-level="1">Tous les titres</div>
+      <button id="dupes-badge" class="dupes-badge" data-action="detect-dupes"
+              style="display:none" aria-live="polite" aria-label="Doublons détectés">
+        <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/></svg>
+        <span id="dupes-badge-count">0</span> doublons
+      </button>
       <button class="sort-btn" id="main-sort-btn" data-action="next-sort">
         <span id="sort-lbl" aria-live="polite">A–Z</span>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M8 6h13M8 12h9M8 18h5"/></svg>
@@ -847,20 +852,6 @@
         </div>
         <div class="set-row">
           <div>
-            <div class="set-row-label" data-i18n="set_genres_label">Détecter les genres</div>
-            <div class="set-row-sub" data-i18n="set_genres_sub">Détecte automatiquement les genres manquants</div>
-          </div>
-          <button class="mbtn" style="font-size:11px;padding:6px 12px" data-action="settings-rescan-genres" data-i18n="set_genres_btn">Détecter</button>
-        </div>
-        <div class="set-row">
-          <div>
-            <div class="set-row-label" data-i18n="set_dupes_label">Détecter les doublons</div>
-            <div class="set-row-sub" data-i18n="set_dupes_sub">Trouver les titres en double dans la bibliothèque</div>
-          </div>
-          <button class="mbtn" style="font-size:11px;padding:6px 12px" data-action="settings-detect-dupes" data-i18n="set_dupes_btn">Analyser</button>
-        </div>
-        <div class="set-row">
-          <div>
             <div class="set-row-label" data-i18n="set_watch_label">Dossier surveillé</div>
             <div class="set-row-sub" id="watch-path-label" data-i18n="set_watch_sub">Surveiller un dossier pour nouvelles musiques</div>
           </div>
@@ -868,33 +859,20 @@
             <span id="watch-btn-label" data-i18n="set_watch_btn_on">Activer</span>
           </button>
         </div>
-        <div class="set-row">
-          <div>
-            <div class="set-row-label" data-i18n="set_export_label">Export playlist M3U</div>
-            <div class="set-row-sub" data-i18n="set_export_sub">Exporter la playlist active au format M3U</div>
+          <div class="set-row">
+            <div class="set-row-text">
+              <div class="set-row-label" data-i18n="set_interop_label">Interopérabilité</div>
+              <div class="set-row-sub" data-i18n="set_interop_sub">Import / export de playlists au format M3U</div>
+            </div>
+            <div style="display:flex;gap:8px;flex-shrink:0">
+              <button class="mbtn" style="font-size:11px;padding:6px 12px" data-action="settings-import-m3u">
+                <span data-i18n="set_import_btn">Importer</span>
+              </button>
+              <button class="mbtn" style="font-size:11px;padding:6px 12px" data-action="settings-export-m3u">
+                <span data-i18n="set_export_btn">Exporter</span>
+              </button>
+            </div>
           </div>
-          <button class="mbtn" style="font-size:11px;padding:6px 12px" data-action="settings-export-m3u">
-            <span data-i18n="set_export_btn">Exporter</span>
-          </button>
-        </div>
-        <div class="set-row">
-          <div>
-            <div class="set-row-label" data-i18n="set_xspf_label">Export playlist XSPF</div>
-            <div class="set-row-sub" data-i18n="set_xspf_sub">Format compatible VLC, foobar2000, Strawberry</div>
-          </div>
-          <button class="mbtn" style="font-size:11px;padding:6px 12px" data-action="settings-export-xspf">
-            <span data-i18n="set_xspf_btn">Exporter XSPF</span>
-          </button>
-        </div>
-        <div class="set-row">
-          <div>
-            <div class="set-row-label" data-i18n="set_import_label">Import playlist M3U</div>
-            <div class="set-row-sub" data-i18n="set_import_sub">Importer une playlist depuis un fichier .m3u</div>
-          </div>
-          <button class="mbtn" style="font-size:11px;padding:6px 12px" data-action="settings-import-m3u">
-            <span data-i18n="set_import_btn">Importer</span>
-          </button>
-        </div>
         <div class="set-row">
           <div>
             <div class="set-row-label" data-i18n="set_clear_label">Vider la bibliothèque</div>
