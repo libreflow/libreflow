@@ -264,7 +264,15 @@
         <svg id="ico-play"  viewBox="0 0 24 24"><polygon points="6 3 20 12 6 21" fill="currentColor"/></svg>
         <svg id="ico-pause" viewBox="0 0 24 24" style="display:none"><rect x="5.5" y="4" width="4" height="16" rx="1.5" fill="currentColor"/><rect x="14.5" y="4" width="4" height="16" rx="1.5" fill="currentColor"/></svg>
       </button>
-      <button class="pc" data-action="next" data-i18n-title="pc_next" data-aria-i18n="pc_next" aria-label="Titre suivant" aria-keyshortcuts="ArrowRight">
+      <button class="pc" id="btn-next" data-action="next" data-i18n-title="pc_next" data-aria-i18n="pc_next" aria-label="Titre suivant" aria-keyshortcuts="ArrowRight">
+        <div id="next-preview" aria-hidden="true">
+          <img id="np-art" width="32" height="32" alt="">
+          <span id="np-em" class="np-em"></span>
+          <div class="np-info">
+            <span class="np-name"></span>
+            <span class="np-artist"></span>
+          </div>
+        </div>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 4 15 12 5 20" fill="currentColor" stroke="none"/><line x1="19" y1="5" x2="19" y2="19"/></svg>
       </button>
       <button class="pc" id="pc-rep" data-action="toggle-repeat" title="" data-i18n-title="pc_repeat" aria-label="Mode répétition" aria-pressed="false">
