@@ -62,7 +62,6 @@ import {
 } from './playlists.js';
 export { playPlaylistFrom, playPlaylistDirect, shufflePlaylist }; // re-export (handlers.js backward compat)
 
-import { initWaveform, wfLoad, wfClear } from './waveform.js';
 import { toggleNowPlaying, closeNowPlaying, updateNowPlaying } from './nowplaying.js';
 import {
   initSettingsVars, getTheme, getDynColor, getDisplayMode, isShortcutsOpen,
@@ -782,7 +781,6 @@ window.addEventListener('unhandledrejection', (e) => {
 
 waitForTauri(() => {
   boot().catch(e => console.error('[LibreFlow] boot failed:', e)); // FIX #19
-  initWaveform(audio); // Waveform progress bar
   initMediaSession(); // Contrôles Windows 11 SMTC / taskbar
   initMiniOverlayDrag(); // Drag du mini-player overlay in-page
   initRipple(); // Ripple feedback sur boutons et lignes
@@ -934,7 +932,6 @@ export async function clearLibrary() {
   document.title = 'LibreFlow';
   setupMarquee(document.getElementById('pl-n'), '–');
   setupMarquee(document.getElementById('pl-a'), '–');
-  wfClear();
   _updateArtBlur(null);
   clearArtColor(); // réinitialise --art-color, --g, --g-rgb, --gd, --gg
   document.getElementById('pl-img').style.display = 'none';

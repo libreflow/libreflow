@@ -216,39 +216,6 @@ pub fn scan_folder(path: String) -> Result<Vec<String>, String> {
     Ok(files)
 }
 
-/// Lit un fichier et retourne son contenu encodé en base64.
-/// Utilisé pour charger les fichiers audio afin de lire leurs tags via JS.
-#[tauri::command]
-pub fn read_file(path: String) -> Result<String, String> {
-    let p = Path::new(&path);
-    if !is_audio(p) {
-        return Err(format!("read_file: extension non autorisée — {path}"));
-    }
-    let canon = fs::canonicalize(p)
-        .map_err(|e| format!("read_file: chemin invalide — {e}"))?;
-    if !is_audio(&canon) {
-        return Err(format!("read_file: extension non autorisée après résolution — {path}"));
-    }
-    if let Some(parent) = canon.parent() {
-        if !is_safe_dir(parent) {
-            return Err(format!("read_file: répertoire système refusé — {path}"));
-        }
-    }
-    const MAX_SIZE: u64 = 500 * 1024 * 1024; // 500 MB
-    let meta = fs::metadata(&canon).map_err(|e| format!("read_file: métadonnées — {e}"))?;
-    if meta.len() > MAX_SIZE {
-        return Err(format!("read_file: fichier trop volumineux ({} octets)", meta.len()));
-    }
-    let data = fs::read(&canon).map_err(|e| format!("read_file({path}): {e}"))?;
-    Ok(general_purpose::STANDARD.encode(&data))
-}
-
-/// Vérifie si un fichier existe sur le système de fichiers.
-#[tauri::command]
-pub fn file_exists(path: String) -> bool {
-    Path::new(&path).exists()
-}
-
 /// Vérifie une liste de chemins et retourne ceux qui n'existent plus (orphelins).
 #[tauri::command]
 pub fn check_paths(paths: Vec<String>) -> Vec<String> {

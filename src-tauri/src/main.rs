@@ -28,8 +28,6 @@ fn main() {
         .invoke_handler(tauri::generate_handler![
             commands::open_folder,
             commands::scan_folder,
-            commands::read_file,
-            commands::file_exists,
             commands::notify_track,
             commands::write_tags,
             commands::pick_image,

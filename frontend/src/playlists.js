@@ -608,32 +608,6 @@ export function showPlFolderCtxMenu(event, folderId) {
   _attachPlCtxClose(menu);
 }
 
-// ── Drag d'une playlist sur un header de dossier ─────────────
-export function onPlFolderDragOver(e, folderId) {
-  if (!_dragPlId) return;
-  e.preventDefault();
-  e.dataTransfer.dropEffect = 'move';
-  e.currentTarget.classList.add('pl-folder-drop');
-}
-export function onPlFolderDragLeave(e, folderId) {
-  e.currentTarget.classList.remove('pl-folder-drop');
-}
-export async function onPlFolderDrop(e, folderId) {
-  e.preventDefault();
-  e.stopPropagation();
-  e.currentTarget.classList.remove('pl-folder-drop');
-  if (!_dragPlId) return;
-  const pl = get('playlists').find(p => p.id === _dragPlId);
-  _dragPlId = null;
-  if (!pl) return;
-  if (pl.folderId === folderId) return;
-  pl.folderId = folderId;
-  await savePlaylists();
-  renderPlNav();
-  setupPlNavDrop();
-  toast(i18n('t_pl_moved_to_folder'), 'success');
-}
-
 // ── Pinned ────────────────────────────────────────────────────
 export async function togglePinPlaylist(plId) {
   const pl = get('playlists').find(p => p.id === plId);
