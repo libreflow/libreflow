@@ -10,7 +10,7 @@
 //   import  : DB, dput (db.js)
 //   import  : audio (player.js)
 //   import  : getLang (i18n.js)
-//   import  : getTheme, getDynColor, getDisplayMode, getVinylSpin (settings.js)
+//   import  : getTheme, getDynColor, getDisplayMode (settings.js)
 //   import  : rgEnabled, rgTargetLUFS (replaygain.js)
 //   store   : cinemaBg — synced by cinema.js via set('cinemaBg',…)
 //   import  : eqEnabled, eqNodes, eqAutoMode,
@@ -31,8 +31,7 @@ import { CFG }                                        from './cfg.js';
 import { DB, dput, isQuotaError }                     from './db.js';
 import { audio }                                      from './player.js';
 import { getLang, i18n }                              from './i18n.js';
-import { getTheme, getDynColor, getDisplayMode,
-         getVinylSpin }                               from './settings.js';
+import { getTheme, getDynColor, getDisplayMode }      from './settings.js';
 import { rgEnabled, rgTargetLUFS }                    from './replaygain.js';
 // cinemaBg is read from the store (set by cinema.js via set('cinemaBg',…))
 // to avoid a cinema.js ↔ cfgsave.js circular dependency.
@@ -128,7 +127,7 @@ async function _doSaveCfg() {
       eqEnabled,
       eqGains: eqNodes.length ? eqNodes.map(n => n.gain.value) : null,
       eqPreset: getActiveEqPreset(),
-      vizMode: getVizMode(), vizEnabled: getVizEnabled(), vinylSpin: getVinylSpin(),
+      vizMode: getVizMode(), vizEnabled: getVizEnabled(),
       eqAutoMode, eqProfiles: getEQProfiles(),
       watchPath: getWatchPath(),
       curTrackId, curPos,

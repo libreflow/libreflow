@@ -277,8 +277,6 @@ export function setIcon(playing) {
   document.querySelector('.pcplay')?.classList.toggle('playing', playing);
   document.querySelector('.pcplay')?.setAttribute('aria-pressed', String(playing));
   document.querySelector('.sb-dot')?.classList.toggle('playing', playing);
-  const _artImg = document.querySelector('#pl-art img');
-  if (_artImg) _artImg.classList.toggle('art-spin', playing);
 }
 
 // ── Playback helpers (private) ───────────────────────────────────────────────

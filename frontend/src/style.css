@@ -5186,34 +5186,13 @@ kbd              { display: inline-flex; align-items: center; justify-content: c
 }
 
 
-/* ── Vinyl Spin (html.vinyl-spin activé dans les paramètres) ─────────────────
-   #pl-img tourne pendant la lecture, se met en pause sur pause.
-   border-radius:50% uniquement quand le mode est actif.               */
-html.vinyl-spin #pl-img.art-loaded {
-  border-radius: 50%;
-  transition: border-radius var(--dur-slow) var(--spring-soft);
-}
-html.vinyl-spin #pl-img.art-loaded.vinyl-playing {
-  animation: artSpin 5s linear infinite;
-}
-/* Pause implicite : la classe .vinyl-playing est retirée à la pause —
-   l'animation s'arrête naturellement. Le border-radius reste à 50%. */
-@media (prefers-reduced-motion: reduce) {
-  html.vinyl-spin #pl-img.art-loaded.vinyl-playing { animation: none; }
-}
-
 /* ── Pochette : blur spring + fade ────────────────────────── */
 @keyframes artIn   {
   0%   { transform: scale(.9); opacity: 0; filter: blur(var(--blur-4)); }
   55%  { filter: blur(0); opacity: 1; }
   100% { transform: scale(1); opacity: 1; filter: blur(0); }
 }
-@keyframes artSpin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
 .pl-art img.art-change { animation: artIn .42s var(--spring-soft) forwards; }
-.pl-art img.art-spin   { animation: artSpin 12s linear infinite; border-radius: 50%; }
-@media (prefers-reduced-motion: reduce) {
-  .pl-art img.art-spin { animation: none; border-radius: var(--r2); }
-}
 
 /* ── View Transitions API — animations personnalisées ────── */
 

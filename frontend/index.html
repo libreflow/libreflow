@@ -17,7 +17,7 @@
   <span>Chargement…</span>
 </div>
 <!-- A11Y-09: skip navigation link -->
-<a href="#tlist" class="skip-link">Aller au contenu principal</a>
+<a href="#tlist" class="skip-link" data-i18n="a11y_skip_link">Aller au contenu principal</a>
 <div id="app">
 
 <!-- ART BLUR BACKGROUND — fond plein écran flou style Apple Music -->
@@ -251,7 +251,7 @@
 
   <div class="pl-c">
     <div class="pl-btns">
-      <button class="pc" id="pc-shuf" data-action="toggle-shuffle" title="" data-i18n-title="pc_shuffle" aria-label="Lecture aléatoire" aria-pressed="false">
+      <button class="pc" id="pc-shuf" data-action="toggle-shuffle" title="" data-i18n-title="pc_shuffle" data-aria-i18n="aria_shuffle" aria-label="Lecture aléatoire" aria-pressed="false">
         <!-- Shuffle icon: two interlaced arrows with dot accent -->
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
           <path d="M4 5h3a6 6 0 0 1 5.5 3.6"/>
@@ -265,7 +265,7 @@
       <button class="pc" data-action="prev" data-i18n-title="pc_prev" data-aria-i18n="pc_prev" aria-label="Titre précédent" aria-keyshortcuts="ArrowLeft">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><polygon points="19 20 9 12 19 4" fill="currentColor" stroke="none"/><line x1="5" y1="19" x2="5" y2="5"/></svg>
       </button>
-      <button class="pcplay" id="pcplay" data-action="toggle-play" title="" data-i18n-title="pc_play" aria-label="Lecture / Pause" aria-pressed="false" aria-keyshortcuts="Space">
+      <button class="pcplay" id="pcplay" data-action="toggle-play" title="" data-i18n-title="pc_play" data-aria-i18n="aria_play" aria-label="Lecture / Pause" aria-pressed="false" aria-keyshortcuts="Space">
         <svg id="ico-play"  viewBox="0 0 24 24"><polygon points="6 3 20 12 6 21" fill="currentColor"/></svg>
         <svg id="ico-pause" viewBox="0 0 24 24" style="display:none"><rect x="5.5" y="4" width="4" height="16" rx="1.5" fill="currentColor"/><rect x="14.5" y="4" width="4" height="16" rx="1.5" fill="currentColor"/></svg>
       </button>
@@ -801,19 +801,6 @@
             <svg viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
             <span data-i18n="set_mini_btn">Ouvrir</span>
           </button>
-        </div>
-      </div>
-      <div class="set-section">
-        <div class="set-section-lbl" data-i18n="set_vinyl_section">Pochette</div>
-        <div class="set-row">
-          <div>
-            <div class="set-row-label" data-i18n="set_vinyl_label">Rotation vinyle</div>
-            <div class="set-row-sub" data-i18n="set_vinyl_sub">Fait tourner la pochette pendant la lecture</div>
-          </div>
-          <div style="display:flex;gap:6px">
-            <button class="mbtn" id="vinyl-on-btn" data-action="set-vinyl-spin" data-value="true" style="font-size:11px;padding:5px 10px" data-i18n="set_dyn_on" aria-pressed="false">Activé</button>
-            <button class="mbtn" id="vinyl-off-btn" data-action="set-vinyl-spin" data-value="false" style="font-size:11px;padding:5px 10px" data-i18n="set_dyn_off" aria-pressed="true">Désactivé</button>
-          </div>
         </div>
       </div>
       <div class="set-section">

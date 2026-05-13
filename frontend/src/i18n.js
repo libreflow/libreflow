@@ -225,8 +225,10 @@ export const LANGS = {
     aria_pbar:      'Position de lecture',
     aria_vol:       'Volume',
     aria_play:      'Lecture / Pause',
+    aria_shuffle:   'Lecture aléatoire',
     aria_prev:      'Titre précédent',
     aria_next:      'Titre suivant',
+    a11y_skip_link: 'Aller au contenu principal',
     // ── Aria labels supplémentaires ────────────────────────────
     aria_eq_close:       "Fermer l'égaliseur",
     aria_eq_cats:        'Catégories de presets EQ',
@@ -308,9 +310,6 @@ export const LANGS = {
     set_mode_label:       "Mode d'affichage",
     set_mode_dark:        'Sombre',
     set_mode_light:       'Clair',
-    set_vinyl_section: 'Pochette',
-    set_vinyl_label: 'Rotation vinyle',
-    set_vinyl_sub: 'Fait tourner la pochette pendant la lecture',
     // Settings — replay gain
     set_rg_label:         'Replay Gain',
     set_rg_sub:           'Égalise le volume entre les pistes',
@@ -805,8 +804,10 @@ export const LANGS = {
     aria_pbar:      'Playback position',
     aria_vol:       'Volume',
     aria_play:      'Play / Pause',
+    aria_shuffle:   'Shuffle',
     aria_prev:      'Previous track',
     aria_next:      'Next track',
+    a11y_skip_link: 'Skip to main content',
     // ── Extra aria labels ───────────────────────────────────────
     aria_eq_close:       'Close equalizer',
     aria_eq_cats:        'EQ preset categories',
@@ -888,9 +889,6 @@ export const LANGS = {
     set_mode_label:       'Display mode',
     set_mode_dark:        'Dark',
     set_mode_light:       'Light',
-    set_vinyl_section: 'Album art',
-    set_vinyl_label: 'Vinyl spin',
-    set_vinyl_sub: 'Rotate album art while playing',
     // Settings — replay gain
     set_rg_label:         'Replay Gain',
     set_rg_sub:           'Equalizes volume across tracks',

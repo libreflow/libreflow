@@ -21,7 +21,6 @@ import { $id, $input, $select } from './dom.js';
 let _theme          = 'blue';
 let _dynColor       = true;
 let _displayMode    = 'dark';
-let _vinylSpin      = false;
 let _shortcutsOpen  = false;
 let _currentArtColor = null;
 
@@ -62,19 +61,16 @@ let _artBlurTimer = null;
  * Appelé depuis app.js boot() après chargement de la config.
  * Permet à settings.js d'owneriser theme/dynColor/displayMode.
  */
-export function initSettingsVars({ theme, dynColor, displayMode, vinylSpin = false }) {
+export function initSettingsVars({ theme, dynColor, displayMode }) {
   _theme       = theme;
   _dynColor    = dynColor;
   _displayMode = displayMode;
-  _vinylSpin   = vinylSpin;
-  document.documentElement.classList.toggle('vinyl-spin', _vinylSpin);
 }
 
 // ── Getters (utilisés par _doSaveCfg dans app.js) ────────────────────────────
 export function getTheme()        { return _theme; }
 export function getDynColor()     { return _dynColor; }
 export function getDisplayMode()  { return _displayMode; }
-export function getVinylSpin()    { return _vinylSpin; }
 export function isShortcutsOpen() { return _shortcutsOpen; }
 
 // ══ SETTINGS PANEL ═══════════════════════════════════════════════════════════
@@ -109,11 +105,6 @@ export function openSettings() {
   const _dynOff = $id('dyn-off-btn');
   if (_dynOn)  { _dynOn.classList.toggle('on',  _dynColor);  _dynOn.setAttribute('aria-pressed',  String(_dynColor)); }
   if (_dynOff) { _dynOff.classList.toggle('on', !_dynColor); _dynOff.setAttribute('aria-pressed', String(!_dynColor)); }
-  // Sync vinyl spin buttons
-  const _vOn  = $id('vinyl-on-btn');
-  const _vOff = $id('vinyl-off-btn');
-  if (_vOn)  { _vOn.classList.toggle('on',  _vinylSpin);  _vOn.setAttribute('aria-pressed',  String(_vinylSpin)); }
-  if (_vOff) { _vOff.classList.toggle('on', !_vinylSpin); _vOff.setAttribute('aria-pressed', String(!_vinylSpin)); }
   syncCinemaBgSettings();
   _syncVizBtns();
   // A11Y-05: mettre en place le piège de focus et déplacer le focus sur le bouton Fermer
@@ -207,15 +198,6 @@ function _applyDynColorUI() {
   }
 }
 
-export function setVinylSpin(v) {
-  _vinylSpin = !!v;
-  document.documentElement.classList.toggle('vinyl-spin', _vinylSpin);
-  const onBtn  = $id('vinyl-on-btn');
-  const offBtn = $id('vinyl-off-btn');
-  if (onBtn)  { onBtn.classList.toggle('on',  _vinylSpin);  onBtn.setAttribute('aria-pressed', String(_vinylSpin)); }
-  if (offBtn) { offBtn.classList.toggle('on', !_vinylSpin); offBtn.setAttribute('aria-pressed', String(!_vinylSpin)); }
-  saveCfg();
-}
 
 export function setDynColor(v) {
   _dynColor = !!v;

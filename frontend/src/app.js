@@ -35,7 +35,7 @@ import { toggleMiniOverlay, syncMiniOverlay, updateMiniOverlayProgress, initMini
 import { rgEnabled, rgTargetLUFS, initRgState, initRG, setReplayGain, setRGTarget, analyzeAndApplyRG, applyRGGain, cancelRgAnalysis } from './replaygain.js';
 import { openTagEditor, saveTagEdit, cancelTagEdit } from './tagedit.js';
 import { toast, toastWithAction, confirmAction, resolveConfirm, initRipple } from './ui.js';
-import { checkForUpdate, checkForUpdateManual } from './updater.js';
+import { checkForUpdate, checkForUpdateManual, initAppVersion } from './updater.js';
 import { getFiltered, filteredIdx, rebuildTrackIdxMap, trackIdx, invalidateFilterCache,
          _trackIdxMap }    from './search.js';
 import { openFolder, loadTagsAndDurations, loadTagsBg, rescanTags,
@@ -65,7 +65,7 @@ export { playPlaylistFrom, playPlaylistDirect, shufflePlaylist }; // re-export (
 import { initWaveform, wfLoad, wfClear } from './waveform.js';
 import { toggleNowPlaying, closeNowPlaying, updateNowPlaying } from './nowplaying.js';
 import {
-  initSettingsVars, getTheme, getDynColor, getDisplayMode, getVinylSpin, isShortcutsOpen,
+  initSettingsVars, getTheme, getDynColor, getDisplayMode, isShortcutsOpen,
   switchSetTab, openSettings, closeSettings,
   setTheme, applyTheme, setDynColor,
   applyArtColor, clearArtColor, animateArtChange, _updateArtBlur,
@@ -266,6 +266,10 @@ on(EVENTS.PLAY_STATE, ({ playing }) => {
 // RENDER_LIB : demande de re-rendu émise par player.js (ex: toggle like)
 // Jalon 4 — évite window.renderLib() dans les satellites
 on(EVENTS.RENDER_LIB, () => renderLib());
+// LIBRARY_UPDATED : enable/disable taskbar thumbnail buttons based on track count
+on(EVENTS.LIBRARY_UPDATED, ({ tracks }) => {
+  invoke('taskbar_set_has_tracks', { hasTracks: tracks.length > 0 }).catch(e => { console.warn('[taskbar] taskbar_set_has_tracks failed:', e); });
+});
 
 // ══ Boot ═══════════════════════════════════════
 
@@ -384,7 +388,6 @@ async function boot() {
       theme:       cfg.theme || 'blue',
       dynColor:    cfg.dynColor !== false,
       displayMode: cfg.displayMode || 'dark',
-      vinylSpin:   cfg.vinylSpin === true,
     });
     set('displayMode', cfg.displayMode || 'dark');
     crossfadeDur  = cfg.crossfadeDur||0;  set('crossfadeDur', crossfadeDur);
@@ -508,8 +511,9 @@ async function boot() {
       if (_bi + _BOOT_CHUNK < saved.length) await new Promise(res => setTimeout(res, 0));
     }
     tracks = _tracksArr;
-    set('tracks', tracks); emit(EVENTS.LIBRARY_UPDATED, { tracks }); // Jalon 3/4
-    rebuildTrackIdxMap(); // FIX #3 — doit précéder updateStats() et renderLib()
+    set('tracks', tracks); // Jalon 3/4
+    rebuildTrackIdxMap(); // FIX #3 — doit précéder updateStats(), renderLib() et LIBRARY_UPDATED
+    emit(EVENTS.LIBRARY_UPDATED, { tracks });
 
     // IPC-ASSET : restaurer l'accès asset:// pour chaque dossier parent unique des pistes
     // chargées depuis l'IDB. En production, le scope asset:// est remis à zéro à chaque
@@ -614,6 +618,7 @@ async function boot() {
     // UX-3 : masquer le spinner de boot même si la bibliothèque est vide
     document.getElementById('boot-spinner')?.remove();
   }
+  initAppVersion().catch(() => {});
   // Vérifier les mises à jour 10s après le boot (non bloquant, silencieux si pas configuré)
   if (_autoUpdate) {
     setTimeout(() => checkForUpdate().catch(() => {}), 10_000);
@@ -627,7 +632,7 @@ async function boot() {
     else if (cmd === 'next')        next(true);
     else if (cmd === 'prev')        prev();
     else if (cmd === 'stop')        { audio.pause(); audio.currentTime = 0; setIcon(false); patchPlayState(false); }
-  }, { target: { kind: 'Any' } }).then(u => _unlisteners.push(u));
+  }).then(u => _unlisteners.push(u));
   window.addEventListener('pagehide', () => { _unlisteners.forEach(u => { try { u(); } catch {} }); });
 
   // ── Sauvegarde complète avant fermeture ──────────────────────────────────
