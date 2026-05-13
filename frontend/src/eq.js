@@ -312,15 +312,62 @@ function _applyGains(gains, immediate = false) {
   }
 }
 
+// ── Animation spring sliders ──────────────────────────────────────────────────
+let _animFrame = 0;
+
+/** Approximation de --spring-soft : cubic-bezier(.34,1.2,.64,1) */
+function _easeSpringSoft(t) {
+  if (t <= 0) return 0;
+  if (t >= 1) return 1;
+  const u = 1 - t;
+  return 1 - u * u * u * (1 + 2.2 * t);
+}
+
+/**
+ * Anime visuellement les sliders de leur position courante vers targetGains.
+ * Audio : géré en amont via setTargetAtTime (_applyGains).
+ * Visual : rAF 220ms avec spring-soft — ne touche pas au graphe audio.
+ */
+function _animateSlidersTo(targetGains) {
+  cancelAnimationFrame(_animFrame);
+  const DUR    = 220; // --dur-mid
+  const tStart = performance.now();
+  const bands  = document.querySelectorAll('#eq-bands .eq-band');
+  if (!bands.length) { renderEQBands(); _drawEQCurve(); return; }
+
+  const from = Array.from(bands, band => {
+    const s = band.querySelector('.eq-slider');
+    return s ? parseFloat(s.value) || 0 : 0;
+  });
+
+  function tick(now) {
+    const t = Math.min((now - tStart) / DUR, 1);
+    const e = _easeSpringSoft(t);
+    bands.forEach((band, i) => {
+      const v      = from[i] + (targetGains[i] - from[i]) * e;
+      const slider = band.querySelector('.eq-slider');
+      const label  = band.querySelector('.eq-val');
+      if (slider) slider.value = v;
+      if (label) {
+        const cls = v > 0.05 ? 'eq-val--boost' : v < -0.05 ? 'eq-val--cut' : 'eq-val--flat';
+        label.textContent = (v >= 0 ? '+' : '') + v.toFixed(1) + ' dB';
+        label.className   = `eq-val ${cls}`;
+      }
+    });
+    _drawEQCurve();
+    if (t < 1) _animFrame = requestAnimationFrame(tick);
+  }
+  _animFrame = requestAnimationFrame(tick);
+}
+
 // ── applyEQPreset ─────────────────────────────────────────────────────────────
 export function applyEQPreset(presetName) {
   if (!eqCtx) initEQ();
   const gains = EQ_PRESETS[presetName] ?? EQ_PRESETS.flat;
   _activePreset = presetName;
-  _applyGains(gains);
+  _applyGains(gains);              // audio : setTargetAtTime (sans click)
   _updatePresetBtns(presetName);
-  renderEQBands();
-  _drawEQCurve();
+  _animateSlidersTo(gains);        // visuel : spring 220ms
   if (!eqEnabled) _setEQEnabled(true);
 }
 
@@ -485,6 +532,18 @@ export function renderEQBands() {
   container.innerHTML = html;
 }
 
+// ── _getArtRgb — couleur d'accent dynamique depuis --art-color ───────────────
+function _getArtRgb() {
+  const styles = getComputedStyle(document.documentElement);
+  for (const prop of ['--art-color', '--g']) {
+    const raw = styles.getPropertyValue(prop).trim();
+    if (!raw) continue;
+    const m = raw.match(/\d+/g);
+    if (m && m.length >= 3) return [+m[0], +m[1], +m[2]];
+  }
+  return [99, 102, 241]; // fallback indigo
+}
+
 // ── _drawEQCurve ──────────────────────────────────────────────────────────────
 /** Dessine la courbe de réponse en fréquence sur le canvas #eq-curve-wrap. */
 function _drawEQCurve() {
@@ -541,13 +600,14 @@ function _drawEQCurve() {
     else         ctx.lineTo(x, y);
   }
 
-  // Remplissage gradient sous la courbe
+  // Remplissage gradient sous la courbe — couleur suit --art-color
+  const [ar, ag, ab] = _getArtRgb();
   const grad = ctx.createLinearGradient(0, 0, 0, H);
-  grad.addColorStop(0,   'rgba(99,102,241,0.35)');
-  grad.addColorStop(0.5, 'rgba(99,102,241,0.12)');
-  grad.addColorStop(1,   'rgba(99,102,241,0.02)');
+  grad.addColorStop(0,   `rgba(${ar},${ag},${ab},0.35)`);
+  grad.addColorStop(0.5, `rgba(${ar},${ag},${ab},0.12)`);
+  grad.addColorStop(1,   `rgba(${ar},${ag},${ab},0.02)`);
 
-  ctx.strokeStyle = 'rgba(129,140,248,0.9)';
+  ctx.strokeStyle = `rgba(${ar},${ag},${ab},0.9)`;
   ctx.lineWidth   = 1.5;
   ctx.stroke();
 
@@ -569,7 +629,32 @@ function _updatePresetBtns(active) {
   document.querySelectorAll('#eq-presets .eq-preset').forEach(btn => {
     btn.classList.toggle('active', btn.dataset.preset === active);
   });
+  // Sync le label preset dans le footer
+  const footerLabel = document.getElementById('eq-preset-label');
+  if (footerLabel) {
+    const activeBtn = document.querySelector(`#eq-presets .eq-preset[data-preset="${active}"]`);
+    footerLabel.textContent = activeBtn ? activeBtn.textContent.trim() : active;
+  }
 }
+
+// ── Mode Simple / Expert ──────────────────────────────────────────────────────
+export let eqExpert = false;
+
+export function setEQExpert(val) {
+  eqExpert = !!val;
+  const panel = document.getElementById('eq-panel');
+  if (panel) panel.classList.toggle('eq-expert', eqExpert);
+  document.querySelectorAll('.eq-mode-btn').forEach(btn => {
+    const isExpert = btn.dataset.mode === 'expert';
+    btn.classList.toggle('active', isExpert === eqExpert);
+    btn.setAttribute('aria-pressed', String(isExpert === eqExpert));
+  });
+  // En passant en Expert, s'assurer que les bandes sont rendues
+  if (eqExpert) { renderEQBands(); }
+  _drawEQCurve();
+}
+
+export function toggleEQExpert() { setEQExpert(!eqExpert); }
 
 // ── _syncEQUI ─────────────────────────────────────────────────────────────────
 function _syncEQUI() {

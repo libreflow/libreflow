@@ -19,7 +19,7 @@ import { queueOpen, toggleQueue, closeQueue, renderQueue, playQueueItem, clearQu
 import { exportM3U, importM3U } from './m3u.js';
 import { VIRT } from './virt.js';
 import { playLog, setPlayLog, logPlay, flushPlayLog, cancelPlayLogFlush } from './playlog.js';
-import { eqCtx, eqSource, eqNodes, eqEnabled, eqOpen, initEQ, ensureEQResumed, toggleEQ, closeEQ, renderEQBands, setEQBand, applyEQPreset, eqAutoMode, setEQAutoMode, toggleEQAutoMode, loadEQProfiles, getEQProfiles, applyGenreEQ, startSmartEQ, stopSmartEQ, updateSmartEQLoudness, updateSmartEQGenre, filterEQPresets, toggleEQAB, initBootEQ, getActiveEqPreset, masterGainNode, setMasterGain } from './eq.js';
+import { eqCtx, eqSource, eqNodes, eqEnabled, eqOpen, initEQ, ensureEQResumed, toggleEQ, closeEQ, renderEQBands, setEQBand, applyEQPreset, eqAutoMode, setEQAutoMode, toggleEQAutoMode, loadEQProfiles, getEQProfiles, applyGenreEQ, startSmartEQ, stopSmartEQ, updateSmartEQLoudness, updateSmartEQGenre, filterEQPresets, toggleEQAB, initBootEQ, getActiveEqPreset, masterGainNode, setMasterGain, setEQExpert } from './eq.js';
 import { initViz, startViz, stopViz, updateVizColor, setVizMode, getVizMode, setVizEnabled, getVizEnabled } from './viz.js';
 import { sleepFading, setSleepFading, sleepEndOfTrack, toggleSleepMenu, setSleepTimer, setSleepEndOfTrack, setSleepCustom, cancelSleepTimer } from './sleep.js';
 import { esc, fmt, fmtd, extEmoji, normTag, mainArtist } from './utils.js';
@@ -416,6 +416,7 @@ async function boot() {
     initBootEQ(cfg.eqGains, cfg.eqEnabled, cfg.eqPreset);
     setBootVizState(cfg.vizMode, cfg.vizEnabled === false);
     if (cfg.eqAutoMode)  setEQAutoMode(true);
+    if (cfg.eqExpert)    setEQExpert(true);
     if (cfg.eqProfiles)  loadEQProfiles(cfg.eqProfiles);
     // Watch folder : restaurer le chemin ET relancer la surveillance native.
     // Bug #7 fix : initWatchPath() seul restaure le chemin mais ne relance pas le watcher.

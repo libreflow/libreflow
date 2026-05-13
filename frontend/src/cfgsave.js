@@ -35,7 +35,7 @@ import { getTheme, getDynColor, getDisplayMode }      from './settings.js';
 import { rgEnabled, rgTargetLUFS }                    from './replaygain.js';
 // cinemaBg is read from the store (set by cinema.js via set('cinemaBg',…))
 // to avoid a cinema.js ↔ cfgsave.js circular dependency.
-import { eqEnabled, eqNodes, eqAutoMode,
+import { eqEnabled, eqNodes, eqAutoMode, eqExpert,
          getActiveEqPreset, getEQProfiles }            from './eq.js';
 import { getVizMode, getVizEnabled }                  from './viz.js';
 import { getWatchPath }                               from './watchfolder.js';
@@ -124,7 +124,7 @@ async function _doSaveCfg() {
       crossfadeDur, displayMode: getDisplayMode(), rgEnabled, rgTargetLUFS,
       playbackSpeed, cinemaBg: get('cinemaBg') ?? 'ambient',
       shuffle, repeat, albumSort, artistSort, genreSort, albumDetailSort,
-      eqEnabled,
+      eqEnabled, eqExpert,
       eqGains: eqNodes.length ? eqNodes.map(n => n.gain.value) : null,
       eqPreset: getActiveEqPreset(),
       vizMode: getVizMode(), vizEnabled: getVizEnabled(),

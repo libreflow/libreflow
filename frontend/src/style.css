@@ -4452,11 +4452,51 @@ html[data-mode="light"] .eq-auto-btn {
 }
 /* ── Focus visible — a11y clavier pour tous les éléments EQ ─────────────── */
 .eq-close:focus-visible,
+/* ── Mode Simple / Expert ────────────────────────────────────────────────── */
+.eq-expert-only { display: none !important; }
+#eq-panel.eq-expert .eq-expert-only { display: flex !important; }
+
+/* Hauteur canvas : 60px en simple, var(--eq-canvas-h) en expert */
+#eq-curve-wrap { height: 60px; transition: height var(--dur-mid) var(--smooth); }
+#eq-panel.eq-expert #eq-curve-wrap { height: var(--eq-canvas-h); }
+
+/* Toggle Simple / Expert */
+.eq-mode-switch {
+  display: flex; background: var(--bg3); border-radius: var(--r-pill);
+  padding: 2px; gap: 2px; flex-shrink: 0;
+}
+.eq-mode-btn {
+  padding: 3px 10px; border-radius: var(--r-pill);
+  border: none; background: none; color: var(--t3);
+  font-size: var(--fs-xs); font-weight: 500; cursor: pointer;
+  transition: background var(--dur-fast) var(--smooth),
+              color     var(--dur-fast) var(--smooth);
+}
+.eq-mode-btn.active { background: var(--bg5); color: var(--t); }
+.eq-mode-btn:hover:not(.active) { color: var(--t2); }
+
+/* Bands wrap : échelle dB + sliders côte à côte */
+.eq-bands-wrap { flex-direction: row; align-items: stretch; gap: 0; }
+.eq-scale {
+  display: flex; flex-direction: column; justify-content: space-between;
+  width: 26px; padding: var(--sp-1) 4px var(--sp-1) 0;
+  font-size: 9px; line-height: 1; color: var(--t4);
+  text-align: right; user-select: none; flex-shrink: 0;
+}
+html[data-mode="light"] .eq-scale { color: var(--t3); }
+
+/* Footer : preset actif à gauche, reset à droite */
+.eq-footer { justify-content: space-between; }
+.eq-preset-name {
+  font-size: var(--fs-sm); color: var(--t3); font-weight: 500;
+  min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  flex-shrink: 1;
+}
+.eq-footer-reset { flex: 0 0 auto; }
+
 .eq-cat:focus-visible,
 .eq-preset:focus-visible,
-.eq-footer-reset:focus-visible,
-.eq-ab-btn:focus-visible,
-.eq-auto-btn:focus-visible {
+.eq-footer-reset:focus-visible {
   outline: var(--border-w-lg) solid rgba(var(--g-rgb), .75);
   outline-offset: var(--focus-offset);
 }

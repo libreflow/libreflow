@@ -965,6 +965,11 @@
     <div class="eq-title-block">
       <h3><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="margin-right:6px;vertical-align:middle"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="13"/><line x1="12" y1="9" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="17"/><line x1="20" y1="13" x2="20" y2="3"/><rect x="1.5" y="12.5" width="5" height="3" rx="1.5" fill="currentColor" stroke="none"/><rect x="9.5" y="7.5" width="5" height="3" rx="1.5" fill="currentColor" stroke="none"/><rect x="17.5" y="15.5" width="5" height="3" rx="1.5" fill="currentColor" stroke="none"/></svg>Égaliseur</h3>
     </div>
+    <!-- Toggle Simple / Expert -->
+    <div class="eq-mode-switch" role="group" aria-label="Mode EQ">
+      <button class="eq-mode-btn active" data-mode="simple" data-action="eq-mode" aria-pressed="true" data-i18n="eq_mode_simple">Simple</button>
+      <button class="eq-mode-btn" data-mode="expert" data-action="eq-mode" aria-pressed="false" data-i18n="eq_mode_expert">Expert</button>
+    </div>
     <button class="eq-close" data-action="close-eq" data-i18n-aria="aria_eq_close" aria-label="Fermer l'égaliseur">
       <svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
     </button>
@@ -1012,20 +1017,29 @@
     <button class="eq-preset" data-cat="world" data-action="eq-preset" data-preset="country">Country</button>
   </div>
 
-  <!-- Spacer flexible — absorbe l'espace au-dessus du canvas pour le centrer -->
-  <div class="eq-spacer" aria-hidden="true"></div>
+  <!-- Spacer flexible — expert uniquement -->
+  <div class="eq-spacer eq-expert-only" aria-hidden="true"></div>
 
   <div id="eq-curve-wrap"></div>
 
-  <!-- Spacer flexible — absorbe l'espace entre canvas et sliders -->
-  <div class="eq-spacer" aria-hidden="true"></div>
+  <!-- Spacer flexible — expert uniquement -->
+  <div class="eq-spacer eq-expert-only" aria-hidden="true"></div>
 
-  <div class="eq-bands" id="eq-bands">
-    <!-- généré par JS -->
+  <!-- Bandes EQ + échelle dB — expert uniquement -->
+  <div class="eq-bands-wrap eq-expert-only">
+    <div class="eq-scale" aria-hidden="true">
+      <span>+12</span>
+      <span>0</span>
+      <span>−12</span>
+    </div>
+    <div class="eq-bands" id="eq-bands">
+      <!-- généré par JS -->
+    </div>
   </div>
 
-  <!-- Barre d'actions basse — Remise à plat -->
+  <!-- Barre d'actions basse — Remise à plat + preset actif -->
   <div class="eq-footer">
+    <span class="eq-preset-name" id="eq-preset-label">Flat</span>
     <button class="eq-footer-reset" data-action="eq-preset" data-preset="flat" title="Remettre à plat (0 dB)" data-i18n-title="eq_reset_title">
       <svg class="eq-footer-reset-icon" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
         <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
