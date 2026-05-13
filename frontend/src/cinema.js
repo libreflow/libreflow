@@ -24,6 +24,7 @@ import { radioActive, stopRadio, startRadio, getRadioQueue } from './radio.js';
 import { toast }                                        from './ui.js';
 import { saveCfg }                   from './cfgsave.js';
 import { updateVolSlider }            from './playerbar.js';
+import { rgbToHsl, hslToRgb, boostSat, regionAvg, sampleArtColors } from './artcolor.js';
 
 // ── State ───────────────────────────────────────────────────
 export let cinemaOpen     = false;
@@ -38,12 +39,6 @@ let _cinTd      = null;
 let _lastCinArt  = null; // dernière URL d'art — évite le bug de normalisation url("…")
 let _noiseCanvas = null; // cache du canvas noise (généré une seule fois)
 let _cinBgCtx    = null; // cache du contexte 2D de #cinema-bg (évite getContext() par frame)
-
-// Singleton canvas 64×64 pour _sampleArtColors — évite 1 canvas créé par changement de piste.
-// Initialisé une seule fois au chargement du module (hors du DOM critique).
-const _colorSampleCanvas = document.createElement('canvas');
-_colorSampleCanvas.width = _colorSampleCanvas.height = 64;
-const _colorSampleCtx    = _colorSampleCanvas.getContext('2d', { willReadFrequently: true });
 
 // Visualiseur (animation RAF uniquement — pas de création d'AudioContext ni de source)
 let _cinVizRaf  = null;
@@ -173,105 +168,20 @@ let _vignetteGrad = null;
 let _vignetteW    = 0;
 let _vignetteH    = 0;
 
-// ── Ambient colour helpers ──────────────────────────────────────
-
-/** RGB → [h°, s, l] */
-function _rgbToHsl(r, g, b) {
-  r /= 255; g /= 255; b /= 255;
-  const max = Math.max(r, g, b), min = Math.min(r, g, b);
-  let h = 0, s = 0;
-  const l = (max + min) / 2;
-  if (max !== min) {
-    const d = max - min;
-    s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
-    switch (max) {
-      case r: h = ((g - b) / d + (g < b ? 6 : 0)) / 6; break;
-      case g: h = ((b - r) / d + 2) / 6; break;
-      case b: h = ((r - g) / d + 4) / 6; break;
-    }
-  }
-  return [h * 360, s, l];
-}
-
-/** [h°, s, l] → [r, g, b] */
-function _hslToRgb(h, s, l) {
-  h /= 360;
-  if (s === 0) { const v = Math.round(l * 255); return [v, v, v]; }
-  const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
-  const p = 2 * l - q;
-  const hue2 = t => {
-    if (t < 0) t += 1; if (t > 1) t -= 1;
-    if (t < 1/6) return p + (q - p) * 6 * t;
-    if (t < 0.5) return q;
-    if (t < 2/3) return p + (q - p) * (2/3 - t) * 6;
-    return p;
-  };
-  return [Math.round(hue2(h + 1/3) * 255), Math.round(hue2(h) * 255), Math.round(hue2(h - 1/3) * 255)];
-}
-
-/**
- * Boost saturation of an RGB colour.
- * lMin prevents near-black colours from producing invisible gradients.
- */
-function _boostSat(r, g, b, sFactor = 1.5, lMin = 0.12) {
-  let [h, s, l] = _rgbToHsl(r, g, b);
-  s = Math.min(1, s * sFactor);
-  l = Math.max(lMin, l);
-  return _hslToRgb(h, s, l);
-}
-
-/** Average RGB of a canvas region */
-function _regionAvg(tc, x, y, w, h) {
-  const d = tc.getImageData(x | 0, y | 0, w | 0, h | 0).data;
-  let r = 0, g = 0, b = 0;
-  const n = d.length >> 2;
-  for (let i = 0; i < d.length; i += 4) { r += d[i]; g += d[i + 1]; b += d[i + 2]; }
-  return [r / n | 0, g / n | 0, b / n | 0];
-}
-
-/**
- * Sample 3 colour zones from the current cinema artwork (blob URL — same-origin, no CORS risk).
- * Returns { top, left, right } as [r,g,b], or null on failure.
- */
-function _sampleArtColors() {
-  const img = document.getElementById('cinema-art-img');
-  if (!img || !img.naturalWidth || img.style.display === 'none') return null;
-  try {
-    const SZ = 64;
-    // Réutiliser le singleton canvas — évite 1 allocation GPU par changement de piste
-    _colorSampleCtx.clearRect(0, 0, SZ, SZ);
-    _colorSampleCtx.drawImage(img, 0, 0, SZ, SZ);
-    const tc = _colorSampleCtx;
-    const hw = SZ >> 1;               // 32
-    const q  = SZ >> 2;               // 16
-    const th = SZ / 3 | 0;           // 21  — top-strip height
-    const by = SZ * 2 / 3 | 0;       // 42  — bottom-strip y
-    const bh = SZ - by;               // 22  — bottom-strip height
-    return {
-      top:   _regionAvg(tc, q,  0,  hw, th),   // top-center
-      left:  _regionAvg(tc, 0,  by, hw, bh),   // bottom-left
-      right: _regionAvg(tc, hw, by, hw, bh),   // bottom-right
-    };
-  } catch(e) { console.warn('[cinema] _sampleArtColors failed (canvas taint ou image manquante):', e); return null; }
-}
-
 /** Extract and boost 3 ambient colours from artwork (or fallback to _cinArtRGB). */
 function _buildAmbientColors() {
-  const sampled = _sampleArtColors();
-  if (sampled) {
-    return {
-      cT: _boostSat(...sampled.top),
-      cL: _boostSat(...sampled.left),
-      cR: _boostSat(...sampled.right),
-    };
+  const img = document.getElementById('cinema-art-img');
+  if (img && img.naturalWidth && img.style.display !== 'none') {
+    const colors = sampleArtColors(img, 64);
+    if (colors) return colors;
   }
   const [rF, gF, bF] = _cinArtRGB.split(',').map(Number);
-  const cT = _boostSat(rF, gF, bF);
-  const [hF, sF, lF] = _rgbToHsl(...cT);
+  const cT = boostSat(rF, gF, bF);
+  const [hF, sF, lF] = rgbToHsl(...cT);
   return {
     cT,
-    cL: _hslToRgb((hF + 38) % 360, Math.min(1, sF), lF),
-    cR: _hslToRgb((hF - 32 + 360) % 360, Math.min(1, sF), lF),
+    cL: hslToRgb((hF + 38) % 360, Math.min(1, sF), lF),
+    cR: hslToRgb((hF - 32 + 360) % 360, Math.min(1, sF), lF),
   };
 }
 
