@@ -14,7 +14,6 @@
 //             _updateArtBlur                                  (settings.js)
 //   import  : extEmoji                                        (utils.js)
 //   import  : extractColor                                    (tags.js)
-//   import  : wfLoad                                          (waveform.js)
 //
 // Exports publics :
 //   updateBar()        — met à jour toute la barre now-playing
@@ -32,8 +31,6 @@ import { animateArtChange, applyArtColor, clearArtColor,
          _updateArtBlur }                            from './settings.js';
 import { extEmoji }                                  from './utils.js';
 import { extractColor }                              from './tags.js';
-import { wfLoad }                                    from './waveform.js';
-
 // ── Volume slider ─────────────────────────────────────────────────────────────
 let _volHideTimer = 0;
 
@@ -117,8 +114,8 @@ export function updateBar() {
   setupMarquee(document.getElementById('pl-a'), t.artistFull || t.artist || i18n('unknown_artist'));
 
   const img = document.getElementById('pl-img'), em = document.getElementById('pl-em');
-  if (t.art) { img.src = t.art; img.style.display = 'block'; em.style.display = 'none'; animateArtChange(); }
-  else       { img.style.display = 'none'; em.style.display = ''; em.innerHTML = extEmoji(t.ext); }
+  if (t.art) { img.src = t.art; img.alt = t.album || t.name || ''; img.style.display = 'block'; em.style.display = 'none'; animateArtChange(); }
+  else       { img.alt = ''; img.style.display = 'none'; em.style.display = ''; em.innerHTML = extEmoji(t.ext); }
 
   const liked = get('liked');
   const _isLikedNow = liked instanceof Set ? liked.has(t.id) : false;
@@ -150,7 +147,6 @@ export function updateBar() {
     else if (t.art) extractColor(t.art).then(c => { if (c) { t.artColor = c; applyArtColor(c); } }).catch(() => {});
     else clearArtColor();
     _updateArtBlur(t.art || null);
-    wfLoad(t.id, t.url);
     if (cinemaOpen) updateCinema();
     if (_shouldNotify) {
       // ART-IDB : base64 généré lazily depuis _artBuf (fire-and-forget, pas bloquant)

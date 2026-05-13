@@ -21,8 +21,6 @@ import { i18n }                                   from './i18n.js';
 import { invoke, convertFileSrc }                 from './ipc.js';
 import { fmt }                                    from './utils.js';
 import { VIRT }                                   from './virt.js';
-import { wfUpdate } from './waveform.js';
-
 import { eqCtx, eqNodes, eqAutoMode,
          initEQ, ensureEQResumed,
          masterGainNode, audioOutGain,
@@ -1225,7 +1223,6 @@ audio.addEventListener('timeupdate', () => {
   updateMiniProgress();
   updateMiniOverlayProgress();
   const p   = audio.currentTime / audio.duration;
-  wfUpdate(p);
   const cur = fmt(audio.currentTime);
   const dur = fmt(audio.duration);
   if (_DOM.pfill) _DOM.pfill.style.transform = 'scaleX(' + p + ')';
