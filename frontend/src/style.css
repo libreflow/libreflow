@@ -4124,7 +4124,7 @@ html[data-mode="light"] .eq-detect-badge {
 /* Onglets de catégorie de presets */
 .eq-cats {
   display: flex; gap: var(--sp-micro);
-  padding: var(--sp-2h) var(--sp-4) 0;
+  padding: var(--sp-3) var(--sp-4) 0;
   flex-shrink: 0;
   border-bottom: var(--border-w-sm) solid var(--sep);
   overflow-x: auto; scrollbar-width: none;
@@ -4152,7 +4152,7 @@ html[data-mode="light"] .eq-detect-badge {
 /* Grille de presets — flex-wrap avec densité adaptée */
 .eq-presets  {
   display: flex; flex-wrap: wrap; gap: var(--sp-1h);
-  padding: var(--sp-2h) var(--sp-4) var(--sp-3);
+  padding: var(--sp-3) var(--sp-4) var(--sp-4);
   border-bottom: var(--border-w-sm) solid var(--sep); flex-shrink: 0;
   max-height: var(--eq-presets-max-h); overflow-y: auto; scrollbar-width: none;
 }
@@ -4202,7 +4202,7 @@ html[data-mode="light"] .eq-detect-badge {
 /* ── Zone courbe — container décollé, inseté, avec bordure et coins ronds ── */
 #eq-curve-wrap {
   flex-shrink: 0; /* taille fixe, les spacers gèrent le centrage */
-  margin: 0 var(--sp-4);
+  margin: var(--sp-3) var(--sp-4);
   border-radius: var(--r-9);
   overflow: hidden;
   border: var(--border-w-sm) solid var(--border-2);
@@ -4214,7 +4214,7 @@ html[data-mode="light"] #eq-curve-wrap {
   border-color: var(--sep);
   box-shadow: var(--shadow-el-sm);
 }
-.eq-curve-canvas { display: block; width: 100%; height: var(--eq-canvas-h); }
+.eq-curve-canvas { display: block; width: 100%; height: 100%; }
 
 /* ── Bandes : layout principal — card inseté comme le canvas ─────────────── */
 .eq-bands {
@@ -4450,8 +4450,6 @@ html[data-mode="light"] .eq-auto-btn {
   0%, 100% { opacity: 1; transform: scale(1); }
   50%       { opacity: .45; transform: scale(.7); }
 }
-/* ── Focus visible — a11y clavier pour tous les éléments EQ ─────────────── */
-.eq-close:focus-visible,
 /* ── Mode Simple / Expert ────────────────────────────────────────────────── */
 .eq-expert-only { display: none !important; }
 #eq-panel.eq-expert .eq-expert-only { display: flex !important; }
@@ -4475,11 +4473,17 @@ html[data-mode="light"] .eq-auto-btn {
 .eq-mode-btn.active { background: var(--bg5); color: var(--t); }
 .eq-mode-btn:hover:not(.active) { color: var(--t2); }
 
-/* Bands wrap : échelle dB + sliders côte à côte */
-.eq-bands-wrap { flex-direction: row; align-items: stretch; gap: 0; }
+/* Bands wrap : margin horizontal + annule le double margin de .eq-bands interne */
+.eq-bands-wrap {
+  flex-direction: row; align-items: stretch; gap: 0;
+  margin: 0 var(--sp-4) var(--sp-3);
+}
+.eq-bands-wrap .eq-bands { margin: 0; flex: 1; }
+
+/* Échelle dB : padding vertical aligné sur .eq-bands (sp-3h top / sp-3 bottom) */
 .eq-scale {
   display: flex; flex-direction: column; justify-content: space-between;
-  width: 26px; padding: var(--sp-1) 4px var(--sp-1) 0;
+  width: 26px; padding: var(--sp-3h) 4px var(--sp-3) 0;
   font-size: 9px; line-height: 1; color: var(--t4);
   text-align: right; user-select: none; flex-shrink: 0;
 }
@@ -4494,6 +4498,8 @@ html[data-mode="light"] .eq-scale { color: var(--t3); }
 }
 .eq-footer-reset { flex: 0 0 auto; }
 
+/* ── Focus visible — a11y clavier pour tous les éléments EQ ─────────────── */
+.eq-close:focus-visible,
 .eq-cat:focus-visible,
 .eq-preset:focus-visible,
 .eq-footer-reset:focus-visible {
