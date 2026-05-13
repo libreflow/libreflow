@@ -281,6 +281,38 @@ export function setIcon(playing) {
   if (_artImg) _artImg.classList.toggle('art-spin', playing);
 }
 
+// ── Playback helpers (private) ───────────────────────────────────────────────
+
+function _updateRecentPlays(trackId) {
+  recentPlays = [trackId, ...recentPlays.filter(id => id !== trackId)].slice(0, 50);
+  set('recentPlays', recentPlays);
+}
+
+// Runs after every successful audio.play(). ORDER IS FIXED — do not reorder.
+function _postPlaySideEffects(track) {
+  _updateRecentPlays(track.id);
+  logPlay(track);
+  invalidateFilterCache();
+  emit(EVENTS.FILTER_CHANGED, {});
+  saveCfg();
+}
+
+// Starts immediate playback of a resolved off-filter track.
+// INVARIANT: caller must call radioRefillQueue() BEFORE emit(TRACK_CHANGE).
+function _playDirect(track, idx) {
+  if (!track.url && track.path) track.url = convertFileSrc(track.path);
+  curIdx = idx;
+  set('curIdx', curIdx);
+  clearCrossfadeTimers();
+  // @ts-ignore — url guaranteed set by convertFileSrc above or by scan
+  audio.src = track.url; ensureEQResumed(); audio.play().catch(() => {});
+  _postPlaySideEffects(track);
+  if (radioActive) radioRefillQueue(); // DOIT précéder TRACK_CHANGE (règle critique)
+  emit(EVENTS.TRACK_CHANGE, { track, idx: curIdx });
+  setTimeout(() => scrollToCurrentTrack(), 50);
+  if (rgEnabled) analyzeAndApplyRG();
+}
+
 // ── Playback core ─────────────────────────────────────────────────────────────
 
 /**
@@ -319,11 +351,7 @@ export async function playAt(filteredIdx, { skipScroll = false, keepQueue = fals
       if (e.name !== 'AbortError') toast(i18n('t_play_start_err', e.message), 'error');
     }
 
-    recentPlays = [t.id, ...recentPlays.filter(id => id !== t.id)].slice(0, 50);
-    set('recentPlays', recentPlays);
-    logPlay(t);
-    invalidateFilterCache(); emit(EVENTS.FILTER_CHANGED, {}); // Jalon 4
-    saveCfg();
+    _postPlaySideEffects(t);
     // Mettre à jour le titre de la fenêtre : "Titre — Artiste | LibreFlow"
     // @ts-ignore — filter(Boolean) narrows to string[] at runtime; join returns string
     const _wTitle = [t.name, t.artistFull || t.artist].filter(Boolean).join(' — ');
@@ -386,19 +414,7 @@ export function prev() {
       const nfi = filteredIdx(_tn); // P4 — O(1) via posMap
       if (nfi >= 0) { playAt(nfi); return; }
       // Piste hors liste filtrée — lecture directe
-      curIdx = ni;
-      set('curIdx', curIdx);
-      clearCrossfadeTimers();
-      if (!tracks[ni].url && tracks[ni].path) tracks[ni].url = convertFileSrc(tracks[ni].path);
-      // @ts-ignore — url guaranteed set by convertFileSrc above
-      audio.src = tracks[ni].url; ensureEQResumed(); audio.play().catch(() => {});
-      recentPlays = [tracks[ni].id, ...recentPlays.filter(id => id !== tracks[ni].id)].slice(0, 50);
-      set('recentPlays', recentPlays);
-      logPlay(tracks[ni]); invalidateFilterCache(); emit(EVENTS.FILTER_CHANGED, {}); saveCfg();
-      if (radioActive) radioRefillQueue(); // DOIT précéder TRACK_CHANGE (règle critique)
-      emit(EVENTS.TRACK_CHANGE, { track: tracks[ni], idx: curIdx });
-      setTimeout(() => scrollToCurrentTrack(), 50);
-      if (rgEnabled) analyzeAndApplyRG();
+      _playDirect(tracks[ni], ni);
     } else if (repeat === 'all') playAt(fl.length - 1);
     return;
   }
@@ -414,20 +430,7 @@ export function prev() {
         const prevFi = filteredIdx(_pt);
         if (prevFi >= 0) { playAt(prevFi); return; }
         // Piste hors filtre actif — lecture directe (même pattern que sort=recent)
-        curIdx = prevTi;
-        set('curIdx', curIdx);
-        clearCrossfadeTimers();
-        if (!_pt.url && _pt.path) _pt.url = convertFileSrc(_pt.path);
-        // @ts-ignore — url guaranteed set by convertFileSrc above
-        audio.src = _pt.url; ensureEQResumed(); audio.play().catch(() => {});
-        // BUG-PREV-SHUFFLE FIX : mettre à jour recentPlays + side-effects omis dans ce chemin
-        recentPlays = [_pt.id, ...recentPlays.filter(id => id !== _pt.id)].slice(0, 50);
-        set('recentPlays', recentPlays);
-        logPlay(_pt); invalidateFilterCache(); emit(EVENTS.FILTER_CHANGED, {}); saveCfg();
-        if (radioActive) radioRefillQueue(); // DOIT précéder TRACK_CHANGE (règle critique)
-        emit(EVENTS.TRACK_CHANGE, { track: _pt, idx: curIdx });
-        setTimeout(() => scrollToCurrentTrack(), 50);
-        if (rgEnabled) analyzeAndApplyRG();
+        _playDirect(_pt, prevTi);
         return;
       }
     }
@@ -517,21 +520,7 @@ export function next(manual = false) {
     getFiltered(); // warm cache for filteredIdx O(1)
     const fi  = filteredIdx(_tq); // P4 — O(1)
     if (fi >= 0) { playAt(fi); return; }
-    if (tracks[ni]) {
-      if (!tracks[ni].url && tracks[ni].path) tracks[ni].url = convertFileSrc(tracks[ni].path);
-      curIdx = ni; set('curIdx', curIdx);
-      clearCrossfadeTimers();
-      // @ts-ignore — url guaranteed set by convertFileSrc above
-      audio.src = tracks[ni].url; ensureEQResumed(); audio.play().catch(() => {});
-      recentPlays = [tracks[ni].id, ...recentPlays.filter(id => id !== tracks[ni].id)].slice(0, 50);
-      set('recentPlays', recentPlays);
-      logPlay(tracks[ni]); invalidateFilterCache(); emit(EVENTS.FILTER_CHANGED, {}); saveCfg();
-      if (radioActive) radioRefillQueue(); // DOIT précéder TRACK_CHANGE (règle critique)
-      emit(EVENTS.TRACK_CHANGE, { track: tracks[ni], idx: curIdx });
-      setTimeout(() => scrollToCurrentTrack(), 50);
-      if (rgEnabled) analyzeAndApplyRG();
-      return;
-    }
+    if (tracks[ni]) { _playDirect(tracks[ni], ni); return; }
   }
 
   // ── Radio active, file vide → recharger ──────────────────────────────────
@@ -545,21 +534,7 @@ export function next(manual = false) {
       getFiltered(); // warm cache for filteredIdx O(1)
       const fi   = filteredIdx(_tq2); // P4 — O(1)
       if (fi >= 0) { playAt(fi); return; }
-      if (tracks[ni]) {
-        if (!tracks[ni].url && tracks[ni].path) tracks[ni].url = convertFileSrc(tracks[ni].path);
-        curIdx = ni; set('curIdx', curIdx);
-        clearCrossfadeTimers();
-        // @ts-ignore — url guaranteed set by convertFileSrc above
-        audio.src = tracks[ni].url; ensureEQResumed(); audio.play().catch(() => {});
-        recentPlays = [tracks[ni].id, ...recentPlays.filter(id => id !== tracks[ni].id)].slice(0, 50);
-        set('recentPlays', recentPlays);
-        logPlay(tracks[ni]); invalidateFilterCache(); emit(EVENTS.FILTER_CHANGED, {}); saveCfg();
-        if (radioActive) radioRefillQueue(); // DOIT précéder TRACK_CHANGE (règle critique)
-        emit(EVENTS.TRACK_CHANGE, { track: tracks[ni], idx: curIdx });
-        setTimeout(() => scrollToCurrentTrack(), 50);
-        if (rgEnabled) analyzeAndApplyRG();
-        return;
-      }
+      if (tracks[ni]) { _playDirect(tracks[ni], ni); return; }
     }
   }
 
@@ -578,9 +553,7 @@ export function next(manual = false) {
       if (!tracks[ni].url && tracks[ni].path) tracks[ni].url = convertFileSrc(tracks[ni].path);
       // @ts-ignore — url guaranteed set by convertFileSrc above
       audio.src = tracks[ni].url; ensureEQResumed(); audio.play().catch(() => {});
-      recentPlays = [tracks[ni].id, ...recentPlays.filter(id => id !== tracks[ni].id)].slice(0, 50);
-      set('recentPlays', recentPlays);
-      logPlay(tracks[ni]); invalidateFilterCache(); emit(EVENTS.FILTER_CHANGED, {}); saveCfg(); // Jalon 4
+      _postPlaySideEffects(tracks[ni]);
       if (radioActive) radioRefillQueue(); // DOIT précéder TRACK_CHANGE (règle critique)
       emit(EVENTS.TRACK_CHANGE, { track: tracks[ni], idx: curIdx });
       setTimeout(() => scrollToCurrentTrack(), 50);
@@ -605,18 +578,7 @@ export function next(manual = false) {
       const _tn = tracks[ni];
       const nfi = filteredIdx(_tn); // P4 — O(1) via posMap
       if (nfi >= 0) { playAt(nfi); return; }
-      curIdx = ni; set('curIdx', curIdx);
-      clearCrossfadeTimers();
-      if (!tracks[ni].url && tracks[ni].path) tracks[ni].url = convertFileSrc(tracks[ni].path);
-      // @ts-ignore — url guaranteed set by convertFileSrc above
-      audio.src = tracks[ni].url; ensureEQResumed(); audio.play().catch(() => {});
-      recentPlays = [tracks[ni].id, ...recentPlays.filter(id => id !== tracks[ni].id)].slice(0, 50);
-      set('recentPlays', recentPlays);
-      logPlay(tracks[ni]); invalidateFilterCache(); emit(EVENTS.FILTER_CHANGED, {}); saveCfg();
-      if (radioActive) radioRefillQueue(); // DOIT précéder TRACK_CHANGE (règle critique)
-      emit(EVENTS.TRACK_CHANGE, { track: tracks[ni], idx: curIdx });
-      setTimeout(() => scrollToCurrentTrack(), 50);
-      if (rgEnabled) analyzeAndApplyRG();
+      _playDirect(tracks[ni], ni);
     } else if (repeat === 'all') playAt(0);
     return;
   }
@@ -917,9 +879,7 @@ function _commitGapless() {
   ensureEQResumed();
   audio.play().catch(() => {});
 
-  recentPlays = [nt.id, ...recentPlays.filter(id => id !== nt.id)].slice(0, 50);
-  set('recentPlays', recentPlays);
-  logPlay(nt); invalidateFilterCache(); emit(EVENTS.FILTER_CHANGED, {}); saveCfg(); // Jalon 4
+  _postPlaySideEffects(nt);
   if (radioActive) radioRefillQueue();
   emit(EVENTS.TRACK_CHANGE, { track: nt, idx: curIdx });
   setTimeout(() => scrollToCurrentTrack(), 50);
@@ -1056,11 +1016,8 @@ export function checkCrossfade() {
       audioNext.pause(); audioNext.src = '';
 
       if (rgEnabled) analyzeAndApplyRG();
-      recentPlays = [nextTrack.id, ...recentPlays.filter(id => id !== nextTrack.id)].slice(0, 50);
-      set('recentPlays', recentPlays);
-      logPlay(nextTrack); saveCfg();
+      _postPlaySideEffects(nextTrack);
       if (radioActive) radioRefillQueue(); // DOIT précéder TRACK_CHANGE (règle critique)
-      invalidateFilterCache(); emit(EVENTS.FILTER_CHANGED, {}); // Jalon 4
       emit(EVENTS.TRACK_CHANGE, { track: nextTrack, idx: curIdx });
       setTimeout(() => scrollToCurrentTrack(), 50);
       if (queueOpen) renderQueue();
