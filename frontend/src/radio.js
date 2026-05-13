@@ -22,7 +22,7 @@ import { i18n }                               from './i18n.js';
 import { get }                                from './store.js';
 import { getFiltered, filteredIdx, _trackIdxMap } from './search.js';
 import { audio, playAt }                      from './player.js';
-import { toast, confirmAction }                                        from './ui.js';
+import { toast, toastWithAction, confirmAction }                       from './ui.js';
 import { setView } from './views.js';
 import { setManualQueue } from './player.js';
 import { closeCtxMenu } from './ctxmenu.js';
@@ -509,8 +509,15 @@ export async function radioSaveAsPlaylist() {
   }
   renderPlNav();
   setupPlNavDrop();
-  setView('playlist', document.getElementById('ni-pl-' + pl.id), pl.id);
-  toast(i18n('radio_pl_saved', name, ids.length), 'success');
+  // Ne pas naviguer vers la playlist → ne polluent pas "Récentes" + l'utilisateur reste sur la radio.
+  // Un toast avec bouton "Voir →" permet d'y accéder si besoin.
+  toastWithAction(
+    i18n('radio_pl_saved', name, ids.length),
+    'success',
+    i18n('radio_pl_see') || 'Voir →',
+    () => setView('playlist', document.getElementById('ni-playlists'), pl.id),
+    6000
+  );
 }
 
 export async function radioRegenerateFromCurrent() {

@@ -25,6 +25,17 @@ import { toast, toastWithAction } from './ui.js';
  * BUG-9 FIXED : migration de invoke('plugin:updater|check') vers
  *               window.__TAURI__.updater.check() (API officielle).
  */
+export async function initAppVersion() {
+  try {
+    const version = await window.__TAURI__.app.getVersion();
+    document.querySelectorAll('[data-i18n="set_app_version"]').forEach(el => {
+      el.textContent = `v${version}`;
+    });
+  } catch {
+    // Silencieux — fallback sur la valeur statique du HTML
+  }
+}
+
 export async function checkForUpdate() {
   try {
     const update = await window.__TAURI__.updater.check();

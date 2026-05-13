@@ -63,7 +63,7 @@ export function renderStats(tracks, trackIdxMap) {
   _statsSig = sig;
 
   if (!tracks.length) {
-    el.innerHTML = `<div class="empty"><div class="empty-ico">📊</div><div class="empty-h">${i18n('stats_empty_h')}</div><div class="empty-s">${i18n('stats_empty_s')}</div></div>`;
+    el.innerHTML = `<div class="empty"><div class="empty-ico"><svg viewBox="0 0 24 24" fill="none" style="fill:none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg></div><div class="empty-h">${i18n('stats_empty_h')}</div><div class="empty-s">${i18n('stats_empty_s')}</div></div>`;
     return;
   }
 

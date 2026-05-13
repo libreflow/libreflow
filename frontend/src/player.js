@@ -903,7 +903,7 @@ export function checkCrossfade() {
           if (!ok || crossfadeDur || _gaplessNextIdx !== _gni) { _gaplessNextIdx = -1; return; }
           // @ts-ignore — url guaranteed set by ensureUrl(ok) above
           if (audioNext) { audioNext.src = _gnt.url; audioNext.preload = 'auto'; }
-        });
+        }).catch(() => { _gaplessNextIdx = -1; }); // évite _commitGapless sur src invalide
       }
     }
   }

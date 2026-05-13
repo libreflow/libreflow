@@ -606,6 +606,7 @@ export function closeCinema() {
   if (cinemaHideTimer) { clearTimeout(cinemaHideTimer); cinemaHideTimer = null; } // Bug 5 fix
   clearTimeout(_cinSwapOutTimer); _cinSwapOutTimer = null;
   clearTimeout(_cinSwapInTimer);  _cinSwapInTimer  = null;
+  clearTimeout(_resizeTimer);     _resizeTimer     = null; // évite applyCinemaBg() orphelin après fermeture
   // Libérer les refs cachées
   _cinFill = _cinTc = _cinTd = null;
   _lastCinArt = null; // reset pour forcer le swap à la prochaine ouverture
