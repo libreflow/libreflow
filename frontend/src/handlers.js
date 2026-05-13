@@ -23,8 +23,7 @@ import { toggleQueue, closeQueue, playQueueItem,
          addToQueueNext, addToQueueEnd,
          removeFromQueue, clearExplicitQueue }                 from './queue.js';
 import { toggleEQ, closeEQ, applyEQPreset,
-         filterEQPresets, setMasterGain,
-         toggleEQAutoMode, toggleEQAB }                        from './eq.js';
+         filterEQPresets, setMasterGain }                      from './eq.js';
 import { toggleSleepMenu, setSleepTimer, setSleepEndOfTrack,
          setSleepCustom, cancelSleepTimer }                    from './sleep.js';
 import { toggleMiniOverlay }                                   from './minioverlay.js';
@@ -130,9 +129,6 @@ const _ACTIONS = {
   'toggle-eq':             ()    => { closeNowPlaying(); toggleEQ(); },
   'close-eq':              ()    => closeEQ(),
   'eq-preset':             btn  => applyEQPreset(btn.dataset.preset),
-  'toggle-eq-auto':        ()    => toggleEQAutoMode(),
-  'toggle-eq-ab':          ()    => toggleEQAB(),
-
   // ── Sleep timer ───────────────────────────────────────────
   'toggle-sleep':          ()    => toggleSleepMenu(),
   'sleep-timer':           btn  => setSleepTimer(+btn.dataset.minutes),

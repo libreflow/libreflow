@@ -284,7 +284,10 @@ export function setEQBand(idx, db) {
   eqNodes[idx].gain.setTargetAtTime(val, eqCtx.currentTime, 0.01);
   // Mettre à jour l'affichage du slider
   const slider = document.querySelector(`#eq-bands [data-band="${idx}"]`);
-  if (slider) slider.value = val;
+  if (slider) {
+    slider.value = val;
+    slider.setAttribute('aria-valuetext', (val >= 0 ? '+' : '') + val.toFixed(1) + ' dB');
+  }
   const label = document.querySelector(`#eq-bands [data-band-label="${idx}"]`);
   if (label) {
     label.textContent = (val >= 0 ? '+' : '') + val.toFixed(1) + ' dB';
@@ -399,8 +402,6 @@ function _updateSmartStatus() {
 // ── setEQAutoMode / toggleEQAutoMode ─────────────────────────────────────────
 export function setEQAutoMode(val) {
   eqAutoMode = !!val;
-  const btn = document.getElementById('eq-auto-btn');
-  if (btn) btn.setAttribute('aria-pressed', String(eqAutoMode));
   if (!eqAutoMode) stopSmartEQ();
   _updateSmartStatus();
 }
@@ -412,16 +413,13 @@ export function toggleEQAutoMode() {
 // ── A/B comparison ────────────────────────────────────────────────────────────
 export function toggleEQAB() {
   _abMode = !_abMode;
-  const btn = document.getElementById('eq-ab-btn');
   if (_abMode) {
     // Mode A : sauvegarde gains courants, applique flat
     _abSavedGains = eqNodes.map(n => n.gain.value);
     _applyGains(EQ_PRESETS.flat);
-    if (btn) { btn.dataset.state = 'a'; btn.setAttribute('aria-pressed', 'true'); }
   } else {
     // Mode B : restaure gains sauvegardés
     if (_abSavedGains) _applyGains(_abSavedGains);
-    if (btn) { btn.dataset.state = 'b'; btn.setAttribute('aria-pressed', 'false'); }
     _abSavedGains = null;
   }
   _drawEQCurve();
@@ -576,13 +574,6 @@ function _updatePresetBtns(active) {
 // ── _syncEQUI ─────────────────────────────────────────────────────────────────
 function _syncEQUI() {
   _updatePresetBtns(_activePreset);
-  const abBtn = document.getElementById('eq-ab-btn');
-  if (abBtn) {
-    abBtn.dataset.state = _abMode ? 'a' : 'b';
-    abBtn.setAttribute('aria-pressed', String(_abMode));
-  }
-  const autoBtn = document.getElementById('eq-auto-btn');
-  if (autoBtn) autoBtn.setAttribute('aria-pressed', String(eqAutoMode));
   _updateSmartStatus();
 }
 
