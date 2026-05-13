@@ -27,7 +27,6 @@ fn main() {
         .manage(watch::WatchState(Default::default()))
         .invoke_handler(tauri::generate_handler![
             commands::open_folder,
-            commands::scan_folder,
             commands::notify_track,
             commands::write_tags,
             commands::pick_image,

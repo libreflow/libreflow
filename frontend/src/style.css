@@ -136,7 +136,6 @@
   --eq-warm-light: #c45f10;   /* bande grave — thème clair */
   --eq-cool-light: #1a6fcc;   /* bande aiguë — thème clair */
   --eq-cut-light:  #d9520a;   /* coupe active — thème clair */
-  --eq-ab-light:   #d97706;   /* A/B toggle — thème clair */
 
   /* États sémantiques contextuels */
   --cinema-active: #fb923c;   /* genre/tag actif dans le cinéma */
@@ -227,7 +226,6 @@
   --sep-h:              1px;    /* séparateurs horizontaux fins (.ns, .ctx-sep) */
   --vh-min-h:          52px;    /* min-height en-têtes de vue (.vh) */
   --folder-row-h:      34px;    /* hauteur rangée dossier playlist (.pl-folder-h) */
-  --eq-canvas-h:      116px;    /* hauteur canvas courbe EQ */
   --eq-slider-min-h:   90px;    /* min-height zone slider EQ */
   --viz-canvas-h:     160px;    /* hauteur canvas visualiseur cinéma */
   --cinema-pbar-hover-h: 7px;   /* pbar élargie au hover — cinéma */
@@ -586,14 +584,14 @@
   --shadow-player-ring:  0 -1px 0 rgba(var(--g-rgb),.15);                       /* player bar top accent line */
   --shadow-inset-hi:     inset 0 1px 0 var(--glass-hi);                         /* inset reflet top glassmorphism */
   --shadow-eq-curve:     var(--shadow-logo-d), inset 0 1px 0 rgba(255,255,255,.05); /* eq-curve-wrap depth */
-  --shadow-eq-auto:      var(--shadow-art-col), 0 4px 18px rgba(var(--g-rgb),.38); /* eq auto btn active */
 
   /* Dimensions supplémentaires — layout & modales */
   --wf-max:             560px;  /* max-width modale waveform / batch-tag */
   --ctx-pane-max:       280px;  /* max-width menu contextuel */
   --modal-max-offset:    80px;  /* offset hauteur max viewport (100vh - N) */
   --panel-queue-w:      300px;  /* largeur panneau queue latéral */
-  --panel-eq-w:         360px;  /* largeur panneau EQ latéral */
+  --panel-eq-w:         320px;  /* largeur panneau EQ latéral (mode simple) */
+  --panel-eq-expert-w:  400px;  /* largeur panneau EQ latéral (mode expert) */
   --sp-3q:              13px;   /* spacing intermédiaire 12→14 — padding compact */
 
   /* Dimensions cinéma & artwork */
@@ -2677,10 +2675,7 @@ html[data-mode="light"] .sleep-custom-inp:focus { border-color: var(--g); backgr
 #pl-quick-pop .pqp-item--smart svg { fill: var(--amber); }
 
 /* ═══ TOAST ══════════════════════════════════════════════════ */
-/* ── Ancien #toast : caché, conservé pour compatibilité interne ─ */
-#toast { display: none !important; }
-
-/* ── Nouveau système de toasts riches ───────────────────────── */
+/* ── Système de toasts riches ───────────────────────────────── */
 #toast-shelf {
   position: fixed; bottom: calc(var(--pb) + var(--sp-3h)); left: 50%;
   transform: translateX(-50%);
@@ -3847,12 +3842,14 @@ html[data-mode="light"] .pl-folder-h:hover .pl-folder-count { background: var(--
   transform: translateX(100%);
   transition: transform var(--dur-mid) var(--snappy),
               box-shadow var(--dur-mid) ease,
-              border-left-color var(--dur-mid) ease;
+              border-left-color var(--dur-mid) ease,
+              width var(--dur-mid) var(--snappy);
   box-shadow: none;
   will-change: transform;
 }
 #queue-panel          { width: min(var(--panel-queue-w), calc(100vw - var(--sb) - var(--sp-10))); }
-#eq-panel             { width: min(var(--panel-eq-w), calc(100vw - var(--sb) - var(--sp-10))); }
+#eq-panel             { width: min(var(--panel-eq-w),        calc(100vw - var(--sb) - var(--sp-10))); }
+#eq-panel.eq-expert   { width: min(var(--panel-eq-expert-w), calc(100vw - var(--sb) - var(--sp-10))); }
 #queue-panel.open, #eq-panel.open {
   transform: translateX(0);
   box-shadow: var(--shadow-queue);
@@ -3872,8 +3869,9 @@ html[data-mode="light"] .pl-folder-h:hover .pl-folder-count { background: var(--
   opacity: 1;
 }
 /* Sidebar push : #main recule pour laisser place au panel */
-#app.panel-queue-open #main { padding-right: min(var(--panel-queue-w), calc(100vw - var(--sb) - var(--sp-10))); }
-#app.panel-eq-open    #main { padding-right: min(var(--panel-eq-w), calc(100vw - var(--sb) - var(--sp-10))); }
+#app.panel-queue-open #main                   { padding-right: min(var(--panel-queue-w),        calc(100vw - var(--sb) - var(--sp-10))); }
+#app.panel-eq-open    #main                   { padding-right: min(var(--panel-eq-w),         calc(100vw - var(--sb) - var(--sp-10))); }
+#app.panel-eq-open.eq-expert-mode #main       { padding-right: min(var(--panel-eq-expert-w),  calc(100vw - var(--sb) - var(--sp-10))); }
 
 /* En-têtes panneau — style commun (queue) */
 .queue-head {
@@ -4065,62 +4063,6 @@ html[data-mode="light"] .pl-folder-h:hover .pl-folder-count { background: var(--
 
 /* ═══ ÉGALISEUR ══════════════════════════════════════════════ */
 
-/* ── Barre de statut AUTO — wrapper collapsible par grid ─────────────────── */
-/* Technique : grid-template-rows 0fr → 1fr, plus propre que max-height */
-.eq-status-wrap {
-  display: grid;
-  grid-template-rows: 0fr;
-  flex-shrink: 0;
-  transition: grid-template-rows var(--dur-mid) var(--decelerate);
-}
-.eq-status-wrap.on {
-  grid-template-rows: 1fr;
-}
-/* Inner — overflow:hidden requis pour le collapse grid */
-.eq-status-row {
-  overflow: hidden;
-  display: flex; align-items: center; gap: var(--sp-1d);
-  padding: 0 var(--sp-4);
-  min-height: 0; /* requis pour le collapse */
-  /* Fond teinté par la couleur de pochette */
-  background: color-mix(in srgb, var(--art-color) 14%, var(--bg3));
-  transition: background var(--dur-slow) ease;
-}
-/* Visible : padding interne apparaît avec la hauteur */
-.eq-status-wrap.on .eq-status-row {
-  padding-top: var(--sp-1h); padding-bottom: var(--sp-1h);
-}
-/* Icône onde — couleur calquée sur art-color */
-.eq-status-icon {
-  flex-shrink: 0; opacity: .65;
-  color: color-mix(in srgb, var(--art-color) 80%, var(--g));
-}
-/* Badge détection — intégré dans la status row, couleur dynamique */
-.eq-detect-badge {
-  font-size: var(--fs-xs); font-weight: 600;
-  letter-spacing: var(--ls-micro); white-space: nowrap;
-  /* Mélange art-color + --g : fallback automatique si art-color transparent (pas de piste) */
-  --_badge-color: color-mix(in srgb, var(--art-color) 85%, var(--g));
-  color: var(--_badge-color);
-  transition: color var(--dur-slow) ease;
-}
-/* Coloration du badge selon la confiance de détection (data-conf="high/mid/low") */
-.eq-detect-badge[data-conf="high"] {
-  color: color-mix(in srgb, #4ade80 70%, var(--_badge-color));
-}
-.eq-detect-badge[data-conf="mid"] {
-  color: color-mix(in srgb, #fb923c 70%, var(--_badge-color));
-}
-.eq-detect-badge[data-conf="low"] {
-  color: color-mix(in srgb, #f87171 60%, var(--_badge-color));
-}
-html[data-mode="light"] .eq-status-wrap .eq-status-row {
-  background: color-mix(in srgb, var(--art-color) 10%, #f0f0f0);
-}
-html[data-mode="light"] .eq-detect-badge {
-  color: color-mix(in srgb, var(--art-color) 70%, #222);
-}
-
 /* Onglets de catégorie de presets */
 .eq-cats {
   display: flex; gap: var(--sp-micro);
@@ -4190,6 +4132,14 @@ html[data-mode="light"] .eq-detect-badge {
 /* Retour à l'état normal — transition inverse sur les wraps */
 .eq-bands:not(.eq-bands--auto) .eq-slider-wrap {
   transition: background var(--dur-mid) ease, box-shadow var(--dur-mid) ease;
+}
+/* P4 — Flash de confirmation double-clic reset bande */
+@keyframes eqBandReset {
+  0%   { background: color-mix(in srgb, var(--art-color) 30%, transparent); }
+  100% { background: transparent; }
+}
+.eq-slider-wrap.eq-band-reset {
+  animation: eqBandReset 300ms var(--smooth) forwards;
 }
 
 /* ── Spacers flexibles — encadrent le canvas pour le centrer verticalement ── */
@@ -4371,92 +4321,14 @@ html[data-mode="light"] .eq-band:nth-child(10) .eq-freq { color: var(--eq-cool-l
 .eq-footer-reset:hover .eq-footer-reset-icon { transform: rotate(-180deg); }
 html[data-mode="light"] .eq-footer-reset { border-color: var(--bg5); color: var(--t2); }
 
-/* Bouton AUTO — primaire, même largeur que reset */
-/* Bouton A/B compare */
-.eq-ab-btn {
-  flex-shrink: 0;
-  padding: var(--sp-2) var(--sp-3q);
-  border-radius: var(--r-art);
-  border: var(--border-w-sm) solid var(--sep);
-  background: none;
-  color: var(--t3);
-  font-size: var(--fs-sm); font-weight: 700; letter-spacing: var(--ls-label);
-  cursor: pointer;
-  transition: background   var(--dur-fast) var(--smooth),
-              border-color var(--dur-fast) var(--smooth),
-              color        var(--dur-fast) var(--smooth);
-}
-.eq-ab-btn:hover { background: var(--bg3); color: var(--t2); border-color: var(--bg5); }
-/* A actif : signal visuel orange → "attention, EQ bypassé" */
-.eq-ab-btn.active, .eq-ab-btn[data-state="a"] {
-  background: rgba(251,146,60, .12);
-  border-color: rgba(251,146,60, .45);
-  color: var(--cinema-active);
-}
-.eq-ab-btn:active { transform: scale(.97); }
-html[data-mode="light"] .eq-ab-btn { border-color: var(--bg5); color: var(--t3); }
-html[data-mode="light"] .eq-ab-btn.active { color: var(--eq-ab-light); background: rgba(217,119,6,.10); }
-
-.eq-auto-btn {
-  flex: 1;
-  display: flex; align-items: center; justify-content: center; gap: var(--sp-1d);
-  padding: var(--sp-2) var(--sp-3h);
-  border-radius: var(--r-art);
-  border: var(--border-w-sm) solid rgba(var(--g-rgb), .30);
-  background: rgba(var(--g-rgb), .07);
-  color: var(--t2);
-  font-size: var(--fs-sm); font-weight: 700; letter-spacing: var(--ls-badge);
-  cursor: pointer;
-  transition: background   var(--dur-fast) var(--smooth),
-              border-color var(--dur-fast) var(--smooth),
-              color        var(--dur-fast) var(--smooth),
-              box-shadow   var(--dur-mid)  var(--smooth);
-}
-.eq-auto-btn:hover {
-  border-color: rgba(var(--g-rgb), .60);
-  color: var(--g);
-  background: rgba(var(--g-rgb), .12);
-}
-.eq-auto-btn.active {
-  background: var(--g);
-  border-color: transparent;
-  color: var(--text-on-accent);
-  box-shadow: var(--shadow-eq-auto);
-}
-/* Préserve l'état actif au hover — sans ça, :hover écrase color: var(--text-on-accent) par var(--g) */
-.eq-auto-btn.active:hover {
-  background: var(--g);
-  border-color: transparent;
-  color: var(--text-on-accent);
-}
-.eq-auto-btn:active { transform: scale(.97); }
-
-/* Dot indicateur dans le bouton AUTO */
-.eq-auto-dot {
-  width: var(--icon-dot); height: var(--icon-dot); border-radius: 50%;
-  background: currentColor; opacity: .45;
-  flex-shrink: 0;
-  transition: opacity var(--dur-fast) var(--smooth);
-}
-.eq-auto-btn.active .eq-auto-dot {
-  opacity: 1;
-  animation: dotpulse var(--anim-pulse) ease infinite; /* définie ci-dessous dans cette section EQ */
-}
-html[data-mode="light"] .eq-auto-btn {
-  border-color: rgba(var(--g-rgb),.25);
-  background: rgba(var(--g-rgb),.06);
-}
-@keyframes dotpulse {
-  0%, 100% { opacity: 1; transform: scale(1); }
-  50%       { opacity: .45; transform: scale(.7); }
-}
 /* ── Mode Simple / Expert ────────────────────────────────────────────────── */
 .eq-expert-only { display: none !important; }
 #eq-panel.eq-expert .eq-expert-only { display: flex !important; }
 
-/* Hauteur canvas : 60px en simple, var(--eq-canvas-h) en expert */
+/* Hauteur canvas : 60px en simple | 80px expert flat | 160px expert actif (P1) */
 #eq-curve-wrap { height: 60px; transition: height var(--dur-mid) var(--smooth); }
-#eq-panel.eq-expert #eq-curve-wrap { height: var(--eq-canvas-h); }
+#eq-panel.eq-expert            #eq-curve-wrap { height: 80px; }
+#eq-panel.eq-expert.eq-curve-active #eq-curve-wrap { height: 160px; }
 
 /* Toggle Simple / Expert */
 .eq-mode-switch {
@@ -4517,7 +4389,6 @@ html[data-mode="light"] .eq-scale { color: var(--t3); }
 
 @media (prefers-reduced-motion: reduce) {
   .eq-footer-reset-icon { transition: none; }
-  .eq-auto-btn.active .eq-auto-dot { animation: none; opacity: 1; }
   .eq-bands--auto .eq-slider-wrap,
   .eq-bands:not(.eq-bands--auto) .eq-slider-wrap { transition: none; }
   .eq-presets--disabled .eq-preset,
@@ -5463,7 +5334,6 @@ html.vt-running .cge > *   { animation: none !important; }
   80%  { transform: translateX(-50%) translateY(calc(-1 * var(--sp-nano))) scale(.99); }
   100% { opacity: 1; transform: translateX(-50%) translateY(0) scale(1); filter: blur(0); }
 }
-/* #toast.on — supprimé : #toast est display:none, système migré vers #toast-shelf */
 
 /* ── EQ bars : 5 barres avec courbes organiques ─────────── */
 .eq       { display: flex; align-items: flex-end; gap: var(--sp-micro); height: var(--icon-xl); width: var(--icon-22); }
@@ -5526,7 +5396,6 @@ html.vt-running .cge > *   { animation: none !important; }
 /* Queue panel — polish (.eq-head h3 est défini canoniquement ligne ~2751) */
 .queue-head h3 { font-size: var(--fs-md); font-weight: 600; color: var(--t); }
 
-/* #toast — supprimé : display:none !important, styles déplacés vers #toast-shelf */
 
 /* viewIn défini plus haut avec translateY — pas de redéfinition */
 
@@ -5654,16 +5523,19 @@ html[data-mode="light"] .badge-tech {
 /* 5. Stat cards — Syne + letter-spacing → fusionnés dans .stat-card-val principal */
 
 /* 6. EQ panel + Queue panel — opacité initiale à 0 pour éviter le flash visuel à l'ouverture */
+/* NOTE : width inclus ici pour ne pas écraser la transition de largeur Expert définie au-dessus */
 #queue-panel, #eq-panel {
   opacity: 0;
   transition: transform var(--dur-mid) var(--snappy), box-shadow var(--dur-mid) ease,
               border-left-color var(--dur-mid) ease,
+              width var(--dur-mid) var(--snappy),
               opacity var(--dur-flash) ease;
 }
 #queue-panel.open, #eq-panel.open {
   opacity: 1;
   transition: transform var(--dur-mid) var(--snappy), box-shadow var(--dur-mid) ease,
               border-left-color var(--dur-mid) ease,
+              width var(--dur-mid) var(--snappy),
               opacity var(--dur-flash) ease 20ms;  /* léger délai pour que le slide précède le fade-in */
 }
 

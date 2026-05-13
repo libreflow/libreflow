@@ -19,7 +19,7 @@ import { queueOpen, toggleQueue, closeQueue, renderQueue, playQueueItem, clearQu
 import { exportM3U, importM3U } from './m3u.js';
 import { VIRT } from './virt.js';
 import { playLog, setPlayLog, logPlay, flushPlayLog, cancelPlayLogFlush } from './playlog.js';
-import { eqCtx, eqSource, eqNodes, eqEnabled, eqOpen, initEQ, ensureEQResumed, toggleEQ, closeEQ, renderEQBands, setEQBand, applyEQPreset, eqAutoMode, setEQAutoMode, toggleEQAutoMode, loadEQProfiles, getEQProfiles, applyGenreEQ, startSmartEQ, stopSmartEQ, updateSmartEQLoudness, updateSmartEQGenre, filterEQPresets, toggleEQAB, initBootEQ, getActiveEqPreset, masterGainNode, setMasterGain, setEQExpert } from './eq.js';
+import { eqCtx, eqSource, eqNodes, eqEnabled, eqOpen, initEQ, ensureEQResumed, toggleEQ, closeEQ, renderEQBands, setEQBand, applyEQPreset, eqAutoMode, setEQAutoMode, toggleEQAutoMode, loadEQProfiles, getEQProfiles, applyGenreEQ, startSmartEQ, stopSmartEQ, updateSmartEQLoudness, updateSmartEQGenre, filterEQPresets, initBootEQ, getActiveEqPreset, masterGainNode, setMasterGain, setEQExpert } from './eq.js';
 import { initViz, startViz, stopViz, updateVizColor, setVizMode, getVizMode, setVizEnabled, getVizEnabled } from './viz.js';
 import { sleepFading, setSleepFading, sleepEndOfTrack, toggleSleepMenu, setSleepTimer, setSleepEndOfTrack, setSleepCustom, cancelSleepTimer } from './sleep.js';
 import { esc, fmt, fmtd, extEmoji, normTag, mainArtist } from './utils.js';
@@ -77,7 +77,6 @@ import {
   nextAlbumSort, nextArtistSort, nextGenreSort,
   statsGoToGenre, statsGoToArtist, statsGoToAlbum,
 } from './views.js';
-export { statsGoToGenre, statsGoToArtist, statsGoToAlbum }; // re-export (backward compat)
 import { _showSkeletonRows,
          virtRenderWindow, virtAttachScroll,
          renderLib, renderAlbumsGrid, renderArtistsGrid, renderPlaylistsGrid,
@@ -88,7 +87,6 @@ import { _showSkeletonRows,
          _withVT, animateViewChange, scrollToCurrentTrack } from './renderer.js';
 // ── allplayerui.js (ARCH-1) ──────────────────────────────────────────────────
 import { _allPlayerUI } from './allplayerui.js';
-export { _allPlayerUI }; // re-export pour handlers.js
 import { showCtxMenu, closeCtxMenu, ctxToggleLike, ctxDeleteTrack, ctxEditTags, ctxGoToArtist, ctxGoToAlbum, ctxNewPlaylist, ctxRemoveFromPlaylist, ctxSmartPlaylist, ctxPlayNext, ctxAddToQueueEnd, ctxCopyInfo } from './ctxmenu.js';
 import { initDrop } from './dropin.js';
 import { initKeyNav } from './keynav.js';
@@ -102,7 +100,6 @@ import { saveCfg, saveCfgNow } from './cfgsave.js';
 export { saveCfg, saveCfgNow }; // re-exports pour cinema.js, ctxmenu.js, player.js, etc.
 // ── state.js (ARCH-1) ────────────────────────────────────────────────────────
 import { setCurIdx, setTracks, setLiked, setCtxTrackId } from './state.js';
-export { setCurIdx, setTracks, setLiked, setCtxTrackId }; // re-exports (backward compat)
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 

@@ -27,7 +27,6 @@ function _waitTauriReady() {
   }));
 }
 
-/** @overload @param {'scan_folder'} cmd @param {{ path: string }} args @returns {Promise<Track[]>} */
 /** @overload @param {'read_tags'} cmd @param {{ path: string }} args @returns {Promise<TrackTags>} */
 /** @overload @param {'open_folder'} cmd @returns {Promise<OpenFolderResult | null>} */
 /** @overload @param {'check_paths'} cmd @param {{ paths: string[] }} args @returns {Promise<string[]>} */
@@ -38,7 +37,7 @@ function _waitTauriReady() {
 /** @overload @param {'notify_track'} cmd @param {{ data: { title: string, artist: string, art?: string|null } }} args @returns {Promise<void>} */
 /** @overload @param {'win_set_title'} cmd @param {{ title: string }} args @returns {Promise<void>} */
 /** @overload @param {'taskbar_set_playing'} cmd @param {{ playing: boolean }} args @returns {Promise<void>} */
-/** @overload @param {'taskbar_set_has_tracks'} cmd @param {{ has_tracks: boolean }} args @returns {Promise<void>} */
+/** @overload @param {'taskbar_set_has_tracks'} cmd @param {{ hasTracks: boolean }} args @returns {Promise<void>} */
 /** @overload @param {'mini_update'} cmd @param {{ data: Record<string, unknown> }} args @returns {Promise<void>} */
 /** @overload @param {'mini_progress'} cmd @param {{ data: Record<string, unknown> }} args @returns {Promise<void>} */
 /** @overload @param {'allow_asset_dir'} cmd @param {{ path: string }} args @returns {Promise<void>} */

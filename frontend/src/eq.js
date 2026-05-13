@@ -404,12 +404,10 @@ let _smartRunning = false;
 
 export function startSmartEQ() {
   _smartRunning = true;
-  _updateSmartStatus();
 }
 
 export function stopSmartEQ() {
   _smartRunning = false;
-  _updateSmartStatus();
 }
 
 export function updateSmartEQGenre(genre) {
@@ -417,7 +415,6 @@ export function updateSmartEQGenre(genre) {
   if (_smartRunning && eqAutoMode) {
     applyGenreEQ(_smartGenre);
   }
-  _updateSmartStatus();
 }
 
 export function updateSmartEQLoudness(lufs) {
@@ -433,24 +430,10 @@ export function updateSmartEQLoudness(lufs) {
   }
 }
 
-function _updateSmartStatus() {
-  const badge = document.getElementById('eq-detect-badge');
-  const wrap  = document.getElementById('eq-status-wrap');
-  if (!badge || !wrap) return;
-  if (_smartRunning && eqAutoMode && _smartGenre) {
-    badge.textContent = _smartGenre;
-    wrap.classList.add('on');
-  } else {
-    badge.textContent = '';
-    wrap.classList.remove('on');
-  }
-}
-
 // ── setEQAutoMode / toggleEQAutoMode ─────────────────────────────────────────
 export function setEQAutoMode(val) {
   eqAutoMode = !!val;
   if (!eqAutoMode) stopSmartEQ();
-  _updateSmartStatus();
 }
 
 export function toggleEQAutoMode() {
@@ -530,6 +513,29 @@ export function renderEQBands() {
 </div>`;
   }
   container.innerHTML = html;
+
+  // P4 : double-clic sur slider → reset cette bande à 0 dB avec spring animation
+  container._eqDblClick && container.removeEventListener('dblclick', container._eqDblClick);
+  container._eqDblClick = (e) => {
+    const slider = e.target.closest('.eq-slider');
+    if (!slider || !eqCtx) return;
+    const idx = parseInt(slider.dataset.band, 10);
+    if (isNaN(idx) || !eqNodes[idx]) return;
+    // Audio : reset immédiat via setTargetAtTime (pas de glitch)
+    eqNodes[idx].gain.setTargetAtTime(0, eqCtx.currentTime, 0.01);
+    // Visuel : les autres bandes gardent leur position, only idx → 0
+    const targetGains = eqNodes.map(n => n.gain.value);
+    targetGains[idx] = 0;
+    _animateSlidersTo(targetGains);
+    // Flash de confirmation
+    const wrap = slider.closest('.eq-slider-wrap');
+    if (wrap) {
+      wrap.classList.remove('eq-band-reset');
+      void wrap.offsetWidth; // force reflow pour relancer l'animation
+      wrap.classList.add('eq-band-reset');
+    }
+  };
+  container.addEventListener('dblclick', container._eqDblClick);
 }
 
 // ── _getArtRgb — couleur d'accent dynamique depuis --art-color ───────────────
@@ -542,6 +548,20 @@ function _getArtRgb() {
     if (m && m.length >= 3) return [+m[0], +m[1], +m[2]];
   }
   return [99, 102, 241]; // fallback indigo
+}
+
+// ── _updateCurveHeight — hauteur adaptative canvas (P1) ──────────────────────
+/**
+ * Active/désactive .eq-curve-active sur #eq-panel selon que les gains sont plats.
+ * Expert flat → 80px  |  Expert actif → 160px  (défini en CSS).
+ */
+function _updateCurveHeight() {
+  const panel = document.getElementById('eq-panel');
+  if (!panel) return;
+  const active = eqNodes.length
+    ? eqNodes.some(n => Math.abs(n.gain.value) > 0.05)
+    : false;
+  panel.classList.toggle('eq-curve-active', active);
 }
 
 // ── _drawEQCurve ──────────────────────────────────────────────────────────────
@@ -622,6 +642,8 @@ function _drawEQCurve() {
   ctx.beginPath();
   ctx.moveTo(0, H / 2); ctx.lineTo(W, H / 2);
   ctx.stroke();
+
+  _updateCurveHeight(); // P1 — hauteur adaptative selon gains actifs
 }
 
 // ── _updatePresetBtns ─────────────────────────────────────────────────────────
@@ -644,6 +666,8 @@ export function setEQExpert(val) {
   eqExpert = !!val;
   const panel = document.getElementById('eq-panel');
   if (panel) panel.classList.toggle('eq-expert', eqExpert);
+  // P7 : largeur Expert 400px — classe sur #app pour le padding-right de #main
+  document.getElementById('app')?.classList.toggle('eq-expert-mode', eqExpert);
   document.querySelectorAll('.eq-mode-btn').forEach(btn => {
     const isExpert = btn.dataset.mode === 'expert';
     btn.classList.toggle('active', isExpert === eqExpert);
@@ -651,7 +675,7 @@ export function setEQExpert(val) {
   });
   // En passant en Expert, s'assurer que les bandes sont rendues
   if (eqExpert) { renderEQBands(); }
-  _drawEQCurve();
+  _drawEQCurve();          // redessine (appelle _updateCurveHeight en fin)
 }
 
 export function toggleEQExpert() { setEQExpert(!eqExpert); }
@@ -659,7 +683,6 @@ export function toggleEQExpert() { setEQExpert(!eqExpert); }
 // ── _syncEQUI ─────────────────────────────────────────────────────────────────
 function _syncEQUI() {
   _updatePresetBtns(_activePreset);
-  _updateSmartStatus();
 }
 
 // ── Handler input slider (wired via data-input-action="eq-band-input") ────────

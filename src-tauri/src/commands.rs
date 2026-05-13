@@ -195,26 +195,6 @@ pub fn open_folder(app: AppHandle) -> Result<Option<OpenFolderResult>, String> {
     Ok(Some(OpenFolderResult { folder: folder_str, files }))
 }
 
-/// Scanne un dossier (chemin explicite) et retourne la liste des fichiers audio.
-/// Utilisé pour les re-scans sans dialog.
-#[tauri::command]
-pub fn scan_folder(path: String) -> Result<Vec<String>, String> {
-    let dir = Path::new(&path);
-    if !dir.is_dir() {
-        return Err(format!("Pas un dossier valide : {path}"));
-    }
-    let canon = fs::canonicalize(dir)
-        .map_err(|e| format!("scan_folder: résolution du chemin échouée — {e}"))?;
-    if !is_safe_dir(&canon) {
-        return Err(format!("scan_folder: chemin système refusé — {path}"));
-    }
-    let raw_paths = scan_dir(&canon);
-    let files = raw_paths
-        .into_par_iter()
-        .filter_map(|p| p.to_str().map(String::from))
-        .collect();
-    Ok(files)
-}
 
 /// Vérifie une liste de chemins et retourne ceux qui n'existent plus (orphelins).
 #[tauri::command]
