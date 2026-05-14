@@ -42,7 +42,7 @@ import { masterGainNode, setMasterGain,
 import { queueOpen, closeQueue }                       from './queue.js';
 import { cinemaOpen, closeCinema, toggleCinema }       from './cinema.js';
 import { isShortcutsOpen, closeShortcuts, toggleShortcuts,
-         closeSettings, _syncVizBtns }                 from './settings.js';
+         closeSettings, _syncVizBtns, syncMiniSettingsBtn } from './settings.js';
 import { closePlModal }                                from './playlists.js';
 import { closeCtxMenu }                                from './ctxmenu.js';
 import { toggleMiniPlayer }                            from './miniplayer.js';
@@ -115,7 +115,7 @@ export function initShortcuts({ updateVolSlider, closeModal, cycleSpeed }) {
     if (e.key.toLowerCase() === 'r') toggleRepeat();
     if (e.key === '/') { document.getElementById('srch')?.focus(); e.preventDefault(); }
     if (e.key.toLowerCase() === 'f' && !e.ctrlKey && !e.altKey && !cinemaOpen) toggleLike();
-    if (e.key.toLowerCase() === 'm' && !e.ctrlKey && !e.altKey) toggleMiniPlayer();
+    if (e.key.toLowerCase() === 'm' && !e.ctrlKey && !e.altKey) { toggleMiniPlayer(); syncMiniSettingsBtn(); }
     if (e.key.toLowerCase() === 'i' && !e.ctrlKey && !e.altKey) toggleMiniOverlay();
 
     if (e.code === 'Escape') {

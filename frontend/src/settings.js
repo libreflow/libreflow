@@ -84,7 +84,7 @@ export function syncMiniSettingsBtn() {
   const key  = open ? 'set_mini_btn_close' : 'set_mini_btn';
   span.dataset.i18n = key;
   span.textContent  = i18n(key);
-  if (btn) btn.setAttribute('aria-pressed', String(open));
+  btn.setAttribute('aria-pressed', String(open));
 }
 
 /** Bascule sur un onglet du panneau settings (tab bar). */
@@ -162,6 +162,8 @@ document.addEventListener('keydown', e => {
     closeSettings();
   }
 });
+
+window.addEventListener('focus', () => syncMiniSettingsBtn());
 
 // ══ THEMES ════════════════════════════════════════════════════════════════════
 export const THEMES = ['green', 'blue', 'purple', 'red', 'orange', 'pink', 'cyan'];
