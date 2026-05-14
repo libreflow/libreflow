@@ -308,13 +308,13 @@ export function updateWatchUI() {
     const shortName = watchPath.split('\\').pop() || watchPath.split('/').pop() || watchPath;
     const watchLabel = document.getElementById('watch-label');
     if (watchLabel)  watchLabel.textContent = shortName;
-    if (pathDisplay) pathDisplay.textContent = watchPath;
+    if (pathDisplay) { pathDisplay.removeAttribute('data-i18n'); pathDisplay.textContent = watchPath; }
     if (chk)         chk.checked = _watchActive;
     if (changeBtn)   changeBtn.dataset.action = 'change-watch-folder';
     if (changeLbl) { changeLbl.dataset.i18n = 'set_watch_change_btn'; changeLbl.textContent = i18n('set_watch_change_btn'); }
   } else {
     if (indicator)   indicator.style.display = 'none';
-    if (pathDisplay) pathDisplay.textContent = i18n('set_no_folder');
+    if (pathDisplay) { pathDisplay.dataset.i18n = 'set_no_folder'; pathDisplay.textContent = i18n('set_no_folder'); }
     if (chk)         chk.checked = false;
     if (changeBtn)   changeBtn.dataset.action = 'settings-open-folder';
     if (changeLbl) { changeLbl.dataset.i18n = 'set_add_folder_btn'; changeLbl.textContent = i18n('set_add_folder_btn'); }
