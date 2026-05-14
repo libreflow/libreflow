@@ -357,7 +357,9 @@ export function _syncVizBtns(save = false) {
   if (shapeGroup) shapeGroup.style.opacity = enabled ? '' : '0.35';
   ['set-viz-bars', 'set-viz-oscilloscope', 'set-viz-circle'].forEach(id => {
     const btn = $id(id);
-    if (btn) btn.disabled = !enabled;
+    if (!btn) return;
+    btn.disabled = !enabled;
+    if (!enabled) btn.setAttribute('aria-pressed', 'false');
   });
   if (save) saveCfg();
 }
