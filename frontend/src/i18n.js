@@ -533,6 +533,7 @@ export const LANGS = {
     set_shortcuts_section:   'Raccourcis clavier',
     set_shortcuts_label:     'Aide & raccourcis',
     set_shortcuts_btn:       'Afficher',
+    set_shortcuts_sub_html:  "Appuie sur <kbd>?</kbd> n'importe quand",
     set_reset_section:       'Réinitialisation',
     set_updates_section:     'Mises à jour',
     set_update_auto_label:   'Vérifier les mises à jour au lancement',
@@ -1141,6 +1142,7 @@ export const LANGS = {
     set_shortcuts_section:   'Keyboard shortcuts',
     set_shortcuts_label:     'Help & shortcuts',
     set_shortcuts_btn:       'Show',
+    set_shortcuts_sub_html:  'Press <kbd>?</kbd> at any time',
     set_reset_section:       'Reset',
     set_updates_section:     'Updates',
     set_update_auto_label:   'Check for updates on launch',
@@ -1301,6 +1303,9 @@ export function applyLang() {
   // ── data-i18n / data-i18n-title elements ───────────────────
   document.querySelectorAll('[data-i18n]').forEach(el => {
     el.textContent = i18n(el.dataset.i18n);
+  });
+  document.querySelectorAll('[data-i18n-html]').forEach(el => {
+    el.innerHTML = i18n(el.dataset.i18nHtml);
   });
   document.querySelectorAll('[data-i18n-title]').forEach(el => {
     el.title = i18n(el.dataset.i18nTitle);
