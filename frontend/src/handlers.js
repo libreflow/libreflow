@@ -116,7 +116,7 @@ const _ACTIONS = {
 
   // ── Drill header ──────────────────────────────────────────
   'dh-play-all':    ()    => { const fl = getFiltered(); if (fl.length) playAt(0); },
-  'dh-shuffle-all': ()    => { set('shuffle', true); const fl = getFiltered(); if (fl.length) playAt(0); },
+  'dh-shuffle-all': ()    => { if (!get('shuffle')) toggleShuffle(); const fl = getFiltered(); if (fl.length) playAt(0); },
   'dh-drill-album':  btn  => drillDown('albums',  btn.dataset.albumKey,  btn.dataset.albumName),
   'dh-drill-artist': btn  => drillDown('artists', btn.dataset.artistKey, btn.dataset.artistName),
 

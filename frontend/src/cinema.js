@@ -265,7 +265,8 @@ function _updateAmbientGradient() {
   if (_ambientColors && canvas.width > 0 && canvas.height > 0) {
     snapshot = document.createElement('canvas');
     snapshot.width = PW; snapshot.height = PH;
-    snapshot.getContext('2d').drawImage(canvas, 0, 0, PW, PH);
+    const snapCtx = snapshot.getContext('2d');
+    if (snapCtx) snapCtx.drawImage(canvas, 0, 0, PW, PH);
   }
 
   _stopAmbientAnim();

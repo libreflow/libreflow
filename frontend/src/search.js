@@ -328,11 +328,11 @@ export function getFiltered() {
       // PM-1: pre-compute scores once (O(n)) so both filter and sort use O(1) Map lookups
       // instead of recomputing _trigramScore ~2×n×log(n) times inside the sort comparator.
       const _scores = new Map();
-      for (const t of tracks) {
+      for (const t of src) {
         if (!t._trigrams) t._trigrams = _trigrams(t._nlc || '');
         _scores.set(t.id, _trigramScore(qTrigrams, t._trigrams));
       }
-      const fuzzy = tracks
+      const fuzzy = src
         .filter(t => (_scores.get(t.id) ?? 0) >= FUZZY_THRESHOLD)
         .sort((a, b) => (_scores.get(b.id) ?? 0) - (_scores.get(a.id) ?? 0));
       _lastWasFuzzy = fuzzy.length > 0;

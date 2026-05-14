@@ -163,7 +163,7 @@ fn scan_dir(dir: &Path) -> Vec<PathBuf> {
     let Ok(entries) = fs::read_dir(dir) else { return results; };
     for entry in entries.flatten() {
         let path = entry.path();
-        if path.is_dir() {
+        if path.is_dir() && !path.is_symlink() {
             results.extend(scan_dir(&path));
         } else if is_audio(&path) {
             results.push(path);

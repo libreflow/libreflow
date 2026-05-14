@@ -580,6 +580,7 @@ export function next(manual = false) {
     return;
   }
 
+  if (fi < 0) return;
   if (fi < fl.length - 1) playAt(fi + 1); else if (repeat === 'all') playAt(0);
 }
 
