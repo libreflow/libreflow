@@ -50,20 +50,22 @@ pub fn watch_folder_start(app: AppHandle, path: String) -> Result<(), String> {
         move |res: notify::Result<Event>| {
             let event = match res {
                 Ok(e) => e,
-                Err(e) => {
-                    eprintln!("[watch] watcher error: {:?}", e);
-                    return;
-                }
+                Err(e) => { eprintln!("[watch] watcher error: {:?}", e); return; }
             };
 
-            // Filtrer : uniquement les créations et renommages (déplacement vers le dossier)
             let is_create = matches!(
                 event.kind,
                 EventKind::Create(_) | EventKind::Modify(notify::event::ModifyKind::Name(_))
             );
-            if !is_create { return; }
+            let is_modify = matches!(
+                event.kind,
+                EventKind::Modify(notify::event::ModifyKind::Data(_))
+            );
 
-            let new_files: Vec<String> = event.paths.iter()
+            if !is_create && !is_modify { return; }
+
+            // Filtre audio partagé — même liste AUDIO_EXTS existante
+            let audio_paths: Vec<String> = event.paths.iter()
                 .filter(|p| {
                     p.extension()
                         .and_then(|e| e.to_str())
@@ -73,10 +75,15 @@ pub fn watch_folder_start(app: AppHandle, path: String) -> Result<(), String> {
                 .filter_map(|p| p.to_str().map(String::from))
                 .collect();
 
-            if new_files.is_empty() { return; }
+            if audio_paths.is_empty() { return; }
 
             if let Some(win) = app_clone.get_webview_window("main") {
-                let _ = win.emit("watch-new-files", &new_files);
+                if is_create {
+                    let _ = win.emit("watch-new-files", &audio_paths);
+                }
+                if is_modify {
+                    let _ = win.emit("watch-modified-files", &audio_paths);
+                }
             }
         },
         Config::default(),
