@@ -15,7 +15,7 @@
 import { _trackIdxMap, trackIdx, invalidateFilterCache } from './search.js';
 import { emit, EVENTS }                                from './bus.js';
 import { DB, dput, dget, isQuotaError }               from './db.js';
-import { invoke, invokeRetry, convertFileSrc }        from './ipc.js';
+import { invoke, invokeRetry }                        from './ipc.js';
 import { i18n }                                       from './i18n.js';
 import { extractColor, guessGenre }                   from './tags.js';
 import { rgEnabled }                                  from './replaygain.js';
@@ -28,9 +28,8 @@ import { adjustShuffleQAfterDelete }                  from './player.js';
 import { VIRT }                                       from './virt.js';
 import { get, set }                                   from './store.js'; // Phase 4
 import { toast, toastWithAction }                                        from './ui.js';
-import { setCurIdx, pushTracks, removeTrackAt } from './state.js';
+import { setCurIdx, removeTrackAt } from './state.js';
 import { updateBar } from './playerbar.js';
-import { setView, showView } from './views.js';
 import { updateStats, scheduleStatsUpdate, patchTrackEl } from './renderer.js';
 import { setReplayGain } from './replaygain.js';
 
@@ -58,107 +57,13 @@ function _sanitizeTagStr(val, maxLen = 500) {
 let _saveTrackBatch    = new Map();  // Map<id, Track> — pistes à flush
 let _saveTrackTimer    = null;       // debounce timer
 let _saveTrackMaxTimer = null;       // garantit un flush toutes les 2s sous charge continue
-let _scanInProgress  = false;      // RACE-1 : guard contre les openFolder() concurrents
 
 // ── openFolder ────────────────────────────────────────────────────────────────
 /**
- * Ouvre le dialog de sélection de dossier, scanne les fichiers audio,
- * crée les pistes avec asset:// URL, puis lance le chargement des tags en BG.
+ * Délégué : voir toggleWatchFolder() dans watchfolder.js via handlers.js
  */
 export async function openFolder() {
-  if (_scanInProgress) { toast(i18n('t_scan_in_progress') || 'Scan déjà en cours…', 'warning'); return; }
-  const result = await invoke('open_folder');
-  if (!result) return;
-  const { folder, files } = result;
-  if (!files.length) { toast(i18n('t_no_audio'), 'warning'); return; }
-
-  // IPC-ASSET : accorder l'accès asset:// au dossier sélectionné (obligatoire en build prod).
-  // En dev, Tauri est permissif — en production, le scope doit être explicitement accordé via
-  // app.asset_protocol_scope().allow_directory() côté Rust, ce que fait allow_asset_dir.
-  // Fire-and-forget : le scan crée les URL avec convertFileSrc ; l'accès sera prêt
-  // avant que l'utilisateur puisse cliquer sur Lire (le scan prend ≥ quelques ms).
-  if (folder) invoke('allow_asset_dir', { path: folder }).catch(e => console.warn('[allow_asset_dir]', e));
-
-  _scanInProgress = true;
-  try {
-  showView('scan');
-  const elSn  = document.getElementById('sn');
-  const elSf  = document.getElementById('sf');
-  const elBar = document.getElementById('scan-bar');
-  if (elSn) elSn.textContent = '0';
-  if (elSf) elSf.textContent = `${files.length} fichiers détectés…`;
-  if (elBar) elBar.style.width = '0%';
-
-  const byPath = new Map(get('tracks').map(t => [t.path, t])); // Phase 4
-  for (const p of files) { if (byPath.has(p)) byPath.get(p).url = null; }
-
-  const newPaths  = files.filter(p => !byPath.has(p));
-  const newTracks = [];
-  let   loaded    = 0;
-  const _scanStart = Date.now();
-
-  // Créer les pistes SANS lire les fichiers (asset:// direct — zéro IPC par fichier)
-  // MINOR-3 FIX : yield toutes les 200 pistes pour que le navigateur repeigne l'UI
-  const YIELD_EVERY = 200;
-  for (const p of newPaths) {
-    const name    = p.replace(/\\/g, '/').split('/').pop();
-    const ext     = name.split('.').pop().toUpperCase();
-    const guess   = n => { const bare = n.replace(/\.[^.]+$/, ''); return bare.includes(' - ') ? bare.split(' - ')[0].trim() : ''; };
-    const assetUrl = convertFileSrc(p);
-    const t = {
-      id:          crypto.randomUUID(),
-      name:        name.replace(/\.[^.]+$/, '').replace(/[-_]+/g, ' ').trim(),
-      artistFull:  guess(name) || i18n('unknown_artist'),
-      artist:      guess(name) || i18n('unknown_artist'),
-      album: '', ext, path: p,
-      duration:    0,
-      dateAdded:   Date.now(),
-      art: null, artColor: null,
-      url:         assetUrl,
-      file:        null,
-      metaDone:    false,
-      _durPending: true,
-    };
-    newTracks.push(t);
-    loaded++;
-    if (elSn) elSn.textContent = String(loaded);
-    if (elSn && (loaded % 50 === 0 || loaded <= 10)) { elSn.classList.remove('pop'); void elSn.offsetWidth; elSn.classList.add('pop'); }
-    if (loaded % YIELD_EVERY === 0 || loaded === newPaths.length) {
-      const pct = Math.round(loaded / newPaths.length * 100);
-      if (elBar) elBar.style.width = pct + '%';
-      const elapsed = Date.now() - _scanStart;
-      if (elapsed > 300 && loaded > 0) {
-        const rate = loaded / elapsed;
-        const etaMs = (newPaths.length - loaded) / rate;
-        const etaS  = Math.ceil(etaMs / 1000);
-        const etaStr = etaS >= 60 ? `${Math.floor(etaS/60)}m ${etaS%60}s` : `${etaS}s`;
-        if (elSf) elSf.textContent = `${loaded} / ${newPaths.length} • ETA ~${etaStr}`;
-      }
-      await new Promise(r => setTimeout(r, 0));
-    }
-  }
-
-  if (!newTracks.length && get('tracks').length === 0) { // Phase 4
-    showView('wlc'); toast(i18n('t_no_loaded'), 'warning'); return;
-  }
-  if (!newTracks.length) {
-    showView('lib'); toast(i18n('t_already_imported'), 'info'); return;
-  }
-
-  pushTracks(newTracks); // ARCH-3 : push + rebuildTrackIdxMap + notify (rebuild avant notify ✓)
-  emit(EVENTS.LIBRARY_UPDATED, { tracks: get('tracks') }); // cohérence avec app.js drag-drop
-  invalidateFilterCache(); emit(EVENTS.FILTER_CHANGED, {}); VIRT._lastListSig = '';
-  updateStats();
-  setView('all', document.getElementById('ni-all'));
-  toast(i18n('t_scanned', newTracks.length), 'success');
-
-  loadTagsAndDurations(newTracks);
-  } catch (e) {
-    console.error('[openFolder] scan failed:', e);
-    toast(i18n('t_scan_error') || 'Erreur lors du scan', 'error');
-  } finally {
-    _scanInProgress = false;
-  }
+  // Délégué : voir toggleWatchFolder() dans watchfolder.js via handlers.js
 }
 
 // ── loadTagsAndDurations ──────────────────────────────────────────────────────
