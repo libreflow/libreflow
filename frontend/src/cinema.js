@@ -25,6 +25,7 @@ import { toast }                                        from './ui.js';
 import { saveCfg }                   from './cfgsave.js';
 import { updateVolSlider }            from './playerbar.js';
 import { rgbToHsl, hslToRgb, boostSat, regionAvg, sampleArtColors } from './artcolor.js';
+import { renderAmbientFrame }                from './ambientRenderer.js';
 
 // ── State ───────────────────────────────────────────────────
 export let cinemaOpen     = false;
@@ -37,7 +38,6 @@ let _cinFill    = null;
 let _cinTc      = null;
 let _cinTd      = null;
 let _lastCinArt  = null; // dernière URL d'art — évite le bug de normalisation url("…")
-let _noiseCanvas = null; // cache du canvas noise (généré une seule fois)
 let _cinBgCtx    = null; // cache du contexte 2D de #cinema-bg (évite getContext() par frame)
 
 // Visualiseur (animation RAF uniquement — pas de création d'AudioContext ni de source)
@@ -79,14 +79,7 @@ const CINEMA_BG_ICONS = {
 
 // ── Constantes d'animation ──────────────────────────────────
 const CINEMA_CONTROLS_HIDE_MS  = 3000;  // délai avant masquage des contrôles
-const AMOLED_DRIFT_FREQ        = 0.000350; // fréquence de dérive sinusoïdale halo (~0.35 Hz)
-const AMOLED_DRIFT_AMP         = 0.04;    // amplitude de dérive (4% de la largeur)
 const AMBIENT_CROSSFADE_MS     = 1400;  // durée du cross-fade ambient
-const AMBIENT_DRIFT_FREQ_X     = 0.000524; // fréquence dérive X gradient
-const AMBIENT_DRIFT_FREQ_Y     = 0.000370; // fréquence dérive Y (breath)
-const AMBIENT_DRIFT_AMP        = 0.06;    // amplitude dérive gradient
-const NOISE_DITHER_AMPLITUDE   = 22;    // amplitude bruit grain AMOLED (±22/255)
-const NOISE_OVERLAY_OPACITY    = 0.055; // opacité overlay grain AMOLED
 
 // ── Arrière-plan ────────────────────────────────────────────
 
@@ -163,11 +156,6 @@ let _ambientCross   = null;   // { snapshot, start, dur } — active cross-fade
 let _frameCount     = 0;      // frame counter for ambient 30fps cap
 let _ambientGen     = 0;      // génération courante — incrémentée à chaque _stopAmbientAnim() pour invalider les loops orphelins
 
-// Vignette gradient cache — recréé uniquement si W ou H changent (évite createRadialGradient/frame)
-let _vignetteGrad = null;
-let _vignetteW    = 0;
-let _vignetteH    = 0;
-
 /** Extract and boost 3 ambient colours from artwork (or fallback to _cinArtRGB). */
 function _buildAmbientColors() {
   const img = document.getElementById('cinema-art-img');
@@ -192,124 +180,6 @@ function _stopAmbientAnim() {
   _ambientCross = null;
 }
 
-/**
- * Render one frame of the breathing animation onto canvas.
- * t = animation time in ms — drives all sinusoidal drifts.
- */
-function _renderAmbientFrame(t, canvas, ctx) {
-  // FIX HiDPI : le contexte est transformé via setTransform(dpr,…) → coordonnées en pixels CSS.
-  // Utiliser innerWidth/innerHeight (CSS px) et non canvas.width/height (pixels physiques).
-  const W = window.innerWidth  || 1280;
-  const H = window.innerHeight || 800;
-  if (!ctx) return;
-
-  // ── Mode AMOLED : halo coloré minimaliste (réutilise la boucle ambient) ──
-  // Un seul createRadialGradient/frame au lieu de 4 — quasiment gratuit.
-  // Dérive sinusoïdale douce depuis le centre-haut — rend le mode vivant sans le trahir.
-  if (cinemaBg === 'amoled') {
-    ctx.fillStyle = '#000';
-    ctx.fillRect(0, 0, W, H);
-    const ax = W * 0.5 + Math.sin(t * AMOLED_DRIFT_FREQ) * W * AMOLED_DRIFT_AMP;
-    const ay = H * 0.22;
-    const ga = ctx.createRadialGradient(ax, ay, 0, ax, ay, H * 0.55);
-    ga.addColorStop(0,   `rgba(${_cinArtRGB},.09)`);
-    ga.addColorStop(0.5, `rgba(${_cinArtRGB},.02)`);
-    ga.addColorStop(1,   'rgba(0,0,0,0)');
-    ctx.fillStyle = ga;
-    ctx.fillRect(0, 0, W, H);
-    return;
-  }
-
-  if (!_ambientColors) return;
-
-  const { cT, cL, cR } = _ambientColors;
-  const [rT, gT, bT] = cT;
-  const [rL, gL, bL] = cL;
-  const [rR, gR, bR] = cR;
-  const rM = (rL + rR) >> 1, gM = (gL + gR) >> 1, bM = (bL + bR) >> 1;
-
-  // ── Animated positions — independent sinusoidal drifts ───────
-  // Halo principal : horizontal drift T≈12s, radius breath T≈17s
-  const driftX  = Math.sin(t * AMBIENT_DRIFT_FREQ_X) * W * AMBIENT_DRIFT_AMP;
-  const breathR = 1 + Math.sin(t * AMBIENT_DRIFT_FREQ_Y) * AMBIENT_DRIFT_AMP;
-  // Accent gauche : drift X, T≈15s
-  const driftLX = W * (0.10 + Math.sin(t * 0.000419 + 1.0) * 0.05);
-  // Accent droit : drift X, T≈14s
-  const driftRX = W * (0.90 + Math.sin(t * 0.000449 + 2.1) * 0.05);
-  // Centre-bas : drift Y, T≈22s
-  const driftCY = H * (1.02 + Math.sin(t * 0.000287 + 0.5) * 0.03);
-
-  ctx.globalAlpha = 1;
-  ctx.globalCompositeOperation = 'source-over';
-
-  // ── Base noire ───────────────────────────────────────────────
-  ctx.fillStyle = '#000';
-  ctx.fillRect(0, 0, W, H);
-
-  // ── Halo principal — top-center, couleur dominante ───────────
-  const cx1 = W * 0.5 + driftX;
-  const g1 = ctx.createRadialGradient(cx1, 0, 0, cx1, 0, H * 1.15 * breathR);
-  g1.addColorStop(0,    `rgb(${rT},${gT},${bT})`);
-  g1.addColorStop(0.22, `rgb(${rT * .75 | 0},${gT * .75 | 0},${bT * .75 | 0})`);
-  g1.addColorStop(0.48, `rgb(${rT * .30 | 0},${gT * .30 | 0},${bT * .30 | 0})`);
-  g1.addColorStop(0.76, `rgb(${rT * .07 | 0},${gT * .07 | 0},${bT * .07 | 0})`);
-  g1.addColorStop(1,    'rgb(0,0,0)');
-  ctx.fillStyle = g1; ctx.fillRect(0, 0, W, H);
-
-  // ── Accent bas-gauche ─────────────────────────────────────────
-  const g2 = ctx.createRadialGradient(driftLX, H, 0, driftLX, H, W * .60);
-  g2.addColorStop(0,    `rgba(${rL},${gL},${bL},.65)`);
-  g2.addColorStop(0.50, `rgba(${rL},${gL},${bL},.12)`);
-  g2.addColorStop(1,    'rgba(0,0,0,0)');
-  ctx.fillStyle = g2; ctx.fillRect(0, 0, W, H);
-
-  // ── Accent bas-droit ──────────────────────────────────────────
-  const g3 = ctx.createRadialGradient(driftRX, H, 0, driftRX, H, W * .55);
-  g3.addColorStop(0,    `rgba(${rR},${gR},${bR},.55)`);
-  g3.addColorStop(0.50, `rgba(${rR},${gR},${bR},.09)`);
-  g3.addColorStop(1,    'rgba(0,0,0,0)');
-  ctx.fillStyle = g3; ctx.fillRect(0, 0, W, H);
-
-  // ── Halo centre-bas — blend L+R pour profondeur ──────────────
-  const g4 = ctx.createRadialGradient(W * .5, driftCY, 0, W * .5, driftCY, W * .48);
-  g4.addColorStop(0,    `rgba(${rM},${gM},${bM},.38)`);
-  g4.addColorStop(0.55, `rgba(${rM},${gM},${bM},.06)`);
-  g4.addColorStop(1,    'rgba(0,0,0,0)');
-  ctx.fillStyle = g4; ctx.fillRect(0, 0, W, H);
-
-  // ── Noise dithering — film grain ─────────────────────────────
-  if (!_noiseCanvas) {
-    const NS = 256;
-    _noiseCanvas = document.createElement('canvas');
-    _noiseCanvas.width = NS; _noiseCanvas.height = NS;
-    const nc = _noiseCanvas.getContext('2d');
-    const id = nc.createImageData(NS, NS);
-    const px = id.data;
-    for (let i = 0; i < px.length; i += 4) {
-      const v = (Math.random() * 2 - 1) * NOISE_DITHER_AMPLITUDE;
-      px[i] = px[i + 1] = px[i + 2] = 128 + v;
-      px[i + 3] = 255;
-    }
-    nc.putImageData(id, 0, 0);
-  }
-  ctx.globalCompositeOperation = 'overlay';
-  ctx.globalAlpha = NOISE_OVERLAY_OPACITY;
-  ctx.drawImage(_noiseCanvas, 0, 0, W, H);
-  ctx.globalAlpha = 1;
-  ctx.globalCompositeOperation = 'source-over';
-
-  // ── Vignette bords — gradient mis en cache (recréé uniquement si W ou H changent) ──
-  if (!_vignetteGrad || W !== _vignetteW || H !== _vignetteH) {
-    _vignetteGrad = ctx.createRadialGradient(W / 2, H / 2, H * .18, W / 2, H / 2, H * .88);
-    _vignetteGrad.addColorStop(0,    'rgba(0,0,0,0)');
-    _vignetteGrad.addColorStop(0.65, 'rgba(0,0,0,.08)');
-    _vignetteGrad.addColorStop(1,    'rgba(0,0,0,.62)');
-    _vignetteW = W;
-    _vignetteH = H;
-  }
-  ctx.fillStyle = _vignetteGrad; ctx.fillRect(0, 0, W, H);
-}
-
 /** Start the continuous breathing animation RAF loop. No-op if already running. */
 function _startAmbientAnim() {
   if (_ambientAnimRaf) return;
@@ -318,7 +188,7 @@ function _startAmbientAnim() {
   function loop(now) {
     // Guard génération : si _stopAmbientAnim() a été appelé depuis, ce loop est orphelin
     if (myGen !== _ambientGen) return;
-    // Boucle active en mode 'ambient' ET 'amoled' (halo minimaliste dans _renderAmbientFrame)
+    // Boucle active en mode 'ambient' ET 'amoled' (halo minimaliste dans renderAmbientFrame)
     if ((cinemaBg !== 'ambient' && cinemaBg !== 'amoled') || !cinemaOpen || document.hidden) {
       last = now;  // prevent time-jump on resume (BUG-D3A-7)
       _ambientAnimRaf = null;
@@ -339,9 +209,8 @@ function _startAmbientAnim() {
       _cinBgCtx = canvas.getContext('2d');
       const _dpr = window.devicePixelRatio || 1;
       _cinBgCtx.setTransform(_dpr, 0, 0, _dpr, 0, 0);
-      _vignetteGrad = null; // gradient lié au ctx précédent — invalider
     }
-    _renderAmbientFrame(_ambientT, canvas, _cinBgCtx);
+    renderAmbientFrame(_ambientT, canvas, _cinBgCtx, cinemaBg, _cinArtRGB, _ambientColors);
     // ── Cross-fade overlay — draw old snapshot fading out ────────
     if (_ambientCross) {
       const { snapshot, start, dur } = _ambientCross;
@@ -384,7 +253,6 @@ function _updateAmbientGradient() {
     canvas.height = PH;
     _cinBgCtx = canvas.getContext('2d');
     _cinBgCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    _vignetteGrad = null; // invalider — nouveau ctx ou canvas redimensionné
     // Pas de _buildAmbientColors ni de cross-fade pour AMOLED
     _startAmbientAnim();
     return;
@@ -405,7 +273,6 @@ function _updateAmbientGradient() {
   canvas.height = PH;
   _cinBgCtx = canvas.getContext('2d');
   _cinBgCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
-  _vignetteGrad = null; // invalider — nouveau ctx ou canvas redimensionné
   _ambientColors = _buildAmbientColors();
 
   if (snapshot) {
