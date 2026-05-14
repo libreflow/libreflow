@@ -355,5 +355,9 @@ export function _syncVizBtns(save = false) {
   }
   const shapeGroup = $id('set-viz-shape-group');
   if (shapeGroup) shapeGroup.style.opacity = enabled ? '' : '0.35';
+  ['set-viz-bars', 'set-viz-oscilloscope', 'set-viz-circle'].forEach(id => {
+    const btn = $id(id);
+    if (btn) btn.disabled = !enabled;
+  });
   if (save) saveCfg();
 }
