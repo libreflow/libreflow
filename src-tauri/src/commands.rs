@@ -141,12 +141,20 @@ pub(crate) fn is_safe_dir(path: &Path) -> bool {
     // Rejeter chemins Windows système connus et chemins UNC
     #[cfg(target_os = "windows")]
     {
+        // fs::canonicalize() sur Windows ajoute le préfixe \\?\ (extended-length path local).
+        // Normaliser avant comparaison pour que les chemins système soient correctement bloqués.
+        let check_str: &str = if path_str.starts_with("\\\\?\\") {
+            &path_str[4..]
+        } else {
+            &path_str
+        };
         let win_blocked = ["c:\\windows", "c:\\program files", "c:\\program files (x86)"];
-        if win_blocked.iter().any(|b| path_str == *b || path_str.starts_with(&format!("{}\\", b))) {
+        if win_blocked.iter().any(|b| check_str == *b || check_str.starts_with(&format!("{}\\", b))) {
             return false;
         }
-        // Bloquer les chemins UNC (\\server\share) — accès réseau non souhaité
-        if path_str.starts_with("\\\\") {
+        // Bloquer les vrais chemins UNC réseau (\\server\share).
+        // Ne PAS bloquer \\?\ qui est le préfixe extended-length pour les chemins locaux.
+        if path_str.starts_with("\\\\") && !path_str.starts_with("\\\\?\\") {
             return false;
         }
     }

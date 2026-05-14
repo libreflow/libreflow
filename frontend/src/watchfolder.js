@@ -170,7 +170,11 @@ export async function toggleWatchFolder() {
       invoke('open_folder'),
       new Promise((_, rej) => setTimeout(() => rej(new Error('open_folder timeout')), CFG.IPC_TIMEOUT_MS)),
     ]);
-  } catch { return; }
+  } catch(err) {
+    console.error('[watchfolder] open_folder failed:', err);
+    toast(i18n('t_scan_error', err?.message ?? String(err)), 'error');
+    return;
+  }
   if (!result?.folder) { updateWatchUI(); return; }
   if (!_isValidFolderPath(result.folder)) {
     console.warn('[watchfolder] Chemin de dossier invalide rejeté :', result.folder);

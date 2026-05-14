@@ -207,6 +207,7 @@ export const LANGS = {
     drag_hint:      'Dépose tes fichiers ici',
     // Toast
     t_scan_in_progress: 'Scan déjà en cours…',
+    t_scan_error:   (e) => `Impossible d'ouvrir le dossier : ${e}`,
     t_no_audio:     'Aucun fichier audio trouvé',
     t_no_loaded:    'Aucun fichier audio chargé',
     t_not_found:    '⚠ Fichier introuvable — rescannes le dossier',
@@ -819,6 +820,7 @@ export const LANGS = {
     set_about_desc:       'Local audio player for Windows. No data sent.',
     drag_hint:      'Drop your files here',
     t_scan_in_progress: 'Scan already in progress…',
+    t_scan_error:   (e) => `Cannot open folder: ${e}`,
     t_no_audio:     'No audio files found',
     t_no_loaded:    'No audio files loaded',
     t_not_found:    '⚠ File not found — rescan the folder',
