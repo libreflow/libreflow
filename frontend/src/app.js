@@ -785,7 +785,6 @@ window.addEventListener('unhandledrejection', (e) => {
   console.error('[LibreFlow] Unhandled rejection:', reason);
   const msg = reason?.message || String(reason) || 'Erreur asynchrone';
   toast(`Erreur asynchrone : ${msg}`, 'error');
-  e.preventDefault(); // empêche l'affichage dans la console DevTools (déjà logué)
 });
 
 waitForTauri(() => {
@@ -992,7 +991,7 @@ export async function clearLibrary() {
       store.transaction.oncomplete = ok;
       store.transaction.onerror   = e => fail(e.target.error);
     });
-    await _doSaveCfg();
+    await saveCfgNow();
   } catch(e) { console.warn('[clearLibrary] DB error:', e); }
   // Réinitialiser radio, crossfade, watchfolder
   resetRadio();

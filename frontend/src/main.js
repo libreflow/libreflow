@@ -18,10 +18,6 @@ import { initNextPreview }  from './playerbar.js';
 registerHandlers();
 initNextPreview();
 
-// R-1 — handler global : capte les rejections non gérées pour éviter
-// les erreurs silencieuses (ex. IPC timeout, decode fail, DB reject).
-window.addEventListener('unhandledrejection', e => {
-  console.warn('[unhandledrejection]', e.reason);
-  // Ne pas appeler toast() ici — ce module s'exécute avant le boot app.js
-  // et toast peut ne pas être disponible. Le log console suffit pour le debug.
-});
+// R-1 — handler global géré dans app.js (unhandledrejection) — ne pas
+// appeler toast() ici car ce module s'exécute avant le boot app.js
+// et toast peut ne pas être disponible.
