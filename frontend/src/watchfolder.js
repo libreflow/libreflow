@@ -68,7 +68,7 @@ let _idSeq        = 0;     // compteur pour UUID fallback garanti unique
 // SEC-10 : rate-limit sur watch-new-files — debounce pour batcher les bursts d'événements
 let _watchDebTimer = null;
 let _watchRawPaths = [];
-let _watchActive  = false; // ← NOUVEAU : true si le watcher natif tourne
+let _watchActive  = false; // true si le watcher natif tourne
 
 /** Initialise watchPath depuis la config au démarrage (pas de side-effects). */
 export function initWatchPath(path) { watchPath = path; }
@@ -119,6 +119,7 @@ export async function startWatchNative() {
   if (_watchUnlisten) { _watchUnlisten(); _watchUnlisten = null; }
   if (_starting) return; // BUG-11 FIX : éviter les appels parallèles
   if (!watchPath) return;
+  _watchActive = false;   // reset avant toute tentative — évite état stale si la tentative échoue
 
   _starting = true;
   try {
@@ -156,6 +157,11 @@ export async function startWatchNative() {
 }
 
 
+/**
+ * @param {boolean} [silent=false] - Si true, ne montre pas le toast d'arrêt.
+ * @param {boolean} [keepPath=false] - Si true, conserve watchPath/watchSnapshot/_importing
+ *   pour permettre un redémarrage du watcher sans perdre le contexte.
+ */
 export function stopWatchFolder(silent = false, keepPath = false) {
   if (_watchUnlisten) { _watchUnlisten(); _watchUnlisten = null; }
   if (_watchDebTimer) { clearTimeout(_watchDebTimer); _watchDebTimer = null; }
