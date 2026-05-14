@@ -24,6 +24,7 @@ import { VIRT }                                   from './virt.js';
 import { eqCtx, eqNodes, eqAutoMode,
          initEQ, ensureEQResumed,
          masterGainNode, audioOutGain,
+         setMasterGain,
          updateSmartEQGenre, startSmartEQ }       from './eq.js';
 import { initViz, startViz, stopViz,
          setVizMode, setVizEnabled }              from './viz.js';
@@ -843,7 +844,7 @@ export function clearCrossfadeTimers() {
     // DSP-5 : restaurer audio.volume depuis le slider DOM (JAMAIS hardcoder 1.0)
     const vel = document.getElementById('vol');
     // @ts-ignore — vol is an input[type=range] with .value property
-    audio.volume = vel ? parseFloat(vel.value) : audio.volume;
+    setMasterGain(vel ? parseFloat(vel.value) : (masterGainNode ? masterGainNode.gain.value : 1));
   }
   if (audioNextGain && !eqCtx) audioNextGain.gain.value = 0;
   if (audioNext) { audioNext.pause(); audioNext.src = ''; }
@@ -985,7 +986,7 @@ export function checkCrossfade() {
         if (audioOutGain && eqCtx) { audioOutGain.gain.cancelScheduledValues(eqCtx.currentTime); audioOutGain.gain.value = 1.0; }
         // DSP-5 : restaurer audio.volume depuis le slider DOM (JAMAIS hardcoder 1.0)
         // @ts-ignore — vol is an input[type=range] with .value property
-        if (!sleepFading) { const _vel = document.getElementById('vol'); audio.volume = _vel ? parseFloat(_vel.value) : audio.volume; }
+        if (!sleepFading) { const _vel = document.getElementById('vol'); setMasterGain(_vel ? parseFloat(_vel.value) : (masterGainNode ? masterGainNode.gain.value : 1)); }
       }
 
       if (validNextIdx < 0) {
@@ -1140,12 +1141,7 @@ audio.addEventListener('play', () => {
     // @ts-ignore — vol is an input[type=range] with .value property
     const _targetVol = _vel ? parseFloat(_vel.value) : 1;
     // DSP-5 : restaurer via masterGainNode si disponible
-    if (masterGainNode && eqCtx) {
-      masterGainNode.gain.setTargetAtTime(_targetVol, eqCtx.currentTime, 0.05);
-      audio.volume = _targetVol; // R1: never hardcode — always read from #vol slider
-    } else {
-      audio.volume = _targetVol;
-    }
+    setMasterGain(_targetVol);
     setSleepFading(false);
     cancelSleepTimer(true);
   }
@@ -1238,5 +1234,5 @@ audio.addEventListener('timeupdate', () => {
   updateCinemaProgress(p, cur, dur);
   // Sauvegarde de position throttlée — évite l'IDB flood à 60fps
   const now = Date.now();
-  if (now - _lastPosSave > 1000) { _lastPosSave = now; saveCfg(); }
+  if (now - _lastPosSave > 5000) { _lastPosSave = now; saveCfg(); }
 });
