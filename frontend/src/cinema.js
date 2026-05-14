@@ -896,9 +896,19 @@ function _startViz() {
     // LERP couleur vers la cible (évite le snap brutal sur changement de piste).
     // Calculé AVANT _detectBeat pour que le flash beat et les barres utilisent
     // exactement la même couleur interpolée dans ce frame (BUG FIX 3 + 4).
-    _cinArtRGBCur[0] += (_cinArtRGBTarget[0] - _cinArtRGBCur[0]) * _LERP_K;
-    _cinArtRGBCur[1] += (_cinArtRGBTarget[1] - _cinArtRGBCur[1]) * _LERP_K;
-    _cinArtRGBCur[2] += (_cinArtRGBTarget[2] - _cinArtRGBCur[2]) * _LERP_K;
+    // Convergence guard: snap to target when all channels are within 0.5 to
+    // stop running LERP math every frame in steady state (CP-2).
+    if (Math.abs(_cinArtRGBCur[0] - _cinArtRGBTarget[0]) < 0.5 &&
+        Math.abs(_cinArtRGBCur[1] - _cinArtRGBTarget[1]) < 0.5 &&
+        Math.abs(_cinArtRGBCur[2] - _cinArtRGBTarget[2]) < 0.5) {
+      _cinArtRGBCur[0] = _cinArtRGBTarget[0];
+      _cinArtRGBCur[1] = _cinArtRGBTarget[1];
+      _cinArtRGBCur[2] = _cinArtRGBTarget[2];
+    } else {
+      _cinArtRGBCur[0] += (_cinArtRGBTarget[0] - _cinArtRGBCur[0]) * _LERP_K;
+      _cinArtRGBCur[1] += (_cinArtRGBTarget[1] - _cinArtRGBCur[1]) * _LERP_K;
+      _cinArtRGBCur[2] += (_cinArtRGBTarget[2] - _cinArtRGBCur[2]) * _LERP_K;
+    }
     const _lerpRGB = `${Math.round(_cinArtRGBCur[0])},${Math.round(_cinArtRGBCur[1])},${Math.round(_cinArtRGBCur[2])}`;
 
     _detectBeat(data, _lerpRGB);
