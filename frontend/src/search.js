@@ -325,12 +325,16 @@ export function getFiltered() {
       // Fuzzy fallback — trigram Jaccard similarity
       const FUZZY_THRESHOLD = 0.4;
       const qTrigrams = _trigrams(query.toLowerCase().replace(/\s+/g, ' ').trim());
+      // PM-1: pre-compute scores once (O(n)) so both filter and sort use O(1) Map lookups
+      // instead of recomputing _trigramScore ~2×n×log(n) times inside the sort comparator.
+      const _scores = new Map();
+      for (const t of tracks) {
+        if (!t._trigrams) t._trigrams = _trigrams(t._nlc || '');
+        _scores.set(t.id, _trigramScore(qTrigrams, t._trigrams));
+      }
       const fuzzy = tracks
-        .filter(t => {
-          if (!t._trigrams) t._trigrams = _trigrams(t._nlc || '');
-          return _trigramScore(qTrigrams, t._trigrams) >= FUZZY_THRESHOLD;
-        })
-        .sort((a, b) => _trigramScore(qTrigrams, b._trigrams) - _trigramScore(qTrigrams, a._trigrams));
+        .filter(t => (_scores.get(t.id) ?? 0) >= FUZZY_THRESHOLD)
+        .sort((a, b) => (_scores.get(b.id) ?? 0) - (_scores.get(a.id) ?? 0));
       _lastWasFuzzy = fuzzy.length > 0;
       // Cache result directly and return — skip normal sort since results are ordered by score
       if (_lastWasFuzzy) {
