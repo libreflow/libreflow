@@ -335,6 +335,8 @@ function _animateSlidersTo(targetGains) {
   const bands  = document.querySelectorAll('#eq-bands .eq-band');
   if (!bands.length) { renderEQBands(); _drawEQCurve(); return; }
 
+  const sliders = Array.from(bands, band => band.querySelector('.eq-slider'));
+  const labels  = Array.from(bands, band => band.querySelector('.eq-val'));
   const from = Array.from(bands, band => {
     const s = band.querySelector('.eq-slider');
     return s ? parseFloat(s.value) || 0 : 0;
@@ -345,8 +347,8 @@ function _animateSlidersTo(targetGains) {
     const e = _easeSpringSoft(t);
     bands.forEach((band, i) => {
       const v      = from[i] + (targetGains[i] - from[i]) * e;
-      const slider = band.querySelector('.eq-slider');
-      const label  = band.querySelector('.eq-val');
+      const slider = sliders[i];
+      const label  = labels[i];
       if (slider) slider.value = v;
       if (label) {
         const cls = v > 0.05 ? 'eq-val--boost' : v < -0.05 ? 'eq-val--cut' : 'eq-val--flat';
