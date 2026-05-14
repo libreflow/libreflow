@@ -824,42 +824,43 @@
     <!-- ── Onglet Bibliothèque ─────────────────────────── -->
     <div class="set-page" id="set-page-library" role="tabpanel">
       <div class="set-section">
-        <div class="set-section-lbl" data-i18n="set_library_section">Bibliothèque</div>
+        <div class="set-section-lbl" data-i18n="set_music_folder_section">Dossier de musique</div>
+        <div class="set-row">
+          <div id="watch-path-display" data-i18n="set_no_folder">Aucun dossier sélectionné</div>
+          <button id="watch-change-btn" class="mbtn" style="font-size:11px;padding:6px 12px;flex-shrink:0"
+                  data-action="settings-open-folder">
+            <span id="watch-change-btn-lbl" data-i18n="set_add_folder_btn">Parcourir…</span>
+          </button>
+        </div>
         <div class="set-row">
           <div>
-            <div class="set-row-label" data-i18n="set_add_folder_label">Ajouter un dossier</div>
-            <div class="set-row-sub" data-i18n="set_add_folder_sub">Importer un dossier de musique dans la bibliothèque</div>
+            <div class="set-row-label" data-i18n="set_watch_label">Surveillance automatique</div>
+            <div class="set-row-sub" data-i18n="set_watch_sub">Détecte les nouveaux fichiers et les mises à jour de tags</div>
           </div>
-          <button class="mbtn" style="font-size:11px;padding:6px 12px" data-action="settings-open-folder" data-i18n="set_add_folder_btn">Parcourir…</button>
+          <label class="toggle-wrap">
+            <input type="checkbox" id="watch-folder-chk"
+                   data-i18n-aria="set_watch_label"
+                   aria-label="Surveillance automatique">
+            <span class="toggle-slider"></span>
+          </label>
         </div>
-
+      </div>
+      <div class="set-section">
+        <div class="set-section-lbl" data-i18n="set_playlists_section">Playlists</div>
         <div class="set-row">
           <div>
-            <div class="set-row-label" data-i18n="set_watch_label">Dossier surveillé</div>
-            <div class="set-row-sub" id="watch-path-label" data-i18n="set_watch_sub">Surveiller un dossier pour nouvelles musiques</div>
+            <div class="set-row-label" data-i18n="set_interop_label">Interopérabilité</div>
+            <div class="set-row-sub" data-i18n="set_interop_sub">Import / export de playlists au format M3U</div>
           </div>
-          <div style="display:flex;gap:8px;align-items:center;flex-shrink:0">
-            <button id="watch-change-btn" class="mbtn" style="font-size:11px;padding:6px 12px;display:none" data-action="change-watch-folder"><span data-i18n="set_watch_change_btn">Changer…</span></button>
-            <label class="toggle-wrap">
-              <input type="checkbox" id="watch-folder-chk" data-i18n-aria="set_watch_label" aria-label="Dossier surveillé">
-              <span class="toggle-slider"></span>
-            </label>
+          <div style="display:flex;gap:8px;flex-shrink:0">
+            <button class="mbtn" style="font-size:11px;padding:6px 12px" data-action="settings-import-m3u">
+              <span data-i18n="set_import_btn">Importer</span>
+            </button>
+            <button class="mbtn" style="font-size:11px;padding:6px 12px" data-action="settings-export-m3u">
+              <span data-i18n="set_export_btn">Exporter</span>
+            </button>
           </div>
         </div>
-          <div class="set-row">
-            <div>
-              <div class="set-row-label" data-i18n="set_interop_label">Interopérabilité</div>
-              <div class="set-row-sub" data-i18n="set_interop_sub">Import / export de playlists au format M3U</div>
-            </div>
-            <div style="display:flex;gap:8px;flex-shrink:0">
-              <button class="mbtn" style="font-size:11px;padding:6px 12px" data-action="settings-import-m3u">
-                <span data-i18n="set_import_btn">Importer</span>
-              </button>
-              <button class="mbtn" style="font-size:11px;padding:6px 12px" data-action="settings-export-m3u">
-                <span data-i18n="set_export_btn">Exporter</span>
-              </button>
-            </div>
-          </div>
       </div>
       <div class="set-section">
         <div class="set-section-lbl" data-i18n="set_reset_section">Réinitialisation</div>

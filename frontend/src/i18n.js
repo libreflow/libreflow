@@ -353,7 +353,7 @@ export const LANGS = {
     set_dupes_label:      'Détecter les doublons',
     set_dupes_sub:        'Trouver les titres en double dans la bibliothèque',
     set_dupes_btn:        'Analyser',
-    set_watch_label:      'Dossier surveillé',
+    set_watch_label:      'Surveillance automatique',
     set_watch_change_btn: 'Changer…',
     set_interop_label:    'Interopérabilité',
     set_interop_sub:      'Import / export de playlists au format M3U',
@@ -495,7 +495,10 @@ export const LANGS = {
     set_rg_target_label: 'Cible',
     aria_rg_target:       'Volume cible ReplayGain',
     // Watch folder
-    set_watch_sub:    'Surveiller un dossier pour nouvelles musiques',
+    set_watch_sub:            'Détecte les nouveaux fichiers et les mises à jour de tags',
+    set_music_folder_section: 'Dossier de musique',
+    set_playlists_section:    'Playlists',
+    set_no_folder:            'Aucun dossier sélectionné',
     // A11Y — labels non visibles (aria-label)
     nav_home:         'Accueil',
     vol_label:        'Volume',
@@ -961,7 +964,7 @@ export const LANGS = {
     set_dupes_label:      'Detect duplicates',
     set_dupes_sub:        'Find duplicate tracks in the library',
     set_dupes_btn:        'Analyze',
-    set_watch_label:      'Watched folder',
+    set_watch_label:      'Automatic monitoring',
     set_watch_change_btn: 'Change…',
     set_interop_label:    'Interoperability',
     set_interop_sub:      'Import / export playlists in M3U format',
@@ -1103,7 +1106,10 @@ export const LANGS = {
     set_rg_target_label: 'Target',
     aria_rg_target:       'ReplayGain target volume',
     // Watch folder
-    set_watch_sub:    'Monitor a folder for new music',
+    set_watch_sub:            'Detects new files and tag updates',
+    set_music_folder_section: 'Music folder',
+    set_playlists_section:    'Playlists',
+    set_no_folder:            'No folder selected',
     // A11Y — aria-label strings
     nav_home:         'Home',
     vol_label:        'Volume',

@@ -298,23 +298,26 @@ export function stopWatchFolder(silent = false, keepPath = false) {
 }
 
 export function updateWatchUI() {
-  const indicator = document.getElementById('watch-indicator');
-  const label     = document.getElementById('watch-path-label');
-  const chk       = document.getElementById('watch-folder-chk');
-  const changeBtn = document.getElementById('watch-change-btn');
+  const indicator  = document.getElementById('watch-indicator');
+  const pathDisplay = document.getElementById('watch-path-display');
+  const chk        = document.getElementById('watch-folder-chk');
+  const changeBtn  = document.getElementById('watch-change-btn');
+  const changeLbl  = document.getElementById('watch-change-btn-lbl');
   if (watchPath) {
-    if (indicator) indicator.style.display = 'flex';
+    if (indicator)   indicator.style.display = 'flex';
     const shortName = watchPath.split('\\').pop() || watchPath.split('/').pop() || watchPath;
     const watchLabel = document.getElementById('watch-label');
-    if (watchLabel) watchLabel.textContent = shortName;
-    if (label)     label.textContent = watchPath;
-    if (chk) chk.checked = _watchActive;
-    if (changeBtn) changeBtn.style.display = '';
+    if (watchLabel)  watchLabel.textContent = shortName;
+    if (pathDisplay) pathDisplay.textContent = watchPath;
+    if (chk)         chk.checked = _watchActive;
+    if (changeBtn)   changeBtn.dataset.action = 'change-watch-folder';
+    if (changeLbl) { changeLbl.dataset.i18n = 'set_watch_change_btn'; changeLbl.textContent = i18n('set_watch_change_btn'); }
   } else {
-    if (indicator) indicator.style.display = 'none';
-    if (label)     label.textContent = i18n('watch_disabled');
-    if (chk)       chk.checked = false;
-    if (changeBtn) changeBtn.style.display = 'none';
+    if (indicator)   indicator.style.display = 'none';
+    if (pathDisplay) pathDisplay.textContent = i18n('set_no_folder');
+    if (chk)         chk.checked = false;
+    if (changeBtn)   changeBtn.dataset.action = 'settings-open-folder';
+    if (changeLbl) { changeLbl.dataset.i18n = 'set_add_folder_btn'; changeLbl.textContent = i18n('set_add_folder_btn'); }
   }
 }
 
