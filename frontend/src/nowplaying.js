@@ -28,7 +28,6 @@ let _npAnimRaf = null;
 let _npAnimGen = 0;
 let _npAnimT   = 0;
 let _npFrameCnt = 0;
-let _npBgCtx   = null;
 
 const _techInfoCache = new Map(); // path → AudioProps
 
@@ -125,10 +124,11 @@ function _applyNpBg() {
   const vnp = document.getElementById('vnp');
   if (!vnp) return;
 
+  _stopNpAnim();
+
   NP_BG_MODES.forEach(m => vnp.classList.remove('vnp-bg-' + m));
   vnp.classList.add('vnp-bg-' + _npBgMode);
 
-  _stopNpAnim();
   if (_npBgMode === 'blur') return;
 
   _buildNpColors();
@@ -140,7 +140,6 @@ function _applyNpBg() {
   canvas.height = Math.round((window.innerHeight || 800)  * dpr);
   const ctx = canvas.getContext('2d');
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-  _npBgCtx = ctx;
 
   _npFrameCnt = 0;
   _startNpAnim(canvas, ctx);
