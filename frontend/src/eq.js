@@ -586,6 +586,7 @@ function _drawEQCurve() {
   canvas.height = H;
 
   const ctx = canvas.getContext('2d');
+  if (!ctx) return;
   ctx.clearRect(0, 0, W, H);
 
   // Fond transparent (géré par CSS)
