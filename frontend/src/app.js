@@ -320,7 +320,7 @@ function _applyBootUI(cfgObj) {
     });
   }
   const watchChk = document.getElementById('watch-folder-chk');
-  if (watchChk) watchChk.addEventListener('change', () => toggleWatchFolder());
+  if (watchChk) watchChk.addEventListener('change', async () => { await toggleWatchFolder(); saveCfg(); });
   const checkUpdateBtn = document.getElementById('check-update-btn');
   if (checkUpdateBtn) {
     checkUpdateBtn.addEventListener('click', () => checkForUpdateManual(checkUpdateBtn));
