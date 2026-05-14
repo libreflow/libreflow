@@ -47,7 +47,7 @@ import { openRadioView, ctxStartRadio,
          radioSaveAsPlaylist, radioRegenerateFromCurrent,
          stopRadio, playRadioTrackAt, removeRadioTrack }       from './radio.js';
 import { openFolder, rescanTags }                              from './library.js';
-import { toggleWatchFolder }                                   from './watchfolder.js';
+import { toggleWatchFolder, changeWatchFolder }                from './watchfolder.js';
 import { setVizMode, setVizEnabled, getVizEnabled }            from './viz.js';
 import { resolveConfirm }                                      from './ui.js';
 import { setCrossfade }                                        from './player.js';
@@ -209,6 +209,7 @@ const _ACTIONS = {
 
   // ── Watch folder ──────────────────────────────────────────
   'toggle-watch-folder':   ()    => toggleWatchFolder(),
+  'change-watch-folder':   ()    => changeWatchFolder(),
 
   // ── Visualiseur ───────────────────────────────────────────
   'viz-bars':        ()    => { setVizMode('bars');         _syncVizBtns(true); },

@@ -841,9 +841,13 @@
             <div class="set-row-label" data-i18n="set_watch_label">Dossier surveillé</div>
             <div class="set-row-sub" id="watch-path-label" data-i18n="set_watch_sub">Surveiller un dossier pour nouvelles musiques</div>
           </div>
-          <button class="mbtn" style="font-size:11px;padding:6px 12px" data-action="toggle-watch-folder">
-            <span id="watch-btn-label" data-i18n="set_watch_btn_on">Activer</span>
-          </button>
+          <div style="display:flex;gap:8px;align-items:center;flex-shrink:0">
+            <button id="watch-change-btn" class="mbtn" style="font-size:11px;padding:6px 12px;display:none" data-action="change-watch-folder"><span data-i18n="set_watch_change_btn">Changer…</span></button>
+            <label class="toggle-wrap">
+              <input type="checkbox" id="watch-folder-chk" data-i18n-aria="set_watch_label" aria-label="Dossier surveillé">
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
         </div>
           <div class="set-row">
             <div>

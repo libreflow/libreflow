@@ -319,6 +319,8 @@ function _applyBootUI(cfgObj) {
       saveCfg();
     });
   }
+  const watchChk = document.getElementById('watch-folder-chk');
+  if (watchChk) watchChk.addEventListener('change', () => toggleWatchFolder());
   const checkUpdateBtn = document.getElementById('check-update-btn');
   if (checkUpdateBtn) {
     checkUpdateBtn.addEventListener('click', () => checkForUpdateManual(checkUpdateBtn));

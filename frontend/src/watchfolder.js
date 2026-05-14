@@ -88,7 +88,7 @@ export async function toggleWatchFolder() {
         new Promise((_, rej) => setTimeout(() => rej(new Error('open_folder timeout')), CFG.IPC_TIMEOUT_MS)),
       ]);
     } catch { return; } // timeout ou annulation → pas d'action
-    if (!result?.folder) return;
+    if (!result?.folder) { updateWatchUI(); return; }
     // SEC-3 : valider le chemin avant d'étendre le scope Tauri — rejeter les paths vides ou traversaux
     if (!_isValidFolderPath(result.folder)) {
       console.warn('[watchfolder] Chemin de dossier invalide rejeté :', result.folder);
@@ -154,7 +154,7 @@ export async function startWatchNative() {
 }
 
 
-export function stopWatchFolder() {
+export function stopWatchFolder(silent = false) {
   // Arrêter le listener Tauri
   if (_watchUnlisten) { _watchUnlisten(); _watchUnlisten = null; }
   // Annuler le debounce SEC-10 et vider le batch en attente
@@ -170,24 +170,27 @@ export function stopWatchFolder() {
   // une perte silencieuse de fichiers reçus pendant un import en cours (BUG-D3B-5).
   _starting     = false;
   updateWatchUI();
-  toast(i18n('t_watch_stopped'));
+  if (!silent) toast(i18n('t_watch_stopped'));
 }
 
 export function updateWatchUI() {
   const indicator = document.getElementById('watch-indicator');
   const label     = document.getElementById('watch-path-label');
-  const btnLabel  = document.getElementById('watch-btn-label');
+  const chk       = document.getElementById('watch-folder-chk');
+  const changeBtn = document.getElementById('watch-change-btn');
   if (watchPath) {
     if (indicator) indicator.style.display = 'flex';
     const shortName = watchPath.split('\\').pop() || watchPath.split('/').pop() || watchPath;
     const watchLabel = document.getElementById('watch-label');
     if (watchLabel) watchLabel.textContent = shortName;
-    if (label)    label.textContent = watchPath;
-    if (btnLabel) btnLabel.textContent = i18n('set_watch_btn_off');
+    if (label)     label.textContent = watchPath;
+    if (chk)       chk.checked = true;
+    if (changeBtn) changeBtn.style.display = '';
   } else {
     if (indicator) indicator.style.display = 'none';
-    if (label)    label.textContent = i18n('watch_disabled');
-    if (btnLabel) btnLabel.textContent = i18n('set_watch_btn_on');
+    if (label)     label.textContent = i18n('watch_disabled');
+    if (chk)       chk.checked = false;
+    if (changeBtn) changeBtn.style.display = 'none';
   }
 }
 
@@ -257,4 +260,17 @@ async function _doImportPaths(paths) {
     setView('all', niAll ?? null);
   }
   return added;
+}
+
+export async function changeWatchFolder() {
+  const prevPath     = watchPath;
+  const prevSnapshot = new Set(watchSnapshot);
+  stopWatchFolder(true);
+  await toggleWatchFolder();
+  if (!watchPath && prevPath) {
+    watchPath     = prevPath;
+    watchSnapshot = prevSnapshot;
+    await startWatchNative();
+    updateWatchUI();
+  }
 }
