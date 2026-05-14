@@ -1,0 +1,16 @@
+{
+    "$schema": "../gen/schemas/desktop-schema.json",
+    "identifier": "mini",
+    "description": "Minimal permissions for the LibreFlow mini-player window",
+    "windows": [
+        "mini"
+    ],
+    "permissions": [
+        "core:default",
+        "core:window:allow-start-dragging",
+        "core:window:allow-set-position",
+        "core:window:allow-unminimize",
+        "core:window:allow-show",
+        "core:window:allow-set-focus"
+    ]
+}

@@ -3,8 +3,7 @@
     "identifier": "default",
     "description": "Permissions LibreFlow",
     "windows": [
-        "main",
-        "mini"
+        "main"
     ],
     "permissions": [
         "core:default",
