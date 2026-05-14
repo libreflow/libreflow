@@ -8,7 +8,7 @@
  * Ces dépendances window.* seront éliminées lors des phases ultérieures
  * (Phase 4 : migration vers store.js/bus.js).
  *
- * Exports : openFolder, loadTagsAndDurations, loadTagsBg,
+ * Exports : loadTagsAndDurations, loadTagsBg,
  *           saveTrack, saveTracks, saveTrackNow, flushTrackBatch.
  */
 
@@ -57,14 +57,6 @@ function _sanitizeTagStr(val, maxLen = 500) {
 let _saveTrackBatch    = new Map();  // Map<id, Track> — pistes à flush
 let _saveTrackTimer    = null;       // debounce timer
 let _saveTrackMaxTimer = null;       // garantit un flush toutes les 2s sous charge continue
-
-// ── openFolder ────────────────────────────────────────────────────────────────
-/**
- * Délégué : voir toggleWatchFolder() dans watchfolder.js via handlers.js
- */
-export async function openFolder() {
-  // Délégué : voir toggleWatchFolder() dans watchfolder.js via handlers.js
-}
 
 // ── loadTagsAndDurations ──────────────────────────────────────────────────────
 /**
@@ -315,7 +307,25 @@ async function _resolveArtBuf(t) {
       t._artBuf  = await blob.arrayBuffer();
       t._artMime = ART_MIME_ALLOWLIST.includes(blob.type) ? blob.type : 'image/jpeg';
       return { buf: t._artBuf, mime: t._artMime };
-    } catch(e) { console.warn('[library] _resolveArtBuf blob fetch failed (URL révoquée?):', e); return null; }
+    } catch(e) {
+      // PM-6 : le blob: URL a été révoqué par le cache LRU avant que flushTrackBatch puisse
+      // le lire. t.art est encore non-null (la révocation ne le remet pas à null dans ce
+      // chemin), donc le fallback IDB du bloc _hasArt ci-dessus n'a pas été atteint.
+      // On tente une dernière récupération depuis IDB plutôt que de perdre l'artwork.
+      console.warn('[library] _resolveArtBuf blob fetch failed (URL révoquée?), tentative IDB:', e);
+      if (t._hasArt && !t.noArt) {
+        try {
+          const rec = await dget('tracks', t.id);
+          if (rec?.artBuf) {
+            t._artBuf  = rec.artBuf;
+            t._artMime = ART_MIME_ALLOWLIST.includes(rec.artMime) ? rec.artMime : 'image/jpeg';
+            t.art      = null; // invalider l'URL révoquée pour éviter de retomber ici
+            return { buf: t._artBuf, mime: t._artMime };
+          }
+        } catch(e2) { console.warn('[_resolveArtBuf] IDB fallback after blob failure failed for', t.id, e2); }
+      }
+      return null;
+    }
   }
   return null;
 }
