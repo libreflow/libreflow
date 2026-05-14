@@ -151,6 +151,9 @@ let _idSeq        = 0;     // compteur pour UUID fallback garanti unique
 // SEC-10 : rate-limit sur watch-new-files — debounce pour batcher les bursts d'événements
 let _watchDebTimer = null;
 let _watchRawPaths = [];
+let _modUnlisten  = null; // unlistener pour 'watch-modified-files'
+let _modDebTimer  = null; // debounce timer pour les modifications
+let _modRawPaths  = [];   // buffer des paths de fichiers modifiés
 let _watchActive  = false; // true si le watcher natif tourne
 
 /** Initialise watchPath depuis la config au démarrage (pas de side-effects). */
@@ -189,12 +192,31 @@ export async function toggleWatchFolder() {
 }
 
 /**
+ * Recharge silencieusement les tags des pistes dont le fichier source a été modifié.
+ * Construit un Map<path, track> temporaire en O(n) pour le lookup par chemin.
+ * Privé — non exporté.
+ */
+function _reloadTagsForPaths(paths) {
+  const tracks = get('tracks');
+  const byPath = new Map(tracks.map(t => [t.path, t]));
+  for (const p of paths) {
+    const t = byPath.get(p);
+    if (!t) continue;
+    t.metaDone = false; // force reload même si déjà chargé
+    loadTagsBg(t);
+  }
+}
+
+/**
  * Démarre la surveillance native via notify (Rust).
  * Remplace le polling setTimeout — zéro CPU en veille, détection immédiate.
  */
 export async function startWatchNative() {
   // Nettoyage de l'ancien listener si existant
   if (_watchUnlisten) { _watchUnlisten(); _watchUnlisten = null; }
+  if (_modUnlisten) { _modUnlisten(); _modUnlisten = null; }
+  if (_modDebTimer) { clearTimeout(_modDebTimer); _modDebTimer = null; }
+  _modRawPaths = [];
   if (_starting) return; // BUG-11 FIX : éviter les appels parallèles
   if (!watchPath) return;
   _watchActive = false;   // reset avant toute tentative — évite état stale si la tentative échoue
@@ -226,6 +248,19 @@ export async function startWatchNative() {
       }, CFG.WATCH_DEBOUNCE_MS);
     });
     _watchActive = true;
+
+    // Écouter les événements émis par Rust quand des fichiers audio existants sont modifiés
+    _modUnlisten = await listen('watch-modified-files', (event) => {
+      const paths = event.payload;
+      if (!Array.isArray(paths) || !paths.length) return;
+      _modRawPaths.push(...paths);
+      if (_modDebTimer) clearTimeout(_modDebTimer);
+      _modDebTimer = setTimeout(() => {
+        _modDebTimer = null;
+        const batch = _modRawPaths.splice(0);
+        if (batch.length) _reloadTagsForPaths(batch);
+      }, CFG.WATCH_DEBOUNCE_MS);
+    });
   } catch (e) {
     // Fallback : pas de surveillance native — log silencieux
     console.warn('[watchfolder] surveillance native indisponible :', e);
@@ -244,6 +279,9 @@ export function stopWatchFolder(silent = false, keepPath = false) {
   if (_watchUnlisten) { _watchUnlisten(); _watchUnlisten = null; }
   if (_watchDebTimer) { clearTimeout(_watchDebTimer); _watchDebTimer = null; }
   _watchRawPaths = [];
+  if (_modUnlisten) { _modUnlisten(); _modUnlisten = null; }
+  if (_modDebTimer) { clearTimeout(_modDebTimer); _modDebTimer = null; }
+  _modRawPaths = [];
   invoke('watch_folder_stop').catch(() => {});
   _watchActive = false;
   _starting    = false;
