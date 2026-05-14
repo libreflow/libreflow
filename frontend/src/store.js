@@ -31,7 +31,7 @@
  * @property {RepeatMode}       repeat
  * @property {number}           playbackSpeed
  * @property {number}           crossfadeDur
- * @property {Track[]}          manualQueue
+ * @property {number[]}         manualQueue
  * @property {ViewMode}         view
  * @property {SortKey}          sort
  * @property {string}           query

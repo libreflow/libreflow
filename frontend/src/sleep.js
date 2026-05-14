@@ -149,7 +149,7 @@ function _sleepTick() {
       // Fallback sans masterGainNode : proportion du slider courant (R1 — jamais hardcoder)
       const _volEl = document.getElementById('vol');
       const _maxVol = _volEl ? parseFloat(_volEl.value) : 1;
-      audio.volume = vol * _maxVol;
+      setMasterGain(vol * _maxVol);
     }
   }
   _updateSleepCountdown();
