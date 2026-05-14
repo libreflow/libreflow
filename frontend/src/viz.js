@@ -68,6 +68,7 @@ export function initViz() {
   canvas = document.getElementById('pl-viz');
   if (!canvas) return;
   canvasCtx = canvas.getContext('2d');
+  if (!canvasCtx) return;
 
   // Polyfill roundRect — absent dans certaines versions de WebView2 (< Chromium 99)
   if (!canvasCtx.roundRect) {

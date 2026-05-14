@@ -259,6 +259,7 @@ function _drawHeroMosaic(fl) {
   const c = document.getElementById('pl-hero-mosaic');
   if (!c) return;
   const ctx = c.getContext('2d');
+  if (!ctx) return;
   ctx.fillStyle = '#1a1a2a';
   ctx.fillRect(0, 0, 200, 200);
 
@@ -959,6 +960,7 @@ function _resizeImageToBase64(file, maxSize = 256) {
         const c  = document.createElement('canvas');
         c.width  = cw; c.height = ch;
         const ctx = c.getContext('2d');
+        if (!ctx) { fail(new Error('canvas context unavailable')); return; }
         ctx.fillStyle = '#000';
         ctx.fillRect(0, 0, cw, ch);
         ctx.drawImage(img, 0, 0, cw, ch);

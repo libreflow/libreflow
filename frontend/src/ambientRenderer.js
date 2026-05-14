@@ -108,6 +108,7 @@ export function renderAmbientFrame(t, canvas, ctx, mode, colorStr, ambientColors
     _noiseCanvas = document.createElement('canvas');
     _noiseCanvas.width = NS; _noiseCanvas.height = NS;
     const nc = _noiseCanvas.getContext('2d');
+    if (!nc) { _noiseCanvas = null; return; }
     const id = nc.createImageData(NS, NS);
     const px = id.data;
     for (let i = 0; i < px.length; i += 4) {

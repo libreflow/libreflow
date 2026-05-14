@@ -221,7 +221,9 @@ function extractColor(url) {
     const img = new Image();
     img.onload = () => {
       const c = document.createElement('canvas'); c.width = c.height = 8;
-      const ctx = c.getContext('2d'); ctx.drawImage(img,0,0,8,8);
+      const ctx = c.getContext('2d');
+      if (!ctx) { res('#3b82f6'); return; }
+      ctx.drawImage(img,0,0,8,8);
       const d = ctx.getImageData(0,0,8,8).data;
       let r=0,g=0,b=0,n=0;
       for (let i=0;i<d.length;i+=4) {

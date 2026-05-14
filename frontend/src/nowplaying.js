@@ -139,6 +139,7 @@ function _applyNpBg() {
   canvas.width  = Math.round((window.innerWidth  || 1280) * dpr);
   canvas.height = Math.round((window.innerHeight || 800)  * dpr);
   const ctx = canvas.getContext('2d');
+  if (!ctx) return;
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
   _npFrameCnt = 0;
