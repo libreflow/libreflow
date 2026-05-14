@@ -17,16 +17,17 @@
 //   importPaths
 
 import { invoke, convertFileSrc, listen } from './ipc.js';
-import { CFG }                    from './cfg.js';
-import { i18n }                   from './i18n.js';
-import { get, notify }             from './store.js'; // Phase 4
-import { on, EVENTS }              from './bus.js'; // ARCH-9 : écouter les suppressions de tracks
-import { VIRT }                   from './virt.js';
-import { rebuildTrackIdxMap }      from './search.js';
-import { toast }                                        from './ui.js';
-import { setView } from './views.js';
-import { loadTagsBg } from './library.js';
-import { updateStats } from './renderer.js';
+import { CFG }                            from './cfg.js';
+import { i18n }                           from './i18n.js';
+import { get, notify }                    from './store.js';
+import { on, emit, EVENTS }               from './bus.js';
+import { VIRT }                           from './virt.js';
+import { rebuildTrackIdxMap, invalidateFilterCache } from './search.js';
+import { toast }                          from './ui.js';
+import { setView, showView }              from './views.js';
+import { loadTagsBg, loadTagsAndDurations } from './library.js';
+import { updateStats }                    from './renderer.js';
+import { pushTracks }                     from './state.js';
 
 // SEC-9 : Extensions audio autorisées — synchronisé avec la liste de app.js/_onDrop
 const _AUDIO_EXTS = new Set(['mp3','flac','aac','m4a','ogg','opus','wav','wma','aiff','ape','alac']);
@@ -44,6 +45,82 @@ function _isValidFolderPath(p) {
   // Interdire path traversal et chemins vides
   if (norm.includes('../') || norm.includes('/..') || norm === '..') return false;
   return norm.length > 0;
+}
+
+/**
+ * Scan initial d'un dossier avec progress bar.
+ * Appelé uniquement par toggleWatchFolder() pour le premier import.
+ * Le watcher natif utilise importPaths() pour les nouveaux fichiers détectés ensuite.
+ * Retourne le nombre de pistes ajoutées.
+ */
+async function _doInitialScan(files) {
+  showView('scan');
+  const elSn  = document.getElementById('sn');
+  const elSf  = document.getElementById('sf');
+  const elBar = document.getElementById('scan-bar');
+  const total = files.length;
+  if (elSn)  elSn.textContent = '0';
+  if (elSf)  elSf.textContent = `${total} fichiers détectés…`;
+  if (elBar) elBar.style.width = '0%';
+
+  const YIELD_EVERY = 200;
+  const newTracks   = [];
+  let   loaded      = 0;
+  const scanStart   = Date.now();
+
+  for (const p of files) {
+    if (watchSnapshot.has(p)) continue;
+    watchSnapshot.add(p);
+    const name    = p.replace(/\\/g, '/').split('/').pop();
+    const ext     = name.split('.').pop().toUpperCase();
+    const bare    = name.replace(/\.[^.]+$/, '');
+    const guess   = bare.includes(' - ') ? bare.split(' - ')[0].trim() : '';
+    const t = {
+      id:          crypto.randomUUID?.() ?? `${Date.now().toString(36)}-${(++_idSeq).toString(36)}`,
+      name:        bare.replace(/[-_]+/g, ' ').trim(),
+      artist:      guess || i18n('unknown_artist'),
+      artistFull:  guess || i18n('unknown_artist'),
+      album: '', ext, path: p,
+      duration:    0,
+      dateAdded:   Date.now(),
+      art: null, artColor: null,
+      url:         convertFileSrc(p),
+      file:        null,
+      metaDone:    false,
+      _durPending: true,
+      bitrate: null, sampleRate: null, channels: null, bitDepth: null,
+    };
+    newTracks.push(t);
+    loaded++;
+    if (elSn) elSn.textContent = String(loaded);
+    if (elSn && (loaded % 50 === 0 || loaded <= 10)) {
+      elSn.classList.remove('pop'); void elSn.offsetWidth; elSn.classList.add('pop');
+    }
+    if (loaded % YIELD_EVERY === 0 || loaded === total) {
+      const pct = Math.round(loaded / total * 100);
+      if (elBar) elBar.style.width = pct + '%';
+      const elapsed = Date.now() - scanStart;
+      if (elapsed > 300 && loaded > 0) {
+        const rate   = loaded / elapsed;
+        const etaMs  = (total - loaded) / rate;
+        const etaS   = Math.ceil(etaMs / 1000);
+        const etaStr = etaS >= 60 ? `${Math.floor(etaS / 60)}m ${etaS % 60}s` : `${etaS}s`;
+        if (elSf) elSf.textContent = `${loaded} / ${total} • ETA ~${etaStr}`;
+      }
+      await new Promise(r => setTimeout(r, 0));
+    }
+  }
+
+  if (!newTracks.length) return 0;
+  pushTracks(newTracks);
+  emit(EVENTS.LIBRARY_UPDATED, { tracks: get('tracks') });
+  invalidateFilterCache();
+  emit(EVENTS.FILTER_CHANGED, {});
+  VIRT._lastListSig = '';
+  updateStats();
+  setView('all', document.getElementById('ni-all'));
+  loadTagsAndDurations(newTracks);
+  return newTracks.length;
 }
 
 // ARCH-9 : Pruner watchSnapshot quand des tracks sont supprimées.
@@ -78,36 +155,32 @@ export function getWatchPath() { return watchPath; }
 // ── Toggle ───────────────────────────────────────────────────
 
 export async function toggleWatchFolder() {
-  if (watchPath) {
-    stopWatchFolder();
-  } else {
-    // IPC-2 FIX : timeout sur open_folder — dialog système bloquée = hang infini sans ça
-    let result;
-    try {
-      result = await Promise.race([
-        invoke('open_folder'),
-        new Promise((_, rej) => setTimeout(() => rej(new Error('open_folder timeout')), CFG.IPC_TIMEOUT_MS)),
-      ]);
-    } catch { return; } // timeout ou annulation → pas d'action
-    if (!result?.folder) { updateWatchUI(); return; }
-    // SEC-3 : valider le chemin avant d'étendre le scope Tauri — rejeter les paths vides ou traversaux
-    if (!_isValidFolderPath(result.folder)) {
-      console.warn('[watchfolder] Chemin de dossier invalide rejeté :', result.folder);
-      return;
-    }
-    watchPath = result.folder;
-    // SEC : étendre explicitement l'asset protocol scope à ce dossier (défense en profondeur)
-    invoke('allow_asset_dir', { path: watchPath }).catch(() => {});
-    // Initialiser le snapshot depuis TOUS les tracks connus
-    watchSnapshot = new Set(get('tracks').map(t => t.path).filter(Boolean));
-    // Scanner immédiatement pour les fichiers déjà présents (SEC-9 : filtrer par extension audio)
-    const newFiles = result.files.filter(p => _isAudioPath(p) && !watchSnapshot.has(p));
-    if (newFiles.length) await importPaths(newFiles);
-    await startWatchNative();
-    updateWatchUI();
-    toast(i18n('t_watch_active',
-      watchPath.split('\\').pop() || watchPath.split('/').pop() || watchPath), 'success');
+  let result;
+  try {
+    result = await Promise.race([
+      invoke('open_folder'),
+      new Promise((_, rej) => setTimeout(() => rej(new Error('open_folder timeout')), CFG.IPC_TIMEOUT_MS)),
+    ]);
+  } catch { return; }
+  if (!result?.folder) { updateWatchUI(); return; }
+  if (!_isValidFolderPath(result.folder)) {
+    console.warn('[watchfolder] Chemin de dossier invalide rejeté :', result.folder);
+    return;
   }
+  // Si un dossier était déjà surveillé, full stop silencieux avant de remplacer
+  if (watchPath) stopWatchFolder(true, false);
+  watchPath = result.folder;
+  invoke('allow_asset_dir', { path: watchPath }).catch(() => {});
+  watchSnapshot = new Set(get('tracks').map(t => t.path).filter(Boolean));
+  const newFiles = result.files.filter(p => _isAudioPath(p) && !watchSnapshot.has(p));
+  if (newFiles.length) {
+    const added = await _doInitialScan(newFiles);
+    if (!added) toast(i18n('t_already_imported') || 'Déjà importé', 'info');
+  }
+  await startWatchNative();
+  updateWatchUI();
+  const shortName = watchPath.split('\\').pop() || watchPath.split('/').pop() || watchPath;
+  toast(i18n('t_watch_active', shortName), 'success');
 }
 
 /**
