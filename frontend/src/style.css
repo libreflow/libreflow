@@ -6397,6 +6397,48 @@ html[data-mode="light"] .rv-start-btn  { background: var(--g); }
   color: var(--vnp-text);
 }
 
+/* ── NowPlaying background modes ──────────────────────────────────────────── */
+
+#vnp-canvas {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.4s ease;
+}
+
+#vnp.vnp-bg-ambient #vnp-canvas,
+#vnp.vnp-bg-amoled  #vnp-canvas { opacity: 1; }
+
+#vnp.vnp-bg-ambient .vnp-bg,
+#vnp.vnp-bg-amoled  .vnp-bg    { opacity: 0; }
+
+#vnp.vnp-bg-ambient::after,
+#vnp.vnp-bg-amoled::after      { opacity: 0; }
+
+#vnp-bg-btn {
+  position: absolute;
+  top: calc(var(--sp-6, 24px) + 44px);
+  right: var(--sp-6, 24px);
+  z-index: 3;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(255,255,255,.12);
+  color: var(--vnp-text, #f0ece4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  backdrop-filter: blur(8px);
+  font-size: 18px;
+  line-height: 1;
+  transition: background .15s ease;
+}
+#vnp-bg-btn:hover { background: rgba(255,255,255,.22); }
+
 /* ── Drill Header (album-detail / artist-detail) ─────────────────────────── */
 #drill-header {
   display: flex;

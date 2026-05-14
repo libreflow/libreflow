@@ -69,7 +69,7 @@ function _renderNowPlaying(t, info) {
   if (!vnp) return;
 
   const artH = t.art
-    ? `<img src="${esc(t.art)}" class="vnp-art" alt="">`
+    ? `<img id="vnp-art-img" src="${esc(t.art)}" class="vnp-art" alt="">`
     : `<div class="vnp-art vnp-art-ph"></div>`;
 
   const bgStyle = t.art ? ` style="background-image:url('${esc(t.art)}')"` : '';
@@ -82,6 +82,8 @@ function _renderNowPlaying(t, info) {
 
   vnp.innerHTML = `
     <div class="vnp-bg" aria-hidden="true"${bgStyle}></div>
+    <canvas id="vnp-canvas" aria-hidden="true"></canvas>
+    <button id="vnp-bg-btn" class="vnp-bg-btn" data-action="cycle-np-bg" aria-label="Changer l'arrière-plan" title="Changer l'arrière-plan">⬡</button>
     <button class="vnp-back" data-action="close-now-playing" aria-label="Retour">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" width="20" height="20">
         <polyline points="6 9 12 15 18 9"></polyline>
