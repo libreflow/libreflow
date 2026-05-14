@@ -201,8 +201,8 @@ function _reloadTagsForPaths(paths) {
   const byPath = new Map(tracks.map(t => [t.path, t]));
   for (const p of paths) {
     const t = byPath.get(p);
-    if (!t) continue;
-    t.metaDone = false; // force reload même si déjà chargé
+    if (!t || !t.metaDone) continue; // skip if already loading
+    t.metaDone = false;
     loadTagsBg(t);
   }
 }
@@ -252,7 +252,9 @@ export async function startWatchNative() {
     _modUnlisten = await listen('watch-modified-files', (event) => {
       const paths = event.payload;
       if (!Array.isArray(paths) || !paths.length) return;
-      _modRawPaths.push(...paths);
+      const filtered = paths.filter(p => _isAudioPath(p));
+      if (!filtered.length) return;
+      _modRawPaths.push(...filtered);
       if (_modDebTimer) clearTimeout(_modDebTimer);
       _modDebTimer = setTimeout(() => {
         _modDebTimer = null;
