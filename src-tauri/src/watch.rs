@@ -2,8 +2,8 @@
 //
 // Remplace le polling setTimeout de watchfolder.js par une surveillance
 // événementielle O(0) CPU : le watcher reçoit les événements du système de fichiers
-// et émet "watch-new-files" vers le frontend uniquement quand des fichiers audio
-// sont créés ou déplacés dans le dossier surveillé.
+// et émet "watch-new-files" (création/déplacement) et "watch-modified-files"
+// (modification de contenu) vers le frontend pour les fichiers audio uniquement.
 //
 // Avantages vs polling :
 //   • Zéro CPU en veille (pas de scan_folder toutes les N secondes)
