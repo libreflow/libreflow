@@ -62,7 +62,7 @@ import {
 } from './playlists.js';
 export { playPlaylistFrom, playPlaylistDirect, shufflePlaylist }; // re-export (handlers.js backward compat)
 
-import { toggleNowPlaying, closeNowPlaying, updateNowPlaying } from './nowplaying.js';
+import { toggleNowPlaying, closeNowPlaying, updateNowPlaying, initNpBg } from './nowplaying.js';
 import {
   initSettingsVars, getTheme, getDynColor, getDisplayMode, isShortcutsOpen,
   switchSetTab, openSettings, closeSettings,
@@ -402,6 +402,7 @@ async function boot() {
       const _bgMigration = { solid: 'amoled', none: 'ambient', blur: 'ambient' };
       initCinemaBg(_bgMigration[cfg.cinemaBg] || cfg.cinemaBg);
     }
+    if (cfg.npBg) initNpBg(cfg.npBg);
     // Restaurer état playback
     if (cfg.shuffle)   { shuffle = true; set('shuffle', true); }
     if (cfg.repeat && ['none','all','one'].includes(cfg.repeat)) { repeat = cfg.repeat; set('repeat', repeat); }

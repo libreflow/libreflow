@@ -89,7 +89,7 @@ import { openTagEditor, saveTagEdit, cancelTagEdit }            from './tagedit.
 import { setHeatPeriod }                                       from './stats.js';
 import { get, set }                                            from './store.js';
 import { toggleNowPlaying, closeNowPlaying,
-         toggleNowPlayingFullscreen }                          from './nowplaying.js';
+         toggleNowPlayingFullscreen, cycleNpBg }              from './nowplaying.js';
 
 // ── Registre d'actions ────────────────────────────────────────────────────
 
@@ -111,6 +111,7 @@ const _ACTIONS = {
   'toggle-now-playing':    ()    => toggleNowPlaying(),
   'close-now-playing':     ()    => closeNowPlaying(),
   'toggle-np-full':        ()    => toggleNowPlayingFullscreen(),
+  'cycle-np-bg':           ()    => cycleNpBg(),
   'np-drill-album':        btn  => { closeNowPlaying(); drillDown('albums',  btn.dataset.albumKey,  btn.dataset.albumName);  },
   'np-drill-artist':       btn  => { closeNowPlaying(); drillDown('artists', btn.dataset.artistKey, btn.dataset.artistName); },
 

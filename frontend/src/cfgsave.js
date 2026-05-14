@@ -123,6 +123,7 @@ async function _doSaveCfg() {
       lang: getLang(), theme: getTheme(), dynColor: getDynColor(),
       crossfadeDur, displayMode: getDisplayMode(), rgEnabled, rgTargetLUFS,
       playbackSpeed, cinemaBg: get('cinemaBg') ?? 'ambient',
+      npBg: get('npBg') ?? 'blur',
       shuffle, repeat, albumSort, artistSort, genreSort, albumDetailSort,
       eqEnabled, eqExpert,
       eqGains: eqNodes.length ? eqNodes.map(n => n.gain.value) : null,
