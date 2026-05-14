@@ -132,7 +132,7 @@ export function applyCinemaBg() {
   // Vider le canvas immédiatement à chaque switch (évite interférence entre modes)
   if (cinBg?.getContext) {
     const c = _cinBgCtx || cinBg.getContext('2d');
-    c.clearRect(0, 0, cinBg.width || 1, cinBg.height || 1);
+    if (c) c.clearRect(0, 0, cinBg.width || 1, cinBg.height || 1);
   }
   // ambient : gradient multi-radial complet. amoled : halo minimaliste (même boucle RAF).
   if (cinemaBg === 'ambient' || cinemaBg === 'amoled') _updateAmbientGradient();
@@ -207,6 +207,7 @@ function _startAmbientAnim() {
     // FIX HiDPI : si le cache est invalide, ré-appliquer setTransform après getContext().
     if (!_cinBgCtx || _cinBgCtx.canvas !== canvas) {
       _cinBgCtx = canvas.getContext('2d');
+      if (!_cinBgCtx) { _ambientAnimRaf = requestAnimationFrame(loop); return; }
       const _dpr = window.devicePixelRatio || 1;
       _cinBgCtx.setTransform(_dpr, 0, 0, _dpr, 0, 0);
     }
@@ -252,6 +253,7 @@ function _updateAmbientGradient() {
     canvas.width  = PW;
     canvas.height = PH;
     _cinBgCtx = canvas.getContext('2d');
+    if (!_cinBgCtx) return;
     _cinBgCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
     // Pas de _buildAmbientColors ni de cross-fade pour AMOLED
     _startAmbientAnim();
@@ -273,6 +275,7 @@ function _updateAmbientGradient() {
   canvas.width  = PW;
   canvas.height = PH;
   _cinBgCtx = canvas.getContext('2d');
+  if (!_cinBgCtx) return;
   _cinBgCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
   _ambientColors = _buildAmbientColors();
 
@@ -809,6 +812,7 @@ function _startViz() {
   if (ac.state === 'suspended') ac.resume();
 
   const ctx = canvas.getContext('2d');
+  if (!ctx) return;
   const dpr = window.devicePixelRatio || 1;
   let   cw  = 0, ch = 0;
 

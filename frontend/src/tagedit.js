@@ -199,7 +199,7 @@ export async function saveTagEdit(trackId) {
   t.track      = track  || null;
   // Invalider les clés fuzzy cachées sur l'objet track (sessions 71 + 119)
   delete t._albumKey; delete t._artistKey;
-  delete t._nlc; delete t._alc; delete t._ablc; delete t._glc; delete t._genreParts;
+  delete t._nlc; delete t._trigrams; delete t._alc; delete t._ablc; delete t._glc; delete t._genreParts;
 
   // Nettoyer l'éditeur
   _cleanTagEditor(el);

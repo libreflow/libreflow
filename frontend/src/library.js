@@ -250,6 +250,7 @@ export async function loadTagsBg(t, rustTags = null) {
     if (rustTags.channels    != null) { t.channels   = rustTags.channels;     changed = true; }
     if (rustTags.bit_depth   != null) { t.bitDepth   = rustTags.bit_depth;    changed = true; }
     t.metaDone = true;
+    if (changed) { delete t._trigrams; }
     if (changed) patchTrackEl(t.id);
     if (trackIdx(t.id) === get('curIdx')) updateBar();
     if (changed) scheduleStatsUpdate();

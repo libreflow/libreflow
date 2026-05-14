@@ -405,7 +405,7 @@ export async function confirmBatchTagEdit() {
     // Invalider les clés de cache fuzzy (comme tagedit.js)
     if (hasArtist || hasAlbum || hasGenre) {
       delete t._albumKey; delete t._artistKey;
-      delete t._nlc; delete t._alc; delete t._ablc; delete t._glc; delete t._genreParts;
+      delete t._nlc; delete t._trigrams; delete t._alc; delete t._ablc; delete t._glc; delete t._genreParts;
     }
 
     try {
