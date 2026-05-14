@@ -68,6 +68,7 @@ let _idSeq        = 0;     // compteur pour UUID fallback garanti unique
 // SEC-10 : rate-limit sur watch-new-files — debounce pour batcher les bursts d'événements
 let _watchDebTimer = null;
 let _watchRawPaths = [];
+let _watchActive  = false; // ← NOUVEAU : true si le watcher natif tourne
 
 /** Initialise watchPath depuis la config au démarrage (pas de side-effects). */
 export function initWatchPath(path) { watchPath = path; }
@@ -145,6 +146,7 @@ export async function startWatchNative() {
         if (added) toast(i18n('t_new_files', added), 'success');
       }, CFG.WATCH_DEBOUNCE_MS);
     });
+    _watchActive = true;
   } catch (e) {
     // Fallback : pas de surveillance native — log silencieux
     console.warn('[watchfolder] surveillance native indisponible :', e);
@@ -154,21 +156,19 @@ export async function startWatchNative() {
 }
 
 
-export function stopWatchFolder(silent = false) {
-  // Arrêter le listener Tauri
+export function stopWatchFolder(silent = false, keepPath = false) {
   if (_watchUnlisten) { _watchUnlisten(); _watchUnlisten = null; }
-  // Annuler le debounce SEC-10 et vider le batch en attente
   if (_watchDebTimer) { clearTimeout(_watchDebTimer); _watchDebTimer = null; }
   _watchRawPaths = [];
-  // Arrêter le watcher Rust (fire-and-forget — pas bloquant)
   invoke('watch_folder_stop').catch(() => {});
-  watchPath     = null;
-  watchSnapshot = new Set(); // reset pour permettre la réimportation après clearLibrary
-  _importing    = false;
-  // _pendingPaths intentionnellement conservé — les chemins en attente se drainent
-  // via le while(_pendingPaths.length) dans importPaths(). Les supprimer ici causerait
-  // une perte silencieuse de fichiers reçus pendant un import en cours (BUG-D3B-5).
-  _starting     = false;
+  _watchActive = false;
+  _starting    = false;
+  if (!keepPath) {
+    watchPath     = null;
+    watchSnapshot = new Set();
+    _importing    = false;
+    // _pendingPaths intentionnellement conservé — voir commentaire BUG-D3B-5 original
+  }
   updateWatchUI();
   if (!silent) toast(i18n('t_watch_stopped'));
 }
@@ -184,7 +184,7 @@ export function updateWatchUI() {
     const watchLabel = document.getElementById('watch-label');
     if (watchLabel) watchLabel.textContent = shortName;
     if (label)     label.textContent = watchPath;
-    if (chk)       chk.checked = true;
+    if (chk) chk.checked = _watchActive;
     if (changeBtn) changeBtn.style.display = '';
   } else {
     if (indicator) indicator.style.display = 'none';
