@@ -38,7 +38,7 @@ import { toast, toastWithAction, confirmAction, resolveConfirm, initRipple } fro
 import { checkForUpdate, checkForUpdateManual, initAppVersion } from './updater.js';
 import { getFiltered, filteredIdx, rebuildTrackIdxMap, trackIdx, invalidateFilterCache,
          _trackIdxMap }    from './search.js';
-import { loadTagsAndDurations, loadTagsBg, rescanTags,
+import { loadTagsAndDurations, loadTagsBg,
          saveTrack, saveTracks, saveTrackNow, flushTrackBatch,
          cancelTrackBatch }                                           from './library.js';
 import { renderGenresGrid, drillGenre, setContentView, rescanGenres, invalidateGenreGridSig } from './genres.js';
@@ -739,9 +739,6 @@ initShortcuts({ updateVolSlider, closeModal, cycleSpeed });
 // ══ MINI-PLAYER → miniplayer.js ═══════════════════════════════
 
 // ══ DÉTECTION DOUBLONS → dupes.js ════════════════════════════
-
-// ══ RESCAN TAGS ══════════════════════════════════════════════
-// rescanTags → library.js
 
 // rescanGenres → genres.js (Jalon 5)
 

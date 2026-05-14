@@ -46,7 +46,6 @@ import { toggleCinema, closeCinema, cycleCinemaBg,
 import { openRadioView, ctxStartRadio,
          radioSaveAsPlaylist, radioRegenerateFromCurrent,
          stopRadio, playRadioTrackAt, removeRadioTrack }       from './radio.js';
-import { rescanTags }                                          from './library.js';
 import { changeWatchFolder, toggleWatchFolder }               from './watchfolder.js';
 import { setVizMode, setVizEnabled, getVizEnabled }            from './viz.js';
 import { resolveConfirm }                                      from './ui.js';
@@ -201,7 +200,6 @@ const _ACTIONS = {
   'settings-import-m3u':   ()    => { closeSettings(); importM3U(); },
   'settings-export-m3u':   ()    => { closeSettings(); exportM3U(); },
   'settings-export-xspf':  ()    => { closeSettings(); exportXSPF(); },
-  'settings-rescan-tags':  ()    => { closeSettings(); rescanTags(); },
   'settings-rescan-genres':()    => { closeSettings(); rescanGenres(); },
   'settings-detect-dupes': ()    => { closeSettings(); detectDupes(); },
   'settings-confirm-clear':()    => { closeSettings(); confirmClear(); },

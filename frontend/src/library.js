@@ -8,7 +8,7 @@
  * Ces dépendances window.* seront éliminées lors des phases ultérieures
  * (Phase 4 : migration vers store.js/bus.js).
  *
- * Exports : openFolder, loadTagsAndDurations, loadTagsBg, rescanTags,
+ * Exports : openFolder, loadTagsAndDurations, loadTagsBg,
  *           saveTrack, saveTracks, saveTrackNow, flushTrackBatch.
  */
 
@@ -270,36 +270,6 @@ export async function loadTagsBg(t, rustTags = null) {
   if (_trackIdxMap.has(t.id)) saveTracks(t);
 }
 
-// ── rescanTags ────────────────────────────────────────────────────────────────
-/**
- * Re-lit les tags ID3 de toutes les pistes (force metaDone=false).
- * Utile après modification externe des fichiers.
- */
-export async function rescanTags() {
-  const _tracks = get('tracks'); // Phase 4
-  if (!_tracks.length) { toast(i18n('t_rescan_empty'), 'warning'); return; }
-  toast(i18n('t_rescan_start'));
-  const CONCURRENCY = CFG.TAG_LOAD_CONCURRENCY;
-  let count = 0;
-  let _rescanTimedOut = 0;
-  for (const t of _tracks) { t.metaDone = false; t.file = null; }
-  for (let i = 0; i < _tracks.length; i += CONCURRENCY) {
-    const batch  = _tracks.slice(i, i + CONCURRENCY).filter(t => t.path);
-    const before = batch.map(t => ({ name: t.name, artist: t.artist, album: t.album, genre: t.genre }));
-    const results = await Promise.all(batch.map(t => loadTagsBg(t)));
-    for (const r of results) { if (r === 'timeout') _rescanTimedOut++; }
-    for (let j = 0; j < batch.length; j++) {
-      const t = batch[j], b = before[j];
-      if (t.name !== b.name || t.artist !== b.artist || t.album !== b.album || t.genre !== b.genre) count++;
-    }
-    await new Promise(r => setTimeout(r, 0)); // yield event loop
-  }
-  if (_rescanTimedOut > 0) toast(i18n('err_tag_timeout', _rescanTimedOut), 'warning');
-  if (_saveTrackTimer) { clearTimeout(_saveTrackTimer); await flushTrackBatch(); }
-  invalidateFilterCache(); emit(EVENTS.FILTER_CHANGED, {}); emit(EVENTS.RENDER_LIB, {}); updateStats();
-  toast(i18n('t_rescan_done', count), 'success');
-  emit(EVENTS.LIBRARY_UPDATED, { tracks: get('tracks') });
-}
 
 
 /**
