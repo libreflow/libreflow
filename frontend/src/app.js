@@ -38,7 +38,7 @@ import { toast, toastWithAction, confirmAction, resolveConfirm, initRipple } fro
 import { checkForUpdate, checkForUpdateManual, initAppVersion } from './updater.js';
 import { getFiltered, filteredIdx, rebuildTrackIdxMap, trackIdx, invalidateFilterCache,
          _trackIdxMap }    from './search.js';
-import { openFolder, loadTagsAndDurations, loadTagsBg, rescanTags,
+import { loadTagsAndDurations, loadTagsBg, rescanTags,
          saveTrack, saveTracks, saveTrackNow, flushTrackBatch,
          cancelTrackBatch }                                           from './library.js';
 import { renderGenresGrid, drillGenre, setContentView, rescanGenres, invalidateGenreGridSig } from './genres.js';

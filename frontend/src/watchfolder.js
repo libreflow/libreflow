@@ -349,7 +349,7 @@ async function _doImportPaths(paths) {
 export async function changeWatchFolder() {
   const prevPath     = watchPath;
   const prevSnapshot = new Set(watchSnapshot);
-  stopWatchFolder(true);
+  stopWatchFolder(true, true);
   await toggleWatchFolder();
   if (!watchPath && prevPath) {
     watchPath     = prevPath;
