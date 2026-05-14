@@ -344,6 +344,7 @@ export const LANGS = {
     set_mini_label:       'Fenêtre flottante',
     set_mini_sub:         "Contrôles visibles sur l'écran",
     set_mini_btn:         'Ouvrir',
+    set_mini_btn_close:   'Fermer',
     // Settings — library extra
     set_add_folder_label: 'Ajouter un dossier',
     set_add_folder_sub:   'Importer un dossier de musique dans la bibliothèque',
@@ -953,6 +954,7 @@ export const LANGS = {
     set_mini_label:       'Floating window',
     set_mini_sub:         'Controls visible on screen',
     set_mini_btn:         'Open',
+    set_mini_btn_close:   'Close',
     // Settings — library extra
     set_add_folder_label: 'Add a folder',
     set_add_folder_sub:   'Import a music folder into the library',

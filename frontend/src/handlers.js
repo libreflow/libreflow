@@ -47,14 +47,14 @@ import { openRadioView, ctxStartRadio,
          radioSaveAsPlaylist, radioRegenerateFromCurrent,
          stopRadio, playRadioTrackAt, removeRadioTrack }       from './radio.js';
 import { openFolder, rescanTags }                              from './library.js';
-import { toggleWatchFolder, changeWatchFolder }                from './watchfolder.js';
+import { changeWatchFolder }                                   from './watchfolder.js';
 import { setVizMode, setVizEnabled, getVizEnabled }            from './viz.js';
 import { resolveConfirm }                                      from './ui.js';
 import { setCrossfade }                                        from './player.js';
 import { importM3U, exportM3U, exportXSPF }                    from './m3u.js';
 import { invoke }                                              from './ipc.js';
 import { cycleSpeed, closeModal, clearLibrary, confirmClear, clearAppCache, updateVolSlider, playPlaylistFrom, shufflePlaylist, playPlaylistDirect, playCardByKey, saveCfg } from './app.js';
-import { _syncVizBtns, openSettings, closeSettings, toggleMode, toggleShortcuts, closeShortcuts, setTheme, setDynColor, setMode, switchSetTab } from './settings.js';
+import { _syncVizBtns, openSettings, closeSettings, toggleMode, toggleShortcuts, closeShortcuts, setTheme, setDynColor, setMode, switchSetTab, syncMiniSettingsBtn } from './settings.js';
 import { goHome, setView, nextSort, nextAlbumSort, onSearch } from './views.js';
 import { setCinemaBg, toggleCinemaRadio }                      from './cinema.js';
 import { rescanGenres, drillGenre }                            from './genres.js';
@@ -104,7 +104,7 @@ const _ACTIONS = {
   'cycle-speed':           ()    => cycleSpeed(),
 
   // ── Mini-player / overlay ─────────────────────────────────
-  'toggle-mini-player':    ()    => toggleMiniPlayer(),
+  'toggle-mini-player':    async () => { await toggleMiniPlayer(); syncMiniSettingsBtn(); },
   'toggle-mini-overlay':   ()    => toggleMiniOverlay(),
 
   // ── Now Playing ───────────────────────────────────────────
@@ -208,7 +208,6 @@ const _ACTIONS = {
   'settings-clear-cache':  ()    => { closeSettings(); clearAppCache(); },
 
   // ── Watch folder ──────────────────────────────────────────
-  'toggle-watch-folder':   ()    => toggleWatchFolder(),
   'change-watch-folder':   async () => { await changeWatchFolder(); saveCfg(); },
 
   // ── Visualiseur ───────────────────────────────────────────

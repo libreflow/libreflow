@@ -8,6 +8,7 @@
  */
 
 import { get, set }                                      from './store.js';
+import { getMiniOpen }                                   from './miniplayer.js';
 import { eqOpen, closeEQ }                               from './eq.js';
 import { queueOpen, closeQueue }                         from './queue.js';
 import { getLang, i18n }                                 from './i18n.js';
@@ -75,6 +76,17 @@ export function isShortcutsOpen() { return _shortcutsOpen; }
 
 // ══ SETTINGS PANEL ═══════════════════════════════════════════════════════════
 
+export function syncMiniSettingsBtn() {
+  const btn  = document.querySelector('#settings-panel [data-action="toggle-mini-player"]');
+  const span = btn?.querySelector('span[data-i18n]');
+  if (!span) return;
+  const open = getMiniOpen();
+  const key  = open ? 'set_mini_btn_close' : 'set_mini_btn';
+  span.dataset.i18n = key;
+  span.textContent  = i18n(key);
+  if (btn) btn.setAttribute('aria-pressed', String(open));
+}
+
 /** Bascule sur un onglet du panneau settings (tab bar). */
 export function switchSetTab(tab) {
   document.querySelectorAll('.set-page').forEach(p => p.classList.remove('on'));
@@ -107,6 +119,7 @@ export function openSettings() {
   if (_dynOff) { _dynOff.classList.toggle('on', !_dynColor); _dynOff.setAttribute('aria-pressed', String(!_dynColor)); }
   syncCinemaBgSettings();
   _syncVizBtns();
+  syncMiniSettingsBtn();
   // A11Y-05: mettre en place le piège de focus et déplacer le focus sur le bouton Fermer
   const box = $id('settings-box');
   if (box) _setupSettingsFocusTrap(box);

@@ -19,6 +19,8 @@ let _miniPos = null;
 export function setMiniPos(pos) { _miniPos = pos; }
 /** Appelé depuis app.js saveCfg() pour persister la position. */
 export function getMiniPos()    { return _miniPos; }
+/** Appelé depuis settings.js pour synchroniser le bouton du panneau settings. */
+export function getMiniOpen()   { return _miniOpen; }
 
 
 // ── État interne ──────────────────────────────────────────────
