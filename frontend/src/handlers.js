@@ -209,7 +209,7 @@ const _ACTIONS = {
 
   // ── Watch folder ──────────────────────────────────────────
   'toggle-watch-folder':   ()    => toggleWatchFolder(),
-  'change-watch-folder':   ()    => changeWatchFolder(),
+  'change-watch-folder':   async () => { await changeWatchFolder(); saveCfg(); },
 
   // ── Visualiseur ───────────────────────────────────────────
   'viz-bars':        ()    => { setVizMode('bars');         _syncVizBtns(true); },
