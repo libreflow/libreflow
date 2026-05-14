@@ -24,7 +24,7 @@ import { initViz, startViz, stopViz, updateVizColor, setVizMode, getVizMode, set
 import { sleepFading, setSleepFading, sleepEndOfTrack, toggleSleepMenu, setSleepTimer, setSleepEndOfTrack, setSleepCustom, cancelSleepTimer } from './sleep.js';
 import { esc, fmt, fmtd, extEmoji, normTag, mainArtist } from './utils.js';
 import { radioActive, startRadio, stopRadio, resetRadio, radioRefillQueue, toggleRadio, ctxStartRadio, radioRegenerateFromCurrent, radioSaveAsPlaylist, getRadioQueue, renderRadioView, openRadioView, syncRadioLibBar, getRadioSeedId, initRadioSeedId } from './radio.js';
-import { initWatchPath, getWatchPath, toggleWatchFolder, stopWatchFolder, updateWatchUI, importPaths, startWatchNative } from './watchfolder.js'; // Bug #7 fix : startWatchNative ajouté
+import { initWatchPath, getWatchPath, stopWatchFolder, updateWatchUI, importPaths, startWatchNative } from './watchfolder.js'; // Bug #7 fix : startWatchNative ajouté
 import { renderStats, getHeatPeriod, initHeatPeriod } from './stats.js';
 import { switchPlTab, openSmartPlaylistModal, _setSmartSeed, smartSeedSearch, smartPreview, confirmSmartPlaylist, regenerateSmartPlaylist } from './smartplaylist.js';
 import { detectDupes, removeDupeTrack, deleteAllDupes, closeDupes } from './dupes.js';
@@ -320,7 +320,14 @@ function _applyBootUI(cfgObj) {
     });
   }
   const watchChk = document.getElementById('watch-folder-chk');
-  if (watchChk) watchChk.addEventListener('change', async () => { await toggleWatchFolder(); saveCfg(); });
+  if (watchChk) watchChk.addEventListener('change', async () => {
+    if (watchChk.checked) {
+      if (getWatchPath()) await startWatchNative();
+    } else {
+      stopWatchFolder(true, true); // silent=true, keepPath=true
+    }
+    saveCfg();
+  });
   const checkUpdateBtn = document.getElementById('check-update-btn');
   if (checkUpdateBtn) {
     checkUpdateBtn.addEventListener('click', () => checkForUpdateManual(checkUpdateBtn));
