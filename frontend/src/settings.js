@@ -162,10 +162,10 @@ document.addEventListener('keydown', e => {
 
 window.addEventListener('focus', () => syncMiniSettingsBtn());
 
-document.addEventListener('DOMContentLoaded', () => {
+{
   const chk = $id('dyn-color-chk');
   if (chk) chk.addEventListener('change', e => setDynColor(e.target.checked));
-});
+}
 
 // ══ THEMES ════════════════════════════════════════════════════════════════════
 export const THEMES = ['green', 'blue', 'purple', 'red', 'orange', 'pink', 'cyan'];

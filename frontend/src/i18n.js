@@ -327,8 +327,6 @@ export const LANGS = {
     // Settings — accent dynamique
     set_dyn_label:        'Accent dynamique',
     set_dyn_sub:          'Suit la couleur de la pochette',
-    set_dyn_on:           'Activé',
-    set_dyn_off:          'Désactivé',
     // Settings — mode
     set_mode_label:       "Mode d'affichage",
     set_mode_dark:        'Sombre',
@@ -937,8 +935,6 @@ export const LANGS = {
     // Settings — dynamic accent
     set_dyn_label:        'Dynamic accent',
     set_dyn_sub:          'Follows the album art color',
-    set_dyn_on:           'On',
-    set_dyn_off:          'Off',
     // Settings — mode
     set_mode_label:       'Display mode',
     set_mode_dark:        'Dark',
