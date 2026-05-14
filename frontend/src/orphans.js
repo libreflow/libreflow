@@ -14,7 +14,7 @@ import { invoke, convertFileSrc }                                 from './ipc.js
 import { emit, EVENTS }                                           from './bus.js';
 import { trackIdx, rebuildTrackIdxMap, invalidateFilterCache }    from './search.js';
 import { VIRT }                                                   from './virt.js';
-import { audio }                                                  from './player.js';
+import { audio, adjustShuffleQAfterDelete }                       from './player.js';
 import { toast, toastWithAction, esc }                            from './ui.js';
 import { setCurIdx }                                              from './state.js';
 import { updateStats }                                            from './renderer.js';
@@ -199,6 +199,7 @@ async function _deleteOrphans(orphanTracks) {
   }
 
   for (const idx of toRemove) {
+    adjustShuffleQAfterDelete(idx);
     tracks.splice(idx, 1);
     if (get('curIdx') === idx)    { audio.pause(); setCurIdx(-1); }
     else if (get('curIdx') > idx) { setCurIdx(get('curIdx') - 1); }
