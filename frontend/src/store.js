@@ -67,7 +67,7 @@ const _state = {
   repeat:            'none',    // 'none' | 'all' | 'one'
   playbackSpeed:     1,
   crossfadeDur:      0,
-  manualQueue:       [],        // Track[] — explicit queue (played before shuffle/order)
+  manualQueue:       [],        // number[] — explicit queue of track indices (played before shuffle/order)
 
   // ── UI / View ────────────────────────────────────────────────────────
   view:              'all',     // 'all' | 'albums' | 'artists' | 'genres' | 'playlists' | 'stats' | 'radio'

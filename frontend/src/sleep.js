@@ -103,7 +103,7 @@ export function cancelSleepTimer(silent) {
   if (masterGainNode && eqCtx) {
     masterGainNode.gain.setTargetAtTime(_targetVol, eqCtx.currentTime, 0.05);
   } else if (audio.volume < _targetVol) {
-    audio.volume = _targetVol;
+    setMasterGain(_targetVol);
   }
   const indicator = document.getElementById('sleep-indicator');
   if (indicator) { indicator.style.display = 'none'; indicator.classList.remove('active'); }

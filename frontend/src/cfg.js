@@ -18,7 +18,7 @@ export const CFG = Object.freeze({
   VIRT_BUFFER:               8,   // lignes buffer virtual scroll de chaque côté
   VIRT_ROW_H:               48,   // px — hauteur d'une ligne piste
   VIRT_GRP_H:               28,   // px — hauteur d'un en-tête de groupe
-  TAG_LOAD_CONCURRENCY:      8,   // pistes chargées en parallèle (OPT : read_tags Rust = I/O léger)
+  TAG_LOAD_CONCURRENCY:      8,   // pistes chargées en parallèle — 8 optimal SSD (read_tags Rust = I/O léger, pas de thread JS bloqué)
   PLAYLOG_MAX_ENTRIES:    2000,   // max entrées dans playlog IDB
   SLEEP_FADE_SECS:          30,   // secondes de fondu avant sleep timer
   IPC_TIMEOUT_MS:        15000,   // ms — timeout global pour les appels IPC Tauri
