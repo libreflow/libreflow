@@ -11,10 +11,25 @@ import { esc }             from './utils.js';
 import { closeQueue }      from './queue.js';
 import { closeEQ }         from './eq.js';
 import { clearSelection }  from './selection.js';
+import { renderAmbientFrame }                               from './ambientRenderer.js';
+import { sampleArtColors, boostSat, rgbToHsl, hslToRgb }  from './artcolor.js';
+import { saveCfg }                                          from './cfgsave.js';
 
 export let nowPlayingOpen = false;
 let _prevView    = 'all';
 let _fullscreen  = false;
+
+// ── NowPlaying background mode state ────────────────────────────────────────
+const NP_BG_MODES = ['blur', 'ambient', 'amoled'];
+let _npBgMode  = 'blur';
+let _npColors  = null;   // { cT, cL, cR } from art sampling
+let _npArtRGB  = '120,80,160'; // "r,g,b" fallback for AMOLED halo
+let _npAnimRaf = null;
+let _npAnimGen = 0;
+let _npAnimT   = 0;
+let _npFrameCnt = 0;
+let _npBgCtx   = null;
+
 const _techInfoCache = new Map(); // path → AudioProps
 
 const _EXPAND_ICON   = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="16" height="16"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>`;
@@ -49,6 +64,98 @@ export function formatBitDepth(bitDepth, sampleRate) {
 export function formatBitrate(bitrate) {
   if (!bitrate) return '–';
   return bitrate + ' kbps';
+}
+
+function _buildNpColors() {
+  const img = document.getElementById('vnp-art-img');
+  if (img && img.naturalWidth) {
+    const colors = sampleArtColors(img, 64);
+    if (colors) {
+      _npColors = colors;
+      _npArtRGB = colors.cT.join(',');
+      return;
+    }
+  }
+  const raw = getComputedStyle(document.documentElement)
+    .getPropertyValue('--art-color').trim();
+  const m = raw.match(/(\d+)[,\s]+(\d+)[,\s]+(\d+)/);
+  if (m) {
+    const cT = boostSat(+m[1], +m[2], +m[3]);
+    const [h, s, l] = rgbToHsl(...cT);
+    _npColors = {
+      cT,
+      cL: hslToRgb((h + 38) % 360, Math.min(1, s), l),
+      cR: hslToRgb((h - 32 + 360) % 360, Math.min(1, s), l),
+    };
+    _npArtRGB = cT.join(',');
+  } else {
+    _npColors = null;
+  }
+}
+
+function _stopNpAnim() {
+  _npAnimGen++;
+  if (_npAnimRaf) { cancelAnimationFrame(_npAnimRaf); _npAnimRaf = null; }
+}
+
+function _startNpAnim(canvas, ctx) {
+  const myGen = _npAnimGen;
+  let last = performance.now();
+  function loop(now) {
+    if (myGen !== _npAnimGen) return;
+    if (!nowPlayingOpen || document.hidden ||
+        (_npBgMode !== 'ambient' && _npBgMode !== 'amoled')) {
+      last = now;
+      _npAnimRaf = null;
+      return;
+    }
+    if (_npBgMode === 'ambient' && _npFrameCnt++ % 2 !== 0) {
+      _npAnimRaf = requestAnimationFrame(loop);
+      return;
+    }
+    _npAnimT += now - last;
+    last = now;
+    renderAmbientFrame(_npAnimT, canvas, ctx, _npBgMode, _npArtRGB, _npColors);
+    _npAnimRaf = requestAnimationFrame(loop);
+  }
+  _npAnimRaf = requestAnimationFrame(loop);
+}
+
+function _applyNpBg() {
+  const vnp = document.getElementById('vnp');
+  if (!vnp) return;
+
+  NP_BG_MODES.forEach(m => vnp.classList.remove('vnp-bg-' + m));
+  vnp.classList.add('vnp-bg-' + _npBgMode);
+
+  _stopNpAnim();
+  if (_npBgMode === 'blur') return;
+
+  _buildNpColors();
+
+  const canvas = document.getElementById('vnp-canvas');
+  if (!canvas) return;
+  const dpr = window.devicePixelRatio || 1;
+  canvas.width  = Math.round((window.innerWidth  || 1280) * dpr);
+  canvas.height = Math.round((window.innerHeight || 800)  * dpr);
+  const ctx = canvas.getContext('2d');
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  _npBgCtx = ctx;
+
+  _npFrameCnt = 0;
+  _startNpAnim(canvas, ctx);
+}
+
+export function cycleNpBg() {
+  const cur = NP_BG_MODES.indexOf(_npBgMode);
+  _npBgMode = NP_BG_MODES[(cur + 1) % NP_BG_MODES.length];
+  set('npBg', _npBgMode);
+  saveCfg();
+  _applyNpBg();
+}
+
+export function initNpBg(mode) {
+  if (NP_BG_MODES.includes(mode)) { _npBgMode = mode; set('npBg', mode); }
 }
 
 // ── IPC (lazy, cached) ────────────────────────────────────────────────────────
@@ -124,7 +231,7 @@ export async function openNowPlaying() {
   _prevView = get('view') || 'all';
   closeQueue();
   closeEQ();
-  clearSelection(); // BUG-9 FIX : vider la sélection avant d'entrer en Now Playing
+  clearSelection();
   _showViewRaw('now-playing');
   set('view', 'now-playing');
   nowPlayingOpen = true;
@@ -133,17 +240,19 @@ export async function openNowPlaying() {
   if (!t) return;
   _renderNowPlaying(t, null);
   const vnp = document.getElementById('vnp');
-  if (vnp) updateAmbient(vnp);
+  if (vnp) { updateAmbient(vnp); _applyNpBg(); }
   const info = await _loadTechInfo(t.path);
   if (nowPlayingOpen) {
     _renderNowPlaying(t, info);
-    updateAmbient(vnp);
+    const vnp2 = document.getElementById('vnp');
+    if (vnp2) { updateAmbient(vnp2); _applyNpBg(); }
   }
 }
 
 export function closeNowPlaying() {
   if (!nowPlayingOpen) return;
   nowPlayingOpen = false;
+  _stopNpAnim();
   if (_fullscreen) {
     _fullscreen = false;
     document.getElementById('app')?.classList.remove('np-full');
@@ -170,12 +279,12 @@ export function updateNowPlaying(track) {
   if (!nowPlayingOpen || !track) return;
   _renderNowPlaying(track, _techInfoCache.get(track.path) ?? null);
   const vnp = document.getElementById('vnp');
-  if (vnp) updateAmbient(vnp);
+  if (vnp) { updateAmbient(vnp); _applyNpBg(); }
   _loadTechInfo(track.path).then(info => {
     if (nowPlayingOpen) {
       _renderNowPlaying(track, info);
       const vnp2 = document.getElementById('vnp');
-      if (vnp2) updateAmbient(vnp2);
+      if (vnp2) { updateAmbient(vnp2); _applyNpBg(); }
     }
   });
 }
