@@ -73,7 +73,10 @@ export async function openMiniAndMinimize() {
   const tbtMini = document.getElementById('tbt-mini');
   if (tbtMini) { tbtMini.classList.add('on'); tbtMini.setAttribute('aria-pressed', 'true'); }
   await updateMiniPlayer();
-  invoke('win_minimize').catch(() => {});
+  invoke('win_minimize').catch(() => {
+    _miniOpen = false;
+    if (tbtMini) { tbtMini.classList.remove('on'); tbtMini.setAttribute('aria-pressed', 'false'); }
+  });
 }
 
 // ── Mise à jour état complet ──────────────────────────────────
