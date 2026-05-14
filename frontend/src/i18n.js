@@ -494,6 +494,7 @@ export const LANGS = {
     sc_esc:           'Fermer / Vider la recherche',
     sc_fullscreen:    'Plein écran',
     set_rg_target_label: 'Cible',
+    aria_rg_target:       'Volume cible ReplayGain',
     // Watch folder
     set_watch_sub:    'Surveiller un dossier pour nouvelles musiques',
     // A11Y — labels non visibles (aria-label)
@@ -1097,6 +1098,7 @@ export const LANGS = {
     sc_esc:           'Close / Clear search',
     sc_fullscreen:    'Full screen',
     set_rg_target_label: 'Target',
+    aria_rg_target:       'ReplayGain target volume',
     // Watch folder
     set_watch_sub:    'Monitor a folder for new music',
     // A11Y — aria-label strings

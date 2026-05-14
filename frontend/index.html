@@ -719,7 +719,7 @@
             <div class="set-row-sub" data-i18n="set_rg_sub">Égalise le volume entre les pistes</div>
           </div>
           <label class="toggle-wrap">
-            <input type="checkbox" id="rg-enabled" data-input-action="rg-enabled">
+            <input type="checkbox" id="rg-enabled" data-input-action="rg-enabled" data-i18n-aria="set_rg_label" aria-label="Replay Gain">
             <span class="toggle-slider"></span>
           </label>
         </div>
@@ -730,6 +730,7 @@
           </div>
           <input type="range" min="-23" max="-9" step="1" value="-14"
             id="rg-target" data-input-action="rg-target"
+            data-i18n-aria="aria_rg_target" aria-label="Volume cible ReplayGain"
             style="width:90px;accent-color:var(--g)">
         </div>
       </div>
@@ -898,7 +899,7 @@
         <div class="set-row">
           <div class="set-row-label" data-i18n="set_update_auto_label">Vérifier les mises à jour au lancement</div>
           <label class="toggle-wrap">
-            <input type="checkbox" id="auto-update-chk" data-input-action="auto-update">
+            <input type="checkbox" id="auto-update-chk" data-input-action="auto-update" data-i18n-aria="set_update_auto_label" aria-label="Vérifier les mises à jour au lancement">
             <span class="toggle-slider"></span>
           </label>
         </div>
