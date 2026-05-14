@@ -17,14 +17,20 @@ let _vignetteW    = 0;
 let _vignetteH    = 0;
 let _lastCtx      = null; // track ctx changes to invalidate vignette cache
 
+// NOTE: _noiseCanvas, _vignetteGrad, _lastCtx are shared module-level singletons.
+// This is safe because cinema and nowplaying are never rendered simultaneously.
+
 /**
  * Render one ambient or amoled frame onto canvas.
  * @param {number}  t             - Animation time in ms
- * @param {HTMLCanvasElement} canvas
+ * @param {HTMLCanvasElement} canvas - Reserved; drawing is done through ctx.
  * @param {CanvasRenderingContext2D} ctx
  * @param {'ambient'|'amoled'} mode
  * @param {string}  colorStr      - "r,g,b" — dominant art colour (used by amoled halo)
  * @param {{cT:[r,g,b], cL:[r,g,b], cR:[r,g,b]}|null} ambientColors
+ * @precondition The caller must apply `ctx.setTransform(dpr, 0, 0, dpr, 0, 0)` for HiDPI.
+ *   This function reads window.innerWidth/innerHeight in CSS px — correct only when the
+ *   transform is set. See cinema.js _updateAmbientGradient for reference.
  */
 export function renderAmbientFrame(t, canvas, ctx, mode, colorStr, ambientColors) {
   const W = window.innerWidth  || 1280;
