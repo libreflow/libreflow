@@ -240,14 +240,9 @@ export function virtRenderWindow(fl) {
         break;
       }
     }
-    // Si la piste courante n'est pas dans la fenêtre, chercher dans tous les rows
+    // PM-2: Si la piste courante n'est pas dans la fenêtre, utiliser filteredIdx O(1)
     if (tabStopFi < 0) {
-      for (let i = 0; i < rows.length; i++) {
-        if (rows[i].type === 'tr' && rows[i].track.id === curTrack.id) {
-          tabStopFi = rows[i].fi;
-          break;
-        }
-      }
+      tabStopFi = filteredIdx(curTrack);
     }
   }
   // Si aucune piste courante ou piste courante absente de la liste filtrée :
@@ -307,8 +302,9 @@ export function virtAttachScroll(listEl) {
   if (!listEl) return;
   const onScroll = () => {
     if (VIRT._raf) cancelAnimationFrame(VIRT._raf);
+    // PM-9: Calculer la liste filtrée maintenant (cache chaud) plutôt que dans le rAF
+    const fl = getFiltered();
     VIRT._raf = requestAnimationFrame(() => {
-      const fl = getFiltered();
       virtRenderWindow(fl);
       // Mettre à jour le suivi de direction
       VIRT._lastScrollTop = listEl.scrollTop;
