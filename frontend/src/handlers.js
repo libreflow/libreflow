@@ -46,8 +46,8 @@ import { toggleCinema, closeCinema, cycleCinemaBg,
 import { openRadioView, ctxStartRadio,
          radioSaveAsPlaylist, radioRegenerateFromCurrent,
          stopRadio, playRadioTrackAt, removeRadioTrack }       from './radio.js';
-import { openFolder, rescanTags }                              from './library.js';
-import { changeWatchFolder }                                   from './watchfolder.js';
+import { rescanTags }                                          from './library.js';
+import { changeWatchFolder, toggleWatchFolder }               from './watchfolder.js';
 import { setVizMode, setVizEnabled, getVizEnabled }            from './viz.js';
 import { resolveConfirm }                                      from './ui.js';
 import { setCrossfade }                                        from './player.js';
@@ -191,13 +191,13 @@ const _ACTIONS = {
   'remove-dupe-track':     btn  => removeDupeTrack(btn.dataset.id, +btn.dataset.gi, +btn.dataset.ti),
 
   // ── Library ───────────────────────────────────────────────
-  'open-folder':           ()    => openFolder(),
+  'open-folder':           async () => { await toggleWatchFolder(); },
   'import-m3u':            ()    => importM3U(),
   'export-m3u':            ()    => exportM3U(),
   'export-xspf':           ()    => exportXSPF(),
 
   // ── Settings + action combinée ────────────────────────────
-  'settings-open-folder':  ()    => { closeSettings(); openFolder(); },
+  'settings-open-folder':  async () => { closeSettings(); await toggleWatchFolder(); },
   'settings-import-m3u':   ()    => { closeSettings(); importM3U(); },
   'settings-export-m3u':   ()    => { closeSettings(); exportM3U(); },
   'settings-export-xspf':  ()    => { closeSettings(); exportXSPF(); },
