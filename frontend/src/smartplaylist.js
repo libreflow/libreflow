@@ -15,7 +15,7 @@
 
 import { esc } from './utils.js';
 import { i18n } from './i18n.js';
-import { get }  from './store.js'; // Phase 4
+import { get, notify }  from './store.js'; // Phase 4
 import { playLog } from './playlog.js'; // Bug #1 fix : accès direct, window.__playLogRef__ n'existe pas
 import { emit, EVENTS } from './bus.js';
 import { _trackIdxMap, trackIdx } from './search.js';
@@ -510,6 +510,7 @@ export async function confirmSmartPlaylist() {
     const criteria = { mode: 'rules', rules: JSON.parse(JSON.stringify(_smartRules)), combinator, size: maxSize };
     const pl = { id:'pl_'+Date.now(), name, trackIds:result.map(t=>t.id), smart:true, seedId:null, criteria, createdAt:Date.now() };
     get('playlists').push(pl);
+    notify('playlists'); // CM-5 FIX: push() in-place → notify() so subscribers see the change
     await savePlaylists();
     renderPlNav(); setupPlNavDrop();
     closePlModal();
@@ -533,6 +534,7 @@ export async function confirmSmartPlaylist() {
   };
   const pl = { id:'pl_'+Date.now(), name, trackIds:result.map(t=>t.id), smart:true, seedId:_smartSeedId, criteria, createdAt:Date.now() };
   get('playlists').push(pl);
+  notify('playlists'); // CM-5 FIX: push() in-place → notify() so subscribers see the change
   await savePlaylists();
   renderPlNav(); setupPlNavDrop();
   closePlModal();

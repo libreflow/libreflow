@@ -19,7 +19,7 @@
 import { esc, fmt }                           from './utils.js';
 import { CFG }                                from './cfg.js';
 import { i18n }                               from './i18n.js';
-import { get }                                from './store.js';
+import { get, notify }                        from './store.js';
 import { getFiltered, filteredIdx, _trackIdxMap } from './search.js';
 import { audio, playAt }                      from './player.js';
 import { toast, toastWithAction, confirmAction }                       from './ui.js';
@@ -497,6 +497,7 @@ export async function radioSaveAsPlaylist() {
   const name = i18n('radio_pl_name', seed ? seed.name : 'Mix');
   const pl = { id: 'pl_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8), name, trackIds: ids }; // BUG-m2 FIX : suffixe aléatoire pour éviter collision si sauvegardé 2× dans la même ms
   get('playlists').push(pl);
+  notify('playlists'); // CM-5 FIX: push() in-place → notify() so subscribers see the change
   try {
     await savePlaylists();
   } catch (e) {

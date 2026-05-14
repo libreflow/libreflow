@@ -1270,6 +1270,7 @@ export async function confirmPlaylistModal() {
     bg.dataset.selBatch     = '';
     bg.dataset.pendingTrack = '';
     get('playlists').push(pl);
+    notify('playlists'); // CM-5 FIX: push() in-place → notify() so subscribers see the change
     await savePlaylists();
     renderPlNav();
     setupPlNavDrop();
