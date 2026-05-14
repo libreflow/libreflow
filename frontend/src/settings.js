@@ -112,11 +112,8 @@ export function openSettings() {
   switchSetTab('appearance');
   $id('lang-fr')?.classList.toggle('on', getLang() === 'fr');
   $id('lang-en')?.classList.toggle('on', getLang() === 'en');
-  // Sync dynColor buttons
-  const _dynOn  = $id('dyn-on-btn');
-  const _dynOff = $id('dyn-off-btn');
-  if (_dynOn)  { _dynOn.classList.toggle('on',  _dynColor);  _dynOn.setAttribute('aria-pressed',  String(_dynColor)); }
-  if (_dynOff) { _dynOff.classList.toggle('on', !_dynColor); _dynOff.setAttribute('aria-pressed', String(!_dynColor)); }
+  // Sync dynColor checkbox
+  _syncDynColorChk();
   syncCinemaBgSettings();
   _syncVizBtns();
   syncMiniSettingsBtn();
@@ -165,6 +162,11 @@ document.addEventListener('keydown', e => {
 
 window.addEventListener('focus', () => syncMiniSettingsBtn());
 
+document.addEventListener('DOMContentLoaded', () => {
+  const chk = $id('dyn-color-chk');
+  if (chk) chk.addEventListener('change', e => setDynColor(e.target.checked));
+});
+
 // ══ THEMES ════════════════════════════════════════════════════════════════════
 export const THEMES = ['green', 'blue', 'purple', 'red', 'orange', 'pink', 'cyan'];
 
@@ -198,11 +200,13 @@ export function setTheme(t) {
   saveCfg();
 }
 
+function _syncDynColorChk() {
+  const chk = $id('dyn-color-chk');
+  if (chk) chk.checked = !!_dynColor;
+}
+
 function _applyDynColorUI() {
-  const onBtn  = $id('dyn-on-btn');
-  const offBtn = $id('dyn-off-btn');
-  if (onBtn)  { onBtn.classList.toggle('on',  !!_dynColor);  onBtn.setAttribute('aria-pressed', String(!!_dynColor)); }
-  if (offBtn) { offBtn.classList.toggle('on', !_dynColor);  offBtn.setAttribute('aria-pressed', String(!_dynColor)); }
+  _syncDynColorChk();
   if (!_dynColor) {
     document.documentElement.style.removeProperty('--g');
     document.documentElement.style.removeProperty('--g-rgb');

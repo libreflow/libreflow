@@ -53,7 +53,7 @@ import { setCrossfade }                                        from './player.js
 import { importM3U, exportM3U, exportXSPF }                    from './m3u.js';
 import { invoke }                                              from './ipc.js';
 import { cycleSpeed, closeModal, clearLibrary, confirmClear, clearAppCache, updateVolSlider, playPlaylistFrom, shufflePlaylist, playPlaylistDirect, playCardByKey, saveCfg } from './app.js';
-import { _syncVizBtns, openSettings, closeSettings, toggleMode, toggleShortcuts, closeShortcuts, setTheme, setDynColor, setMode, switchSetTab, syncMiniSettingsBtn } from './settings.js';
+import { _syncVizBtns, openSettings, closeSettings, toggleMode, toggleShortcuts, closeShortcuts, setTheme, setMode, switchSetTab, syncMiniSettingsBtn } from './settings.js';
 import { goHome, setView, nextSort, nextAlbumSort, onSearch } from './views.js';
 import { setCinemaBg, toggleCinemaRadio }                      from './cinema.js';
 import { rescanGenres, drillGenre }                            from './genres.js';
@@ -221,7 +221,6 @@ const _ACTIONS = {
 
   // ── Settings — appearance ─────────────────────────────────
   'set-lang':              btn  => { setLang(btn.dataset.lang); saveCfg(); },
-  'set-dyn-color':         btn  => setDynColor(btn.dataset.value === 'true'),
   'set-mode':              btn  => setMode(btn.dataset.mode),
   'set-cinema-bg':         btn  => setCinemaBg(btn.dataset.bg),
 

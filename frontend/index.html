@@ -692,10 +692,12 @@
             <div class="set-row-label" data-i18n="set_dyn_label">Accent dynamique</div>
             <div class="set-row-sub" data-i18n="set_dyn_sub">Suit la couleur de la pochette</div>
           </div>
-          <div style="display:flex;gap:6px">
-            <button class="mbtn" id="dyn-on-btn" data-action="set-dyn-color" data-value="true" style="font-size:11px;padding:5px 10px" data-i18n="set_dyn_on" aria-pressed="false">Activé</button>
-            <button class="mbtn" id="dyn-off-btn" data-action="set-dyn-color" data-value="false" style="font-size:11px;padding:5px 10px" data-i18n="set_dyn_off" aria-pressed="false">Désactivé</button>
-          </div>
+          <label class="toggle-wrap">
+            <input type="checkbox" id="dyn-color-chk"
+                   data-i18n-aria="set_dyn_label"
+                   aria-label="Accent dynamique">
+            <span class="toggle-slider"></span>
+          </label>
         </div>
         <div class="set-row" style="margin-top:8px">
           <div>
