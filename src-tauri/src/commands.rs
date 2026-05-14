@@ -138,6 +138,19 @@ pub(crate) fn is_safe_dir(path: &Path) -> bool {
         return false;
     }
 
+    // Rejeter chemins Windows système connus et chemins UNC
+    #[cfg(target_os = "windows")]
+    {
+        let win_blocked = ["c:\\windows", "c:\\program files", "c:\\program files (x86)"];
+        if win_blocked.iter().any(|b| path_str == *b || path_str.starts_with(&format!("{}\\", b))) {
+            return false;
+        }
+        // Bloquer les chemins UNC (\\server\share) — accès réseau non souhaité
+        if path_str.starts_with("\\\\") {
+            return false;
+        }
+    }
+
     // Exiger au moins un composant non-root (depth > 1 sur Unix, > 2 sur Windows)
     if path.components().count() <= 1 { return false; }
 
@@ -493,6 +506,14 @@ pub async fn write_cover(data: WriteCoverData) -> Result<(), String> {
 #[tauri::command]
 pub async fn write_replaygain_tags(data: WriteReplaygainData) -> Result<(), String> {
     tokio::task::spawn_blocking(move || {
+        // Valider les bornes des valeurs ReplayGain avant toute écriture
+        if data.gain_db < -51.0 || data.gain_db > 51.0 {
+            return Err("gain_db hors limites (-51..+51 dB)".into());
+        }
+        if data.peak < 0.0 || data.peak > 1.0 {
+            return Err("peak hors limites (0..1)".into());
+        }
+
         let path = Path::new(&data.path);
         if !is_audio(path) {
             return Err(format!("write_replaygain_tags: extension non autorisée — {}", data.path));
@@ -531,8 +552,14 @@ pub async fn write_replaygain_tags(data: WriteReplaygainData) -> Result<(), Stri
 #[tauri::command]
 pub fn notify_track(app: AppHandle, data: NotifyTrackData) -> Result<(), String> {
     use tauri_plugin_notification::NotificationExt;
-    let title  = data.title.chars().take(100).collect::<String>();
-    let artist = data.artist.chars().take(100).collect::<String>();
+    let title = data.title.chars()
+        .filter(|c| !c.is_control())
+        .take(100)
+        .collect::<String>();
+    let artist = data.artist.chars()
+        .filter(|c| !c.is_control())
+        .take(100)
+        .collect::<String>();
     app.notification()
         .builder()
         .title(&title)
