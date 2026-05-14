@@ -28,7 +28,7 @@ import { toggleEQ, closeEQ, applyEQPreset,
 import { toggleSleepMenu, setSleepTimer, setSleepEndOfTrack,
          setSleepCustom, cancelSleepTimer }                    from './sleep.js';
 import { toggleMiniOverlay }                                   from './minioverlay.js';
-import { toggleMiniPlayer }                                    from './miniplayer.js';
+import { toggleMiniPlayer, openMiniAndMinimize }               from './miniplayer.js';
 import { clearSelection, selAddToPlaylist, selToggleLike,
          selBatchTagEdit, selRemove, selAddBatch,
          selectionMode, toggleTrackSelection,
@@ -216,7 +216,7 @@ const _ACTIONS = {
   'viz-toggle':      ()    => { setVizEnabled(!getVizEnabled()); _syncVizBtns(true); },
 
   // ── Window controls ───────────────────────────────────────
-  'win-minimize':    ()    => invoke('win_minimize'),
+  'win-minimize':    ()    => openMiniAndMinimize(),
   'win-maximize':    ()    => invoke('win_maximize'),
   'win-close':       ()    => invoke('win_close'),
 
