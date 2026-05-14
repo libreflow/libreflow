@@ -81,7 +81,7 @@ export function initShortcuts({ updateVolSlider, closeModal, cycleSpeed }) {
       document.getElementById('confirm-modal-bg')?.classList.contains('on') ||
       document.getElementById('settings-panel')?.classList.contains('on') ||
       document.querySelector('.orphan-modal-bg.on') !== null ||
-      document.querySelector('.ctx-menu') !== null;
+      document.querySelector('.ctx-menu.on') !== null;
     if (_anyModalOpen) return;
 
     // Bloquer tous les raccourcis pendant l'édition inline de métadonnées

@@ -281,13 +281,15 @@ function _drawHeroMosaic(fl) {
     img.onload = () => {
       const cv = document.getElementById('pl-hero-mosaic');
       if (!cv) return; // canvas retiré du DOM (changement de playlist)
-      cv.getContext('2d').drawImage(img, px, py, 100, 100);
+      const ctx2d = cv.getContext('2d');
+      if (ctx2d) ctx2d.drawImage(img, px, py, 100, 100);
     };
     // S157 FIX-8 : guard onerror — laisse la cellule en fond #1a1a2a au lieu d'échouer silencieusement
     img.onerror = () => {
       const cv = document.getElementById('pl-hero-mosaic');
       if (!cv) return;
       const c = cv.getContext('2d');
+      if (!c) return;
       c.fillStyle = '#1a1a2a';
       c.fillRect(px, py, 100, 100);
     };
@@ -518,6 +520,10 @@ export function renderPlNav() {
         </div>
       </div>
     `);
+  }
+
+  if (ungroupedOrNoFolder.length) {
+    parts.push(ungroupedOrNoFolder.map(_plNavItemHTML).join(''));
   }
 
   el.innerHTML = parts.join('');
