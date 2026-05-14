@@ -247,7 +247,6 @@ export async function startWatchNative() {
         if (added) toast(i18n('t_new_files', added), 'success');
       }, CFG.WATCH_DEBOUNCE_MS);
     });
-    _watchActive = true;
 
     // Écouter les événements émis par Rust quand des fichiers audio existants sont modifiés
     _modUnlisten = await listen('watch-modified-files', (event) => {
@@ -261,6 +260,7 @@ export async function startWatchNative() {
         if (batch.length) _reloadTagsForPaths(batch);
       }, CFG.WATCH_DEBOUNCE_MS);
     });
+    _watchActive = true; // both listeners confirmed up before marking watcher active
   } catch (e) {
     // Fallback : pas de surveillance native — log silencieux
     console.warn('[watchfolder] surveillance native indisponible :', e);
