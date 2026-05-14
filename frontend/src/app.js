@@ -322,7 +322,11 @@ function _applyBootUI(cfgObj) {
   const watchChk = document.getElementById('watch-folder-chk');
   if (watchChk) watchChk.addEventListener('change', async () => {
     if (watchChk.checked) {
-      if (getWatchPath()) await startWatchNative();
+      if (getWatchPath()) {
+        await startWatchNative();
+      } else {
+        watchChk.checked = false; // no folder selected yet — reset visually
+      }
     } else {
       stopWatchFolder(true, true); // silent=true, keepPath=true
     }
