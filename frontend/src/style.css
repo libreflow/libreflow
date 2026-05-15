@@ -3492,6 +3492,21 @@ html[data-mode="light"] .bte-cover-clear    { background: var(--bg3); border-col
 .ctx-item--danger:hover { background: rgba(var(--red-rgb),.1); }
 .ctx-item--sub         { position: relative; }
 .ctx-item--sub:hover .ctx-submenu { display: block; }
+.ctx-kbd {
+  margin-left: auto;
+  font-size: var(--fs-2xs);
+  font-family: var(--font);
+  background: var(--bg4);
+  border: var(--border-w-sm) solid var(--border-2, var(--bg5));
+  border-radius: var(--r-sm);
+  padding: 1px 5px;
+  color: var(--t3);
+  letter-spacing: var(--ls-micro);
+  white-space: nowrap;
+  pointer-events: none;
+  line-height: 1.5;
+  flex-shrink: 0;
+}
 .ctx-submenu {
   display: none; position: absolute; left: 100%; top: 0;
   background: var(--bg2); border: var(--border-w-sm) solid var(--border-1);
