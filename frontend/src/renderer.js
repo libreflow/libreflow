@@ -1082,7 +1082,7 @@ export function updateStats() {
     </span>
     <span class="sb-stat-chip">
       <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-      <span class="sb-stat-val">${hours}&nbsp;h</span>
+      <span class="sb-stat-val">${hours.toLocaleString()}&nbsp;h</span>
     </span>`;
 }
 
