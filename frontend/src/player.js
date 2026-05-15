@@ -342,6 +342,7 @@ export async function playAt(filteredIdx, { skipScroll = false, keepQueue = fals
     clearCrossfadeTimers(); // DOIT précéder audio.src + audio.play() (évite volume=0 au démarrage)
     // @ts-ignore — url is guaranteed set by ensureUrl() above
     audio.src = t.url;
+    if (playbackSpeed !== 1) audio.playbackRate = playbackSpeed;
     ensureEQResumed();
     try { await audio.play(); } catch(e) {
       // @ts-ignore — e is unknown, access .name/.message safely via type assertion
@@ -874,6 +875,7 @@ function _commitGapless() {
   const gSrc = audioNext.src; // même URL déjà en cache browser
   clearCrossfadeTimers();     // restaure audio.volume + audioNextGain=0
   audio.src = gSrc;
+  if (playbackSpeed !== 1) audio.playbackRate = playbackSpeed;
   ensureEQResumed();
   audio.play().catch(() => {});
 
@@ -1006,6 +1008,7 @@ export function checkCrossfade() {
       set('curIdx', curIdx);
       // @ts-ignore — url guaranteed set by ensureUrl(ok) above
       audio.src = nextTrack.url;
+      if (playbackSpeed !== 1) audio.playbackRate = playbackSpeed;
       // Continuer depuis la position du fondu (ne pas repartir de 0)
       if (_cfPos > 0.05) audio.currentTime = _cfPos;
       _resetGains();
