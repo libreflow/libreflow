@@ -6242,6 +6242,8 @@ html[data-mode="light"] .rv-start-btn  { background: var(--g); }
   .tr::before                    { transition: background var(--dur-fast) ease; }
   .genre-name                    { transition: none; }
   .genre-card:hover .genre-name  { transform: none; }
+  .card-play-btn { transition: none; }
+  .card { transition: background var(--dur-fast) ease, border-color var(--dur-fast) ease; }
 }
 
 /* ── Now Playing View (#vnp) ──────────────────────────────────────────────── */
