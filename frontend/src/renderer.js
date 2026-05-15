@@ -38,6 +38,7 @@ import { cancelSearchDebounce }                              from './views.js';
 let _statsTimer   = null;    // debounce updateStats
 let _plHero       = null;    // référence au #pl-hero courant (FIX-B1)
 let _activeRowEl  = null;    // I-1: cache du dernier élément .tr.act
+const ART_COLOR_RE = /^rgb\(\s*\d{1,3}\s*,\s*\d{1,3}\s*,\s*\d{1,3}\s*\)$/;
 
 // C-1: caches memoïsés pour _getAlbumMap / _getArtistMap
 let _albumMapCache  = null;
@@ -92,7 +93,6 @@ function _djb2(str) {
 /** Génère le HTML d'un placeholder d'artwork (lettre initiale). */
 export function artPlaceholder(t) {
   const letter = t.name?.[0]?.toUpperCase() || '♪';
-  const ART_COLOR_RE = /^rgb\(\s*\d{1,3}\s*,\s*\d{1,3}\s*,\s*\d{1,3}\s*\)$/;
   if (t.artColor && ART_COLOR_RE.test(t.artColor)) {
     return `<div class="tart-ph" aria-hidden="true" style="background:${esc(t.artColor)}"><span class="tart-init">${extEmoji(t.ext) || letter}</span></div>`;
   }
