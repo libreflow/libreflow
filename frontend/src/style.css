@@ -853,6 +853,7 @@ html[data-mode="light"] .ctx-item.danger,
 html[data-mode="light"] .ctx-item--danger        { color:var(--red); }
 html[data-mode="light"] .ctx-item.danger:hover,
 html[data-mode="light"] .ctx-item--danger:hover  { background:rgba(var(--red-rgb),.1); color:var(--red); }
+html[data-mode="light"] .ctx-kbd { background:var(--bg4); color:var(--t3); border-color:var(--bg5); box-shadow:none; }
 
 /* ── Modales ── */
 /* background/border/scrim désormais automatiques via --glass-surface / --border-X / --scrim */
