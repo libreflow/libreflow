@@ -829,7 +829,7 @@ html[data-mode="light"] .bc-cur       { color:var(--t); }
 
 /* ── Grilles albums / artistes / genres ── */
 html[data-mode="light"] .card         { background:var(--bg2); border:var(--border-w-sm) solid var(--bg5); }
-html[data-mode="light"] .card:hover   { background:var(--bg3); border-color:var(--bg6); box-shadow:var(--shadow-card-lt2); transform:translateY(calc(-1 * var(--sp-nano))); }
+html[data-mode="light"] .card:hover   { background:var(--bg3); border-color:var(--bg6); box-shadow:var(--shadow-card-lt2); transform:translateY(-6px) scale(1.025); }
 html[data-mode="light"] .card-art     { background:var(--bg4); }
 html[data-mode="light"] .card-name    { color:var(--t); }
 html[data-mode="light"] .card-sub     { color:var(--t3); }
@@ -1651,8 +1651,8 @@ html[data-mode="light"] mark.srch-hl { background: rgba(var(--g-rgb), .22); }
 .card:hover  {
   will-change: transform;  /* PERF : allocation GPU uniquement pendant le hover */
   background: var(--bg3); border-color: rgba(var(--g-rgb),.2);
-  transform: translateY(calc(-1 * var(--sp-1))) scale(1.012);
-  box-shadow: var(--shadow-pl-list);
+  transform: translateY(-6px) scale(1.025);
+  box-shadow: var(--shadow-card-hv);
 }
 /* FIX-A1 : cartes playlist navigables clavier (role=button + tabindex=0 posés dans le HTML) */
 .card:focus-visible {
@@ -1682,16 +1682,25 @@ html[data-mode="light"] mark.srch-hl { background: rgba(var(--g-rgb), .22); }
 .card:hover .card-art::after { opacity: 1; }
 /* Hover play overlay sur les cartes album/artiste */
 .card-play-btn {
-  position: absolute; inset: 0; border: none; cursor: pointer;
-  background: rgba(0,0,0,0); border-radius: inherit;
+  position: absolute;
+  width: 40px; height: 40px;
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%) scale(0.8);
+  border: none; cursor: pointer;
+  background: rgba(0,0,0,0.60);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  border-radius: 50%;
   display: flex; align-items: center; justify-content: center;
-  opacity: 0; transition: opacity var(--dur-mid) ease, background var(--dur-mid) ease;
-  color: var(--text-on-accent); z-index: 1;
+  opacity: 0;
+  transition: opacity var(--dur-card, .2s) ease, transform var(--dur-card, .2s) var(--spring-soft, cubic-bezier(.34,1.56,.64,1));
+  color: #fff;
+  z-index: 1;
 }
-.card-play-btn svg { filter: drop-shadow(var(--dropshadow-card)); transform: scale(.7); transition: transform var(--dur-mid) var(--spring-soft); }
-.card:hover .card-play-btn { opacity: 1; background: rgba(0,0,0,.38); }
-.card:hover .card-play-btn svg { transform: scale(1); }
-.card-play-btn:hover { background: rgba(0,0,0,.52) !important; }
+.card-play-btn svg { width: 18px; height: 18px; fill: currentColor; filter: drop-shadow(0 2px 8px rgba(0,0,0,0.6)); transform: none; transition: none; }
+.card:hover .card-play-btn { opacity: 1; background: rgba(0,0,0,0.60); transform: translate(-50%, -50%) scale(1); }
+.card:hover .card-play-btn svg { transform: none; }
+.card-play-btn:hover { background: rgba(0,0,0,0.75) !important; }
 .card-name {
   font-size: var(--fs-md); font-weight: 700;
   font-family: var(--font-display);
