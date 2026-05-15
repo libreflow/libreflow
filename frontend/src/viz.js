@@ -53,6 +53,9 @@ const PEAK_GRAV  = 0.0007; // accélération de la chute (par frame²)
 let _peaks       = null;   // Float32Array — valeur peak courante (0..1) par barre
 let _peakVel     = null;   // Float32Array — vitesse de chute courante
 let _peakHold    = null;   // Uint8Array   — compteur de maintien
+// Pre-allocated radius arrays for _drawBars — avoids inline [] allocation per frame
+const _radiiTop = [0, 0, 0, 0]; // [tl, tr, br, bl] for main bars (rounded top)
+const _radiiBot = [0, 0, 0, 0]; // for reflection bars (rounded bottom)
 // Gradient mis en cache — invalidé si hauteur canvas ou couleur change
 let _grad        = null;
 let _gradH       = 0;
@@ -305,6 +308,9 @@ function _drawBars(bins, w, h) {
     _grad.addColorStop(1, `rgba(${_vizRGB}, 0.88)`);
   }
 
+  _radiiTop[0] = radius; _radiiTop[1] = radius; _radiiTop[2] = 0; _radiiTop[3] = 0;
+  _radiiBot[0] = 0;      _radiiBot[1] = 0;      _radiiBot[2] = radius; _radiiBot[3] = radius;
+
   // Pass 1: main bars (bottom-up, within top 80%)
   canvasCtx.fillStyle   = _grad;
   canvasCtx.globalAlpha = 1;
@@ -314,7 +320,7 @@ function _drawBars(bins, w, h) {
     if (bH < 1) continue;
     const x = i * (barW + gap);
     canvasCtx.beginPath();
-    canvasCtx.roundRect(x, barBase - bH, barW, bH, [radius, radius, 0, 0]);
+    canvasCtx.roundRect(x, barBase - bH, barW, bH, _radiiTop);
     canvasCtx.fill();
   }
 
@@ -326,7 +332,7 @@ function _drawBars(bins, w, h) {
     if (rH < 1) continue;
     const x = i * (barW + gap);
     canvasCtx.beginPath();
-    canvasCtx.roundRect(x, barBase, barW, rH, [0, 0, radius, radius]);
+    canvasCtx.roundRect(x, barBase, barW, rH, _radiiBot);
     canvasCtx.fill();
   }
   canvasCtx.globalAlpha = 1;
