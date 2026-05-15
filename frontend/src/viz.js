@@ -288,71 +288,48 @@ function _draw() {
 function _drawBars(bins, w, h) {
   const dpr = _dpr;
 
-  // On n'utilise que les BAR_COUNT premiers bins (basses/médiums — les plus expressifs)
   const gap     = 2 * dpr;
-  const barW    = (w - gap * (BAR_COUNT - 1)) / BAR_COUNT;
-  const radius  = Math.min(barW * 0.4, 3 * dpr);
-  const mid     = h / 2;
-  const maxHalf = h * 0.40; // ±40 % depuis le centre → 80 % de h, sans débordement
+  const barW    = Math.max(2 * dpr, (w - gap * (BAR_COUNT - 1)) / BAR_COUNT);
+  const radius  = Math.min(barW * 0.5, 2 * dpr);
 
-  // ── Gradient vertical centré mis en cache ───────────────────
-  // Centre lumineux (blanc) → bords colorés atténués : effet glow naturel
+  const barBase = h * 0.80;  // y where bars sit (top 80% used for bars)
+  const maxBarH = barBase;   // max bar height
+  const reflH   = h - barBase; // reflection zone = bottom 20%
+
+  // Gradient: faded at tip (top) → full color at base, cached
   if (!_grad || h !== _gradH || _vizRGB !== _gradRGB) {
     _gradH   = h;
     _gradRGB = _vizRGB;
-    _grad    = canvasCtx.createLinearGradient(0, mid - maxHalf, 0, mid + maxHalf);
-    _grad.addColorStop(0,    `rgba(${_vizRGB}, 0.50)`);
-    _grad.addColorStop(0.5,  `rgba(255,255,255, 0.88)`);
-    _grad.addColorStop(1,    `rgba(${_vizRGB}, 0.50)`);
+    _grad    = canvasCtx.createLinearGradient(0, 0, 0, barBase);
+    _grad.addColorStop(0, `rgba(${_vizRGB}, 0.30)`);
+    _grad.addColorStop(1, `rgba(${_vizRGB}, 0.88)`);
   }
 
-  // ── Passe 1 : barres symétriques centrées ───────────────────
+  // Pass 1: main bars (bottom-up, within top 80%)
   canvasCtx.fillStyle   = _grad;
   canvasCtx.globalAlpha = 1;
   for (let i = 0; i < BAR_COUNT; i++) {
-    const val   = smoothed[i] / 255;   // 0..1
-    const halfH = val * maxHalf;
-    if (halfH < 1) continue;           // skip les barres invisibles
+    const val = smoothed[i] / 255;
+    const bH  = val * maxBarH;
+    if (bH < 1) continue;
     const x = i * (barW + gap);
     canvasCtx.beginPath();
-    canvasCtx.roundRect(x, mid - halfH, barW, halfH * 2, radius);
+    canvasCtx.roundRect(x, barBase - bH, barW, bH, [radius, radius, 0, 0]);
     canvasCtx.fill();
   }
 
-  // ── Mise à jour peaks (physique de chute) ───────────────────
-  if (_peaks) {
-    for (let i = 0; i < BAR_COUNT; i++) {
-      const val = smoothed[i] / 255;
-      if (val >= _peaks[i]) {
-        _peaks[i]    = val;
-        _peakHold[i] = PEAK_HOLD;
-        _peakVel[i]  = 0;
-      } else if (_peakHold[i] > 0) {
-        _peakHold[i]--;
-      } else {
-        _peakVel[i] += PEAK_GRAV;
-        _peaks[i]    = Math.max(0, _peaks[i] - _peakVel[i]);
-      }
-    }
-
-    // ── Passe 2 : points de pic en miroir (haut + bas) ──────────
-    canvasCtx.fillStyle   = `rgba(255,255,255,0.82)`;
-    canvasCtx.globalAlpha = 1;
-    const dotH = Math.max(1.5, 2 * dpr);
-    for (let i = 0; i < BAR_COUNT; i++) {
-      if (_peaks[i] < 0.03) continue;
-      const x       = i * (barW + gap);
-      const offset  = _peaks[i] * maxHalf + dotH;
-      // Dot haut
-      canvasCtx.beginPath();
-      canvasCtx.roundRect(x, mid - offset, barW, dotH, dotH / 2);
-      canvasCtx.fill();
-      // Dot bas (miroir)
-      canvasCtx.beginPath();
-      canvasCtx.roundRect(x, mid + offset - dotH, barW, dotH, dotH / 2);
-      canvasCtx.fill();
-    }
+  // Pass 2: reflection (mirror below barBase, capped to bottom 20%)
+  canvasCtx.globalAlpha = 0.18;
+  for (let i = 0; i < BAR_COUNT; i++) {
+    const val = smoothed[i] / 255;
+    const rH  = Math.min(val * maxBarH * 0.5, reflH);
+    if (rH < 1) continue;
+    const x = i * (barW + gap);
+    canvasCtx.beginPath();
+    canvasCtx.roundRect(x, barBase, barW, rH, [0, 0, radius, radius]);
+    canvasCtx.fill();
   }
+  canvasCtx.globalAlpha = 1;
 }
 
 /* ── Mode oscilloscope ────────────────────────────────────── */
