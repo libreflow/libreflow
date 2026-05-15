@@ -1975,7 +1975,7 @@ html[data-mode="light"] mark.srch-hl { background: rgba(var(--g-rgb), .22); }
   animation: emptyPulse 2.4s ease-in-out infinite;
 }
 .empty-ico::after {
-  inset: -24px;
+  inset: -16px;
   animation-delay: 1.2s;
 }
 @keyframes emptyPulse {

@@ -550,9 +550,9 @@ export function renderLib() {
     }
     if (_h) {
       const _cta = _libEmpty
-        ? `<button class="empty-cta" data-action="open-folder">${i18n('empty_cta_scan') || 'Scanner un dossier'}</button>`
+        ? `<button class="empty-cta" data-action="open-folder">${esc(i18n('empty_cta_scan') || 'Scanner un dossier')}</button>`
         : (_view === 'playlist' && !_query)
-          ? `<button class="empty-cta" data-action="set-view" data-view="all">${i18n('empty_cta_add') || 'Ajouter des titres'}</button>`
+          ? `<button class="empty-cta" data-action="set-view" data-view="all">${esc(i18n('empty_cta_add') || 'Ajouter des titres')}</button>`
           : '';
       listEl.innerHTML = `<div class="empty"><div class="empty-ico">${_ico}</div>`
         + `<div class="empty-h">${esc(_h)}</div><div class="empty-s">${esc(_s)}</div>${_cta}</div>`;
