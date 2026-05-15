@@ -1231,8 +1231,34 @@ button { cursor: pointer; }
   50%       { filter: drop-shadow(0 0 var(--blur-6) color-mix(in srgb, var(--art-color, var(--g)) 75%, transparent)); }
 }
 
-.sb-stats { font-size: var(--fs-sm); color: var(--t3); line-height: var(--lh-2); margin-top: var(--sp-micro); }
-.sb-stats b { color: var(--g); }
+.sb-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-3);
+  padding: var(--sp-1) var(--sp-3) var(--sp-2);
+}
+.sb-stat-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-1);
+  font-size: var(--fs-sm);
+  color: var(--t3);
+}
+.sb-stat-chip svg {
+  width: var(--icon-xs, 12px);
+  height: var(--icon-xs, 12px);
+  opacity: 0.6;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  flex-shrink: 0;
+}
+.sb-stat-val {
+  font-variant-numeric: tabular-nums;
+  color: var(--t2);
+  font-weight: 500;
+}
 
 .sb-nav {
   flex: 1; padding: var(--sp-3) var(--sp-2);

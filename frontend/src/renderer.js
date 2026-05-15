@@ -33,6 +33,7 @@ import { prefetchArts }                                      from './artLoader.j
 // Imports circulaires — OK en ES modules (appelés à l'exécution, pas à l'init)
 import { playAt }                                            from './player.js';
 import { cancelSearchDebounce }                              from './views.js';
+import { playLog }                                           from './playlog.js';
 
 // ── État interne ──────────────────────────────────────────────────────────────
 let _statsTimer   = null;    // debounce updateStats
@@ -1061,22 +1062,28 @@ export function patchTrackEl(id) {
 /** Met à jour les compteurs de la bibliothèque (#lib-stats). */
 export function updateStats() {
   const tracks = get('tracks') || [];
-
-  // #sb-stats — sidebar (HTML avec counts en gras)
   const sbEl = document.getElementById('sb-stats');
-  if (sbEl) {
-    if (tracks.length === 0) {
-      sbEl.innerHTML = i18n('sb_empty');
-    } else {
-      const artistCount = _getArtistMap().length;
-      const albumCount  = _getAlbumMap().length;
-      sbEl.innerHTML = [
-        i18n('sb_tracks',  tracks.length),
-        artistCount > 0 ? i18n('sb_artists', artistCount) : '',
-        albumCount  > 0 ? i18n('sb_albums',  albumCount)  : '',
-      ].filter(Boolean).join(' · ');
-    }
+  if (!sbEl) return;
+  if (tracks.length === 0) {
+    sbEl.innerHTML = i18n('sb_empty');
+    return;
   }
+  const artistCount = _getArtistMap().length;
+  const totalSecs   = playLog.reduce((s, e) => s + (e.dur || 0), 0);
+  const hours       = Math.round(totalSecs / 3600);
+  sbEl.innerHTML = `
+    <span class="sb-stat-chip">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
+      <span class="sb-stat-val">${tracks.length.toLocaleString()}</span>
+    </span>
+    <span class="sb-stat-chip">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 20v-1a8 8 0 0 1 16 0v1"/></svg>
+      <span class="sb-stat-val">${artistCount.toLocaleString()}</span>
+    </span>
+    <span class="sb-stat-chip">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+      <span class="sb-stat-val">${hours}&nbsp;h</span>
+    </span>`;
 }
 
 /** Planifie une mise à jour des stats après le délai de debounce. */
