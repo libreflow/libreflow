@@ -3,6 +3,7 @@
 // OPT-1.1: Event-based instead of polling
 
 /** @import { Track } from './types.js' */
+import { CFG } from './cfg.js';
 
 /**
  * @typedef {{ title?: string, artist?: string, album?: string, genre?: string, year?: number, track?: number, cover_base64?: string, cover_mime?: string, bitrate?: number, sample_rate?: number, channels?: number, bit_depth?: number, duration_secs?: number, file_size?: number }} TrackTags
@@ -53,7 +54,15 @@ function _waitTauriReady() {
 async function invoke(cmd, args) {
   await _waitTauriReady();
   // @ts-ignore — __TAURI__ injected at runtime by Tauri, not in Window type
-  return window.__TAURI__.core.invoke(cmd, args);
+  return Promise.race([
+    window.__TAURI__.core.invoke(cmd, args),
+    new Promise((_, fail) =>
+      setTimeout(
+        () => fail(new Error(`[ipc] ${cmd} timed out after ${CFG.IPC_TIMEOUT_MS}ms`)),
+        CFG.IPC_TIMEOUT_MS
+      )
+    ),
+  ]);
 }
 
 /**
