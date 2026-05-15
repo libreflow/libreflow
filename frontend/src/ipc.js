@@ -53,15 +53,19 @@ function _waitTauriReady() {
  */
 async function invoke(cmd, args) {
   await _waitTauriReady();
+  let _timerId;
   // @ts-ignore — __TAURI__ injected at runtime by Tauri, not in Window type
   return Promise.race([
-    window.__TAURI__.core.invoke(cmd, args),
-    new Promise((_, fail) =>
-      setTimeout(
-        () => fail(new Error(`[ipc] ${cmd} timed out after ${CFG.IPC_TIMEOUT_MS}ms`)),
+    window.__TAURI__.core.invoke(cmd, args).finally(() => clearTimeout(_timerId)),
+    new Promise((_, fail) => {
+      _timerId = setTimeout(
+        () => {
+          console.warn('[ipc] timeout:', cmd);
+          fail(new Error(`[ipc] ${cmd} timed out after ${CFG.IPC_TIMEOUT_MS}ms`));
+        },
         CFG.IPC_TIMEOUT_MS
-      )
-    ),
+      );
+    }),
   ]);
 }
 
