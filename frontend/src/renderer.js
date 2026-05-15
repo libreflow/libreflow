@@ -31,7 +31,7 @@ import { CFG }                                               from './cfg.js';
 import { prefetchArts }                                      from './artLoader.js';
 
 // Imports circulaires — OK en ES modules (appelés à l'exécution, pas à l'init)
-import { playAt }                                            from './player.js';
+import { playAt, audio }                                     from './player.js';
 import { cancelSearchDebounce }                              from './views.js';
 import { playLog }                                           from './playlog.js';
 
@@ -550,11 +550,16 @@ export function renderLib() {
       _h = i18n('empty_lib_h'); _s = i18n('empty_lib_s');
     }
     if (_h) {
+      const _curPl = _view === 'playlist'
+        ? (get('playlists') || []).find(p => p.id === get('curPlId'))
+        : null;
       const _cta = _libEmpty
         ? `<button class="empty-cta" data-action="open-folder">${esc(i18n('empty_cta_scan') || 'Scanner un dossier')}</button>`
-        : (_view === 'playlist' && !_query)
-          ? `<button class="empty-cta" data-action="set-view" data-view="all">${esc(i18n('empty_cta_add') || 'Ajouter des titres')}</button>`
-          : '';
+        : (_view === 'playlist' && !_query && _curPl?.smart)
+          ? `<button class="empty-cta" data-action="regen-cur-pl">${esc(i18n('pl_regen_btn') || 'Régénérer')}</button>`
+          : (_view === 'playlist' && !_query)
+            ? `<button class="empty-cta" data-action="set-view" data-view="all" data-ni-id="ni-all">${esc(i18n('empty_cta_add') || 'Ajouter des titres')}</button>`
+            : '';
       listEl.innerHTML = `<div class="empty"><div class="empty-ico">${_ico}</div>`
         + `<div class="empty-h">${esc(_h)}</div><div class="empty-s">${esc(_s)}</div>${_cta}</div>`;
     }
@@ -564,6 +569,9 @@ export function renderLib() {
   const view     = get('view')     || 'all';
   const drillKey = get('drillKey') || '';
   renderDrillHeader(view, drillKey);
+
+  // innerHTML wipes any prior .playing-row → restore from audio state.
+  patchPlayState(!audio.paused);
 
   scheduleStatsUpdate();
 }
@@ -655,7 +663,7 @@ export function renderAlbumsGrid() {
       data-from="albums" data-display="${esc(a.name)}"
       aria-label="${esc(a.name)}${a.artist ? ' — ' + a.artist : ''}">
       <div class="card-art">${artHtml}
-        <button class="card-play-btn" data-action="play-card" tabindex="-1" aria-hidden="true">▶</button>
+        <button class="card-play-btn" data-action="play-card" tabindex="-1" aria-hidden="true"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><polygon points="5,3 19,12 5,21"/></svg></button>
       </div>
       <div class="card-info">
         <span class="card-name">${hlText(a.name || i18n('unknown_album') || '?', query)}</span>
@@ -729,7 +737,7 @@ export function renderArtistsGrid() {
       data-from="artists" data-display="${esc(a.name)}"
       aria-label="${esc(a.name)}">
       <div class="card-art card-art-round">${artHtml}
-        <button class="card-play-btn" data-action="play-card" tabindex="-1" aria-hidden="true">▶</button>
+        <button class="card-play-btn" data-action="play-card" tabindex="-1" aria-hidden="true"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><polygon points="5,3 19,12 5,21"/></svg></button>
       </div>
       <div class="card-info">
         <span class="card-name">${hlText(a.name || '?', query)}</span>
@@ -807,7 +815,7 @@ export function renderPlaylistsGrid() {
       <div class="card-art">
         ${artHtml}
         ${smartBadge}${pinBadge}
-        <button class="card-play-btn" data-action="play-pl-direct" data-pl-id="${esc(pl.id)}" tabindex="-1" aria-hidden="true">▶</button>
+        <button class="card-play-btn" data-action="play-pl-direct" data-pl-id="${esc(pl.id)}" tabindex="-1" aria-hidden="true"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><polygon points="5,3 19,12 5,21"/></svg></button>
       </div>
       <div class="card-info">
         <span class="card-name">${hlText(pl.name || '?', query)}</span>
@@ -1069,20 +1077,22 @@ export function updateStats() {
     return;
   }
   const artistCount = _getArtistMap().length;
-  const totalSecs   = playLog.reduce((s, e) => s + (e.dur || 0), 0);
-  const hours       = Math.round(totalSecs / 3600);
+  const playCount   = playLog.length;
+  const tracksLbl   = esc(i18n('sb_chip_tracks',  tracks.length));
+  const artistsLbl  = esc(i18n('sb_chip_artists', artistCount));
+  const playedLbl   = esc(i18n('sb_chip_played',  playCount));
   sbEl.innerHTML = `
-    <span class="sb-stat-chip">
+    <span class="sb-stat-chip" aria-label="${tracksLbl}" title="${tracksLbl}">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
-      <span class="sb-stat-val">${tracks.length.toLocaleString()}</span>
+      <span class="sb-stat-val" aria-hidden="true">${tracks.length.toLocaleString()}</span>
     </span>
-    <span class="sb-stat-chip">
+    <span class="sb-stat-chip" aria-label="${artistsLbl}" title="${artistsLbl}">
       <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 20v-1a8 8 0 0 1 16 0v1"/></svg>
-      <span class="sb-stat-val">${artistCount.toLocaleString()}</span>
+      <span class="sb-stat-val" aria-hidden="true">${artistCount.toLocaleString()}</span>
     </span>
-    <span class="sb-stat-chip">
+    <span class="sb-stat-chip" aria-label="${playedLbl}" title="${playedLbl}">
       <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-      <span class="sb-stat-val">${hours.toLocaleString()}&nbsp;h</span>
+      <span class="sb-stat-val" aria-hidden="true">${playCount.toLocaleString()}</span>
     </span>`;
 }
 

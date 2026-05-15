@@ -46,13 +46,8 @@ let _dpr        = 1;      // devicePixelRatio mis en cache au resize (évite pro
 const _ALPHA_BUCKETS = 8;
 const _circleBuckets = Array.from({ length: _ALPHA_BUCKETS }, () => []);
 
-/* ── Peaks (mode bars) ────────────────────────────────────── */
+/* ── Bars mode ─────────────────────────────────────────────── */
 const BAR_COUNT  = 60;     // bins FFT utilisés (0..~10 kHz)
-const PEAK_HOLD  = 18;     // frames de maintien au sommet avant chute
-const PEAK_GRAV  = 0.0007; // accélération de la chute (par frame²)
-let _peaks       = null;   // Float32Array — valeur peak courante (0..1) par barre
-let _peakVel     = null;   // Float32Array — vitesse de chute courante
-let _peakHold    = null;   // Uint8Array   — compteur de maintien
 // Pre-allocated radius arrays for _drawBars — avoids inline [] allocation per frame
 const _radiiTop = [0, 0, 0, 0]; // [tl, tr, br, bl] for main bars (rounded top)
 const _radiiBot = [0, 0, 0, 0]; // for reflection bars (rounded bottom)
@@ -174,10 +169,6 @@ export function startViz() {
   if (!smoothed  || smoothed.length  !== bins) smoothed  = new Float32Array(bins);
   if (!_vizData  || _vizData.length  !== bins) _vizData  = new Uint8Array(bins);
   if (!_timeData || _timeData.length !== bins) _timeData = new Uint8Array(bins);
-  // Peaks — allouer/réinitialiser à chaque démarrage (nouvelle piste)
-  _peaks   = new Float32Array(BAR_COUNT);
-  _peakVel = new Float32Array(BAR_COUNT);
-  _peakHold = new Uint8Array(BAR_COUNT);
   // Ghost oscilloscope — réinitialiser au silence (128 = ligne plate en domaine temporel)
   _ghostTimeData = new Uint8Array(bins);
   _ghostTimeData.fill(128);

@@ -166,10 +166,7 @@ export function getWatchPath() { return watchPath; }
 export async function toggleWatchFolder() {
   let result;
   try {
-    result = await Promise.race([
-      invoke('open_folder'),
-      new Promise((_, rej) => setTimeout(() => rej(new Error('open_folder timeout')), CFG.IPC_TIMEOUT_MS)),
-    ]);
+    result = await invoke('open_folder', undefined, { timeout: 0 });
   } catch(err) {
     console.error('[watchfolder] open_folder failed:', err);
     toast(i18n('t_scan_error', err?.message ?? String(err)), 'error');

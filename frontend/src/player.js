@@ -364,6 +364,12 @@ export async function playAt(filteredIdx, { skipScroll = false, keepQueue = fals
 // BUG-D1-8 FIX: track whether audioNext was mid-crossfade when paused so we can resume it
 let _crossfadeWasActive = false;
 
+/** Compare id to the currently-playing track via store (no closure on `curIdx`). */
+export function isCurrentTrack(id) {
+  const i = get('curIdx');
+  return i >= 0 && get('tracks')[i]?.id === id;
+}
+
 /** @returns {void} */
 export function togglePlay() {
   if (curIdx < 0) { if (getFiltered().length) playAt(0); return; }

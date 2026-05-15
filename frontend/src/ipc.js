@@ -49,10 +49,15 @@ function _waitTauriReady() {
 /**
  * @param {string} cmd
  * @param {Record<string, unknown>} [args]
+ * @param {{ timeout?: number }} [opts] — `timeout: 0` désactive le timeout
+ *   (dialogues bloquants côté Rust : pickers fichier/dossier).
  * @returns {Promise<unknown>}
  */
-async function invoke(cmd, args) {
+async function invoke(cmd, args, opts) {
   await _waitTauriReady();
+  const timeout = opts?.timeout ?? CFG.IPC_TIMEOUT_MS;
+  // @ts-ignore — __TAURI__ injected at runtime by Tauri, not in Window type
+  if (!timeout) return window.__TAURI__.core.invoke(cmd, args);
   let _timerId;
   // @ts-ignore — __TAURI__ injected at runtime by Tauri, not in Window type
   return Promise.race([
@@ -61,9 +66,9 @@ async function invoke(cmd, args) {
       _timerId = setTimeout(
         () => {
           console.warn('[ipc] timeout:', cmd);
-          fail(new Error(`[ipc] ${cmd} timed out after ${CFG.IPC_TIMEOUT_MS}ms`));
+          fail(new Error(`[ipc] ${cmd} timed out after ${timeout}ms`));
         },
-        CFG.IPC_TIMEOUT_MS
+        timeout
       );
     }),
   ]);

@@ -138,7 +138,7 @@ async function _relocateOrphan(track, rowEl, btnEl) {
 
   let newPath;
   try {
-    newPath = await invoke('pick_audio_file');
+    newPath = await invoke('pick_audio_file', undefined, { timeout: 0 });
   } catch(e) {
     console.warn('[orphans] pick_audio_file:', e);
   }

@@ -18,7 +18,7 @@
 // Export : registerHandlers() — à appeler UNE SEULE FOIS au boot (main.js)
 
 import { togglePlay, prev, next, toggleShuffle, toggleRepeat, toggleLike,
-         likeat, playAt }                                     from './player.js';
+         likeat, playAt, isCurrentTrack }                     from './player.js';
 import { toggleQueue, closeQueue, playQueueItem,
          addToQueueNext, addToQueueEnd,
          removeFromQueue, clearExplicitQueue }                 from './queue.js';
@@ -279,7 +279,11 @@ const _ACTIONS = {
   // ── BRIDGE-1 : anciens onclick inline ────────────────────
 
   // Playback / tracks
-  'play-track':            btn  => playById(btn.dataset.trackId),
+  'play-track': btn => {
+    const id = btn.dataset.trackId;
+    if (isCurrentTrack(id)) { togglePlay(); return; }
+    playById(id);
+  },
   'track-click':           (btn, e) => {
     if (e.ctrlKey || e.metaKey || selectionMode)
       toggleTrackSelection(btn.dataset.trackId, e);

@@ -258,7 +258,7 @@ export function selRemove() {
 // ── Cover art helpers (batch modal) ──────────────────────────
 export async function bteCoverClick() {
   try {
-    const path = await invoke('pick_image');
+    const path = await invoke('pick_image', undefined, { timeout: 0 });
     if (!path) return;
     _bteCoverPath = path;
     const img   = document.getElementById('bte-cover-img');

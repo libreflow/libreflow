@@ -18,7 +18,8 @@ import { i18n }                           from './i18n.js';
 import { get, set }                       from './store.js';
 import { getFiltered, filteredIdx, _trackIdxMap,
          invalidateFilterCache }          from './search.js';
-import { playAt }                         from './player.js';
+import { playAt, togglePlay, isCurrentTrack, audio } from './player.js';
+import { patchPlayState } from './renderer.js';
 import { closeSettings } from './settings.js';
 import { emit, EVENTS } from './bus.js';
 import { toast } from './ui.js';
@@ -200,7 +201,12 @@ export function renderQueue() {
       ? `<img src="${t.art}" alt="">`
       : extEmoji(t?.ext ?? '');
     const row = `<div class="queue-item queue-item--loop" data-action="play-queue-item" data-track-id="${t?.id}">
-      <div class="q-art q-art--loop">${artHTML}<span class="q-loop-icon">🔂</span></div>
+      <div class="q-art q-art--loop">${artHTML}
+        <button class="q-art-hover-play" data-action="toggle-play" tabindex="-1" aria-hidden="true">
+          <svg class="icon-play" viewBox="0 0 24 24" width="12" height="12" fill="currentColor" aria-hidden="true"><polygon points="5,3 19,12 5,21"/></svg>
+          <svg class="icon-pause" viewBox="0 0 24 24" width="12" height="12" fill="currentColor" aria-hidden="true"><rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/></svg>
+        </button>
+        <span class="q-loop-icon">🔂</span></div>
       <div class="q-info">
         <div class="q-name">${esc(t?.name ?? '')}</div>
         <div class="q-artist">${esc(t?.artistFull || t?.artist || '–')}</div>
@@ -208,6 +214,7 @@ export function renderQueue() {
       <div class="q-dur">${fmtd(t?.duration ?? 0)}</div>
     </div>`;
     el.innerHTML = Array(5).fill(row).join('');
+    patchPlayState(!audio.paused);
     return;
   }
 
@@ -255,7 +262,11 @@ export function renderQueue() {
       const rmvLbl   = `Retirer ${t.name} de la file d'attente`;
       return `<div class="queue-item queue-item--explicit" role="listitem" tabindex="0" aria-label="${esc(itemLbl)}" data-id="${t.id}" data-qi="${i}">
         <div class="q-drag-handle" aria-hidden="true"><svg viewBox="0 0 6 14" aria-hidden="true" width="10" height="14"><circle cx="2" cy="2" r="1.2"/><circle cx="5" cy="2" r="1.2"/><circle cx="2" cy="7" r="1.2"/><circle cx="5" cy="7" r="1.2"/><circle cx="2" cy="12" r="1.2"/><circle cx="5" cy="12" r="1.2"/></svg></div>
-        <div class="q-art" aria-hidden="true">${artHTML}</div>
+        <div class="q-art" aria-hidden="true">${artHTML}
+          <button class="q-art-hover-play" data-action="play-queue-item" data-track-id="${t.id}" tabindex="-1" aria-hidden="true">
+            <svg class="icon-play" viewBox="0 0 24 24" width="12" height="12" fill="currentColor" aria-hidden="true"><polygon points="5,3 19,12 5,21"/></svg>
+          </button>
+        </div>
         <div class="q-info">
           <div class="q-name">${esc(t.name)}</div>
           <div class="q-artist">${esc(t.artistFull || t.artist || '–')}</div>
@@ -275,7 +286,11 @@ export function renderQueue() {
       const itemLbl = `${t.name}${t.artistFull || t.artist ? ' — ' + (t.artistFull || t.artist) : ''}`;
       return `<div class="queue-item queue-item--natural" role="listitem" tabindex="0" aria-label="${esc(itemLbl)}" data-id="${t.id}" data-ni="${i}"
           data-action="play-queue-item" data-track-id="${t.id}">
-        <div class="q-art" aria-hidden="true">${artHTML}</div>
+        <div class="q-art" aria-hidden="true">${artHTML}
+          <button class="q-art-hover-play" data-action="play-queue-item" data-track-id="${t.id}" tabindex="-1" aria-hidden="true">
+            <svg class="icon-play" viewBox="0 0 24 24" width="12" height="12" fill="currentColor" aria-hidden="true"><polygon points="5,3 19,12 5,21"/></svg>
+          </button>
+        </div>
         <div class="q-info">
           <div class="q-name">${esc(t.name)}</div>
           <div class="q-artist">${esc(t.artistFull || t.artist || '–')}</div>
@@ -286,6 +301,8 @@ export function renderQueue() {
   }
 
   el.innerHTML = html;
+  // innerHTML wipes .playing-row -> restore from audio state.
+  patchPlayState(!audio.paused);
 }
 
 // ── Drag helpers ─────────────────────────────────────────────
@@ -500,6 +517,8 @@ export function playQueueItem(id) {
   if (_ptrState) return;
   const t = (_trackIdxMap.has(id) ? get('tracks')[_trackIdxMap.get(id)] : undefined);
   if (!t) return;
+  // repeat=one : toggle au lieu de redémarrer la piste courante.
+  if (isCurrentTrack(id)) { togglePlay(); return; }
   const fi = filteredIdx(t);
   if (fi >= 0) { removeFromQueue(id); playAt(fi, { keepQueue: true }); return; }
   // UX-QUEUE-1 FIX : piste hors vue courante → basculer vers 'all' et jouer
