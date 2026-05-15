@@ -6,7 +6,7 @@ import { updateAmbient }   from './ambient.js';
 import { _showViewRaw }    from './views.js';
 import { invoke }          from './ipc.js';
 import { on, EVENTS }      from './bus.js';
-import { get, set }        from './store.js';
+import { get, set, subscribe } from './store.js';
 import { esc }             from './utils.js';
 import { closeQueue }      from './queue.js';
 import { closeEQ }         from './eq.js';
@@ -288,6 +288,22 @@ export function updateNowPlaying(track) {
     }
   });
 }
+
+// Patch just the like button without re-rendering the whole view.
+function _patchLikeBtn() {
+  const tracks = get('tracks') || [];
+  const t = tracks[get('curIdx') ?? -1];
+  if (!t) return;
+  const btn = document.querySelector('#vnp .vnp-lk');
+  if (!btn) return;
+  const isLiked = get('liked')?.has(t.id) ?? false;
+  btn.classList.toggle('active', isLiked);
+  btn.setAttribute('aria-pressed', String(isLiked));
+  const svg = btn.querySelector('svg');
+  if (svg) svg.setAttribute('fill', isLiked ? 'currentColor' : 'none');
+}
+
+subscribe('liked', () => { if (nowPlayingOpen) _patchLikeBtn(); });
 
 // Track change — update if open, do NOT auto-open (full-page view, user-initiated only)
 on(EVENTS.TRACK_CHANGE, ({ track }) => {
