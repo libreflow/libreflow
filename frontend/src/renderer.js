@@ -83,14 +83,24 @@ export function hlText(text, query, re) {
   }).join('');
 }
 
+function _djb2(str) {
+  let h = 5381;
+  for (let i = 0; i < str.length; i++) h = ((h << 5) + h) ^ str.charCodeAt(i);
+  return Math.abs(h);
+}
+
 /** Génère le HTML d'un placeholder d'artwork (lettre initiale). */
 export function artPlaceholder(t) {
   const letter = t.name?.[0]?.toUpperCase() || '♪';
   const ART_COLOR_RE = /^rgb\(\s*\d{1,3}\s*,\s*\d{1,3}\s*,\s*\d{1,3}\s*\)$/;
-  const color = (t.artColor && ART_COLOR_RE.test(t.artColor))
-    ? ` style="background:${esc(t.artColor)}"`
-    : '';
-  return `<div class="tart-ph" aria-hidden="true"${color}><span class="tart-init">${extEmoji(t.ext) || letter}</span></div>`;
+  if (t.artColor && ART_COLOR_RE.test(t.artColor)) {
+    return `<div class="tart-ph" aria-hidden="true" style="background:${esc(t.artColor)}"><span class="tart-init">${extEmoji(t.ext) || letter}</span></div>`;
+  }
+  const seed = t.artist || t.album || t.name || '';
+  const hue  = _djb2(seed) % 360;
+  const bg   = `hsl(${hue},32%,26%)`;
+  const fg   = `hsl(${hue},55%,72%)`;
+  return `<div class="tart-ph" aria-hidden="true" style="background:${bg};color:${fg}"><span class="tart-init">${extEmoji(t.ext) || letter}</span></div>`;
 }
 
 /** Génère le bouton ♥ Like pour une piste. */
@@ -151,7 +161,8 @@ export function thtml(t, fi, { active = false, liked = false, likedSet, query = 
   ${trackNum}<div class="tart">
     ${artInner}
     <button class="tart-hover-play" data-action="play-track" data-track-id="${esc(t.id)}" tabindex="-1" aria-label="${i18n('play') || 'Lire'}">
-      <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true"><polygon points="5,3 19,12 5,21"/></svg>
+      <svg class="icon-play" viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true"><polygon points="5,3 19,12 5,21"/></svg>
+      <svg class="icon-pause" viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true"><rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/></svg>
     </button>
   </div>
   <div class="ti">
@@ -1009,7 +1020,7 @@ export function patchActiveTrack() {
 
 /** Met à jour la classe .playing-row sur la piste active (play vs pause). */
 export function patchPlayState(playing) {
-  document.querySelectorAll('.tr.act').forEach(el => {
+  document.querySelectorAll('.tr.act, .queue-item--loop').forEach(el => {
     el.classList.toggle('playing-row', playing);
   });
 }
