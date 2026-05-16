@@ -202,6 +202,8 @@
       </button>
       <button class="sort-btn" id="album-sort-btn" data-action="next-album-sort" style="display:none" title="" data-i18n-title="sort_albums_title" data-i18n-aria="aria_album_sort" aria-label="Trier les albums">A–Z</button>
     </div>
+    <!-- Format filter chips — injecté par renderFormatChips() -->
+    <div id="format-bar" class="format-bar" role="group" aria-label="Filtrer par format audio"></div>
     <div id="radio-lib-bar" role="status" aria-live="polite"></div>
     <div id="content-area" data-view="list">
       <div class="tlist" id="tlist" role="list"></div>
@@ -861,6 +863,12 @@
               <span data-i18n="set_export_btn">Exporter</span>
             </button>
           </div>
+        </div>
+      </div>
+      <div class="set-section">
+        <div class="set-section-lbl">Historique des imports</div>
+        <div id="import-history-list" class="import-history-list">
+          <!-- injecté par renderImportHistory() -->
         </div>
       </div>
       <div class="set-section">
