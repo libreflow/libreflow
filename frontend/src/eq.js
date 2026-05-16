@@ -15,7 +15,7 @@
 //   eqCtx, eqSource, eqNodes, eqEnabled, eqOpen, eqAutoMode
 //   eqAnalyser, audioOutGain, masterGainNode
 //   initEQ, ensureEQResumed, initBootEQ
-//   toggleEQ, closeEQ, setEQBand, applyEQPreset, getActiveEqPreset
+//   toggleEQ, closeEQ, setEQBand, applyEQPreset, getActiveEqPreset, applyEQGains
 //   setEQAutoMode, toggleEQAutoMode, applyGenreEQ
 //   startSmartEQ, stopSmartEQ, updateSmartEQLoudness, updateSmartEQGenre
 //   loadEQProfiles, getEQProfiles
@@ -375,6 +375,17 @@ export function applyEQPreset(presetName) {
 
 export function getActiveEqPreset() {
   return _activePreset;
+}
+
+/** Applique un tableau de 10 gains (en dB) depuis un profil par appareil.
+ *  Active l'EQ si nécessaire et marque le preset comme 'custom'. */
+export function applyEQGains(bands) {
+  if (!Array.isArray(bands) || bands.length !== EQ_BAND_COUNT) return;
+  _activePreset = 'custom';
+  _applyGains(bands);
+  _updatePresetBtns('custom'); // aucun preset bouton actif
+  _animateSlidersTo(bands);
+  if (!eqEnabled) _setEQEnabled(true);
 }
 
 // ── toggleEQ enabled (bypass) ─────────────────────────────────────────────────

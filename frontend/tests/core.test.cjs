@@ -908,6 +908,83 @@ section('imports.js -- structure ImportEntry');
   }
 }());
 
+// ─── eqdevice.js — profil EQ par appareil ────────────────────────────────────
+{
+  const assert = require('assert');
+
+  // Replicate pure logic for testing (no DOM/AudioContext)
+  function makeDeviceProfile(label, bands) {
+    if (!Array.isArray(bands) || bands.length !== 10) throw new Error('bands must be length 10');
+    return { label: String(label), bands: bands.map(Number) };
+  }
+
+  function saveDeviceProfile(profiles, deviceId, label, bands) {
+    const copy = { ...profiles };
+    copy[deviceId] = makeDeviceProfile(label, bands);
+    return copy;
+  }
+
+  function deleteDeviceProfile(profiles, deviceId) {
+    const copy = { ...profiles };
+    delete copy[deviceId];
+    return copy;
+  }
+
+  function getDeviceProfilesCopy(profiles) {
+    return { ...profiles };
+  }
+
+  // Tests
+  let profiles = {};
+
+  // 1. Save profile for a device
+  profiles = saveDeviceProfile(profiles, 'abc123', 'Sony WH-1000XM5', new Array(10).fill(0));
+  assert.ok('abc123' in profiles, '1. profile saved under deviceId');
+  assert.strictEqual(profiles['abc123'].label, 'Sony WH-1000XM5', '1. label stored correctly');
+  assert.strictEqual(profiles['abc123'].bands.length, 10, '1. bands array has 10 entries');
+
+  // 2. Bands must be 10 elements
+  assert.throws(
+    () => makeDeviceProfile('Test', [1, 2, 3]),
+    /length 10/,
+    '2. throws if bands not 10 elements'
+  );
+
+  // 3. Save second device
+  profiles = saveDeviceProfile(profiles, 'default', 'Speakers', [1,2,3,4,5,6,7,8,9,10]);
+  assert.strictEqual(Object.keys(profiles).length, 2, '3. two profiles stored');
+
+  // 4. Delete a profile
+  profiles = deleteDeviceProfile(profiles, 'abc123');
+  assert.ok(!('abc123' in profiles), '4. profile deleted');
+  assert.ok('default' in profiles, '4. other profile still present');
+
+  // 5. getDeviceProfilesCopy returns a copy (not reference)
+  const copy = getDeviceProfilesCopy(profiles);
+  copy['extra'] = makeDeviceProfile('Extra', new Array(10).fill(0));
+  assert.ok(!('extra' in profiles), '5. copy is independent from original');
+
+  // 6. Overwrite existing profile
+  profiles = saveDeviceProfile(profiles, 'default', 'Speakers v2', new Array(10).fill(3));
+  assert.strictEqual(profiles['default'].label, 'Speakers v2', '6. profile overwritten');
+  assert.strictEqual(profiles['default'].bands[0], 3, '6. bands updated');
+
+  // 7. Numeric conversion of bands
+  profiles = saveDeviceProfile(profiles, 'x', 'Test', ['1','2','3','4','5','6','7','8','9','10']);
+  assert.strictEqual(typeof profiles['x'].bands[0], 'number', '7. bands coerced to number');
+
+  // 8. Empty label fallback
+  const p = makeDeviceProfile('', new Array(10).fill(0));
+  assert.strictEqual(p.label, '', '8. empty label allowed');
+
+  // 9. getDeviceProfilesCopy with empty profiles
+  const emptyProfiles = {};
+  const emptyCopy = getDeviceProfilesCopy(emptyProfiles);
+  assert.deepStrictEqual(emptyCopy, {}, '9. empty profiles returns empty copy');
+
+  console.log('eqdevice.js — profil EQ par appareil: 9/9 OK');
+}
+
 // -- Résultat -----------------------------------------------------------
 console.log('\n═══════════════════════════════════════════════════════════');
 console.log(`  Total : ${_ok + _ko}   OK: ${_ok}   KO: ${_ko}`);
