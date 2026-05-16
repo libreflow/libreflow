@@ -96,6 +96,7 @@ async function _doSaveCfg() {
     const plFolders     = get('plFolders') ?? [];
     const recentPls     = get('recentPls') ?? [];
     const autoUpdate    = get('autoUpdate') !== false; // true par défaut
+    const formatFilter  = get('formatFilter') || '';
 
     const likedIds    = liked instanceof Set ? [...liked] : [];
     const curTrackId  = curIdx >= 0 && tracks[curIdx] ? tracks[curIdx].id : null;
@@ -141,6 +142,7 @@ async function _doSaveCfg() {
       queueState:  getQueueState(),
       radioSeedId: radioActive ? getRadioSeedId() : null,
       autoUpdate,
+      formatFilter,
     }, 'state');
   } catch (e) {
     if (isQuotaError(e)) {
