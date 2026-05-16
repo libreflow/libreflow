@@ -1,10 +1,11 @@
 // LibreFlow — IndexedDB layer
 //
-// Database schema (version 4):
+// Database schema (version 5):
 //   tracks    { id, name, artist, album, path, ext, duration, dateAdded, artB64, artColor, genre, rgGain }
 //   cfg       { state: <app config object> }
 //   playlists { id, name, trackIds[] }
 //   playlog   { ts, id, dur }
+//   imports   { id, date, source, paths[], count }
 
 import { CFG } from './cfg.js';
 
@@ -23,13 +24,14 @@ export let DB = null;
 async function openDB() {
   if (DB) return;
   DB = await new Promise((ok, fail) => {
-    const r = indexedDB.open('lp4', 4); // v4 : ajout du store playlog
+    const r = indexedDB.open('lp4', 5); // v5 : ajout du store imports
     r.onupgradeneeded = e => {
       const d = e.target.result;
       if (!d.objectStoreNames.contains('tracks'))    d.createObjectStore('tracks', { keyPath: 'id' });
       if (!d.objectStoreNames.contains('cfg'))       d.createObjectStore('cfg');
       if (!d.objectStoreNames.contains('playlists')) d.createObjectStore('playlists', { keyPath: 'id' });
       if (!d.objectStoreNames.contains('playlog'))   d.createObjectStore('playlog', { keyPath: 'ts' });
+      if (!d.objectStoreNames.contains('imports'))   d.createObjectStore('imports', { keyPath: 'id' });
     };
     r.onsuccess = e => ok(e.target.result);
     r.onerror   = () => fail(r.error);

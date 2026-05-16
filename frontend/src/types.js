@@ -67,6 +67,15 @@
  */
 
 /**
+ * @typedef {Object} ImportEntry
+ * @property {string}   id
+ * @property {number}   date
+ * @property {'drag-drop'|'folder-scan'|'manual'|'usb'} source
+ * @property {string[]} paths
+ * @property {number}   count
+ */
+
+/**
  * @typedef {Object} PlaylistFolder
  * @property {string}  id
  * @property {string}  name
