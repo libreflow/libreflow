@@ -120,6 +120,7 @@ export async function importBackup() {
     for (const t of backupTracks) {
       if (!existingIds.has(t.id)) {
         newTracks.push(t);
+        existingIds.add(t.id); // évite les doublons si le backup contient des ids dupliqués
         // Fire-and-forget IDB (cohérent avec le pattern importPaths)
         dput('tracks', t).catch(e => console.warn('[backup] track IDB write:', t.id, e));
       }
@@ -133,11 +134,19 @@ export async function importBackup() {
     updateStats();
 
     // ── Playlists : merge par id ──────────────────────────────────────────────
-    const existingPlIds = new Set((get('playlists') ?? []).map(p => p.id));
+    const currentPlaylists = get('playlists') ?? [];
+    const existingPlIds    = new Set(currentPlaylists.map(p => p.id));
+    const newPlaylists     = [...currentPlaylists];
     for (const p of backupPlaylists) {
       if (!existingPlIds.has(p.id)) {
+        newPlaylists.push(p);
+        existingPlIds.add(p.id); // évite les doublons si le backup contient des ids dupliqués
         dput('playlists', p).catch(e => console.warn('[backup] playlist IDB write:', p.id, e));
       }
+    }
+    if (newPlaylists.length > currentPlaylists.length) {
+      set('playlists', newPlaylists);
+      notify('playlists');
     }
 
     // ── Playlog : merge par ts (timestamp) ───────────────────────────────────
