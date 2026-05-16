@@ -283,18 +283,18 @@ export function getFiltered() {
     // Drill-down album / artiste / genre
     if (drillFrom === 'albums') {
       const key = drillKey.toLowerCase();
-      src = tracks.filter(t => (t.album || '').toLowerCase() === key);
+      src = src.filter(t => (t.album || '').toLowerCase() === key);
     } else if (drillFrom === 'artists') {
       const key = drillKey.toLowerCase();
-      src = tracks.filter(t =>
+      src = src.filter(t =>
         (t.artist || '').toLowerCase() === key ||
         (t.artistFull || '').toLowerCase() === key
       );
     } else if (drillFrom === 'genres') {
-      src = tracks.filter(t => _normalizeGenre(t.genre) === drillKey);
+      src = src.filter(t => _normalizeGenre(t.genre) === drillKey);
     }
   } else if (view === 'liked') {
-    src = tracks.filter(t => liked?.has(t.id));
+    src = src.filter(t => liked?.has(t.id));
   } else if (view === 'playlist' && curPlId) {
     const playlists = get('playlists') || [];
     const pl = playlists.find(p => p.id === curPlId);
@@ -308,7 +308,7 @@ export function getFiltered() {
   } else if (view === 'recent') {
     // Vue "récentes" : uniquement les pistes jouées récemment
     const recentSet = new Map(recentPlays.map((id, i) => [id, i]));
-    src = tracks
+    src = src
       .filter(t => recentSet.has(t.id))
       .sort((a, b) => (recentSet.get(a.id) || 0) - (recentSet.get(b.id) || 0));
   }
