@@ -25,6 +25,7 @@ import { invalidateFilterCache }                        from './search.js';
 import { pushTracks }                                   from './state.js';
 import { invalidateGenreGridSig }                      from './genres.js';
 import { loadTagsBg }                                  from './library.js';
+import { logImport }                                   from './imports.js';
 import { updateStats, renderLib }                      from './renderer.js';
 import { showView }                                    from './views.js';
 
@@ -152,6 +153,7 @@ async function _onDrop(e) {
   showView('lib');
   toast(i18n('t_files_added', newTracks.length), 'success');
   newTracks.forEach(t => loadTagsBg(t));
+  if (newTracks.length) logImport('drag-drop', newTracks.map(t => t.path));
 }
 
 // ── Init ─────────────────────────────────────────────────────────────────────
