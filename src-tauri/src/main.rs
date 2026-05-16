@@ -54,6 +54,8 @@ fn main() {
             commands::organize_files,
             commands::export_backup,
             commands::import_backup,
+            commands::list_drives,
+            commands::open_folder_at,
             #[cfg(debug_assertions)]
             commands::open_devtools,
         ])

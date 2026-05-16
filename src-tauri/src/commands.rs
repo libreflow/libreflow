@@ -122,6 +122,19 @@ pub struct OrganizeResult {
     pub error_count: usize,
 }
 
+// ── Types : détection de lecteurs ─────────────────────────────────────────────
+
+/// Informations sur un volume monté.
+#[derive(Serialize, Clone)]
+pub struct DriveInfo {
+    /// Chemin racine du volume (ex: "C:\\", "/Volumes/USB")
+    pub path:  String,
+    /// Label du volume (ex: "USB DRIVE", "Macintosh HD")
+    pub label: String,
+    /// Type de lecteur : "fixed" | "removable" | "network" | "cdrom" | "unknown"
+    pub kind:  String,
+}
+
 // ── Helpers internes ──────────────────────────────────────────────────────────
 
 fn is_audio(path: &Path) -> bool {
@@ -854,4 +867,128 @@ pub fn import_backup(app: AppHandle) -> Result<Option<crate::backup::ImportPaylo
     }
     let payload = crate::backup::read_backup_zip(&src)?;
     Ok(Some(payload))
+}
+
+// ── Commande : liste des volumes montés ───────────────────────────────────────
+
+/// Retourne la liste des volumes montés sur le système.
+/// Utilisé par devices.js pour la détection USB (polling).
+#[tauri::command]
+pub fn list_drives() -> Vec<DriveInfo> {
+    _list_drives_impl()
+}
+
+#[cfg(target_os = "windows")]
+fn _list_drives_impl() -> Vec<DriveInfo> {
+    use windows::Win32::Storage::FileSystem::{
+        GetLogicalDriveStringsW, GetDriveTypeW,
+    };
+    use windows::core::HSTRING;
+
+    let mut buf = vec![0u16; 256];
+    let len = unsafe { GetLogicalDriveStringsW(Some(&mut buf)) } as usize;
+    if len == 0 { return vec![]; }
+
+    let mut drives = vec![];
+    let raw = &buf[..len];
+
+    for segment in raw.split(|&c| c == 0) {
+        if segment.is_empty() { continue; }
+        let drive_str = String::from_utf16_lossy(segment).to_string();
+        let hstr = HSTRING::from(drive_str.as_str());
+        let dtype = unsafe { GetDriveTypeW(&hstr) };
+
+        let kind = match dtype {
+            2 => "removable",
+            3 => "fixed",
+            4 => "network",
+            5 => "cdrom",
+            _ => "unknown",
+        };
+
+        // Label = lettre de lecteur sans le backslash final (ex: "C:")
+        let label = drive_str.trim_end_matches('\\').to_string();
+
+        drives.push(DriveInfo {
+            path:  drive_str,
+            label,
+            kind:  kind.to_string(),
+        });
+    }
+    drives
+}
+
+#[cfg(target_os = "macos")]
+fn _list_drives_impl() -> Vec<DriveInfo> {
+    let Ok(dir) = std::fs::read_dir("/Volumes") else { return vec![]; };
+    dir.flatten()
+        .filter_map(|e| {
+            let p = e.path();
+            if !p.is_dir() { return None; }
+            let label = p.file_name()?.to_string_lossy().to_string();
+            if label.starts_with('.') { return None; } // skip hidden (Preboot, etc.)
+            Some(DriveInfo {
+                path:  p.to_string_lossy().to_string(),
+                label,
+                kind:  "unknown".to_string(),
+            })
+        })
+        .collect()
+}
+
+#[cfg(all(not(target_os = "windows"), not(target_os = "macos")))]
+fn _list_drives_impl() -> Vec<DriveInfo> {
+    const PSEUDO_FS: &[&str] = &[
+        "proc", "sysfs", "devtmpfs", "tmpfs", "cgroup", "cgroup2",
+        "debugfs", "securityfs", "pstore", "bpf", "tracefs",
+        "hugetlbfs", "mqueue", "fusectl", "devpts", "efivarfs", "overlay",
+    ];
+    let Ok(content) = std::fs::read_to_string("/proc/mounts") else { return vec![]; };
+    content.lines()
+        .filter_map(|line| {
+            let parts: Vec<&str> = line.split_whitespace().collect();
+            if parts.len() < 3 { return None; }
+            let mountpoint = parts[1];
+            let fstype     = parts[2];
+            if PSEUDO_FS.contains(&fstype) { return None; }
+            let label = mountpoint.split('/').last().unwrap_or(mountpoint).to_string();
+            Some(DriveInfo {
+                path:  mountpoint.to_string(),
+                label: if label.is_empty() { "/".to_string() } else { label },
+                kind:  "unknown".to_string(),
+            })
+        })
+        .collect()
+}
+
+// ── Commande : ouvrir un dossier à un chemin de départ spécifique ─────────────
+
+/// Ouvre un dialog de sélection de dossier pré-navigué à start_path,
+/// scanne les fichiers audio et retourne { folder, files }.
+/// Identique à open_folder mais avec un répertoire de départ (pour USB).
+#[tauri::command]
+pub fn open_folder_at(
+    app: AppHandle,
+    start_path: String,
+) -> Result<Option<OpenFolderResult>, String> {
+    let Some(folder_path) = app
+        .dialog()
+        .file()
+        .set_directory(&start_path)
+        .blocking_pick_folder()
+    else {
+        return Ok(None); // utilisateur a annulé
+    };
+
+    let folder_str = folder_path.to_string();
+    let canon = fs::canonicalize(&folder_str)
+        .map_err(|e| format!("open_folder_at: canonicalize échoué — {e}"))?;
+
+    let raw_paths = scan_dir(&canon);
+    let files: Vec<String> = raw_paths
+        .into_par_iter()
+        .filter_map(|p| p.to_str().map(String::from))
+        .collect();
+
+    Ok(Some(OpenFolderResult { folder: folder_str, files }))
 }
