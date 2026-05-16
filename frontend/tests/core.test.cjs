@@ -1100,6 +1100,78 @@ section('imports.js -- structure ImportEntry');
   console.log('organize.js — computeMoves: 9/9 OK');
 }
 
+// ─── backup.js — pure logic ──────────────────────────────────────────────────
+{
+  const assert = require('assert');
+  const BACKUP_FORMAT_VERSION = 1;
+
+  // Réplique de la logique pure (sans IDB/IPC/DOM)
+  function createManifest(tracks) {
+    return {
+      version:        BACKUP_FORMAT_VERSION,
+      app_version:    '1.1.0',
+      date:           new Date().toISOString(),
+      track_count:    tracks.length,
+      includes_files: false,
+    };
+  }
+
+  function mergeTrackArrays(existing, backup) {
+    const existingIds = new Set(existing.map(t => t.id));
+    const result = [...existing];
+    for (const t of backup) {
+      if (!existingIds.has(t.id)) result.push(t);
+    }
+    return result;
+  }
+
+  function isCompatibleVersion(manifest) {
+    return typeof manifest.version === 'number'
+      && manifest.version <= BACKUP_FORMAT_VERSION;
+  }
+
+  // 1. Manifest contains required fields
+  const m = createManifest([{ id: '1' }, { id: '2' }]);
+  assert.strictEqual(m.version, 1,          '1. version is 1');
+  assert.strictEqual(m.track_count, 2,      '1. track_count correct');
+  assert.ok(m.date,                         '1. date is set');
+  assert.strictEqual(m.includes_files, false,'1. includes_files is false');
+
+  // 2. Merge: new tracks added without duplication
+  const merged = mergeTrackArrays([{ id: 'a' }], [{ id: 'a' }, { id: 'b' }]);
+  assert.strictEqual(merged.length, 2, '2. merge: deduplicates by id');
+
+  // 3. Merge: no duplication when all already exist
+  const noDup = mergeTrackArrays([{ id: 'a' }, { id: 'b' }], [{ id: 'a' }, { id: 'b' }]);
+  assert.strictEqual(noDup.length, 2, '3. no duplication when all exist');
+
+  // 4. Merge: existing record wins over backup record (merge = add-only)
+  const preserved = mergeTrackArrays(
+    [{ id: 'x', name: 'local' }],
+    [{ id: 'x', name: 'backup' }]
+  );
+  assert.strictEqual(preserved[0].name, 'local', '4. existing record preserved over backup');
+
+  // 5. Merge: empty backup
+  const fromEmpty = mergeTrackArrays([{ id: 'x' }], []);
+  assert.strictEqual(fromEmpty.length, 1, '5. merge with empty backup');
+
+  // 6. Merge: empty existing
+  const intoEmpty = mergeTrackArrays([], [{ id: 'a' }, { id: 'b' }]);
+  assert.strictEqual(intoEmpty.length, 2, '6. merge into empty existing');
+
+  // 7. Version: same version is compatible
+  assert.ok(isCompatibleVersion({ version: 1 }), '7. version 1 compatible');
+
+  // 8. Version: higher version is not compatible
+  assert.ok(!isCompatibleVersion({ version: 2 }), '8. version 2 not compatible');
+
+  // 9. Version: non-numeric version is not compatible
+  assert.ok(!isCompatibleVersion({ version: 'foo' }), '9. string version not compatible');
+
+  console.log('backup.js — logic: 9/9 OK');
+}
+
 // -- Résultat -----------------------------------------------------------
 console.log('\n═══════════════════════════════════════════════════════════');
 console.log(`  Total : ${_ok + _ko}   OK: ${_ok}   KO: ${_ko}`);
