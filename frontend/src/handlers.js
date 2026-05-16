@@ -25,6 +25,8 @@ import { toggleQueue, closeQueue, playQueueItem,
 import { toggleEQ, closeEQ, applyEQPreset,
          filterEQPresets, setMasterGain,
          setEQExpert }                                         from './eq.js';
+import { saveCurrentDeviceProfile, deleteDeviceProfile,
+         renderDeviceProfiles }                                from './eqdevice.js';
 import { toggleSleepMenu, setSleepTimer, setSleepEndOfTrack,
          setSleepCustom, cancelSleepTimer }                    from './sleep.js';
 import { toggleMiniOverlay }                                   from './minioverlay.js';
@@ -226,6 +228,18 @@ const _ACTIONS = {
   'set-mode':              btn  => setMode(btn.dataset.mode),
   'set-cinema-bg':         btn  => setCinemaBg(btn.dataset.bg),
 
+  // ── EQ device profiles ───────────────────────────────────
+  'save-device-eq': () => {
+    saveCurrentDeviceProfile();
+    saveCfg();
+  },
+  'delete-device-eq': (btn) => {
+    const deviceId = btn.dataset.deviceId;
+    if (!deviceId) return;
+    deleteDeviceProfile(deviceId);
+    saveCfg();
+  },
+
   // ── EQ — filtrage des presets ─────────────────────────────
   'filter-eq-presets':     btn  => filterEQPresets(btn.dataset.cat),
 
@@ -266,6 +280,7 @@ const _ACTIONS = {
     const tab = btn.dataset.tab;
     switchSetTab(tab);
     if (tab === 'library') renderImportHistory();
+    if (tab === 'audio')   renderDeviceProfiles();
   },
   'pl-tab':                btn  => switchPlTab(btn.dataset.tab),
   'close-modal':           ()    => closeModal(),
