@@ -28,6 +28,7 @@ import { setView, showView }              from './views.js';
 import { loadTagsBg, loadTagsAndDurations } from './library.js';
 import { updateStats }                    from './renderer.js';
 import { pushTracks }                     from './state.js';
+import { logImport }                                   from './imports.js';
 
 // SEC-9 : Extensions audio autorisées — synchronisé avec la liste de app.js/_onDrop
 const _AUDIO_EXTS = new Set(['mp3','flac','aac','m4a','ogg','opus','wav','wma','aiff','ape','alac']);
@@ -123,6 +124,7 @@ async function _doInitialScan(files) {
     updateStats();
     setView('all', document.getElementById('ni-all'));
     loadTagsAndDurations(newTracks);
+    if (newTracks.length) logImport('folder-scan', newTracks.map(t => t.path));
     return newTracks.length;
   } finally {
     _importing = false;
@@ -349,6 +351,7 @@ export async function importPaths(paths) {
 
 async function _doImportPaths(paths) {
   let added = 0;
+  const newPaths = [];
   const tracks = get('tracks'); // Phase 4
   // RACE-4 FIX : déduplication intra-batch — si `paths` contient des doublons
   // (ex. scan initial + premier événement watcher en chevauchement), watchSnapshot
@@ -358,6 +361,7 @@ async function _doImportPaths(paths) {
     if (watchSnapshot.has(p) || seenInBatch.has(p)) continue;
     seenInBatch.add(p);
     watchSnapshot.add(p);
+    newPaths.push(p);
     const name = p.replace(/\\/g, '/').split('/').pop();
     const ext  = name.split('.').pop().toUpperCase();
     const t = {
@@ -386,6 +390,7 @@ async function _doImportPaths(paths) {
     updateStats();
     const niAll = document.getElementById('ni-all');
     setView('all', niAll ?? null);
+    logImport('folder-scan', newPaths);
   }
   return added;
 }
