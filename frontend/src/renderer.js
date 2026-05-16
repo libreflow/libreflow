@@ -1197,7 +1197,7 @@ export function renderFormatChips() {
   bar.innerHTML = [
     `<button class="fmt-chip${!active ? ' active' : ''}" data-action="filter-format" data-fmt="" aria-pressed="${String(!active)}">Tous</button>`,
     ...formats.map(f =>
-      `<button class="fmt-chip${active === f ? ' active' : ''}" data-action="filter-format" data-fmt="${f}" aria-pressed="${String(active === f)}">${f}</button>`
+      `<button class="fmt-chip${active === f ? ' active' : ''}" data-action="filter-format" data-fmt="${esc(f)}" aria-pressed="${String(active === f)}">${esc(f)}</button>`
     ),
   ].join('');
 }
@@ -1231,7 +1231,7 @@ export async function renderImportHistory() {
     const src = _SRC_LABELS[e.source] ?? e.source;
     return `<div class="import-entry">
       <span class="import-date">${dateStr}</span>
-      <span class="import-src">${src}</span>
+      <span class="import-src">${esc(src)}</span>
       <span class="import-count">${e.count} titre${e.count > 1 ? 's' : ''}</span>
     </div>`;
   }).join('');
