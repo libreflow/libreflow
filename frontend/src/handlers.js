@@ -27,6 +27,8 @@ import { toggleEQ, closeEQ, applyEQPreset,
          setEQExpert }                                         from './eq.js';
 import { saveCurrentDeviceProfile, deleteDeviceProfile,
          renderDeviceProfiles }                                from './eqdevice.js';
+import { organizePreview, organizeConfirm,
+         organizeCancel }                                      from './organize.js';
 import { toggleSleepMenu, setSleepTimer, setSleepEndOfTrack,
          setSleepCustom, cancelSleepTimer }                    from './sleep.js';
 import { toggleMiniOverlay }                                   from './minioverlay.js';
@@ -238,6 +240,20 @@ const _ACTIONS = {
     if (!deviceId) return;
     deleteDeviceProfile(deviceId);
     saveCfg();
+  },
+
+  // ── Organize ──────────────────────────────────────────────
+  'organize-trigger': async (btn) => {
+    const scheme = btn.dataset.scheme || 'artist-album';
+    await organizePreview(scheme);
+  },
+
+  'organize-confirm': async () => {
+    await organizeConfirm();
+  },
+
+  'organize-cancel': () => {
+    organizeCancel();
   },
 
   // ── EQ — filtrage des presets ─────────────────────────────
