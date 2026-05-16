@@ -19,7 +19,7 @@ export async function logImport(source, paths) {
     id: crypto.randomUUID?.() ?? `${Date.now().toString(36)}-${(++_idSeq).toString(36)}`,
     date: Date.now(),
     source,
-    paths,
+    paths: paths.slice(0, 500),
     count: paths.length,
   };
   await dput('imports', entry).catch(e => console.warn('[imports] logImport failed', e));
