@@ -58,8 +58,9 @@ import { goHome, setView, nextSort, nextAlbumSort, onSearch } from './views.js';
 import { setCinemaBg, toggleCinemaRadio }                      from './cinema.js';
 import { rescanGenres, drillGenre }                            from './genres.js';
 import { setLang }                                             from './i18n.js';
-import { playById, scrollToCurrentTrack, drillDown }           from './renderer.js';
-import { getFiltered }                                         from './search.js';
+import { playById, scrollToCurrentTrack, drillDown,
+         renderImportHistory }                                 from './renderer.js';
+import { getFiltered, invalidateFilterCache }                  from './search.js';
 
 // ── Module state ──────────────────────────────────────────────────────────
 let _registered = false;  // Guard against double-registration during HMR
@@ -89,6 +90,7 @@ import { setHeatPeriod }                                       from './stats.js'
 import { get, set }                                            from './store.js';
 import { toggleNowPlaying, closeNowPlaying,
          toggleNowPlayingFullscreen, cycleNpBg }              from './nowplaying.js';
+import { emit, EVENTS }                                        from './bus.js';
 
 // ── Registre d'actions ────────────────────────────────────────────────────
 
@@ -252,8 +254,19 @@ const _ACTIONS = {
   },
   'next-sort':             ()    => nextSort(),
   'next-album-sort':       ()    => nextAlbumSort(),
+  'filter-format': (btn) => {
+    const fmt = btn.dataset.fmt ?? '';
+    set('formatFilter', fmt);
+    invalidateFilterCache();
+    emit(EVENTS.FILTER_CHANGED, {});
+    saveCfg();
+  },
   'set-theme':             btn  => setTheme(btn.dataset.theme),
-  'set-tab':               btn  => switchSetTab(btn.dataset.tab),
+  'set-tab': (btn) => {
+    const tab = btn.dataset.tab;
+    switchSetTab(tab);
+    if (tab === 'library') renderImportHistory();
+  },
   'pl-tab':                btn  => switchPlTab(btn.dataset.tab),
   'close-modal':           ()    => closeModal(),
   'clear-library':         ()    => clearLibrary(),
