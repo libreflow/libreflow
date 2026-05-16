@@ -370,6 +370,18 @@
     </div>
   </div>
 </div>
+<!-- ORGANIZE MODAL — prévisualisation des déplacements de fichiers -->
+<div id="organize-modal-bg" data-backdrop-action="organize-cancel">
+  <div id="organize-modal" role="dialog" aria-modal="true" aria-labelledby="organize-modal-title">
+    <div class="modal-h" id="organize-modal-title">Organiser les fichiers</div>
+    <div class="modal-s" id="organize-modal-summary"></div>
+    <div id="organize-modal-list" class="organize-preview-list"></div>
+    <div class="modal-btns">
+      <button class="mbtn cancel" data-action="organize-cancel">Annuler</button>
+      <button class="mbtn" id="organize-confirm-btn" data-action="organize-confirm">Confirmer</button>
+    </div>
+  </div>
+</div>
 
 
 <!-- NEW PLAYLIST MODAL -->
@@ -887,6 +899,32 @@
         <div class="set-section-lbl">Historique des imports</div>
         <div id="import-history-list" class="import-history-list">
           <!-- injecté par renderImportHistory() -->
+        </div>
+      </div>
+      <div class="set-section">
+        <div class="set-section-lbl">Arborescence fichiers</div>
+        <div class="set-row">
+          <div>
+            <div class="set-row-label">Organiser la bibliothèque</div>
+            <div class="set-row-sub">Déplace les fichiers audio dans des dossiers Artiste/Album. Aperçu avant confirmation.</div>
+          </div>
+        </div>
+        <div class="set-row" style="gap:6px;flex-wrap:wrap">
+          <button class="mbtn" style="font-size:11px;padding:5px 12px"
+            data-action="organize-trigger"
+            data-scheme="artist-album">
+            Artiste / Album
+          </button>
+          <button class="mbtn" style="font-size:11px;padding:5px 12px"
+            data-action="organize-trigger"
+            data-scheme="artist">
+            Artiste
+          </button>
+          <button class="mbtn" style="font-size:11px;padding:5px 12px"
+            data-action="organize-trigger"
+            data-scheme="flat">
+            Plat
+          </button>
         </div>
       </div>
       <div class="set-section">
