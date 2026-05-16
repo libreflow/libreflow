@@ -791,6 +791,10 @@
   padding-top: 4px;
 }
 
+/* ── Backup section ─────────────────────────────────────────────────────── */
+/* Les styles réutilisent les classes .set-section, .set-row, .mbtn —      */
+/* aucun style spécifique nécessaire pour l'instant.                        */
+
 /* ── Thème clair ─────────────────────────────────────────── */
 html[data-mode="light"] {
   /* Palette principale — blanc propre, gris froids */

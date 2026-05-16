@@ -29,6 +29,7 @@ import { saveCurrentDeviceProfile, deleteDeviceProfile,
          renderDeviceProfiles }                                from './eqdevice.js';
 import { organizePreview, organizeConfirm,
          organizeCancel }                                      from './organize.js';
+import { exportBackup, importBackup }                          from './backup.js';
 import { toggleSleepMenu, setSleepTimer, setSleepEndOfTrack,
          setSleepCustom, cancelSleepTimer }                    from './sleep.js';
 import { toggleMiniOverlay }                                   from './minioverlay.js';
@@ -254,6 +255,14 @@ const _ACTIONS = {
 
   'organize-cancel': () => {
     organizeCancel();
+  },
+
+  'backup-export': async () => {
+    await exportBackup(false);
+  },
+
+  'backup-import': async () => {
+    await importBackup();
   },
 
   // ── EQ — filtrage des presets ─────────────────────────────
