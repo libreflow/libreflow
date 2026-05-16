@@ -383,6 +383,7 @@ async function boot() {
     // Toutes les vues persistées sont valides, y compris les drill-downs
     const safeViews = ['all','liked','albums','artists','genres','recent','playlist','stats','album-detail','artist-detail','genre-detail'];
     view = safeViews.includes(cfg.view) ? cfg.view : 'all'; set('view', view);
+    set('formatFilter', cfg.formatFilter || '');
     if (cfg.curPlId)   { curPlId  = cfg.curPlId;  set('curPlId', curPlId); }
     if (cfg.drillKey)  { drillKey = cfg.drillKey; set('drillKey', drillKey); drillFrom = cfg.drillFrom || ''; drillDisplayName = cfg.drillDisplayName || ''; set('drillFrom', drillFrom); set('drillDisplayName', drillDisplayName); }
     recentPlays = cfg.recentPlays||[];  set('recentPlays', recentPlays);
