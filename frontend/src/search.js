@@ -264,18 +264,20 @@ export function getFiltered() {
   const plSort          = get('plSort')          || 'manual';
   const albumDetailSort = (view === 'album-detail') ? (get('albumDetailSort') || 'track') : '';
   const liked           = get('liked');
+  const formatFilter    = get('formatFilter') || '';
 
   // Signature de cache — inclure toutes les dimensions qui peuvent changer le résultat
   const tracksSig   = tracks.length + '|' + (tracks[tracks.length - 1]?.id || '');
   const likedSig    = (view === 'liked') ? (liked?.size ?? 0) : '';
   const recentSig   = (sort === 'recent') ? recentPlays.slice(0, 20).join(',') : '';
-  const sig = `${sort}\0${albumDetailSort}\0${query}\0${view}\0${drillKey}\0${drillFrom}\0${curPlId}\0${plSort}\0${tracksSig}\0${likedSig}\0${recentSig}`;
+  const sig = `${sort}\0${albumDetailSort}\0${query}\0${view}\0${drillKey}\0${drillFrom}\0${curPlId}\0${plSort}\0${tracksSig}\0${likedSig}\0${recentSig}\0${formatFilter}`;
 
   // @ts-ignore — result is always Track[] when sig matches (null only on first call)
   if (_GF.sig === sig) return _GF.result;
 
   // ── Filtrage par vue ──────────────────────────────────────────────────────
   let src = tracks;
+  if (formatFilter) src = src.filter(t => (t.ext || '') === formatFilter);
 
   if (drillKey && drillFrom) {
     // Drill-down album / artiste / genre
