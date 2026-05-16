@@ -262,6 +262,8 @@ on(EVENTS.PLAY_STATE, ({ playing }) => {
 // RENDER_LIB : demande de re-rendu émise par player.js (ex: toggle like)
 // Jalon 4 — évite window.renderLib() dans les satellites
 on(EVENTS.RENDER_LIB, () => renderLib());
+// FILTER_CHANGED : invalidateFilter() a été appelé (ex: chip format) → re-rendre la lib
+on(EVENTS.FILTER_CHANGED, () => renderLib());
 // LIBRARY_UPDATED : enable/disable taskbar thumbnail buttons based on track count
 on(EVENTS.LIBRARY_UPDATED, ({ tracks }) => {
   invoke('taskbar_set_has_tracks', { hasTracks: tracks.length > 0 }).catch(e => { console.warn('[taskbar] taskbar_set_has_tracks failed:', e); });
