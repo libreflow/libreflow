@@ -97,6 +97,31 @@ pub struct TrackTags {
     pub file_size:     Option<u64>,
 }
 
+// ── Types : organisation de fichiers ─────────────────────────────────────────
+
+/// Un déplacement planifié : chemin source → chemin cible.
+#[derive(Deserialize)]
+pub struct OrganizeMoveEntry {
+    pub from: String,
+    pub to:   String,
+}
+
+/// Résultat d'un déplacement individuel.
+#[derive(Serialize)]
+pub struct OrganizeMoveResult {
+    pub from:  String,
+    pub to:    String,
+    pub ok:    bool,
+    pub error: Option<String>,
+}
+
+/// Résultat global de la commande organize_files.
+#[derive(Serialize)]
+pub struct OrganizeResult {
+    pub moves:       Vec<OrganizeMoveResult>,
+    pub error_count: usize,
+}
+
 // ── Helpers internes ──────────────────────────────────────────────────────────
 
 fn is_audio(path: &Path) -> bool {
@@ -651,4 +676,116 @@ pub fn open_devtools(app: AppHandle) {
     if let Some(win) = app.get_webview_window("main") {
         win.open_devtools();
     }
+}
+
+// ── Commande : organisation de fichiers ──────────────────────────────────────
+
+/// Déplace des fichiers audio vers une arborescence cible.
+///
+/// En dry_run = true : valide seulement (source existe, destination libre).
+/// En dry_run = false : effectue les rename atomiques; rollback sur première erreur.
+#[tauri::command]
+pub async fn organize_files(
+    moves:   Vec<OrganizeMoveEntry>,
+    dry_run: bool,
+) -> Result<OrganizeResult, String> {
+    tokio::task::spawn_blocking(move || {
+        let mut results: Vec<OrganizeMoveResult> = Vec::new();
+        let mut error_count = 0usize;
+
+        if dry_run {
+            for m in &moves {
+                let from = Path::new(&m.from);
+                let to   = Path::new(&m.to);
+
+                if !from.exists() {
+                    results.push(OrganizeMoveResult {
+                        from:  m.from.clone(),
+                        to:    m.to.clone(),
+                        ok:    false,
+                        error: Some(format!("Source introuvable : {}", m.from)),
+                    });
+                    error_count += 1;
+                } else if to.exists() {
+                    let same = from.canonicalize().ok() == to.canonicalize().ok();
+                    if same {
+                        results.push(OrganizeMoveResult {
+                            from: m.from.clone(), to: m.to.clone(), ok: true, error: None,
+                        });
+                    } else {
+                        results.push(OrganizeMoveResult {
+                            from:  m.from.clone(),
+                            to:    m.to.clone(),
+                            ok:    false,
+                            error: Some(format!("Destination occupée : {}", m.to)),
+                        });
+                        error_count += 1;
+                    }
+                } else {
+                    results.push(OrganizeMoveResult {
+                        from: m.from.clone(), to: m.to.clone(), ok: true, error: None,
+                    });
+                }
+            }
+        } else {
+            // completed: (new_path, original_path) for rollback
+            let mut completed: Vec<(String, String)> = Vec::new();
+
+            'outer: for m in &moves {
+                let from = Path::new(&m.from);
+                let to   = Path::new(&m.to);
+
+                if from == to {
+                    results.push(OrganizeMoveResult {
+                        from: m.from.clone(), to: m.to.clone(), ok: true, error: None,
+                    });
+                    continue;
+                }
+
+                if let Some(parent) = to.parent() {
+                    if !parent.exists() {
+                        if let Err(e) = fs::create_dir_all(parent) {
+                            error_count += 1;
+                            results.push(OrganizeMoveResult {
+                                from:  m.from.clone(),
+                                to:    m.to.clone(),
+                                ok:    false,
+                                error: Some(format!("Création dossier échouée : {e}")),
+                            });
+                            for (done_to, done_from) in completed.iter().rev() {
+                                let _ = fs::rename(done_to, done_from);
+                            }
+                            break 'outer;
+                        }
+                    }
+                }
+
+                match fs::rename(&m.from, &m.to) {
+                    Ok(_) => {
+                        completed.push((m.to.clone(), m.from.clone()));
+                        results.push(OrganizeMoveResult {
+                            from: m.from.clone(), to: m.to.clone(), ok: true, error: None,
+                        });
+                    }
+                    Err(e) => {
+                        error_count += 1;
+                        results.push(OrganizeMoveResult {
+                            from:  m.from.clone(),
+                            to:    m.to.clone(),
+                            ok:    false,
+                            error: Some(e.to_string()),
+                        });
+                        for (done_to, done_from) in completed.iter().rev() {
+                            let _ = fs::rename(done_to, done_from);
+                        }
+                        break 'outer;
+                    }
+                }
+            }
+        }
+
+        Ok(OrganizeResult { moves: results, error_count })
+    })
+    .await
+    .map_err(|e| format!("organize_files: spawn_blocking: {e}"))?
 }

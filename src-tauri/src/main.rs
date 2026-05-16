@@ -50,6 +50,7 @@ fn main() {
             commands::check_paths,
             commands::read_audio_props,
             commands::read_tags,
+            commands::organize_files,
             #[cfg(debug_assertions)]
             commands::open_devtools,
         ])
