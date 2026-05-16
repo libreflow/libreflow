@@ -52,6 +52,7 @@
  * @property {string[]}         recentPls
  * @property {PlSortKey}        plSort
  * @property {string|null}      ctxTrackId
+ * @property {string}           formatFilter
  */
 
 /** @type {AppState} */
@@ -94,6 +95,7 @@ const _state = {
 
   // ── Misc ─────────────────────────────────────────────────────────────
   ctxTrackId:        null,      // string | null — track id for context menu
+  formatFilter:      '',        // '' = tous, 'MP3'/'FLAC'/etc. = filtre actif
 };
 
 /** @type {Map<string, Set<Function>>} */
