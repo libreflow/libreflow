@@ -985,6 +985,121 @@ section('imports.js -- structure ImportEntry');
   console.log('eqdevice.js — profil EQ par appareil: 9/9 OK');
 }
 
+// ─── organize.js — computeMoves ──────────────────────────────────────────────
+{
+  const assert = require('assert');
+
+  function sanitizeName(s) {
+    return (String(s || 'Inconnu'))
+      .replace(/[\\/:*?"<>|]/g, '_')
+      .replace(/[\x00-\x1f]/g, '_')
+      .trim()
+      .replace(/\s+$/, '')
+      .replace(/\.+$/, '')
+      .slice(0, 80) || 'Inconnu';
+  }
+
+  function getBasename(filePath) {
+    return filePath.replace(/\\/g, '/').split('/').filter(Boolean).pop() || '';
+  }
+
+  function computeMoves(tracks, basePath, scheme) {
+    const sep  = basePath.includes('\\') ? '\\' : '/';
+    const base = basePath.replace(/[\\/]+$/, '');
+    const moves = [];
+    const seen  = new Set();
+    for (const t of tracks) {
+      if (!t.path) continue;
+      const file   = getBasename(t.path);
+      const artist = sanitizeName(t.artist);
+      const album  = sanitizeName(t.album);
+      let targetDir;
+      if      (scheme === 'artist-album') targetDir = [base, artist, album].join(sep);
+      else if (scheme === 'artist')       targetDir = [base, artist].join(sep);
+      else if (scheme === 'flat')         targetDir = base;
+      else continue;
+      const to    = targetDir + sep + file;
+      const fromN = t.path.replace(/\\/g, '/');
+      const toN   = to.replace(/\\/g, '/');
+      if (fromN === toN) continue;
+      if (seen.has(toN)) continue;
+      seen.add(toN);
+      moves.push({ from: t.path, to });
+    }
+    return moves;
+  }
+
+  // 1. artist-album scheme
+  let moves = computeMoves(
+    [{ path: 'C:\\music\\file.mp3', artist: 'Daft Punk', album: 'RAM' }],
+    'C:\\music', 'artist-album'
+  );
+  assert.strictEqual(moves.length, 1, '1. one move generated');
+  assert.strictEqual(moves[0].to, 'C:\\music\\Daft Punk\\RAM\\file.mp3', '1. correct target path');
+
+  // 2. artist scheme (no album folder)
+  moves = computeMoves(
+    [{ path: 'C:\\music\\file.mp3', artist: 'Artist', album: 'Album' }],
+    'C:\\music', 'artist'
+  );
+  assert.ok(moves[0].to.includes('Artist'), '2. artist folder present');
+  assert.ok(!moves[0].to.replace('Artist','').includes('Album'), '2. no album folder');
+
+  // 3. flat scheme — file directly in base
+  moves = computeMoves(
+    [{ path: 'C:\\music\\sub\\track.mp3', artist: 'A', album: 'B' }],
+    'C:\\music', 'flat'
+  );
+  assert.strictEqual(moves[0].to, 'C:\\music\\track.mp3', '3. flat target correct');
+
+  // 4. skip when already at target
+  moves = computeMoves(
+    [{ path: 'C:\\music\\Daft Punk\\RAM\\file.mp3', artist: 'Daft Punk', album: 'RAM' }],
+    'C:\\music', 'artist-album'
+  );
+  assert.strictEqual(moves.length, 0, '4. already in place → no move');
+
+  // 5. sanitize illegal characters in artist name
+  moves = computeMoves(
+    [{ path: 'C:\\music\\track.mp3', artist: 'AC/DC', album: 'Back In Black' }],
+    'C:\\music', 'artist-album'
+  );
+  assert.ok(moves[0].to.includes('AC_DC'), '5. slash sanitized to underscore');
+
+  // 6. fallback for missing artist/album
+  moves = computeMoves(
+    [{ path: 'C:\\music\\track.mp3' }],
+    'C:\\music', 'artist-album'
+  );
+  assert.ok(moves[0].to.includes('Inconnu'), '6. missing fields use Inconnu fallback');
+
+  // 7. deduplication of conflicting targets
+  moves = computeMoves(
+    [
+      { path: 'C:\\music\\a\\file.mp3', artist: 'A', album: 'X' },
+      { path: 'C:\\music\\b\\file.mp3', artist: 'A', album: 'X' },
+    ],
+    'C:\\music', 'artist-album'
+  );
+  assert.strictEqual(moves.length, 1, '7. conflicting targets: second skipped');
+
+  // 8. POSIX-style paths (Linux/macOS)
+  moves = computeMoves(
+    [{ path: '/home/user/music/track.mp3', artist: 'Artist', album: 'Album' }],
+    '/home/user/music', 'artist-album'
+  );
+  assert.strictEqual(moves[0].to, '/home/user/music/Artist/Album/track.mp3', '8. POSIX paths work');
+
+  // 9. tracks without path are skipped
+  moves = computeMoves(
+    [{ artist: 'A', album: 'B' }],
+    'C:\\music', 'artist-album'
+  );
+  assert.strictEqual(moves.length, 0, '9. track without path skipped');
+
+  console.log('organize.js — computeMoves: 9/9 OK');
+}
+
 // -- Résultat -----------------------------------------------------------
 console.log('\n═══════════════════════════════════════════════════════════');
 console.log(`  Total : ${_ok + _ko}   OK: ${_ok}   KO: ${_ko}`);
