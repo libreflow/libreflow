@@ -160,6 +160,17 @@ export async function organizeConfirm() {
     return;
   }
 
+  const failCount = result.error_count;
+
+  if (failCount > 0) {
+    // Rust rolled back all moves on first failure — do not update any paths
+    _pendingMoves = [];
+    organizeCancel();
+    toast(`Erreur lors de l'organisation : ${failCount} fichier(s) non déplacé(s). Aucune modification appliquée.`, 'error');
+    return;
+  }
+
+  // All moves succeeded — update paths in memory + IDB
   const succeeded = result.moves.filter(m => m.ok);
   const tracks    = get('tracks');
   const pathMap   = new Map(succeeded.map(m => [m.from, m.to]));
@@ -168,7 +179,7 @@ export async function organizeConfirm() {
     const newPath = pathMap.get(track.path);
     if (newPath) {
       track.path = newPath;
-      // Fire-and-forget IDB update
+      // Fire-and-forget IDB update (IDB writes toujours async)
       dput('tracks', track).catch(e => console.warn('[organize] IDB update failed:', track.id, e));
     }
   }
@@ -180,13 +191,7 @@ export async function organizeConfirm() {
 
   _pendingMoves = [];
   organizeCancel();
-
-  const failCount = result.error_count;
-  if (failCount > 0) {
-    toast(`${succeeded.length} fichier(s) déplacé(s), ${failCount} erreur(s)`, 'warn');
-  } else {
-    toast(`${succeeded.length} fichier(s) organisé(s) avec succès`, 'success');
-  }
+  toast(`${succeeded.length} fichier(s) organisé(s) avec succès`, 'success');
 }
 
 // ── organizeCancel ────────────────────────────────────────────────────────────
