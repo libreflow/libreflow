@@ -716,6 +716,24 @@
 
     <!-- ── Onglet Audio ────────────────────────────────── -->
     <div class="set-page" id="set-page-audio" role="tabpanel">
+      <div class="set-section" id="eq-device-section">
+        <div class="set-section-lbl">EQ par appareil</div>
+        <div class="set-row">
+          <div>
+            <div class="set-row-label">Appareil actuel</div>
+            <div class="set-row-sub" id="eq-device-current-label">Détection en cours…</div>
+          </div>
+          <button id="eq-device-save-btn" class="mbtn"
+            data-action="save-device-eq"
+            style="font-size:11px;padding:5px 14px;flex-shrink:0"
+            title="Enregistrer l'EQ actuel pour cet appareil">
+            Enregistrer
+          </button>
+        </div>
+        <div id="eq-device-profiles-list" class="eq-device-profiles-list">
+          <!-- injecté par renderDeviceProfiles() -->
+        </div>
+      </div>
       <div class="set-section">
         <div class="set-section-lbl" data-i18n="set_rg_section">Normalisation du volume</div>
         <div class="set-row">
