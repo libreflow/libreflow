@@ -43,7 +43,7 @@ async function openDB() {
  * Open a transaction on a single store and return the IObjectStore.
  * Throws synchronously if DB has not been initialised yet.
  *
- * @param {string} s             - Store name ('tracks' | 'cfg' | 'playlists' | 'playlog')
+ * @param {string} s             - Store name ('tracks' | 'cfg' | 'playlists' | 'playlog' | 'imports')
  * @param {'readonly'|'readwrite'} [m='readonly'] - Transaction mode
  * @returns {IDBObjectStore}
  */
