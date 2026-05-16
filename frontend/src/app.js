@@ -931,6 +931,7 @@ export async function clearLibrary() {
   shuffle = false; set('shuffle', false); resetShuffleQ();
   repeat  = 'none'; set('repeat', 'none');
   query   = ''; set('query', '');
+  formatFilter = ''; set('formatFilter', '');
   albumSort = 'name'; set('albumSort', 'name');
   artistSort = 'name'; set('artistSort', 'name');
   genreSort = 'count'; set('genreSort', 'count');
