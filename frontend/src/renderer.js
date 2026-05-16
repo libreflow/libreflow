@@ -34,7 +34,6 @@ import { prefetchArts }                                      from './artLoader.j
 import { playAt, audio }                                     from './player.js';
 import { cancelSearchDebounce }                              from './views.js';
 import { playLog }                                           from './playlog.js';
-import { saveCfg }                                           from './cfgsave.js';
 import { getImports }                                        from './imports.js';
 
 // ── État interne ──────────────────────────────────────────────────────────────
