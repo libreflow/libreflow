@@ -789,3 +789,44 @@ pub async fn organize_files(
     .await
     .map_err(|e| format!("organize_files: spawn_blocking: {e}"))?
 }
+
+// ── Sauvegarde & Portabilité ──────────────────────────────────────────────────
+
+/// Ouvre un dialog de sauvegarde .libreflow, puis écrit le ZIP avec les données sérialisées.
+/// Retourne le chemin du fichier créé, ou None si l'utilisateur annule.
+#[tauri::command]
+pub fn export_backup(
+    app: AppHandle,
+    payload: crate::backup::ExportPayload,
+) -> Result<Option<String>, String> {
+    let Some(fp) = app
+        .dialog()
+        .file()
+        .add_filter("LibreFlow Backup", &["libreflow"])
+        .blocking_save_file()
+    else {
+        return Ok(None); // utilisateur a annulé
+    };
+
+    let dest = fp.to_string();
+    crate::backup::write_backup_zip(&dest, &payload)?;
+    Ok(Some(dest))
+}
+
+/// Ouvre un file picker .libreflow, lit le ZIP et retourne les JSON internes.
+/// Retourne None si l'utilisateur annule.
+#[tauri::command]
+pub fn import_backup(app: AppHandle) -> Result<Option<crate::backup::ImportPayload>, String> {
+    let Some(fp) = app
+        .dialog()
+        .file()
+        .add_filter("LibreFlow Backup", &["libreflow"])
+        .blocking_pick_file()
+    else {
+        return Ok(None); // utilisateur a annulé
+    };
+
+    let src = fp.to_string();
+    let payload = crate::backup::read_backup_zip(&src)?;
+    Ok(Some(payload))
+}

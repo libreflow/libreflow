@@ -2,6 +2,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod commands;
+mod backup;
 mod mini;
 mod watch;
 #[cfg(target_os = "windows")]
@@ -51,6 +52,8 @@ fn main() {
             commands::read_audio_props,
             commands::read_tags,
             commands::organize_files,
+            commands::export_backup,
+            commands::import_backup,
             #[cfg(debug_assertions)]
             commands::open_devtools,
         ])

@@ -26,6 +26,7 @@ tokio                        = { version = "1", features = ["full"] }
 lofty                        = "0.22"
 rayon                        = "1"
 notify                       = "6"
+zip                          = "0.6"
 
 [target.'cfg(windows)'.dependencies]
 windows = { version = "0.58", features = [
