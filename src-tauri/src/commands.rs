@@ -809,6 +809,19 @@ pub fn export_backup(
     };
 
     let dest = fp.to_string();
+    // is_safe_dir est un filtre général (bloque racines système, C:\Windows, chemins UNC, etc.)
+    // et non un filtre restreint aux bibliothèques audio — il est donc approprié ici.
+    // fs::canonicalize n'est pas applicable : le fichier n'existe pas encore (dialog de sauvegarde).
+    // On vérifie le dossier parent au lieu (il doit exister et être sûr).
+    if let Some(parent) = std::path::Path::new(&dest).parent() {
+        if !parent.as_os_str().is_empty() {
+            let canon_parent = fs::canonicalize(parent)
+                .map_err(|e| format!("export_backup: dossier cible invalide — {e}"))?;
+            if !is_safe_dir(&canon_parent) {
+                return Err(format!("export_backup: dossier cible refusé (chemin système) — {dest}"));
+            }
+        }
+    }
     crate::backup::write_backup_zip(&dest, &payload)?;
     Ok(Some(dest))
 }
@@ -827,6 +840,18 @@ pub fn import_backup(app: AppHandle) -> Result<Option<crate::backup::ImportPaylo
     };
 
     let src = fp.to_string();
+    // is_safe_dir est un filtre général (bloque racines système, C:\Windows, chemins UNC, etc.)
+    // et non un filtre restreint aux bibliothèques audio — il est donc approprié ici.
+    // Canonicalize résout les symlinks avant lecture pour éviter les path-traversal.
+    let src = fs::canonicalize(&src)
+        .map_err(|e| format!("import_backup: chemin invalide — {e}"))?
+        .to_string_lossy()
+        .to_string();
+    if let Some(parent) = std::path::Path::new(&src).parent() {
+        if !parent.as_os_str().is_empty() && !is_safe_dir(parent) {
+            return Err(format!("import_backup: chemin refusé (chemin système) — {src}"));
+        }
+    }
     let payload = crate::backup::read_backup_zip(&src)?;
     Ok(Some(payload))
 }

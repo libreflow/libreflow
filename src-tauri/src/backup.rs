@@ -32,38 +32,55 @@ pub struct ImportPayload {
 
 /// Crée un fichier .libreflow (ZIP Deflate) au chemin indiqué.
 /// Écrit 6 fichiers JSON dans l'archive : manifest, library, playlists, playlog, imports, config.
+///
+/// Stratégie atomic : écriture dans un fichier temporaire (.tmp), puis rename atomique
+/// vers la destination finale.  Si une étape échoue, le fichier temporaire est supprimé
+/// et aucun fichier partiel/corrompu n'est laissé à la destination.
 pub fn write_backup_zip(dest_path: &str, payload: &ExportPayload) -> Result<(), String> {
-    let file = std::fs::File::create(dest_path)
-        .map_err(|e| format!("backup: création fichier échouée — {e}"))?;
-    let mut zip = zip::ZipWriter::new(file);
-    let opts = FileOptions::default()
-        .compression_method(zip::CompressionMethod::Deflated);
+    // Write to temp path first — rename atomically on success to avoid partial files
+    let tmp_path = format!("{dest_path}.tmp");
 
-    let entries = [
-        ("manifest.json",  payload.manifest.as_str()),
-        ("library.json",   payload.library.as_str()),
-        ("playlists.json", payload.playlists.as_str()),
-        ("playlog.json",   payload.playlog.as_str()),
-        ("imports.json",   payload.imports.as_str()),
-        ("config.json",    payload.config.as_str()),
-    ];
+    {
+        let file = std::fs::File::create(&tmp_path)
+            .map_err(|e| format!("backup: création fichier temp échouée — {e}"))?;
+        let mut zip = zip::ZipWriter::new(file);
+        let opts = FileOptions::default()
+            .compression_method(zip::CompressionMethod::Deflated);
 
-    for (name, content) in &entries {
-        zip.start_file(*name, opts)
-            .map_err(|e| format!("backup: ajout '{name}' échoué — {e}"))?;
-        zip.write_all(content.as_bytes())
-            .map_err(|e| format!("backup: écriture '{name}' échouée — {e}"))?;
-    }
+        let entries = [
+            ("manifest.json",  payload.manifest.as_str()),
+            ("library.json",   payload.library.as_str()),
+            ("playlists.json", payload.playlists.as_str()),
+            ("playlog.json",   payload.playlog.as_str()),
+            ("imports.json",   payload.imports.as_str()),
+            ("config.json",    payload.config.as_str()),
+        ];
 
-    zip.finish()
-        .map_err(|e| format!("backup: finalisation ZIP échouée — {e}"))?;
+        for (name, content) in &entries {
+            zip.start_file(*name, opts)
+                .map_err(|e| format!("backup: ajout '{name}' échoué — {e}"))?;
+            zip.write_all(content.as_bytes())
+                .map_err(|e| format!("backup: écriture '{name}' échouée — {e}"))?;
+        }
+
+        zip.finish()
+            .map_err(|e| format!("backup: finalisation ZIP échouée — {e}"))?;
+    } // file handle closed here
+
+    // Atomic rename — only happens if ZIP was written successfully
+    std::fs::rename(&tmp_path, dest_path)
+        .map_err(|e| {
+            let _ = std::fs::remove_file(&tmp_path); // cleanup temp on rename failure
+            format!("backup: renommage fichier échoué — {e}")
+        })?;
+
     Ok(())
 }
 
 /// Helper interne : lit une entrée ZIP par nom et retourne son contenu texte.
 fn _read_entry(archive: &mut zip::ZipArchive<std::fs::File>, name: &str) -> Result<String, String> {
     let mut entry = archive.by_name(name)
-        .map_err(|_| format!("backup: entrée '{name}' absente de l'archive"))?;
+        .map_err(|e| format!("backup: entrée '{name}' introuvable dans l'archive — {e}"))?;
     let mut s = String::new();
     entry.read_to_string(&mut s)
         .map_err(|e| format!("backup: lecture '{name}' échouée — {e}"))?;
