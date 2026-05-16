@@ -85,6 +85,7 @@ export function saveCurrentDeviceProfile() {
  * @param {string} deviceId
  */
 export function deleteDeviceProfile(deviceId) {
+  if (!deviceId) return; // guard against deleting the '' key accidentally
   delete _deviceProfiles[deviceId];
   renderDeviceProfiles();
 }
@@ -162,21 +163,10 @@ async function _onDeviceChange() {
   try {
     const devices = await navigator.mediaDevices.enumerateDevices();
     const outputs = devices.filter(d => d.kind === 'audiooutput');
-    const newIds  = outputs.map(d => d.deviceId);
+    _knownIds = outputs.map(d => d.deviceId);
 
-    // Trouver les devices ajoutés
-    const added = newIds.filter(id => !_knownIds.includes(id));
-    _knownIds   = newIds;
-
-    if (added.length > 0) {
-      // Nouveau device branché → l'utiliser comme device actif
-      _activeId    = added[0];
-      _activeLabel = outputs.find(d => d.deviceId === _activeId)?.label || '';
-    } else {
-      // Device débranché → retour à la sortie par défaut
-      _activeId    = '';
-      _activeLabel = outputs.find(d => d.deviceId === 'default')?.label || '';
-    }
+    // Refresh active device from authoritative source (audioEl.sinkId)
+    await _refreshActiveDevice();
 
     // Auto-appliquer le profil enregistré pour ce device si disponible
     const profileKey = _activeId || 'default';

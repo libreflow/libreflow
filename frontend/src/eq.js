@@ -385,7 +385,14 @@ export function applyEQGains(bands) {
   _applyGains(bands);
   _updatePresetBtns('custom'); // aucun preset bouton actif
   _animateSlidersTo(bands);
-  if (!eqEnabled) _setEQEnabled(true);
+  if (!eqEnabled) {
+    eqEnabled = true;
+    const _eqBtn = document.getElementById('btn-eq');
+    if (_eqBtn) {
+      _eqBtn.setAttribute('aria-pressed', 'true');
+      _eqBtn.classList.add('active');
+    }
+  }
 }
 
 // ── toggleEQ enabled (bypass) ─────────────────────────────────────────────────
