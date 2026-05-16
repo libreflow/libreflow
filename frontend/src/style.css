@@ -796,6 +796,12 @@ html[data-mode="light"] .srch-clear:hover { color:var(--t); background:var(--bg5
 html[data-mode="light"] .sort-btn     { background:var(--bg2); border-color:var(--bg5); color:var(--t2); }
 html[data-mode="light"] .sort-btn:hover { background:var(--bg4); border-color:var(--bg6); color:var(--t); }
 
+/* ── Filtre format (chips) ── */
+html[data-mode="light"] .fmt-chip       { background: var(--bg2); border-color: var(--bg5); color: var(--t2); }
+html[data-mode="light"] .fmt-chip:hover { background: var(--bg4); border-color: var(--bg6); color: var(--t); }
+html[data-mode="light"] .fmt-chip.active { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
+html[data-mode="light"] .import-entry:nth-child(odd) { background: var(--bg3); }
+
 /* ── Liste de titres ── */
 html[data-mode="light"] #tlist        { background:var(--bg); }
 html[data-mode="light"] .tr           { border-bottom:var(--border-w-sm) solid rgba(0,0,0,.05); }
@@ -1409,6 +1415,38 @@ button { cursor: pointer; }
 }
 .sort-btn:hover { background: var(--bg3); color: var(--t2); border-color: var(--bg5); }
 .sort-btn svg   { width: var(--icon-2xs); height: var(--icon-2xs); fill: currentColor; }
+
+/* ── Filtre format (chips) ── */
+.format-bar {
+  display: flex; align-items: center; gap: var(--sp-1); flex-wrap: wrap;
+  padding: 0 var(--sp-5) var(--sp-2);
+  min-height: 0;
+}
+.format-bar:empty { display: none; }
+.fmt-chip {
+  display: inline-flex; align-items: center;
+  padding: var(--sp-1q) var(--sp-2); border-radius: 999px;
+  border: var(--border-w-sm) solid var(--bg4);
+  background: var(--bg2); color: var(--t3);
+  font-size: var(--fs-caption); font-weight: 500; white-space: nowrap;
+  cursor: pointer;
+  transition: background var(--dur-fast) ease, color var(--dur-fast) ease, border-color var(--dur-fast) ease;
+}
+.fmt-chip:hover { background: var(--bg3); color: var(--t2); border-color: var(--bg5); }
+.fmt-chip.active { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
+
+/* ── Historique imports (settings) ── */
+.import-history-list { display: flex; flex-direction: column; gap: var(--sp-1); }
+.import-entry {
+  display: flex; gap: var(--sp-3); align-items: baseline;
+  padding: var(--sp-1h) var(--sp-2); border-radius: var(--r);
+  font-size: var(--fs-caption); color: var(--t2);
+}
+.import-entry:nth-child(odd) { background: var(--bg2); }
+.import-date { color: var(--t3); min-width: 130px; flex-shrink: 0; }
+.import-src { flex: 1; }
+.import-count { font-weight: 600; color: var(--t); }
+.import-history-empty { color: var(--t3); font-size: var(--fs-caption); padding: var(--sp-2); }
 
 /* ═══ LISTE DE TITRES ════════════════════════════════════════ */
 /* .tlist styles managed via #content-area #tlist below */
