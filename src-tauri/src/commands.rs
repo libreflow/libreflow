@@ -983,6 +983,9 @@ pub fn open_folder_at(
     let folder_str = folder_path.to_string();
     let canon = fs::canonicalize(&folder_str)
         .map_err(|e| format!("open_folder_at: canonicalize échoué — {e}"))?;
+    if !is_safe_dir(&canon) {
+        return Err(format!("open_folder_at: dossier non autorisé — {}", canon.display()));
+    }
 
     let raw_paths = scan_dir(&canon);
     let files: Vec<String> = raw_paths
