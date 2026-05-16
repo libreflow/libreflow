@@ -43,6 +43,7 @@ import { getMiniPos }                                 from './miniplayer.js';
 import { getHeatPeriod }                              from './stats.js';
 import { getQueueState }                              from './queue.js';
 import { radioActive, getRadioSeedId }               from './radio.js';
+import { getDeviceProfiles }                            from './eqdevice.js';
 import { toast }                                      from './ui.js';
 
 // ── Debounce timer (module-local) ─────────────────────────────────────────────
@@ -131,6 +132,7 @@ async function _doSaveCfg() {
       eqPreset: getActiveEqPreset(),
       vizMode: getVizMode(), vizEnabled: getVizEnabled(),
       eqAutoMode, eqProfiles: getEQProfiles(),
+      eqDeviceProfiles: getDeviceProfiles(),
       watchPath: getWatchPath(),
       curTrackId, curPos,
       miniPos: getMiniPos() ?? null,
