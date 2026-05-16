@@ -34,6 +34,8 @@ import { prefetchArts }                                      from './artLoader.j
 import { playAt, audio }                                     from './player.js';
 import { cancelSearchDebounce }                              from './views.js';
 import { playLog }                                           from './playlog.js';
+import { saveCfg }                                           from './cfgsave.js';
+import { getImports }                                        from './imports.js';
 
 // ── État interne ──────────────────────────────────────────────────────────────
 let _statsTimer   = null;    // debounce updateStats
@@ -574,6 +576,7 @@ export function renderLib() {
   patchPlayState(!audio.paused);
 
   scheduleStatsUpdate();
+  renderFormatChips();
 }
 
 // ── Skeleton loading ──────────────────────────────────────────────────────────
@@ -1176,4 +1179,61 @@ export function scrollToCurrentTrack() {
     top:      targetTop,
     behavior: Math.abs(scrollT - targetTop) < window.innerHeight * 3 ? 'smooth' : 'instant',
   });
+}
+
+// ── Format filter chips ───────────────────────────────────────────────────────
+
+/**
+ * Render format filter chips in #format-bar.
+ * Shows bar only when 2+ distinct formats exist in the library.
+ * Called from renderLib() and after FILTER_CHANGED events.
+ */
+export function renderFormatChips() {
+  const bar = document.getElementById('format-bar');
+  if (!bar) return;
+  const tracks = get('tracks');
+  const formats = [...new Set(tracks.map(t => t.ext).filter(Boolean))].sort();
+  if (formats.length < 2) { bar.innerHTML = ''; return; }
+  const active = get('formatFilter') || '';
+  bar.innerHTML = [
+    `<button class="fmt-chip${!active ? ' active' : ''}" data-action="filter-format" data-fmt="" aria-pressed="${String(!active)}">Tous</button>`,
+    ...formats.map(f =>
+      `<button class="fmt-chip${active === f ? ' active' : ''}" data-action="filter-format" data-fmt="${f}" aria-pressed="${String(active === f)}">${f}</button>`
+    ),
+  ].join('');
+}
+
+// ── Import history ────────────────────────────────────────────────────────────
+
+const _SRC_LABELS = {
+  'drag-drop':    'Glisser-déposer',
+  'folder-scan':  'Scan dossier',
+  'usb':          'USB',
+  'manual':       'Manuel',
+};
+
+/**
+ * Render import history in #import-history-list (settings panel).
+ * Called when the settings Library tab is opened.
+ */
+export async function renderImportHistory() {
+  const el = document.getElementById('import-history-list');
+  if (!el) return;
+  el.innerHTML = '<span class="import-history-empty">Chargement…</span>';
+  const entries = await getImports();
+  if (!entries.length) {
+    el.innerHTML = '<span class="import-history-empty">Aucun import enregistré.</span>';
+    return;
+  }
+  el.innerHTML = entries.slice(0, 50).map(e => {
+    const d = new Date(e.date);
+    const dateStr = d.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' })
+      + ' ' + d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+    const src = _SRC_LABELS[e.source] ?? e.source;
+    return `<div class="import-entry">
+      <span class="import-date">${dateStr}</span>
+      <span class="import-src">${src}</span>
+      <span class="import-count">${e.count} titre${e.count > 1 ? 's' : ''}</span>
+    </div>`;
+  }).join('');
 }
