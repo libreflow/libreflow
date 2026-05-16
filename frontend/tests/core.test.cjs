@@ -843,6 +843,71 @@ section('search.js -- trackIdx (Map-based, O(1))');
   assert(trackIdx({})             === -1, 'trackIdx: objet sans id → -1');
 }());
 
+// =============================================================================
+// 27. Filtre format audio — logique de filtrage (reproduced inline)
+// =============================================================================
+section('search.js -- filtre format (t.ext)');
+
+(function () {
+  const tracks = [
+    { id: '1', ext: 'MP3',  name: 'A', artist: '', album: '', duration: 100 },
+    { id: '2', ext: 'FLAC', name: 'B', artist: '', album: '', duration: 200 },
+    { id: '3', ext: 'MP3',  name: 'C', artist: '', album: '', duration: 150 },
+    { id: '4', ext: 'WAV',  name: 'D', artist: '', album: '', duration: 180 },
+    { id: '5', ext: undefined, name: 'E', artist: '', album: '', duration: 50 },
+  ];
+
+  function filterByFormat(src, fmt) {
+    if (!fmt) return src;
+    return src.filter(t => (t.ext || '') === fmt);
+  }
+
+  assert(filterByFormat(tracks, '').length === 5,    'filtre vide = tous');
+  assert(filterByFormat(tracks, 'MP3').length === 2,  'filtre MP3 = 2 pistes');
+  assert(filterByFormat(tracks, 'FLAC').length === 1, 'filtre FLAC = 1 piste');
+  assert(filterByFormat(tracks, 'WAV').length === 1,  'filtre WAV = 1 piste');
+  assert(filterByFormat(tracks, 'OGG').length === 0,  'filtre OGG = 0 pistes');
+  assert(filterByFormat(tracks, 'MP3')[0].id === '1', 'filtre MP3 : première piste = id=1');
+
+  // Chips : uniquement formats présents (>= 2 formats distincts)
+  const formats = [...new Set(tracks.map(t => t.ext).filter(Boolean))].sort();
+  assert(formats.length === 3,           'chips : 3 formats distincts (MP3, FLAC, WAV)');
+  assert(formats[0] === 'FLAC',          'chips : tri alphabétique → FLAC en premier');
+  assert(!formats.includes(undefined),   'chips : undefined filtré');
+}());
+
+// =============================================================================
+// 28. ImportEntry — structure et validation
+// =============================================================================
+section('imports.js -- structure ImportEntry');
+
+(function () {
+  function makeEntry(source, paths) {
+    return {
+      id: 'test-' + Date.now(),
+      date: Date.now(),
+      source,
+      paths,
+      count: paths.length,
+    };
+  }
+
+  const e1 = makeEntry('drag-drop', ['/a/b.mp3', '/a/c.flac']);
+  assert(e1.count === 2,              'count = paths.length');
+  assert(e1.source === 'drag-drop',   'source conservé');
+  assert(Array.isArray(e1.paths),     'paths est tableau');
+  assert(e1.paths.length === 2,       'paths.length correct');
+
+  const e2 = makeEntry('folder-scan', []);
+  assert(e2.count === 0,              'count = 0 pour tableau vide');
+
+  const sources = ['drag-drop', 'folder-scan', 'manual', 'usb'];
+  for (const s of sources) {
+    const entry = makeEntry(s, ['/test.mp3']);
+    assert(entry.source === s, `source valide: ${s}`);
+  }
+}());
+
 // -- Résultat -----------------------------------------------------------
 console.log('\n═══════════════════════════════════════════════════════════');
 console.log(`  Total : ${_ok + _ko}   OK: ${_ok}   KO: ${_ko}`);
