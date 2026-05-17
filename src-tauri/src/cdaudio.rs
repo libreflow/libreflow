@@ -105,19 +105,91 @@ pub fn cd_cancel_rip(rip_id: String) -> Result<(), String> {
     Err(format!("rip_id {} not found", rip_id))
 }
 
-// windows_impl module will be filled in subsequent tasks. For now, declare an
-// empty stub so the cfg gates above compile on Windows without errors.
 #[cfg(target_os = "windows")]
 mod windows_impl {
     use super::{CdTrack, CdToc};
+    use crate::cdaudio_toc::{parse_toc_lba, frames_to_seconds};
     use std::sync::Arc;
     use std::sync::atomic::AtomicBool;
     use tauri::AppHandle;
 
-    pub(super) fn read_toc(_drive: &str) -> Result<CdToc, String> {
-        Err("cd_read_toc not yet implemented".to_string())
+    use windows::core::PCWSTR;
+    use windows::Win32::Foundation::{CloseHandle, HANDLE};
+    use windows::Win32::Storage::FileSystem::{
+        CreateFileW, FILE_FLAGS_AND_ATTRIBUTES, FILE_SHARE_READ, OPEN_EXISTING,
+    };
+    use windows::Win32::System::IO::DeviceIoControl;
+
+    // GENERIC_READ as a raw u32 (GENERIC_ACCESS_RIGHTS(2147483648u32).0)
+    const GENERIC_READ_U32: u32 = 0x80000000u32;
+    const IOCTL_CDROM_READ_TOC: u32 = 0x00024000;
+
+    fn open_drive(drive: &str) -> Result<HANDLE, String> {
+        // drive comes in as "D:\\" — convert to "\\\\.\\D:"
+        let letter = drive.chars().next().ok_or_else(|| "empty drive string".to_string())?;
+        let path = format!("\\\\.\\{}:", letter);
+        let wide: Vec<u16> = path.encode_utf16().chain(std::iter::once(0)).collect();
+        let handle = unsafe {
+            CreateFileW(
+                PCWSTR(wide.as_ptr()),
+                GENERIC_READ_U32,
+                FILE_SHARE_READ,
+                None,
+                OPEN_EXISTING,
+                FILE_FLAGS_AND_ATTRIBUTES(0),
+                None,
+            )
+        }
+        .map_err(|e| format!("CreateFileW({}) failed: {:?}", path, e))?;
+        Ok(handle)
     }
 
+    pub(super) fn read_toc(drive: &str) -> Result<CdToc, String> {
+        let handle = open_drive(drive)?;
+
+        let mut out_buf = vec![0u8; 1024];
+        let mut bytes_returned: u32 = 0;
+
+        let result = unsafe {
+            DeviceIoControl(
+                handle,
+                IOCTL_CDROM_READ_TOC,
+                None,
+                0,
+                Some(out_buf.as_mut_ptr() as *mut _),
+                out_buf.len() as u32,
+                Some(&mut bytes_returned),
+                None,
+            )
+        };
+
+        let _ = unsafe { CloseHandle(handle) };
+
+        result.map_err(|e| format!("IOCTL_CDROM_READ_TOC failed: {:?}", e))?;
+
+        out_buf.truncate(bytes_returned as usize);
+        let parsed = parse_toc_lba(&out_buf)?;
+
+        let tracks: Vec<CdTrack> = parsed
+            .iter()
+            .map(|p| CdTrack {
+                idx: p.idx,
+                lba_start: p.lba_start,
+                frames: p.frames,
+                duration_sec: frames_to_seconds(p.frames),
+            })
+            .collect();
+
+        let total_duration_sec = tracks.iter().map(|t| t.duration_sec).sum();
+
+        Ok(CdToc {
+            drive: drive.to_string(),
+            tracks,
+            total_duration_sec,
+        })
+    }
+
+    /// Stub — filled in T5.
     pub(super) fn rip_track(
         _app: &AppHandle,
         _drive: &str,
@@ -127,13 +199,5 @@ mod windows_impl {
         _cancel: Arc<AtomicBool>,
     ) -> Result<(), String> {
         Err("cd_rip_track not yet implemented".to_string())
-    }
-
-    #[allow(dead_code)]
-    fn _silence_unused_imports() -> (CdTrack, CdToc) {
-        (
-            CdTrack { idx: 0, lba_start: 0, frames: 0, duration_sec: 0.0 },
-            CdToc { drive: String::new(), tracks: vec![], total_duration_sec: 0.0 },
-        )
     }
 }
