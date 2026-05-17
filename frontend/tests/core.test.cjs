@@ -1213,6 +1213,105 @@ section('imports.js -- structure ImportEntry');
   console.log('devices.js — logic: 5/5 OK');
 }
 
+// ── cdaudio_pure.js — logique pure ──────────────────────────────
+{
+  const assert = require('assert');
+  const {
+    detectNewAudioCds,
+    buildEphemeralCdTrack,
+    cleanupEphemeralForDrive,
+    extractDestPath,
+    calculateRipPercent,
+    formatTrackLabel,
+  } = require('../src/cdaudio_pure.cjs');
+
+  assert.strictEqual(formatTrackLabel(1),  'Track 01', 'formatTrackLabel(1) → "Track 01"');
+  assert.strictEqual(formatTrackLabel(12), 'Track 12', 'formatTrackLabel(12) → "Track 12"');
+
+  // detectNewAudioCds detects new audio CD
+  {
+    const prev = [{ path: 'D:\\', audio_cd: false }];
+    const curr = [{ path: 'D:\\', audio_cd: true, track_count: 12, label: 'MY CD' }];
+    const out = detectNewAudioCds(prev, curr);
+    assert.strictEqual(out.length, 1, 'detectNewAudioCds detects new audio CD: length');
+    assert.strictEqual(out[0].path, 'D:\\', 'detectNewAudioCds detects new audio CD: path');
+  }
+
+  // detectNewAudioCds ignores already-known CD
+  {
+    const prev = [{ path: 'D:\\', audio_cd: true }];
+    const curr = [{ path: 'D:\\', audio_cd: true }];
+    const out = detectNewAudioCds(prev, curr);
+    assert.strictEqual(out.length, 0, 'detectNewAudioCds ignores already-known CD');
+  }
+
+  // detectNewAudioCds ignores data CD
+  {
+    const prev = [];
+    const curr = [{ path: 'D:\\', audio_cd: false }];
+    const out = detectNewAudioCds(prev, curr);
+    assert.strictEqual(out.length, 0, 'detectNewAudioCds ignores data CD');
+  }
+
+  // buildEphemeralCdTrack shapes virtual track
+  {
+    const drive = { path: 'D:\\', label: 'MY CD' };
+    const tocTrack = { idx: 3, duration_sec: 245.5 };
+    const t = buildEphemeralCdTrack(drive, tocTrack, '/tmp/x.flac');
+    assert.strictEqual(t.id,        'cd:D:\\:3',    'buildEphemeralCdTrack: id');
+    assert.strictEqual(t.path,      '/tmp/x.flac',  'buildEphemeralCdTrack: path');
+    assert.strictEqual(t.title,     'Track 03',      'buildEphemeralCdTrack: title');
+    assert.strictEqual(t.artist,    'CD Audio',      'buildEphemeralCdTrack: artist');
+    assert.strictEqual(t.album,     'MY CD',         'buildEphemeralCdTrack: album');
+    assert.strictEqual(t.dur,       245.5,           'buildEphemeralCdTrack: dur');
+    assert.strictEqual(t._isEphemeralCd, true,       'buildEphemeralCdTrack: _isEphemeralCd');
+    assert.strictEqual(t._cdDrive,  'D:\\',          'buildEphemeralCdTrack: _cdDrive');
+  }
+
+  // buildEphemeralCdTrack falls back album label
+  {
+    const drive = { path: 'D:\\', label: '' };
+    const t = buildEphemeralCdTrack(drive, { idx: 1, duration_sec: 60 }, '/tmp/y.flac');
+    assert.strictEqual(t.album, 'CD inconnu', 'buildEphemeralCdTrack falls back album label');
+  }
+
+  // cleanupEphemeralForDrive removes only this drive
+  {
+    const tracks = [
+      { id: 'normal-1' },
+      { id: 'cd:D:\\:1', _isEphemeralCd: true, _cdDrive: 'D:\\' },
+      { id: 'cd:E:\\:1', _isEphemeralCd: true, _cdDrive: 'E:\\' },
+      { id: 'normal-2' },
+    ];
+    const out = cleanupEphemeralForDrive(tracks, 'D:\\');
+    assert.strictEqual(out.length, 3, 'cleanupEphemeralForDrive: length');
+    assert.deepStrictEqual(out.map(t => t.id), ['normal-1', 'cd:E:\\:1', 'normal-2'], 'cleanupEphemeralForDrive: ids');
+  }
+
+  // extractDestPath builds folder + Track filename
+  {
+    const p = extractDestPath('C:\\Music', 'MY CD', 7, '2026-05-17');
+    assert.ok(p.endsWith('Track 07.flac'), `extractDestPath ends with Track 07.flac: got ${p}`);
+    assert.ok(p.includes('CD_MY_CD_2026-05-17'), `extractDestPath includes dir: got ${p}`);
+  }
+
+  // extractDestPath sanitizes label with forbidden chars
+  {
+    const p = extractDestPath('C:\\Music', 'rock/roll<>?', 1, '2026-05-17');
+    const dirPart = p.split(/[\\/]/).slice(-2)[0];
+    assert.ok(!/[\/<>?]/.test(dirPart), `extractDestPath sanitizes label: dir part should be sanitized: ${p}`);
+  }
+
+  // calculateRipPercent rounds down + zero guard
+  assert.strictEqual(calculateRipPercent(0,    100), 0,   'calculateRipPercent(0, 100) = 0');
+  assert.strictEqual(calculateRipPercent(50,   100), 50,  'calculateRipPercent(50, 100) = 50');
+  assert.strictEqual(calculateRipPercent(99,   100), 99,  'calculateRipPercent(99, 100) = 99');
+  assert.strictEqual(calculateRipPercent(100,  100), 100, 'calculateRipPercent(100, 100) = 100');
+  assert.strictEqual(calculateRipPercent(0,    0),   0,   'calculateRipPercent(0, 0) = 0');
+
+  console.log('cdaudio_pure.js — logique pure: 11/11 OK');
+}
+
 // -- Résultat -----------------------------------------------------------
 console.log('\n═══════════════════════════════════════════════════════════');
 console.log(`  Total : ${_ok + _ko}   OK: ${_ok}   KO: ${_ko}`);
