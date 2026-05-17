@@ -6,6 +6,7 @@ mod backup;
 mod mini;
 mod watch;
 mod cdaudio;
+mod cdaudio_toc;
 #[cfg(target_os = "windows")]
 mod taskbar;
 
