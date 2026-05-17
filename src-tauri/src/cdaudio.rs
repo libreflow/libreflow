@@ -105,6 +105,40 @@ pub fn cd_cancel_rip(rip_id: String) -> Result<(), String> {
     Err(format!("rip_id {} not found", rip_id))
 }
 
+/// Returns the absolute path of the CD ephemeral-rip cache directory,
+/// creating it on first call. Lives under the app data dir as `cd-cache/`.
+#[tauri::command]
+pub fn cd_cache_dir(app: AppHandle) -> Result<String, String> {
+    use tauri::Manager;
+    let base = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("app_data_dir failed: {}", e))?;
+    let dir = base.join("cd-cache");
+    std::fs::create_dir_all(&dir)
+        .map_err(|e| format!("create cd-cache dir failed: {}", e))?;
+    dir.into_os_string()
+        .into_string()
+        .map_err(|s| format!("non-UTF8 cache path: {:?}", s))
+}
+
+/// Recursively deletes the CD ephemeral-rip cache directory.
+/// Missing directory is treated as success.
+#[tauri::command]
+pub fn cd_purge_cache(app: AppHandle) -> Result<(), String> {
+    use tauri::Manager;
+    let base = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("app_data_dir failed: {}", e))?;
+    let dir = base.join("cd-cache");
+    match std::fs::remove_dir_all(&dir) {
+        Ok(()) => Ok(()),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(e) => Err(format!("remove cd-cache failed: {}", e)),
+    }
+}
+
 #[cfg(target_os = "windows")]
 mod windows_impl {
     use super::{CdTrack, CdToc};
@@ -283,6 +317,12 @@ mod windows_impl {
         stream.write(&mut sink)
             .map_err(|e| format!("flacenc write failed: {:?}", e))?;
 
+        if let Some(parent) = std::path::Path::new(dest_path).parent() {
+            if !parent.as_os_str().is_empty() {
+                std::fs::create_dir_all(parent)
+                    .map_err(|e| format!("create FLAC parent dir failed: {}", e))?;
+            }
+        }
         std::fs::write(dest_path, sink.as_slice())
             .map_err(|e| format!("write FLAC file failed: {}", e))?;
 

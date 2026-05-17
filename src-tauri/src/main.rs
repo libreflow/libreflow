@@ -61,6 +61,8 @@ fn main() {
             cdaudio::cd_read_toc,
             cdaudio::cd_rip_track,
             cdaudio::cd_cancel_rip,
+            cdaudio::cd_cache_dir,
+            cdaudio::cd_purge_cache,
             #[cfg(debug_assertions)]
             commands::open_devtools,
         ])
