@@ -2,6 +2,8 @@ use libreflow_lib::cdaudio_toc::{parse_toc_lba, ParsedTrack};
 
 #[test]
 fn parses_three_audio_tracks_plus_leadout() {
+    // Header: length=0x22, first=1, last=3, then 4 entries × 8 bytes
+    // Each entry: [reserved, control|adr, track_no, reserved, lba_be×4]
     let buf: Vec<u8> = vec![
         0x00, 0x22, 0x01, 0x03,
         0x00, 0x10, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00,
@@ -18,6 +20,8 @@ fn parses_three_audio_tracks_plus_leadout() {
 
 #[test]
 fn filters_data_tracks() {
+    // Header: length=0x1A, first=1, last=2, then 3 entries × 8 bytes
+    // Entry 2 has control=0x14 (bit 2 set) marking it as data track
     let buf: Vec<u8> = vec![
         0x00, 0x1A, 0x01, 0x02,
         0x00, 0x10, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00,

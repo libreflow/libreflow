@@ -42,6 +42,12 @@ pub fn parse_toc_lba(buf: &[u8]) -> Result<Vec<ParsedTrack>, String> {
     }
 
     let mut all: Vec<(u8, u32, bool)> = Vec::with_capacity(entry_count);
+    // Per-entry byte layout (8 bytes, big-endian addresses):
+    //   [0] reserved
+    //   [1] ADR(high nibble) | CONTROL(low nibble)  — CONTROL bit 2 (0x04) set = data track
+    //   [2] track number (0xAA = lead-out marker)
+    //   [3] reserved
+    //   [4..7] LBA u32 big-endian (since IOCTL was called with Msf=FALSE)
     for i in 0..entry_count {
         let off = HEADER_SIZE + i * TRACK_ENTRY_SIZE;
         let control_adr = buf[off + 1];
