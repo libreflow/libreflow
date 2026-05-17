@@ -205,6 +205,8 @@ mod windows_impl {
     const TRACK_MODE_CDDA: u32 = 2;
     const SECTOR_BYTES: usize = 2352;       // CD audio sector size
     const FRAMES_PER_CHUNK: u32 = 50;        // ~117KB per IOCTL call
+    const FRAMES_PER_SECTOR: usize = 588;    // 588 stereo PCM frames per CDDA sector
+    const MAX_SECTORS_GUARD: u32 = 400_000;  // ~88 min — longer than any real CD; OOM safety
 
     /// RAW_READ_INFO struct expected by IOCTL_CDROM_RAW_READ (ntddcdrm.h).
     #[repr(C)]
@@ -304,12 +306,18 @@ mod windows_impl {
         if total_sectors == 0 {
             return Err(format!("track {} has 0 frames", track_idx));
         }
+        if total_sectors > MAX_SECTORS_GUARD {
+            return Err(format!(
+                "track {} reports {} sectors (> {} cap) — refusing to allocate",
+                track_idx, total_sectors, MAX_SECTORS_GUARD
+            ));
+        }
 
         let handle = open_drive(drive)?;
 
         // CD audio: 44100 Hz, 16-bit signed LE, 2 channels (stereo interleaved)
-        // 1 sector = 2352 bytes = 588 stereo frames × 2 channels × 2 bytes
-        let mut all_samples: Vec<i32> = Vec::with_capacity((total_sectors as usize) * 588 * 2);
+        // 1 sector = 2352 bytes = FRAMES_PER_SECTOR stereo frames × 2 channels × 2 bytes
+        let mut all_samples: Vec<i32> = Vec::with_capacity((total_sectors as usize) * FRAMES_PER_SECTOR * 2);
         let mut sectors_done: u32 = 0;
         let mut last_emit = std::time::Instant::now();
 
@@ -338,8 +346,13 @@ mod windows_impl {
                     match retry_pcm {
                         Some(b) => b,
                         None => {
-                            eprintln!("[cdaudio] giving up on LBA {} after 3 retries: {}", lba, e);
-                            // Insert silence so the track stays time-aligned
+                            // Permanent read failure — pad with silence to keep track time-aligned.
+                            // The FLAC will have a noticeable gap; user should refer to the WARN
+                            // log if the output sounds wrong.
+                            eprintln!(
+                                "[cdaudio] WARN: LBA {} — read failed after 3 retries; padding {} sectors with silence",
+                                lba, chunk
+                            );
                             vec![0u8; SECTOR_BYTES * chunk as usize]
                         }
                     }
