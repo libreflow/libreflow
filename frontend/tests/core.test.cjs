@@ -1312,6 +1312,18 @@ section('imports.js -- structure ImportEntry');
   console.log('cdaudio_pure.js — logique pure: 11/11 OK');
 }
 
+// ── db.js — _isEphemeralCd skip predicate ──────────────────────────
+{
+  // db.js depends on idb + window; test the predicate inline instead of requiring the module.
+  const isEphemeralCdTrack = (store, v) =>
+    store === 'tracks' && v && v._isEphemeralCd === true;
+
+  assert(isEphemeralCdTrack('tracks', { _isEphemeralCd: true }), 'dput skip: ephemeral CD track');
+  assert(!isEphemeralCdTrack('tracks', { id: 1 }), 'dput skip: normal track persisted');
+  assert(!isEphemeralCdTrack('playlists', { _isEphemeralCd: true }), 'dput skip: ephemeral but wrong store');
+}
+console.log('db.js — _isEphemeralCd skip: 3/3 OK');
+
 // -- Résultat -----------------------------------------------------------
 console.log('\n═══════════════════════════════════════════════════════════');
 console.log(`  Total : ${_ok + _ko}   OK: ${_ok}   KO: ${_ko}`);

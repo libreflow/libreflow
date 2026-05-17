@@ -102,11 +102,15 @@ const dall = (s) => Promise.race([_idbTimeout(CFG.IDB_TIMEOUT_DALL), new Promise
  * @param {IDBValidKey} [k]    - Explicit key (omit if store has keyPath)
  * @returns {Promise<void>}
  */
-const dput = (s,v,k) => Promise.race([_idbTimeout(8000), new Promise((ok,fail) => {
-  const r = k !== undefined ? tx(s,'readwrite').put(v,k) : tx(s,'readwrite').put(v);
-  r.onsuccess = () => ok();
-  r.onerror   = () => fail(r.error);
-})]);
+const dput = (s,v,k) => {
+  // Skip persisting ephemeral CD tracks — they're tied to the inserted disc's lifetime
+  if (s === 'tracks' && v && v._isEphemeralCd === true) return;
+  return Promise.race([_idbTimeout(8000), new Promise((ok,fail) => {
+    const r = k !== undefined ? tx(s,'readwrite').put(v,k) : tx(s,'readwrite').put(v);
+    r.onsuccess = () => ok();
+    r.onerror   = () => fail(r.error);
+  })]);
+};
 
 /**
  * Delete a record by key from a store.
