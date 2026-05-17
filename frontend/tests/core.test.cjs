@@ -1172,6 +1172,47 @@ section('imports.js -- structure ImportEntry');
   console.log('backup.js — logic: 9/9 OK');
 }
 
+// ─── devices.js — pure logic ──────────────────────────────────────────────────
+{
+  const assert = require('assert');
+
+  // Réplique de la logique pure (sans IPC/DOM/timer)
+  function detectNewRemovable(previous, current) {
+    const prevPaths = new Set(previous.map(d => d.path));
+    return current.filter(d => d.kind === 'removable' && !prevPaths.has(d.path));
+  }
+
+  // 1. New removable drive detected
+  const newDrives = detectNewRemovable(
+    [{ path: 'C:\\', kind: 'fixed' }],
+    [{ path: 'C:\\', kind: 'fixed' }, { path: 'E:\\', kind: 'removable' }]
+  );
+  assert.strictEqual(newDrives.length, 1, '1. new removable detected');
+  assert.strictEqual(newDrives[0].path, 'E:\\', '1. correct drive path');
+
+  // 2. Fixed drive not reported as new removable
+  const noRemovable = detectNewRemovable(
+    [{ path: 'C:\\', kind: 'fixed' }],
+    [{ path: 'C:\\', kind: 'fixed' }, { path: 'D:\\', kind: 'fixed' }]
+  );
+  assert.strictEqual(noRemovable.length, 0, '2. fixed drives ignored');
+
+  // 3. Already known removable not re-detected
+  const knownRemovable = [{ path: 'E:\\', kind: 'removable' }];
+  const noDup = detectNewRemovable(knownRemovable, knownRemovable);
+  assert.strictEqual(noDup.length, 0, '3. known removable not re-detected');
+
+  // 4. From empty previous
+  const fromNone = detectNewRemovable([], [{ path: 'E:\\', kind: 'removable' }]);
+  assert.strictEqual(fromNone.length, 1, '4. from empty previous');
+
+  // 5. Disconnected drive not reported as new
+  const fromFull = detectNewRemovable([{ path: 'E:\\', kind: 'removable' }], []);
+  assert.strictEqual(fromFull.length, 0, '5. disconnected drive not false-positive');
+
+  console.log('devices.js — logic: 5/5 OK');
+}
+
 // -- Résultat -----------------------------------------------------------
 console.log('\n═══════════════════════════════════════════════════════════');
 console.log(`  Total : ${_ok + _ko}   OK: ${_ok}   KO: ${_ko}`);
