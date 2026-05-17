@@ -799,7 +799,7 @@
 #usb-modal-bg {
   position: fixed;
   inset: 0;
-  background: rgba(0,0,0,0.55);
+  background: var(--scrim);
   z-index: calc(var(--z-modal) + 150);
   display: flex;
   align-items: center;
@@ -815,7 +815,7 @@
   width: min(480px, 90vw);
   max-height: 70vh;
   overflow-y: auto;
-  box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+  box-shadow: var(--shadow-xl);
   display: flex;
   flex-direction: column;
   gap: 14px;
@@ -833,7 +833,7 @@
   justify-content: space-between;
   gap: 12px;
   padding: 8px 0;
-  border-bottom: 1px solid rgba(255,255,255,0.05);
+  border-bottom: 1px solid var(--border-1);
 }
 .usb-drive-info {
   display: flex;
@@ -1077,7 +1077,6 @@ html[data-mode="light"] .organize-move-row { border-color: rgba(0,0,0,0.06); }
 html[data-mode="light"] .organize-move-from,
 html[data-mode="light"] .organize-move-to   { color: var(--t2); }
 html[data-mode="light"] #usb-modal { background: var(--bg2, #f5f5f8); }
-html[data-mode="light"] .usb-drive-row { border-color: rgba(0,0,0,0.06); }
 
 /* ── Settings ── */
 html[data-mode="light"] #settings-box    { background:var(--bg2); border:var(--border-w-sm) solid var(--bg5); box-shadow:var(--shadow-modal2); }
