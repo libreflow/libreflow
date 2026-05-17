@@ -14,9 +14,11 @@
 //   closeUsbImportModal()
 //   importFromDrive(drivePath)
 
-import { invoke }        from './ipc.js';
-import { toast, esc }   from './ui.js';
-import { importPaths }  from './watchfolder.js';
+import { invoke }                       from './ipc.js';
+import { toast, esc }                   from './ui.js';
+import { importPaths }                  from './watchfolder.js';
+import { detectNewAudioCds }            from './cdaudio_pure.js';
+import { openCdModal, cleanupCdCache }  from './cdaudio.js';
 
 // ── État module ───────────────────────────────────────────────────────────────
 
@@ -64,6 +66,19 @@ async function _poll() {
 
   const newRemovable = _detectNewRemovable(_lastDrives, drives);
   for (const d of newRemovable) _onUsbConnected(d);
+
+  // CD audio : insertion depuis le dernier poll
+  const newCds = detectNewAudioCds(_lastDrives, drives);
+  for (const cd of newCds) _onAudioCdInserted(cd);
+
+  // CD audio : éjection (présent au poll précédent, absent maintenant)
+  const currAudioPaths = new Set(drives.filter(d => d.audio_cd).map(d => d.path));
+  for (const prev of _lastDrives) {
+    if (prev.audio_cd && !currAudioPaths.has(prev.path)) {
+      cleanupCdCache(prev.path).catch(e => console.warn('[devices] cleanup failed:', e));
+    }
+  }
+
   _lastDrives = drives;
 }
 
@@ -78,6 +93,14 @@ function _onUsbConnected(drive) {
     `Disque USB détecté (${drive.label || drive.path}) — Importer de la musique ?`,
     'info'
   );
+}
+
+function _onAudioCdInserted(drive) {
+  toast(
+    `CD Audio détecté (${drive.track_count} pistes) — Lire ou extraire ?`,
+    'info'
+  );
+  openCdModal(drive.path);
 }
 
 // ── Import depuis un lecteur ──────────────────────────────────────────────────

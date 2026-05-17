@@ -32,6 +32,8 @@ import { organizePreview, organizeConfirm,
 import { exportBackup, importBackup }                          from './backup.js';
 import { openUsbImportModal, closeUsbImportModal,
          importFromDrive }                                     from './devices.js';
+import { closeCdModal, playCdTrack, extractCd,
+         cancelCurrentRip }                                    from './cdaudio.js';
 import { toggleSleepMenu, setSleepTimer, setSleepEndOfTrack,
          setSleepCustom, cancelSleepTimer }                    from './sleep.js';
 import { toggleMiniOverlay }                                   from './minioverlay.js';
@@ -283,6 +285,24 @@ const _ACTIONS = {
 
   'usb-refresh': async () => {
     await openUsbImportModal(); // re-renders the list
+  },
+
+  // ── CD audio ──────────────────────────────────────────────
+  // Drive path is read from the TOC stashed on #cd-modal-bg by openCdModal,
+  // matching the existing modal-element-stash pattern (avoids polluting window).
+  'cd-play': async () => {
+    const drive = document.getElementById('cd-modal-bg')?._toc?.drive;
+    if (drive) await playCdTrack(drive, 1);
+  },
+  'cd-extract': async () => {
+    const drive = document.getElementById('cd-modal-bg')?._toc?.drive;
+    if (drive) await extractCd(drive);
+  },
+  'cd-cancel-modal': () => {
+    closeCdModal();
+  },
+  'cd-cancel-rip': async () => {
+    await cancelCurrentRip();
   },
 
   // ── EQ — filtrage des presets ─────────────────────────────

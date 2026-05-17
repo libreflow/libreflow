@@ -22,6 +22,7 @@ import { playLog, setPlayLog, logPlay, flushPlayLog, cancelPlayLogFlush } from '
 import { eqCtx, eqSource, eqNodes, eqEnabled, eqOpen, initEQ, ensureEQResumed, toggleEQ, closeEQ, renderEQBands, setEQBand, applyEQPreset, eqAutoMode, setEQAutoMode, toggleEQAutoMode, loadEQProfiles, getEQProfiles, applyGenreEQ, startSmartEQ, stopSmartEQ, updateSmartEQLoudness, updateSmartEQGenre, filterEQPresets, initBootEQ, getActiveEqPreset, masterGainNode, setMasterGain, setEQExpert } from './eq.js';
 import { initDeviceEQ }                                from './eqdevice.js';
 import { initDevices }                                 from './devices.js';
+import { cleanupCdCache }                              from './cdaudio.js';
 import { initViz, startViz, stopViz, updateVizColor, setVizMode, getVizMode, setVizEnabled, getVizEnabled } from './viz.js';
 import { sleepFading, setSleepFading, sleepEndOfTrack, toggleSleepMenu, setSleepTimer, setSleepEndOfTrack, setSleepCustom, cancelSleepTimer } from './sleep.js';
 import { esc, fmt, fmtd, extEmoji, normTag, mainArtist } from './utils.js';
@@ -435,7 +436,9 @@ async function boot() {
     if (cfg.eqExpert)    setEQExpert(true);
     if (cfg.eqProfiles)  loadEQProfiles(cfg.eqProfiles);
     initDeviceEQ(cfg.eqDeviceProfiles ?? {}); // fire-and-forget async — detects current audio output device
-    initDevices(); // démarrer le polling USB
+    initDevices(); // démarrer le polling USB + CD audio
+    // Purge tout résidu de cache CD orphelin (rip interrompu, crash, etc.)
+    cleanupCdCache(null).catch(e => console.warn('[boot] CD cache GC failed:', e));
     // Watch folder : restaurer le chemin ET relancer la surveillance native.
     // Bug #7 fix : initWatchPath() seul restaure le chemin mais ne relance pas le watcher.
     // La surveillance était inactive jusqu'au prochain clic sur le bouton.

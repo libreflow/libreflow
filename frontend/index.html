@@ -399,6 +399,32 @@
 </div>
 
 
+<!-- CD AUDIO MODAL — lecture / extraction d'un CD audio inséré -->
+<div id="cd-modal-bg" data-backdrop-action="cd-cancel-modal">
+  <div id="cd-modal" role="dialog" aria-modal="true" aria-labelledby="cd-modal-title">
+    <div class="modal-h" id="cd-modal-title">CD Audio détecté</div>
+    <div class="modal-s">
+      Lecteur : <strong id="cd-label"></strong><br>
+      <span id="cd-track-count"></span> pistes — <span id="cd-duration"></span>
+    </div>
+
+    <div id="cd-progress" hidden>
+      <div class="cd-progress-bar"><div id="cd-progress-fill"></div></div>
+      <p id="cd-progress-text"></p>
+      <div class="modal-btns">
+        <button class="mbtn cancel" data-action="cd-cancel-rip">Annuler</button>
+      </div>
+    </div>
+
+    <div class="modal-btns" id="cd-actions">
+      <button class="mbtn cancel" data-action="cd-cancel-modal">Ignorer</button>
+      <button class="mbtn" data-action="cd-extract">Extraire vers bibliothèque</button>
+      <button class="mbtn confirm" data-action="cd-play">Lire</button>
+    </div>
+  </div>
+</div>
+
+
 <!-- NEW PLAYLIST MODAL -->
 <div id="pl-modal-bg" data-backdrop-action="close-pl-modal">
   <div id="pl-modal" role="dialog" aria-modal="true" aria-labelledby="pl-modal-title">
