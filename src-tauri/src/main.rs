@@ -58,6 +58,9 @@ fn main() {
             commands::import_backup,
             commands::list_drives,
             commands::open_folder_at,
+            cdaudio::cd_read_toc,
+            cdaudio::cd_rip_track,
+            cdaudio::cd_cancel_rip,
             #[cfg(debug_assertions)]
             commands::open_devtools,
         ])
