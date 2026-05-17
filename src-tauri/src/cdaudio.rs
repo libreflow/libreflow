@@ -198,15 +198,187 @@ mod windows_impl {
         })
     }
 
-    /// Stub — filled in T5.
+    use std::sync::atomic::Ordering;
+    use tauri::Emitter;
+
+    const IOCTL_CDROM_RAW_READ: u32 = 0x0002403E;
+    const TRACK_MODE_CDDA: u32 = 2;
+    const SECTOR_BYTES: usize = 2352;       // CD audio sector size
+    const FRAMES_PER_CHUNK: u32 = 50;        // ~117KB per IOCTL call
+
+    /// RAW_READ_INFO struct expected by IOCTL_CDROM_RAW_READ (ntddcdrm.h).
+    #[repr(C)]
+    struct RawReadInfo {
+        disk_offset_lo: u32,
+        disk_offset_hi: u32,
+        sector_count: u32,
+        track_mode: u32,
+    }
+
+    fn read_audio_sectors(
+        handle: HANDLE,
+        start_lba: u32,
+        sector_count: u32,
+    ) -> Result<Vec<u8>, String> {
+        // IOCTL expects DiskOffset = LBA * 2048 (logical sector size), not byte offset
+        let offset_logical_bytes: u64 = (start_lba as u64) * 2048;
+        let info = RawReadInfo {
+            disk_offset_lo: (offset_logical_bytes & 0xFFFF_FFFF) as u32,
+            disk_offset_hi: ((offset_logical_bytes >> 32) & 0xFFFF_FFFF) as u32,
+            sector_count,
+            track_mode: TRACK_MODE_CDDA,
+        };
+
+        let mut out = vec![0u8; SECTOR_BYTES * sector_count as usize];
+        let mut bytes_returned: u32 = 0;
+
+        let ok = unsafe {
+            DeviceIoControl(
+                handle,
+                IOCTL_CDROM_RAW_READ,
+                Some(&info as *const _ as *const _),
+                std::mem::size_of::<RawReadInfo>() as u32,
+                Some(out.as_mut_ptr() as *mut _),
+                out.len() as u32,
+                Some(&mut bytes_returned),
+                None,
+            )
+        };
+
+        if ok.is_err() {
+            return Err(format!(
+                "IOCTL_CDROM_RAW_READ failed at LBA {}: {:?} (os: {})",
+                start_lba, ok.err(), std::io::Error::last_os_error()
+            ));
+        }
+
+        out.truncate(bytes_returned as usize);
+        Ok(out)
+    }
+
+    fn encode_flac(samples: &[i32], dest_path: &str) -> Result<(), String> {
+        use flacenc::bitsink::ByteSink;
+        use flacenc::component::BitRepr;
+        use flacenc::config::Encoder as EncoderConfig;
+        use flacenc::error::Verify;
+        use flacenc::source::MemSource;
+
+        let channels = 2;
+        let bits_per_sample = 16;
+        let sample_rate = 44100;
+
+        let config = EncoderConfig::default()
+            .into_verified()
+            .map_err(|e| format!("flacenc config verify failed: {:?}", e))?;
+        let block_size = config.block_size;
+
+        let source = MemSource::from_samples(samples, channels, bits_per_sample, sample_rate);
+
+        let stream = flacenc::encode_with_fixed_block_size(&config, source, block_size)
+            .map_err(|e| format!("flacenc encode failed: {:?}", e))?;
+
+        let mut sink = ByteSink::new();
+        stream.write(&mut sink)
+            .map_err(|e| format!("flacenc write failed: {:?}", e))?;
+
+        std::fs::write(dest_path, sink.as_slice())
+            .map_err(|e| format!("write FLAC file failed: {}", e))?;
+
+        Ok(())
+    }
+
     pub(super) fn rip_track(
-        _app: &AppHandle,
-        _drive: &str,
-        _track_idx: u8,
-        _dest_path: &str,
-        _rip_id: &str,
-        _cancel: Arc<AtomicBool>,
+        app: &AppHandle,
+        drive: &str,
+        track_idx: u8,
+        dest_path: &str,
+        rip_id: &str,
+        cancel: Arc<AtomicBool>,
     ) -> Result<(), String> {
-        Err("cd_rip_track not yet implemented".to_string())
+        let toc = read_toc(drive)?;
+        let track = toc.tracks.iter()
+            .find(|t| t.idx == track_idx)
+            .ok_or_else(|| format!("track {} not in TOC", track_idx))?;
+
+        let total_sectors = track.frames;
+        if total_sectors == 0 {
+            return Err(format!("track {} has 0 frames", track_idx));
+        }
+
+        let handle = open_drive(drive)?;
+
+        // CD audio: 44100 Hz, 16-bit signed LE, 2 channels (stereo interleaved)
+        // 1 sector = 2352 bytes = 588 stereo frames × 2 channels × 2 bytes
+        let mut all_samples: Vec<i32> = Vec::with_capacity((total_sectors as usize) * 588 * 2);
+        let mut sectors_done: u32 = 0;
+        let mut last_emit = std::time::Instant::now();
+
+        while sectors_done < total_sectors {
+            if cancel.load(Ordering::SeqCst) {
+                let _ = unsafe { CloseHandle(handle) };
+                let _ = std::fs::remove_file(dest_path);
+                return Err("cancelled".to_string());
+            }
+
+            let chunk = FRAMES_PER_CHUNK.min(total_sectors - sectors_done);
+            let lba = track.lba_start + sectors_done;
+
+            let pcm = match read_audio_sectors(handle, lba, chunk) {
+                Ok(b) => b,
+                Err(e) => {
+                    // Retry up to 3 times with backoff
+                    let mut retry_pcm = None;
+                    for attempt in 1..=3u64 {
+                        std::thread::sleep(std::time::Duration::from_millis(100 * attempt));
+                        if let Ok(b) = read_audio_sectors(handle, lba, chunk) {
+                            retry_pcm = Some(b);
+                            break;
+                        }
+                    }
+                    match retry_pcm {
+                        Some(b) => b,
+                        None => {
+                            eprintln!("[cdaudio] giving up on LBA {} after 3 retries: {}", lba, e);
+                            // Insert silence so the track stays time-aligned
+                            vec![0u8; SECTOR_BYTES * chunk as usize]
+                        }
+                    }
+                }
+            };
+
+            // Convert 16-bit LE stereo bytes → i32 samples for flacenc
+            for stereo_frame in pcm.chunks_exact(4) {
+                let l = i16::from_le_bytes([stereo_frame[0], stereo_frame[1]]) as i32;
+                let r = i16::from_le_bytes([stereo_frame[2], stereo_frame[3]]) as i32;
+                all_samples.push(l);
+                all_samples.push(r);
+            }
+
+            sectors_done += chunk;
+
+            if last_emit.elapsed() >= std::time::Duration::from_millis(500) {
+                let percent = ((sectors_done as f64 / total_sectors as f64) * 100.0) as u32;
+                let _ = app.emit("cd-rip-progress", serde_json::json!({
+                    "rip_id": rip_id,
+                    "percent": percent,
+                    "sector_current": sectors_done,
+                    "sector_total": total_sectors,
+                }));
+                last_emit = std::time::Instant::now();
+            }
+        }
+
+        let _ = unsafe { CloseHandle(handle) };
+
+        encode_flac(&all_samples, dest_path)?;
+
+        let _ = app.emit("cd-rip-progress", serde_json::json!({
+            "rip_id": rip_id,
+            "percent": 100,
+            "sector_current": total_sectors,
+            "sector_total": total_sectors,
+        }));
+
+        Ok(())
     }
 }
