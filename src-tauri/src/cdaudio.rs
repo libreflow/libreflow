@@ -124,6 +124,8 @@ mod windows_impl {
     const GENERIC_READ_U32: u32 = 0x80000000u32;
     const IOCTL_CDROM_READ_TOC: u32 = 0x00024000;
 
+    /// Opens a CD drive as a raw block device. Caller must call `CloseHandle` on the returned HANDLE.
+    /// `drive` must be a Windows drive root like "D:\\" — only the first letter is used.
     fn open_drive(drive: &str) -> Result<HANDLE, String> {
         // drive comes in as "D:\\" — convert to "\\\\.\\D:"
         let letter = drive.chars().next().ok_or_else(|| "empty drive string".to_string())?;
@@ -140,13 +142,17 @@ mod windows_impl {
                 None,
             )
         }
-        .map_err(|e| format!("CreateFileW({}) failed: {:?}", path, e))?;
+        .map_err(|e| format!(
+            "CreateFileW({}) failed: {} (os: {})",
+            path, e, std::io::Error::last_os_error()
+        ))?;
         Ok(handle)
     }
 
     pub(super) fn read_toc(drive: &str) -> Result<CdToc, String> {
         let handle = open_drive(drive)?;
 
+        // CD TOC max ~804 bytes (100 tracks × 8 + 4-byte header); 1KB has margin
         let mut out_buf = vec![0u8; 1024];
         let mut bytes_returned: u32 = 0;
 
@@ -165,7 +171,10 @@ mod windows_impl {
 
         let _ = unsafe { CloseHandle(handle) };
 
-        result.map_err(|e| format!("IOCTL_CDROM_READ_TOC failed: {:?}", e))?;
+        result.map_err(|e| format!(
+            "IOCTL_CDROM_READ_TOC failed: {:?} (os: {})",
+            e, std::io::Error::last_os_error()
+        ))?;
 
         out_buf.truncate(bytes_returned as usize);
         let parsed = parse_toc_lba(&out_buf)?;
