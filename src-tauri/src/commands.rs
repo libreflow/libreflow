@@ -133,6 +133,12 @@ pub struct DriveInfo {
     pub label: String,
     /// Type de lecteur : "fixed" | "removable" | "network" | "cdrom" | "unknown"
     pub kind:  String,
+    /// True si CDROM avec au moins une piste audio (Windows uniquement, sinon false).
+    #[serde(default)]
+    pub audio_cd: bool,
+    /// Nombre de pistes audio (0 si pas un CD audio).
+    #[serde(default)]
+    pub track_count: u8,
 }
 
 // ── Helpers internes ──────────────────────────────────────────────────────────
@@ -904,15 +910,27 @@ fn _list_drives_impl() -> Vec<DriveInfo> {
             4 => "network",
             5 => "cdrom",
             _ => "unknown",
-        };
+        }.to_string();
 
         // Label = lettre de lecteur sans le backslash final (ex: "C:")
         let label = drive_str.trim_end_matches('\\').to_string();
 
+        // For CDROM drives, probe the TOC to determine if this is an audio CD
+        let (audio_cd, track_count) = if dtype == 5 {
+            match crate::cdaudio::cd_read_toc(drive_str.clone()) {
+                Ok(toc) => (!toc.tracks.is_empty(), toc.tracks.len().min(255) as u8),
+                Err(_)  => (false, 0), // drive empty, data CD, or read error — silent
+            }
+        } else {
+            (false, 0)
+        };
+
         drives.push(DriveInfo {
             path:  drive_str,
             label,
-            kind:  kind.to_string(),
+            kind,
+            audio_cd,
+            track_count,
         });
     }
     drives
@@ -931,6 +949,8 @@ fn _list_drives_impl() -> Vec<DriveInfo> {
                 path:  p.to_string_lossy().to_string(),
                 label,
                 kind:  "unknown".to_string(),
+                audio_cd: false,
+                track_count: 0,
             })
         })
         .collect()
@@ -956,6 +976,8 @@ fn _list_drives_impl() -> Vec<DriveInfo> {
                 path:  mountpoint.to_string(),
                 label: if label.is_empty() { "/".to_string() } else { label },
                 kind:  "unknown".to_string(),
+                audio_cd: false,
+                track_count: 0,
             })
         })
         .collect()
