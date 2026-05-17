@@ -383,6 +383,21 @@
   </div>
 </div>
 
+<!-- USB IMPORT MODAL — import depuis un disque externe -->
+<div id="usb-modal-bg" data-backdrop-action="usb-cancel">
+  <div id="usb-modal" role="dialog" aria-modal="true" aria-labelledby="usb-modal-title">
+    <div class="modal-h" id="usb-modal-title">Importer depuis un disque</div>
+    <div class="modal-s">Sélectionnez un disque, puis choisissez un dossier à importer.</div>
+    <div id="usb-drives-list" class="usb-drives-list">
+      <!-- Injecté dynamiquement par _renderDrivesList() -->
+    </div>
+    <div class="modal-btns">
+      <button class="mbtn cancel" data-action="usb-cancel">Fermer</button>
+      <button class="mbtn" data-action="usb-refresh">↻ Actualiser</button>
+    </div>
+  </div>
+</div>
+
 
 <!-- NEW PLAYLIST MODAL -->
 <div id="pl-modal-bg" data-backdrop-action="close-pl-modal">
@@ -945,6 +960,18 @@
           </div>
           <button class="mbtn" id="backup-import-btn" data-action="backup-import">
             Restaurer
+          </button>
+        </div>
+      </div>
+      <div class="set-section">
+        <div class="set-section-lbl">Import USB</div>
+        <div class="set-row">
+          <div>
+            <div class="set-row-label">Importer depuis un disque externe</div>
+            <div class="set-row-sub">Détecte les clés USB et disques externes, importe la musique via le pipeline existant.</div>
+          </div>
+          <button class="mbtn" data-action="usb-open-modal">
+            Importer depuis USB
           </button>
         </div>
       </div>

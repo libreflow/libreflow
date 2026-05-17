@@ -795,6 +795,75 @@
 /* Les styles réutilisent les classes .set-section, .set-row, .mbtn —      */
 /* aucun style spécifique nécessaire pour l'instant.                        */
 
+/* ── USB import modal ────────────────────────────────────────────────────── */
+#usb-modal-bg {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.55);
+  z-index: calc(var(--z-modal) + 150);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  visibility: hidden; opacity: 0; pointer-events: none;
+  transition: opacity var(--dur-fast), visibility var(--dur-fast);
+}
+#usb-modal-bg.on { visibility: visible; opacity: 1; pointer-events: auto; }
+#usb-modal {
+  background: var(--bg2, #1e1e2e);
+  border-radius: 12px;
+  padding: 24px;
+  width: min(480px, 90vw);
+  max-height: 70vh;
+  overflow-y: auto;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.usb-drives-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 240px;
+  overflow-y: auto;
+}
+.usb-drive-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 0;
+  border-bottom: 1px solid rgba(255,255,255,0.05);
+}
+.usb-drive-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.usb-drive-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--t);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.usb-drive-path {
+  font-size: 11px;
+  color: var(--t3);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.usb-drives-empty {
+  font-size: 13px;
+  color: var(--t3);
+  text-align: center;
+  padding: 16px 0;
+  font-style: italic;
+}
+
 /* ── Thème clair ─────────────────────────────────────────── */
 html[data-mode="light"] {
   /* Palette principale — blanc propre, gris froids */
@@ -1007,6 +1076,8 @@ html[data-mode="light"] #organize-modal { background: var(--bg2, #f5f5f8); }
 html[data-mode="light"] .organize-move-row { border-color: rgba(0,0,0,0.06); }
 html[data-mode="light"] .organize-move-from,
 html[data-mode="light"] .organize-move-to   { color: var(--t2); }
+html[data-mode="light"] #usb-modal { background: var(--bg2, #f5f5f8); }
+html[data-mode="light"] .usb-drive-row { border-color: rgba(0,0,0,0.06); }
 
 /* ── Settings ── */
 html[data-mode="light"] #settings-box    { background:var(--bg2); border:var(--border-w-sm) solid var(--bg5); box-shadow:var(--shadow-modal2); }

@@ -30,6 +30,8 @@ import { saveCurrentDeviceProfile, deleteDeviceProfile,
 import { organizePreview, organizeConfirm,
          organizeCancel }                                      from './organize.js';
 import { exportBackup, importBackup }                          from './backup.js';
+import { openUsbImportModal, closeUsbImportModal,
+         importFromDrive }                                     from './devices.js';
 import { toggleSleepMenu, setSleepTimer, setSleepEndOfTrack,
          setSleepCustom, cancelSleepTimer }                    from './sleep.js';
 import { toggleMiniOverlay }                                   from './minioverlay.js';
@@ -263,6 +265,24 @@ const _ACTIONS = {
 
   'backup-import': async () => {
     await importBackup();
+  },
+
+  'usb-open-modal': async () => {
+    await openUsbImportModal();
+  },
+
+  'usb-scan': async (btn) => {
+    const path = btn.dataset.path || '';
+    if (!path) return;
+    await importFromDrive(path);
+  },
+
+  'usb-cancel': () => {
+    closeUsbImportModal();
+  },
+
+  'usb-refresh': async () => {
+    await openUsbImportModal(); // re-renders the list
   },
 
   // ── EQ — filtrage des presets ─────────────────────────────
