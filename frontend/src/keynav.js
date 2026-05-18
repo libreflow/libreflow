@@ -10,6 +10,7 @@
 
 import { VIRT }       from './virt.js';
 import { getFiltered } from './search.js';
+import { CFG }        from './cfg.js';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -60,7 +61,10 @@ export function initKeyNav() {
     if (_isModalOpen()) return;
 
     const key = e.key;
-    if (key !== 'ArrowDown' && key !== 'ArrowUp' && key !== 'Home' && key !== 'End') return;
+    const handled = key === 'ArrowDown' || key === 'ArrowUp'
+                 || key === 'Home'      || key === 'End'
+                 || key === 'PageDown'  || key === 'PageUp';
+    if (!handled) return;
 
     e.preventDefault();
 
@@ -72,6 +76,10 @@ export function initKeyNav() {
       _handleArrow(listEl, 1);
     } else if (key === 'ArrowUp') {
       _handleArrow(listEl, -1);
+    } else if (key === 'PageDown') {
+      _handlePage(listEl, 1);
+    } else if (key === 'PageUp') {
+      _handlePage(listEl, -1);
     }
   });
 }
@@ -130,6 +138,42 @@ function _handleArrow(listEl, dir) {
     const target = newRows.find(el => parseInt(el.dataset.fi, 10) === nextFi);
     if (target) {
       // Remove tabindex="0" from the previously focused row if still in DOM
+      const prevFocused = listEl.querySelector('.tr:not(.tr-skel)[tabindex="0"]');
+      _moveFocus(prevFocused !== target ? prevFocused : null, target);
+      target.scrollIntoView({ block: 'nearest' });
+    }
+  });
+}
+
+// ── Page Up / Page Down ───────────────────────────────────────────────────────
+
+/**
+ * Move focus by one viewport (minus 1 row for context).
+ * Computes page size dynamically from listEl.clientHeight / ROW_H so it scales
+ * to the actual viewport, not a hardcoded constant.
+ */
+function _handlePage(listEl, dir) {
+  const fl = getFiltered();
+  if (!fl.length) return;
+
+  // Page size en lignes = viewport / ROW_H - 1 (garde une ligne de contexte).
+  const rowH = CFG.VIRT_ROW_H || 36;
+  const pageSize = Math.max(1, Math.floor(listEl.clientHeight / rowH) - 1);
+
+  const focused = document.activeElement?.closest('.tr:not(.tr-skel)');
+  let currentFi = focused ? parseInt(focused.dataset.fi, 10) : -1;
+  if (isNaN(currentFi)) currentFi = -1;
+  if (currentFi < 0) currentFi = dir === 1 ? 0 : fl.length - 1;
+
+  const targetFi = Math.max(0, Math.min(fl.length - 1, currentFi + dir * pageSize));
+  if (targetFi === currentFi) return;
+
+  VIRT.scrollToIdx(targetFi);
+
+  requestAnimationFrame(() => {
+    const rows = _trackRows(listEl);
+    const target = rows.find(el => parseInt(el.dataset.fi, 10) === targetFi);
+    if (target) {
       const prevFocused = listEl.querySelector('.tr:not(.tr-skel)[tabindex="0"]');
       _moveFocus(prevFocused !== target ? prevFocused : null, target);
       target.scrollIntoView({ block: 'nearest' });
