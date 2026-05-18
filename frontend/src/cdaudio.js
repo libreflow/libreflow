@@ -117,10 +117,10 @@ export async function playCdTrack(drivePath, idx) {
 
   const tracks = get('tracks');
   tracks.push(eph);
-  notify('tracks');
   rebuildTrackIdxMap();
   invalidateFilterCache();
   if (VIRT) VIRT._lastListSig = '';
+  notify('tracks');
 
   const newIdx = tracks.length - 1;
   if (typeof window.playAt === 'function') window.playAt(newIdx);
@@ -197,10 +197,10 @@ export async function cleanupCdCache(drivePath) {
     if (filtered.length !== tracks.length) {
       tracks.length = 0;
       tracks.push(...filtered);
-      notify('tracks');
       rebuildTrackIdxMap();
       invalidateFilterCache();
       if (VIRT) VIRT._lastListSig = '';
+      notify('tracks');
     }
   }
   // Best-effort purge du cache disque

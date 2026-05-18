@@ -1258,12 +1258,14 @@ section('imports.js -- structure ImportEntry');
     const drive = { path: 'D:\\', label: 'MY CD' };
     const tocTrack = { idx: 3, duration_sec: 245.5 };
     const t = buildEphemeralCdTrack(drive, tocTrack, '/tmp/x.flac');
-    assert.strictEqual(t.id,        'cd:D:\\:3',    'buildEphemeralCdTrack: id');
-    assert.strictEqual(t.path,      '/tmp/x.flac',  'buildEphemeralCdTrack: path');
-    assert.strictEqual(t.title,     'Track 03',      'buildEphemeralCdTrack: title');
+    assert.strictEqual(t.id,        'cd:D:\\:3',     'buildEphemeralCdTrack: id');
+    assert.strictEqual(t.path,      '/tmp/x.flac',   'buildEphemeralCdTrack: path');
+    assert.strictEqual(t.name,      'Track 03',      'buildEphemeralCdTrack: name');
     assert.strictEqual(t.artist,    'CD Audio',      'buildEphemeralCdTrack: artist');
     assert.strictEqual(t.album,     'MY CD',         'buildEphemeralCdTrack: album');
-    assert.strictEqual(t.dur,       245.5,           'buildEphemeralCdTrack: dur');
+    assert.strictEqual(t.duration,  245.5,           'buildEphemeralCdTrack: duration');
+    assert.strictEqual(t.ext,       'flac',          'buildEphemeralCdTrack: ext');
+    assert.strictEqual(t.metaDone,  true,            'buildEphemeralCdTrack: metaDone');
     assert.strictEqual(t._isEphemeralCd, true,       'buildEphemeralCdTrack: _isEphemeralCd');
     assert.strictEqual(t._cdDrive,  'D:\\',          'buildEphemeralCdTrack: _cdDrive');
   }
@@ -1309,7 +1311,7 @@ section('imports.js -- structure ImportEntry');
   assert.strictEqual(calculateRipPercent(100,  100), 100, 'calculateRipPercent(100, 100) = 100');
   assert.strictEqual(calculateRipPercent(0,    0),   0,   'calculateRipPercent(0, 0) = 0');
 
-  console.log('cdaudio_pure.js — logique pure: 11/11 OK');
+  console.log('cdaudio_pure.js — logique pure: 13/13 OK');
 }
 
 // ── db.js — _isEphemeralCd skip predicate ──────────────────────────

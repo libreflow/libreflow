@@ -74,16 +74,21 @@ pub async fn cd_rip_track(
     dest_path: String,
     rip_id: String,
 ) -> Result<(), String> {
+    // Validation chemin destination (défense en profondeur — JS construit dest_path
+    // depuis cd_cache_dir ou watchPath, mais on revalide côté Rust).
+    validate_rip_dest(&dest_path)?;
+
     #[cfg(target_os = "windows")]
     {
         let cancel = register_cancel(&rip_id);
         let rip_id_inner = rip_id.clone();
+        // CancelGuard garantit l'unregister même si spawn_blocking panique.
+        let _guard = CancelGuard(&rip_id);
         let result = tokio::task::spawn_blocking(move || {
             windows_impl::rip_track(&app, &drive, track_idx, &dest_path, &rip_id_inner, cancel)
         })
         .await
         .map_err(|e| format!("rip task join error: {}", e))?;
-        unregister_cancel(&rip_id);
         result
     }
     #[cfg(not(target_os = "windows"))]
@@ -91,6 +96,48 @@ pub async fn cd_rip_track(
         let _ = (app, drive, track_idx, dest_path, rip_id);
         Err("CD audio non supporté sur cette plateforme".to_string())
     }
+}
+
+#[cfg(target_os = "windows")]
+struct CancelGuard<'a>(&'a str);
+#[cfg(target_os = "windows")]
+impl<'a> Drop for CancelGuard<'a> {
+    fn drop(&mut self) { unregister_cancel(self.0); }
+}
+
+/// Vérifie qu'un `dest_path` est sûr :
+/// - extension `.flac` (case-insensitive)
+/// - pas de composant `..` ni de chemin vide
+/// - parent dans un dossier autorisé par `is_safe_dir` (rejette `C:\Windows\…` etc.)
+fn validate_rip_dest(dest_path: &str) -> Result<(), String> {
+    use std::path::{Component, Path};
+    if dest_path.is_empty() {
+        return Err("dest_path vide".to_string());
+    }
+    let p = Path::new(dest_path);
+    if !p.extension().is_some_and(|e| e.eq_ignore_ascii_case("flac")) {
+        return Err(format!("dest_path doit se terminer par .flac : {}", dest_path));
+    }
+    for c in p.components() {
+        if matches!(c, Component::ParentDir) {
+            return Err(format!("dest_path contient '..' : {}", dest_path));
+        }
+    }
+    let parent = p.parent().ok_or_else(|| format!("dest_path sans parent : {}", dest_path))?;
+    // Le parent peut ne pas exister encore (encode_flac le crée). Si canonicalize échoue,
+    // on remonte jusqu'à un ancêtre existant pour la validation.
+    let mut check = parent.to_path_buf();
+    let canon = loop {
+        if let Ok(c) = std::fs::canonicalize(&check) { break c; }
+        let Some(p) = check.parent() else {
+            return Err(format!("aucun ancêtre existant pour : {}", dest_path));
+        };
+        check = p.to_path_buf();
+    };
+    if !crate::commands::is_safe_dir(&canon) {
+        return Err(format!("dest_path dans un dossier système refusé : {}", dest_path));
+    }
+    Ok(())
 }
 
 #[tauri::command]
@@ -158,9 +205,23 @@ mod windows_impl {
     const GENERIC_READ_U32: u32 = 0x80000000u32;
     const IOCTL_CDROM_READ_TOC: u32 = 0x00024000;
 
-    /// Opens a CD drive as a raw block device. Caller must call `CloseHandle` on the returned HANDLE.
+    /// RAII guard pour HANDLE — appelle CloseHandle au Drop, garantissant zéro fuite
+    /// même si une fonction panique entre l'ouverture et la fermeture.
+    pub(super) struct DriveHandle(pub HANDLE);
+    impl DriveHandle {
+        pub fn raw(&self) -> HANDLE { self.0 }
+    }
+    impl Drop for DriveHandle {
+        fn drop(&mut self) {
+            if !self.0.is_invalid() {
+                let _ = unsafe { CloseHandle(self.0) };
+            }
+        }
+    }
+
+    /// Opens a CD drive as a raw block device. The returned `DriveHandle` closes the handle on drop.
     /// `drive` must be a Windows drive root like "D:\\" — only the first letter is used.
-    fn open_drive(drive: &str) -> Result<HANDLE, String> {
+    fn open_drive(drive: &str) -> Result<DriveHandle, String> {
         // drive comes in as "D:\\" — convert to "\\\\.\\D:"
         let letter = drive.chars().next().ok_or_else(|| "empty drive string".to_string())?;
         let path = format!("\\\\.\\{}:", letter);
@@ -180,7 +241,7 @@ mod windows_impl {
             "CreateFileW({}) failed: {} (os: {})",
             path, e, std::io::Error::last_os_error()
         ))?;
-        Ok(handle)
+        Ok(DriveHandle(handle))
     }
 
     pub(super) fn read_toc(drive: &str) -> Result<CdToc, String> {
@@ -192,7 +253,7 @@ mod windows_impl {
 
         let result = unsafe {
             DeviceIoControl(
-                handle,
+                handle.raw(),
                 IOCTL_CDROM_READ_TOC,
                 None,
                 0,
@@ -203,7 +264,7 @@ mod windows_impl {
             )
         };
 
-        let _ = unsafe { CloseHandle(handle) };
+        // handle est fermé automatiquement au drop en fin de fonction
 
         result.map_err(|e| format!(
             "IOCTL_CDROM_READ_TOC failed: {:?} (os: {})",
@@ -299,6 +360,10 @@ mod windows_impl {
         use flacenc::error::Verify;
         use flacenc::source::MemSource;
 
+        if samples.is_empty() {
+            return Err("encode_flac: aucun sample à encoder".to_string());
+        }
+
         let channels = 2;
         let bits_per_sample = 16;
         let sample_rate = 44100;
@@ -317,13 +382,18 @@ mod windows_impl {
         stream.write(&mut sink)
             .map_err(|e| format!("flacenc write failed: {:?}", e))?;
 
+        let bytes = sink.as_slice();
+        if bytes.is_empty() {
+            return Err("encode_flac: flux FLAC vide produit par l'encodeur".to_string());
+        }
+
         if let Some(parent) = std::path::Path::new(dest_path).parent() {
             if !parent.as_os_str().is_empty() {
                 std::fs::create_dir_all(parent)
                     .map_err(|e| format!("create FLAC parent dir failed: {}", e))?;
             }
         }
-        std::fs::write(dest_path, sink.as_slice())
+        std::fs::write(dest_path, bytes)
             .map_err(|e| format!("write FLAC file failed: {}", e))?;
 
         Ok(())
@@ -363,22 +433,22 @@ mod windows_impl {
 
         while sectors_done < total_sectors {
             if cancel.load(Ordering::SeqCst) {
-                let _ = unsafe { CloseHandle(handle) };
-                let _ = std::fs::remove_file(dest_path);
+                // handle est fermé au drop, et dest_path n'a pas encore été écrit
+                // (encode_flac n'est appelé qu'après le loop), donc rien à supprimer.
                 return Err("cancelled".to_string());
             }
 
             let chunk = FRAMES_PER_CHUNK.min(total_sectors - sectors_done);
             let lba = track.lba_start + sectors_done;
 
-            let pcm = match read_audio_sectors(handle, lba, chunk) {
+            let pcm = match read_audio_sectors(handle.raw(), lba, chunk) {
                 Ok(b) => b,
-                Err(e) => {
+                Err(_e) => {
                     // Retry up to 3 times with backoff
                     let mut retry_pcm = None;
                     for attempt in 1..=3u64 {
                         std::thread::sleep(std::time::Duration::from_millis(100 * attempt));
-                        if let Ok(b) = read_audio_sectors(handle, lba, chunk) {
+                        if let Ok(b) = read_audio_sectors(handle.raw(), lba, chunk) {
                             retry_pcm = Some(b);
                             break;
                         }
@@ -421,7 +491,7 @@ mod windows_impl {
             }
         }
 
-        let _ = unsafe { CloseHandle(handle) };
+        drop(handle); // ferme proprement avant l'encodage
 
         encode_flac(&all_samples, dest_path)?;
 

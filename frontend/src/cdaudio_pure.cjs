@@ -23,12 +23,15 @@ function detectNewAudioCds(previous, current) {
 
 function buildEphemeralCdTrack(drive, tocTrack, tempPath) {
   return {
-    id:    `cd:${drive.path}:${tocTrack.idx}`,
-    path:  tempPath,
-    title: formatTrackLabel(tocTrack.idx),
-    artist: 'CD Audio',
-    album:  drive.label && drive.label.length > 0 ? drive.label : 'CD inconnu',
-    dur:    tocTrack.duration_sec,
+    id:        `cd:${drive.path}:${tocTrack.idx}`,
+    path:      tempPath,
+    name:      formatTrackLabel(tocTrack.idx),
+    artist:    'CD Audio',
+    album:     drive.label && drive.label.length > 0 ? drive.label : 'CD inconnu',
+    duration:  tocTrack.duration_sec,
+    ext:       'flac',
+    dateAdded: Date.now(),
+    metaDone:  true,
     _isEphemeralCd: true,
     _cdDrive:       drive.path,
   };
