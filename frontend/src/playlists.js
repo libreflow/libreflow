@@ -208,7 +208,7 @@ export function renderPlHero(pl, fl) {
   const label = (isSmart ? i18n('pl_smart_lbl') + ' · ' : '') + i18n('pl_hero_playlist');
 
   const coverInner = pl.coverB64
-    ? `<img src="${pl.coverB64}" alt="" class="pl-hero-cover-img">`
+    ? `<img src="${esc(pl.coverB64)}" alt="" class="pl-hero-cover-img">`
     : `<canvas id="pl-hero-mosaic" width="200" height="200" class="pl-hero-mosaic"></canvas>
        <div class="pl-hero-cover-ico">
          <svg viewBox="0 0 24 24" width="56" height="56" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round">
@@ -430,7 +430,7 @@ function _plNavItemHTML(pl) {
     data-pl-ctx-id="${pl.id}">
     <span class="pl-icon">
       ${pl.coverB64
-        ? `<img src="${pl.coverB64}" alt="" class="pl-cover-img">`
+        ? `<img src="${esc(pl.coverB64)}" alt="" class="pl-cover-img">`
         : (isSmart
           ? `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>`
           : `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>`)
@@ -985,7 +985,7 @@ function _renderPlCoverPreview() {
   const rm   = document.getElementById('pl-cover-rm');
   if (!prev) return;
   if (_plModalCoverB64) {
-    prev.innerHTML = `<img src="${_plModalCoverB64}" alt="" class="pl-cover-img">`;
+    prev.innerHTML = `<img src="${esc(_plModalCoverB64)}" alt="" class="pl-cover-img">`;
     prev.classList.add('has-cover');
     if (rm) rm.style.display = '';
   } else {

@@ -607,7 +607,7 @@ export function renderRadioView() {
     : 0;
 
   const seedArt = seed?.art
-    ? `<img src="${seed.art}" class="rv-seed-art" alt="">`
+    ? `<img src="${esc(seed.art)}" class="rv-seed-art" alt="">`
     : `<div class="rv-seed-art rv-seed-art-em"></div>`;
 
   const t_regen = esc(i18n('radio_regen_btn'));
@@ -665,7 +665,7 @@ export function renderRadioView() {
     const t_remove = esc(i18n('radio_remove_track'));
     const rows = queue.map((t, i) => {
       const art = t.art
-        ? `<img src="${t.art}" class="rv-row-art" alt="">`
+        ? `<img src="${esc(t.art)}" class="rv-row-art" alt="">`
         : `<div class="rv-row-art rv-row-art-em"></div>`;
       const dur = t.duration ? fmt(t.duration) : '';
       const isActive = t.id === _curTrackId;

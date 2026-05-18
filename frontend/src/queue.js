@@ -198,7 +198,7 @@ export function renderQueue() {
     const t = tracks[curIdx];
     _updateQueueBadge('∞');
     const artHTML = t?.art
-      ? `<img src="${t.art}" alt="">`
+      ? `<img src="${esc(t.art)}" alt="">`
       : extEmoji(t?.ext ?? '');
     const row = `<div class="queue-item queue-item--loop" data-action="play-queue-item" data-track-id="${t?.id}">
       <div class="q-art q-art--loop">${artHTML}
@@ -257,7 +257,7 @@ export function renderQueue() {
     </div>`;
     // A11Y-03: role=listitem + aria-label pour chaque item (remove button labeled)
     html += explicit.map((t, i) => {
-      const artHTML  = t.art ? `<img src="${t.art}" alt="">` : extEmoji(t.ext);
+      const artHTML  = t.art ? `<img src="${esc(t.art)}" alt="">` : extEmoji(t.ext);
       const itemLbl  = `${t.name}${t.artistFull || t.artist ? ' — ' + (t.artistFull || t.artist) : ''}`;
       const rmvLbl   = `Retirer ${t.name} de la file d'attente`;
       return `<div class="queue-item queue-item--explicit" role="listitem" tabindex="0" aria-label="${esc(itemLbl)}" data-id="${t.id}" data-qi="${i}">
@@ -282,7 +282,7 @@ export function renderQueue() {
     html += `<div class="queue-section-divider" role="presentation">À suivre : ${esc(_getQueueSource())}</div>`;
     // A11Y-03: role=listitem + aria-label pour chaque item naturel
     html += natural.slice(0, 50).map((t, i) => {
-      const artHTML = t.art ? `<img src="${t.art}" alt="">` : extEmoji(t.ext);
+      const artHTML = t.art ? `<img src="${esc(t.art)}" alt="">` : extEmoji(t.ext);
       const itemLbl = `${t.name}${t.artistFull || t.artist ? ' — ' + (t.artistFull || t.artist) : ''}`;
       return `<div class="queue-item queue-item--natural" role="listitem" tabindex="0" aria-label="${esc(itemLbl)}" data-id="${t.id}" data-ni="${i}"
           data-action="play-queue-item" data-track-id="${t.id}">
