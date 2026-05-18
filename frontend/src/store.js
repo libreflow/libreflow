@@ -113,9 +113,12 @@ function _notify(key, val) {
   }
   const set = _subs.get(key);
   if (!set) return;
+  // Snapshot avant itération : permet aux subscribers d'appeler subscribe()/unsubscribe()
+  // sur la même clé pendant dispatch sans muter la Set en cours d'itération.
+  const snapshot = [...set];
   _notifying.add(key);
   try {
-    for (const cb of set) {
+    for (const cb of snapshot) {
       try { cb(val); } catch (e) { console.error('[store] subscriber error', key, e); queueMicrotask(() => { throw e; }); }
     }
   } finally {

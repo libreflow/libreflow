@@ -82,18 +82,19 @@ export function trackIdx(idOrTrack) {
 /** @type {{ sig: string | null, result: Track[] | null, posMap: Map<string, number> | null }} */
 const _GF = { sig: null, result: null, posMap: null };
 
+// Generation counter for per-track NLC/trigram cache. Incrémenté à chaque
+// invalidate ; les lecteurs vérifient `t._nlcGen === _filterGen` avant d'utiliser
+// les caches. Évite un sweep O(n) sur 50k tracks à chaque mutation.
+let _filterGen = 0;
+
 /**
  * Invalide le cache de getFiltered(). Appeler après toute mutation UI.
+ * O(1) — bump le generation counter au lieu de balayer toutes les tracks.
  * @returns {void}
  */
 export function invalidateFilterCache() {
   _GF.sig = '';
-  // BUG-D3B-1 FIX: clear per-track NLC cache so stale search strings don't survive tag edits/rescans
-  const tracks = get('tracks');
-  for (let i = 0; i < tracks.length; i++) {
-    delete tracks[i]._nlc;
-    delete tracks[i]._trigrams;
-  }
+  _filterGen++;
 }
 
 // ── Store subscriber : auto-invalidation du cache NLC lors d'un changement de tracks ──
@@ -190,8 +191,11 @@ function _filterByQuery(tracks, query) {
   if (!q) return tracks;
   const parts = q.split(/\s+/).filter(Boolean);
   return tracks.filter(t => {
-    if (!t._nlc) t._nlc = [t.name || '', t.artist || '', t.artistFull || '', t.album || '', t.genre || ''].join(' ').toLowerCase();
-    if (!t._trigrams) t._trigrams = _trigrams(t._nlc);
+    if (t._nlcGen !== _filterGen) {
+      t._nlc = [t.name || '', t.artist || '', t.artistFull || '', t.album || '', t.genre || ''].join(' ').toLowerCase();
+      t._trigrams = _trigrams(t._nlc);
+      t._nlcGen = _filterGen;
+    }
     const hay = t._nlc;
     return parts.every(p => hay.includes(p));
   });
@@ -331,7 +335,11 @@ export function getFiltered() {
       // instead of recomputing _trigramScore ~2×n×log(n) times inside the sort comparator.
       const _scores = new Map();
       for (const t of src) {
-        if (!t._trigrams) t._trigrams = _trigrams(t._nlc || '');
+        if (t._nlcGen !== _filterGen) {
+          t._nlc = [t.name || '', t.artist || '', t.artistFull || '', t.album || '', t.genre || ''].join(' ').toLowerCase();
+          t._trigrams = _trigrams(t._nlc);
+          t._nlcGen = _filterGen;
+        }
         _scores.set(t.id, _trigramScore(qTrigrams, t._trigrams));
       }
       const fuzzy = src
