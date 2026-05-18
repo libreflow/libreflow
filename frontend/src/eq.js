@@ -381,6 +381,7 @@ export function getActiveEqPreset() {
  *  Active l'EQ si nécessaire et marque le preset comme 'custom'. */
 export function applyEQGains(bands) {
   if (!Array.isArray(bands) || bands.length !== EQ_BAND_COUNT) return;
+  if (!eqCtx) initEQ();
   _activePreset = 'custom';
   _applyGains(bands);
   _updatePresetBtns('custom'); // aucun preset bouton actif
@@ -462,6 +463,7 @@ export function toggleEQAutoMode() {
 
 // ── A/B comparison ────────────────────────────────────────────────────────────
 export function toggleEQAB() {
+  if (!eqCtx) initEQ();
   _abMode = !_abMode;
   if (_abMode) {
     // Mode A : sauvegarde gains courants, applique flat
