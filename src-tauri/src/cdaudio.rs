@@ -353,30 +353,180 @@ mod windows_impl {
         Ok(out)
     }
 
-    fn encode_flac(samples: &[i32], dest_path: &str) -> Result<(), String> {
+    // ── Streaming source : lit les secteurs CD à la demande pour l'encodeur FLAC ──
+    //
+    // Au lieu de pré-allouer un Vec<i32> pour TOUS les samples du track (~1.76 GB
+    // dans le pire cas), cette Source garde un petit buffer de FRAMES_PER_CHUNK
+    // secteurs (~235 KB) et le re-remplit à chaque appel `read_samples`. Mémoire
+    // O(chunk) au lieu de O(track).
+    //
+    // - Cancellation propagée via Arc<AtomicBool>. Quand activée, read_samples
+    //   retourne Ok(0) (EOF gracieux) ; le caller détecte le flag après l'encode
+    //   pour retourner "cancelled" et supprimer le fichier partiel.
+    // - Read errors retry × 3 avec backoff, fallback silence-pad pour préserver
+    //   l'alignement temporel du track.
+    // - Progress event émis toutes les 500 ms.
+    struct CdRipSource<'a> {
+        handle: DriveHandle,
+        lba_start: u32,
+        sectors_total: u32,
+        lba_cursor: u32,
+        sample_buf: Vec<i32>,       // interleaved L,R,L,R...
+        sample_cursor: usize,
+        cancel: Arc<AtomicBool>,
+        app: &'a AppHandle,
+        rip_id: &'a str,
+        last_emit: std::time::Instant,
+    }
+
+    impl<'a> CdRipSource<'a> {
+        fn new(
+            handle: DriveHandle,
+            lba_start: u32,
+            sectors_total: u32,
+            cancel: Arc<AtomicBool>,
+            app: &'a AppHandle,
+            rip_id: &'a str,
+        ) -> Self {
+            Self {
+                handle,
+                lba_start,
+                sectors_total,
+                lba_cursor: 0,
+                sample_buf: Vec::with_capacity(FRAMES_PER_CHUNK as usize * FRAMES_PER_SECTOR * 2),
+                sample_cursor: 0,
+                cancel,
+                app,
+                rip_id,
+                last_emit: std::time::Instant::now(),
+            }
+        }
+
+        /// Lit le prochain chunk de secteurs et remplit sample_buf.
+        /// Retourne true si des données ont été produites, false si EOF.
+        fn refill_buffer(&mut self) -> bool {
+            if self.lba_cursor >= self.sectors_total { return false; }
+            let chunk = FRAMES_PER_CHUNK.min(self.sectors_total - self.lba_cursor);
+            let lba = self.lba_start + self.lba_cursor;
+
+            let pcm = match read_audio_sectors(self.handle.raw(), lba, chunk) {
+                Ok(b) => b,
+                Err(_e) => {
+                    // Retry × 3 avec backoff
+                    let mut retry_pcm = None;
+                    for attempt in 1..=3u64 {
+                        std::thread::sleep(std::time::Duration::from_millis(100 * attempt));
+                        if let Ok(b) = read_audio_sectors(self.handle.raw(), lba, chunk) {
+                            retry_pcm = Some(b);
+                            break;
+                        }
+                    }
+                    retry_pcm.unwrap_or_else(|| {
+                        eprintln!(
+                            "[cdaudio] WARN: LBA {} — read failed after 3 retries; padding {} sectors with silence",
+                            lba, chunk
+                        );
+                        vec![0u8; SECTOR_BYTES * chunk as usize]
+                    })
+                }
+            };
+
+            self.sample_buf.clear();
+            for stereo_frame in pcm.chunks_exact(4) {
+                let l = i16::from_le_bytes([stereo_frame[0], stereo_frame[1]]) as i32;
+                let r = i16::from_le_bytes([stereo_frame[2], stereo_frame[3]]) as i32;
+                self.sample_buf.push(l);
+                self.sample_buf.push(r);
+            }
+            self.sample_cursor = 0;
+            self.lba_cursor += chunk;
+
+            if self.last_emit.elapsed() >= std::time::Duration::from_millis(500) {
+                let percent = ((self.lba_cursor as f64 / self.sectors_total as f64) * 100.0) as u32;
+                let _ = self.app.emit("cd-rip-progress", serde_json::json!({
+                    "rip_id":         self.rip_id,
+                    "percent":        percent,
+                    "sector_current": self.lba_cursor,
+                    "sector_total":   self.sectors_total,
+                }));
+                self.last_emit = std::time::Instant::now();
+            }
+            true
+        }
+    }
+
+    impl<'a> flacenc::source::Source for CdRipSource<'a> {
+        fn channels(&self) -> usize { 2 }
+        fn bits_per_sample(&self) -> usize { 16 }
+        fn sample_rate(&self) -> usize { 44100 }
+        fn len_hint(&self) -> Option<usize> {
+            Some((self.sectors_total as usize) * FRAMES_PER_SECTOR)
+        }
+
+        fn read_samples<F: flacenc::source::Fill>(
+            &mut self,
+            block_size: usize,
+            dest: &mut F,
+        ) -> Result<usize, flacenc::error::SourceError> {
+            // block_size = frames per channel ; on a besoin de block_size * 2 i32 interleaved.
+            let needed_samples = block_size * 2;
+            // Buffer de sortie : pas d'allocation par appel grâce à un Vec réutilisé serait possible,
+            // mais block_size est petit (~4096 frames = 8192 i32 = 32 KB) donc l'alloc est négligeable.
+            let mut out: Vec<i32> = Vec::with_capacity(needed_samples);
+
+            while out.len() < needed_samples {
+                if self.cancel.load(Ordering::SeqCst) {
+                    break; // EOF gracieux — l'encode courant se termine sur ce qu'on a déjà
+                }
+                if self.sample_cursor >= self.sample_buf.len() && !self.refill_buffer() {
+                    break; // fin du track
+                }
+                let take = (needed_samples - out.len()).min(self.sample_buf.len() - self.sample_cursor);
+                out.extend_from_slice(&self.sample_buf[self.sample_cursor..self.sample_cursor + take]);
+                self.sample_cursor += take;
+            }
+
+            if out.is_empty() { return Ok(0); }
+            dest.fill_interleaved(&out)
+                .map_err(|_| flacenc::error::SourceError::from_unknown())?;
+            // Nombre de frames par-canal délivrés
+            Ok(out.len() / 2)
+        }
+    }
+
+    fn encode_flac_streaming(
+        source: CdRipSource<'_>,
+        dest_path: &str,
+    ) -> Result<bool, String> {
         use flacenc::bitsink::ByteSink;
         use flacenc::component::BitRepr;
         use flacenc::config::Encoder as EncoderConfig;
         use flacenc::error::Verify;
-        use flacenc::source::MemSource;
-
-        if samples.is_empty() {
-            return Err("encode_flac: aucun sample à encoder".to_string());
-        }
-
-        let channels = 2;
-        let bits_per_sample = 16;
-        let sample_rate = 44100;
 
         let config = EncoderConfig::default()
             .into_verified()
             .map_err(|e| format!("flacenc config verify failed: {:?}", e))?;
         let block_size = config.block_size;
 
-        let source = MemSource::from_samples(samples, channels, bits_per_sample, sample_rate);
+        // Note : encode_with_fixed_block_size prend ownership de la Source.
+        // L'encodeur appelle Source::read_samples en boucle jusqu'à EOF (return 0).
+        // La cancellation produit aussi un EOF gracieux.
+        //
+        // Mémoire ici : ByteSink accumule la sortie FLAC compressée. Pour un track CD
+        // typique de 5 minutes ≈ 25-35 MB compressé. Acceptable. (Pour streamer aussi
+        // l'OUTPUT vers un fichier, il faudrait implémenter BitSink sur BufWriter<File>.
+        // Hors scope actuel — la majorité de l'économie était côté input PCM.)
+        // On capture le flag cancel via une référence atomique partagée avec la source —
+        // mais comme la source est moved, on doit aussi tracer le flag via le retour
+        // de cancellation. On utilise un Arc cloné pour le check post-encode.
+        let cancel_check = source.cancel.clone();
 
         let stream = flacenc::encode_with_fixed_block_size(&config, source, block_size)
             .map_err(|e| format!("flacenc encode failed: {:?}", e))?;
+
+        if cancel_check.load(Ordering::SeqCst) {
+            return Ok(true); // cancelled — caller skip écriture disque
+        }
 
         let mut sink = ByteSink::new();
         stream.write(&mut sink)
@@ -396,7 +546,7 @@ mod windows_impl {
         std::fs::write(dest_path, bytes)
             .map_err(|e| format!("write FLAC file failed: {}", e))?;
 
-        Ok(())
+        Ok(false) // not cancelled
     }
 
     pub(super) fn rip_track(
@@ -418,82 +568,21 @@ mod windows_impl {
         }
         if total_sectors > MAX_SECTORS_GUARD {
             return Err(format!(
-                "track {} reports {} sectors (> {} cap) — refusing to allocate",
+                "track {} reports {} sectors (> {} cap) — refusing",
                 track_idx, total_sectors, MAX_SECTORS_GUARD
             ));
         }
 
         let handle = open_drive(drive)?;
 
-        // CD audio: 44100 Hz, 16-bit signed LE, 2 channels (stereo interleaved)
-        // 1 sector = 2352 bytes = FRAMES_PER_SECTOR stereo frames × 2 channels × 2 bytes
-        let mut all_samples: Vec<i32> = Vec::with_capacity((total_sectors as usize) * FRAMES_PER_SECTOR * 2);
-        let mut sectors_done: u32 = 0;
-        let mut last_emit = std::time::Instant::now();
-
-        while sectors_done < total_sectors {
-            if cancel.load(Ordering::SeqCst) {
-                // handle est fermé au drop, et dest_path n'a pas encore été écrit
-                // (encode_flac n'est appelé qu'après le loop), donc rien à supprimer.
-                return Err("cancelled".to_string());
-            }
-
-            let chunk = FRAMES_PER_CHUNK.min(total_sectors - sectors_done);
-            let lba = track.lba_start + sectors_done;
-
-            let pcm = match read_audio_sectors(handle.raw(), lba, chunk) {
-                Ok(b) => b,
-                Err(_e) => {
-                    // Retry up to 3 times with backoff
-                    let mut retry_pcm = None;
-                    for attempt in 1..=3u64 {
-                        std::thread::sleep(std::time::Duration::from_millis(100 * attempt));
-                        if let Ok(b) = read_audio_sectors(handle.raw(), lba, chunk) {
-                            retry_pcm = Some(b);
-                            break;
-                        }
-                    }
-                    match retry_pcm {
-                        Some(b) => b,
-                        None => {
-                            // Permanent read failure — pad with silence to keep track time-aligned.
-                            // The FLAC will have a noticeable gap; user should refer to the WARN
-                            // log if the output sounds wrong.
-                            eprintln!(
-                                "[cdaudio] WARN: LBA {} — read failed after 3 retries; padding {} sectors with silence",
-                                lba, chunk
-                            );
-                            vec![0u8; SECTOR_BYTES * chunk as usize]
-                        }
-                    }
-                }
-            };
-
-            // Convert 16-bit LE stereo bytes → i32 samples for flacenc
-            for stereo_frame in pcm.chunks_exact(4) {
-                let l = i16::from_le_bytes([stereo_frame[0], stereo_frame[1]]) as i32;
-                let r = i16::from_le_bytes([stereo_frame[2], stereo_frame[3]]) as i32;
-                all_samples.push(l);
-                all_samples.push(r);
-            }
-
-            sectors_done += chunk;
-
-            if last_emit.elapsed() >= std::time::Duration::from_millis(500) {
-                let percent = ((sectors_done as f64 / total_sectors as f64) * 100.0) as u32;
-                let _ = app.emit("cd-rip-progress", serde_json::json!({
-                    "rip_id": rip_id,
-                    "percent": percent,
-                    "sector_current": sectors_done,
-                    "sector_total": total_sectors,
-                }));
-                last_emit = std::time::Instant::now();
-            }
+        // Source streaming : lit les secteurs à la demande au lieu de pré-allouer
+        // ~1.76 GB de PCM. Mémoire bornée à ~235 KB (FRAMES_PER_CHUNK * 588 * 2 * i32).
+        let source = CdRipSource::new(handle, track.lba_start, total_sectors, cancel.clone(), app, rip_id);
+        let was_cancelled = encode_flac_streaming(source, dest_path)?;
+        if was_cancelled {
+            let _ = std::fs::remove_file(dest_path); // pas de fichier partiel laissé sur disque
+            return Err("cancelled".to_string());
         }
-
-        drop(handle); // ferme proprement avant l'encodage
-
-        encode_flac(&all_samples, dest_path)?;
 
         let _ = app.emit("cd-rip-progress", serde_json::json!({
             "rip_id": rip_id,
