@@ -25,6 +25,7 @@ import { openCdModal, cleanupCdCache }  from './cdaudio.js';
 /** @type {Array<{path:string,label:string,kind:string}>} */
 let _lastDrives = [];
 let _pollTimer  = null;
+let _polling    = false;
 const POLL_INTERVAL_MS = 6000; // 6 secondes
 
 // ── API publique ──────────────────────────────────────────────────────────────
@@ -32,10 +33,17 @@ const POLL_INTERVAL_MS = 6000; // 6 secondes
 /**
  * Démarre le polling de détection USB.
  * À appeler une fois au boot (après la première renderLib).
+ * Idempotent : un second appel remplace l'interval précédent.
  */
 export function initDevices() {
+  if (_pollTimer) { clearInterval(_pollTimer); _pollTimer = null; }
   _poll(); // premier poll immédiat
   _pollTimer = setInterval(_poll, POLL_INTERVAL_MS);
+}
+
+/** Stoppe le polling. Utile pour HMR / teardown. */
+export function stopDevices() {
+  if (_pollTimer) { clearInterval(_pollTimer); _pollTimer = null; }
 }
 
 /** Affiche le modal d'import USB avec la liste des lecteurs amovibles courants. */
@@ -60,26 +68,32 @@ export function closeUsbImportModal() {
 // ── Polling ───────────────────────────────────────────────────────────────────
 
 async function _poll() {
-  let drives;
-  try { drives = await invoke('list_drives'); }
-  catch { return; } // IPC indisponible (app en cours de boot, etc.)
+  if (_polling) return; // tick précédent encore en cours (list_drives lent)
+  _polling = true;
+  try {
+    let drives;
+    try { drives = await invoke('list_drives'); }
+    catch { return; } // IPC indisponible (app en cours de boot, etc.)
 
-  const newRemovable = _detectNewRemovable(_lastDrives, drives);
-  for (const d of newRemovable) _onUsbConnected(d);
+    const newRemovable = _detectNewRemovable(_lastDrives, drives);
+    for (const d of newRemovable) _onUsbConnected(d);
 
-  // CD audio : insertion depuis le dernier poll
-  const newCds = detectNewAudioCds(_lastDrives, drives);
-  for (const cd of newCds) _onAudioCdInserted(cd);
+    // CD audio : insertion depuis le dernier poll
+    const newCds = detectNewAudioCds(_lastDrives, drives);
+    for (const cd of newCds) _onAudioCdInserted(cd);
 
-  // CD audio : éjection (présent au poll précédent, absent maintenant)
-  const currAudioPaths = new Set(drives.filter(d => d.audio_cd).map(d => d.path));
-  for (const prev of _lastDrives) {
-    if (prev.audio_cd && !currAudioPaths.has(prev.path)) {
-      cleanupCdCache(prev.path).catch(e => console.warn('[devices] cleanup failed:', e));
+    // CD audio : éjection (présent au poll précédent, absent maintenant)
+    const currAudioPaths = new Set(drives.filter(d => d.audio_cd).map(d => d.path));
+    for (const prev of _lastDrives) {
+      if (prev.audio_cd && !currAudioPaths.has(prev.path)) {
+        cleanupCdCache(prev.path).catch(e => console.warn('[devices] cleanup failed:', e));
+      }
     }
-  }
 
-  _lastDrives = drives;
+    _lastDrives = drives;
+  } finally {
+    _polling = false;
+  }
 }
 
 /** Détecte les lecteurs amovibles apparus depuis le dernier poll. */
