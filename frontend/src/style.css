@@ -111,8 +111,8 @@
 
   /* Texte — hiérarchie claire */
   --t:   #f0ece4;     /* Primary — titres */
-  --t2:  #b8ada5;     /* Secondary — artistes  (A11Y-04: ~5.4:1 on #080808) */
-  --t3:  #837d79;     /* Tertiary — metadata   (A11Y-04: ~4.6:1 on #080808) */
+  --t2:  #b8ada5;     /* Secondary — artistes  (~9.1:1 on #080808) */
+  --t3:  #8a847f;     /* Tertiary — metadata   (WCAG: 5.4:1 on bg, 4.5:1 on bg3 hover, 4.5:1 on bg4) */
   --t4:  #2e2e2e;     /* Ghost — invisible par défaut */
 
   /* États — sémantique partagée (toasts, trends, stop/delete) */
@@ -923,7 +923,7 @@ html[data-mode="light"] {
   --t:   #0f1117;   /* texte principal */
   --t2:  #3a4050;   /* texte secondaire (~7.8:1 on #f0f2f5 — OK) */
   --t3:  #5a6080;   /* texte tertiaire  (A11Y-12: ~5.4:1 on #f0f2f5) */
-  --t4:  #c8ccda;   /* placeholder */
+  --t4:  #7e859a;   /* placeholder (WCAG: 3.3:1 on #f0f2f5 — passe SC 1.4.11 Non-text Contrast) */
   --sep: rgba(0,0,0,.07);
   --player-shadow: 0 -1px 0 rgba(0,0,0,.08), 0 -4px 20px rgba(0,0,0,.06);
   color-scheme: light;
