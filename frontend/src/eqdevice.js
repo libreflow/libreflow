@@ -161,11 +161,6 @@ async function _refreshActiveDevice() {
 async function _onDeviceChange() {
   if (!navigator.mediaDevices?.enumerateDevices) return;
   try {
-    const devices = await navigator.mediaDevices.enumerateDevices();
-    const outputs = devices.filter(d => d.kind === 'audiooutput');
-    _knownIds = outputs.map(d => d.deviceId);
-
-    // Refresh active device from authoritative source (audioEl.sinkId)
     await _refreshActiveDevice();
 
     // Auto-appliquer le profil enregistré pour ce device si disponible
