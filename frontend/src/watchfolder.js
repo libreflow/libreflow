@@ -184,7 +184,7 @@ export async function toggleWatchFolder() {
   watchPath = result.folder;
   invoke('allow_asset_dir', { path: watchPath }).catch(() => {});
   watchSnapshot = new Set(get('tracks').map(t => t.path).filter(Boolean));
-  const newFiles = result.files.filter(p => _isAudioPath(p) && !watchSnapshot.has(p));
+  const newFiles = (result.files ?? []).filter(p => _isAudioPath(p) && !watchSnapshot.has(p));
   if (newFiles.length) {
     await _doInitialScan(newFiles);
   }

@@ -18,6 +18,8 @@ let _playLogFlushTimer = null;
 // BUG FIX : seules les entrées "pending" (nouvelles) doivent être flushées.
 // Les entrées chargées depuis l'IDB au boot ne doivent PAS être supprimées de playLog.
 const _pendingTs = new Set();
+// Compteur monotone µs pour garantir des ts uniques même sous bursts < 1 ms.
+let _lastTs = 0;
 
 /** Replace the playLog array (used by boot() after loading from IDB). */
 export function setPlayLog(arr) { playLog = arr; }
@@ -36,14 +38,15 @@ export function cancelPlayLogFlush() {
  */
 export function logPlay(t) {
   if (!t?.id) return;
-  // Bug #19 fix — UNITÉ DOCUMENTÉE : ts est stocké en MICROSECONDES (µs).
+  // UNITÉ DOCUMENTÉE : ts est stocké en MICROSECONDES (µs).
   // Raison : éviter les collisions de clés IDB dans la même milliseconde (clé primaire = ts).
-  //   ts = Date.now() [ms] × 1000 + suffixe aléatoire [0-999 µs]
-  // Conséquence pour les lecteurs : toujours diviser par 1000 pour obtenir des ms avant
-  // toute comparaison avec Date.now() ou des timestamps courants.
+  //   ts = max(Date.now()*1000, _lastTs + 1) — strict-monotonic, garanti unique.
+  // Conséquence pour les lecteurs : toujours diviser par 1000 pour obtenir des ms.
   //   Ex. stats.js : Math.floor(entry.ts / 1000) → ms ✓
-  //   Ex. smartplaylist.js _buildPlayCountMap() : utilise seulement entry.id, pas entry.ts ✓
-  const entry = { ts: Date.now() * 1000 + Math.floor(Math.random() * 1000), id: t.id, dur: t.duration || 0 };
+  let ts = Date.now() * 1000;
+  if (ts <= _lastTs) ts = _lastTs + 1;
+  _lastTs = ts;
+  const entry = { ts, id: t.id, dur: t.duration || 0 };
   playLog.push(entry);
   _pendingTs.add(entry.ts);
   if (playLog.length > CFG.PLAYLOG_MAX_ENTRIES) playLog = playLog.slice(-CFG.PLAYLOG_MAX_ENTRIES);

@@ -66,7 +66,10 @@ async function _onDrop(e) {
   // Support dossiers via DataTransferItem API (webkitGetAsEntry)
   async function traverseEntry(entry) {
     if (entry.isFile) {
-      await new Promise(res => entry.file(f => { allFiles.push(f); res(); }));
+      await new Promise(res => entry.file(
+        f => { allFiles.push(f); res(); },
+        err => { console.warn('[dropin] entry.file error', entry.name, err); res(); },
+      ));
     } else if (entry.isDirectory) {
       const reader = entry.createReader();
       // readEntries() retourne max 100 entrées à la fois — boucler jusqu'au tableau vide

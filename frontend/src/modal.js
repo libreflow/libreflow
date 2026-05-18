@@ -41,11 +41,15 @@ export function confirmClear() {
   _modalPrevFocus = document.activeElement;
   document.getElementById('modal-bg').classList.add('on');
   const modal = document.getElementById('modal');
-  if (modal && !_modalFocusTrap) {
-    _modalFocusTrap = _buildModalFocusTrap(modal);
-    modal.addEventListener('keydown', _modalFocusTrap);
-    setTimeout(() => modal.querySelector('.mbtn.cancel')?.focus(), 50);
+  if (!modal) return;
+  // Toujours nettoyer un trap résiduel avant d'en installer un nouveau (anti-leak).
+  if (_modalFocusTrap) {
+    modal.removeEventListener('keydown', _modalFocusTrap);
+    _modalFocusTrap = null;
   }
+  _modalFocusTrap = _buildModalFocusTrap(modal);
+  modal.addEventListener('keydown', _modalFocusTrap);
+  setTimeout(() => modal.querySelector('.mbtn.cancel')?.focus(), 50);
 }
 
 /**
