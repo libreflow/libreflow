@@ -184,8 +184,18 @@ function _updateSrchBadge(count) {
     badge.className = 'srch-ct';
     document.querySelector('.srch')?.appendChild(badge);
   }
-  const show = count > 0 && !!_q();
-  badge.textContent = show ? (wasFuzzySearch() ? '≈ ' + String(count) : String(count)) : '';
+  const hasQuery = !!_q();
+  const show = count > 0 && hasQuery;
+  // A11Y : annoncer le résultat (y compris "0") via aria-live. Le visuel reste piloté
+  // par `.on` qui contrôle opacity — quand count=0, .on retiré donc badge invisible,
+  // mais aria-live="polite" annonce le textContent quand-même.
+  if (hasQuery && count === 0) {
+    badge.textContent = '0 résultats';
+  } else if (show) {
+    badge.textContent = wasFuzzySearch() ? '≈ ' + String(count) : String(count);
+  } else {
+    badge.textContent = '';
+  }
   badge.classList.toggle('on', show);
 }
 
