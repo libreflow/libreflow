@@ -304,7 +304,7 @@ function _applyBootUI(cfgObj) {
   document.getElementById('pc-shuf')?.setAttribute('aria-pressed', String(shuffle));
   document.getElementById('pc-rep')?.classList.toggle('on', repeat !== 'none');
   document.getElementById('pc-rep')?.setAttribute('aria-pressed', String(repeat !== 'none'));
-  if (getWatchPath()) updateWatchUI();
+  updateWatchUI();
   setTimeout(updateVolSlider, 100);
   if (playbackSpeed !== 1) setSpeed(playbackSpeed);
   const rgChk = document.getElementById('rg-enabled');

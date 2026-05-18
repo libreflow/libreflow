@@ -322,6 +322,21 @@ export function updateWatchUI() {
     if (changeBtn)   changeBtn.dataset.action = 'settings-open-folder';
     if (changeLbl) { changeLbl.dataset.i18n = 'set_add_folder_btn'; changeLbl.textContent = i18n('set_add_folder_btn'); }
   }
+
+  // Les boutons "Organiser la bibliothèque" exigent un dossier surveillé
+  // comme racine de l'arborescence cible — sinon désactivés avec tooltip.
+  const organizeTip = i18n('set_organize_needs_watch');
+  document.querySelectorAll('.organize-btn').forEach(b => {
+    if (watchPath) {
+      b.disabled = false;
+      b.removeAttribute('aria-disabled');
+      b.removeAttribute('title');
+    } else {
+      b.disabled = true;
+      b.setAttribute('aria-disabled', 'true');
+      b.title = organizeTip;
+    }
+  });
 }
 
 // ── Import de chemins ─────────────────────────────────────────

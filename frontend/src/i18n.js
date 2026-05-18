@@ -506,6 +506,7 @@ export const LANGS = {
     set_music_folder_section: 'Dossier de musique',
     set_playlists_section:    'Playlists',
     set_no_folder:            'Aucun dossier sélectionné',
+    set_organize_needs_watch: 'Configurez d’abord un dossier surveillé — il sert de racine à l’arborescence cible.',
     // A11Y — labels non visibles (aria-label)
     nav_home:         'Accueil',
     vol_label:        'Volume',
@@ -1124,6 +1125,7 @@ export const LANGS = {
     set_music_folder_section: 'Music folder',
     set_playlists_section:    'Playlists',
     set_no_folder:            'No folder selected',
+    set_organize_needs_watch: 'Set a watched folder first — it serves as the root of the target tree.',
     // A11Y — aria-label strings
     nav_home:         'Home',
     vol_label:        'Volume',
