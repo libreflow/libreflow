@@ -149,9 +149,14 @@ export async function importBackup() {
       notify('playlists');
     }
 
-    // ── Playlog : merge par ts (timestamp) ───────────────────────────────────
+    // ── Playlog : merge par ts — local conservé en priorité (put() est upsert sur keyPath 'ts')
+    const existingPlaylog = await dall('playlog').catch(() => []);
+    const existingTs = new Set();
+    for (const l of existingPlaylog) existingTs.add(l.ts);
     for (const l of backupPlaylog) {
-      dput('playlog', l).catch(e => console.warn('[backup] playlog IDB write:', e));
+      if (!existingTs.has(l.ts)) {
+        dput('playlog', l).catch(e => console.warn('[backup] playlog IDB write:', e));
+      }
     }
 
     // ── Imports history : merge par id ────────────────────────────────────────
