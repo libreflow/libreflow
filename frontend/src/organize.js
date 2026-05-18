@@ -15,11 +15,12 @@
 //   organizeConfirm()
 //   organizeCancel()
 
-import { get, set }             from './store.js';
+import { get, set, notify }     from './store.js';
 import { dput }                  from './db.js';
 import { getWatchPath }          from './watchfolder.js';
 import { invoke }                from './ipc.js';
 import { toast, esc }            from './ui.js';
+import { VIRT }                  from './virt.js';
 import { rebuildTrackIdxMap,
          invalidateFilterCache } from './search.js';
 
@@ -185,9 +186,11 @@ export async function organizeConfirm() {
   }
 
   // INVARIANT: toute mutation de tracks[] → rebuildTrackIdxMap()
-  set('tracks', tracks);
+  // mutation in-place — set() would no-op (same array reference)
+  notify('tracks');
   rebuildTrackIdxMap();
   invalidateFilterCache();
+  VIRT._lastListSig = '';
 
   _pendingMoves = [];
   organizeCancel();
@@ -200,12 +203,14 @@ export async function organizeConfirm() {
 export function organizeCancel() {
   _pendingMoves = [];
   const bg = document.getElementById('organize-modal-bg');
-  if (!bg) return;
+  if (!bg || bg.classList.contains('modal-closing')) return;
   bg.classList.add('modal-closing');
   bg.addEventListener('animationend', () => {
     bg.classList.remove('on', 'modal-closing');
   }, { once: true });
-  setTimeout(() => bg.classList.remove('on', 'modal-closing'), 250);
+  // Fallback si l'animation CSS ne se déclenche pas (ex: prefers-reduced-motion).
+  // Stocké pour pouvoir être annulé si le modal est rouvert avant l'échéance.
+  bg._closeTimer = setTimeout(() => bg.classList.remove('on', 'modal-closing'), 300);
 }
 
 // ── Modal ─────────────────────────────────────────────────────────────────────
@@ -221,6 +226,10 @@ const _MAX_PREVIEW = 8;
 function _showOrganizeModal(valid, errors, scheme) {
   const bg = document.getElementById('organize-modal-bg');
   if (!bg) return;
+
+  // Annule un close en cours pour éviter que le timer/anim ne strip 'on' juste après réouverture
+  if (bg._closeTimer) { clearTimeout(bg._closeTimer); bg._closeTimer = null; }
+  bg.classList.remove('modal-closing');
 
   const title   = document.getElementById('organize-modal-title');
   const summary = document.getElementById('organize-modal-summary');
