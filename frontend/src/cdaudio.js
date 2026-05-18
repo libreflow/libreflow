@@ -40,6 +40,7 @@ let _currentDrive     = null;
 let _progressUnlisten = null;
 let _prefetchTimer    = null;
 let _prefetchAudioListener = null;
+let _cdModalPrevFocus = null;
 
 // ── API publique ──────────────────────────────────────────────────────────────
 
@@ -64,8 +65,14 @@ export async function openCdModal(drivePath) {
   _resetProgressUi();
   const bg = document.getElementById('cd-modal-bg');
   if (bg) {
+    _cdModalPrevFocus = document.activeElement;
     bg.classList.add('on');
     bg._toc = toc;
+    // A11Y : déplacer le focus sur le premier bouton actif du modal.
+    requestAnimationFrame(() => {
+      const first = bg.querySelector('#cd-modal button:not([disabled])');
+      first?.focus();
+    });
   }
 }
 
@@ -75,6 +82,11 @@ export function closeCdModal() {
   bg.classList.remove('on');
   bg._toc = null;
   _resetProgressUi();
+  // A11Y : restaurer le focus sur l'élément qui a ouvert le modal.
+  if (_cdModalPrevFocus && typeof _cdModalPrevFocus.focus === 'function') {
+    _cdModalPrevFocus.focus();
+  }
+  _cdModalPrevFocus = null;
 }
 
 export async function playCdTrack(drivePath, idx) {

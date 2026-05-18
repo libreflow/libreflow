@@ -26,6 +26,7 @@ import { openCdModal, cleanupCdCache }  from './cdaudio.js';
 let _lastDrives = [];
 let _pollTimer  = null;
 let _polling    = false;
+let _usbModalPrevFocus = null;
 const POLL_INTERVAL_MS = 6000; // 6 secondes
 
 // ── API publique ──────────────────────────────────────────────────────────────
@@ -55,7 +56,14 @@ export async function openUsbImportModal() {
   _renderDrivesList(drives.filter(d => d.kind === 'removable' || d.kind === 'unknown'));
 
   const bg = document.getElementById('usb-modal-bg');
-  if (bg) bg.classList.add('on');
+  if (!bg) return;
+  _usbModalPrevFocus = document.activeElement;
+  bg.classList.add('on');
+  // A11Y : focus sur le premier bouton actif (drive ou close).
+  requestAnimationFrame(() => {
+    const first = bg.querySelector('#usb-modal button:not([disabled])');
+    first?.focus();
+  });
 }
 
 /** Ferme le modal d'import USB. */
@@ -63,6 +71,11 @@ export function closeUsbImportModal() {
   const bg = document.getElementById('usb-modal-bg');
   if (!bg) return;
   bg.classList.remove('on');
+  // A11Y : restaurer le focus sur l'élément déclencheur.
+  if (_usbModalPrevFocus && typeof _usbModalPrevFocus.focus === 'function') {
+    _usbModalPrevFocus.focus();
+  }
+  _usbModalPrevFocus = null;
 }
 
 // ── Polling ───────────────────────────────────────────────────────────────────
