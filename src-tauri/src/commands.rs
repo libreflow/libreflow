@@ -187,11 +187,7 @@ pub(crate) fn is_safe_dir(path: &Path) -> bool {
     {
         // fs::canonicalize() sur Windows ajoute le préfixe \\?\ (extended-length path local).
         // Normaliser avant comparaison pour que les chemins système soient correctement bloqués.
-        let check_str: &str = if path_str.starts_with("\\\\?\\") {
-            &path_str[4..]
-        } else {
-            &path_str
-        };
+        let check_str: &str = path_str.strip_prefix("\\\\?\\").unwrap_or(&path_str);
         let win_blocked = ["c:\\windows", "c:\\program files", "c:\\program files (x86)"];
         if win_blocked.iter().any(|b| check_str == *b || check_str.starts_with(&format!("{}\\", b))) {
             return false;
@@ -210,18 +206,56 @@ pub(crate) fn is_safe_dir(path: &Path) -> bool {
 }
 
 /// Scan récursif synchrone d'un dossier — retourne tous les fichiers audio trouvés.
+///
+/// Garde anti-cycle : suit `fs::canonicalize` sur chaque sous-dossier et bail si déjà visité.
+/// Refuse les symlinks ET les reparse points Windows (junctions/mount points) car
+/// `Path::is_symlink` retourne `false` pour les junctions, ce qui peut faire boucler le scan.
 fn scan_dir(dir: &Path) -> Vec<PathBuf> {
     let mut results = Vec::new();
-    let Ok(entries) = fs::read_dir(dir) else { return results; };
+    let mut visited: std::collections::HashSet<PathBuf> = std::collections::HashSet::new();
+    if let Ok(c) = fs::canonicalize(dir) { visited.insert(c); }
+    scan_dir_inner(dir, &mut results, &mut visited, 0);
+    results
+}
+
+const SCAN_MAX_DEPTH: usize = 32;
+
+fn scan_dir_inner(
+    dir: &Path,
+    results: &mut Vec<PathBuf>,
+    visited: &mut std::collections::HashSet<PathBuf>,
+    depth: usize,
+) {
+    if depth >= SCAN_MAX_DEPTH { return; }
+    let Ok(entries) = fs::read_dir(dir) else { return; };
     for entry in entries.flatten() {
         let path = entry.path();
-        if path.is_dir() && !path.is_symlink() {
-            results.extend(scan_dir(&path));
+        let Ok(meta) = entry.metadata() else { continue; };
+        let ft = meta.file_type();
+
+        // Reparse points (junctions / mount points sur Windows) ET symlinks classiques.
+        #[cfg(target_os = "windows")]
+        let is_reparse = {
+            use std::os::windows::fs::MetadataExt;
+            const FILE_ATTRIBUTE_REPARSE_POINT: u32 = 0x400;
+            (meta.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT) != 0
+        };
+        #[cfg(not(target_os = "windows"))]
+        let is_reparse = false;
+
+        if ft.is_symlink() || is_reparse {
+            continue;
+        }
+
+        if ft.is_dir() {
+            // Anti-cycle : canonicalize et insert dans `visited`.
+            let Ok(canon) = fs::canonicalize(&path) else { continue; };
+            if !visited.insert(canon) { continue; }
+            scan_dir_inner(&path, results, visited, depth + 1);
         } else if is_audio(&path) {
             results.push(path);
         }
     }
-    results
 }
 
 /// Retourne ou crée le tag principal d'un TaggedFile.
@@ -257,7 +291,10 @@ pub fn open_folder(app: AppHandle) -> Result<Option<OpenFolderResult>, String> {
         .filter_map(|p| p.to_str().map(String::from))
         .collect();
 
-    Ok(Some(OpenFolderResult { folder: folder_str, files }))
+    // Retourner le chemin canonique (résolu) pour que les commandes suivantes opèrent sur
+    // le même chemin que celui validé par is_safe_dir. Évite une fenêtre TOCTOU sur symlinks.
+    let canon_str = canon.to_string_lossy().to_string();
+    Ok(Some(OpenFolderResult { folder: canon_str, files }))
 }
 
 
@@ -501,6 +538,18 @@ pub async fn write_cover(data: WriteCoverData) -> Result<(), String> {
             return Err(format!("write_cover: extension image non autorisée après résolution — {}", data.image_path));
         }
 
+        // Cap taille image à 10 MB pour éviter qu'un fichier hostile ou un symlink
+        // pointant sur un fichier massif n'alloue plusieurs Go en RAM.
+        const MAX_COVER_BYTES: u64 = 10 * 1024 * 1024;
+        let meta = fs::metadata(&canon_image)
+            .map_err(|e| format!("metadata image ({}) : {e}", data.image_path))?;
+        if meta.len() > MAX_COVER_BYTES {
+            return Err(format!(
+                "write_cover: image trop volumineuse ({} octets, max {})",
+                meta.len(), MAX_COVER_BYTES
+            ));
+        }
+
         let image_data = fs::read(&canon_image)
             .map_err(|e| format!("Lecture image ({}) : {e}", data.image_path))?;
 
@@ -699,6 +748,44 @@ pub fn open_devtools(app: AppHandle) {
 
 // ── Commande : organisation de fichiers ──────────────────────────────────────
 
+/// Détecte ERROR_NOT_SAME_DEVICE (Windows: 17, Unix: EXDEV=18).
+/// `fs::rename` échoue avec ce code quand source et destination sont sur des volumes différents.
+fn is_cross_device_error(e: &std::io::Error) -> bool {
+    if let Some(code) = e.raw_os_error() {
+        #[cfg(target_os = "windows")]
+        return code == 17;
+        #[cfg(not(target_os = "windows"))]
+        return code == 18;
+    }
+    false
+}
+
+/// Vérifie qu'un chemin d'organize_files vit dans un dossier autorisé.
+/// Refuse `..`, chemins système connus, et chemins vides.
+fn validate_organize_path(raw: &str) -> Result<(), String> {
+    use std::path::Component;
+    if raw.is_empty() { return Err("chemin vide".to_string()); }
+    let path = Path::new(raw);
+    for c in path.components() {
+        if matches!(c, Component::ParentDir) {
+            return Err(format!("'..' interdit : {}", raw));
+        }
+    }
+    let parent = path.parent().ok_or_else(|| format!("sans parent : {}", raw))?;
+    let mut check = parent.to_path_buf();
+    let canon = loop {
+        if let Ok(c) = fs::canonicalize(&check) { break c; }
+        let Some(up) = check.parent() else {
+            return Err(format!("aucun ancêtre existant : {}", raw));
+        };
+        check = up.to_path_buf();
+    };
+    if !is_safe_dir(&canon) {
+        return Err(format!("dossier système refusé : {}", raw));
+    }
+    Ok(())
+}
+
 /// Déplace des fichiers audio vers une arborescence cible.
 ///
 /// En dry_run = true : valide seulement (source existe, destination libre).
@@ -708,6 +795,11 @@ pub async fn organize_files(
     moves:   Vec<OrganizeMoveEntry>,
     dry_run: bool,
 ) -> Result<OrganizeResult, String> {
+    // Validation préalable : aucun move ne doit pointer hors d'un dossier autorisé.
+    for m in &moves {
+        validate_organize_path(&m.from).map_err(|e| format!("from: {}", e))?;
+        validate_organize_path(&m.to).map_err(|e| format!("to: {}", e))?;
+    }
     tokio::task::spawn_blocking(move || {
         let mut results: Vec<OrganizeMoveResult> = Vec::new();
         let mut error_count = 0usize;
@@ -779,7 +871,21 @@ pub async fn organize_files(
                     }
                 }
 
-                match fs::rename(&m.from, &m.to) {
+                // Tentative atomique via fs::rename, fallback copy+remove sur
+                // ERROR_NOT_SAME_DEVICE (rename cross-volume échoue sur Windows).
+                let move_res = fs::rename(&m.from, &m.to).or_else(|e| {
+                    if is_cross_device_error(&e) {
+                        fs::copy(&m.from, &m.to)
+                            .and_then(|_| fs::remove_file(&m.from))
+                            .map_err(|e2| std::io::Error::new(
+                                e2.kind(),
+                                format!("rename cross-volume fallback: {e2}"),
+                            ))
+                    } else {
+                        Err(e)
+                    }
+                });
+                match move_res {
                     Ok(_) => {
                         completed.push((m.to.clone(), m.from.clone()));
                         results.push(OrganizeMoveResult {
@@ -794,8 +900,18 @@ pub async fn organize_files(
                             ok:    false,
                             error: Some(e.to_string()),
                         });
+                        // Rollback : tracker les échecs au lieu de les avaler
+                        // silencieusement, pour que le frontend voie l'état réel.
                         for (done_to, done_from) in completed.iter().rev() {
-                            let _ = fs::rename(done_to, done_from);
+                            if let Err(re) = fs::rename(done_to, done_from) {
+                                error_count += 1;
+                                results.push(OrganizeMoveResult {
+                                    from:  done_to.clone(),
+                                    to:    done_from.clone(),
+                                    ok:    false,
+                                    error: Some(format!("rollback failed: {re}")),
+                                });
+                            }
                         }
                         break 'outer;
                     }
