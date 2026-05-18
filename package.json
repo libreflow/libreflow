@@ -10,7 +10,8 @@
     "vite": "vite",
     "vite:build": "vite build",
     "vite:preview": "vite preview",
-    "test": "node frontend/tests/core.test.cjs"
+    "test": "node frontend/tests/core.test.cjs",
+    "bench": "node frontend/tests/bench.cjs"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.10.1"
