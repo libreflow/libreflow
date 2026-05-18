@@ -36,6 +36,26 @@ let _circlecy      = null;   // Y centre du cercle en px canvas — aligné sur 
 let vizR = 59, vizG = 130, vizB = 246; // couleur courante (défaut : --g bleu)
 // PERF : chaîne RGB mise en cache pour éviter le template literal à chaque barre × frame
 let _vizRGB     = '59,130,246';
+// PERF : rgba strings à alpha statique pré-construites quand _vizRGB change.
+// Évite 4-6 allocations de template literal par frame en mode oscilloscope/circle.
+let _vizRgbaGhost = `rgba(59,130,246, 0.15)`;
+let _vizRgbaBase  = `rgba(59,130,246, 0.1)`;
+let _vizRgbaHalo  = `rgba(59,130,246, 0.18)`;
+let _vizRgbaMain  = `rgba(59,130,246, 0.88)`;
+let _vizRgbaFill  = `rgba(59,130,246, 0.55)`;
+// 8 strings une par bucket d'alpha (utilisé en mode circle)
+const _vizRgbaBuckets = new Array(8);
+function _rebuildVizRgbaCache() {
+  _vizRgbaGhost = `rgba(${_vizRGB}, 0.15)`;
+  _vizRgbaBase  = `rgba(${_vizRGB}, 0.1)`;
+  _vizRgbaHalo  = `rgba(${_vizRGB}, 0.18)`;
+  _vizRgbaMain  = `rgba(${_vizRGB}, 0.88)`;
+  _vizRgbaFill  = `rgba(${_vizRGB}, 0.55)`;
+  for (let b = 0; b < 8; b++) {
+    _vizRgbaBuckets[b] = `rgba(${_vizRGB}, ${((b + 0.5) / 8).toFixed(2)})`;
+  }
+}
+_rebuildVizRgbaCache(); // remplir au boot du module
 let _resizeObs  = null;   // ResizeObserver — stocké pour pouvoir le déconnecter
 let _vizBins    = 0;      // P8 — cache de eqAnalyser.frequencyBinCount (immuable après init)
 let _dpr        = 1;      // devicePixelRatio mis en cache au resize (évite property access par frame)
@@ -211,6 +231,7 @@ export function updateVizColor(color) {
       vizR = 59; vizG = 130; vizB = 246; // dernier recours
     }
     _vizRGB = `${vizR},${vizG},${vizB}`;
+    _rebuildVizRgbaCache();
     _grad = null; // invalider le gradient mis en cache
     return;
   }
@@ -219,6 +240,7 @@ export function updateVizColor(color) {
   if (m) {
     vizR = +m[1]; vizG = +m[2]; vizB = +m[3];
     _vizRGB = `${vizR},${vizG},${vizB}`;
+    _rebuildVizRgbaCache();
     _grad = null;
     return;
   }
@@ -229,6 +251,7 @@ export function updateVizColor(color) {
     vizG = parseInt(mHex[2], 16);
     vizB = parseInt(mHex[3], 16);
     _vizRGB = `${vizR},${vizG},${vizB}`;
+    _rebuildVizRgbaCache();
     _grad = null;
   }
 }
@@ -342,7 +365,7 @@ function _drawOscilloscope(bins, w, h) {
   if (_ghostTimeData) {
     canvasCtx.beginPath();
     canvasCtx.lineWidth   = 2 * dpr;
-    canvasCtx.strokeStyle = `rgba(${_vizRGB}, 0.15)`;
+    canvasCtx.strokeStyle = _vizRgbaGhost;
     canvasCtx.lineJoin    = 'round';
     canvasCtx.lineCap     = 'round';
     canvasCtx.shadowBlur  = 0;
@@ -358,7 +381,7 @@ function _drawOscilloscope(bins, w, h) {
 
   // Ligne de base centrale (guide discret)
   canvasCtx.beginPath();
-  canvasCtx.strokeStyle = `rgba(${_vizRGB}, 0.1)`;
+  canvasCtx.strokeStyle = _vizRgbaBase;
   canvasCtx.lineWidth = 1 * dpr;
   canvasCtx.moveTo(0, mid);
   canvasCtx.lineTo(w, mid);
@@ -379,11 +402,11 @@ function _drawOscilloscope(bins, w, h) {
   }
   // Passe 1 : halo large (glow simulé, aucun GPU composite layer)
   canvasCtx.lineWidth   = 10 * dpr;
-  canvasCtx.strokeStyle = `rgba(${_vizRGB}, 0.18)`;
+  canvasCtx.strokeStyle = _vizRgbaHalo;
   canvasCtx.stroke();
   // Passe 2 : trait principal fin par-dessus
   canvasCtx.lineWidth   = 2 * dpr;
-  canvasCtx.strokeStyle = `rgba(${_vizRGB}, 0.88)`;
+  canvasCtx.strokeStyle = _vizRgbaMain;
   canvasCtx.stroke();
 
   // Sauvegarder le frame courant pour la traîne du prochain frame
@@ -406,7 +429,7 @@ function _drawCircle(bins, w, h) {
   // Cercle intérieur de référence (anneau discret)
   canvasCtx.beginPath();
   canvasCtx.arc(cx, cy, inner, 0, Math.PI * 2);
-  canvasCtx.strokeStyle = `rgba(${_vizRGB}, 0.18)`;
+  canvasCtx.strokeStyle = _vizRgbaHalo;
   canvasCtx.lineWidth   = 1.5 * dpr;
   canvasCtx.stroke();
 
@@ -424,9 +447,8 @@ function _drawCircle(bins, w, h) {
   canvasCtx.lineCap   = 'round';
   for (let b = 0; b < _ALPHA_BUCKETS; b++) {
     if (!_circleBuckets[b].length) continue;
-    const alpha = ((b + 0.5) / _ALPHA_BUCKETS).toFixed(2);
     canvasCtx.beginPath();
-    canvasCtx.strokeStyle = `rgba(${_vizRGB}, ${alpha})`;
+    canvasCtx.strokeStyle = _vizRgbaBuckets[b];
     for (const i of _circleBuckets[b]) {
       const angle = (i / COUNT) * Math.PI * 2 - Math.PI / 2 + _circleAngle;
       const val   = smoothed[i] / 255;
@@ -441,7 +463,7 @@ function _drawCircle(bins, w, h) {
   // Point central
   canvasCtx.beginPath();
   canvasCtx.arc(cx, cy, 3 * dpr, 0, Math.PI * 2);
-  canvasCtx.fillStyle = `rgba(${_vizRGB}, 0.55)`;
+  canvasCtx.fillStyle = _vizRgbaFill;
   canvasCtx.fill();
 }
 

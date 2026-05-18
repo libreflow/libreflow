@@ -169,3 +169,22 @@ export function revokeArt(trackId) {
     _cache.delete(trackId);
   }
 }
+
+/**
+ * Crée un blob: URL pour une piste depuis son _artBuf et l'enregistre dans le cache LRU.
+ * Permet à library.js (path tag-load batch) de bénéficier de l'éviction LRU au lieu
+ * de créer des blob: URLs hors-cache qui s'accumulent en RAM.
+ *
+ * @param {object} t - Track object (doit avoir id, _artBuf, _artMime)
+ * @returns {string|null} blob: URL ou null si _artBuf manquant
+ */
+export function cacheArt(t) {
+  if (!t._artBuf) return null;
+  // Si une entrée existe deja (rare), revoke pour eviter la fuite avant remplacement
+  const existing = _cache.get(t.id);
+  if (existing) { URL.revokeObjectURL(existing); _cache.delete(t.id); }
+  _evict();
+  const url = URL.createObjectURL(new Blob([t._artBuf], { type: t._artMime || 'image/jpeg' }));
+  _cache.set(t.id, url);
+  return url;
+}

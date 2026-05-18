@@ -26,6 +26,7 @@ import { normTag, mainArtist, fmtd }                  from './utils.js';
 const ART_MIME_ALLOWLIST = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/bmp', 'image/tiff'];
 import { adjustShuffleQAfterDelete }                  from './player.js';
 import { VIRT }                                       from './virt.js';
+import { cacheArt }                                   from './artLoader.js';
 import { get, set }                                   from './store.js'; // Phase 4
 import { toast, toastWithAction }                                        from './ui.js';
 import { setCurIdx, removeTrackAt } from './state.js';
@@ -220,7 +221,8 @@ export async function loadTagsBg(t, rustTags = null) {
     // Mettre à jour l'année — y compris la vider si le tag est absent/epoch (nettoyage des 1970 parasites)
     { const ny = _validYear(rustTags.year); if (ny !== (t.year ?? null)) { t.year = ny; changed = true; } }
     if (rustTags.track && rustTags.track !== t.track) { t.track = rustTags.track; changed = true; }
-    // Cover : décodage base64 → ArrayBuffer → blob URL
+    // Cover : décodage base64 → ArrayBuffer → blob URL géré par artLoader LRU.
+    // Évite les blob URLs hors-cache qui s'accumulent en RAM (50-60 MB en batch).
     if (rustTags.cover_base64) {
       if (t.art && t.art.startsWith('blob:')) try { URL.revokeObjectURL(t.art); } catch {}
       const mime = ART_MIME_ALLOWLIST.includes(rustTags.cover_mime) ? rustTags.cover_mime : 'image/jpeg';
@@ -228,11 +230,10 @@ export async function loadTagsBg(t, rustTags = null) {
       t._artBuf  = u8.buffer;
       t._artMime = mime;
       t._b64     = null; // invalider tout cache base64 existant
-      const blob = new Blob([t._artBuf], { type: mime });
-      t.art     = URL.createObjectURL(blob);
-      t.noArt   = false;
-      t._hasArt = true;  // ARCH-2 : marquer comme ayant une artwork (flag lazy loader)
-      changed = true;
+      t.art      = cacheArt(t);    // ajoute à artLoader LRU + crée blob URL
+      t.noArt    = false;
+      t._hasArt  = true;             // ARCH-2 : marquer comme ayant une artwork
+      changed    = true;
       // OPT-2 : extractColor fire-and-forget — ne bloque plus le batch critique
       const artUrl = t.art;
       extractColor(artUrl).then(color => {

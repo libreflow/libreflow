@@ -178,13 +178,16 @@ export function updateBar() {
  * Peuple la mini-card #next-preview au mouseenter du bouton ⏭.
  * L'affichage est géré par CSS #btn-next:hover — pas de manipulation de classe ici.
  */
+let _nextPreviewInit = false;
 export function initNextPreview() {
+  if (_nextPreviewInit) return; // idempotent : evite duplication sur HMR/re-init
   const btn      = document.getElementById('btn-next');
   const artEl    = document.getElementById('np-art');
   const emEl     = document.getElementById('np-em');
   const nameEl   = btn?.querySelector('.np-name');
   const artistEl = btn?.querySelector('.np-artist');
   if (!btn || !artEl || !emEl || !nameEl || !artistEl) return;
+  _nextPreviewInit = true;
 
   btn.addEventListener('mouseenter', () => {
     const t = peekNext();
