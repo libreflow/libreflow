@@ -157,8 +157,8 @@ fn com_thread_loop(main_hwnd_raw: isize) {
         match msg.message {
             // ── Initialiser ou réinitialiser la toolbar (ex: taskbar restart) ──
             CMD_INIT | CMD_TASKBAR_CREATED => {
-                let label = if msg.message == CMD_INIT { "CMD_INIT" } else { "CMD_TASKBAR_CREATED" };
-                dlog!("[taskbar] {label} reçu — ThumbBarAddButtons en cours…");
+                let _label = if msg.message == CMD_INIT { "CMD_INIT" } else { "CMD_TASKBAR_CREATED" };
+                dlog!("[taskbar] {_label} reçu — ThumbBarAddButtons en cours…");
                 playing    = *lock_recover(&PLAYING);
                 has_tracks = *lock_recover(&HAS_TRACKS);
                 // (Re)construire les deux image lists. Sur taskbar restart Windows libère
@@ -170,8 +170,8 @@ fn com_thread_loop(main_hwnd_raw: isize) {
                 let cur_il_raw = if playing { il_pause_raw } else { il_play_raw };
                 let ok = unsafe {
                     if cur_il_raw != 0 {
-                        let r = tb3.ThumbBarSetImageList(main_hwnd, HIMAGELIST(cur_il_raw));
-                        dlog!("[taskbar] ThumbBarSetImageList = {r:?}");
+                        let _r = tb3.ThumbBarSetImageList(main_hwnd, HIMAGELIST(cur_il_raw));
+                        dlog!("[taskbar] ThumbBarSetImageList = {_r:?}");
                     }
                     let r = tb3.ThumbBarAddButtons(main_hwnd, &mk_buttons(playing, has_tracks));
                     dlog!("[taskbar] ThumbBarAddButtons = {r:?}");
