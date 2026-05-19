@@ -13,10 +13,16 @@
 // inline ont migré vers data-action/data-* + delegated listeners.
 
 import './app.js';
-import { registerHandlers } from './handlers.js';
-import { initNextPreview }  from './playerbar.js';
+import { registerHandlers }      from './handlers.js';
+import { initNextPreview }       from './playerbar.js';
+import { installAutoFocusTrap }  from './modal.js';
+import { initSettingsKeynav }    from './settings.js';
 registerHandlers();
 initNextPreview();
+// A11Y-SERIOUS : focus trap auto-installé sur tous les [role="dialog"] connus.
+installAutoFocusTrap();
+// UX-Ergo : navigation clavier (ArrowLeft/Right/Home/End) dans la tablist settings.
+initSettingsKeynav();
 
 // R-1 — handler global géré dans app.js (unhandledrejection) — ne pas
 // appeler toast() ici car ce module s'exécute avant le boot app.js

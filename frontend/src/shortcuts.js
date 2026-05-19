@@ -42,7 +42,7 @@ import { masterGainNode, setMasterGain,
 import { queueOpen, closeQueue }                       from './queue.js';
 import { cinemaOpen, closeCinema, toggleCinema }       from './cinema.js';
 import { isShortcutsOpen, closeShortcuts, toggleShortcuts,
-         closeSettings, _syncVizBtns, syncMiniSettingsBtn } from './settings.js';
+         closeSettings, toggleSettings, _syncVizBtns, syncMiniSettingsBtn } from './settings.js';
 import { closePlModal }                                from './playlists.js';
 import { closeCtxMenu }                                from './ctxmenu.js';
 import { toggleMiniPlayer }                            from './miniplayer.js';
@@ -70,6 +70,14 @@ export function initShortcuts({ updateVolSlider, closeModal, cycleSpeed }) {
       e.preventDefault();
       const srch = document.getElementById('srch');
       if (srch) { showView('lib'); srch.focus(); srch.select(); }
+      return;
+    }
+
+    // UX-Ergo : Ctrl+, ouvre/ferme les Paramètres — convention universelle (VS Code, Chrome, macOS).
+    // Intercepté avant le guard INPUT pour fonctionner même lors d'un focus dans la recherche.
+    if (e.ctrlKey && (e.key === ',' || e.code === 'Comma')) {
+      e.preventDefault();
+      toggleSettings();
       return;
     }
 

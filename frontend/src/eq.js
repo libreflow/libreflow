@@ -259,6 +259,8 @@ export function toggleEQ() {
   if (!panel) return;
   eqOpen = !eqOpen;
   panel.classList.toggle('open', eqOpen);
+  // A11Y : aria-expanded reflète l'état d'ouverture du panneau EQ.
+  document.getElementById('btn-eq')?.setAttribute('aria-expanded', eqOpen ? 'true' : 'false');
   if (eqOpen) {
     if (!eqCtx) initEQ();
     renderEQBands();
@@ -272,6 +274,7 @@ export function closeEQ() {
   eqOpen = false;
   const panel = document.getElementById('eq-panel');
   if (panel) panel.classList.remove('open');
+  document.getElementById('btn-eq')?.setAttribute('aria-expanded', 'false'); // A11Y
 }
 
 // ── setEQBand ─────────────────────────────────────────────────────────────────
@@ -667,6 +670,22 @@ function _drawEQCurve() {
   ctx.stroke();
 
   _updateCurveHeight(); // P1 — hauteur adaptative selon gains actifs
+
+  // A11Y : alternative textuelle pour SR — résume la courbe (graves/médiums/aigus moyens).
+  // Mise à jour à chaque redraw (drag d'une bande, preset, profil device, etc.).
+  if (!wrap.getAttribute('role')) wrap.setAttribute('role', 'img');
+  const _avg = (a, b) => {
+    let s = 0; for (let i = a; i <= b; i++) s += gains[i] || 0;
+    return s / (b - a + 1);
+  };
+  const _fmt = v => (v >= 0 ? '+' : '') + v.toFixed(1) + ' dB';
+  const bass = _avg(0, 2);   // 32–125 Hz
+  const mids = _avg(3, 6);   // 250–2000 Hz
+  const treb = _avg(7, 9);   // 4 k–16 k Hz
+  wrap.setAttribute(
+    'aria-label',
+    `Courbe EQ : graves ${_fmt(bass)}, médiums ${_fmt(mids)}, aigus ${_fmt(treb)}`
+  );
 }
 
 // ── _updatePresetBtns ─────────────────────────────────────────────────────────

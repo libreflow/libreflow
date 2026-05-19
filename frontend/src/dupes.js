@@ -15,7 +15,7 @@ import { emit, on, EVENTS }                          from './bus.js';
 import { trackIdx, _trackIdxMap, rebuildTrackIdxMap, invalidateFilterCache } from './search.js';
 import { audio, adjustShuffleQAfterDelete }           from './player.js';
 import { toast, confirmAction }                                        from './ui.js';
-import { setCurIdx } from './state.js';
+import { setCurIdx, removeTrackAt, removeTracksBatch } from './state.js';
 import { updateStats } from './renderer.js';
 
 // ── État interne ──────────────────────────────────────────────
@@ -95,12 +95,13 @@ export async function removeDupeTrack(id, gi, ti) {
     // MEM-1/MEM-2 FIX : révoquer art ET url blob
     if (t.art && t.art.startsWith('blob:')) try { URL.revokeObjectURL(t.art); } catch {}
     if (t.url && t.url.startsWith('blob:')) try { URL.revokeObjectURL(t.url); } catch {}
-    tracks.splice(idx, 1);
-    adjustShuffleQAfterDelete(idx); // BUG-D2-2 FIX: sync shuffle queue after splice
-    // liked migré Set<id> : suppression directe, pas de shift d'indices
+    // CLAUDE.md §13 : passer par state.js — pré-requis avant removeTrackAt :
+    // adjustShuffleQAfterDelete + setCurIdx (l'idx est encore valide avant splice).
+    adjustShuffleQAfterDelete(idx); // BUG-D2-2 FIX: sync shuffle queue
     get('liked').delete(t.id);
     if (get('curIdx') === idx) { audio.pause(); setCurIdx(-1); }
     else if (get('curIdx') > idx) setCurIdx(get('curIdx') - 1);
+    removeTrackAt(idx); // splice + rebuildTrackIdxMap + notify('tracks')
   }
   // Persister la suppression en IDB — sinon la piste réapparaît au redémarrage
   await ddel('tracks', t.id).catch(e => console.warn('[dupes] IDB delete failed:', e));
@@ -109,8 +110,6 @@ export async function removeDupeTrack(id, gi, ti) {
     dupesGroups[gi].splice(ti, 1);
     if (dupesGroups[gi].length < 2) dupesGroups.splice(gi, 1);
   }
-  rebuildTrackIdxMap(); // RÈGLE CRITIQUE : après tout tracks.splice(), AVANT notify
-  notify('tracks');     // BUG-D2-2 FIX: notify subscribers after map rebuild
   _renderDupes();
   updateDupesBadge();
   invalidateFilterCache(); emit(EVENTS.FILTER_CHANGED, {}); emit(EVENTS.RENDER_LIB, {}); updateStats();
@@ -136,26 +135,27 @@ export async function deleteAllDupes() {
   // Capturer les IDs AVANT de splicer (après splice, les indices sont périmés)
   const idsToDelete = toRemove.map(idx => tracks[idx]?.id).filter(Boolean);
 
+  // Pré-passe : révoquer les blob URLs + ajuster shuffle queue + curIdx
+  // AVANT de splicer (les indices doivent être encore valides).
   let removed = 0;
   for (const idx of toRemove) {
-    // MEM-1/MEM-2 FIX : révoquer art ET url blob
-    if (tracks[idx].art && tracks[idx].art.startsWith('blob:')) try { URL.revokeObjectURL(tracks[idx].art); } catch {}
-    if (tracks[idx].url && tracks[idx].url.startsWith('blob:')) try { URL.revokeObjectURL(tracks[idx].url); } catch {}
-    tracks.splice(idx, 1);
-    adjustShuffleQAfterDelete(idx); // BUG-D2-4 FIX: sync shuffle queue after each splice (indices sorted desc, so idx is stable)
+    if (tracks[idx]?.art?.startsWith?.('blob:')) try { URL.revokeObjectURL(tracks[idx].art); } catch {}
+    if (tracks[idx]?.url?.startsWith?.('blob:')) try { URL.revokeObjectURL(tracks[idx].url); } catch {}
+    adjustShuffleQAfterDelete(idx);
     if (get('curIdx') === idx) { audio.pause(); setCurIdx(-1); }
     else if (get('curIdx') > idx) setCurIdx(get('curIdx') - 1);
     removed++;
   }
 
+  // CLAUDE.md §13 : batch splice + rebuild + notify atomique via state.js
+  removeTracksBatch(toRemove);
+
   // Persister toutes les suppressions en IDB en parallèle
   await Promise.all(idsToDelete.map(id => ddel('tracks', id).catch(e => console.warn('[dupes] IDB delete failed:', e))));
 
   // liked migré Set<id> : supprimer directement les IDs supprimés
-  const liked = get('liked'); // Phase 4
+  const liked = get('liked');
   idsToDelete.forEach(id => liked.delete(id));
-  rebuildTrackIdxMap(); // RÈGLE CRITIQUE : après suppression en lot, AVANT notify
-  notify('tracks');     // BUG-D2-4 FIX: notify subscribers after batch splice + map rebuild
   dupesGroups = [];
   _renderDupes();
   updateDupesBadge();

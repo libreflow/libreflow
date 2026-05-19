@@ -1,0 +1,21 @@
+LibreFlow
+Copyright (c) 2026 Robin Di Berardini
+
+This product is distributed under the MIT License (see LICENSE).
+
+This product includes software developed by third parties, listed in:
+  - THIRD_PARTY_LICENSES.txt       (npm dependencies)
+  - THIRD_PARTY_LICENSES_RUST.txt  (Rust dependencies)
+  - LICENSES/dm-sans.txt           (SIL OFL-1.1 — DM Sans font)
+  - LICENSES/inter.txt             (SIL OFL-1.1 — Inter font)
+  - LICENSES/syne.txt              (SIL OFL-1.1 — Syne font)
+
+Where Apache-2.0 dependencies bundle an upstream NOTICE file, those notices are
+preserved in their original packaging inside the Cargo cache; redistributing
+LibreFlow in source form preserves them automatically through Cargo.lock and
+dependency resolution. The compiled LibreFlow binary statically links those
+dependencies and the attribution above (together with THIRD_PARTY_LICENSES_RUST.txt
+bundled as a resource) satisfies the Apache-2.0 §4(d) propagation requirement.
+
+LibreFlow does not collect, store, or transmit any personal data. See PRIVACY.md.
+LibreFlow security reports are handled per SECURITY.md.

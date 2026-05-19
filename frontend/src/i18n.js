@@ -470,6 +470,7 @@ export const LANGS = {
     t_sleep_set:           (m) => `⏱ Extinction dans ${m} min`,
     t_sleep_cancel:        '⏱ Minuterie annulée',
     t_sleep_warn_1min:     '⏱ Extinction dans 1 minute…',
+    t_sleep_warn_5min:     '⏱ Extinction dans 5 minutes',
     t_sleep_done:          '⏱ Extinction — bonne nuit !',
     t_sleep_end_track:     '⏱ Arrêt après le titre en cours',
     t_sleep_end_track_done:'⏱ Extinction — bonne nuit !',
@@ -499,6 +500,7 @@ export const LANGS = {
     sc_shortcuts_key: 'Afficher cette aide',
     sc_esc:           'Fermer / Vider la recherche',
     sc_fullscreen:    'Plein écran',
+    sc_settings:      'Ouvrir / fermer les paramètres',
     set_rg_target_label: 'Cible',
     aria_rg_target:       'Volume cible ReplayGain',
     // Watch folder
@@ -507,6 +509,10 @@ export const LANGS = {
     set_playlists_section:    'Playlists',
     set_no_folder:            'Aucun dossier sélectionné',
     set_organize_needs_watch: 'Configurez d’abord un dossier surveillé — il sert de racine à l’arborescence cible.',
+    // CD ripping — avertissement copyright one-shot (CONFORMITÉ-CD)
+    cd_copyright_h:           'Extraction de CD audio',
+    cd_copyright_body:        'L’extraction d’un CD audio est généralement autorisée pour un usage personnel dans l’UE et soumise au DMCA aux USA. Vous êtes responsable du respect des droits d’auteur dans votre pays.',
+    cd_copyright_ack:         'J’accepte et je continue',
     // A11Y — labels non visibles (aria-label)
     nav_home:         'Accueil',
     vol_label:        'Volume',
@@ -1089,6 +1095,7 @@ export const LANGS = {
     t_sleep_set:           (m) => `⏱ Sleep in ${m} min`,
     t_sleep_cancel:        '⏱ Sleep timer cancelled',
     t_sleep_warn_1min:     '⏱ Shutting down in 1 minute…',
+    t_sleep_warn_5min:     '⏱ Shutting down in 5 minutes',
     t_sleep_done:          '⏱ Sleep — good night!',
     t_sleep_end_track:     '⏱ Stopping after current track',
     t_sleep_end_track_done:'⏱ Sleep — good night!',
@@ -1118,6 +1125,7 @@ export const LANGS = {
     sc_shortcuts_key: 'Show this help',
     sc_esc:           'Close / Clear search',
     sc_fullscreen:    'Full screen',
+    sc_settings:      'Open / close settings',
     set_rg_target_label: 'Target',
     aria_rg_target:       'ReplayGain target volume',
     // Watch folder
@@ -1126,6 +1134,10 @@ export const LANGS = {
     set_playlists_section:    'Playlists',
     set_no_folder:            'No folder selected',
     set_organize_needs_watch: 'Set a watched folder first — it serves as the root of the target tree.',
+    // CD ripping — one-shot copyright warning (COMPLIANCE-CD)
+    cd_copyright_h:           'CD audio ripping',
+    cd_copyright_body:        'Ripping an audio CD is generally allowed for personal use in the EU and is subject to the DMCA in the US. You are responsible for complying with copyright law in your country.',
+    cd_copyright_ack:         'I understand, continue',
     // A11Y — aria-label strings
     nav_home:         'Home',
     vol_label:        'Volume',

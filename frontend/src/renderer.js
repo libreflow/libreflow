@@ -156,9 +156,11 @@ export function thtml(t, fi, { active = false, liked = false, likedSet, query = 
   const ariaLbl  = [t.name, t.artistFull || t.artist].filter(Boolean).join(' — ');
   // A11Y-ROVING: roving tabindex — seul le tab stop courant reçoit tabindex="0"
   const tabIdx   = isTabStop ? '0' : '-1';
+  // A11Y : aria-current="true" sur la piste courante (info non couleur-only) + title sur titres/artistes longs (tooltip troncation)
+  const ariaCur  = active ? ' aria-current="true"' : '';
 
   return `<div class="${classes}" id="tr-${esc(t.id)}" data-track-id="${esc(t.id)}" data-fi="${fi}"
-  data-action="track-click" role="listitem" tabindex="${tabIdx}" aria-label="${esc(ariaLbl)}"
+  data-action="track-click" role="listitem" tabindex="${tabIdx}" aria-label="${esc(ariaLbl)}"${ariaCur}
   draggable="true" data-drag-action="track-drag">
   ${trackNum}<div class="tart">
     ${artInner}
@@ -168,10 +170,10 @@ export function thtml(t, fi, { active = false, liked = false, likedSet, query = 
     </button>
   </div>
   <div class="ti">
-    <div class="tn">${hlText(t.name || '', query, hlRe)}</div>
-    <div class="ts">${hlText(t.artistFull || t.artist || '', query, hlRe)}</div>
+    <div class="tn" title="${esc(t.name || '')}">${hlText(t.name || '', query, hlRe)}</div>
+    <div class="ts" title="${esc(t.artistFull || t.artist || '')}">${hlText(t.artistFull || t.artist || '', query, hlRe)}</div>
   </div>
-  <div class="ta">${esc(t.album || '')}</div>
+  <div class="ta" title="${esc(t.album || '')}">${esc(t.album || '')}</div>
   <div class="tr-r">
     ${makeEqHTML(t)}
     <span class="tdur">${fmtd(t.duration)}</span>

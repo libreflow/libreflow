@@ -17,8 +17,10 @@
 //   - audio.volume jamais touché ici (cf. CLAUDE.md §2)
 
 import { invoke, listen, convertFileSrc }     from './ipc.js';
-import { toast }                              from './ui.js';
-import { get, notify }                        from './store.js';
+import { toast, confirmAction }               from './ui.js';
+import { i18n }                               from './i18n.js';
+import { get, set, notify }                   from './store.js';
+import { saveCfg }                            from './cfgsave.js';
 import { rebuildTrackIdxMap,
          invalidateFilterCache }              from './search.js';
 import { VIRT }                               from './virt.js';
@@ -43,6 +45,28 @@ let _prefetchAudioListener = null;
 let _cdModalPrevFocus = null;
 
 // ── API publique ──────────────────────────────────────────────────────────────
+
+/**
+ * Affiche une fois par installation un avertissement copyright avant le
+ * premier rip CD. Persisté via `cfg.cdCopyrightAck` (cfgsave.js). Retourne
+ * `true` si l'utilisateur a déjà acquitté ou vient d'accepter ; `false` s'il
+ * a annulé — l'appelant doit alors abandonner l'opération.
+ * CONFORMITÉ-CD (audit 2026-05-19 : DMCA §1201 / EUCD Art. 6).
+ */
+async function _ensureCdCopyrightAck() {
+  if (get('cdCopyrightAck') === true) return true;
+  const ok = await confirmAction(
+    i18n('cd_copyright_h'),
+    i18n('cd_copyright_body'),
+    i18n('cd_copyright_ack'),
+    'primary',
+  );
+  if (!ok) return false;
+  set('cdCopyrightAck', true);
+  // Persistance immédiate (debounced) : la prochaine session se rappellera l'opt-in.
+  saveCfg();
+  return true;
+}
 
 export async function openCdModal(drivePath) {
   let toc;
@@ -95,6 +119,8 @@ export async function playCdTrack(drivePath, idx) {
   if (!toc) { toast('TOC perdu — réessayer', 'error'); return; }
   const tocTrack = toc.tracks.find(t => t.idx === idx) || toc.tracks[0];
   if (!tocTrack) return;
+  // CONFORMITÉ-CD : avertissement copyright one-shot (DMCA / EUCD).
+  if (!(await _ensureCdCopyrightAck())) return;
 
   const rip_id  = crypto.randomUUID();
   const tempPath = await _tempPathForRip(rip_id);
@@ -153,17 +179,24 @@ export async function extractCd(drivePath) {
     toast('Aucun dossier de surveillance configuré', 'error');
     return;
   }
+  // CONFORMITÉ-CD : avertissement copyright one-shot (DMCA / EUCD).
+  if (!(await _ensureCdCopyrightAck())) return;
 
   const dateStr = new Date().toISOString().slice(0, 10);
   const label   = drivePath.replace(/[:\\]/g, '');
 
   _showProgressUi();
   const written = [];
+  const totalTracks = toc.tracks.length;
 
-  for (const tocTrack of toc.tracks) {
+  for (let i = 0; i < toc.tracks.length; i++) {
+    const tocTrack = toc.tracks[i];
     const rip_id = crypto.randomUUID();
     const dest   = extractDestPath(watchPath, label, tocTrack.idx, dateStr);
-    _setProgressText(`Extraction : ${tocTrack.idx} / ${toc.tracks.length}`);
+    // Texte affiche progression GLOBALE (track i+1/N — XX%) en complément de la barre de remplissage par track.
+    // L'audit (UI 2026-05-19) signalait que la barre revenait à zéro entre chaque piste sans repère global.
+    const _globalPct = Math.round((i / totalTracks) * 100);
+    _setProgressText(`Extraction ${i + 1} / ${totalTracks} — ${_globalPct}%`);
     await _subscribeProgress(rip_id);
 
     try {

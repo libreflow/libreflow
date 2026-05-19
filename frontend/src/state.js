@@ -104,3 +104,34 @@ export function replaceTracks(newArray) {
   set('tracks', newArray);
   rebuildTrackIdxMap();
 }
+
+/**
+ * Supprime plusieurs pistes par index, en un seul rebuild + notify.
+ * Les indices DOIVENT être triés décroissants pour rester valides pendant
+ * la boucle de splice (haute → basse). La fonction valide cet ordre en debug.
+ *
+ * Préférée à un simple `for (const idx of indices) tracks.splice(idx, 1)`
+ * suivi d'un rebuild manuel : centralise l'invariant CLAUDE.md §2 et évite
+ * que des sites appelants oublient le rebuild.
+ *
+ * ⚠ Prérequis : adjustShuffleQAfterDelete + setCurIdx déjà appelés AVANT
+ *   sur chaque idx — ils utilisent l'index *avant* splice.
+ *
+ * @param {number[]} sortedDescIndices — indices triés décroissants
+ */
+export function removeTracksBatch(sortedDescIndices) {
+  if (!sortedDescIndices.length) return;
+  const tracks = get('tracks');
+  // Garde-fou : vérifier l'ordre en debug uniquement
+  for (let i = 1; i < sortedDescIndices.length; i++) {
+    if (sortedDescIndices[i] >= sortedDescIndices[i - 1]) {
+      console.warn('[state] removeTracksBatch: indices NON triés décroissants', sortedDescIndices);
+      break;
+    }
+  }
+  for (const idx of sortedDescIndices) {
+    if (idx >= 0 && idx < tracks.length) tracks.splice(idx, 1);
+  }
+  rebuildTrackIdxMap();
+  notify('tracks');
+}

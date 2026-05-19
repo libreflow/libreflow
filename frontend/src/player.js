@@ -628,16 +628,20 @@ export function toggleRepeat() {
   repeat = m[(m.indexOf(repeat) + 1) % 3];
   set('repeat', repeat);
   const isOn = repeat !== 'none';
+  // A11Y : aria-pressed tri-état → "false" (off) / "true" (all) / "mixed" (one) — convention WAI-ARIA tri-state.
+  const ariaPressed = repeat === 'none' ? 'false' : repeat === 'all' ? 'true' : 'mixed';
+  const lbl = { none: i18n('t_repeat_none'), all: i18n('t_repeat_all'), one: i18n('t_repeat_one') }[repeat];
   const repBtn = document.getElementById('pc-rep');
   repBtn?.classList.toggle('on', isOn);
   repBtn?.classList.toggle('rep-one', repeat === 'one');
-  repBtn?.setAttribute('aria-pressed', String(isOn));
-  repBtn?.setAttribute('aria-label', { none: i18n('t_repeat_none'), all: i18n('t_repeat_all'), one: i18n('t_repeat_one') }[repeat]);
+  repBtn?.setAttribute('aria-pressed', ariaPressed);
+  repBtn?.setAttribute('aria-label', lbl);
   const cinRep = document.getElementById('cinema-rep');
   cinRep?.classList.toggle('on',      isOn);
   cinRep?.classList.toggle('rep-one', repeat === 'one');
-  cinRep?.setAttribute('aria-pressed', String(isOn));
-  toast({ none: i18n('t_repeat_none'), all: i18n('t_repeat_all'), one: i18n('t_repeat_one') }[repeat]);
+  cinRep?.setAttribute('aria-pressed', ariaPressed);
+  cinRep?.setAttribute('aria-label', lbl);
+  toast(lbl); // toast aria-live=polite — annonce dynamique du nouvel état (3 distincts)
   _allPlayerUI();
 }
 

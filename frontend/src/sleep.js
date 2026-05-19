@@ -21,6 +21,7 @@ export let sleepTickTimer = null; // setInterval handle
 export let sleepFading    = false; // true once fade-out has started
 export let sleepEndOfTrack = false; // true = stop after current track ends (no timer)
 let _sleepWarnedMin       = false; // guard for 1-min warning toast
+let _sleepWarned5Min      = false; // guard for 5-min warning (a11y annonce SR)
 
 /** Allow app.js to reset sleepFading (e.g. when the user resumes playback manually). */
 export function setSleepFading(val) { sleepFading = val; }
@@ -49,6 +50,7 @@ export function setSleepTimer(minutes) {
   sleepFading      = false;
   sleepEndOfTrack  = false;
   _sleepWarnedMin  = false;
+  _sleepWarned5Min = false;
 
   const indicator = document.getElementById('sleep-indicator');
   if (indicator) { indicator.style.display = 'flex'; indicator.classList.add('active'); }
@@ -95,7 +97,8 @@ export function setSleepCustom() {
 
 export function cancelSleepTimer(silent) {
   if (sleepTickTimer) { clearInterval(sleepTickTimer); sleepTickTimer = null; }
-  sleepTimerEnd = 0; sleepFading = false; sleepEndOfTrack = false; _sleepWarnedMin = false;
+  sleepTimerEnd = 0; sleepFading = false; sleepEndOfTrack = false;
+  _sleepWarnedMin = false; _sleepWarned5Min = false;
   // Restore volume to the user's set level (read slider — never hardcode = 1)
   const _vel = document.getElementById('vol');
   const _targetVol = _vel ? parseFloat(_vel.value) : audio.volume;
@@ -127,10 +130,15 @@ function _sleepTick() {
     toast(i18n('t_sleep_done'));
     return;
   }
+  // A11Y : annonces SR à T-5min (info) puis T-1min (warning) — pas plus, sinon trop bavard
+  if (remaining <= 5 * 60000 && !_sleepWarned5Min && remaining > 60000) {
+    _sleepWarned5Min = true;
+    toast(i18n('t_sleep_warn_5min') || '5 minutes avant la mise en pause');
+  }
   // Warning toast at 1 minute remaining (guard: only once)
   if (remaining <= 60000 && !_sleepWarnedMin) {
     _sleepWarnedMin = true;
-    toast(i18n('t_sleep_warn_1min'));
+    toast(i18n('t_sleep_warn_1min'), 'warning'); // type=warning → role=alert pour annonce assertive
   }
   // Start fade-out during the last N seconds
   if (remaining <= CFG.SLEEP_FADE_SECS * 1000 && !sleepFading) {

@@ -39,7 +39,7 @@
       <svg id="ico-mode-dark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
       <svg id="ico-mode-light" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" style="display:none"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
     </button>
-    <button class="tb-icon-btn" id="tbt-settings" data-action="open-settings" title="" data-i18n-title="tb_settings" data-aria-i18n="tb_settings" aria-label="Paramètres">
+    <button class="tb-icon-btn" id="tbt-settings" data-action="open-settings" title="" data-i18n-title="tb_settings" data-aria-i18n="tb_settings" aria-label="Paramètres" aria-expanded="false" aria-controls="settings-panel" aria-haspopup="dialog" aria-keyshortcuts="Control+Comma">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
     </button>
   </div>
@@ -227,7 +227,7 @@
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
     <span data-i18n="sel_tags">Tags</span>
   </button>
-  <button class="sel-close" data-action="clear-selection" data-i18n-title="sel_cancel" data-i18n-aria="aria_sel_cancel" title="Annuler la sélection" aria-label="Annuler la sélection">
+  <button class="sel-close" data-action="clear-selection" data-i18n-title="sel_cancel" data-i18n-aria="aria_sel_cancel" title="Annuler la sélection" aria-label="Annuler la sélection" aria-keyshortcuts="Escape">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
   </button>
   <button class="sel-action danger sel-action--delete" data-action="sel-remove" data-i18n="sel_delete" data-i18n-aria="aria_sel_delete" aria-label="Supprimer">
@@ -297,11 +297,11 @@
   <div id="np-live" class="sr-only" aria-live="assertive" aria-atomic="true"></div>
 
   <div class="pl-r">
-      <button class="pl-queue-btn" id="btn-queue" data-action="toggle-queue" title="" data-i18n-title="pl_queue_title" data-aria-i18n="pl_queue_title" aria-label="File d'attente" style="position:relative">
+      <button class="pl-queue-btn" id="btn-queue" data-action="toggle-queue" title="" data-i18n-title="pl_queue_title" data-aria-i18n="pl_queue_title" aria-label="File d'attente" aria-expanded="false" aria-controls="queue-panel" style="position:relative">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><line x1="9" y1="6" x2="21" y2="6"/><line x1="9" y1="12" x2="21" y2="12"/><line x1="9" y1="18" x2="21" y2="18"/><circle cx="3.5" cy="6" r="1.2" fill="currentColor" stroke="none"/><circle cx="3.5" cy="12" r="1.2" fill="currentColor" stroke="none"/><circle cx="3.5" cy="18" r="1.2" fill="currentColor" stroke="none"/></svg>
         <span id="queue-badge" class="queue-badge" style="display:none"></span>
       </button>
-      <button class="pl-queue-btn" id="btn-eq" data-action="toggle-eq" title="" data-i18n-title="pl_eq_title" data-aria-i18n="pl_eq_title" aria-label="Égaliseur">
+      <button class="pl-queue-btn" id="btn-eq" data-action="toggle-eq" title="" data-i18n-title="pl_eq_title" data-aria-i18n="pl_eq_title" aria-label="Égaliseur" aria-expanded="false" aria-controls="eq-panel">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="13"/><line x1="12" y1="9" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="17"/><line x1="20" y1="13" x2="20" y2="3"/><rect x="1.5" y="12.5" width="5" height="3" rx="1.5" fill="currentColor" stroke="none"/><rect x="9.5" y="7.5" width="5" height="3" rx="1.5" fill="currentColor" stroke="none"/><rect x="17.5" y="15.5" width="5" height="3" rx="1.5" fill="currentColor" stroke="none"/></svg>
       </button>
       <button class="pl-queue-btn" id="tbt-cinema" data-action="toggle-cinema" title="" data-i18n-title="tb_cinema" data-aria-i18n="tb_cinema" aria-label="Mode cinéma" aria-pressed="false">
@@ -691,24 +691,25 @@
         </button>
       </div>
       <!-- A11Y-15: removed duplicate data-tab attributes -->
+      <!-- A11Y-SERIOUS: aria-controls + ids ajoutés pour relier tab → tabpanel -->
       <div class="set-tabs" id="set-tabs" role="tablist">
-        <button class="set-tab-btn on" role="tab" aria-selected="true"  data-action="set-tab" data-tab="appearance">
+        <button class="set-tab-btn on" id="set-tab-appearance" role="tab" aria-selected="true"  aria-controls="set-page-appearance" data-action="set-tab" data-tab="appearance">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3z"/></svg>
           <span data-i18n="set_appearance_tab">Apparence</span>
         </button>
-        <button class="set-tab-btn" role="tab" aria-selected="false" data-action="set-tab" data-tab="audio">
+        <button class="set-tab-btn" id="set-tab-audio" role="tab" aria-selected="false" aria-controls="set-page-audio" data-action="set-tab" data-tab="audio">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
           <span data-i18n="set_audio_tab">Audio</span>
         </button>
-        <button class="set-tab-btn" role="tab" aria-selected="false" data-action="set-tab" data-tab="playback">
+        <button class="set-tab-btn" id="set-tab-playback" role="tab" aria-selected="false" aria-controls="set-page-playback" data-action="set-tab" data-tab="playback">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><polygon points="10 8 16 12 10 16" fill="currentColor" stroke="none"/></svg>
           <span data-i18n="set_playback_tab">Lecture</span>
         </button>
-        <button class="set-tab-btn" role="tab" aria-selected="false" data-action="set-tab" data-tab="library">
+        <button class="set-tab-btn" id="set-tab-library" role="tab" aria-selected="false" aria-controls="set-page-library" data-action="set-tab" data-tab="library">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
           <span data-i18n="set_lib_tab">Bibliothèque</span>
         </button>
-        <button class="set-tab-btn" role="tab" aria-selected="false" data-action="set-tab" data-tab="system">
+        <button class="set-tab-btn" id="set-tab-system" role="tab" aria-selected="false" aria-controls="set-page-system" data-action="set-tab" data-tab="system">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
           <span data-i18n="set_system_tab">Système</span>
         </button>
@@ -716,7 +717,7 @@
     </div>
 
     <!-- ── Onglet Apparence ─────────────────────────────── -->
-    <div class="set-page on" id="set-page-appearance" role="tabpanel">
+    <div class="set-page on" id="set-page-appearance" role="tabpanel" aria-labelledby="set-tab-appearance" tabindex="0">
       <div class="set-section">
         <div class="set-section-lbl" data-i18n="set_language_section">Langue / Language</div>
         <div class="set-row">
@@ -768,7 +769,7 @@
     </div>
 
     <!-- ── Onglet Audio ────────────────────────────────── -->
-    <div class="set-page" id="set-page-audio" role="tabpanel">
+    <div class="set-page" id="set-page-audio" role="tabpanel" aria-labelledby="set-tab-audio" tabindex="0">
       <div class="set-section" id="eq-device-section">
         <div class="set-section-lbl">EQ par appareil</div>
         <div class="set-row">
@@ -865,7 +866,7 @@
     </div>
 
     <!-- ── Onglet Lecture ──────────────────────────────── -->
-    <div class="set-page" id="set-page-playback" role="tabpanel">
+    <div class="set-page" id="set-page-playback" role="tabpanel" aria-labelledby="set-tab-playback" tabindex="0">
       <div class="set-section">
         <div class="set-section-lbl" data-i18n="set_mini_section">Mini-player</div>
         <div class="set-row">
@@ -896,7 +897,7 @@
     </div>
 
     <!-- ── Onglet Bibliothèque ─────────────────────────── -->
-    <div class="set-page" id="set-page-library" role="tabpanel">
+    <div class="set-page" id="set-page-library" role="tabpanel" aria-labelledby="set-tab-library" tabindex="0">
       <div class="set-section">
         <div class="set-section-lbl" data-i18n="set_music_folder_section">Dossier de musique</div>
         <div class="set-row">
@@ -1016,7 +1017,7 @@
     </div>
 
     <!-- ── Onglet Système ──────────────────────────────── -->
-    <div class="set-page" id="set-page-system" role="tabpanel">
+    <div class="set-page" id="set-page-system" role="tabpanel" aria-labelledby="set-tab-system" tabindex="0">
       <div class="set-section">
         <div class="set-section-lbl" data-i18n="set_reset_section">Réinitialisation</div>
         <div class="set-row">
@@ -1111,17 +1112,19 @@
   </div>
 
   <!-- Onglets de catégorie — nouvelle taxonomie par couleur sonore -->
+  <!-- A11Y : data-cat doublé corrigé, aria-controls ajouté vers #eq-presets -->
   <div class="eq-cats" id="eq-cats" role="tablist" data-i18n-aria="aria_eq_cats" aria-label="Catégories de presets EQ">
-    <button class="eq-cat active" data-cat="all"    role="tab" aria-selected="true"  data-action="filter-eq-presets" data-cat="all">Tous</button>
-    <button class="eq-cat"        data-cat="bass"   role="tab" aria-selected="false" data-action="filter-eq-presets" data-cat="bass">Bass</button>
-    <button class="eq-cat"        data-cat="electro" role="tab" aria-selected="false" data-action="filter-eq-presets" data-cat="electro">Électro</button>
-    <button class="eq-cat"        data-cat="urban"  role="tab" aria-selected="false" data-action="filter-eq-presets" data-cat="urban">Urban</button>
-    <button class="eq-cat"        data-cat="live"   role="tab" aria-selected="false" data-action="filter-eq-presets" data-cat="live">Live</button>
-    <button class="eq-cat"        data-cat="world"  role="tab" aria-selected="false" data-action="filter-eq-presets" data-cat="world">World</button>
+    <button class="eq-cat active" role="tab" aria-selected="true"  aria-controls="eq-presets" data-action="filter-eq-presets" data-cat="all">Tous</button>
+    <button class="eq-cat"        role="tab" aria-selected="false" aria-controls="eq-presets" data-action="filter-eq-presets" data-cat="bass">Bass</button>
+    <button class="eq-cat"        role="tab" aria-selected="false" aria-controls="eq-presets" data-action="filter-eq-presets" data-cat="electro">Électro</button>
+    <button class="eq-cat"        role="tab" aria-selected="false" aria-controls="eq-presets" data-action="filter-eq-presets" data-cat="urban">Urban</button>
+    <button class="eq-cat"        role="tab" aria-selected="false" aria-controls="eq-presets" data-action="filter-eq-presets" data-cat="live">Live</button>
+    <button class="eq-cat"        role="tab" aria-selected="false" aria-controls="eq-presets" data-action="filter-eq-presets" data-cat="world">World</button>
   </div>
 
   <!-- Presets filtrés par catégorie -->
-  <div class="eq-presets" id="eq-presets">
+  <!-- A11Y i18n : les noms de presets sont tous anglais (Phonk, Trap, Lofi, R&B…) — lang="en" évite la mauvaise prononciation par un SR FR. -->
+  <div class="eq-presets" id="eq-presets" lang="en">
     <!-- ── Tous (toujours visible) ─────────────────────────── -->
     <button class="eq-preset active" data-cat="all" data-action="eq-preset" data-preset="flat">Flat</button>
     <button class="eq-preset"        data-cat="all" data-action="eq-preset" data-preset="bass">Bass +</button>
@@ -1286,10 +1289,10 @@
   </div>
 </div>
 
-<!-- SHORTCUTS PANEL -->
-<div id="shortcuts-panel" data-backdrop-action="toggle-shortcuts">
+<!-- SHORTCUTS PANEL — a11y: dialog complet (BLOCKER fix audit 2026-05-19) -->
+<div id="shortcuts-panel" data-backdrop-action="toggle-shortcuts" role="dialog" aria-modal="true" aria-labelledby="shortcuts-panel-title">
   <div class="shortcuts-box">
-    <div class="shortcuts-title"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="20" height="12" rx="2.5"/><path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M6 14h4M14 14h4"/></svg> <span data-i18n="sc_title">Raccourcis clavier</span></div>
+    <div class="shortcuts-title" id="shortcuts-panel-title"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="6" width="20" height="12" rx="2.5"/><path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M6 14h4M14 14h4"/></svg> <span data-i18n="sc_title">Raccourcis clavier</span></div>
     <div class="shortcuts-grid">
       <div class="sc-key"><kbd>Espace</kbd></div><div class="sc-desc">Play / Pause</div>
       <div class="sc-key"><kbd>←</kbd></div><div class="sc-desc"><span data-i18n="sc_prev">Titre précédent</span></div>
@@ -1310,6 +1313,7 @@
       <div class="sc-key"><kbd>?</kbd></div><div class="sc-desc"><span data-i18n="sc_shortcuts_key">Afficher cette aide</span></div>
       <div class="sc-key"><kbd>Échap</kbd></div><div class="sc-desc"><span data-i18n="sc_esc">Fermer / Vider la recherche</span></div>
       <div class="sc-key"><kbd>F11</kbd></div><div class="sc-desc"><span data-i18n="sc_fullscreen">Plein écran</span></div>
+      <div class="sc-key"><kbd>Ctrl</kbd><span style="opacity:.4;font-size:10px">+</span><kbd>,</kbd></div><div class="sc-desc"><span data-i18n="sc_settings">Ouvrir / fermer les paramètres</span></div>
     </div>
     <button class="shortcuts-close" data-action="toggle-shortcuts" data-i18n="sc_close">Fermer</button>
   </div>

@@ -154,7 +154,10 @@ function _buildUpcoming() {
 export function toggleQueue() {
   queueOpen = !queueOpen;
   document.getElementById('queue-panel').classList.toggle('open', queueOpen);
-  document.getElementById('btn-queue').classList.toggle('active', queueOpen);
+  const btn = document.getElementById('btn-queue');
+  btn?.classList.toggle('active', queueOpen);
+  // A11Y : aria-expanded reflète l'état d'ouverture du panneau associé.
+  btn?.setAttribute('aria-expanded', queueOpen ? 'true' : 'false');
   document.getElementById('app')?.classList.toggle('panel-queue-open', queueOpen);
   if (eqOpen) closeEQ();
   if (queueOpen && document.getElementById('settings-panel').classList.contains('on')) closeSettings();
@@ -179,7 +182,9 @@ export function closeQueue() {
   }
   queueOpen = false;
   document.getElementById('queue-panel').classList.remove('open');
-  document.getElementById('btn-queue').classList.remove('active');
+  const btn = document.getElementById('btn-queue');
+  btn?.classList.remove('active');
+  btn?.setAttribute('aria-expanded', 'false'); // A11Y
   document.getElementById('app')?.classList.remove('panel-queue-open');
 }
 

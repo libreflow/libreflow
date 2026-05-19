@@ -32,8 +32,18 @@ pub struct CdToc {
 /// Maps rip_id → AtomicBool. Set to true to request graceful cancel.
 static RIP_CANCEL: Mutex<Option<HashMap<String, Arc<AtomicBool>>>> = Mutex::new(None);
 
+/// Acquiert le lock sur RIP_CANCEL en récupérant proprement un mutex empoisonné.
+/// Un mutex empoisonné se produit si un thread panique en tenant le lock — la
+/// donnée reste cohérente puisque l'on ne fait qu'insérer/supprimer des entrées
+/// HashMap. SEC-9 : remplace `.expect()` qui pouvait abattre le thread rip.
 fn rip_cancel_lock() -> std::sync::MutexGuard<'static, Option<HashMap<String, Arc<AtomicBool>>>> {
-    let mut guard = RIP_CANCEL.lock().expect("RIP_CANCEL poisoned");
+    let mut guard = match RIP_CANCEL.lock() {
+        Ok(g) => g,
+        Err(poisoned) => {
+            eprintln!("[cdaudio] WARN: RIP_CANCEL mutex was poisoned; recovering");
+            poisoned.into_inner()
+        }
+    };
     if guard.is_none() {
         *guard = Some(HashMap::new());
     }

@@ -11,7 +11,10 @@
     "vite:build": "vite build",
     "vite:preview": "vite preview",
     "test": "node frontend/tests/core.test.cjs",
-    "bench": "node frontend/tests/bench.cjs"
+    "bench": "node frontend/tests/bench.cjs",
+    "sbom:npm": "npx --yes @cyclonedx/cyclonedx-npm --output-file dist/sbom-npm.cdx.json --output-format JSON",
+    "sbom:rust": "cd src-tauri && cargo install --quiet --locked cargo-cyclonedx && cargo cyclonedx --format json --override-filename sbom-rust",
+    "sbom": "npm run sbom:npm && npm run sbom:rust"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.10.1"

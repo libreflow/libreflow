@@ -47,8 +47,17 @@ export function toast(m, type = 'info') {
 
   const el = document.createElement('div');
   el.className = `t-item t-${type}`;
-  el.innerHTML = `<span class="t-icon">${icon}</span><span class="t-msg"></span><span class="t-bar"></span>`;
+  // A11Y : les erreurs / warnings sont annoncées en assertive (interrompent ce qui parle).
+  // Le shelf parent reste aria-live=polite pour les autres types (success/info/loading).
+  if (type === 'error' || type === 'warning') {
+    el.setAttribute('role', 'alert');
+    el.setAttribute('aria-live', 'assertive');
+  }
+  el.innerHTML = `<span class="t-icon" aria-hidden="true">${icon}</span><span class="t-msg"></span><span class="t-bar" aria-hidden="true"></span>`;
   el.querySelector('.t-msg').textContent = m;
+  // Cap stacking — au-delà de 5 toasts simultanés, on retire les plus anciens pour éviter de spam le SR.
+  const MAX_TOASTS = 5;
+  while (shelf.children.length >= MAX_TOASTS) shelf.firstElementChild?.remove();
   shelf.appendChild(el);
 
   const bar = el.querySelector('.t-bar');

@@ -18,7 +18,7 @@
 // Export : registerHandlers() — à appeler UNE SEULE FOIS au boot (main.js)
 
 import { togglePlay, prev, next, toggleShuffle, toggleRepeat, toggleLike,
-         likeat, playAt, isCurrentTrack }                     from './player.js';
+         likeat, playAt, isCurrentTrack, audio }              from './player.js';
 import { toggleQueue, closeQueue, playQueueItem,
          addToQueueNext, addToQueueEnd,
          removeFromQueue, clearExplicitQueue }                 from './queue.js';
@@ -62,7 +62,7 @@ import { setCrossfade }                                        from './player.js
 import { importM3U, exportM3U, exportXSPF }                    from './m3u.js';
 import { invoke }                                              from './ipc.js';
 import { cycleSpeed, closeModal, clearLibrary, confirmClear, clearAppCache, updateVolSlider, playPlaylistFrom, shufflePlaylist, playPlaylistDirect, playCardByKey, saveCfg } from './app.js';
-import { _syncVizBtns, openSettings, closeSettings, toggleMode, toggleShortcuts, closeShortcuts, setTheme, setMode, switchSetTab, syncMiniSettingsBtn } from './settings.js';
+import { _syncVizBtns, openSettings, closeSettings, toggleSettings, toggleMode, toggleShortcuts, closeShortcuts, setTheme, setMode, switchSetTab, syncMiniSettingsBtn } from './settings.js';
 import { goHome, setView, nextSort, nextAlbumSort, onSearch } from './views.js';
 import { setCinemaBg, toggleCinemaRadio }                      from './cinema.js';
 import { rescanGenres, drillGenre }                            from './genres.js';
@@ -320,7 +320,9 @@ const _ACTIONS = {
   },
 
   // ── Misc (app.js) ─────────────────────────────────────────
-  'open-settings':         ()    => openSettings(),
+  // UX-Ergo : 'open-settings' devient un toggle — re-presser le bouton ferme le panneau.
+  // Le nom data-action est conservé pour la compatibilité HTML existante.
+  'open-settings':         ()    => toggleSettings(),
   'close-settings':        ()    => closeSettings(),
   'toggle-mode':           ()    => toggleMode(),
   'go-home':               ()    => goHome(),
@@ -482,6 +484,8 @@ function _handleInput(e) {
       // DSP-5 : volume via masterGainNode (graph) — fallback audio.volume si graph absent
       setMasterGain(v);
       updateVolSlider(el);
+      // A11Y : aria-valuetext humain ("74%") au lieu de "0.74" lu brut par les SR.
+      el.setAttribute('aria-valuetext', `${Math.round(v * 100)} %`);
       break;
     }
 
@@ -490,6 +494,8 @@ function _handleInput(e) {
       const v = +el.value;
       setMasterGain(v);
       if (main) { main.value = el.value; updateVolSlider(main); }
+      el.setAttribute('aria-valuetext', `${Math.round(v * 100)} %`);
+      main?.setAttribute('aria-valuetext', `${Math.round(v * 100)} %`);
       break;
     }
 
@@ -525,10 +531,14 @@ function _handleInput(e) {
 
     case 'rg-target':
       setRGTarget(+el.value);
+      // A11Y : "-14 LUFS" lu correctement au lieu de "-14"
+      el.setAttribute('aria-valuetext', `${el.value} LUFS`);
       break;
 
     case 'crossfade':
       setCrossfade(+el.value);
+      // A11Y : "5 secondes" au lieu de "5"
+      el.setAttribute('aria-valuetext', el.value === '0' ? 'Désactivé' : `${el.value} secondes`);
       break;
 
     // S157 FIX-2 : tri playlist (remplace l'inline onchange="setPlSort(...)")
@@ -565,6 +575,26 @@ function _handleContextMenu(e) {
 }
 
 function _handleKeydown(e) {
+  // A11Y BLOCKER (WCAG 2.1.1) : seek bar #pbar opérable au clavier.
+  // ArrowLeft/Right ±5s, ArrowUp/Down ±10s, PageUp/Down ±10s, Home/End début/fin.
+  // updateBar() (player.js) ré-écrira aria-valuenow / aria-valuetext sur le tick suivant.
+  if (e.target.id === 'pbar' && audio && Number.isFinite(audio.duration) && audio.duration > 0) {
+    const dur = audio.duration;
+    let handled = true;
+    switch (e.key) {
+      case 'ArrowRight':
+      case 'ArrowUp':   audio.currentTime = Math.min(dur, audio.currentTime + 5);  break;
+      case 'ArrowLeft':
+      case 'ArrowDown': audio.currentTime = Math.max(0,   audio.currentTime - 5);  break;
+      case 'PageUp':    audio.currentTime = Math.min(dur, audio.currentTime + 10); break;
+      case 'PageDown':  audio.currentTime = Math.max(0,   audio.currentTime - 10); break;
+      case 'Home':      audio.currentTime = 0;   break;
+      case 'End':       audio.currentTime = dur; break;
+      default:          handled = false;
+    }
+    if (handled) { e.preventDefault(); return; }
+  }
+
   if (e.key !== 'Enter' && e.key !== ' ') return;
   // sleep-custom-key: Enter on #sleep-custom-input → setSleepCustom()
   if (e.key === 'Enter' && e.target.id === 'sleep-custom-input') {

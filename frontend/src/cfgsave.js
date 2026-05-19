@@ -98,6 +98,8 @@ async function _doSaveCfg() {
     const recentPls     = get('recentPls') ?? [];
     const autoUpdate    = get('autoUpdate') !== false; // true par défaut
     const formatFilter  = get('formatFilter') || '';
+    const cdCopyrightAck = get('cdCopyrightAck') === true; // CONFORMITÉ-CD
+    const lastSettingsTab = get('lastSettingsTab') || 'appearance'; // UX-Ergo : mémoire onglet
 
     const likedIds    = liked instanceof Set ? [...liked] : [];
     const curTrackId  = curIdx >= 0 && tracks[curIdx] ? tracks[curIdx].id : null;
@@ -145,6 +147,8 @@ async function _doSaveCfg() {
       radioSeedId: radioActive ? getRadioSeedId() : null,
       autoUpdate,
       formatFilter,
+      cdCopyrightAck,
+      lastSettingsTab,
     }, 'state');
   } catch (e) {
     if (isQuotaError(e)) {

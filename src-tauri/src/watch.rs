@@ -15,10 +15,8 @@ use notify::{Config, Event, EventKind, RecommendedWatcher, RecursiveMode, Watche
 use std::sync::Mutex;
 use tauri::{AppHandle, Emitter, Manager};
 
-const AUDIO_EXTS: &[&str] = &[
-    "mp3", "flac", "aac", "m4a", "ogg", "opus",
-    "wav", "wma", "aiff", "ape", "alac",
-];
+// CQ — source unique : `commands::AUDIO_EXTS` couvre scan, picker et watcher.
+use crate::commands::AUDIO_EXTS;
 
 /// État global : watcher actif (ou None si surveillance désactivée).
 /// Droppé automatiquement quand on en crée un nouveau ou quand watch_folder_stop est appelé.

@@ -27,6 +27,8 @@ import { rebuildTrackIdxMap,
 // ── État module ───────────────────────────────────────────────────────────────
 /** @type {Array<{from:string,to:string}>} */
 let _pendingMoves = [];
+/** @type {HTMLElement|null} — élément à re-focuser à la fermeture (a11y) */
+let _prevFocus = null;
 
 // ── Helpers de chemin ─────────────────────────────────────────────────────────
 
@@ -211,6 +213,9 @@ export function organizeCancel() {
   // Fallback si l'animation CSS ne se déclenche pas (ex: prefers-reduced-motion).
   // Stocké pour pouvoir être annulé si le modal est rouvert avant l'échéance.
   bg._closeTimer = setTimeout(() => bg.classList.remove('on', 'modal-closing'), 300);
+  // A11Y : restaurer le focus à l'élément qui a ouvert le modal.
+  if (_prevFocus && typeof _prevFocus.focus === 'function') _prevFocus.focus();
+  _prevFocus = null;
 }
 
 // ── Modal ─────────────────────────────────────────────────────────────────────
@@ -268,6 +273,8 @@ function _showOrganizeModal(valid, errors, scheme) {
     btn.textContent = totalValid === 0 ? 'Rien à faire' : 'Confirmer';
   }
 
+  // A11Y : sauvegarder l'élément focusé avant ouverture (restauré dans organizeCancel)
+  _prevFocus = /** @type {HTMLElement|null} */ (document.activeElement);
   bg.classList.add('on');
 
   setTimeout(() => {

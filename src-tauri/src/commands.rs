@@ -21,7 +21,10 @@ use tokio::time::{timeout, Duration};
 
 // ── Constantes ────────────────────────────────────────────────────────────────
 
-const AUDIO_EXTS: &[&str] = &[
+/// Liste partagée des extensions audio reconnues par LibreFlow.
+/// Source unique de vérité côté backend — référencée par les commandes
+/// scan/pick locales ET par `watch.rs` (filtrage des événements notify).
+pub(crate) const AUDIO_EXTS: &[&str] = &[
     "mp3", "flac", "aac", "m4a", "ogg", "opus",
     "wav", "wma", "aiff", "ape", "alac",
 ];

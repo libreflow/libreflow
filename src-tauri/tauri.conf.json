@@ -39,6 +39,9 @@
     },
     "resources": [
       "../LICENSE",
+      "../NOTICE",
+      "../PRIVACY.md",
+      "../SECURITY.md",
       "../THIRD_PARTY_LICENSES.txt",
       "../THIRD_PARTY_LICENSES_RUST.txt",
       "../LICENSES/dm-sans.txt",
@@ -74,9 +77,12 @@
       "assetProtocol": {
         "enable": true,
         "scope": [
-          "**/*.mp3",  "**/*.flac", "**/*.ogg",  "**/*.opus",
-          "**/*.m4a",  "**/*.aac",  "**/*.wav",  "**/*.wma",
-          "**/*.aiff", "**/*.ape",  "**/*.alac"
+          "$APPDATA/**",
+          "$AUDIO/**",
+          "$MUSIC/**",
+          "$DOWNLOAD/**",
+          "$DESKTOP/**",
+          "$DOCUMENT/**"
         ]
       }
     }

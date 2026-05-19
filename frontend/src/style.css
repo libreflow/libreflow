@@ -357,6 +357,8 @@
   /* Alias sémantiques accent — --gd/--gg restent les sources (mis à jour par settings.js) */
   --accent-subtle:  var(--gd);   /* remplace var(--gd) dans les rules CSS */
   --accent-mid:     var(--gg);   /* remplace var(--gg) dans les rules CSS */
+  --accent:         var(--g);                 /* couleur accent pleine — .fmt-chip.active, etc. */
+  --on-accent:      var(--text-on-accent);    /* texte/icônes sur fond accent */
 
   /* Boutons — base tokens partagés */
   --btn-h:    30px;
@@ -3234,6 +3236,13 @@ html[data-mode="light"] .sleep-custom-inp:focus { border-color: var(--g); backgr
 .mbtn.confirm:hover { filter: brightness(1.12); }
 /* État actif des boutons de settings (viz, mode, dynColor, cinema bg) */
 .mbtn.on           { background: var(--g); color: var(--text-on-accent); border: var(--border-w-md) solid var(--g); font-weight: 700; }
+/* DS — Variant secondary (utilisé par promptAction et par les CTAs neutres : "ouvrir dossier", "exporter", etc.) */
+.mbtn.secondary    { background: var(--bg3); color: var(--t2); border: var(--border-w-sm) solid var(--bg5); }
+.mbtn.secondary:hover { background: var(--bg4); color: var(--t); border-color: var(--g); }
+/* DS — Utility size : équivalent des inline `font-size:11px;padding:5px 14px` dans index.html (à migrer) */
+.mbtn--sm          { font-size: var(--fs-sm); padding: var(--sp-1h) var(--sp-3h); }
+/* État disabled global — couvre les cas où le composant individuel n'en a pas défini */
+.mbtn:disabled, button:disabled[disabled] { opacity: .5; cursor: not-allowed; pointer-events: none; }
 #set-viz-shape-group { transition: opacity var(--dur-mid) var(--smooth); }
 
 /* ── Orphans dialog list (C-2) ── */

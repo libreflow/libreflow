@@ -27,7 +27,6 @@
         "core:webview:allow-create-webview-window",
         "core:event:default",
         "dialog:allow-open",
-        "fs:default",
         "notification:default",
         "global-shortcut:allow-is-registered",
         "global-shortcut:allow-register",

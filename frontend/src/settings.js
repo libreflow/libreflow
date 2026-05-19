@@ -96,7 +96,62 @@ export function switchSetTab(tab) {
     const isActive = b.dataset.tab === tab;
     b.classList.toggle('on', isActive);
     b.setAttribute('aria-selected', isActive ? 'true' : 'false');
+    // Roving tabindex : seul l'onglet actif est tab-stop (Tab descend ensuite vers le contenu).
+    b.setAttribute('tabindex', isActive ? '0' : '-1');
   });
+  // Ergonomie UX : mémoriser pour la prochaine ouverture
+  if (_VALID_TABS.includes(tab)) {
+    set('lastSettingsTab', tab);
+    saveCfg();
+  }
+}
+
+/**
+ * Navigation clavier dans la tablist settings (WAI-ARIA Authoring Practices) :
+ *   ArrowLeft  → onglet précédent (cycle)
+ *   ArrowRight → onglet suivant   (cycle)
+ *   Home       → premier onglet
+ *   End        → dernier onglet
+ * Idempotent — appelé une seule fois au boot via initSettingsKeynav().
+ */
+function _handleTabKeydown(e) {
+  const tabs = /** @type {HTMLElement[]} */ ([...document.querySelectorAll('#set-tabs .set-tab-btn')]);
+  if (!tabs.length || !tabs.includes(/** @type {HTMLElement} */ (e.target))) return;
+  const cur = tabs.indexOf(/** @type {HTMLElement} */ (e.target));
+  let next = -1;
+  switch (e.key) {
+    case 'ArrowLeft':  next = (cur - 1 + tabs.length) % tabs.length; break;
+    case 'ArrowRight': next = (cur + 1) % tabs.length;               break;
+    case 'Home':       next = 0;                                     break;
+    case 'End':        next = tabs.length - 1;                       break;
+    default: return;
+  }
+  e.preventDefault();
+  const nextTab = tabs[next];
+  nextTab.focus();
+  // Activer la tab focusée — pattern "automatic activation" (vs "manual" via Enter/Space)
+  const tabKey = nextTab.dataset.tab;
+  if (tabKey) switchSetTab(tabKey);
+}
+
+/** Initialise la navigation clavier de la tablist. Appelé une seule fois au boot. */
+export function initSettingsKeynav() {
+  const tablist = $id('set-tabs');
+  if (!tablist) return;
+  tablist.addEventListener('keydown', _handleTabKeydown);
+}
+
+/** Liste des onglets valides — garde-fou pour `cfg.lastSettingsTab` (anti-typo/corruption). */
+const _VALID_TABS = ['appearance', 'audio', 'playback', 'library', 'system'];
+
+/**
+ * Ergonomie UX (audit 2026-05-19) : toggle au lieu de open systématique.
+ * Re-pressing `#tbt-settings` ou `Ctrl+,` ferme le panneau s'il est ouvert.
+ */
+export function toggleSettings() {
+  const panel = $id('settings-panel');
+  if (panel?.classList.contains('on')) closeSettings();
+  else                                  openSettings();
 }
 
 export function openSettings() {
@@ -108,8 +163,13 @@ export function openSettings() {
   _settingsTrigger = document.activeElement instanceof HTMLElement ? document.activeElement : null;
   panel.classList.remove('closing');
   panel.classList.add('on');
-  $id('tbt-settings')?.classList.add('active');
-  switchSetTab('appearance');
+  // A11Y + UX : sync état du trigger (active + aria-expanded)
+  const trigger = $id('tbt-settings');
+  trigger?.classList.add('active');
+  trigger?.setAttribute('aria-expanded', 'true');
+  // Ergonomie UX : restaurer le dernier onglet ouvert (au lieu de revenir systématiquement à 'appearance').
+  const _lastTab = get('lastSettingsTab');
+  switchSetTab(_VALID_TABS.includes(_lastTab) ? _lastTab : 'appearance');
   $id('lang-fr')?.classList.toggle('on', getLang() === 'fr');
   $id('lang-en')?.classList.toggle('on', getLang() === 'en');
   // Sync dynColor checkbox
@@ -117,11 +177,16 @@ export function openSettings() {
   syncCinemaBgSettings();
   _syncVizBtns();
   syncMiniSettingsBtn();
-  // A11Y-05: mettre en place le piège de focus et déplacer le focus sur le bouton Fermer
+  // A11Y-05: mettre en place le piège de focus
   const box = $id('settings-box');
   if (box) _setupSettingsFocusTrap(box);
+  // Ergonomie UX : focus initial sur le tab actif (WAI-ARIA dialog+tabs pattern)
+  // plutôt que sur la croix de fermeture — l'utilisateur peut Arrow-naviguer ou Tab vers le contenu.
   setTimeout(() => {
-    document.querySelector('#settings-box .set-close')?.focus();
+    /** @type {HTMLElement|null} */
+    const target = document.querySelector('#set-tabs .set-tab-btn.on')
+                || document.querySelector('#settings-box .set-close');
+    target?.focus();
   }, 50);
 }
 
@@ -150,7 +215,9 @@ export function closeSettings() {
   };
   panel.addEventListener('animationend', _onClose, { once: true });
   setTimeout(_onClose, 400); // fallback si animationend ne se déclenche jamais
-  $id('tbt-settings')?.classList.remove('active');
+  const trigger = $id('tbt-settings');
+  trigger?.classList.remove('active');
+  trigger?.setAttribute('aria-expanded', 'false');
 }
 
 document.addEventListener('keydown', e => {

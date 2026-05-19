@@ -324,6 +324,10 @@ function _applyBootUI(cfgObj) {
       saveCfg();
     });
   }
+  // CONFORMITÉ-CD : restaurer l'opt-in copyright CD au boot (sinon false → warning à chaque session)
+  set('cdCopyrightAck', cfgObj?.cdCopyrightAck === true);
+  // UX-Ergo : restaurer le dernier onglet settings ouvert
+  set('lastSettingsTab', cfgObj?.lastSettingsTab || 'appearance');
   const watchChk = document.getElementById('watch-folder-chk');
   if (watchChk) watchChk.addEventListener('change', async () => {
     if (watchChk.checked) {
