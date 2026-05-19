@@ -197,6 +197,57 @@ function _updateSrchBadge(count) {
     badge.textContent = '';
   }
   badge.classList.toggle('on', show);
+  updateClearFiltersBtn();
+}
+
+// ── ERG-P1 : Bouton "Effacer tous les filtres" ───────────────────────────────
+// Visible si au moins un filtre actif : search, format chip non-Tous, ou drill.
+export function updateClearFiltersBtn() {
+  const btn = document.getElementById('clear-filters');
+  if (!btn) return;
+  const hasQuery  = !!_q();
+  const hasFormat = !!(get('formatFilter'));
+  const hasDrill  = !!(get('drillKey'));
+  btn.style.display = (hasQuery || hasFormat || hasDrill) ? 'flex' : 'none';
+}
+
+/**
+ * ERG-P1 — Réinitialise les 3 filtres (search, format chip, drill) sans changer la vue.
+ * Diffère de goHome() qui force la vue "all".
+ */
+export function clearAllFilters() {
+  let changed = false;
+  // 1. Recherche
+  const srch = document.getElementById('srch');
+  if (srch && srch.value) {
+    srch.value = '';
+    set('query', '');
+    const clr = document.getElementById('srch-clear');
+    if (clr) clr.style.display = 'none';
+    changed = true;
+  }
+  // 2. Format chip
+  if (get('formatFilter')) {
+    set('formatFilter', '');
+    changed = true;
+  }
+  // 3. Drill
+  if (get('drillKey')) {
+    set('drillKey', '');
+    set('drillFrom', '');
+    set('drillDisplayName', '');
+    document.getElementById('drill-header')?.remove();
+    const bc = document.getElementById('breadcrumb');
+    if (bc) bc.style.display = 'none';
+    changed = true;
+  }
+  if (!changed) return;
+  cancelSearchDebounce();
+  invalidateFilter();
+  emit(EVENTS.FILTER_CHANGED, {});
+  saveCfg();
+  // Remettre le focus sur la recherche pour fluidité clavier
+  if (srch) srch.focus();
 }
 
 export function onSearch(q) {

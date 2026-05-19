@@ -499,10 +499,12 @@ function renderDrillHeader(view, key) {
 export function renderLib() {
   const fl = getFiltered();
 
-  // Invalider les caches de virt pour forcer un rebuild complet
-  VIRT._lastListSig   = '';
-  VIRT._lastWindowSig = '';
-  VIRT._fiToRowIdx    = null;  // I-2: invalider la map fi→rowIdx
+  // PERF (audit 2026-05-19) : ne PAS wiper les caches de virt ici.
+  // virtRenderWindow détecte les changements via sa signature granulaire
+  // (length|sort|query|view|first/mid/last id) ; les mutations de tracks[]
+  // sont invalidées explicitement par leurs callsites (backup, cdaudio,
+  // library, player, orphans, selection, tagedit). Un reset systématique
+  // forçait un rebuild complet même sur simple changement de tri.
   // C-1: invalider les caches memoïsés album/artist uniquement si tracks[] a changé
   // Évite un rebuild coûteux à chaque navigation (tri, filtre, drill) sur la même lib.
   const _tracks   = get('tracks') || [];
@@ -1104,6 +1106,44 @@ export function updateStats() {
 export function scheduleStatsUpdate() {
   if (_statsTimer) clearTimeout(_statsTimer);
   _statsTimer = setTimeout(updateStats, CFG.STATS_UPDATE_DELAY);
+}
+
+// ── ERG-P2 : Compteurs par vue dans la sidebar ────────────────────────────────
+/**
+ * Met à jour les badges `(N)` à droite des items sidebar fixes :
+ *   #ni-all, #ni-liked, #ni-recent, #ni-playlists, #ni-artists, #ni-albums.
+ * Réutilise les memo-caches existants (_getArtistMap / _getAlbumMap).
+ */
+export function updateSidebarCounts() {
+  const tracks    = get('tracks')      || [];
+  const liked     = get('liked');
+  const recent    = get('recentPlays') || [];
+  const playlists = get('playlists')   || [];
+  const counts = {
+    'ni-all':       tracks.length,
+    'ni-liked':     liked ? liked.size : 0,
+    'ni-recent':    recent.length,
+    'ni-playlists': playlists.length,
+    'ni-artists':   tracks.length ? _getArtistMap().length : 0,
+    'ni-albums':    tracks.length ? _getAlbumMap().length  : 0,
+  };
+  for (const [id, n] of Object.entries(counts)) {
+    const btn = document.getElementById(id);
+    if (!btn) continue;
+    let badge = btn.querySelector('.ni-count');
+    if (n > 0) {
+      const text = n.toLocaleString();
+      if (!badge) {
+        badge = document.createElement('span');
+        badge.className = 'ni-count';
+        badge.setAttribute('aria-hidden', 'true');
+        btn.appendChild(badge);
+      }
+      if (badge.textContent !== text) badge.textContent = text;
+    } else if (badge) {
+      badge.remove();
+    }
+  }
 }
 
 // ── View Transition ───────────────────────────────────────────────────────────

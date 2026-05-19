@@ -79,6 +79,7 @@ import {
   _showViewRaw, showView, goHome, setView, onSearch, nextSort,
   nextAlbumSort, nextArtistSort, nextGenreSort,
   statsGoToGenre, statsGoToArtist, statsGoToAlbum,
+  updateClearFiltersBtn, clearAllFilters,
 } from './views.js';
 import { _showSkeletonRows,
          virtRenderWindow, virtAttachScroll,
@@ -86,7 +87,7 @@ import { _showSkeletonRows,
          drillDown, updatePlActionBar, updateBreadcrumb,
          makeLikeBtn, makeAddBtn, makeEqHTML, artPlaceholder, hlText, thtml,
          playById, patchActiveTrack, patchPlayState, patchTrackEl,
-         scheduleStatsUpdate, updateStats,
+         scheduleStatsUpdate, updateStats, updateSidebarCounts,
          _withVT, animateViewChange, scrollToCurrentTrack } from './renderer.js';
 // ── allplayerui.js (ARCH-1) ──────────────────────────────────────────────────
 import { _allPlayerUI } from './allplayerui.js';
@@ -266,11 +267,14 @@ on(EVENTS.PLAY_STATE, ({ playing }) => {
 // Jalon 4 — évite window.renderLib() dans les satellites
 on(EVENTS.RENDER_LIB, () => renderLib());
 // FILTER_CHANGED : invalidateFilter() a été appelé (ex: chip format) → re-rendre la lib
-on(EVENTS.FILTER_CHANGED, () => renderLib());
+on(EVENTS.FILTER_CHANGED, () => { renderLib(); updateClearFiltersBtn(); });
 // LIBRARY_UPDATED : enable/disable taskbar thumbnail buttons based on track count
 on(EVENTS.LIBRARY_UPDATED, ({ tracks }) => {
   invoke('taskbar_set_has_tracks', { hasTracks: tracks.length > 0 }).catch(e => { console.warn('[taskbar] taskbar_set_has_tracks failed:', e); });
+  updateSidebarCounts();
 });
+// ERG-P2 : RENDER_LIB couvre toggle like / playlog update / suppressions → re-calcul léger
+on(EVENTS.RENDER_LIB, () => updateSidebarCounts());
 
 // ══ Boot ═══════════════════════════════════════
 

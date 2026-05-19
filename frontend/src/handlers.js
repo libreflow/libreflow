@@ -63,7 +63,7 @@ import { importM3U, exportM3U, exportXSPF }                    from './m3u.js';
 import { invoke }                                              from './ipc.js';
 import { cycleSpeed, closeModal, clearLibrary, confirmClear, clearAppCache, updateVolSlider, playPlaylistFrom, shufflePlaylist, playPlaylistDirect, playCardByKey, saveCfg } from './app.js';
 import { _syncVizBtns, openSettings, closeSettings, toggleSettings, toggleMode, toggleShortcuts, closeShortcuts, setTheme, setMode, switchSetTab, syncMiniSettingsBtn } from './settings.js';
-import { goHome, setView, nextSort, nextAlbumSort, onSearch } from './views.js';
+import { goHome, setView, nextSort, nextAlbumSort, onSearch, clearAllFilters } from './views.js';
 import { setCinemaBg, toggleCinemaRadio }                      from './cinema.js';
 import { rescanGenres, drillGenre }                            from './genres.js';
 import { setLang }                                             from './i18n.js';
@@ -318,6 +318,9 @@ const _ACTIONS = {
     const c = document.getElementById('srch-clear');
     if (c) c.style.display = 'none';
   },
+
+  // ── ERG-P1 : Effacer TOUS les filtres (search + format + drill) ─────────
+  'clear-filters':         ()   => clearAllFilters(),
 
   // ── Misc (app.js) ─────────────────────────────────────────
   // UX-Ergo : 'open-settings' devient un toggle — re-presser le bouton ferme le panneau.

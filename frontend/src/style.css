@@ -291,6 +291,11 @@
   /* Focus — accessibilité clavier */
   --focus-ring:    2px solid var(--g);
   --focus-offset:  2px;
+  /* A11Y-30 (UI_AUDIT 2026-05-19) : halo de contraste autour du focus ring.
+     L'accent dynamique --g peut tomber sous 3:1 contre certains backgrounds
+     (cyan/jaune vs panneaux clairs). Le halo garantit la lisibilité du ring
+     sur n'importe quel fond. Override en light mode plus bas. */
+  --focus-halo:    rgba(0,0,0,.55);
   --border-w-sm:   1px;    /* épaisseur border fine — bordures standard (1px hairline) */
   --border-w-md:   1.5px;  /* épaisseur border medium — inputs actifs, modal highlight */
   --border-w-lg:   2px;    /* épaisseur border forte — tabs, drag-over, queue-act */
@@ -914,6 +919,8 @@
 
 /* ── Thème clair ─────────────────────────────────────────── */
 html[data-mode="light"] {
+  /* A11Y-30 : halo focus blanc/clair pour contraster contre l'accent --g sur fond clair */
+  --focus-halo: rgba(255,255,255,.85);
   /* Palette principale — blanc propre, gris froids */
   --bg:  #f0f2f5;   /* fond global */
   --bg1: #e4e7ec;   /* titlebar / player */
@@ -1302,6 +1309,11 @@ button { cursor: pointer; }
 :focus-visible  {
   outline: var(--focus-ring);
   outline-offset: var(--focus-offset);
+  /* A11Y-30 (UI_AUDIT 2026-05-19) : sandwich halo / accent / halo de 6px total
+     pour garantir ≥3:1 contraste contre n'importe quel bg. Le box-shadow fill
+     le gap intérieur (0→2px) avec --focus-halo ET ajoute 2px de halo extérieur
+     (4→6px) — l'outline (--g) reste peint au-dessus au plan 2→4px. */
+  box-shadow: 0 0 0 calc(var(--focus-offset) + 4px) var(--focus-halo);
   border-radius: var(--r);
 }
 
@@ -1447,6 +1459,25 @@ button { cursor: pointer; }
   flex: 1;
   min-width: 0;
 }
+/* ── ERG-P1 : Bouton "Effacer tous les filtres" ─────────── */
+.clear-filters-btn {
+  display: flex; align-items: center; gap: var(--sp-1h);
+  width: 100%;
+  margin-top: var(--sp-1h);
+  padding: var(--sp-1) var(--sp-2);
+  background: var(--accent-subtle);
+  color: var(--g);
+  border: var(--border-w-sm) solid var(--accent-mid);
+  border-radius: var(--r);
+  font-size: var(--fs-sm);
+  font-weight: 500;
+  cursor: pointer;
+  text-align: left;
+  transition: background var(--dur-fast) var(--smooth), border-color var(--dur-fast) var(--smooth);
+}
+.clear-filters-btn:hover { background: var(--accent-mid); }
+.clear-filters-btn:focus-visible { outline: var(--focus-ring); outline-offset: var(--focus-offset); }
+.clear-filters-btn svg { flex-shrink: 0; }
 /* ── Sidebar brand ──────────────────────────────────────── */
 .sb-brand {
   display: flex; align-items: center; gap: var(--sp-2h);
@@ -1550,6 +1581,20 @@ button { cursor: pointer; }
 .ni svg    { width: var(--icon-lg); height: var(--icon-lg); fill: currentColor; flex-shrink: 0; opacity: .55; transition: opacity var(--dur-fast) ease, color var(--dur-fast) ease; }
 .ni:hover svg { opacity: .8; }
 .ni.on svg { opacity: 1; color: var(--g); }
+
+/* ERG-P2 : badge compteur sur items sidebar fixes (#ni-all, #ni-liked, etc.) */
+.ni .ni-count {
+  margin-left: auto;
+  font-size: var(--fs-xs);
+  font-variant-numeric: tabular-nums;
+  color: var(--t4);
+  font-weight: 500;
+  padding: 0 var(--sp-1);
+  border-radius: var(--r-xs);
+  flex-shrink: 0;
+  transition: color var(--dur-fast) ease;
+}
+.ni.on .ni-count { color: var(--g); }
 
 /* Séparateur */
 .ns { height: var(--sep-h); background: var(--sep); margin: var(--sp-1h) var(--sp-1); }
@@ -1837,6 +1882,12 @@ button { cursor: pointer; }
 /* Piste active en lecture : swap play → pause */
 .tr.act.playing-row .tart-hover-play .icon-play  { display: none; }
 .tr.act.playing-row .tart-hover-play .icon-pause { display: block; }
+/* A11Y-11 (UI_AUDIT 2026-05-19) : marqueur ▶ / ❚❚ permanent sur la piste active.
+   Renforce aria-current="true" par un signal NON-couleur (icône visible) →
+   WCAG 1.4.1 (Use of Color). Le bouton overlay est déjà câblé play/pause via
+   .playing-row : on le rend simplement visible (légèrement plus opaque au hover). */
+.tr.act .tart-hover-play           { opacity: 1; background: rgba(0,0,0,.36); }
+.tr.act:hover .tart-hover-play     { background: rgba(0,0,0,.48); }
 /* A11Y — rendre le bouton visible quand il reçoit le focus clavier (sinon opacity:0 = invisible) */
 .tart-hover-play:focus-visible     { opacity: 1; background: rgba(0,0,0,.48); }
 
