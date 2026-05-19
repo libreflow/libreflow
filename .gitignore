@@ -29,6 +29,7 @@ dist-ssr
 *.sw?
 
 # AI / agent tooling local state
-.claude/
+.claude/*
 docs/maestro/
 PATHFINDER-*/
+!.claude/rules/
