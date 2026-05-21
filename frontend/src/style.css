@@ -218,32 +218,34 @@
   --sb-sm: 54px;   /* sidebar compacte icônes-only (< 720px) */
   --pb: 96px;
 
-  /* Spacing — 2px grid */
-  --sp-nano:  1px;   /* séparateurs fins, gaps d'un pixel */
-  --sp-micro: 2px;  /* séparateurs, micro-ajustements, borders visuels */
-  --sp-1q: 3px;      /* quart — séparateurs légers */
-  --sp-1: 4px;
-  --sp-1p: 5px;      /* intermédiaire 4→6 — petits gaps */
-  --sp-1h: 6px;      /* intermédiaire 4→8 — gaps compacts */
-  --sp-1d: 7px;      /* intermédiaire 6→8 — gaps semi-compacts */
-  --sp-2: 8px;
-  --sp-2q: 9px;      /* intermédiaire 8→10 — gaps légèrement modérés */
-  --sp-2h: 10px;     /* intermédiaire 8→12 — gaps modérés */
-  --sp-3: 12px;
-  --sp-3h: 14px;     /* intermédiaire 12→16 — gaps confortables */
-  --sp-4: 16px;
-  --sp-5: 20px;
-  --sp-6: 24px;
-  --sp-7: 28px;      /* gaps généreux */
-  --sp-4h: 18px;     /* intermédiaire 16→20 */
-  --sp-5h: 22px;     /* intermédiaire 20→24 */
-  --sp-7h: 30px;     /* intermédiaire 28→36 */
-  --sp-2d: 11px;     /* intermédiaire 10→12 — usage rare */
-  --sp-3d: 15px;     /* intermédiaire 14→16 — usage rare */
-  --sp-8:  32px;     /* 2×sp-4 — modaux, dupes */
-  --sp-10: 40px;     /* états vides, padding généreux */
-  --sp-12: 48px;     /* padding héros */
-  --sp-15: 60px;     /* padding vues larges */
+  /* Spacing — recâblé sur l'échelle canonique --space-* (harmonisation, audit §2.1).
+     25 paliers → 8. nano/micro/1q restent littéraux : hairlines/bordures
+     sous-grille intentionnelles (les snapper à 4px casserait les séparateurs 1px). */
+  --sp-nano:  1px;            /* hairline — gardé littéral */
+  --sp-micro: 2px;            /* hairline — gardé littéral */
+  --sp-1q: 3px;               /* sous-grille — gardé littéral */
+  --sp-1:  var(--space-1);    /* 4 */
+  --sp-1p: var(--space-1);    /* 5  → 4 */
+  --sp-1h: var(--space-2);    /* 6  → 8 */
+  --sp-1d: var(--space-2);    /* 7  → 8 */
+  --sp-2:  var(--space-2);    /* 8 */
+  --sp-2q: var(--space-2);    /* 9  → 8 */
+  --sp-2h: var(--space-3);    /* 10 → 12 */
+  --sp-3:  var(--space-3);    /* 12 */
+  --sp-3h: var(--space-4);    /* 14 → 16 */
+  --sp-4:  var(--space-4);    /* 16 */
+  --sp-5:  var(--space-5);    /* 20 → 24 */
+  --sp-6:  var(--space-5);    /* 24 */
+  --sp-7:  var(--space-6);    /* 28 → 32 */
+  --sp-4h: var(--space-4);    /* 18 → 16 */
+  --sp-5h: var(--space-5);    /* 22 → 24 */
+  --sp-7h: var(--space-6);    /* 30 → 32 */
+  --sp-2d: var(--space-3);    /* 11 → 12 */
+  --sp-3d: var(--space-4);    /* 15 → 16 */
+  --sp-8:  var(--space-6);    /* 32 */
+  --sp-10: var(--space-7);    /* 40 → 48 */
+  --sp-12: var(--space-7);    /* 48 */
+  --sp-15: var(--space-7);    /* 60 → 48 */
 
   /* Icon scale — remplace les px hardcodés dans les SVG */
   --icon-2xs:  10px;   /* micro-indicateurs (sort, heatmap) */
@@ -481,24 +483,25 @@
   --fs-vw-cin-art:   clamp(11px, 1.8vw, 17px);  /* cinéma artiste responsive */
   --fs-vw-cin-alb:   clamp(9px, 1.3vw, 13px);   /* cinéma album responsive */
 
-  /* Design tokens — border-radius scale */
-  --r-micro:  1px;    /* indicateurs ultra-fins (eq bar, thin line) */
-  --r-xs:     2px;    /* sliders, barres de progression, heatmap */
-  --r-sm:     3px;    /* scrollbar, micro-badges, labels inline */
-  --r-md:     4px;    /* éléments compacts (tags, petits boutons) */
-  --r-lg:     5px;    /* medium-small (kbd, search-clear) */
-  --r:        6px;    /* standard — boutons, inputs, dropdowns */
-  --r-badge:  7px;    /* badge pill (queue-count, speed-lbl) */
-  --r-art:    8px;    /* artwork thumbnails (srch, card-art, skel-art) */
-  --r-9:      9px;    /* eq-curve-wrap spécifique */
-  --r2:      10px;    /* popups, tooltips, menus */
-  --r-card:  12px;    /* cards conteneurs (album, artiste) */
-  --r3:      14px;    /* grands panneaux */
-  --r-4xl:   16px;    /* cinéma overlay arrondi */
-  --r-pill:  20px;    /* pilule (tags, presets, filter-btns) */
-  --r-32:    32px;    /* sélection-filter compacte */
-  --r-round: 50px;    /* ultra-arrondi (toast progress) */
-  --r-full:  60px;    /* circulaire (cinema vol btn) */
+  /* Rayons — recâblés sur l'échelle canonique --radius-* (harmonisation, audit §2.2).
+     17 rayons → 5. --r-micro reste littéral (hairline 1px). */
+  --r-micro:  1px;                 /* hairline — gardé littéral */
+  --r-xs:     var(--radius-xs);    /* 2  → 4 */
+  --r-sm:     var(--radius-xs);    /* 3  → 4 */
+  --r-md:     var(--radius-xs);    /* 4 */
+  --r-lg:     var(--radius-sm);    /* 5  → 8 */
+  --r:        var(--radius-sm);    /* 6  → 8  (rayon standard) */
+  --r-badge:  var(--radius-sm);    /* 7  → 8 */
+  --r-art:    var(--radius-sm);    /* 8 */
+  --r-9:      var(--radius-sm);    /* 9  → 8 */
+  --r2:       var(--radius-md);    /* 10 → 12 */
+  --r-card:   var(--radius-md);    /* 12 */
+  --r3:       var(--radius-md);    /* 14 → 12 */
+  --r-4xl:    var(--radius-lg);    /* 16 */
+  --r-pill:   var(--radius-pill);  /* 20 → pilule pleine */
+  --r-32:     var(--radius-lg);    /* 32 → 16 */
+  --r-round:  var(--radius-pill);  /* 50 → pilule pleine */
+  --r-full:   var(--radius-pill);  /* 60 → pilule pleine */
 
   /* Transitions — hiérarchie temporelle */
   --dur:           140ms;   /* micro-interactions (hover, bg) */
