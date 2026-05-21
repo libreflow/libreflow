@@ -559,48 +559,51 @@
   --shadow-lg:  var(--elev-3);
   --shadow-xl:  var(--elev-4);
 
-  /* Ombres composants & thème clair */
-  --shadow-xs:     0 2px 6px rgba(0,0,0,.35);   /* toolbar */
-  --shadow-sm-lt:  0 2px 8px rgba(0,0,0,.15);   /* sm légère */
-  --shadow-sm-pl:  0 2px 8px rgba(0,0,0,.1);    /* sm très légère */
-  --shadow-sm-tip: 0 2px 8px rgba(0,0,0,.35);   /* tooltip */
-  --shadow-logo:   0 3px 10px rgba(0,0,0,.12);  /* logo light */
-  --shadow-logo-d: 0 3px 10px rgba(0,0,0,.22);  /* logo ctx dark */
-  --shadow-pop:    0 8px 24px rgba(0,0,0,.12);  /* quick-pop light */
-  --shadow-art:    0 4px 12px rgba(0,0,0,.3);   /* artwork thumbnail */
-  --shadow-art-hv: 0 8px 24px rgba(0,0,0,.5);  /* artwork hover */
-  --shadow-card:   0 6px 20px rgba(0,0,0,.32);  /* card hover */
-  --shadow-card-lt:0 6px 20px rgba(0,0,0,.18);  /* card light mode */
-  --shadow-card-hv:0 12px 32px rgba(0,0,0,.5);  /* genre card hover */
-  --shadow-pl-hv:  0 12px 36px rgba(0,0,0,.6);  /* playlist hero hover */
-  --shadow-pl-hv-lt: 0 8px 28px rgba(0,0,0,.45); /* pl hero base */
-  --shadow-modal2: 0 12px 48px rgba(0,0,0,.16); /* modal light mode */
-  --shadow-modal3: 0 12px 40px rgba(0,0,0,.5);  /* search modal */
-  --shadow-cin-btn:0 4px 20px rgba(0,0,0,.4);   /* cinema corner btn */
-  --shadow-cin-vol:0 0 6px rgba(0,0,0,.4);      /* cinema vol btn */
-  --shadow-mp-drag:0 16px 48px rgba(0,0,0,.65); /* mini-player dragging */
-  --shadow-tart:   0 4px 14px rgba(0,0,0,.5);   /* track art hover */
-  --shadow-sb-tip: 0 4px 16px rgba(0,0,0,.45);  /* sidebar tooltip */
-  --shadow-radio:  0 8px 32px rgba(0,0,0,.14), 0 2px 6px rgba(0,0,0,.08); /* radio banner */
+  /* Ombres composants — drop-shadows recâblées sur --elev-* (audit §2.4 / FND-04).
+     Les variantes thème clair (-lt / -pl) restent littérales (re-définies par mode
+     au re-skin couleur), ainsi que les composites et glows spécifiques. */
+  --shadow-xs:     var(--elev-1);               /* toolbar */
+  --shadow-sm-lt:  0 2px 8px rgba(0,0,0,.15);   /* variante claire — gardée littérale */
+  --shadow-sm-pl:  0 2px 8px rgba(0,0,0,.1);    /* variante claire — gardée littérale */
+  --shadow-sm-tip: var(--elev-1);               /* tooltip */
+  --shadow-logo:   0 3px 10px rgba(0,0,0,.12);  /* logo clair — gardée littérale */
+  --shadow-logo-d: var(--elev-1);               /* logo ctx dark */
+  --shadow-pop:    0 8px 24px rgba(0,0,0,.12);  /* quick-pop clair — gardée littérale */
+  --shadow-art:    var(--elev-1);               /* artwork thumbnail */
+  --shadow-art-hv: var(--elev-2);               /* artwork hover */
+  --shadow-card:   var(--elev-2);               /* card */
+  --shadow-card-lt:0 6px 20px rgba(0,0,0,.18);  /* variante claire — gardée littérale */
+  --shadow-card-hv:var(--elev-3);               /* card hover */
+  --shadow-pl-hv:  var(--elev-3);               /* playlist hero hover */
+  --shadow-pl-hv-lt: 0 8px 28px rgba(0,0,0,.45); /* variante de base — gardée littérale */
+  --shadow-modal2: 0 12px 48px rgba(0,0,0,.16); /* modale claire — gardée littérale */
+  --shadow-modal3: var(--elev-3);               /* search modal */
+  --shadow-cin-btn:var(--elev-2);               /* cinema corner btn */
+  --shadow-cin-vol:0 0 6px rgba(0,0,0,.4);      /* glow spécifique — gardée littérale */
+  --shadow-mp-drag:var(--elev-4);               /* mini-player dragging */
+  --shadow-tart:   var(--elev-2);               /* track art hover */
+  --shadow-sb-tip: var(--elev-2);               /* sidebar tooltip */
+  --shadow-radio:  0 8px 32px rgba(0,0,0,.14), 0 2px 6px rgba(0,0,0,.08); /* composite — gardée littérale */
   --shadow-cin-art:var(--shadow-cin-art);  /* cinema artwork */
-  --shadow-ring:   0 0 0 var(--border-w-xl) rgba(var(--g-rgb),.35); /* pbar thumb ring */
-  --shadow-thumb:  0 2px 8px rgba(0,0,0,.5);    /* pbar thumb shadow */
-  --shadow-big-modal: 0 16px 48px rgba(0,0,0,.7), 0 0 0 0.5px rgba(0,0,0,.5); /* big modal multi */
+  --shadow-ring:   var(--glow-accent);          /* pbar thumb ring → lueur accent */
+  --shadow-thumb:  var(--elev-1);               /* pbar thumb shadow */
+  --shadow-big-modal: var(--elev-3);            /* big modal */
 
-  /* Ombres accent (teintées --g-rgb) */
-  --shadow-pcplay:    0 0 0 3px rgba(var(--g-rgb),.22), 0 2px 6px rgba(0,0,0,.18); /* pcplay ring */
-  --shadow-pcplay-hv: 0 0 0 5px rgba(var(--g-rgb),.2),  0 6px 20px rgba(var(--g-rgb),.5); /* pcplay hover */
-  --shadow-pcplay-lt: 0 0 0 5px rgba(var(--g-rgb),.18), 0 6px 20px rgba(var(--g-rgb),.4); /* pcplay light */
-  --shadow-acc-glow:  0 2px 12px rgba(var(--g-rgb),.3); /* accent glow doux */
-  --shadow-srch-dk:   0 0 0 3px rgba(var(--g-rgb),.12); /* search focus dark */
-  --shadow-srch-lt:   0 0 0 3px rgba(var(--g-rgb),.1);  /* search focus light */
-  --shadow-wbtn-hv:   0 6px 24px rgba(var(--g-rgb),.35); /* wbtn hover */
-  --shadow-pbar-thumb: 0 0 0 3px rgba(var(--g-rgb),.35), 0 2px 8px rgba(0,0,0,.5); /* pbar thumb */
-  --shadow-pl-icon:   0 2px 8px rgba(var(--g-rgb),.35); /* pl-icon playing */
-  --shadow-dot-glow:  0 0 8px rgba(var(--g-rgb),.45), 0 0 2px rgba(var(--g-rgb),.25); /* dot glow */
-  --shadow-dot-pulse: 0 0 10px rgba(var(--g-rgb),.65), 0 0 3px rgba(var(--g-rgb),.9); /* dotpulse */
-  --shadow-vslider:   0 0 0 2px rgba(var(--g-rgb),.25), 0 1px 4px rgba(0,0,0,.4); /* vol thumb */
-  --shadow-pbar-glow: 0 0 6px rgba(var(--g-rgb),.5); /* pbar fill glow */
+  /* Ombres accent — glows simples recâblés sur --glow-accent ; les anneaux
+     multi-état (hover/light) et composites restent littéraux. */
+  --shadow-pcplay:    var(--glow-accent);       /* pcplay ring */
+  --shadow-pcplay-hv: 0 0 0 5px rgba(var(--g-rgb),.2),  0 6px 20px rgba(var(--g-rgb),.5); /* état hover — gardé littéral */
+  --shadow-pcplay-lt: 0 0 0 5px rgba(var(--g-rgb),.18), 0 6px 20px rgba(var(--g-rgb),.4); /* variante claire — gardée littérale */
+  --shadow-acc-glow:  var(--glow-accent);       /* accent glow doux */
+  --shadow-srch-dk:   var(--glow-accent);       /* search focus */
+  --shadow-srch-lt:   0 0 0 3px rgba(var(--g-rgb),.1);  /* variante claire — gardée littérale */
+  --shadow-wbtn-hv:   var(--glow-accent);       /* wbtn hover */
+  --shadow-pbar-thumb: 0 0 0 3px rgba(var(--g-rgb),.35), 0 2px 8px rgba(0,0,0,.5); /* composite — gardé littéral */
+  --shadow-pl-icon:   var(--glow-accent);       /* pl-icon playing */
+  --shadow-dot-glow:  var(--glow-accent);       /* dot glow */
+  --shadow-dot-pulse: 0 0 10px rgba(var(--g-rgb),.65), 0 0 3px rgba(var(--g-rgb),.9); /* keyframe — gardé littéral */
+  --shadow-vslider:   0 0 0 2px rgba(var(--g-rgb),.25), 0 1px 4px rgba(0,0,0,.4); /* composite — gardé littéral */
+  --shadow-pbar-glow: var(--glow-accent);       /* pbar fill glow */
 
   /* Ombres inset & indicateurs */
   --shadow-act-bar:   inset 3px 0 0 var(--g); /* barre active gauche */
