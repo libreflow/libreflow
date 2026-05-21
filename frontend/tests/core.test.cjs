@@ -1326,6 +1326,34 @@ section('imports.js -- structure ImportEntry');
 }
 console.log('db.js — _isEphemeralCd skip: 3/3 OK');
 
+// =============================================================================
+// settings.js -- _nextTabIndex (navigation onglets verticale)
+// =============================================================================
+section('settings.js -- _nextTabIndex (navigation onglets verticale)');
+
+// Logique reproduite inline (convention du fichier, cf. en-tête ligne 2).
+function _nextTabIndex(key, cur, len) {
+  if (len <= 0) return -1;
+  switch (key) {
+    case 'ArrowUp':   return (cur - 1 + len) % len;
+    case 'ArrowDown': return (cur + 1) % len;
+    case 'Home':      return 0;
+    case 'End':       return len - 1;
+    default:          return -1;
+  }
+}
+
+(function () {
+  assert(_nextTabIndex('ArrowDown', 0, 5) === 1,  '_nextTabIndex: ArrowDown avance');
+  assert(_nextTabIndex('ArrowDown', 4, 5) === 0,  '_nextTabIndex: ArrowDown cycle après le dernier');
+  assert(_nextTabIndex('ArrowUp',   0, 5) === 4,  '_nextTabIndex: ArrowUp cycle avant le premier');
+  assert(_nextTabIndex('ArrowUp',   2, 5) === 1,  '_nextTabIndex: ArrowUp recule');
+  assert(_nextTabIndex('Home',      3, 5) === 0,  '_nextTabIndex: Home → premier onglet');
+  assert(_nextTabIndex('End',       1, 5) === 4,  '_nextTabIndex: End → dernier onglet');
+  assert(_nextTabIndex('ArrowLeft', 1, 5) === -1, '_nextTabIndex: touche non gérée → -1');
+  assert(_nextTabIndex('ArrowDown', 0, 0) === -1, '_nextTabIndex: liste vide → -1');
+}());
+
 // -- Résultat -----------------------------------------------------------
 console.log('\n═══════════════════════════════════════════════════════════');
 console.log(`  Total : ${_ok + _ko}   OK: ${_ok}   KO: ${_ko}`);

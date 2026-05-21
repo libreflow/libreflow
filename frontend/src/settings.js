@@ -107,25 +107,35 @@ export function switchSetTab(tab) {
 }
 
 /**
- * Navigation clavier dans la tablist settings (WAI-ARIA Authoring Practices) :
- *   ArrowLeft  → onglet précédent (cycle)
- *   ArrowRight → onglet suivant   (cycle)
- *   Home       → premier onglet
- *   End        → dernier onglet
+ * Index de l'onglet cible pour une touche de navigation.
+ * Fonction pure (sans DOM) — testable unitairement.
+ * @param {string} key  valeur de `e.key`
+ * @param {number} cur  index de l'onglet courant
+ * @param {number} len  nombre d'onglets
+ * @returns {number} index cible (cyclique), ou -1 si la touche n'est pas gérée
+ */
+function _nextTabIndex(key, cur, len) {
+  if (len <= 0) return -1;
+  switch (key) {
+    case 'ArrowUp':   return (cur - 1 + len) % len;
+    case 'ArrowDown': return (cur + 1) % len;
+    case 'Home':      return 0;
+    case 'End':       return len - 1;
+    default:          return -1;
+  }
+}
+
+/**
+ * Navigation clavier dans la tablist settings (WAI-ARIA Authoring Practices).
+ * La barre latérale est verticale → flèches Haut/Bas (cycle) + Home/End.
  * Idempotent — appelé une seule fois au boot via initSettingsKeynav().
  */
 function _handleTabKeydown(e) {
   const tabs = /** @type {HTMLElement[]} */ ([...document.querySelectorAll('#set-tabs .set-tab-btn')]);
   if (!tabs.length || !tabs.includes(/** @type {HTMLElement} */ (e.target))) return;
-  const cur = tabs.indexOf(/** @type {HTMLElement} */ (e.target));
-  let next = -1;
-  switch (e.key) {
-    case 'ArrowLeft':  next = (cur - 1 + tabs.length) % tabs.length; break;
-    case 'ArrowRight': next = (cur + 1) % tabs.length;               break;
-    case 'Home':       next = 0;                                     break;
-    case 'End':        next = tabs.length - 1;                       break;
-    default: return;
-  }
+  const cur  = tabs.indexOf(/** @type {HTMLElement} */ (e.target));
+  const next = _nextTabIndex(e.key, cur, tabs.length);
+  if (next < 0) return;
   e.preventDefault();
   const nextTab = tabs[next];
   nextTab.focus();
