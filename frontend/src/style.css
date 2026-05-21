@@ -3742,6 +3742,27 @@ html[data-mode="light"] .bte-cover-clear    { background: var(--bg3); border-col
 }
 .spl-rule-del:hover { color: var(--red); background: rgba(var(--red-rgb),.10); }
 
+/* ─── Constructeur de playlist intelligente — layout extrait des styles inline
+       (audit §4 UIH-spl-01/02 ; conformité CLAUDE.md §13). ─── */
+.spl-modes        { display: flex; gap: var(--space-2); margin-bottom: var(--space-4); }
+.spl-mode-btn     { flex: 1; font-size: var(--text-xs); padding: var(--space-2) var(--space-3); }
+.spl-desc         { font-size: var(--text-sm); color: var(--t2); margin-bottom: var(--space-4); line-height: var(--lh-base); }
+.spl-field        { margin-bottom: var(--space-3); }
+.spl-section-lbl  { font-size: var(--text-xs); color: var(--t3); font-weight: 600; letter-spacing: var(--ls-label); text-transform: uppercase; margin-bottom: var(--space-2); }
+.spl-seed-name    { font-size: var(--text-sm); color: var(--t2); }
+.spl-seed-search  { margin-top: var(--space-2); }
+.spl-results      { max-height: 120px; overflow-y: auto; background: var(--bg3); border-radius: var(--r); border: var(--border-w-sm) solid var(--bg5); margin-top: var(--space-1); }
+.spl-preview-list { max-height: 100px; overflow-y: auto; border-radius: var(--r); border: var(--border-w-sm) solid var(--bg4); }
+.spl-grid-2       { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-3); margin-bottom: var(--space-4); }
+.spl-combinator   { display: flex; align-items: center; gap: var(--space-2); margin-bottom: var(--space-3); font-size: var(--text-sm); color: var(--t2); }
+.spl-select       { cursor: pointer; }
+.spl-select-auto  { width: auto; cursor: pointer; }
+.spl-rules-list   { display: flex; flex-direction: column; gap: var(--space-2); margin-bottom: var(--space-3); }
+.spl-add-rule     { width: 100%; font-size: var(--text-xs); padding: var(--space-2) var(--space-3); margin-bottom: var(--space-4); }
+.spl-preview      { margin-bottom: var(--space-3); }
+.spl-preview-count{ color: var(--g); font-weight: 700; }
+.spl-ico-mr       { margin-right: var(--space-1); }
+
 /* ═══ SIDEBAR PLAYLISTS ══════════════════════════════════════ */
 .ni-pl { padding-left: var(--sp-2h); padding-right: var(--sp-2); font-size: var(--fs-md); }
 /* Nom de la playlist dans le nav item */
