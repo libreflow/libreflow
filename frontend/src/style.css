@@ -4751,7 +4751,7 @@ html[data-mode="light"] .pl-folder-h:hover .pl-folder-count { background: var(--
   100% { background: transparent; }
 }
 .eq-slider-wrap.eq-band-reset {
-  animation: eqBandReset 300ms var(--smooth) forwards;
+  animation: eqBandReset var(--motion-slow) var(--smooth) forwards;
 }
 
 /* ── Spacers flexibles — encadrent le canvas pour le centrer verticalement ── */
