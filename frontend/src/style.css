@@ -4256,7 +4256,8 @@ html[data-mode="light"] .pl-folder-h:hover .pl-folder-count { background: var(--
 }
 
 /* En-tête — barre supérieure pleine largeur */
-.set-head        { display: flex; align-items: center; justify-content: space-between; padding: var(--sp-3h) var(--sp-4h); border-bottom: var(--border-w-sm) solid var(--bg4); flex-shrink: 0; }
+/* R2 — panneau Settings recâblé sur les échelles canoniques (audit §4 UIH-settings) */
+.set-head        { display: flex; align-items: center; justify-content: space-between; padding: var(--space-3) var(--space-5); border-bottom: var(--border-w-sm) solid var(--bg4); flex-shrink: 0; }
 .set-head-title  { font-size: var(--fs-base); font-weight: 700; display: flex; align-items: center; gap: var(--sp-2); }
 .set-head-title svg { width: var(--icon-lg); height: var(--icon-lg); fill: var(--g); }
 .set-close       { background: none; border: none; color: var(--t3); width: var(--icon-28); height: var(--icon-28); border-radius: var(--r); display: flex; align-items: center; justify-content: center; transition: background var(--ease), color var(--ease); }
@@ -4296,7 +4297,7 @@ html[data-mode="light"] .pl-folder-h:hover .pl-folder-count { background: var(--
 .set-page.on  { display: flex; }
 
 /* Bouton compact — variante de .mbtn pour les rangées de settings */
-.mbtn-sm { font-size: 11px; padding: 6px 12px; }
+.mbtn-sm { font-size: var(--text-xs); padding: var(--space-2) var(--space-3); }
 
 /* Groupe de boutons aligné à droite dans une .set-row */
 .set-btn-group { display: flex; gap: var(--sp-2); flex-wrap: wrap; flex-shrink: 0; }
@@ -4304,9 +4305,9 @@ html[data-mode="light"] .pl-folder-h:hover .pl-folder-count { background: var(--
 /* Le contrôle de droite d'une rangée ne se comprime jamais */
 .set-row > .mbtn { flex-shrink: 0; }
 
-.set-section     { padding: var(--sp-4) var(--sp-4h); border-bottom: var(--border-w-sm) solid var(--sep); }
-.set-section-lbl { font-size: var(--fs-xs); font-weight: 700; color: var(--t3); letter-spacing: var(--ls-caps); text-transform: uppercase; margin-bottom: var(--sp-3); }
-.set-row         { display: flex; align-items: center; justify-content: space-between; margin-bottom: var(--sp-2h); gap: var(--sp-3); }
+.set-section     { padding: var(--space-4) var(--space-5); border-bottom: var(--border-w-sm) solid var(--sep); }
+.set-section-lbl { font-size: var(--fs-xs); font-weight: 700; color: var(--t3); letter-spacing: var(--ls-caps); text-transform: uppercase; margin-bottom: var(--space-3); }
+.set-row         { display: flex; align-items: center; justify-content: space-between; margin-bottom: var(--space-3); gap: var(--space-3); }
 .set-row:last-child { margin-bottom: 0; }
 .set-row-label   { font-size: var(--fs-md); color: var(--t2); line-height: var(--lh-comfort); }
 .set-row-sub     { font-size: var(--fs-sm); color: var(--t3); margin-top: var(--sp-micro); }
