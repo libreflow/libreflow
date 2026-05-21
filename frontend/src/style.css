@@ -100,6 +100,77 @@
   --gd:    rgba(59,130,246,.14);
   --gg:    rgba(59,130,246,.28);
 
+  /* ════════════════════════════════════════════════════════════════
+     R1 — ÉCHELLES CANONIQUES D'HARMONISATION (audit 2026-05-21)
+     Réf : docs/superpowers/audits/ui-harmonization-audit.md §2.
+     Couche CIBLE. Additive : aucun consommateur n'y est encore recâblé,
+     donc rendu strictement inchangé. La migration des consommateurs
+     (--sp-* / --r-* / --fs-* / --dur-* / --shadow-* → ces tokens) se
+     fait écran par écran dans les lots R2–R5, avec vérification visuelle.
+     ════════════════════════════════════════════════════════════════ */
+
+  /* Espacement — grille 4px stricte (cible de --sp-*, 25 → 8) */
+  --space-0: 0;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+
+  /* Rayons (cible de --r-*, 17 → 5) */
+  --radius-xs:   4px;
+  --radius-sm:   8px;
+  --radius-md:   12px;
+  --radius-lg:   16px;
+  --radius-pill: 999px;
+
+  /* Typographie — tailles (cible de --fs-*, 28 → 7 + 2 display) */
+  --text-xs:      11px;
+  --text-sm:      12px;
+  --text-base:    13px;
+  --text-md:      14px;
+  --text-lg:      16px;
+  --text-xl:      20px;
+  --text-2xl:     26px;
+  --text-display: 32px;
+  --text-hero:    clamp(40px, 6vw, 80px);
+
+  /* Graisses */
+  --fw-regular:  400;
+  --fw-medium:   500;
+  --fw-semibold: 600;
+  --fw-bold:     700;
+
+  /* Élévations (cible de --shadow-*, 62 → 4 + 1 lueur) */
+  --elev-1: 0 1px 3px var(--scrim-1);
+  --elev-2: 0 6px 20px var(--scrim-2);
+  --elev-3: 0 16px 48px var(--scrim-3);
+  --elev-4: 0 24px 64px var(--scrim-3);
+  --glow-accent: 0 0 0 3px var(--accent-subtle);
+
+  /* Motion (cible de --dur-* 19 → 3 et easings 6 → 2) */
+  --motion-fast: 120ms;
+  --motion-base: 200ms;
+  --motion-slow: 320ms;
+  --ease-standard: cubic-bezier(.4, 0, .2, 1);
+  --ease-spring:   cubic-bezier(.34, 1.4, .64, 1);
+
+  /* Flou (cible de --blur-*, 19 → 4) */
+  --blur-sm: 4px;
+  --blur-md: 8px;
+  --blur-lg: 16px;
+  --blur-xl: 48px;
+
+  /* Voiles & teintes (cible des rgba(0/255…) littéraux) */
+  --scrim-1: rgba(0,0,0,.4);
+  --scrim-2: rgba(0,0,0,.55);
+  --scrim-3: rgba(0,0,0,.75);
+  --tint-1:  rgba(255,255,255,.06);
+  --tint-2:  rgba(255,255,255,.10);
+  --tint-3:  rgba(255,255,255,.16);
+
   /* Surfaces — palette sombre raffinée */
   --bg:  #080808;
   --bg1: #0d0d0d;
@@ -539,7 +610,6 @@
   --shadow-cn-img:    0 4px 12px rgba(0,0,0,.4);  /* cinema img */
 
   /* Ombres latérales (side panels) */
-  --shadow-settings:  -24px 0 72px rgba(0,0,0,.65), -1px 0 0 var(--sep);
   --shadow-queue:     -6px 0 24px rgba(0,0,0,.30), -1px 0 0 var(--sep);
   --shadow-radio-bar: inset 3px 0 0 var(--g), 0 2px 12px rgba(var(--g-rgb),.08);
   --shadow-radio-lt:  inset 3px 0 0 var(--g), 0 2px 8px rgba(var(--g-rgb),.06);
@@ -1135,7 +1205,7 @@ html[data-mode="light"] .organize-move-to   { color: var(--t2); }
 html[data-mode="light"] #usb-modal { background: var(--bg2, #f5f5f8); }
 
 /* ── Settings ── */
-html[data-mode="light"] #settings-box    { background:var(--bg2); border:var(--border-w-sm) solid var(--bg5); box-shadow:var(--shadow-modal2); }
+html[data-mode="light"] #settings-box    { background:var(--bg2); }
 html[data-mode="light"] .set-section     { border-bottom:var(--border-w-sm) solid var(--bg5); }
 html[data-mode="light"] .set-row-t       { color:var(--t); }
 html[data-mode="light"] .set-row-sub     { color:var(--t3); }
