@@ -311,18 +311,19 @@
   --sep-h:              1px;    /* séparateurs horizontaux fins (.ns, .ctx-sep) */
   --vh-min-h:          52px;    /* min-height en-têtes de vue (.vh) */
   --folder-row-h:      34px;    /* hauteur rangée dossier playlist (.pl-folder-h) */
-  --eq-slider-min-h:   90px;    /* min-height zone slider EQ */
+  --eq-slider-min-h:   92px;    /* min-height zone slider EQ — aligné grille 4px (UIH-eq-01) */
   --viz-canvas-h:     160px;    /* hauteur canvas visualiseur cinéma */
   --cinema-pbar-hover-h: 7px;   /* pbar élargie au hover — cinéma */
   --cinema-vol-hover-h:  5px;   /* vol slider élargi au hover — cinéma */
   --orphan-list-max-h: 260px;   /* cap liste orphelins modale (scroll) */
-  --eq-presets-max-h:  126px;   /* cap zone presets EQ (scroll) */
-  --eq-spacer-min:      10px;   /* respiration min espace-courbe EQ */
+  --eq-presets-max-h:  128px;   /* cap zone presets EQ (scroll) — aligné grille 4px (UIH-eq-01) */
+  --eq-spacer-min:      12px;   /* respiration min espace-courbe EQ — aligné grille 4px (UIH-eq-01) */
   --eq-spacer-max:      52px;   /* plafond espace-courbe EQ */
   --eq-bands-max-h:    280px;   /* cap panneau bandes EQ */
   --scrollbar-w:         5px;   /* épaisseur scrollbar Webkit */
 
-  /* Largeurs composants — tiroirs & modales */
+  /* Largeurs composants — tiroirs & modales. Dimensions structurelles,
+     hors échelle d'espacement — exceptions assumées (UIH-settings-07). */
   --set-sidebar-w:     200px;   /* barre latérale du panneau settings */
   --set-content-w:     720px;   /* largeur max de la colonne contenu settings */
   --shelf-w:           280px;   /* étagère mini-player / shelf flottant */
@@ -636,7 +637,7 @@
   --shadow-cn-img:    0 4px 12px rgba(0,0,0,.4);  /* cinema img */
 
   /* Ombres latérales (side panels) */
-  --shadow-queue:     -6px 0 24px rgba(0,0,0,.30), -1px 0 0 var(--sep);
+  --shadow-queue:     -6px 0 24px var(--scrim-1), -1px 0 0 var(--sep);
   --shadow-radio-bar: inset 3px 0 0 var(--g), 0 2px 12px rgba(var(--g-rgb),.08);
   --shadow-radio-lt:  inset 3px 0 0 var(--g), 0 2px 8px rgba(var(--g-rgb),.06);
 
