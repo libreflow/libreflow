@@ -881,7 +881,7 @@ sur des tokens qui n'existent pas encore est impossible.
 | Lot | Intitulé | Écrans / portée | Findings couverts | Prérequis | Effort |
 |---|---|---|---|---|---|
 | **R1** | Fondation : effondrement des tokens | `style.css:90-660` (`:root`) | UIH-FND-01 → 15 | — | **L** (le plus lourd) |
-| **R2** | Re-skin Panneaux | Settings, EQ, File d'attente | UIH-settings-01→07, UIH-eq-01→04, UIH-queue-01→04 | R1 | M |
+| **R2 ✅** | Re-skin Panneaux | Settings, EQ, File d'attente | UIH-settings-01→07, UIH-eq-01→04, UIH-queue-01→04 | R1 | M |
 | **R3** | Re-skin Modales & secondaires | Playlist intelligente, modales, CD/Stats/Radio, Mode clair | UIH-spl-01→07, UIH-modal-01→04, UIH-secondary-01→03, UIH-light-01→03 | R1 | M |
 | **R4** | Re-skin Shell | Topbar/Recherche, Bibliothèque, Barre de lecture, Navigation latérale | UIH-topbar-01→02, UIH-search-01→03, UIH-library-01→06, UIH-playerbar-01→03, UIH-sidebar-01→04 | R1 | M |
 | **R5** | Re-skin Immersif | Now Playing `#vnp`, Cinéma, Menus contextuels, Mini-player, Toasts, Drop-in | UIH-vnp-01→05, UIH-cinema-01→04, UIH-ctxmenu-01→04, UIH-miniplayer-01→04, UIH-toast-01→05, UIH-dropin-01 | R1 | M |
@@ -890,6 +890,14 @@ sur des tokens qui n'existent pas encore est impossible.
 (les pires d'abord) : R3 (contient le constructeur de playlist intelligente à 73, le
 plus bas), R2 (Settings à 75), R5 (`#vnp` à 85, Cinéma à 88), R4 (shell, déjà le plus
 sain : 85–92). Chaque lot R2–R5 fera l'objet de son propre spec de re-skin.
+
+> **R2 implémenté le 2026-05-21** — plan `docs/superpowers/plans/2026-05-21-harmonisation-ui-r2-panneaux.md`.
+> Les 15 findings R2 sont traités (cette session + commit `77e5b06` du chantier concurrent pour
+> les styles inline Settings/file d'attente). Réserves assumées : **UIH-eq-03** — `eqb`/`eqb2`/`eqb3`
+> sont des animations de formes distinctes, non fusionnables sans altérer le rendu (seul le motion
+> de `eqBandReset` a été aligné) ; **UIH-queue-03** — `border-radius:50%` conservé comme convention
+> de cercle documentée plutôt que tokenisé ; **UIH-settings-04** — cohérence intra-panneau appliquée,
+> le composant bouton global `.btn` reste hors périmètre R2 (transverse → futur lot Composants).
 
 **Couverture** : les 5 lots couvrent **100 %** des 88 findings du §4
 (15 Fondation + 73 écran : R1=15, R2=15, R3=17, R4=18, R5=23). Aucun finding n'est orphelin.
