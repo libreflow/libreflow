@@ -4225,6 +4225,15 @@ html[data-mode="light"] .pl-folder-h:hover .pl-folder-count { background: var(--
 .set-page     { display: none; flex-direction: column; width: 100%; max-width: var(--set-content-w); margin-inline: auto; }
 .set-page.on  { display: flex; }
 
+/* Bouton compact — variante de .mbtn pour les rangées de settings */
+.mbtn-sm { font-size: 11px; padding: 6px 12px; }
+
+/* Groupe de boutons aligné à droite dans une .set-row */
+.set-btn-group { display: flex; gap: var(--sp-2); flex-wrap: wrap; flex-shrink: 0; }
+
+/* Le contrôle de droite d'une rangée ne se comprime jamais */
+.set-row > .mbtn { flex-shrink: 0; }
+
 .set-section     { padding: var(--sp-4) var(--sp-4h); border-bottom: var(--border-w-sm) solid var(--sep); }
 .set-section-lbl { font-size: var(--fs-xs); font-weight: 700; color: var(--t3); letter-spacing: var(--ls-caps); text-transform: uppercase; margin-bottom: var(--sp-3); }
 .set-row         { display: flex; align-items: center; justify-content: space-between; margin-bottom: var(--sp-2h); gap: var(--sp-3); }

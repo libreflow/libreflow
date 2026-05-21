@@ -747,7 +747,7 @@
             <button class="theme-swatch"    data-theme="cyan"   style="background:#06b6d4" data-action="set-theme"   data-i18n-aria="aria_theme_cyan"   aria-label="Cyan"   aria-pressed="false"></button>
           </div>
         </div>
-        <div class="set-row" style="margin-top:8px">
+        <div class="set-row">
           <div>
             <div class="set-row-label" data-i18n="set_dyn_label">Accent dynamique</div>
             <div class="set-row-sub" data-i18n="set_dyn_sub">Suit la couleur de la pochette</div>
@@ -759,7 +759,7 @@
             <span class="toggle-slider"></span>
           </label>
         </div>
-        <div class="set-row" style="margin-top:8px">
+        <div class="set-row">
           <div>
             <div class="set-row-label" data-i18n="set_mode_label">Mode d'affichage</div>
           </div>
@@ -780,9 +780,8 @@
             <div class="set-row-label">Appareil actuel</div>
             <div class="set-row-sub" id="eq-device-current-label">Détection en cours…</div>
           </div>
-          <button id="eq-device-save-btn" class="mbtn"
+          <button id="eq-device-save-btn" class="mbtn mbtn-sm"
             data-action="save-device-eq"
-            style="font-size:11px;padding:5px 14px;flex-shrink:0"
             title="Enregistrer l'EQ actuel pour cet appareil">
             Enregistrer
           </button>
@@ -838,7 +837,7 @@
             <div class="set-row-sub" data-i18n="set_viz_toggle_sub">Afficher le visualiseur dans la barre de lecture</div>
           </div>
           <button id="set-viz-toggle"
-            class="mbtn" style="font-size:11px;padding:5px 14px;min-width:82px"
+            class="mbtn mbtn-sm" style="min-width:82px"
             aria-pressed="true"
             data-action="viz-toggle">
             <span data-i18n="set_viz_on">Activé</span>
@@ -850,17 +849,17 @@
             <div class="set-row-label" data-i18n="set_viz_label">Forme du visualiseur</div>
             <div class="set-row-sub" data-i18n="set_viz_sub">Apparence de la barre de lecture</div>
           </div>
-          <div style="display:flex;gap:4px">
+          <div class="set-btn-group">
             <button id="set-viz-bars"
-              class="mbtn" style="font-size:11px;padding:5px 10px"
+              class="mbtn mbtn-sm"
               data-action="viz-bars"
               data-i18n="set_viz_bars">Barres</button>
             <button id="set-viz-oscilloscope"
-              class="mbtn" style="font-size:11px;padding:5px 10px"
+              class="mbtn mbtn-sm"
               data-action="viz-oscilloscope"
               data-i18n="set_viz_osc">Oscilloscope</button>
             <button id="set-viz-circle"
-              class="mbtn" style="font-size:11px;padding:5px 10px"
+              class="mbtn mbtn-sm"
               data-action="viz-circle"
               data-i18n="set_viz_circle">Cercle</button>
           </div>
@@ -890,10 +889,10 @@
             <div class="set-row-label" data-i18n="set_cinema_bg_label">Arrière-plan</div>
             <div class="set-row-sub" data-i18n="set_cinema_bg_sub">Fond derrière la pochette</div>
           </div>
-          <div style="display:flex;gap:4px;flex-wrap:wrap">
-            <button id="set-cinema-ambient"  class="mbtn" style="font-size:11px;padding:5px 10px" data-action="set-cinema-bg" data-bg="ambient"  data-i18n-title="set_cinema_ambient" aria-pressed="false" data-i18n="set_cinema_ambient_label">Ambient</button>
-            <button id="set-cinema-spectrum" class="mbtn" style="font-size:11px;padding:5px 10px" data-action="set-cinema-bg" data-bg="spectrum" data-i18n-title="set_cinema_spectrum" aria-pressed="false" data-i18n="set_cinema_spectrum_label">Spectre</button>
-            <button id="set-cinema-amoled"   class="mbtn" style="font-size:11px;padding:5px 10px" data-action="set-cinema-bg" data-bg="amoled"   data-i18n-title="set_cinema_amoled" aria-pressed="false">AMOLED</button>
+          <div class="set-btn-group">
+            <button id="set-cinema-ambient"  class="mbtn mbtn-sm" data-action="set-cinema-bg" data-bg="ambient"  data-i18n-title="set_cinema_ambient" aria-pressed="false" data-i18n="set_cinema_ambient_label">Ambient</button>
+            <button id="set-cinema-spectrum" class="mbtn mbtn-sm" data-action="set-cinema-bg" data-bg="spectrum" data-i18n-title="set_cinema_spectrum" aria-pressed="false" data-i18n="set_cinema_spectrum_label">Spectre</button>
+            <button id="set-cinema-amoled"   class="mbtn mbtn-sm" data-action="set-cinema-bg" data-bg="amoled"   data-i18n-title="set_cinema_amoled" aria-pressed="false">AMOLED</button>
           </div>
         </div>
       </div>
@@ -905,7 +904,7 @@
         <div class="set-section-lbl" data-i18n="set_music_folder_section">Dossier de musique</div>
         <div class="set-row">
           <div id="watch-path-display" data-i18n="set_no_folder">Aucun dossier sélectionné</div>
-          <button id="watch-change-btn" class="mbtn" style="font-size:11px;padding:6px 12px;flex-shrink:0"
+          <button id="watch-change-btn" class="mbtn mbtn-sm"
                   data-action="settings-open-folder">
             <span id="watch-change-btn-lbl" data-i18n="set_add_folder_btn">Parcourir…</span>
           </button>
@@ -930,11 +929,11 @@
             <div class="set-row-label" data-i18n="set_interop_label">Interopérabilité</div>
             <div class="set-row-sub" data-i18n="set_interop_sub">Import / export de playlists au format M3U</div>
           </div>
-          <div style="display:flex;gap:8px;flex-shrink:0">
-            <button class="mbtn" style="font-size:11px;padding:6px 12px" data-action="settings-import-m3u">
+          <div class="set-btn-group">
+            <button class="mbtn mbtn-sm" data-action="settings-import-m3u">
               <span data-i18n="set_import_btn">Importer</span>
             </button>
-            <button class="mbtn" style="font-size:11px;padding:6px 12px" data-action="settings-export-m3u">
+            <button class="mbtn mbtn-sm" data-action="settings-export-m3u">
               <span data-i18n="set_export_btn">Exporter</span>
             </button>
           </div>
@@ -954,18 +953,18 @@
             <div class="set-row-sub">Déplace les fichiers audio dans des dossiers Artiste/Album. Aperçu avant confirmation.</div>
           </div>
         </div>
-        <div class="set-row" style="gap:6px;flex-wrap:wrap">
-          <button class="mbtn organize-btn" style="font-size:11px;padding:5px 12px"
+        <div class="set-row" style="flex-wrap:wrap">
+          <button class="mbtn mbtn-sm organize-btn"
             data-action="organize-trigger"
             data-scheme="artist-album">
             Artiste / Album
           </button>
-          <button class="mbtn organize-btn" style="font-size:11px;padding:5px 12px"
+          <button class="mbtn mbtn-sm organize-btn"
             data-action="organize-trigger"
             data-scheme="artist">
             Artiste
           </button>
-          <button class="mbtn organize-btn" style="font-size:11px;padding:5px 12px"
+          <button class="mbtn mbtn-sm organize-btn"
             data-action="organize-trigger"
             data-scheme="flat">
             Plat
@@ -1012,7 +1011,7 @@
             <div class="set-row-label" data-i18n="set_clear_label">Vider la bibliothèque</div>
             <div class="set-row-sub" data-i18n="set_clear_sub">Supprime tous les titres importés</div>
           </div>
-          <button id="btn-clear" class="mbtn danger" style="font-size:11px;padding:6px 12px" data-action="settings-confirm-clear">
+          <button id="btn-clear" class="mbtn mbtn-sm danger" data-action="settings-confirm-clear">
             <span data-i18n="set_clear_btn">Vider</span>
           </button>
         </div>
@@ -1028,7 +1027,7 @@
             <div class="set-row-label" data-i18n="set_cache_label">Vider les caches</div>
             <div class="set-row-sub" data-i18n="set_cache_sub">Supprime toutes les données de l'application (bibliothèque, config, playlists, historique) puis redémarre</div>
           </div>
-          <button class="mbtn danger" style="font-size:11px;padding:6px 12px;flex-shrink:0" data-action="settings-clear-cache">
+          <button class="mbtn mbtn-sm danger" data-action="settings-clear-cache">
             <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:5px"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M9 6V4h6v2"/></svg>
             <span data-i18n="set_cache_btn">Vider les caches</span>
           </button>
@@ -1045,7 +1044,7 @@
         </div>
         <div class="set-row">
           <div class="set-row-label" data-i18n="set_update_manual_label">Vérifier manuellement</div>
-          <button class="mbtn" id="check-update-btn" style="font-size:11px;padding:6px 12px;flex-shrink:0"><span data-i18n="t_update_check_btn">Vérifier maintenant</span></button>
+          <button class="mbtn mbtn-sm" id="check-update-btn"><span data-i18n="t_update_check_btn">Vérifier maintenant</span></button>
         </div>
       </div>
       <div class="set-section">
@@ -1062,7 +1061,7 @@
         </div>
         <div class="set-row">
           <div class="set-row-label" data-i18n="set_shortcuts_label">Aide &amp; raccourcis</div>
-          <button class="mbtn" style="font-size:11px;padding:6px 12px;flex-shrink:0"
+          <button class="mbtn mbtn-sm"
                   data-action="toggle-shortcuts" data-i18n="set_shortcuts_btn">Afficher</button>
         </div>
       </div>
