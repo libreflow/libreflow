@@ -681,9 +681,7 @@
   <div id="settings-overlay" data-action="close-settings"></div>
   <div id="settings-box">
 
-    <!-- En-tête + onglets — sticky ensemble -->
-    <div class="set-sticky-top">
-      <div class="set-head">
+    <div class="set-head">
         <div class="set-head-title">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" fill="none" stroke="currentColor" stroke-width="1.7"/></svg>
           <!-- A11Y-05: id for aria-labelledby -->
@@ -694,9 +692,10 @@
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/></svg>
         </button>
       </div>
+    <div class="set-body">
       <!-- A11Y-15: removed duplicate data-tab attributes -->
       <!-- A11Y-SERIOUS: aria-controls + ids ajoutés pour relier tab → tabpanel -->
-      <div class="set-tabs" id="set-tabs" role="tablist">
+      <div class="set-tabs" id="set-tabs" role="tablist" aria-orientation="vertical">
         <button class="set-tab-btn on" id="set-tab-appearance" role="tab" aria-selected="true"  aria-controls="set-page-appearance" data-action="set-tab" data-tab="appearance">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3z"/></svg>
           <span data-i18n="set_appearance_tab">Apparence</span>
@@ -718,7 +717,7 @@
           <span data-i18n="set_system_tab">Système</span>
         </button>
       </div>
-    </div>
+      <div class="set-content">
 
     <!-- ── Onglet Apparence ─────────────────────────────── -->
     <div class="set-page on" id="set-page-appearance" role="tabpanel" aria-labelledby="set-tab-appearance" tabindex="0">
@@ -1069,6 +1068,8 @@
       </div>
     </div>
 
+      </div>
+    </div>
   </div>
 </div>
 
