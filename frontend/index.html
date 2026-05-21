@@ -610,8 +610,8 @@
 
 <!-- TRACK CONTEXT MENU — A11Y-01: role="menu", items role="menuitem" -->
 <div id="ctx-menu" role="menu" data-i18n-aria="aria_ctx_menu" aria-label="Actions pour ce titre">
-  <div class="ctx-submenu-lbl" id="ctx-track-name" role="presentation" style="color:var(--t);font-weight:600;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></div>
-  <div class="ctx-sep" style="margin-top:4px"></div>
+  <div class="ctx-submenu-lbl ctx-track-name" id="ctx-track-name" role="presentation"></div>
+  <div class="ctx-sep ctx-sep--first"></div>
   <div class="ctx-item" role="menuitem" tabindex="-1" data-action="ctx-toggle-like" id="ctx-like-item">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" id="ctx-like-icon" aria-hidden="true"><path d="M20.42 4.58a5.4 5.4 0 0 0-7.65 0L12 5.35l-.77-.77a5.4 5.4 0 0 0-7.65 7.65l.77.77L12 20.77l7.65-7.77.77-.77a5.4 5.4 0 0 0 0-7.65z"/></svg>
     <span id="ctx-like-lbl">Liker</span>
@@ -810,7 +810,7 @@
           <input type="range" min="-23" max="-9" step="1" value="-14"
             id="rg-target" data-input-action="rg-target"
             data-i18n-aria="aria_rg_target" aria-label="Volume cible ReplayGain"
-            style="width:90px;accent-color:var(--g)">
+            class="set-range">
         </div>
       </div>
       <div class="set-section">
@@ -837,7 +837,7 @@
             <div class="set-row-sub" data-i18n="set_viz_toggle_sub">Afficher le visualiseur dans la barre de lecture</div>
           </div>
           <button id="set-viz-toggle"
-            class="mbtn mbtn-sm" style="min-width:82px"
+            class="mbtn mbtn-sm set-viz-toggle"
             aria-pressed="true"
             data-action="viz-toggle">
             <span data-i18n="set_viz_on">Activé</span>
@@ -876,7 +876,7 @@
             <div class="set-row-label" data-i18n="set_mini_label">Fenêtre flottante</div>
             <div class="set-row-sub" data-i18n="set_mini_sub">Contrôles visibles sur l'écran</div>
           </div>
-          <button class="mp-toggle-btn" style="width:auto;padding:6px 14px" data-action="toggle-mini-player" aria-pressed="false">
+          <button class="mp-toggle-btn set-mp-btn" data-action="toggle-mini-player" aria-pressed="false">
             <svg viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
             <span data-i18n="set_mini_btn">Ouvrir</span>
           </button>
@@ -953,7 +953,7 @@
             <div class="set-row-sub">Déplace les fichiers audio dans des dossiers Artiste/Album. Aperçu avant confirmation.</div>
           </div>
         </div>
-        <div class="set-row" style="flex-wrap:wrap">
+        <div class="set-row set-row--wrap">
           <button class="mbtn mbtn-sm organize-btn"
             data-action="organize-trigger"
             data-scheme="artist-album">
@@ -1028,7 +1028,7 @@
             <div class="set-row-sub" data-i18n="set_cache_sub">Supprime toutes les données de l'application (bibliothèque, config, playlists, historique) puis redémarre</div>
           </div>
           <button class="mbtn mbtn-sm danger" data-action="settings-clear-cache">
-            <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:5px"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M9 6V4h6v2"/></svg>
+            <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="set-btn-ico"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M9 6V4h6v2"/></svg>
             <span data-i18n="set_cache_btn">Vider les caches</span>
           </button>
         </div>
@@ -1050,14 +1050,14 @@
       <div class="set-section">
         <div class="set-section-lbl" data-i18n="set_about_section">À propos</div>
         <div class="set-row">
-          <div style="display:flex;align-items:center;gap:12px;">
-            <img src="/icon-32.png" width="36" height="36" style="border-radius:8px;flex-shrink:0;" alt="LibreFlow">
+          <div class="set-about-row">
+            <img src="/icon-32.png" width="36" height="36" class="set-about-logo" alt="LibreFlow">
             <div>
               <div class="set-row-label" data-i18n="set_app_name">LibreFlow</div>
               <div class="set-row-sub" data-i18n="set_about_desc">Lecteur audio local pour Windows. Aucune donnée envoyée.</div>
             </div>
           </div>
-          <div class="set-row-sub" style="color:var(--t3);font-size:12px;" data-i18n="set_app_version">v1.0.0</div>
+          <div class="set-row-sub set-version" data-i18n="set_app_version">v1.0.0</div>
         </div>
         <div class="set-row">
           <div class="set-row-label" data-i18n="set_shortcuts_label">Aide &amp; raccourcis</div>
@@ -1083,9 +1083,9 @@
 <div id="queue-panel" role="complementary" data-i18n-aria="aria_queue_panel" aria-label="File d'attente">
   <div class="queue-head">
     <h3><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="margin-right:6px;vertical-align:middle"><line x1="9" y1="6" x2="21" y2="6"/><line x1="9" y1="12" x2="21" y2="12"/><line x1="9" y1="18" x2="21" y2="18"/><circle cx="3.5" cy="6" r="1.2" fill="currentColor" stroke="none"/><circle cx="3.5" cy="12" r="1.2" fill="currentColor" stroke="none"/><circle cx="3.5" cy="18" r="1.2" fill="currentColor" stroke="none"/></svg>File d'attente</h3>
-    <div style="display:flex;align-items:center;gap:4px">
+    <div class="queue-head-actions">
       <!-- A11Y-17: aria-label on queue utility buttons -->
-      <button class="queue-close" data-action="scroll-to-current" title="Aller à la piste en cours" data-i18n-aria="aria_scroll_to_current" aria-label="Aller à la piste en cours" style="opacity:.7">
+      <button class="queue-close queue-util-btn" data-action="scroll-to-current" title="Aller à la piste en cours" data-i18n-aria="aria_scroll_to_current" aria-label="Aller à la piste en cours">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg>
       </button>
       <button class="queue-close" data-action="close-queue" data-i18n-aria="aria_close_queue" aria-label="Fermer la file d'attente">

@@ -4392,6 +4392,21 @@ html[data-mode="light"] .pl-folder-h:hover .pl-folder-count { background: var(--
 .mp-toggle-btn:hover { background: var(--bg4); color: var(--t); }
 .mp-toggle-btn svg   { width: var(--icon-md); height: var(--icon-md); fill: none; stroke: currentColor; stroke-width: 2; }
 
+/* ─── Styles extraits du markup Settings / ctx-menu / file d'attente
+       (audit §4 UIH-settings-01/05/06, UIH-ctxmenu-01/02, UIH-queue-01 ; CLAUDE.md §13). ─── */
+.set-range       { width: 90px; accent-color: var(--g); }
+.set-viz-toggle  { min-width: 82px; }
+.set-mp-btn      { width: auto; padding: var(--space-2) var(--space-3); }
+.set-row--wrap   { flex-wrap: wrap; }
+.set-btn-ico     { margin-right: var(--space-1); }
+.set-about-row   { display: flex; align-items: center; gap: var(--space-3); }
+.set-about-logo  { border-radius: var(--radius-sm); flex-shrink: 0; }
+.set-version     { color: var(--t3); font-size: var(--text-sm); }
+.ctx-track-name  { color: var(--t); font-weight: 600; max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ctx-sep--first  { margin-top: var(--space-1); }
+.queue-head-actions { display: flex; align-items: center; gap: var(--space-1); }
+.queue-util-btn  { opacity: .7; }
+
 /* ═══ FILE D'ATTENTE + EQ (panels latéraux partagés) ════════ */
 #queue-panel, #eq-panel {
   position: fixed; top: var(--tb); right: 0;
