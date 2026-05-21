@@ -186,6 +186,19 @@
   --t3:  #8a847f;     /* Tertiary — metadata   (WCAG: 5.4:1 on bg, 4.5:1 on bg3 hover, 4.5:1 on bg4) */
   --t4:  #2e2e2e;     /* Ghost — invisible par défaut */
 
+  /* Rôles sémantiques surface/texte — alias des --bg*/--t* (audit §2.6).
+     Couche CIBLE additive : permet aux re-skins de référencer un rôle plutôt
+     qu'un palier. La réduction 7→4 des --bg* eux-mêmes exige une vérification
+     de contraste WCAG (texte --t3 ne doit jamais passer sur une surface plus
+     claire que --bg4) et n'est donc PAS faite à l'aveugle ici. */
+  --surface-base:    var(--bg);
+  --surface-raised:  var(--bg3);
+  --surface-overlay: var(--bg4);
+  --surface-hover:   var(--bg5);
+  --fg-primary:      var(--t);
+  --fg-secondary:    var(--t2);
+  --fg-muted:        var(--t3);
+
   /* États — sémantique partagée (toasts, trends, stop/delete) */
   --red:     #e84040;
   --red-rgb: 232,64,64;
@@ -686,7 +699,7 @@
   --panel-queue-w:      300px;  /* largeur panneau queue latéral */
   --panel-eq-w:         320px;  /* largeur panneau EQ latéral (mode simple) */
   --panel-eq-expert-w:  400px;  /* largeur panneau EQ latéral (mode expert) */
-  --sp-3q:              13px;   /* spacing intermédiaire 12→14 — padding compact */
+  --sp-3q:              var(--space-3);   /* 13 → 12 (harmonisation) */
 
   /* Dimensions cinéma & artwork */
   --art-cinema-max:     420px;  /* taille max pochette cinéma (min(46vh,46vw,N)) */
@@ -3376,8 +3389,7 @@ html[data-mode="light"] .sleep-custom-inp:focus { border-color: var(--g); backgr
 /* DS — Variant secondary (utilisé par promptAction et par les CTAs neutres : "ouvrir dossier", "exporter", etc.) */
 .mbtn.secondary    { background: var(--bg3); color: var(--t2); border: var(--border-w-sm) solid var(--bg5); }
 .mbtn.secondary:hover { background: var(--bg4); color: var(--t); border-color: var(--g); }
-/* DS — Utility size : équivalent des inline `font-size:11px;padding:5px 14px` dans index.html (à migrer) */
-.mbtn--sm          { font-size: var(--fs-sm); padding: var(--sp-1h) var(--sp-3h); }
+/* Variante compacte unique : .mbtn-sm (doublon mort .mbtn--sm supprimé — audit UIH-settings-04). */
 /* État disabled global — couvre les cas où le composant individuel n'en a pas défini */
 .mbtn:disabled, button:disabled[disabled] { opacity: .5; cursor: not-allowed; pointer-events: none; }
 #set-viz-shape-group { transition: opacity var(--dur-mid) var(--smooth); }
