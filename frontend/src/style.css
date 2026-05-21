@@ -186,7 +186,7 @@
   --t3:  #8a847f;     /* Tertiary — metadata   (WCAG: 5.4:1 on bg, 4.5:1 on bg3 hover, 4.5:1 on bg4) */
   --t4:  #2e2e2e;     /* Ghost — invisible par défaut */
 
-  /* Rôles sémantiques surface/texte — alias des --bg*/--t* (audit §2.6).
+  /* Rôles sémantiques surface/texte — alias des --bg* / --t* (audit §2.6).
      Couche CIBLE additive : permet aux re-skins de référencer un rôle plutôt
      qu'un palier. La réduction 7→4 des --bg* eux-mêmes exige une vérification
      de contraste WCAG (texte --t3 ne doit jamais passer sur une surface plus
@@ -217,9 +217,6 @@
   --eq-warm:       #f48a3d;   /* bande grave chaude (band 2) */
   --eq-cool:       #5baeff;   /* bande aiguë froide (band 10) */
   --eq-cut:        #ff7a45;   /* valeur en coupe active */
-  --eq-warm-light: #c45f10;   /* bande grave — thème clair */
-  --eq-cool-light: #1a6fcc;   /* bande aiguë — thème clair */
-  --eq-cut-light:  #d9520a;   /* coupe active — thème clair */
 
   /* États sémantiques contextuels */
   --cinema-active: #fb923c;   /* genre/tag actif dans le cinéma */
@@ -1046,6 +1043,10 @@ html[data-mode="light"] {
   --scrim:         rgba(0,0,0,.30);
   --scrim-heavy:   rgba(0,0,0,.40);
   --blend-viz:     multiply;
+  /* EQ — couleurs de bande en mode clair (remplace les tokens --eq-*-light, UIH-eq-02) */
+  --eq-warm: #c45f10;
+  --eq-cool: #1a6fcc;
+  --eq-cut:  #d9520a;
 }
 
 /* ── Base ── */
@@ -4818,7 +4819,6 @@ html[data-mode="light"] .eq-bands {
 .eq-val--cut   { color: var(--eq-cut) !important; font-weight: 600; }
 /* Flat (0dB) → très atténué */
 .eq-val--flat  { color: var(--t4) !important; font-weight: 400; }
-html[data-mode="light"] .eq-val--cut { color: var(--eq-cut-light) !important; }
 
 /* ── Wrap slider : zone interactive avec ligne 0 dB ─────────────────────── */
 .eq-slider-wrap {
@@ -4893,10 +4893,8 @@ html[data-mode="light"] .eq-slider-wrap::before {
 .eq-band:nth-child(9)  .eq-freq,
 .eq-band:nth-child(10) .eq-freq { color: var(--eq-cool); }
 html[data-mode="light"] .eq-band:nth-child(1) .eq-freq,
-html[data-mode="light"] .eq-band:nth-child(2) .eq-freq { color: var(--eq-warm-light); }
 html[data-mode="light"] .eq-band:nth-child(8) .eq-freq,
 html[data-mode="light"] .eq-band:nth-child(9) .eq-freq,
-html[data-mode="light"] .eq-band:nth-child(10) .eq-freq { color: var(--eq-cool-light); }
 
 /* ── Footer EQ — barre d'actions basse, toujours en bas du panel ────────── */
 .eq-footer {
