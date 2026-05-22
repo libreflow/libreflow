@@ -2714,9 +2714,13 @@ html[data-mode="light"] .empty-cta {
   border-top: var(--border-w-sm) solid var(--border-1);
   box-shadow: var(--player-shadow), var(--shadow-player-ring);
   /* R-C5 : minmax(0,…) sur chaque colonne — évite que la colonne centrale
-     (.pl-prog flex:1) force un débordement clippé par overflow:hidden. */
-  display: grid; grid-template-columns: minmax(0, var(--shelf-w)) minmax(0, 1fr) minmax(0, var(--shelf-w));
-  align-items: center; padding: 0 var(--sp-5); gap: var(--sp-4);
+     (.pl-prog flex:1) force un débordement clippé par overflow:hidden.
+     T8 : grille intrinsèquement fluide — les étagères rétrécissent avec la fenêtre
+     via clamp(), éliminant les overrides @media sur #pl lui-même.
+     Left shelf : clamp(160px, 22vw, 280px) → 280px à ≥1273px, 160px à ≤727px.
+     Right shelf : clamp(88px, 18vw, 280px) → 280px à ≥1556px, 88px à ≤489px. */
+  display: grid; grid-template-columns: minmax(0, clamp(160px, 22vw, var(--shelf-w))) minmax(0, 1fr) minmax(0, clamp(88px, 18vw, var(--shelf-w)));
+  align-items: center; padding: 0 clamp(var(--sp-2), 2vw, var(--sp-5)); gap: clamp(var(--sp-1h), 1.5vw, var(--sp-4));
   transition: background 1.2s ease;
   view-transition-name: player-bar; contain: layout;
 }
@@ -6777,24 +6781,36 @@ html[data-mode="light"] .rv-start-btn  { background: var(--g); }
      <720px  : Compact        — sidebar icon-only (54px) + tooltips
    ═══════════════════════════════════════════════════════════════════ */
 
-/* ── Normal (<900px) ──────────────────────────────────────────────── */
-/* R-H2 : note de redondance — les seuils 880px (.stats-row-2, .stats-cards
-   via 700px) et 899px (ci-dessous) sont à 19px d'écart. Consolidation NON
-   faite : ils fonctionnent, le gain serait cosmétique et le risque de
-   régression visuelle réel. Laissé tel quel, documenté ici. */
-@media (max-width: 899px) {
-  #pl {
-    grid-template-columns: minmax(var(--pl-shelf-900-l-min), var(--pl-shelf-900-l-max)) 1fr minmax(var(--pl-shelf-900-r-min), var(--pl-shelf-900-r-max));
-    padding: 0 var(--sp-3);
-    gap: var(--sp-2);
-  }
-  .vol .vslider { width: var(--vol-slider-sm); }
+/* ── Player bar — container queries (T8) ──────────────────────────
+   #pl est le conteneur « playerbar » (container: playerbar / inline-size).
+   Un conteneur NE PEUT PAS se requêter lui-même → seuls les descendants
+   sont ciblables ici. La grille de #pl est rendue fluide via clamp() dans
+   la règle base #pl (voir ci-dessus). Les @media (max-width:899px) et
+   les règles descendantes du @media (max-width:719px) sont supprimés :
+   ces containers queries les remplacent.
+   R-H2 : note de redondance — les seuils 880px et 899px étaient à 19px
+   d'écart ; consolidation non faite initialement. Désormais sans objet :
+   la grille est fluide et les extras se masquent via @container. */
+
+/* Étagères latérales rétrécissent ; la colonne centrale est prioritaire. */
+@container playerbar (max-width: 900px) {
+  .vol .vslider    { width: var(--vol-slider-sm); }
   /* R-H6 : la pilule #sleep-indicator (largeur variable) surcharge .pl-r
      entre 720 et 900px — masquée comme les autres extras de la player bar. */
   #sleep-indicator { display: none; }
 }
 
+/* Extras cèdent au transport (jamais touché) */
+@container playerbar (max-width: 720px) {
+  #btn-speed,
+  .vol          { display: none; }
+  #sleep-indicator { display: none !important; }
+}
+
 /* ── Compact (<720px) — sidebar icon-only ─────────────────────────── */
+/* T8 : les règles player bar (#pl grid, .pl-art, .vol, #btn-speed,
+   #sleep-indicator, .pl-n, .pl-a) migrées vers @container playerbar
+   ci-dessus. Seules les règles sidebar + sort-btn restent ici. */
 @media (max-width: 719px) {
   :root { --sb: var(--sb-sm); }
 
@@ -6858,23 +6874,6 @@ html[data-mode="light"] .rv-start-btn  { background: var(--g); }
     font-size: 0;
   }
   .btn-scan svg { margin: 0; width: var(--icon-xl); height: var(--icon-xl); }
-
-  /* Player bar */
-  #pl {
-    grid-template-columns: minmax(var(--pl-shelf-900-r-min), var(--pl-shelf-900-r-max)) 1fr minmax(var(--art-hero-sm), var(--pl-shelf-720-r-max));
-    padding: 0 var(--sp-2);
-    gap: var(--sp-1h);
-  }
-  .pl-art { width: var(--icon-44); height: var(--icon-44); flex-shrink: 0; }
-
-  /* Masquer volume, vitesse, sleep */
-  .vol,
-  #btn-speed { display: none; }
-  #sleep-indicator { display: none !important; }
-
-  /* Textes piste plus compacts */
-  .pl-n { font-size: var(--fs-sm); }
-  .pl-a { font-size: var(--fs-xs); }
 
   /* R-H3 : .vh tient sur une seule ligne — le libellé texte des .sort-btn
      (text node) est masqué via font-size:0, seule l'icône SVG reste. */
