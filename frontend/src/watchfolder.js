@@ -127,6 +127,13 @@ async function _doInitialScan(files) {
     if (newTracks.length) logImport('folder-scan', newTracks.map(t => t.path));
     return newTracks.length;
   } finally {
+    // B6 FIX : drainer les events watcher mis en file dans _pendingPaths pendant
+    // que _importing tenait le lock — sinon ces fichiers ne sont importés que si
+    // un autre event watcher arrive ensuite (sinon jamais).
+    while (_pendingPaths.length) {
+      const pending = _pendingPaths.splice(0);
+      await _doImportPaths(pending);
+    }
     _importing = false;
   }
 }
@@ -366,7 +373,8 @@ export async function importPaths(paths) {
 
 async function _doImportPaths(paths) {
   let added = 0;
-  const newPaths = [];
+  const newPaths  = [];
+  const newTracks = []; // B10 : différer loadTagsBg jusqu'après rebuildTrackIdxMap
   const tracks = get('tracks'); // Phase 4
   // RACE-4 FIX : déduplication intra-batch — si `paths` contient des doublons
   // (ex. scan initial + premier événement watcher en chevauchement), watchSnapshot
@@ -394,18 +402,23 @@ async function _doImportPaths(paths) {
       // Sans ça, le badge LOSSLESS et les infos audio restent indéfinis (undefined ≠ null).
       bitrate: null, sampleRate: null, channels: null, bitDepth: null,
     };
-    tracks.push(t);
-    loadTagsBg(t);
+    newTracks.push(t);
     added++;
   }
   if (added) {
-    rebuildTrackIdxMap();
-    notify('tracks'); // BUG-C2 FIX : push() in-place → force-notifie les subscribers
+    // AUDIT-2026-05-22 : accumuler puis pushTracks() une seule fois après la boucle
+    // — pushTracks enchaîne push + rebuildTrackIdxMap + notify('tracks') atomiquement,
+    // évitant la fenêtre d'incohérence _trackIdxMap pendant la boucle (CLAUDE.md §2).
+    pushTracks(newTracks);
     if (VIRT) VIRT._lastListSig = '';
     updateStats();
     const niAll = document.getElementById('ni-all');
     setView('all', niAll ?? null);
     logImport('folder-scan', newPaths);
+    // B10 FIX : loadTagsBg APRÈS rebuildTrackIdxMap — sinon _trackIdxMap n'est
+    // plus une projection exacte de tracks[] (CLAUDE.md §2) pendant la boucle, et
+    // flushTrackBatch exclut les pistes pas encore mappées de l'écriture IDB.
+    for (const t of newTracks) loadTagsBg(t);
   }
   return added;
 }

@@ -30,9 +30,12 @@ pub fn parse_toc_lba(buf: &[u8]) -> Result<Vec<ParsedTrack>, String> {
     }
 
     let first_track = buf[2];
-    let last_track  = buf[3];
+    let last_track = buf[3];
     if first_track == 0 || last_track < first_track {
-        return Err(format!("Invalid track range: {}..={}", first_track, last_track));
+        return Err(format!(
+            "Invalid track range: {}..={}",
+            first_track, last_track
+        ));
     }
 
     let entries_bytes = (length + 2).saturating_sub(HEADER_SIZE);
@@ -51,22 +54,31 @@ pub fn parse_toc_lba(buf: &[u8]) -> Result<Vec<ParsedTrack>, String> {
     for i in 0..entry_count {
         let off = HEADER_SIZE + i * TRACK_ENTRY_SIZE;
         let control_adr = buf[off + 1];
-        let track_no    = buf[off + 2];
-        let lba = u32::from_be_bytes([
-            buf[off + 4], buf[off + 5], buf[off + 6], buf[off + 7],
-        ]);
+        let track_no = buf[off + 2];
+        let lba = u32::from_be_bytes([buf[off + 4], buf[off + 5], buf[off + 6], buf[off + 7]]);
         let control = control_adr & 0x0F;
         let is_audio = (control & 0x04) == 0;
         all.push((track_no, lba, is_audio));
     }
 
     let mut audio_tracks = Vec::new();
-    for i in 0..all.len() - 1 {
+    // B26 FIX : la fin d'une piste = la plus petite LBA strictement supérieure
+    // parmi TOUTES les entrées (piste suivante ou lead-out), pas all[i+1]. Un TOC
+    // malformé (octets contrôlés par le device) peut placer le lead-out 0xAA
+    // ailleurs qu'en dernière position — all[i+1] donnerait alors frames = 0.
+    for i in 0..all.len() {
         let (track_no, lba, is_audio) = all[i];
-        if track_no == 0xAA { continue; }
-        let next_lba = all[i + 1].1;
-        if !is_audio { continue; }
-        let frames = next_lba.saturating_sub(lba);
+        if track_no == 0xAA {
+            continue;
+        } // lead-out : pas une vraie piste
+        if !is_audio {
+            continue;
+        }
+        let next_lba = all.iter().map(|&(_, l, _)| l).filter(|&l| l > lba).min();
+        let frames = match next_lba {
+            Some(n) => n.saturating_sub(lba),
+            None => continue, // aucune entrée après — piste sans fin connue
+        };
         audio_tracks.push(ParsedTrack {
             idx: track_no,
             lba_start: lba,

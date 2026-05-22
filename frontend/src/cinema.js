@@ -333,6 +333,13 @@ function _onArtDblClick(e) {
   setTimeout(() => heart.remove(), 750);
 }
 
+/** Lit le volume depuis le slider DOM #vol (source de vérité — §2). Fallbacks : master gain puis 1. */
+function _readVol() {
+  const dom = parseFloat(document.getElementById('vol')?.value);
+  if (Number.isFinite(dom)) return dom;
+  return masterGainNode?.gain.value ?? 1;
+}
+
 function _onCinKey(e) {
   if (!cinemaOpen) return;
   // Ignorer si focus sur un input/slider
@@ -343,7 +350,7 @@ function _onCinKey(e) {
   switch (e.code) {
     case 'Space':
       e.preventDefault();
-      if (audio) { audio.paused ? audio.play() : audio.pause(); updateCinema(); }
+      if (audio) { audio.paused ? audio.play().catch(() => {}) : audio.pause(); updateCinema(); } // B33 FIX : .catch — évite un rejet non géré si autoplay refuse
       break;
     case 'ArrowLeft':
       e.preventDefault();
@@ -355,11 +362,11 @@ function _onCinKey(e) {
       break;
     case 'ArrowUp':
       e.preventDefault();
-      if (audio) { const _cur = masterGainNode ? masterGainNode.gain.value : audio.volume; const v = Math.min(1, _cur + 0.05); setMasterGain(v); _syncCinVol(v); updateCinema(); }
+      if (audio) { const v = Math.min(1, _readVol() + 0.05); setMasterGain(v); _syncCinVol(v); updateCinema(); }
       break;
     case 'ArrowDown':
       e.preventDefault();
-      if (audio) { const _cur = masterGainNode ? masterGainNode.gain.value : audio.volume; const v = Math.max(0, _cur - 0.05); setMasterGain(v); _syncCinVol(v); updateCinema(); }
+      if (audio) { const v = Math.max(0, _readVol() - 0.05); setMasterGain(v); _syncCinVol(v); updateCinema(); }
       break;
     case 'KeyN': case 'KeyL':
       e.preventDefault();
@@ -407,8 +414,7 @@ function _onCinWheel(e) {
   // audio imported from player.js
   if (!audio) return;
   const delta = e.deltaY < 0 ? 0.05 : -0.05;
-  const _cur = masterGainNode ? masterGainNode.gain.value : audio.volume;
-  const v = Math.min(1, Math.max(0, _cur + delta));
+  const v = Math.min(1, Math.max(0, _readVol() + delta));
   setMasterGain(v);
   _syncCinVol(v);
   updateCinema();
@@ -894,6 +900,10 @@ function _startViz() {
     }
     ctx.clearRect(0, 0, w, h);
 
+    // Recréer le buffer si l'AudioContext a changé de frequencyBinCount (FFT resize / ctx recréé)
+    if (_vizBuf.length !== analyser.frequencyBinCount) {
+      _vizBuf = new Uint8Array(analyser.frequencyBinCount);
+    }
     analyser.getByteFrequencyData(_vizBuf);
     const data = _vizBuf;
     const usedBins = Math.floor(data.length * 0.6);
@@ -1014,8 +1024,9 @@ function _startViz() {
     _cinVizRaf = requestAnimationFrame(draw);
   }
 
-  // PERF : pré-allouer hors du loop draw — évite new Uint8Array(128) à chaque frame
-  const _vizBuf = new Uint8Array(analyser.frequencyBinCount);
+  // PERF : pré-allouer hors du loop draw — évite new Uint8Array(128) à chaque frame.
+  // `let` (et non `const`) : draw() le recrée si analyser.frequencyBinCount change.
+  let _vizBuf = new Uint8Array(analyser.frequencyBinCount);
 
   if (_cinVizRaf) cancelAnimationFrame(_cinVizRaf);
   draw();

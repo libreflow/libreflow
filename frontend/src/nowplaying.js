@@ -242,7 +242,9 @@ export async function openNowPlaying() {
   const vnp = document.getElementById('vnp');
   if (vnp) { updateAmbient(vnp); _applyNpBg(); }
   const info = await _loadTechInfo(t.path);
-  if (nowPlayingOpen) {
+  // La piste courante a pu changer pendant l'await (skip rapide) — ne pas
+  // peindre des infos techniques périmées sur la nouvelle pochette.
+  if (nowPlayingOpen && (get('tracks') || [])[get('curIdx')]?.id === t.id) {
     _renderNowPlaying(t, info);
     const vnp2 = document.getElementById('vnp');
     if (vnp2) { updateAmbient(vnp2); _applyNpBg(); }
@@ -281,7 +283,8 @@ export function updateNowPlaying(track) {
   const vnp = document.getElementById('vnp');
   if (vnp) { updateAmbient(vnp); _applyNpBg(); }
   _loadTechInfo(track.path).then(info => {
-    if (nowPlayingOpen) {
+    // Revérifier que `track` est toujours la piste courante après l'await async.
+    if (nowPlayingOpen && (get('tracks') || [])[get('curIdx')]?.id === track.id) {
       _renderNowPlaying(track, info);
       const vnp2 = document.getElementById('vnp');
       if (vnp2) { updateAmbient(vnp2); _applyNpBg(); }

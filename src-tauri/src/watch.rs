@@ -30,12 +30,16 @@ pub fn watch_folder_start(app: AppHandle, path: String) -> Result<(), String> {
     // Valider et canonicaliser le chemin avant de démarrer le watcher
     let dir = std::path::Path::new(&path);
     if !dir.is_dir() {
-        return Err(format!("watch_folder_start: pas un dossier valide — {path}"));
+        return Err(format!(
+            "watch_folder_start: pas un dossier valide — {path}"
+        ));
     }
     let canon = std::fs::canonicalize(dir)
         .map_err(|e| format!("watch_folder_start: chemin invalide — {e}"))?;
     if !crate::commands::is_safe_dir(&canon) {
-        return Err(format!("watch_folder_start: répertoire système refusé — {path}"));
+        return Err(format!(
+            "watch_folder_start: répertoire système refusé — {path}"
+        ));
     }
 
     // Arrêter le watcher précédent (drop = arrêt automatique)
@@ -48,7 +52,10 @@ pub fn watch_folder_start(app: AppHandle, path: String) -> Result<(), String> {
         move |res: notify::Result<Event>| {
             let event = match res {
                 Ok(e) => e,
-                Err(e) => { eprintln!("[watch] watcher error: {:?}", e); return; }
+                Err(e) => {
+                    eprintln!("[watch] watcher error: {:?}", e);
+                    return;
+                }
             };
 
             let is_create = matches!(
@@ -60,20 +67,26 @@ pub fn watch_folder_start(app: AppHandle, path: String) -> Result<(), String> {
                 EventKind::Modify(notify::event::ModifyKind::Data(_))
             );
 
-            if !is_create && !is_modify { return; }
+            if !is_create && !is_modify {
+                return;
+            }
 
             // Filtre audio partagé — même liste AUDIO_EXTS existante
-            let audio_paths: Vec<String> = event.paths.iter()
+            let audio_paths: Vec<String> = event
+                .paths
+                .iter()
                 .filter(|p| {
                     p.extension()
                         .and_then(|e| e.to_str())
-                        .map(|e| AUDIO_EXTS.contains(&e.to_lowercase().as_str()))
+                        .map(|e| AUDIO_EXTS.iter().any(|&ext| e.eq_ignore_ascii_case(ext)))
                         .unwrap_or(false)
                 })
                 .filter_map(|p| p.to_str().map(String::from))
                 .collect();
 
-            if audio_paths.is_empty() { return; }
+            if audio_paths.is_empty() {
+                return;
+            }
 
             if let Some(win) = app_clone.get_webview_window("main") {
                 if is_create {

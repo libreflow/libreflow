@@ -106,6 +106,7 @@ let _plModalFocusTrap = null;   // keydown handler Tab-trap dans #pl-modal
 let _plModalCoverB64  = null;   // cover en cours d'édition dans le modal
 let _plModalBusy      = false;  // guard anti double-submit confirmPlaylistModal
 let _plNavDropInit    = false;  // setupPlNavDrop one-shot (flag module vs DOM node)
+let _heroMosaicGen    = 0;      // B19 : token anti-race pour les img.onload du hero-mosaic
 
 /** Setter pour smartplaylist.js (window.setPlModalMode). */
 export function setPlModalMode(v) { plModalMode = v; }
@@ -114,17 +115,24 @@ export function setPlModalMode(v) { plModalMode = v; }
 function _attachPlCtxClose(menu) {
   if (_plCtxClose)    { document.removeEventListener('mousedown', _plCtxClose,    true); _plCtxClose    = null; }
   if (_plCtxEscClose) { document.removeEventListener('keydown',   _plCtxEscClose, true); _plCtxEscClose = null; }
+  // B27 FIX : _close capture ses PROPRES références (mdHandler / escHandler).
+  // Avant, _close lisait les variables module — un 2e ctx-menu les réassignait
+  // et le _close du 1er retirait alors les listeners du 2e, laissant ceux du
+  // 1er empilés sur document.
   const _close = () => {
     menu.classList.remove('on');
-    document.removeEventListener('mousedown', _plCtxClose,    true);
-    document.removeEventListener('keydown',   _plCtxEscClose, true);
-    _plCtxClose = null; _plCtxEscClose = null;
+    document.removeEventListener('mousedown', mdHandler,  true);
+    document.removeEventListener('keydown',   escHandler, true);
+    if (_plCtxClose    === mdHandler)  _plCtxClose    = null;
+    if (_plCtxEscClose === escHandler) _plCtxEscClose = null;
   };
-  _plCtxClose    = (e) => { if (!menu.contains(e.target)) _close(); };
-  _plCtxEscClose = (e) => { if (e.code === 'Escape') { e.stopPropagation(); _close(); } };
+  const mdHandler  = (e) => { if (!menu.contains(e.target)) _close(); };
+  const escHandler = (e) => { if (e.code === 'Escape') { e.stopPropagation(); _close(); } };
+  _plCtxClose    = mdHandler;
+  _plCtxEscClose = escHandler;
   setTimeout(() => {
-    document.addEventListener('mousedown', _plCtxClose,    true);
-    document.addEventListener('keydown',   _plCtxEscClose, true);
+    document.addEventListener('mousedown', mdHandler,  true);
+    document.addEventListener('keydown',   escHandler, true);
   }, 0);
 }
 
@@ -256,6 +264,9 @@ export function renderPlHero(pl, fl) {
  * Ignoré si le canvas n'est plus dans le DOM (playlist changée entre-temps).
  */
 function _drawHeroMosaic(fl) {
+  // B19 FIX : token de génération — un img.onload lent d'une playlist précédente
+  // ne doit pas peindre sur le canvas (même id) d'une playlist ouverte depuis.
+  const _myGen = ++_heroMosaicGen;
   const c = document.getElementById('pl-hero-mosaic');
   if (!c) return;
   const ctx = c.getContext('2d');
@@ -279,6 +290,7 @@ function _drawHeroMosaic(fl) {
     const img = new Image();
     const [px, py] = positions[i];
     img.onload = () => {
+      if (_heroMosaicGen !== _myGen) return; // B19 FIX : playlist changée entre-temps
       const cv = document.getElementById('pl-hero-mosaic');
       if (!cv) return; // canvas retiré du DOM (changement de playlist)
       const ctx2d = cv.getContext('2d');
@@ -286,6 +298,7 @@ function _drawHeroMosaic(fl) {
     };
     // S157 FIX-8 : guard onerror — laisse la cellule en fond #1a1a2a au lieu d'échouer silencieusement
     img.onerror = () => {
+      if (_heroMosaicGen !== _myGen) return; // B19 FIX : playlist changée entre-temps
       const cv = document.getElementById('pl-hero-mosaic');
       if (!cv) return;
       const c = cv.getContext('2d');
@@ -476,7 +489,10 @@ export function renderPlNav() {
     .slice(0, 5);
 
   // Section 3 : Dossiers + playlists hors dossier
-  const shownRecentIds = new Set();
+  // AUDIT-2026-05-22 : alimenter shownRecentIds avec les ids deja affiches en
+  // section "Recentes" — sans ca la deduplication echoue et les playlists
+  // recentes reapparaissent en double dans la section 3.
+  const shownRecentIds = new Set(recents.map(p => p.id));
   const folderIds = new Set(plFolders.map(f => f.id));
   const ungroupedOrNoFolder = visible.filter(p =>
     !p.pinned &&
@@ -652,8 +668,11 @@ export async function removePlFromFolder(plId) {
 
 
 // ── Popup ajout rapide à playlist ────────────────────────────
-export function showPlQuickPop(e, trackId) {
+export function showPlQuickPop(e, trackId, triggerEl) {
   e.stopPropagation();
+  // B16 FIX : e.currentTarget vaut `document` dans un listener délégué puis null
+  // une fois le dispatch terminé — utiliser l'élément déclencheur passé explicitement.
+  const _trigger = triggerEl || e.target?.closest?.('[data-action="show-pl-qpop"]');
   _pqpTrackId = trackId;
   const pop = document.getElementById('pl-quick-pop');
   const playlists = get('playlists');
@@ -686,7 +705,8 @@ export function showPlQuickPop(e, trackId) {
 
   // Positionner après le paint pour avoir offsetHeight correct
   requestAnimationFrame(() => {
-    const rect  = e.currentTarget.getBoundingClientRect();
+    if (!_trigger) { pop.style.visibility = ''; return; }
+    const rect  = _trigger.getBoundingClientRect();
     const popH  = pop.offsetHeight;
     const popW  = pop.offsetWidth || 190;
     const x = Math.max(4, Math.min(rect.left, window.innerWidth  - popW - 8));
@@ -776,6 +796,9 @@ export function _attachPlaylistReorder(tlist) {
 
     const pl = get('playlists').find(p => p.id === curPlId);
     if (!pl) return;
+    // B20 FIX : pas de réorganisation manuelle d'une smart playlist — l'ordre
+    // serait écrasé au prochain regenerateSmartPlaylist (contrat read-only).
+    if (pl.smart) return;
 
     const fromId = _dragTrackId;
     const toId   = row.id.replace('tr-', '');
@@ -898,7 +921,9 @@ export function setupPlNavDrop() {
       pl.folderId = folderId;
       await savePlaylists();
       renderPlNav();
-      toast(i18n('t_pl_moved_to_folder') || 'Déplacée dans le dossier', 'success');
+      // B29 FIX : passer le nom du dossier à i18n — sinon toast « … « undefined » ».
+      const folder = get('plFolders').find(f => f.id === folderId);
+      toast(i18n('t_pl_moved_to_folder', folder?.name) || 'Déplacée dans le dossier', 'success');
       return;
     }
 
@@ -1363,6 +1388,10 @@ export function removeTrackFromPlaylist(trackId, plId) {
   // UNDO-PL FIX : mémoriser la position avant suppression pour permettre l'annulation
   const removedIdx = pl.trackIds.indexOf(trackId);
   if (removedIdx === -1) return; // trackId absent — rien à faire
+  // B4 FIX : ancrer sur l'id des voisins, pas sur un index numérique — une 2e
+  // suppression dans la même playlist décale pl.trackIds et rend removedIdx périmé.
+  const _prevAnchorId = removedIdx > 0 ? pl.trackIds[removedIdx - 1] : null;
+  const _nextAnchorId = removedIdx < pl.trackIds.length - 1 ? pl.trackIds[removedIdx + 1] : null;
 
   // Retrait immédiat en mémoire + mise à jour UI
   pl.trackIds = pl.trackIds.filter(id => id !== trackId);
@@ -1379,8 +1408,19 @@ export function removeTrackFromPlaylist(trackId, plId) {
   toastWithAction(i18n('t_removed'), 'success', i18n('t_undo') || 'Annuler', () => {
     undone = true;
     clearTimeout(saveTimer);
-    // Ré-insérer le trackId à sa position d'origine
-    pl.trackIds.splice(removedIdx, 0, trackId);
+    // B4 FIX : ré-insérer après l'ancre précédente si elle existe encore, sinon
+    // avant la suivante, sinon en tête — robuste face à une 2e suppression.
+    if (!pl.trackIds.includes(trackId)) {
+      const _prevPos = _prevAnchorId != null ? pl.trackIds.indexOf(_prevAnchorId) : -1;
+      let _insertAt;
+      if (_prevPos >= 0) {
+        _insertAt = _prevPos + 1;
+      } else {
+        const _nextPos = _nextAnchorId != null ? pl.trackIds.indexOf(_nextAnchorId) : -1;
+        _insertAt = _nextPos >= 0 ? _nextPos : 0;
+      }
+      pl.trackIds.splice(_insertAt, 0, trackId);
+    }
     savePlaylists().catch(() => {});
     renderPlNav();
     if (get('view') === 'playlist' && get('curPlId') === plId) emit(EVENTS.RENDER_LIB, {});

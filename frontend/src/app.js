@@ -301,7 +301,10 @@ on(EVENTS.RENDER_LIB, () => updateSidebarCounts());
  * entre les deux branches du boot (PERF-BOOT Fix B).
  * @param {object|null} cfgObj — objet cfg tel que lu depuis IDB (peut être null)
  */
+let _bootUIApplied = false; // BUG-AUDIT HIGH : garde anti-double-appel (_applyBootUI ajoute des listeners)
 function _applyBootUI(cfgObj) {
+  if (_bootUIApplied) return; // idempotent — évite le double-câblage des listeners de panneau
+  _bootUIApplied = true;
   applyLang();
   setMode(getDisplayMode());
   document.getElementById('pc-shuf')?.classList.toggle('on', shuffle);
@@ -634,7 +637,8 @@ async function boot() {
           updateBar();
           patchActiveTrack();
           // UX-5: toast de session restaurée
-          const _resumeTitle = resumeTrack.name || resumeTrack.file?.split(/[\\/]/).pop() || '…';
+          // L-08 : resumeTrack.file est toujours null sur les pistes restaurées depuis l'IDB — branche file?.split retirée.
+          const _resumeTitle = resumeTrack.name || '…';
           toast(i18n('t_session_restored', _resumeTitle), 'info');
           // On ne relance PAS la lecture — l'utilisateur choisit de reprendre
         }
@@ -724,9 +728,8 @@ export function invalidateFilter() {
 // Logique extraite dans dropin.js ; initDrop() appelé dans DOMContentLoaded ci-dessous.
 
 // ══ Keyboard shortcuts → shortcuts.js (CQ-2) ════════════════════
-// Handler attaché ici après définition de updateVolSlider, closeModal, cycleSpeed
-// (fonctions injectées comme callbacks pour éviter la dépendance circulaire).
-initShortcuts({ updateVolSlider, closeModal, cycleSpeed });
+// initShortcuts() est appelé dans le callback waitForTauri (voir bas de fichier),
+// pour garantir que __TAURI__ est prêt (raccourcis F11/F12 → invoke) et le DOM chargé.
 
 // ══ Persistence ═════════════════════════════════
 
@@ -807,6 +810,9 @@ window.addEventListener('unhandledrejection', (e) => {
 
 waitForTauri(() => {
   boot().catch(e => console.error('[LibreFlow] boot failed:', e)); // FIX #19
+  // BUG-AUDIT HIGH : initShortcuts() déplacé ici depuis le niveau module — garantit
+  // que __TAURI__ est prêt (F11/F12 → invoke) et le DOM chargé avant d'attacher le handler.
+  initShortcuts({ updateVolSlider, closeModal, cycleSpeed });
   initMediaSession(); // Contrôles Windows 11 SMTC / taskbar
   initMiniOverlayDrag(); // Drag du mini-player overlay in-page
   initRipple(); // Ripple feedback sur boutons et lignes

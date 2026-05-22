@@ -8,7 +8,7 @@
 //!
 //! Uses proptest to generate millions of random inputs in seconds.
 
-use libreflow_lib::cdaudio_toc::{parse_toc_lba, frames_to_seconds};
+use libreflow_lib::cdaudio_toc::{frames_to_seconds, parse_toc_lba};
 use proptest::prelude::*;
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -39,20 +39,21 @@ proptest! {
 
 /// Generator for a well-formed TOC entry payload.
 /// Produces entries with monotonically increasing LBAs and a lead-out marker.
-fn arb_valid_toc()
-    -> impl Strategy<Value = (u8, u8, Vec<(u8, u8, u32)>)>
-{
+fn arb_valid_toc() -> impl Strategy<Value = (u8, u8, Vec<(u8, u8, u32)>)> {
     // 1 to 99 audio tracks (CD spec max is 99)
     (1u8..=20).prop_flat_map(|num_tracks| {
         let first_track = 1u8;
-        let last_track  = num_tracks;
+        let last_track = num_tracks;
 
         // Generate `num_tracks` monotonic LBA values + 1 lead-out
         let lba_steps = prop::collection::vec(100u32..50_000, (num_tracks + 1) as usize);
-        let controls  = prop::collection::vec(prop::sample::select(vec![0x10u8, 0x14u8]), num_tracks as usize);
+        let controls = prop::collection::vec(
+            prop::sample::select(vec![0x10u8, 0x14u8]),
+            num_tracks as usize,
+        );
 
-        (Just(first_track), Just(last_track), lba_steps, controls)
-            .prop_map(move |(first, last, steps, ctls)| {
+        (Just(first_track), Just(last_track), lba_steps, controls).prop_map(
+            move |(first, last, steps, ctls)| {
                 // Convert step deltas into absolute LBAs (always increasing).
                 let mut lba = 0u32;
                 let mut entries = Vec::with_capacity((num_tracks + 1) as usize);
@@ -64,23 +65,24 @@ fn arb_valid_toc()
                 lba = lba.saturating_add(steps[num_tracks as usize]);
                 entries.push((0xAA, 0x10, lba));
                 (first, last, entries)
-            })
+            },
+        )
     })
 }
 
 /// Encode a TOC entry list into the binary IOCTL format.
 fn encode_toc(first: u8, last: u8, entries: &[(u8, u8, u32)]) -> Vec<u8> {
     let entries_bytes = entries.len() * 8;
-    let length        = (entries_bytes + 2) as u16; // length excludes its own 2 bytes
-    let mut buf       = Vec::with_capacity(entries_bytes + 4);
+    let length = (entries_bytes + 2) as u16; // length excludes its own 2 bytes
+    let mut buf = Vec::with_capacity(entries_bytes + 4);
     buf.extend_from_slice(&length.to_be_bytes());
     buf.push(first);
     buf.push(last);
     for (track_no, control_adr, lba) in entries {
-        buf.push(0x00);                  // [0] reserved
-        buf.push(*control_adr);          // [1] adr|control
-        buf.push(*track_no);             // [2] track number
-        buf.push(0x00);                  // [3] reserved
+        buf.push(0x00); // [0] reserved
+        buf.push(*control_adr); // [1] adr|control
+        buf.push(*track_no); // [2] track number
+        buf.push(0x00); // [3] reserved
         buf.extend_from_slice(&lba.to_be_bytes()); // [4..7] LBA BE
     }
     buf

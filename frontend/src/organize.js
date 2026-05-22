@@ -187,12 +187,12 @@ export async function organizeConfirm() {
     }
   }
 
-  // INVARIANT: toute mutation de tracks[] → rebuildTrackIdxMap()
+  // INVARIANT: toute mutation de tracks[] → rebuildTrackIdxMap() AVANT notify()
   // mutation in-place — set() would no-op (same array reference)
-  notify('tracks');
   rebuildTrackIdxMap();
   invalidateFilterCache();
   VIRT._lastListSig = '';
+  notify('tracks');
 
   _pendingMoves = [];
   organizeCancel();

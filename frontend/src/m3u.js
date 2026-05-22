@@ -11,7 +11,7 @@
 //   exportM3U, exportXSPF, importM3U
 
 import { i18n } from './i18n.js';
-import { get, set }  from './store.js'; // Phase 4
+import { get, set, notify }  from './store.js'; // Phase 4
 import { _trackIdxMap, getFiltered } from './search.js';
 import { toast } from './ui.js';
 import { setView } from './views.js';
@@ -129,7 +129,9 @@ export async function importM3U() {
     try {
       const file = e.target.files[0];
       if (!file) return;
-      const text = await file.text();
+      // B18 FIX : retirer un BOM UTF-8 en tête — sinon la 1re ligne (et le chemin
+      // de la 1re piste si le fichier n'a pas de header) commence par le caractère BOM.
+      const text = (await file.text()).replace(/^﻿/, '');
 
       // Parser M3U : extraire chemins + métadonnées EXTINF
       const lines   = text.split(/\r?\n/);
@@ -192,9 +194,14 @@ export async function importM3U() {
         if (validNew.length) {
           importedCount = await importPaths(validNew);
           const tracksNow = get('tracks'); // Phase 4 — relire après importPaths
+          // AUDIT-2026-05-22 (M-10) : indexer tracksNow par chemin normalise une
+          // seule fois (O(n)) plutot qu'un .find() par fichier importe (O(n×m)).
+          const byNormPath = new Map();
+          for (const tk of tracksNow) {
+            if (tk.path) byNormPath.set(tk.path.replace(/\\/g, '/'), tk);
+          }
           for (const p of validNew) {
-            const norm = p.replace(/\\/g, '/');
-            const t = tracksNow.find(tk => tk.path && tk.path.replace(/\\/g, '/') === norm);
+            const t = byNormPath.get(p.replace(/\\/g, '/'));
             if (t && !matchedIds.includes(t.id)) matchedIds.push(t.id);
           }
         }
@@ -203,10 +210,15 @@ export async function importM3U() {
       if (!matchedIds.length) { toast(i18n('t_m3u_no_tracks'), 'warning'); return; }
 
       const plName = file.name.replace(/\.m3u8?$/i, '').replace(/[-_]+/g, ' ').trim() || 'Playlist importée';
-      const newPl  = { id: 'pl_' + Date.now(), name: plName, trackIds: matchedIds };
+      // B17 FIX : suffixe aléatoire — 2 imports M3U dans la même milliseconde
+      // produiraient le même id 'pl_<ts>' → le 2e put écraserait le 1er en IDB.
+      const newPl  = { id: 'pl_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7), name: plName, trackIds: matchedIds };
       const playlists = get('playlists');
       playlists.push(newPl);
-      set('playlists', playlists);
+      // AUDIT-2026-05-22 : set('playlists', playlists) est un no-op (meme reference
+      // → guard `=== val` dans store.set). Notifier explicitement les subscribers
+      // apres le push in-place, sans dependre de savePlaylists() pour le faire.
+      notify('playlists');
       await savePlaylists();
       renderPlNav();
       setupPlNavDrop();

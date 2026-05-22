@@ -102,7 +102,10 @@ export function initShortcuts({ updateVolSlider, closeModal, cycleSpeed }) {
     if (e.code === 'ArrowRight') { e.preventDefault(); next(true); }
     if (e.code === 'ArrowLeft')  { e.preventDefault(); prev(); }
 
-    if (e.code === 'ArrowUp') {
+    // M-13 : ne pas capter ArrowUp/Down pour le volume si le focus est dans la
+    // liste de pistes — keynav.js gère alors la navigation au clavier (évite la double action).
+    const _inTrackList = document.activeElement?.closest('#tlist');
+    if (e.code === 'ArrowUp' && !_inTrackList) {
       e.preventDefault();
       const _cur = masterGainNode ? masterGainNode.gain.value : audio.volume;
       const v = Math.min(1, _cur + 0.05);
@@ -110,7 +113,7 @@ export function initShortcuts({ updateVolSlider, closeModal, cycleSpeed }) {
       const vel = document.getElementById('vol');
       if (vel) { vel.value = v; updateVolSlider(vel); }
     }
-    if (e.code === 'ArrowDown') {
+    if (e.code === 'ArrowDown' && !_inTrackList) {
       e.preventDefault();
       const _cur = masterGainNode ? masterGainNode.gain.value : audio.volume;
       const v = Math.max(0, _cur - 0.05);

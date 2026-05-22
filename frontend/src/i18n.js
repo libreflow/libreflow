@@ -513,6 +513,9 @@ export const LANGS = {
     cd_copyright_h:           'Extraction de CD audio',
     cd_copyright_body:        'L’extraction d’un CD audio est généralement autorisée pour un usage personnel dans l’UE et soumise au DMCA aux USA. Vous êtes responsable du respect des droits d’auteur dans votre pays.',
     cd_copyright_ack:         'J’accepte et je continue',
+    // CD ripping — messages d'erreur (M-02 : ne pas exposer l'erreur IPC brute)
+    cd_err_unreadable:        'CD illisible — vérifiez le disque et le lecteur.',
+    cd_err_rip:               'Échec de l’extraction du CD — réessayez.',
     // A11Y — labels non visibles (aria-label)
     nav_home:         'Accueil',
     vol_label:        'Volume',
@@ -1149,6 +1152,9 @@ export const LANGS = {
     cd_copyright_h:           'CD audio ripping',
     cd_copyright_body:        'Ripping an audio CD is generally allowed for personal use in the EU and is subject to the DMCA in the US. You are responsible for complying with copyright law in your country.',
     cd_copyright_ack:         'I understand, continue',
+    // CD ripping — error messages (M-02: do not expose the raw IPC error)
+    cd_err_unreadable:        'CD unreadable — check the disc and the drive.',
+    cd_err_rip:               'CD extraction failed — please try again.',
     // A11Y — aria-label strings
     nav_home:         'Home',
     vol_label:        'Volume',

@@ -188,7 +188,10 @@ export function _normalizeGenre(g) {
  * @param {Track & {_nlc?: string, _nlcGen?: number}} t
  */
 function _ensureNlc(t) {
-  if (t._nlcGen !== _filterGen) {
+  // B2 FIX : tester aussi `_nlc == null`. Un appelant (loadTagsBg, batch-tag edit)
+  // peut `delete t._nlc` sans réinitialiser `_nlcGen` ; sans ce garde le rebuild
+  // est sauté et `hay` reste undefined → TypeError dans _filterByQuery.
+  if (t._nlcGen !== _filterGen || t._nlc == null) {
     t._nlc = [t.name || '', t.artist || '', t.artistFull || '', t.album || '', t.genre || ''].join(' ').toLowerCase();
     t._nlcGen = _filterGen;
   }
@@ -200,7 +203,9 @@ function _ensureNlc(t) {
  * @param {Track & {_nlc?: string, _trigrams?: Set<string>, _trigGen?: number}} t
  */
 function _ensureTrigrams(t) {
-  if (t._trigGen !== _filterGen) {
+  // B2 FIX : idem _ensureNlc — un `delete t._trigrams` sans reset de `_trigGen`
+  // laisserait `_trigrams` undefined au prochain accès fuzzy.
+  if (t._trigGen !== _filterGen || t._trigrams == null) {
     t._trigrams = _trigrams(t._nlc || '');
     t._trigGen  = _filterGen;
   }
@@ -293,8 +298,14 @@ export function getFiltered() {
   const liked           = get('liked');
   const formatFilter    = get('formatFilter') || '';
 
-  // Signature de cache — inclure toutes les dimensions qui peuvent changer le résultat
-  const tracksSig   = tracks.length + '|' + (tracks[tracks.length - 1]?.id || '');
+  // Signature de cache — inclure toutes les dimensions qui peuvent changer le résultat.
+  // AUDIT-2026-05-22 (M-07) : tracksSig = length + dernier id est volontairement
+  // faible — elle NE detecte PAS un reorder de tracks[] a longueur/extremites
+  // constantes. Ce n'est pas un bug : invalidateFilterCache() est le mecanisme
+  // PRIMAIRE d'invalidation. Tout site qui mute/reordonne tracks[] (tagedit,
+  // organize, backup, library, selection...) DOIT appeler invalidateFilterCache()
+  // — la signature n'est qu'un garde-fou rapide pour les changements de longueur.
+  const tracksSig   = tracks.length + '|' + (tracks[0]?.id || '') + '|' + (tracks[tracks.length - 1]?.id || '');
   const likedSig    = (view === 'liked') ? (liked?.size ?? 0) : '';
   const recentSig   = (sort === 'recent') ? recentPlays.slice(0, 20).join(',') : '';
   const sig = `${sort}\0${albumDetailSort}\0${query}\0${view}\0${drillKey}\0${drillFrom}\0${curPlId}\0${plSort}\0${tracksSig}\0${likedSig}\0${recentSig}\0${formatFilter}`;

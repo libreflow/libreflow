@@ -103,7 +103,7 @@ export function openTagEditor(trackId) {
         <label class="tag-edit-lbl" for="te-genre">${_lGenre}</label>
         <input class="tag-edit-inp" id="te-genre"  value="${esc(t.genre||'')}"                placeholder="${_lGenre}" autocomplete="off" list="te-dl-genre" style="max-width:120px">
         <label class="tag-edit-lbl" for="te-year" style="width:36px">${_lYear}</label>
-        <input class="tag-edit-inp" id="te-year"   value="${esc(t.year||'')}"                 placeholder="2024" type="number" min="1900" max="2099" autocomplete="off" style="max-width:72px">
+        <input class="tag-edit-inp" id="te-year"   value="${esc(t.year||'')}"                 placeholder="2024" type="number" min="1900" max="2100" autocomplete="off" style="max-width:72px">
         <label class="tag-edit-lbl" for="te-track" style="width:28px" title="${_lTrack}">${_lTrack}</label>
         <input class="tag-edit-inp" id="te-track"  value="${esc(t.track||'')}"                placeholder="1" type="number" min="1" max="999" autocomplete="off" style="max-width:56px">
       </div>

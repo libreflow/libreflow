@@ -160,15 +160,32 @@ export function closeCtxMenu() {
   }
 }
 
-document.addEventListener('click', e => {
-  const menu = document.getElementById('ctx-menu');
-  if (menu && !menu.contains(e.target)) closeCtxMenu();
-});
-document.addEventListener('keydown', e => {
-  if (e.code === 'Escape' && document.getElementById('ctx-menu')?.classList.contains('on')) {
-    e.stopImmediatePropagation(); closeCtxMenu();
-  }
-});
+// BUG-AUDIT HIGH : listeners document encapsulés dans initCtxMenu() avec AbortController
+// (cf. pattern handlers.js registerHandlers). Évite le cumul lors d'un HMR/test et permet
+// le nettoyage via le cleanup retourné. Appelé une seule fois au boot depuis main.js.
+let _ctxMenuInit = false; // garde anti-double-appel
+
+/**
+ * Attache les listeners globaux du menu contextuel (clic extérieur + Escape).
+ * Idempotent — à appeler UNE SEULE FOIS au boot (main.js).
+ * @returns {Function} cleanup — retire les listeners (utile pour les tests)
+ */
+export function initCtxMenu() {
+  if (_ctxMenuInit) { console.warn('[ctxmenu] initCtxMenu() called more than once'); return () => {}; }
+  _ctxMenuInit = true;
+  const ac = new AbortController();
+  const { signal } = ac;
+  document.addEventListener('click', e => {
+    const menu = document.getElementById('ctx-menu');
+    if (menu && !menu.contains(e.target)) closeCtxMenu();
+  }, { signal });
+  document.addEventListener('keydown', e => {
+    if (e.code === 'Escape' && document.getElementById('ctx-menu')?.classList.contains('on')) {
+      e.stopImmediatePropagation(); closeCtxMenu();
+    }
+  }, { signal });
+  return () => ac.abort();
+}
 
 // ── Actions ───────────────────────────────────────────────────
 
@@ -267,7 +284,7 @@ export async function ctxDeleteTrack() {
   if (!t) return;
   // P4-5 : body enrichi avec pochette + artiste pour les actions destructives
   const _unknownArtist = i18n('unknown_artist') || 'Artiste inconnu';
-  const _artist = (t.artistFull || t.artist || '').replace(/</g, '&lt;');
+  const _artist = esc(t.artistFull || t.artist || ''); // L-01 : esc() cohérent (était un .replace ad-hoc)
   const _artHtml = t.art
     ? `<img src="${esc(t.art)}" alt="" style="width:40px;height:40px;border-radius:6px;object-fit:cover;flex-shrink:0;vertical-align:middle">`
     : `<span style="width:40px;height:40px;border-radius:6px;background:var(--bg4);display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;font-size:18px">🎵</span>`;
@@ -353,11 +370,17 @@ export async function ctxWriteRG() {
   closeCtxMenu();
   if (!t || t.rgGain === undefined || !t.path) return;
 
-  // Fallback : si rgGainDB absent (ancien cache), dériver depuis la valeur linéaire
+  // Fallback : si rgGainDB absent (ancien cache), dériver depuis la valeur linéaire.
+  // B14 FIX : Math.log10(rgGain ≤ 0) donne -Infinity / NaN — un rgGain de 0
+  // (analyse RG ratée, piste silencieuse) ou négatif corromprait le tag écrit.
   const gainDB = typeof t.rgGainDB === 'number'
     ? t.rgGainDB
-    : 20 * Math.log10(t.rgGain);
+    : (t.rgGain > 0 ? 20 * Math.log10(t.rgGain) : 0);
   const peak = typeof t.rgPeak === 'number' ? t.rgPeak : 1.0;
+  if (!Number.isFinite(gainDB)) {
+    toast(i18n('t_rg_write_err') || 'Valeur ReplayGain invalide', 'error');
+    return;
+  }
 
   const dismiss = toast(i18n('t_rg_writing') || 'Écriture des tags RG…', 'loading');
   try {

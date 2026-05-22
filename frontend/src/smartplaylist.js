@@ -508,7 +508,9 @@ export async function confirmSmartPlaylist() {
     const combinator = document.getElementById('spl-combinator')?.value || 'all';
     const maxSize = parseInt(document.getElementById('spl-rules-size')?.value || '20') || 20;
     const criteria = { mode: 'rules', rules: JSON.parse(JSON.stringify(_smartRules)), combinator, size: maxSize };
-    const pl = { id:'pl_'+Date.now(), name, trackIds:result.map(t=>t.id), smart:true, seedId:null, criteria, createdAt:Date.now() };
+    // B31 FIX : suffixe aléatoire — 2 smart playlists créées dans la même ms
+    // (double-clic « Créer ») produiraient le même id 'pl_<ts>' → collision IDB.
+    const pl = { id:'pl_'+Date.now()+'_'+Math.random().toString(36).slice(2,7), name, trackIds:result.map(t=>t.id), smart:true, seedId:null, criteria, createdAt:Date.now() };
     get('playlists').push(pl);
     notify('playlists'); // CM-5 FIX: push() in-place → notify() so subscribers see the change
     await savePlaylists();
@@ -532,7 +534,9 @@ export async function confirmSmartPlaylist() {
     similar: !!document.getElementById('crit-similar-artist')?.checked,
     size:    parseInt(document.getElementById('smart-size')?.value || '20'),
   };
-  const pl = { id:'pl_'+Date.now(), name, trackIds:result.map(t=>t.id), smart:true, seedId:_smartSeedId, criteria, createdAt:Date.now() };
+  // B31 FIX : suffixe aléatoire — évite la collision d'id en cas de double création
+  // dans la même milliseconde (le 2e put écraserait le 1er en IDB).
+  const pl = { id:'pl_'+Date.now()+'_'+Math.random().toString(36).slice(2,7), name, trackIds:result.map(t=>t.id), smart:true, seedId:_smartSeedId, criteria, createdAt:Date.now() };
   get('playlists').push(pl);
   notify('playlists'); // CM-5 FIX: push() in-place → notify() so subscribers see the change
   await savePlaylists();

@@ -45,6 +45,7 @@ export function initRadioSeedId(id) { if (id) radioSeedId = id; }
 let radioQueue            = [];
 let _radioPlayedIds       = new Set();
 let _radioStopInProgress  = false; // guard anti-concurrence pour stopRadio (async)
+let _radioRefillInProgress = false; // B34 : guard anti-concurrence pour le refill async de radioRefillQueue
 
 // ── Progress bar live (rv-prog-fill) ─────────────────────────
 // NOTE : la mise à jour de rv-prog-fill est gérée directement par le handler
@@ -251,6 +252,21 @@ export async function startRadio(trackId) {
   toast(i18n('radio_started', seed.name), 'success');
 }
 
+/** Teardown synchrone de l'état radio + UI. Partagé par stopRadio() et stopRadioSilent(). */
+function _radioTeardown() {
+  _cleanRvProg();
+  radioActive     = false;
+  radioSeedId     = null;
+  radioQueue      = [];
+  _radioPlayedIds = new Set();
+  setManualQueue([]);
+  _syncRadioButtons(false);
+  // Si on est sur la vue radio, retour à Tous les titres
+  if (get('view') === 'radio') {
+    setView('all', document.getElementById('ni-all'));
+  }
+}
+
 export async function stopRadio() {
   if (_radioStopInProgress) return; // guard : empêche deux appels concurrents pendant l'await
   _radioStopInProgress = true;
@@ -266,21 +282,21 @@ export async function stopRadio() {
     );
     if (!ok) return;
   }
-  _cleanRvProg();
-  radioActive     = false;
-  radioSeedId     = null;
-  radioQueue      = [];
-  _radioPlayedIds = new Set();
-  setManualQueue([]);
-  _syncRadioButtons(false);
+  _radioTeardown();
   toast(i18n('radio_stopped'));
-  // Si on est sur la vue radio, retour à Tous les titres
-  if (get('view') === 'radio') {
-    setView('all', document.getElementById('ni-all'));
-  }
   } finally {
     _radioStopInProgress = false;
   }
+}
+
+/**
+ * Arrêt radio synchrone sans dialog de confirmation.
+ * Appelé depuis des contextes synchrones (ex: _sleepTick) où un await/confirmAction
+ * serait hors-contexte. Pas de toast — l'appelant gère son propre feedback.
+ */
+export function stopRadioSilent() {
+  if (!radioActive) return;
+  _radioTeardown();
 }
 
 /** Réinitialise tout l'état radio sans side-effects UI (appelé depuis clearLibrary). */
@@ -328,22 +344,30 @@ export async function radioRefillQueue() {
     radioQueue.shift();
   }
 
-  if (radioQueue.length < RADIO_REFILL) {
-    // Seed glissant : à chaque recharge, le seed évolue vers le titre en cours.
-    radioSeedId = cur.id;
+  // B34 FIX : guard anti-concurrence. Deux radioRefillQueue() qui se chevauchent
+  // (changements de piste très rapprochés) passeraient tous deux le test, feraient
+  // chacun un `await buildRadioQueue()` puis un push → file dupliquée / surremplie.
+  if (radioQueue.length < RADIO_REFILL && !_radioRefillInProgress) {
+    _radioRefillInProgress = true;
+    try {
+      // Seed glissant : à chaque recharge, le seed évolue vers le titre en cours.
+      radioSeedId = cur.id;
 
-    // Anti-overflow : si _radioPlayedIds a couvert toute la bibliothèque (ou presque),
-    // on réinitialise pour éviter que buildRadioQueue retourne [] → file définitivement vide.
-    const totalTracks = tracks.length; // Phase 4 — tracks déjà local get('tracks')
-    if (_radioPlayedIds.size >= totalTracks - RADIO_SIZE) {
-      // Conserver seulement les titres de la file courante + le seed courant
-      // pour garder une diversité minimale.
-      _radioPlayedIds = new Set([cur.id, ...radioQueue.map(t => t.id)]);
+      // Anti-overflow : si _radioPlayedIds a couvert toute la bibliothèque (ou presque),
+      // on réinitialise pour éviter que buildRadioQueue retourne [] → file définitivement vide.
+      const totalTracks = tracks.length; // Phase 4 — tracks déjà local get('tracks')
+      if (_radioPlayedIds.size >= totalTracks - RADIO_SIZE) {
+        // Conserver seulement les titres de la file courante + le seed courant
+        // pour garder une diversité minimale.
+        _radioPlayedIds = new Set([cur.id, ...radioQueue.map(t => t.id)]);
+      }
+
+      const exclude = new Set([..._radioPlayedIds, ...radioQueue.map(t => t.id)]);
+      const extra   = (await buildRadioQueue(cur, exclude)).slice(0, RADIO_SIZE - radioQueue.length);
+      radioQueue.push(...extra);
+    } finally {
+      _radioRefillInProgress = false;
     }
-
-    const exclude = new Set([..._radioPlayedIds, ...radioQueue.map(t => t.id)]);
-    const extra   = (await buildRadioQueue(cur, exclude)).slice(0, RADIO_SIZE - radioQueue.length);
-    radioQueue.push(...extra);
   }
 
   if ((get('manualQueue')?.length ?? 0) < 3) {
@@ -428,20 +452,20 @@ function _syncRadioLibBar(active) {
         <circle cx="12" cy="12" r="2"/>
       </svg>
       <div class="rlb-info">
-        <span class="rlb-label">${i18n('radio_active_lbl')}</span>
+        <span class="rlb-label">${esc(i18n('radio_active_lbl'))}</span>
         <span class="rlb-seed">${seedName}${seedArtist ? ` — <span class="rlb-artist">${seedArtist}</span>` : ''}
-          <span class="rlb-ct">${i18n('radio_queue_ct', qCount)}</span>
+          <span class="rlb-ct">${esc(i18n('radio_queue_ct', qCount))}</span>
         </span>
       </div>
     </div>
     <div class="rlb-actions">
       <button class="rlb-btn" data-action="open-radio" title="${t_see}">
         <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
-        ${i18n('radio_see_file')}
+        ${esc(i18n('radio_see_file'))}
       </button>
       <button class="rlb-btn rlb-save" data-action="radio-save-pl" title="${t_save}">
         <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
-        ${i18n('radio_save_lbl')}
+        ${esc(i18n('radio_save_lbl'))}
       </button>
       <button class="rlb-btn rlb-stop" data-action="radio-stop" title="${t_stop}">
         <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>

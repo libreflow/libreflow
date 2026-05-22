@@ -54,6 +54,7 @@ let _bootGains      = null;   // Float32Array ou null
 let _bootEnabled    = false;
 let _bootPreset     = null;
 let _eqInitialized  = false;  // R6 — singleton guard : empêche createMediaElementSource × N
+let _eqInitFailed   = false;  // B30 — true si new AudioContext() a échoué : court-circuite les retries
 
 // ── Presets ───────────────────────────────────────────────────────────────────
 // Gains en dB pour [32,64,125,250,500,1k,2k,4k,8k,16k]
@@ -130,7 +131,10 @@ export function initBootEQ(gains, enabled, preset) {
 /** Initialise le pipeline Web Audio. Appel idempotent (singleton).
  *  N'accepte aucun argument — lit la config via _bootGains / _bootEnabled. */
 export function initEQ() {
-  if (_eqInitialized) return;   // R6 — singleton : createMediaElementSource ne doit être appelé qu'une fois
+  // B30 FIX : _eqInitFailed court-circuite les retries — sans ça, un échec de
+  // `new AudioContext()` laisse eqCtx=null sans flag et chaque setEQBand /
+  // applyEQPreset / toggleEQAB re-tente (et re-échoue) indéfiniment.
+  if (_eqInitialized || _eqInitFailed) return;   // R6 — singleton : createMediaElementSource ne doit être appelé qu'une fois
 
   const audio = document.getElementById('audio');
   if (!audio) { console.warn('[eq] <audio> introuvable'); return; }
@@ -140,6 +144,7 @@ export function initEQ() {
     eqCtx = new (window.AudioContext || window.webkitAudioContext)();
   } catch (e) {
     console.warn('[eq] AudioContext non disponible', e);
+    _eqInitFailed = true;
     return;
   }
 

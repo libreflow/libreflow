@@ -56,14 +56,22 @@ const tx = (s, m='readonly') => {
 // Timeout pour les opérations IDB — évite un hang permanent si la DB est corrompue
 
 /**
- * Returns a promise that rejects after `ms` milliseconds.
- * Used with Promise.race() to add timeouts to IDB requests.
+ * Race an IDB operation against a timeout, clearing the timeout timer once the
+ * operation settles. B28 FIX — sans clearTimeout, le setTimeout orphelin
+ * (jusqu'à 30 s pour dall) continue de tourner et garde l'event loop éveillé
+ * après une opération réussie.
  *
- * @param {number} [ms=8000]
- * @returns {Promise<never>}
+ * @template T
+ * @param {Promise<T>} op - IDB operation promise
+ * @param {number} ms     - Timeout in milliseconds
+ * @returns {Promise<T>}
  */
-function _idbTimeout(ms = 8000) {
-  return new Promise((_, fail) => setTimeout(() => fail(new Error('IDB timeout')), ms));
+function _raceWithTimeout(op, ms) {
+  let timer;
+  const timeout = new Promise((_, fail) => {
+    timer = setTimeout(() => fail(new Error('IDB timeout')), ms);
+  });
+  return Promise.race([op, timeout]).finally(() => clearTimeout(timer));
 }
 
 /**
@@ -74,11 +82,11 @@ function _idbTimeout(ms = 8000) {
  * @param {IDBValidKey} k - Record key
  * @returns {Promise<T|undefined>}
  */
-const dget = (s,k) => Promise.race([_idbTimeout(CFG.IDB_TIMEOUT_DEFAULT), new Promise((ok,fail) => {
+const dget = (s,k) => _raceWithTimeout(new Promise((ok,fail) => {
   const r = tx(s).get(k);
   r.onsuccess = () => ok(r.result);
   r.onerror   = () => fail(r.error);
-})]);
+}), CFG.IDB_TIMEOUT_DEFAULT);
 
 /**
  * Get all records from a store.
@@ -88,11 +96,11 @@ const dget = (s,k) => Promise.race([_idbTimeout(CFG.IDB_TIMEOUT_DEFAULT), new Pr
  * @param {string} s - Store name
  * @returns {Promise<T[]>}
  */
-const dall = (s) => Promise.race([_idbTimeout(CFG.IDB_TIMEOUT_DALL), new Promise((ok,fail) => {
+const dall = (s) => _raceWithTimeout(new Promise((ok,fail) => {
   const r = tx(s).getAll();
   r.onsuccess = () => ok(r.result);
   r.onerror   = () => fail(r.error);
-})]);
+}), CFG.IDB_TIMEOUT_DALL);
 
 /**
  * Put (insert or update) a record in a store.
@@ -105,11 +113,11 @@ const dall = (s) => Promise.race([_idbTimeout(CFG.IDB_TIMEOUT_DALL), new Promise
 const dput = (s,v,k) => {
   // Skip persisting ephemeral CD tracks — they're tied to the inserted disc's lifetime
   if (s === 'tracks' && v && v._isEphemeralCd === true) return;
-  return Promise.race([_idbTimeout(8000), new Promise((ok,fail) => {
+  return _raceWithTimeout(new Promise((ok,fail) => {
     const r = k !== undefined ? tx(s,'readwrite').put(v,k) : tx(s,'readwrite').put(v);
     r.onsuccess = () => ok();
     r.onerror   = () => fail(r.error);
-  })]);
+  }), 8000);
 };
 
 /**
@@ -119,11 +127,11 @@ const dput = (s,v,k) => {
  * @param {IDBValidKey} k     - Key to delete
  * @returns {Promise<void>}
  */
-const ddel = (s,k) => Promise.race([_idbTimeout(8000), new Promise((ok,fail) => {
+const ddel = (s,k) => _raceWithTimeout(new Promise((ok,fail) => {
   const r = tx(s,'readwrite').delete(k);
   r.onsuccess = () => ok();
   r.onerror   = () => fail(r.error);
-})]);
+}), 8000);
 
 // ── Storage quota ─────────────────────────────────────────────
 

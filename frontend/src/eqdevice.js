@@ -161,12 +161,18 @@ async function _refreshActiveDevice() {
 async function _onDeviceChange() {
   if (!navigator.mediaDevices?.enumerateDevices) return;
   try {
+    // B21 FIX : devicechange fire pour TOUT changement de périphérique média
+    // (brancher un micro/webcam). Ne ré-appliquer l'EQ que si le périphérique de
+    // SORTIE a réellement changé — sinon rampes setTargetAtTime inutiles.
+    const _prevActiveId = _activeId;
     await _refreshActiveDevice();
 
-    // Auto-appliquer le profil enregistré pour ce device si disponible
-    const profileKey = _activeId || 'default';
-    if (_deviceProfiles[profileKey]) {
-      applyEQGains(_deviceProfiles[profileKey].bands);
+    // Auto-appliquer le profil enregistré uniquement si la sortie a changé
+    if (_activeId !== _prevActiveId) {
+      const profileKey = _activeId || 'default';
+      if (_deviceProfiles[profileKey]) {
+        applyEQGains(_deviceProfiles[profileKey].bands);
+      }
     }
 
     // Mettre à jour l'UI si settings est ouvert

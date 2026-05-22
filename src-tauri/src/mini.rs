@@ -51,9 +51,9 @@ fn create_mini_window(app: &AppHandle) -> Result<(), String> {
 
     // Positionner en bas de l'écran, centré horizontalement
     if let Ok(Some(monitor)) = mini.current_monitor() {
-        let screen_w = monitor.size().width  as f64;
+        let screen_w = monitor.size().width as f64;
         let screen_h = monitor.size().height as f64;
-        let scale    = monitor.scale_factor();
+        let scale = monitor.scale_factor();
 
         // Taille logique du mini (pixels indépendants de la densité)
         let mini_w = 280.0_f64;
@@ -88,15 +88,17 @@ pub async fn mini_close(app: AppHandle) -> Result<(), String> {
         // (le plugin window-state restaure la dernière taille connue,
         //  mais après unminimize la fenêtre reste parfois à taille nulle)
         let current = main_win.inner_size().ok();
-        let needs_resize = current.map(|s| s.width < 400 || s.height < 300).unwrap_or(true);
+        let needs_resize = current
+            .map(|s| s.width < 400 || s.height < 300)
+            .unwrap_or(true);
         if needs_resize {
             let _ = main_win.set_size(tauri::LogicalSize::new(1100.0_f64, 700.0_f64));
             // Centrer sur le moniteur courant
             if let Ok(Some(monitor)) = main_win.current_monitor() {
-                let sw = monitor.size().width  as f64 / monitor.scale_factor();
+                let sw = monitor.size().width as f64 / monitor.scale_factor();
                 let sh = monitor.size().height as f64 / monitor.scale_factor();
-                let x  = ((sw - 1100.0) / 2.0 * monitor.scale_factor()) as i32;
-                let y  = ((sh -  700.0) / 2.0 * monitor.scale_factor()) as i32;
+                let x = ((sw - 1100.0) / 2.0 * monitor.scale_factor()) as i32;
+                let y = ((sh - 700.0) / 2.0 * monitor.scale_factor()) as i32;
                 let _ = main_win.set_position(tauri::PhysicalPosition::new(x, y));
             }
         }

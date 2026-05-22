@@ -28,7 +28,8 @@ export const CFG = Object.freeze({
   WATCH_DEBOUNCE_MS:       500,   // ms — debounce sur watch-new-files (SEC-10 rate-limit)
   SHORT_TRACK_MIN_SECS:     20,   // s  — durée min d'une piste valide (< = ignorée)
   RG_GAIN_CAP:           3.162,   // gain linéaire max ReplayGain ≈ +10 dB (B1 fix)
-  MAX_ART_CACHE:            60,   // ARCH-2 — taille max du cache LRU blob: URL artwork
+  MAX_ART_CACHE:           200,   // ARCH-2 — cache LRU blob: URL artwork (liste + grilles albums/artistes)
+  QUEUE_ROW_H:              50,   // px — hauteur d'un .queue-item (padding 7px*2 + art 36px)
 });
 
 export const SORTS = ['az', 'za', 'artist', 'album', 'recent'];

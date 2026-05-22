@@ -98,7 +98,21 @@ async function _onDrop(e) {
     allFiles.push(...e.dataTransfer.files);
   }
 
-  const audioFiles = allFiles.filter(f => _EXTS.has(f.name.split('.').pop().toLowerCase()));
+  // AUDIT-2026-05-22 : valider le chemin droppe avant tout traitement.
+  // Rejette les segments `..`, les octets null et les caracteres de controle ;
+  // exige une extension (`f.name` doit contenir un point) pour `split('.').pop()`.
+  // eslint-disable-next-line no-control-regex
+  const _CTRL_RE = /[\u0000-\u001F\u007F]/;
+  const _isSafeDropPath = (f) => {
+    const p = f.webkitRelativePath || f.name || '';
+    if (!p || !f.name.includes('.')) return false;
+    if (_CTRL_RE.test(p)) return false;
+    if (/(^|[/\\])\.\.([/\\]|$)/.test(p)) return false;
+    return true;
+  };
+  const audioFiles = allFiles.filter(f =>
+    _isSafeDropPath(f) && _EXTS.has(f.name.split('.').pop().toLowerCase()),
+  );
   if (!audioFiles.length) { toast(i18n('t_drag_hint'), 'warning'); return; }
 
   showView('scan');
@@ -109,7 +123,10 @@ async function _onDrop(e) {
     // Dédup : comparer les basenames (file.webkitRelativePath est toujours vide en drag-drop Tauri).
     // Fonctionne pour t.path = nom seul (drag-drop) ou chemin complet (scan dossier).
     const _dnL = file.name.toLowerCase();
-    if (tracks.some(t => t.path.split(/[/\\]/).pop().toLowerCase() === _dnL)) continue;
+    // B13 FIX : t.path peut être undefined (piste restaurée d'un backup .libreflow) —
+    // t.path.split() throw alors hors de la boucle for synchrone → pushTracks jamais
+    // appelé → tous les fichiers déposés perdus. Garde défensive comme watchfolder/m3u.
+    if (tracks.some(t => t.path && t.path.split(/[/\\]/).pop().toLowerCase() === _dnL)) continue;
 
     const ext = file.name.split('.').pop().toUpperCase();
     const url = URL.createObjectURL(file);

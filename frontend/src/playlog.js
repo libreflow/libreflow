@@ -75,12 +75,18 @@ export async function flushPlayLog() {
     try {
       const purgeTx    = DB.transaction('playlog', 'readwrite');
       const purgeStore = purgeTx.objectStore('playlog');
+      // AUDIT-2026-05-22 : sans onerror, une erreur IDB sur la purge par cursor
+      // est avalee silencieusement → le playlog disque croit au-dela de la limite.
+      purgeTx.onerror = e => console.warn('[flushPlayLog purge tx]', e);
       const cntReq     = purgeStore.count();
+      cntReq.onerror   = e => console.warn('[flushPlayLog purge count]', e);
       cntReq.onsuccess = () => {
         const total = cntReq.result;
         if (total > CFG.PLAYLOG_MAX_ENTRIES) {
           let toDelete = total - CFG.PLAYLOG_MAX_ENTRIES;
-          purgeStore.openCursor().onsuccess = ev => {
+          const curReq = purgeStore.openCursor();
+          curReq.onerror   = e => console.warn('[flushPlayLog purge cursor]', e);
+          curReq.onsuccess = ev => {
             const c = ev.target.result;
             if (c && toDelete > 0) { toDelete--; c.delete(); c.continue(); }
           };

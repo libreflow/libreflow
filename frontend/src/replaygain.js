@@ -106,6 +106,12 @@ export async function analyzeAndApplyRG() {
       return;
     }
 
+    // Garde offline (§15) : ne fetch que des URLs asset: produites par convertFileSrc.
+    // Une URL d'un autre schéma (donnée corrompue, dossier réseau) sortirait du périmètre offline.
+    if (!t.url || !t.url.startsWith('asset:')) {
+      console.warn('[replaygain] skip — URL non-asset:', t.url);
+      return;
+    }
     // BUG-M2 FIX : en production, asset:// nécessite que le scope soit accordé avant fetch()
     if (t.path) {
       const _dir = t.path.replace(/[/\\][^/\\]+$/, '');
@@ -176,9 +182,13 @@ export async function analyzeAndApplyRG() {
     t.rgGainDB     = gainDB;   // F-7 — stocker en dB pour écriture dans les tags
     // F-7 — Peak depuis les données originales décodées (avant K-weighting)
     // srcBuf contient le PCM brut ; le K-weighting est appliqué via les nœuds filtres, pas via decodeAudioData.
-    const _pcm = srcBuf.getChannelData(0);
+    // B32 FIX : balayer TOUS les canaux (cap 2) — un peak calculé sur le canal 0
+    // seul sous-estime REPLAYGAIN_TRACK_PEAK si le canal droit est plus fort.
     let _peak = 0;
-    for (let i = 0; i < _pcm.length; i++) { const a = Math.abs(_pcm[i]); if (a > _peak) _peak = a; }
+    for (let ch = 0; ch < nch; ch++) {
+      const _pcm = srcBuf.getChannelData(ch);
+      for (let i = 0; i < _pcm.length; i++) { const a = Math.abs(_pcm[i]); if (a > _peak) _peak = a; }
+    }
     t.rgPeak = Math.min(1.0, _peak);
     srcBuf = null; // allow GC of the 30 MB AudioBuffer
     applyRGGain(t.rgGain);

@@ -8,36 +8,29 @@ use std::sync::{Mutex, OnceLock};
 use tauri::{AppHandle, Emitter, Manager};
 use tokio::sync::mpsc;
 
-use windows::{
-    Win32::{
-        Foundation::{BOOL, HWND, LPARAM, LRESULT, WPARAM},
-        Graphics::Gdi::{
-            CreateBitmap, CreateDIBSection, DeleteObject,
-            BITMAPINFO, BITMAPINFOHEADER, DIB_RGB_COLORS,
-            HDC, HGDIOBJ, RGBQUAD,
+use windows::Win32::{
+    Foundation::{BOOL, HWND, LPARAM, LRESULT, WPARAM},
+    Graphics::Gdi::{
+        CreateBitmap, CreateDIBSection, DeleteObject, BITMAPINFO, BITMAPINFOHEADER, DIB_RGB_COLORS,
+        HDC, HGDIOBJ, RGBQUAD,
+    },
+    System::{
+        Com::{
+            CoCreateInstance, CoInitializeEx, CoUninitialize, CLSCTX_ALL, COINIT_APARTMENTTHREADED,
         },
-        System::{
-            Com::{
-                CoCreateInstance, CoInitializeEx, CoUninitialize,
-                CLSCTX_ALL, COINIT_APARTMENTTHREADED,
-            },
-            Threading::GetCurrentThreadId,
+        Threading::GetCurrentThreadId,
+    },
+    UI::{
+        Controls::{
+            ImageList_Create, ImageList_Destroy, ImageList_ReplaceIcon, HIMAGELIST, ILC_COLOR32,
         },
-        UI::{
-            Controls::{
-                ImageList_Create, ImageList_Destroy, ImageList_ReplaceIcon,
-                HIMAGELIST, ILC_COLOR32,
-            },
-            Shell::{
-                DefSubclassProc, ITaskbarList3, SetWindowSubclass, TaskbarList,
-                THUMBBUTTON, THUMBBUTTONFLAGS, THBF_DISABLED, THBF_ENABLED,
-                THB_BITMAP, THB_FLAGS, THB_TOOLTIP,
-            },
-            WindowsAndMessaging::{
-                CreateIconIndirect, DestroyIcon, GetMessageW,
-                HICON, ICONINFO, MSG, PostThreadMessageW, RegisterWindowMessageW,
-                WM_COMMAND,
-            },
+        Shell::{
+            DefSubclassProc, ITaskbarList3, SetWindowSubclass, TaskbarList, THBF_DISABLED,
+            THBF_ENABLED, THB_BITMAP, THB_FLAGS, THB_TOOLTIP, THUMBBUTTON, THUMBBUTTONFLAGS,
+        },
+        WindowsAndMessaging::{
+            CreateIconIndirect, DestroyIcon, GetMessageW, PostThreadMessageW,
+            RegisterWindowMessageW, HICON, ICONINFO, MSG, WM_COMMAND,
         },
     },
 };
@@ -48,7 +41,9 @@ use windows::{
 #[cfg(debug_assertions)]
 macro_rules! dlog { ($($t:tt)*) => { eprintln!($($t)*) } }
 #[cfg(not(debug_assertions))]
-macro_rules! dlog { ($($t:tt)*) => {} }
+macro_rules! dlog {
+    ($($t:tt)*) => {};
+}
 
 // ── Helper : récupère un MutexGuard même si le mutex est poisonné ─────────
 // Pattern recommandé : au lieu de paniquer sur le lock suivant un thread panic,
@@ -61,33 +56,33 @@ fn lock_recover<T>(m: &'static Mutex<T>) -> std::sync::MutexGuard<'static, T> {
 }
 
 // ── Identifiants boutons ────────────────────────────────────────────────────
-const BTN_PREV:     u32 = 0x4001;
-const BTN_PLAY:     u32 = 0x4002;
-const BTN_NEXT:     u32 = 0x4003;
+const BTN_PREV: u32 = 0x4001;
+const BTN_PLAY: u32 = 0x4002;
+const BTN_NEXT: u32 = 0x4003;
 
 const IMG_PREV: u32 = 0;
 const IMG_PLAY: u32 = 1;
 const IMG_NEXT: u32 = 2;
 
 const SUBCLASS_UID: usize = 0x4C46_0001;
-const ICON_SIZE:    i32   = 24;
+const ICON_SIZE: i32 = 24;
 
 // Messages internes vers le COM thread (WM_USER range 0x0400..0x7FFF)
-const CMD_INIT:            u32 = 0x0401; // initialiser la toolbar
-const CMD_PLAY_STATE:      u32 = 0x0402; // wparam = 1 (playing) ou 0 (paused)
-const CMD_HAS_TRACKS:      u32 = 0x0403; // wparam = 1 (has tracks) ou 0 (empty)
+const CMD_INIT: u32 = 0x0401; // initialiser la toolbar
+const CMD_PLAY_STATE: u32 = 0x0402; // wparam = 1 (playing) ou 0 (paused)
+const CMD_HAS_TRACKS: u32 = 0x0403; // wparam = 1 (has tracks) ou 0 (empty)
 const CMD_TASKBAR_CREATED: u32 = 0x0404; // taskbar redémarré, refaire AddButtons
-const CMD_QUIT:            u32 = 0x0405; // arrêter le thread COM
+const CMD_QUIT: u32 = 0x0405; // arrêter le thread COM
 
 // ── État global ─────────────────────────────────────────────────────────────
-static MAIN_HWND:       Mutex<isize>                   = Mutex::new(0);
-static COM_THREAD_ID:   OnceLock<u32>                  = OnceLock::new();
-static TASKBAR_BTN_MSG: OnceLock<u32>                  = OnceLock::new();
-static PLAYING:         Mutex<bool>                    = Mutex::new(false);
-static HAS_TRACKS:      Mutex<bool>                    = Mutex::new(false);
-static BTN_TX:          OnceLock<mpsc::Sender<String>> = OnceLock::new();
+static MAIN_HWND: Mutex<isize> = Mutex::new(0);
+static COM_THREAD_ID: OnceLock<u32> = OnceLock::new();
+static TASKBAR_BTN_MSG: OnceLock<u32> = OnceLock::new();
+static PLAYING: Mutex<bool> = Mutex::new(false);
+static HAS_TRACKS: Mutex<bool> = Mutex::new(false);
+static BTN_TX: OnceLock<mpsc::Sender<String>> = OnceLock::new();
 #[cfg(debug_assertions)]
-static SUBCLASS_CALLS:  std::sync::atomic::AtomicU32   = std::sync::atomic::AtomicU32::new(0);
+static SUBCLASS_CALLS: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
 
 // ── COM thread ───────────────────────────────────────────────────────────────
 //
@@ -98,7 +93,13 @@ fn com_thread_loop(main_hwnd_raw: isize) {
     dlog!("[taskbar] COM thread démarré");
     // Initialiser COM STA sur ce thread (sera uninit à la sortie via guard)
     struct ComGuard;
-    impl Drop for ComGuard { fn drop(&mut self) { unsafe { CoUninitialize(); } } }
+    impl Drop for ComGuard {
+        fn drop(&mut self) {
+            unsafe {
+                CoUninitialize();
+            }
+        }
+    }
     let _com = unsafe {
         let hr = CoInitializeEx(None, COINIT_APARTMENTTHREADED);
         if hr.is_ok() {
@@ -113,12 +114,21 @@ fn com_thread_loop(main_hwnd_raw: isize) {
     // Créer ITaskbarList3 une fois, le garder vivant toute la durée du thread
     let tb3 = unsafe {
         match CoCreateInstance::<_, ITaskbarList3>(&TaskbarList, None, CLSCTX_ALL) {
-            Err(e) => { eprintln!("[taskbar] CoCreateInstance ERREUR : {e:?}"); return; }
+            Err(e) => {
+                eprintln!("[taskbar] CoCreateInstance ERREUR : {e:?}");
+                return;
+            }
             Ok(tb3) => {
                 dlog!("[taskbar] ITaskbarList3 créé");
                 match tb3.HrInit() {
-                    Err(e) => { eprintln!("[taskbar] HrInit ERREUR : {e:?}"); return; }
-                    Ok(_) => { dlog!("[taskbar] HrInit OK"); tb3 }
+                    Err(e) => {
+                        eprintln!("[taskbar] HrInit ERREUR : {e:?}");
+                        return;
+                    }
+                    Ok(_) => {
+                        dlog!("[taskbar] HrInit OK");
+                        tb3
+                    }
                 }
             }
         }
@@ -131,16 +141,18 @@ fn com_thread_loop(main_hwnd_raw: isize) {
     let thread_id = unsafe { GetCurrentThreadId() };
     COM_THREAD_ID.set(thread_id).ok();
     dlog!("[taskbar] COM_THREAD_ID = {thread_id}");
-    unsafe { let _ = PostThreadMessageW(thread_id, CMD_INIT, WPARAM(0), LPARAM(0)); }
+    unsafe {
+        let _ = PostThreadMessageW(thread_id, CMD_INIT, WPARAM(0), LPARAM(0));
+    }
     dlog!("[taskbar] CMD_INIT posté au COM thread");
 
-    let main_hwnd    = HWND(main_hwnd_raw as *mut _);
-    let mut playing    = *lock_recover(&PLAYING);
+    let main_hwnd = HWND(main_hwnd_raw as *mut _);
+    let mut playing = *lock_recover(&PLAYING);
     let mut has_tracks = *lock_recover(&HAS_TRACKS);
     // Deux HIMAGELIST mises en cache : icône play (paused) et icône pause (playing).
     // Le rasterizer (~36K itérations × icône) ne tourne donc qu'au boot / taskbar restart,
     // pas à chaque toggle play/pause.
-    let mut il_play_raw:  isize = 0; // playing=false → icône ▶
+    let mut il_play_raw: isize = 0; // playing=false → icône ▶
     let mut il_pause_raw: isize = 0; // playing=true  → icône ⏸
     let mut buttons_added = false;
 
@@ -157,16 +169,28 @@ fn com_thread_loop(main_hwnd_raw: isize) {
         match msg.message {
             // ── Initialiser ou réinitialiser la toolbar (ex: taskbar restart) ──
             CMD_INIT | CMD_TASKBAR_CREATED => {
-                let _label = if msg.message == CMD_INIT { "CMD_INIT" } else { "CMD_TASKBAR_CREATED" };
+                let _label = if msg.message == CMD_INIT {
+                    "CMD_INIT"
+                } else {
+                    "CMD_TASKBAR_CREATED"
+                };
                 dlog!("[taskbar] {_label} reçu — ThumbBarAddButtons en cours…");
-                playing    = *lock_recover(&PLAYING);
+                playing = *lock_recover(&PLAYING);
                 has_tracks = *lock_recover(&HAS_TRACKS);
                 // (Re)construire les deux image lists. Sur taskbar restart Windows libère
                 // ses HIMAGELIST internes → on doit en fournir des nouvelles.
-                if il_play_raw  != 0 { unsafe { let _ = ImageList_Destroy(HIMAGELIST(il_play_raw)); } }
-                if il_pause_raw != 0 { unsafe { let _ = ImageList_Destroy(HIMAGELIST(il_pause_raw)); } }
-                il_play_raw  = build_image_list(false).0 as isize;
-                il_pause_raw = build_image_list(true).0  as isize;
+                if il_play_raw != 0 {
+                    unsafe {
+                        let _ = ImageList_Destroy(HIMAGELIST(il_play_raw));
+                    }
+                }
+                if il_pause_raw != 0 {
+                    unsafe {
+                        let _ = ImageList_Destroy(HIMAGELIST(il_pause_raw));
+                    }
+                }
+                il_play_raw = build_image_list(false).0 as isize;
+                il_pause_raw = build_image_list(true).0 as isize;
                 let cur_il_raw = if playing { il_pause_raw } else { il_play_raw };
                 let ok = unsafe {
                     if cur_il_raw != 0 {
@@ -191,7 +215,8 @@ fn com_thread_loop(main_hwnd_raw: isize) {
                         if cur_il_raw != 0 {
                             let _ = tb3.ThumbBarSetImageList(main_hwnd, HIMAGELIST(cur_il_raw));
                         }
-                        let _ = tb3.ThumbBarUpdateButtons(main_hwnd, &mk_buttons(playing, has_tracks));
+                        let _ =
+                            tb3.ThumbBarUpdateButtons(main_hwnd, &mk_buttons(playing, has_tracks));
                     }
                 }
             }
@@ -202,7 +227,8 @@ fn com_thread_loop(main_hwnd_raw: isize) {
                 *lock_recover(&HAS_TRACKS) = has_tracks;
                 if buttons_added {
                     unsafe {
-                        let _ = tb3.ThumbBarUpdateButtons(main_hwnd, &mk_buttons(playing, has_tracks));
+                        let _ =
+                            tb3.ThumbBarUpdateButtons(main_hwnd, &mk_buttons(playing, has_tracks));
                     }
                 }
             }
@@ -215,8 +241,16 @@ fn com_thread_loop(main_hwnd_raw: isize) {
         }
     }
 
-    if il_play_raw  != 0 { unsafe { let _ = ImageList_Destroy(HIMAGELIST(il_play_raw)); } }
-    if il_pause_raw != 0 { unsafe { let _ = ImageList_Destroy(HIMAGELIST(il_pause_raw)); } }
+    if il_play_raw != 0 {
+        unsafe {
+            let _ = ImageList_Destroy(HIMAGELIST(il_play_raw));
+        }
+    }
+    if il_pause_raw != 0 {
+        unsafe {
+            let _ = ImageList_Destroy(HIMAGELIST(il_pause_raw));
+        }
+    }
     // tb3 droppé ici → ITaskbarList3::Release() automatique
     // _com droppé ici → CoUninitialize() automatique
 }
@@ -240,9 +274,7 @@ pub fn update_play_state(playing: bool) {
     *lock_recover(&PLAYING) = playing;
     if let Some(&tid) = COM_THREAD_ID.get() {
         unsafe {
-            let _ = PostThreadMessageW(
-                tid, CMD_PLAY_STATE, WPARAM(playing as usize), LPARAM(0),
-            );
+            let _ = PostThreadMessageW(tid, CMD_PLAY_STATE, WPARAM(playing as usize), LPARAM(0));
         }
     }
 }
@@ -252,9 +284,7 @@ pub fn update_has_tracks(has: bool) {
     *lock_recover(&HAS_TRACKS) = has;
     if let Some(&tid) = COM_THREAD_ID.get() {
         unsafe {
-            let _ = PostThreadMessageW(
-                tid, CMD_HAS_TRACKS, WPARAM(has as usize), LPARAM(0),
-            );
+            let _ = PostThreadMessageW(tid, CMD_HAS_TRACKS, WPARAM(has as usize), LPARAM(0));
         }
     }
 }
@@ -270,13 +300,24 @@ pub fn cleanup() {
 
 // ── Implémentation ───────────────────────────────────────────────────────────
 
+/// # Safety
+///
+/// `hwnd_raw` doit être un handle de fenêtre Win32 valide pour la fenêtre `main`,
+/// obtenu depuis `WebviewWindow::hwnd()` juste avant l'appel. `setup_impl` doit être
+/// appelée une seule fois, depuis le thread du message pump Win32 (le main thread,
+/// dans la closure `setup()` de Tauri) : `SetWindowSubclass` doit s'exécuter sur le
+/// thread propriétaire de la fenêtre pour intercepter ses messages.
 unsafe fn setup_impl(hwnd_raw: isize, app: AppHandle) {
     *lock_recover(&MAIN_HWND) = hwnd_raw;
 
     // ── Enregistrer le message WM_TASKBARBUTTONCREATED ────────────────────
     let msg_name: Vec<u16> = "TaskbarButtonCreated\0".encode_utf16().collect();
+    // SAFETY: msg_name est un buffer UTF-16 NUL-terminé qui vit jusqu'à la fin de
+    // l'appel ; RegisterWindowMessageW ne conserve pas le pointeur après retour.
     let tbc_msg = RegisterWindowMessageW(windows::core::PCWSTR(msg_name.as_ptr()));
-    if tbc_msg != 0 { TASKBAR_BTN_MSG.set(tbc_msg).ok(); }
+    if tbc_msg != 0 {
+        TASKBAR_BTN_MSG.set(tbc_msg).ok();
+    }
 
     // ── Canal mpsc : boutons cliqués → Tokio → JS ─────────────────────────
     let (tx, mut rx) = mpsc::channel::<String>(8);
@@ -298,7 +339,11 @@ unsafe fn setup_impl(hwnd_raw: isize, app: AppHandle) {
     // avant qu'il arrive — l'ancienne version différée via on_window_event créait
     // une race condition : le message pouvait arriver avant l'installation.
     let hwnd = HWND(hwnd_raw as *mut _);
-    let r = SetWindowSubclass(hwnd, Some(subclass_proc), SUBCLASS_UID, 0);
+    // SAFETY: `hwnd` est le handle valide reçu en paramètre (cf. contrat `# Safety`) ;
+    // `subclass_proc` est une `extern "system" fn` à durée de vie statique ; SUBCLASS_UID
+    // est l'identifiant unique du subclass. L'appel s'exécute sur le thread propriétaire
+    // de la fenêtre, prérequis de SetWindowSubclass.
+    let r = unsafe { SetWindowSubclass(hwnd, Some(subclass_proc), SUBCLASS_UID, 0) };
     if r.0 == 0 {
         eprintln!("[taskbar] SetWindowSubclass ERREUR (r=0) — thumbnail toolbar inactive");
     } else {
@@ -315,21 +360,29 @@ unsafe fn setup_impl(hwnd_raw: isize, app: AppHandle) {
 
 fn mk_buttons(playing: bool, has_tracks: bool) -> [THUMBBUTTON; 3] {
     // Sans THBF_NOBACKGROUND : Windows affiche le highlight de survol natif (cercle).
-    let nav_flags  = if has_tracks { THBF_ENABLED } else { THBF_DISABLED };
-    let play_flags = if has_tracks { THBF_ENABLED } else { THBF_DISABLED };
-    let play_tip   = if playing { "Pause" } else { "Play" };
+    let nav_flags = if has_tracks {
+        THBF_ENABLED
+    } else {
+        THBF_DISABLED
+    };
+    let play_flags = if has_tracks {
+        THBF_ENABLED
+    } else {
+        THBF_DISABLED
+    };
+    let play_tip = if playing { "Pause" } else { "Play" };
     [
         thumb_btn(BTN_PREV, IMG_PREV, "Previous", nav_flags),
-        thumb_btn(BTN_PLAY, IMG_PLAY, play_tip,   play_flags),
-        thumb_btn(BTN_NEXT, IMG_NEXT, "Next",      nav_flags),
+        thumb_btn(BTN_PLAY, IMG_PLAY, play_tip, play_flags),
+        thumb_btn(BTN_NEXT, IMG_NEXT, "Next", nav_flags),
     ]
 }
 
 fn thumb_btn(id: u32, img: u32, tip: &str, flags: THUMBBUTTONFLAGS) -> THUMBBUTTON {
     let wide: Vec<u16> = tip.encode_utf16().collect();
     let mut tb = THUMBBUTTON {
-        dwMask:  THB_BITMAP | THB_FLAGS | THB_TOOLTIP,
-        iId:     id,
+        dwMask: THB_BITMAP | THB_FLAGS | THB_TOOLTIP,
+        iId: id,
         iBitmap: img,
         dwFlags: flags,
         ..THUMBBUTTON::default()
@@ -344,15 +397,44 @@ fn thumb_btn(id: u32, img: u32, tip: &str, flags: THUMBBUTTONFLAGS) -> THUMBBUTT
 fn build_image_list(playing: bool) -> HIMAGELIST {
     let icons = [
         make_icon_prev(),
-        if playing { make_icon_pause() } else { make_icon_play() },
+        if playing {
+            make_icon_pause()
+        } else {
+            make_icon_play()
+        },
         make_icon_next(),
     ];
+    // SAFETY: ImageList_Create est un appel COMCTL32 sans précondition particulière ;
+    // il peut échouer (OOM, contexte DPI) et renvoyer un handle NULL.
     let il = unsafe { ImageList_Create(ICON_SIZE, ICON_SIZE, ILC_COLOR32, 3, 0) };
+    // Handle NULL : ImageList_ReplaceIcon sur un handle NULL est un comportement
+    // indéfini Win32. HIMAGELIST encapsule un isize ; un handle NULL vaut 0.
+    // On loggue et on sort tôt — les icônes créées sont libérées avant le retour
+    // pour ne pas fuiter de HICON.
+    if il.0 == 0 {
+        eprintln!("[taskbar] ImageList_Create a renvoyé NULL — image list ignorée");
+        for ic in icons {
+            // SAFETY: ic provient de make_icon_* (CreateIconIndirect) ; DestroyIcon
+            // tolère un HICON invalide, l'appel reste sûr même si la création a échoué.
+            unsafe {
+                let _ = DestroyIcon(ic);
+            }
+        }
+        return il;
+    }
     for ic in icons {
         if !ic.is_invalid() {
-            unsafe { ImageList_ReplaceIcon(il, -1, ic); }
+            // SAFETY: `il` est non-NULL (vérifié ci-dessus) et `ic` est un HICON
+            // valide ; ImageList_ReplaceIcon copie l'icône dans la liste.
+            unsafe {
+                ImageList_ReplaceIcon(il, -1, ic);
+            }
         }
-        unsafe { let _ = DestroyIcon(ic); }
+        // SAFETY: l'icône a été copiée par la liste (ou est invalide) ; on libère
+        // le HICON local — DestroyIcon tolère un handle invalide.
+        unsafe {
+            let _ = DestroyIcon(ic);
+        }
     }
     il
 }
@@ -364,7 +446,9 @@ fn build_image_list(playing: bool) -> HIMAGELIST {
 // Output: BGRA bytes (Windows DIB memory layout, top-down).
 
 fn in_poly(x: f32, y: f32, v: &[(f32, f32)]) -> bool {
-    if v.is_empty() { return false; }
+    if v.is_empty() {
+        return false;
+    }
     let n = v.len();
     let mut inside = false;
     let mut j = n - 1;
@@ -390,13 +474,18 @@ fn rasterize(polys: &[&[(f32, f32)]], size: usize) -> Vec<u8> {
                 for sx in 0..SS {
                     let x = col as f32 + (sx as f32 + 0.5) / SS as f32;
                     let y = row as f32 + (sy as f32 + 0.5) / SS as f32;
-                    if polys.iter().any(|p| in_poly(x, y, p)) { hits += 1; }
+                    if polys.iter().any(|p| in_poly(x, y, p)) {
+                        hits += 1;
+                    }
                 }
             }
             let a = ((hits as f32 / SS2) * 255.0 + 0.5) as u8;
             let i = (row * size + col) * 4;
             // BGRA: white foreground, alpha = coverage
-            out[i] = 255; out[i+1] = 255; out[i+2] = 255; out[i+3] = a;
+            out[i] = 255;
+            out[i + 1] = 255;
+            out[i + 2] = 255;
+            out[i + 3] = a;
         }
     }
     out
@@ -406,10 +495,10 @@ fn bgra_to_hicon(bgra: &[u8], sz: i32) -> HICON {
     unsafe {
         let bmi = BITMAPINFO {
             bmiHeader: BITMAPINFOHEADER {
-                biSize:     std::mem::size_of::<BITMAPINFOHEADER>() as u32,
-                biWidth:    sz,
-                biHeight:   -sz, // negative = top-down
-                biPlanes:   1,
+                biSize: std::mem::size_of::<BITMAPINFOHEADER>() as u32,
+                biWidth: sz,
+                biHeight: -sz, // negative = top-down
+                biPlanes: 1,
                 biBitCount: 32,
                 ..Default::default()
             },
@@ -417,13 +506,23 @@ fn bgra_to_hicon(bgra: &[u8], sz: i32) -> HICON {
         };
         let mut bits: *mut core::ffi::c_void = std::ptr::null_mut();
         let Ok(color_bm) = CreateDIBSection(
-            HDC(std::ptr::null_mut()), &bmi, DIB_RGB_COLORS, &mut bits, None, 0,
-        ) else { return HICON(std::ptr::null_mut()); };
+            HDC(std::ptr::null_mut()),
+            &bmi,
+            DIB_RGB_COLORS,
+            &mut bits,
+            None,
+            0,
+        ) else {
+            return HICON(std::ptr::null_mut());
+        };
         std::ptr::copy_nonoverlapping(bgra.as_ptr(), bits.cast::<u8>(), bgra.len());
         let mask_bm = CreateBitmap(sz, sz, 1, 1, None);
         let ii = ICONINFO {
-            fIcon: BOOL(1), xHotspot: 0, yHotspot: 0,
-            hbmMask: mask_bm, hbmColor: color_bm,
+            fIcon: BOOL(1),
+            xHotspot: 0,
+            yHotspot: 0,
+            hbmMask: mask_bm,
+            hbmColor: color_bm,
         };
         let ic = CreateIconIndirect(&ii).unwrap_or(HICON(std::ptr::null_mut()));
         let _ = DeleteObject(HGDIOBJ(color_bm.0));
@@ -440,25 +539,25 @@ fn bgra_to_hicon(bgra: &[u8], sz: i32) -> HICON {
 //  ⏭  Next  : right-pointing triangle + right bar (3px)
 
 fn make_icon_prev() -> HICON {
-    let bar: &[(f32, f32)] = &[(3.,3.),(7.,3.),(7.,21.),(3.,21.)];
-    let tri: &[(f32, f32)] = &[(21.,3.),(8.,12.),(21.,21.)];
+    let bar: &[(f32, f32)] = &[(3., 3.), (7., 3.), (7., 21.), (3., 21.)];
+    let tri: &[(f32, f32)] = &[(21., 3.), (8., 12.), (21., 21.)];
     bgra_to_hicon(&rasterize(&[bar, tri], 24), 24)
 }
 
 fn make_icon_play() -> HICON {
-    let tri: &[(f32, f32)] = &[(5.,3.),(5.,21.),(20.,12.)];
+    let tri: &[(f32, f32)] = &[(5., 3.), (5., 21.), (20., 12.)];
     bgra_to_hicon(&rasterize(&[tri], 24), 24)
 }
 
 fn make_icon_pause() -> HICON {
-    let b1: &[(f32, f32)] = &[(5.,3.),(10.,3.),(10.,21.),(5.,21.)];
-    let b2: &[(f32, f32)] = &[(14.,3.),(19.,3.),(19.,21.),(14.,21.)];
+    let b1: &[(f32, f32)] = &[(5., 3.), (10., 3.), (10., 21.), (5., 21.)];
+    let b2: &[(f32, f32)] = &[(14., 3.), (19., 3.), (19., 21.), (14., 21.)];
     bgra_to_hicon(&rasterize(&[b1, b2], 24), 24)
 }
 
 fn make_icon_next() -> HICON {
-    let tri: &[(f32, f32)] = &[(5.,3.),(5.,21.),(16.,12.)];
-    let bar: &[(f32, f32)] = &[(17.,3.),(21.,3.),(21.,21.),(17.,21.)];
+    let tri: &[(f32, f32)] = &[(5., 3.), (5., 21.), (16., 12.)];
+    let bar: &[(f32, f32)] = &[(17., 3.), (21., 3.), (21., 21.), (17., 21.)];
     bgra_to_hicon(&rasterize(&[tri, bar], 24), 24)
 }
 
@@ -476,7 +575,10 @@ unsafe extern "system" fn subclass_proc(
     {
         let n = SUBCLASS_CALLS.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         if n < 8 {
-            dlog!("[taskbar] subclass_proc #{n} msg={msg:#06x} wparam={:#x}", wparam.0);
+            dlog!(
+                "[taskbar] subclass_proc #{n} msg={msg:#06x} wparam={:#x}",
+                wparam.0
+            );
         }
     }
 
@@ -487,7 +589,7 @@ unsafe extern "system" fn subclass_proc(
             BTN_PREV => Some("prev"),
             BTN_PLAY => Some("toggle-play"),
             BTN_NEXT => Some("next"),
-            _        => None,
+            _ => None,
         };
         if let Some(k) = key {
             dlog!("[taskbar] WM_COMMAND btn={btn_id:#x} → '{k}'");

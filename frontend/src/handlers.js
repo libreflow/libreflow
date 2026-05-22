@@ -437,7 +437,7 @@ const _ACTIONS = {
     const fakeEvent = { preventDefault: () => {}, stopPropagation: () => {}, clientX: r.right, clientY: r.bottom + 4 };
     showPlCtxMenu(fakeEvent, plId);
   },
-  'show-pl-qpop':          (btn, e) => showPlQuickPop(e, btn.dataset.trackId),
+  'show-pl-qpop':          (btn, e) => showPlQuickPop(e, btn.dataset.trackId, btn), // B16 : passer le bouton déclencheur
   'pqp-add':               btn  => pqpAdd(btn.dataset.plId),
   'pqp-new':               ()   => pqpNew(),
   'pqp-smart':             ()   => { closePlQuickPop(); openSmartPlaylistModal(getPqpTrackId()); },
@@ -460,6 +460,7 @@ function _handleClick(e) {
   const action = btn.dataset.action;
   const handler = _ACTIONS[action];
   if (handler) {
+    e._lfActionHandled = true; // B25 FIX : marqueur — empêche _handleBackdropClick de re-déclencher
     handler(btn, e);
   } else {
     console.warn('[handlers] Action inconnue :', action);
@@ -467,6 +468,10 @@ function _handleClick(e) {
 }
 
 function _handleBackdropClick(e) {
+  // B25 FIX : si _handleClick a déjà traité un data-action sur cet event, ne pas
+  // re-déclencher — un élément portant data-action ET data-backdrop-action
+  // exécuterait l'action deux fois.
+  if (e._lfActionHandled) return;
   const el = e.target.closest('[data-backdrop-action]');
   if (el && e.target === el) {
     const action = el.dataset.backdropAction;

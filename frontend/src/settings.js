@@ -230,18 +230,34 @@ export function closeSettings() {
   trigger?.setAttribute('aria-expanded', 'false');
 }
 
-document.addEventListener('keydown', e => {
-  if (e.code === 'Escape' && $id('settings-panel')?.classList.contains('on')) {
-    e.stopImmediatePropagation();
-    closeSettings();
-  }
-});
+// BUG-AUDIT HIGH : listeners document/window encapsulés dans initSettingsListeners()
+// avec AbortController (cf. pattern handlers.js registerHandlers). Évite le cumul lors
+// d'un HMR/test et permet le nettoyage. Appelé une seule fois au boot depuis main.js.
+let _settingsListenersInit = false; // garde anti-double-appel
 
-window.addEventListener('focus', () => syncMiniSettingsBtn());
-
-{
+/**
+ * Attache les listeners globaux du panneau settings :
+ *   - Escape sur document → ferme le panneau
+ *   - focus sur window    → resync du bouton mini-player
+ *   - change sur #dyn-color-chk → setDynColor()
+ * Idempotent — à appeler UNE SEULE FOIS au boot (main.js).
+ * @returns {Function} cleanup — retire les listeners (utile pour les tests)
+ */
+export function initSettingsListeners() {
+  if (_settingsListenersInit) { console.warn('[settings] initSettingsListeners() called more than once'); return () => {}; }
+  _settingsListenersInit = true;
+  const ac = new AbortController();
+  const { signal } = ac;
+  document.addEventListener('keydown', e => {
+    if (e.code === 'Escape' && $id('settings-panel')?.classList.contains('on')) {
+      e.stopImmediatePropagation();
+      closeSettings();
+    }
+  }, { signal });
+  window.addEventListener('focus', () => syncMiniSettingsBtn(), { signal });
   const chk = $id('dyn-color-chk');
-  if (chk) chk.addEventListener('change', e => setDynColor(e.target.checked));
+  if (chk) chk.addEventListener('change', e => setDynColor(e.target.checked), { signal });
+  return () => ac.abort();
 }
 
 // ══ THEMES ════════════════════════════════════════════════════════════════════

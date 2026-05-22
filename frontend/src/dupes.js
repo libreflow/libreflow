@@ -27,6 +27,9 @@ let _autoDupesTimer = null;
 function _computeDupeGroups() {
   const tracks = get('tracks');
   const map = new Map();
+  // AUDIT-2026-05-22 (L-06) : la cle de dedoublonnage ignore VOLONTAIREMENT
+  // l'extension — un meme titre en MP3 et en FLAC est traite comme un doublon,
+  // ce qui est le comportement attendu (l'utilisateur veut choisir un format).
   for (const t of tracks) {
     const key = normTag(t.name).toLowerCase().replace(/[^\w\s]/g,'').replace(/\s+/g,' ').trim()
               + '|' + (t.artist || '').toLowerCase().replace(/[^\w\s]/g,'').replace(/\s+/g,' ').trim();
