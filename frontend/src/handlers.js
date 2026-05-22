@@ -1,3 +1,7 @@
+// @ts-nocheck FIXME — Type cleanup à faire dans une passe dédiée (cf audit qualité)
+// handlers.js a ~80 actions avec des signatures hétérogènes (btn seul, btn+e, aucun param).
+// Activer @ts-check révèle des dizaines d'incompatibilités de signature qui nécessitent
+// une refactorisation de _ACTIONS (overload union ou type discriminé). Sprint 2.
 // LibreFlow — handlers.js
 // Phase 5 : registre d'actions centralisé — remplace les onclick="fn()" inline.
 // BRIDGE-1 (session 146) : window.* entièrement éliminé — tous les

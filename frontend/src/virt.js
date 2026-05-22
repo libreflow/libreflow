@@ -1,3 +1,6 @@
+// @ts-check
+/** @import { Track, VirtRow } from './types.js' */
+
 // P3 FIX : Intl.Collator caché pour les tris de groupes
 const _cmp = new Intl.Collator('fr', { sensitivity: 'base', ignorePunctuation: true }).compare;
 // LibreFlow — Virtual scroll engine
@@ -19,6 +22,7 @@ const _cmp = new Intl.Collator('fr', { sensitivity: 'base', ignorePunctuation: t
 
 import { CFG } from './cfg.js';
 
+/** @type {{ ROW_H: number, GRP_H: number, BUFFER: number, _fl: Track[], _rows: VirtRow[], _offsets: Int32Array|number[], _totalH: number, _startIdx: number, _endIdx: number, _raf: number|null, _lastSig: string, _lastListSig: string, _lastScrollTop: number|null, _lastWindowSig?: string, _fiToRowIdx?: Map<number,number>, scrollToIdx: (fi: number) => void }} */
 const VIRT = {
   ROW_H:      CFG.VIRT_ROW_H,
   GRP_H:      CFG.VIRT_GRP_H,
@@ -71,6 +75,12 @@ const VIRT = {
   },
 };
 
+/**
+ * Build row descriptors + prefix-sum for the virtual scroll engine.
+ * @param {Track[]} fl — filtered track list
+ * @param {{ sort?: string, query?: string, view?: string }} [opts]
+ * @returns {VirtRow[]}
+ */
 function virtBuildRows(fl, { sort = 'az', query = '', view = 'all' } = {}) {
   if (!fl || !fl.length) return [];
   const rows = [];
@@ -108,9 +118,17 @@ function virtBuildRows(fl, { sort = 'az', query = '', view = 'all' } = {}) {
 }
 
 // O(1) grâce au prefix-sum
+/** @param {VirtRow[]} rows @returns {number} */
 function virtTotalH(rows)         { return VIRT._totalH; }
+/** @param {VirtRow[]} rows @param {number} idx @returns {number} */
 function virtOffsetOf(rows, idx)  { return VIRT._offsets[idx] || 0; }
 
+/**
+ * Binary-search the index of the first row visible at the given scroll position.
+ * @param {VirtRow[]} rows
+ * @param {number} scrollTop
+ * @returns {number}
+ */
 function virtIdxAtScroll(rows, scrollTop) {
   if (!rows || !rows.length) return 0;
   scrollTop = Math.min(scrollTop, VIRT._totalH);

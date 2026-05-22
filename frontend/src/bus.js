@@ -1,3 +1,4 @@
+// @ts-check
 /**
  * bus.js — Typed EventBus (zero deps)
  *
@@ -8,9 +9,18 @@
  *   off(); // unsubscribe
  */
 
+/** @import { EventPayloadMap } from './types.js' */
+
+/** @type {Map<string, Set<Function>>} */
 const _listeners = new Map(); // event → Set<fn>
 
-/** Emit an event with an optional payload. */
+/**
+ * Emit an event with an optional payload.
+ * @template {keyof EventPayloadMap} K
+ * @param {K} event
+ * @param {EventPayloadMap[K]} payload
+ * @returns {void}
+ */
 export function emit(event, payload) {
   const set = _listeners.get(event);
   if (!set) return;
@@ -21,6 +31,9 @@ export function emit(event, payload) {
 
 /**
  * Subscribe to an event.
+ * @template {keyof EventPayloadMap} K
+ * @param {K} event
+ * @param {(payload: EventPayloadMap[K]) => void} fn
  * @returns {Function} off — call to unsubscribe
  */
 export function on(event, fn) {

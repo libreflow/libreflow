@@ -1,3 +1,5 @@
+// @ts-check
+/** @import { ZoomLevel } from './types.js' */
 // LibreFlow — tlistZoom.js
 // Zoom de la liste de pistes : Compact / Normal / Confortable.
 // Source de vérité unique : cfg.tlistZoom.
@@ -26,9 +28,9 @@ export const TLIST_ZOOM_ROW_H = {
 
 /**
  * Logique pure de cycling (sans effet de bord — testable unitairement).
- * @param {string} current  niveau actuel
- * @param {'in'|'out'} dir  direction
- * @returns {string} niveau résultant (identique si déjà à la limite)
+ * @param {ZoomLevel} current  niveau actuel
+ * @param {'in'|'out'} dir     direction
+ * @returns {ZoomLevel} niveau résultant (identique si déjà à la limite)
  */
 export function _nextZoomLevel(current, dir) {
   const idx = TLIST_ZOOM_LEVELS.indexOf(current);
@@ -41,7 +43,8 @@ export function _nextZoomLevel(current, dir) {
 /**
  * Applique un niveau de zoom à la liste de pistes.
  * Synchronise : attribut data-tlist-zoom → CSS, VIRT.ROW_H, store, cfg, re-render.
- * @param {string} level  'compact' | 'normal' | 'comfortable'
+ * @param {ZoomLevel} level  'compact' | 'normal' | 'comfortable'
+ * @returns {void}
  */
 export function setTlistZoom(level) {
   if (!TLIST_ZOOM_LEVELS.includes(level)) {
