@@ -17,6 +17,7 @@ import { toast } from './ui.js';
 import { setView } from './views.js';
 import { importPaths } from './watchfolder.js';
 import { savePlaylists, renderPlNav, setupPlNavDrop } from './playlists.js';
+import { isSafePath } from './utils.js';
 
 // ── Export M3U ───────────────────────────────────────────────
 // Exports publics :
@@ -159,11 +160,10 @@ export async function importM3U() {
 
       if (!entries.length) { toast(i18n('t_m3u_invalid'), 'warning'); return; }
 
-      // Rejeter les chemins contenant des traversals de répertoire (..)
-      const safeEntries = entries.filter(e => {
-        const segs = e.path.replace(/\\/g, '/').split('/');
-        return !segs.some(s => s === '..' || s === '.');
-      });
+      // SEC : valider chaque chemin via isSafePath (rejette `..`, `.`, octets null,
+      // caractères de contrôle, chemins > 4096). Défense en profondeur côté JS —
+      // Rust reste la garde finale, mais on filtre avant l'IPC.
+      const safeEntries = entries.filter(e => isSafePath(e.path));
       if (!safeEntries.length) { toast(i18n('t_m3u_invalid'), 'warning'); return; }
 
       const tracks       = get('tracks'); // Phase 4

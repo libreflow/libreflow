@@ -25,7 +25,7 @@ import { initDevices }                                 from './devices.js';
 import { cleanupCdCache }                              from './cdaudio.js';
 import { initViz, startViz, stopViz, updateVizColor, setVizMode, getVizMode, setVizEnabled, getVizEnabled } from './viz.js';
 import { sleepFading, setSleepFading, sleepEndOfTrack, toggleSleepMenu, setSleepTimer, setSleepEndOfTrack, setSleepCustom, cancelSleepTimer } from './sleep.js';
-import { esc, fmt, fmtd, extEmoji, normTag, mainArtist } from './utils.js';
+import { esc, fmt, fmtd, extEmoji, normTag, mainArtist, validYear } from './utils.js';
 import { radioActive, startRadio, stopRadio, resetRadio, radioRefillQueue, toggleRadio, ctxStartRadio, radioRegenerateFromCurrent, radioSaveAsPlaylist, getRadioQueue, renderRadioView, openRadioView, syncRadioLibBar, getRadioSeedId, initRadioSeedId } from './radio.js';
 import { initWatchPath, getWatchPath, stopWatchFolder, updateWatchUI, importPaths, startWatchNative } from './watchfolder.js'; // Bug #7 fix : startWatchNative ajouté
 import { renderStats, getHeatPeriod, initHeatPeriod } from './stats.js';
@@ -107,13 +107,6 @@ export { saveCfg, saveCfgNow }; // re-exports pour cinema.js, ctxmenu.js, player
 import { setCurIdx, setTracks, setLiked, setCtxTrackId } from './state.js';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
-
-/** Retourne l'année si elle est plausible (1900–2100), null sinon.
- *  Note : les faux-1970 (TDRC="1970-01-01T00:00:00") sont filtrés en amont dans tags.js. */
-function validYear(y) {
-  const n = Number(y);
-  return (Number.isInteger(n) && n >= 1900 && n <= 2100) ? n : null;
-}
 
 // ── JSDoc type definitions ────────────────────────────────────────────────────
 

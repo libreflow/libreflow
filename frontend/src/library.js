@@ -20,13 +20,11 @@ import { i18n }                                       from './i18n.js';
 import { extractColor, guessGenre }                   from './tags.js';
 import { rgEnabled }                                  from './replaygain.js';
 import { CFG }                                        from './cfg.js';
-import { normTag, mainArtist, fmtd }                  from './utils.js';
+import { normTag, mainArtist, fmtd, validYear }       from './utils.js';
 
-// ── Security ──────────────────────────────────────────────────────────────────
-const ART_MIME_ALLOWLIST = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/bmp', 'image/tiff'];
 import { adjustShuffleQAfterDelete }                  from './player.js';
 import { VIRT }                                       from './virt.js';
-import { cacheArt }                                   from './artLoader.js';
+import { cacheArt, ART_MIME_ALLOWLIST }               from './artLoader.js';
 import { get, set }                                   from './store.js'; // Phase 4
 import { toast, toastWithAction }                                        from './ui.js';
 import { setCurIdx, removeTrackAt } from './state.js';
@@ -35,11 +33,6 @@ import { updateStats, scheduleStatsUpdate, patchTrackEl } from './renderer.js';
 import { setReplayGain } from './replaygain.js';
 
 // ── Helpers locaux ────────────────────────────────────────────────────────────
-/** Valide une année entre 1900 et 2100. */
-function _validYear(y) {
-  const n = Number(y);
-  return (Number.isInteger(n) && n >= 1900 && n <= 2100) ? n : null;
-}
 
 /**
  * SEC-5 : Valide et tronque un champ tag textuel provenant d'un fichier externe.
@@ -219,7 +212,7 @@ export async function loadTagsBg(t, rustTags = null) {
     if (ngenre && ngenre !== t.genre) { t.genre = ngenre; changed = true; delete t._nlc; delete t._glc; delete t._genreParts; }
     if (!t.genre) { const guessed = guessGenre(t); if (guessed) { t.genre = guessed; changed = true; } }
     // Mettre à jour l'année — y compris la vider si le tag est absent/epoch (nettoyage des 1970 parasites)
-    { const ny = _validYear(rustTags.year); if (ny !== (t.year ?? null)) { t.year = ny; changed = true; } }
+    { const ny = validYear(rustTags.year); if (ny !== (t.year ?? null)) { t.year = ny; changed = true; } }
     if (rustTags.track && rustTags.track !== t.track) { t.track = rustTags.track; changed = true; }
     // Cover : décodage base64 → ArrayBuffer → blob URL géré par artLoader LRU.
     // Évite les blob URLs hors-cache qui s'accumulent en RAM (50-60 MB en batch).

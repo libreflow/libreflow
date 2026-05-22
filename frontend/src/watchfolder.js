@@ -28,6 +28,7 @@ import { setView, showView }              from './views.js';
 import { loadTagsBg, loadTagsAndDurations } from './library.js';
 import { updateStats }                    from './renderer.js';
 import { pushTracks }                     from './state.js';
+import { isSafePath }                     from './utils.js';
 import { logImport }                                   from './imports.js';
 
 // SEC-9 : Extensions audio autorisées — synchronisé avec la liste de app.js/_onDrop
@@ -352,6 +353,14 @@ export function updateWatchUI() {
  *  Déduplique via watchSnapshot. Retourne le nombre de titres ajoutés.
  *  RACE-2 FIX : si un import est en cours, paths mis en queue → zéro corruption de tracks[]. */
 export async function importPaths(paths) {
+  // SEC : filtre défensif côté JS — Rust reste la garde finale, mais on rejette
+  // les chemins évidemment dangereux (.. / null bytes / contrôle) avant l'IPC.
+  const before = paths.length;
+  paths = paths.filter(isSafePath);
+  if (paths.length !== before) {
+    console.warn('[watchfolder] importPaths: ' + (before - paths.length) + ' chemin(s) rejeté(s) par isSafePath');
+  }
+  if (!paths.length) return 0;
   if (_importing) {
     // Accumuler — watchSnapshot déduplique dans _doImportPaths, pas de double-ajout
     _pendingPaths.push(...paths);
