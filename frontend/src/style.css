@@ -1877,7 +1877,7 @@ button { cursor: pointer; }
 }
 
 .tr {
-  display: grid; grid-template-columns: var(--art-list) 1fr minmax(0, 12em) auto;
+  display: grid; grid-template-columns: var(--art-list) minmax(0,1fr) minmax(0,12em) auto;
   align-items: center; gap: var(--sp-3);
   padding: var(--sp-1h) var(--sp-2h) var(--sp-1h) var(--sp-2);
   min-height: 48px; /* doit correspondre à VIRT_ROW_H dans cfg.js */
@@ -2051,14 +2051,17 @@ html[data-mode="light"] mark.srch-hl { background: rgba(var(--g-rgb), .22); }
   letter-spacing: var(--ls-slight);
 }
 
-/* R-H7 : la colonne album cède AVANT le titre. Étape intermédiaire à 899px
-   (album réduit à 8em), puis masquage complet à 760px. */
-@media (max-width: 899px) {
-  .tr { grid-template-columns: var(--art-list) 1fr minmax(0, 8em) auto; }
+/* R-C3 : container query — la liste réagit à la largeur RÉELLE de #main,
+   pas au viewport. Ainsi, quand un panneau latéral (Queue/EQ) est ouvert,
+   le titre garde la priorité sur l'album. */
+/* Conteneur moyen : l'album rétrécit AVANT le titre */
+@container main (max-width: 820px) {
+  .tr { grid-template-columns: var(--art-list) minmax(0,1fr) minmax(0,7em) auto; }
 }
-@media (max-width: 760px) {
+/* Conteneur étroit : l'album disparaît, le titre reste */
+@container main (max-width: 680px) {
+  .tr { grid-template-columns: var(--art-list) minmax(0,1fr) auto; }
   .ta { display: none; }
-  .tr { grid-template-columns: var(--art-list) 1fr auto; }
 }
 
 .tdur {
