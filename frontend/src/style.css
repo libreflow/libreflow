@@ -257,6 +257,12 @@
   --sp-12: var(--space-7);    /* 48 */
   --sp-15: var(--space-7);    /* 60 → 48 */
 
+  /* Échelle de breakpoints canonique — 3 seuils intentionnels (voir le plan). */
+  --bp-compact: 720px;
+  --bp-wide:    1100px;
+  /* Padding de zone fluide — remplace les paddings en % et px fixes. */
+  --pad-zone:   clamp(var(--sp-3), 2.5cqi, var(--sp-8));
+
   /* Icônes — sous-échelle SVG resserrée (harmonisation, audit §2.7 / FND-09).
      Ancres icône : xs 12 / xl 16 / 3xl 20 / 4xl 24 / 32. Les tokens servant de
      dimension de conteneur (dot, 22/26/28/30/36/40/44, icon-4) restent littéraux. */
