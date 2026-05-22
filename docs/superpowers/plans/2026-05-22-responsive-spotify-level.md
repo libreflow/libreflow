@@ -207,7 +207,7 @@ Expected: `0`
 - [ ] **Step 3: Régression visuelle (doit être INCHANGÉE — on a seulement ajouté des tokens inutilisés)**
 
 Run: `npm run test:visual`
-Expected: 28/28 PASS (aucun token n'est encore consommé → zéro diff).
+Expected: 22/22 PASS (aucun token n'est encore consommé → zéro diff).
 
 - [ ] **Step 4: Commit**
 
@@ -298,7 +298,7 @@ Expected: build OK.
 - [ ] **Step 3: Régression visuelle — INCHANGÉE**
 
 Run: `npm run test:visual`
-Expected: 28/28 PASS (`container-type` seul ne modifie pas le rendu).
+Expected: 22/22 PASS (`container-type` seul ne modifie pas le rendu).
 
 - [ ] **Step 4: Commit**
 
@@ -514,7 +514,7 @@ Expected: liste des `@media` largeur restants.
 - [ ] **Step 4: Accolades + build + régression visuelle COMPLÈTE**
 
 Run: `npm run test:visual`
-Expected: 28/28 PASS contre la baseline mise à jour au fil des tasks. Tout diff inattendu = régression à corriger.
+Expected: 22/22 PASS contre la baseline mise à jour au fil des tasks. Tout diff inattendu = régression à corriger.
 
 - [ ] **Step 5: Commit**
 
@@ -527,7 +527,7 @@ git commit -m "refactor(css): retrait des @media redondants post-migration conta
 
 - [ ] **Step 1:** `npm run vite:build` → OK.
 - [ ] **Step 2:** `npm test` → `Total : 266 OK: 266 KO: 0`.
-- [ ] **Step 3:** `npm run test:visual` → 28/28 PASS.
+- [ ] **Step 3:** `npm run test:visual` → 22/22 PASS.
 - [ ] **Step 4: Smoke manuel** — `npm run dev`, redimensionner la fenêtre de 600×400 à plein écran *en continu* : l'adaptation doit être fluide (pas de saut), ouvrir Queue/EQ/Now Playing/modal Smart Playlist à 600×400 → rien de coupé ni d'inatteignable.
 - [ ] **Step 5: Commit final**
 

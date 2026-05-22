@@ -260,8 +260,7 @@
   /* Échelle de breakpoints canonique — 3 seuils intentionnels (voir le plan). */
   --bp-compact: 720px;
   --bp-wide:    1100px;
-  /* Padding de zone fluide — remplace les paddings en % et px fixes. */
-  --pad-zone:   clamp(var(--sp-3), 2.5cqi, var(--sp-8));
+  --bp-short:   560px;  /* seuil vertical (height) — déclaré ici pour cohérence, @media ne peut pas lire les vars CSS */
 
   /* Icônes — sous-échelle SVG resserrée (harmonisation, audit §2.7 / FND-09).
      Ancres icône : xs 12 / xl 16 / 3xl 20 / 4xl 24 / 32. Les tokens servant de
@@ -501,7 +500,8 @@
   /* ── Échelle typographique fluide (responsive niveau Spotify) ──────────
      clamp(min, préférence-fluide, max). L'unité cqi = 1% de la largeur du
      conteneur de query le plus proche → le texte respire avec son panneau,
-     pas avec la fenêtre. Adoptée progressivement, remplace les --fs-* fixes. */
+     pas avec la fenêtre. Adoptée progressivement, remplace les --fs-* fixes.
+     ATTENTION : cqi résout à 0 si l'élément n'est pas enfant d'un named container — toujours consommer dans un container context. */
   --fs-f-caption: clamp(0.69rem, 0.66rem + 0.15cqi, 0.78rem);
   --fs-f-body:    clamp(0.81rem, 0.77rem + 0.25cqi, 0.94rem);
   --fs-f-subhead: clamp(0.94rem, 0.88rem + 0.4cqi,  1.13rem);
@@ -724,12 +724,6 @@
   --artist-month-col-min: 90px; /* min colonne nom artiste (stats month) */
   --heatmap-cell-min:     10px; /* min cellule heatmap (grid auto-fill) */
 
-  /* Grilles responsive player bar (breakpoints < 900px / < 720px) */
-  --pl-shelf-900-l-min: 160px;  /* shelf gauche < 900px — min */
-  --pl-shelf-900-l-max: 240px;  /* shelf gauche < 900px — max */
-  --pl-shelf-900-r-min: 120px;  /* shelf droite < 900px (= shelf gauche < 720px) — min */
-  --pl-shelf-900-r-max: 200px;  /* shelf droite < 900px (= shelf gauche < 720px) — max */
-  --pl-shelf-720-r-max: 140px;  /* shelf droite < 720px — max (min = --art-hero-sm) */
 
   /* Ombres composées — sel-bar ring */
   --shadow-sep-ring:    0 0 0 1px var(--sep);  /* ring séparateur fin autour d'éléments flottants */
@@ -2139,7 +2133,7 @@ html[data-mode="light"] mark.srch-hl { background: rgba(var(--g-rgb), .22); }
 }
 
 /* ── Densité container — panneau ouvert ou fenêtre étroite ── */
-@container content (max-width: 480px) {
+@container content (max-width: 480px) { /* couvre album-grid, artist-grid ET genre-grid (tous enfants de #content-area container:content) */
   .card-sub  { display: none; }
   .card-info { padding: var(--sp-1h) var(--sp-2); }
 }
@@ -2614,7 +2608,7 @@ html[data-mode="light"] .empty-cta {
 }
 /* R-H8 : sous 700px les deux colonnes de cartes features sont à l'étroit —
    repli sur une seule colonne. */
-@media (max-width: 700px) {
+@media (max-width: 700px) { /* modale waveform — grille features repliée en colonne, non-containerisable (modale hors flux principal) */
   .wfeats { grid-template-columns: 1fr; }
 }
 
@@ -4407,7 +4401,7 @@ html[data-mode="light"] .pl-folder-h:hover .pl-folder-count { background: var(--
 /* R-M4 : sous ~680px la barre latérale Settings (200px fixe) mange trop de
    largeur — elle passe en barre horizontale scrollable au-dessus du contenu,
    indicateur actif déplacé du bord gauche au bord bas. */
-@media (max-width: 680px) {
+@media (max-width: 680px) { /* = --bp-compact — barre tabs Settings passe en horizontal, non-containerisable (panneau positionné fixe) */
   .set-body { flex-direction: column; }
   .set-tabs {
     flex-direction: row; width: 100%; flex-shrink: 0;
@@ -4560,7 +4554,7 @@ html[data-mode="light"] .pl-folder-h:hover .pl-folder-count { background: var(--
 /* R-C3 : sous 720px, Queue/EQ passent en overlay flottant — plus de push sur
    #main (sinon la bibliothèque tombe à ~146px à 600px de large). z-index relevé
    au niveau dropdown et ombre portée forte pour décoller du contenu. */
-@media (max-width: 720px) {
+@media (max-width: 720px) { /* = --bp-compact — panneaux Queue/EQ passent en overlay flottant, non-containerisable (panels positionnés fixed/absolute hors conteneur) */
   #queue-panel, #eq-panel { z-index: var(--z-dropdown); }
   #queue-panel.open, #eq-panel.open { box-shadow: var(--shadow-xl); }
   #app.panel-queue-open #main,
@@ -5818,11 +5812,11 @@ kbd              { display: inline-flex; align-items: center; justify-content: c
 .stats-row-2 { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-3h); }
 /* Genre seul (pas de top titres encore) → s'étend sur toute la largeur */
 .stats-row-2 > :only-child { grid-column: 1 / -1; }
-@media (max-width: 880px) { .stats-row-2 { grid-template-columns: 1fr; } }
-@media (max-width: 700px) { .stats-cards  { grid-template-columns: 1fr 1fr; } }
+@media (max-width: 880px) { .stats-row-2 { grid-template-columns: 1fr; } } /* stats — deux colonnes de cartes trop étroites < 880px, non-containerisable (vue plein écran sans conteneur nommé) */
+@media (max-width: 700px) { .stats-cards  { grid-template-columns: 1fr 1fr; } } /* stats — grille cartes repasse à 2 col < 700px, non-containerisable (idem) */
 /* R-M12 : sous 560px les cartes stats passent en colonne unique (étaient
    bloquées à 2 colonnes, trop serrées à 600px). */
-@media (max-width: 560px) { .stats-cards  { grid-template-columns: 1fr; } }
+@media (max-width: 560px) { .stats-cards  { grid-template-columns: 1fr; } } /* = --bp-short — cartes stats en colonne unique < 560px, non-containerisable (idem) */
 
 /* ═══ MULTI-SÉLECTION ════════════════════════════════════════ */
 .tr.selected    { background: rgba(var(--g-rgb), .1) !important; }
@@ -5857,7 +5851,7 @@ kbd              { display: inline-flex; align-items: center; justify-content: c
 }
 /* R-M1 : sous ~700px la barre de sélection compacte ses actions —
    libellés texte masqués (icône seule) + retour à la ligne autorisé. */
-@media (max-width: 700px) {
+@media (max-width: 700px) { /* sel-bar — positionnée fixed hors flux, non-containerisable ; compacte sous ~700px */
   #sel-bar { flex-wrap: wrap; justify-content: center; white-space: normal; }
   .sel-action { font-size: 0; gap: 0; padding: var(--sp-1p) var(--sp-2h); }
   .sel-action svg { width: var(--icon-md); height: var(--icon-md); }
@@ -6829,7 +6823,7 @@ html[data-mode="light"] .rv-start-btn  { background: var(--g); }
 /* T8 : les règles player bar (#pl grid, .pl-art, .vol, #btn-speed,
    #sleep-indicator, .pl-n, .pl-a) migrées vers @container playerbar
    ci-dessus. Seules les règles sidebar + sort-btn restent ici. */
-@media (max-width: 719px) {
+@media (max-width: 719px) { /* = --bp-compact — sidebar passe en icon-only + overflow visible pour tooltips, non-containerisable (règle :root + sidebar positionnée fixed) */
   :root { --sb: var(--sb-sm); }
 
   /* Sidebar : permettre aux tooltips de déborder + stacking au-dessus de #main */
@@ -7408,12 +7402,11 @@ html[data-mode="light"] .rv-start-btn  { background: var(--g); }
    Grilles d'album/artiste/genre réduites pour 2 colonnes serrées.
    ═══════════════════════════════════════════════════════════════════ */
 /* R-M3 : px sur la grille recâblés sur tokens exacts (--sp-3 = 12px). */
-@media (max-width: 640px) {
+@media (max-width: 640px) { /* = ~--bp-compact — grilles album/artiste/genre réduites en compact, non-containerisable (grids enfants directs de #content-area) */
   #album-grid,
   #artist-grid {
     padding: var(--sp-3);
     gap: var(--sp-3);
-    --card-min-w: 150px;
   }
   #genre-grid {
     padding: var(--sp-3);
@@ -7428,6 +7421,8 @@ html[data-mode="light"] .rv-start-btn  { background: var(--g); }
    largeur du conteneur, pas à celle du viewport.
    ═══════════════════════════════════════════════════════════════════ */
 @container drill (max-width: 560px) {
-  .dh-art  { width: clamp(56px, 18cqi, 96px); height: clamp(56px, 18cqi, 96px); }
-  .dh-name { font-size: var(--fs-f-subhead); }
+  .dh-art     { width: clamp(56px, 18cqi, 96px); height: clamp(56px, 18cqi, 96px); }
+  .dh-name    { font-size: var(--fs-f-subhead); }
+  .dh-btn     { padding: var(--sp-1h) var(--sp-3); font-size: var(--fs-caption); }
+  .dh-actions { margin-top: var(--sp-1h); }
 }
