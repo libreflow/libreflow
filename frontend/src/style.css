@@ -1739,6 +1739,7 @@ button { cursor: pointer; }
 
 /* ═══ MAIN ═══════════════════════════════════════════════════ */
 #main {
+  container: main / inline-size;
   grid-area: main; display: flex; flex-direction: column; overflow: hidden;
   min-width: 0; /* R-M5 : défense en profondeur — un descendant nowrap large ne gonfle pas la piste grid */
   background:
@@ -2278,6 +2279,7 @@ html[data-mode="light"] mark.srch-hl { background: rgba(var(--g-rgb), .22); }
 
 /* ═══ CONTENT AREA + VUE GENRES ═════════════════════════════ */
 #content-area {
+  container: content / inline-size;
   flex: 1; min-height: 0;
   display: flex; flex-direction: column;
   overflow: hidden;
@@ -2687,6 +2689,7 @@ html[data-mode="light"] .empty-cta {
 
 /* ═══ PLAYER BAR ═════════════════════════════════════════════ */
 #pl {
+  container: playerbar / inline-size;
   grid-area: pl; height: var(--pb);
   position: relative; /* ancre le canvas absolu du visualiseur */
   overflow: hidden;
@@ -4496,8 +4499,8 @@ html[data-mode="light"] .pl-folder-h:hover .pl-folder-count { background: var(--
   box-shadow: none;
   will-change: transform;
 }
-#queue-panel          { width: min(var(--panel-queue-w), calc(100vw - var(--sb) - var(--sp-10))); }
-#eq-panel             { width: min(var(--panel-eq-w),        calc(100vw - var(--sb) - var(--sp-10))); }
+#queue-panel          { container: panel-queue / inline-size; width: min(var(--panel-queue-w), calc(100vw - var(--sb) - var(--sp-10))); }
+#eq-panel             { container: panel-eq / inline-size;   width: min(var(--panel-eq-w),        calc(100vw - var(--sb) - var(--sp-10))); }
 #eq-panel.eq-expert   { width: min(var(--panel-eq-expert-w), calc(100vw - var(--sb) - var(--sp-10))); }
 #queue-panel.open, #eq-panel.open {
   transform: translateX(0);
@@ -7229,6 +7232,7 @@ html[data-mode="light"] .rv-start-btn  { background: var(--g); }
    --sp-5 vaut 24px et changerait le rendu), les tailles de police et
    l'artwork restent littérales — recabler décalerait le rendu. */
 #drill-header {
+  container: drill / inline-size;
   display: flex;
   align-items: flex-start;
   gap: 20px;
