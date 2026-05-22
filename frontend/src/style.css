@@ -2131,9 +2131,16 @@ html[data-mode="light"] mark.srch-hl { background: rgba(var(--g-rgb), .22); }
 /* ═══ GRILLES Albums / Artistes ══════════════════════════════ */
 .grid-view {
   flex: 1; overflow-y: auto; padding: var(--sp-5) var(--sp-6) var(--sp-6);
-  display: grid; grid-template-columns: repeat(auto-fill, minmax(var(--card-min-w), 1fr)); gap: var(--sp-4);
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, clamp(140px, 22cqi, 200px)), 1fr)); gap: clamp(var(--sp-2), 2cqi, var(--sp-4));
   min-height: 0; align-content: start;
 }
+
+/* ── Densité container — panneau ouvert ou fenêtre étroite ── */
+@container content (max-width: 480px) {
+  .card-sub  { display: none; }
+  .card-info { padding: var(--sp-1h) var(--sp-2); }
+}
+
 .card {
   background: var(--bg2); border: var(--border-w-sm) solid var(--bg4); border-radius: var(--r-card);
   padding: var(--sp-3); cursor: pointer;
@@ -2197,13 +2204,13 @@ html[data-mode="light"] mark.srch-hl { background: rgba(var(--g-rgb), .22); }
 .card:hover .card-play-btn svg { transform: none; }
 .card-play-btn:hover { background: rgba(0,0,0,0.75) !important; }
 .card-name {
-  font-size: var(--fs-md); font-weight: 700;
+  font-size: var(--fs-f-body); font-weight: 700;
   font-family: var(--font-display);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   line-height: var(--lh-comfort); margin-bottom: var(--sp-1); color: var(--t);
   letter-spacing: var(--ls-display);
 }
-.card-sub { font-size: var(--fs-sm); color: var(--t2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: var(--lh-comfort); }
+.card-sub { font-size: var(--fs-f-caption); color: var(--t2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: var(--lh-comfort); }
 .card-ct  { font-size: var(--fs-xs); color: var(--t3); margin-top: var(--sp-nano); }
 .card-year { font-size: var(--fs-xs); color: var(--t3); margin-left: var(--sp-1); }
 
