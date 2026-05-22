@@ -817,7 +817,9 @@ pub fn win_close(app: AppHandle) -> Result<(), String> {
 #[tauri::command]
 pub async fn win_minimize(app: AppHandle) -> Result<(), String> {
     // Ouvrir le mini-player (guard interne : idempotent si déjà ouvert)
-    let _ = crate::mini::open_mini(&app).await;
+    if let Err(e) = crate::mini::open_mini(&app).await {
+        eprintln!("[win_minimize] open_mini failed: {e}");
+    }
     // Réduire la fenêtre principale
     app.get_webview_window("main")
         .ok_or_else(|| "Fenêtre main introuvable".to_string())?
@@ -1022,7 +1024,9 @@ pub async fn organize_files(
                                 error: Some(format!("Création dossier échouée : {e}")),
                             });
                             for (done_to, done_from) in completed.iter().rev() {
-                                let _ = fs::rename(done_to, done_from);
+                                if let Err(e) = fs::rename(done_to, done_from) {
+                                    eprintln!("[organize] rollback rename failed: {} -> {}: {e}", done_to, done_from);
+                                }
                             }
                             break 'outer;
                         }
@@ -1047,7 +1051,9 @@ pub async fn organize_files(
                             )),
                         });
                         for (done_to, done_from) in completed.iter().rev() {
-                            let _ = fs::rename(done_to, done_from);
+                            if let Err(e) = fs::rename(done_to, done_from) {
+                                eprintln!("[organize] rollback rename failed: {} -> {}: {e}", done_to, done_from);
+                            }
                         }
                         break 'outer;
                     }
@@ -1066,7 +1072,9 @@ pub async fn organize_files(
                                 )),
                             });
                             for (done_to, done_from) in completed.iter().rev() {
-                                let _ = fs::rename(done_to, done_from);
+                                if let Err(e) = fs::rename(done_to, done_from) {
+                                    eprintln!("[organize] rollback rename failed: {} -> {}: {e}", done_to, done_from);
+                                }
                             }
                             break 'outer;
                         }
@@ -1087,7 +1095,9 @@ pub async fn organize_files(
                             )
                         })?;
                         if let Err(e2) = fs::remove_file(&m.from) {
-                            let _ = fs::remove_file(&m.to);
+                            if let Err(e3) = fs::remove_file(&m.to) {
+                                eprintln!("[organize] cross-device cleanup failed for {}: {e3}", m.to);
+                            }
                             return Err(std::io::Error::new(
                                 e2.kind(),
                                 format!("rename cross-volume fallback: {e2}"),

@@ -236,7 +236,7 @@ export function initEQ() {
 /** Relance l'AudioContext si suspendu ou interrompu (autoplay policy, OS interrupt). */
 export function ensureEQResumed() {
   if (eqCtx && (eqCtx.state === 'suspended' || eqCtx.state === 'interrupted')) {
-    eqCtx.resume().catch(() => {});
+    eqCtx.resume().catch(e => console.warn('[eq:resume]', e));
   }
 }
 

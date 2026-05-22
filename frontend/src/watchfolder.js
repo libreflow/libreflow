@@ -190,7 +190,7 @@ export async function toggleWatchFolder() {
   // Si un dossier était déjà surveillé, full stop silencieux avant de remplacer
   if (watchPath) stopWatchFolder(true, false);
   watchPath = result.folder;
-  invoke('allow_asset_dir', { path: watchPath }).catch(() => {});
+  invoke('allow_asset_dir', { path: watchPath }).catch(e => console.warn('[watchfolder:allow_asset_dir]', watchPath, e));
   watchSnapshot = new Set(get('tracks').map(t => t.path).filter(Boolean));
   const newFiles = (result.files ?? []).filter(p => _isAudioPath(p) && !watchSnapshot.has(p));
   if (newFiles.length) {
@@ -295,7 +295,7 @@ export function stopWatchFolder(silent = false, keepPath = false) {
   if (_modUnlisten) { _modUnlisten(); _modUnlisten = null; }
   if (_modDebTimer) { clearTimeout(_modDebTimer); _modDebTimer = null; }
   _modRawPaths = [];
-  invoke('watch_folder_stop').catch(() => {});
+  invoke('watch_folder_stop').catch(e => console.warn('[watchfolder:watch_folder_stop]', e));
   _watchActive = false;
   _starting    = false;
   if (!keepPath) {

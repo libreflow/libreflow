@@ -1347,7 +1347,7 @@ export async function deletePlaylist(e, plId) {
     let undone = false;
     const UNDO_MS = 5000;
     const saveTimer = setTimeout(() => {
-      if (!undone) savePlaylists().catch(() => {});
+      if (!undone) savePlaylists().catch(e => console.warn('[playlists:savePlaylists delete]', e));
     }, UNDO_MS);
 
     toastWithAction(i18n('t_pl_deleted'), 'success', i18n('t_undo') || 'Annuler', () => {
@@ -1355,7 +1355,7 @@ export async function deletePlaylist(e, plId) {
       clearTimeout(saveTimer);
       get('playlists').push(plSnapshot);
       notify('playlists'); // BUG-M4 FIX : push() in-place → notify() (set() ignore same-ref)
-      savePlaylists().catch(() => {});
+      savePlaylists().catch(e => console.warn('[playlists:savePlaylists undo-delete]', e));
       renderPlNav();
       toast(i18n('t_undo_done') || 'Annulé', 'info');
     }, UNDO_MS);
@@ -1402,7 +1402,7 @@ export function removeTrackFromPlaylist(trackId, plId) {
   const UNDO_MS = 5000;
   let undone = false;
   const saveTimer = setTimeout(() => {
-    if (!undone) savePlaylists().catch(() => {});
+    if (!undone) savePlaylists().catch(e => console.warn('[playlists:savePlaylists remove-track]', e));
   }, UNDO_MS);
 
   toastWithAction(i18n('t_removed'), 'success', i18n('t_undo') || 'Annuler', () => {
@@ -1421,7 +1421,7 @@ export function removeTrackFromPlaylist(trackId, plId) {
       }
       pl.trackIds.splice(_insertAt, 0, trackId);
     }
-    savePlaylists().catch(() => {});
+    savePlaylists().catch(e => console.warn('[playlists:savePlaylists undo-remove-track]', e));
     renderPlNav();
     if (get('view') === 'playlist' && get('curPlId') === plId) emit(EVENTS.RENDER_LIB, {});
     toast(i18n('t_undo_done') || 'Annulé', 'info');

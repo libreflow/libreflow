@@ -379,7 +379,7 @@ async function boot() {
         'warning'
       );
     }
-  }).catch(() => {});
+  }).catch(e => console.warn('[app:storageEstimate]', e));
 
   // Load config
   const cfg = await dget('cfg','state').catch(()=>null);
@@ -449,7 +449,7 @@ async function boot() {
     // La surveillance était inactive jusqu'au prochain clic sur le bouton.
     if (cfg.watchPath) {
       initWatchPath(cfg.watchPath);
-      startWatchNative().catch(() => {}); // fire-and-forget — timeout géré dans startWatchNative
+      startWatchNative().catch(e => console.warn('[app:startWatchNative]', e)); // fire-and-forget — timeout géré dans startWatchNative
     }
     // Position mini-player
     setMiniPos(cfg.miniPos ?? null);
@@ -552,7 +552,7 @@ async function boot() {
     const _assetDirs = [...new Set(
       tracks.map(t => t.path ? t.path.replace(/[/\\][^/\\]+$/, '') : null).filter(Boolean)
     )];
-    _assetDirs.forEach(dir => invoke('allow_asset_dir', { path: dir }).catch(() => {}));
+    _assetDirs.forEach(dir => invoke('allow_asset_dir', { path: dir }).catch(e => console.warn('[app:allow_asset_dir]', dir, e)));
     // Reconstruire liked par IDs si disponible (robuste aux réordres)
     updateStats();
     renderLib();
@@ -649,10 +649,10 @@ async function boot() {
     // UX-3 : masquer le spinner de boot même si la bibliothèque est vide
     document.getElementById('boot-spinner')?.remove();
   }
-  initAppVersion().catch(() => {});
+  initAppVersion().catch(e => console.warn('[app:initAppVersion]', e));
   // Vérifier les mises à jour 10s après le boot (non bloquant, silencieux si pas configuré)
   if (_autoUpdate) {
-    setTimeout(() => checkForUpdate().catch(() => {}), 10_000);
+    setTimeout(() => checkForUpdate().catch(e => console.warn('[app:checkForUpdate]', e)), 10_000);
   }
 
   listen('win-state', (e) => { const s = e.payload;
@@ -664,7 +664,7 @@ async function boot() {
     else if (cmd === 'prev')        prev();
     else if (cmd === 'stop')        { audio.pause(); audio.currentTime = 0; setIcon(false); patchPlayState(false); }
   }).then(u => _unlisteners.push(u));
-  window.addEventListener('pagehide', () => { _unlisteners.forEach(u => { try { u(); } catch {} }); });
+  window.addEventListener('pagehide', () => { _unlisteners.forEach(u => { try { u(); } catch(e) { console.warn('[app:unlisten]', e); } }); });
 
   // ── Sauvegarde complète avant fermeture ──────────────────────────────────
   // beforeunload seul ne suffit pas sous Tauri : les promises async ne sont pas attendues.
@@ -919,7 +919,7 @@ export async function clearAppCache() {
   cancelTrackBatch();
   cancelPlayLogFlush();
   // 2. Fermer la connexion IDB.
-  if (DB) { try { DB.close(); } catch(e) {} }
+  if (DB) { try { DB.close(); } catch(e) { console.warn('[app:DB.close]', e); } }
   // 3. Supprimer la base. On track `deleted` séparément :
   //    onblocked = resolve était un bug silencieux — la DB n'était pas supprimée
   //    mais l'app rechargait quand même, laissant les données intactes.
@@ -955,8 +955,8 @@ export async function clearLibrary() {
   setPlayLog([]);
   // Révoquer tous les blob URLs pour libérer la mémoire (B4 FIX : guard blob: — data: URIs ne doivent pas être révoquées)
   for (const t of tracks) {
-    if (t.url && t.url.startsWith('blob:'))  try { URL.revokeObjectURL(t.url);  } catch {}
-    if (t.art && t.art.startsWith('blob:'))  try { URL.revokeObjectURL(t.art);  } catch {}
+    if (t.url && t.url.startsWith('blob:'))  try { URL.revokeObjectURL(t.url);  } catch(e) { console.warn('[app:revokeObjectURL url]', e); }
+    if (t.art && t.art.startsWith('blob:'))  try { URL.revokeObjectURL(t.art);  } catch(e) { console.warn('[app:revokeObjectURL art]', e); }
   }
   tracks  = []; set('tracks', tracks); rebuildTrackIdxMap(); notify('tracks'); invalidateFilter(); // INVARIANT : map must stay in sync; store gets same ref as local var so openFolder mutations stay visible to updateBar()
   liked   = new Set(); set('liked', liked);

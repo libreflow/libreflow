@@ -544,7 +544,7 @@ mod windows_impl {
 
             if self.last_emit.elapsed() >= std::time::Duration::from_millis(500) {
                 let percent = ((self.lba_cursor as f64 / self.sectors_total as f64) * 100.0) as u32;
-                let _ = self.app.emit(
+                if let Err(e) = self.app.emit(
                     "cd-rip-progress",
                     serde_json::json!({
                         "rip_id":         self.rip_id,
@@ -552,7 +552,9 @@ mod windows_impl {
                         "sector_current": self.lba_cursor,
                         "sector_total":   self.sectors_total,
                     }),
-                );
+                ) {
+                    eprintln!("[cdaudio] emit cd-rip-progress failed: {e}");
+                }
                 self.last_emit = std::time::Instant::now();
             }
             true
@@ -716,7 +718,7 @@ mod windows_impl {
             return Err("cancelled".to_string());
         }
 
-        let _ = app.emit(
+        if let Err(e) = app.emit(
             "cd-rip-progress",
             serde_json::json!({
                 "rip_id": rip_id,
@@ -724,7 +726,9 @@ mod windows_impl {
                 "sector_current": total_sectors,
                 "sector_total": total_sectors,
             }),
-        );
+        ) {
+            eprintln!("[cdaudio] emit cd-rip-progress 100% failed: {e}");
+        }
 
         Ok(())
     }

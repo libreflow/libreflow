@@ -90,10 +90,14 @@ pub fn watch_folder_start(app: AppHandle, path: String) -> Result<(), String> {
 
             if let Some(win) = app_clone.get_webview_window("main") {
                 if is_create {
-                    let _ = win.emit("watch-new-files", &audio_paths);
+                    if let Err(e) = win.emit("watch-new-files", &audio_paths) {
+                        eprintln!("[watch] emit watch-new-files failed: {e}");
+                    }
                 }
                 if is_modify {
-                    let _ = win.emit("watch-modified-files", &audio_paths);
+                    if let Err(e) = win.emit("watch-modified-files", &audio_paths) {
+                        eprintln!("[watch] emit watch-modified-files failed: {e}");
+                    }
                 }
             }
         },

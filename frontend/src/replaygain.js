@@ -52,7 +52,7 @@ export function initRG() {
     rgGainNode = eqCtx.createGain();
     rgGainNode.gain.value = 1.0;
     // Recâbler : déconnecter eqSource → audioOutGain, puis eqSource → rgGainNode → audioOutGain
-    try { eqSource.disconnect(audioOutGain ?? eqNodes[0]); } catch(e) {}
+    try { eqSource.disconnect(audioOutGain ?? eqNodes[0]); } catch(e) { console.warn('[replaygain:disconnect]', e); }
     eqSource.connect(rgGainNode);
     rgGainNode.connect(audioOutGain ?? eqNodes[0]);
   } catch(e) { console.warn('[RG init]', e); }
@@ -115,7 +115,7 @@ export async function analyzeAndApplyRG() {
     // BUG-M2 FIX : en production, asset:// nécessite que le scope soit accordé avant fetch()
     if (t.path) {
       const _dir = t.path.replace(/[/\\][^/\\]+$/, '');
-      invoke('allow_asset_dir', { path: _dir }).catch(() => {});
+      invoke('allow_asset_dir', { path: _dir }).catch(e => console.warn('[replaygain:allow_asset_dir]', _dir, e));
     }
     const resp = await fetch(t.url);
     if (_rgAnalysisId !== myId) return; // piste changée pendant le download
@@ -123,7 +123,7 @@ export async function analyzeAndApplyRG() {
     // (qui peuvent atteindre 5-10 Mo/min). Ce second test utilise la taille réelle du fichier.
     const contentLen = parseInt(resp.headers.get('content-length') || '0', 10);
     if (contentLen > 0 && contentLen > RG_MAX_BYTES) {
-      resp.body?.cancel().catch(() => {}); // ne pas charger un FLAC de 200 Mo
+      resp.body?.cancel().catch(e => console.warn('[replaygain:body.cancel]', e)); // ne pas charger un FLAC de 200 Mo
       t.rgGain = 1.0; applyRGGain(1.0);  // gain neutre — mieux que rien
       return;
     }

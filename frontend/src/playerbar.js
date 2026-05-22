@@ -160,7 +160,7 @@ export function updateBar() {
   // Phase 2 : opérations lourdes — différées après le premier paint
   requestAnimationFrame(() => setTimeout(() => {
     if (t.artColor) applyArtColor(t.artColor);
-    else if (t.art) extractColor(t.art).then(c => { if (c) { t.artColor = c; applyArtColor(c); } }).catch(() => {});
+    else if (t.art) extractColor(t.art).then(c => { if (c) { t.artColor = c; applyArtColor(c); } }).catch(e => console.warn('[playerbar:extractColor]', e));
     else clearArtColor();
     _updateArtBlur(t.art || null);
     if (cinemaOpen) updateCinema();
@@ -180,7 +180,7 @@ export function updateBar() {
           });
           t._b64 = artUrl; // cache pour le prochain changement de piste
         }
-        invoke('notify_track', { data: { title: t.name, artist: t.artistFull || t.artist || '', art: artUrl } }).catch(() => {});
+        invoke('notify_track', { data: { title: t.name, artist: t.artistFull || t.artist || '', art: artUrl } }).catch(e => console.warn('[playerbar:notify_track]', e));
       })();
       updateMediaSession(t);
     }

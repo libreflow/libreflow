@@ -233,7 +233,7 @@ export async function loadTagsBg(t, rustTags = null) {
         if (!_trackIdxMap.has(t.id)) return;
         t.artColor = color;
         saveTracks(t);
-      }).catch(() => {});
+      }).catch(e => console.warn('[library:extractColor]', t.id, e));
     } else {
       t.noArt   = true;
       t._hasArt = false; // ARCH-2 : aucune artwork → désactiver le chargement paresseux

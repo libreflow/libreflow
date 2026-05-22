@@ -187,7 +187,7 @@ export async function loadArt(t) {
 export function prefetchArts(trackList) {
   for (const t of trackList) {
     if (t._hasArt && !t.art && !t.noArt) {
-      loadArt(t).catch(() => {});
+      loadArt(t).catch(e => console.warn('[artLoader:prefetchArts]', t.id, e));
     }
   }
 }
