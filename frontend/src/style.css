@@ -792,9 +792,9 @@
 [data-theme="cyan"]   { --g:#06b6d4; --g-rgb:6,182,212;   --gd:rgba(6,182,212,.14);   --gg:rgba(6,182,212,.28); }
 
 /* ── Zoom liste de pistes ────────────────────────────────── */
-:root[data-tlist-zoom="compact"]     { --tr-h: 36px; --art-list: 28px; }
-:root[data-tlist-zoom="normal"]      { --tr-h: 48px; --art-list: 36px; }
-:root[data-tlist-zoom="comfortable"] { --tr-h: 60px; --art-list: 44px; }
+:root[data-tlist-zoom="compact"]     { --tr-h: 36px; --art-list: 42px; }
+:root[data-tlist-zoom="normal"]      { --tr-h: 48px; --art-list: 56px; }  /* Normal = pré-feature (intouché) */
+:root[data-tlist-zoom="comfortable"] { --tr-h: 60px; --art-list: 70px; }
 
 /* ── EQ par appareil ──────────────────────────────────────────────────────── */
 .eq-device-profiles-list {
