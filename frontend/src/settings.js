@@ -17,6 +17,7 @@ import { updateVizColor, getVizMode, getVizEnabled }     from './viz.js';
 import { saveCfg }       from './cfgsave.js';
 import { _allPlayerUI } from './allplayerui.js';
 import { $id, $input, $select } from './dom.js';
+import { setTlistZoom }         from './tlistZoom.js';
 
 // ── État local ────────────────────────────────────────────────────────────────
 let _theme          = 'blue';
@@ -182,6 +183,8 @@ export function openSettings() {
   switchSetTab(_VALID_TABS.includes(_lastTab) ? _lastTab : 'appearance');
   $id('lang-fr')?.classList.toggle('on', getLang() === 'fr');
   $id('lang-en')?.classList.toggle('on', getLang() === 'en');
+  // Sync zoom radios
+  _syncTlistZoomRadios();
   // Sync dynColor checkbox
   _syncDynColorChk();
   syncCinemaBgSettings();
@@ -257,6 +260,12 @@ export function initSettingsListeners() {
   window.addEventListener('focus', () => syncMiniSettingsBtn(), { signal });
   const chk = $id('dyn-color-chk');
   if (chk) chk.addEventListener('change', e => setDynColor(e.target.checked), { signal });
+  // Zoom liste de pistes
+  document.querySelectorAll('input[name="tlist-zoom"]').forEach(r => {
+    r.addEventListener('change', e => {
+      if (e.target.checked) setTlistZoom(e.target.value);
+    }, { signal });
+  });
   return () => ac.abort();
 }
 
@@ -291,6 +300,13 @@ export function setTheme(t) {
   });
   _allPlayerUI();
   saveCfg();
+}
+
+function _syncTlistZoomRadios() {
+  const cur = get('tlistZoom') || 'normal';
+  document.querySelectorAll('input[name="tlist-zoom"]').forEach(r => {
+    r.checked = r.value === cur;
+  });
 }
 
 function _syncDynColorChk() {

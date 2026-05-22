@@ -299,6 +299,7 @@
   --art-cover:    100px;   /* cover placeholder modal */
   --art-hero:     148px;   /* hero cover — taille pleine */
   --art-list:      56px;   /* colonne artwork dans rangée track (grid) */
+  --tr-h:          48px;   /* hauteur d'une ligne piste — pilotée par data-tlist-zoom */
 
   /* Éléments structurels — tracks & sliders */
   --track-h-xs: 2px;   /* indicateurs fins, tab active line */
@@ -789,6 +790,11 @@
 [data-theme="orange"] { --g:#f97316; --g-rgb:249,115,22;  --gd:rgba(249,115,22,.14);  --gg:rgba(249,115,22,.28); }
 [data-theme="pink"]   { --g:#ec4899; --g-rgb:236,72,153;  --gd:rgba(236,72,153,.14);  --gg:rgba(236,72,153,.28); }
 [data-theme="cyan"]   { --g:#06b6d4; --g-rgb:6,182,212;   --gd:rgba(6,182,212,.14);   --gg:rgba(6,182,212,.28); }
+
+/* ── Zoom liste de pistes ────────────────────────────────── */
+:root[data-tlist-zoom="compact"]     { --tr-h: 36px; --art-list: 28px; }
+:root[data-tlist-zoom="normal"]      { --tr-h: 48px; --art-list: 36px; }
+:root[data-tlist-zoom="comfortable"] { --tr-h: 60px; --art-list: 44px; }
 
 /* ── EQ par appareil ──────────────────────────────────────────────────────── */
 .eq-device-profiles-list {
@@ -1874,7 +1880,8 @@ button { cursor: pointer; }
   display: grid; grid-template-columns: var(--art-list) minmax(0,1fr) minmax(0,12em) auto;
   align-items: center; gap: var(--sp-3);
   padding: var(--sp-1h) var(--sp-2h) var(--sp-1h) var(--sp-2);
-  min-height: 48px; /* doit correspondre à VIRT_ROW_H dans cfg.js */
+  height: var(--tr-h); /* piloté par data-tlist-zoom → tlistZoom.js */
+  min-height: 36px; /* plancher compact — ne jamais descendre en dessous */
   border-radius: var(--r);
   transition: background var(--dur-fast) ease, transform var(--dur-interact) var(--spring-soft);
   cursor: pointer;
@@ -4457,6 +4464,21 @@ html[data-mode="light"] .pl-folder-h:hover .pl-folder-count { background: var(--
 .lang-btn     { padding: var(--sp-1p) var(--sp-3h); border-radius: var(--r); border: none; font-size: var(--fs-caption); font-weight: 600; color: var(--t3); background: transparent; transition: background var(--ease), color var(--ease); }
 .lang-btn.on  { background: var(--g); color: var(--text-on-accent); }
 .lang-btn:not(.on):hover { background: var(--border-2); color: var(--t2); }
+
+/* ── Zoom liste de pistes — radio group ─────────────────── */
+.tlist-zoom-radios { display: flex; background: var(--bg4); border-radius: var(--r); padding: var(--sp-1q); gap: var(--sp-micro); }
+.tlist-zoom-radio  { display: flex; }
+.tlist-zoom-radio input[type="radio"] { display: none; }
+.tlist-zoom-radio span {
+  padding: var(--sp-1p) var(--sp-3h);
+  border-radius: var(--r);
+  font-size: var(--fs-caption); font-weight: 600;
+  color: var(--t3); background: transparent;
+  cursor: pointer;
+  transition: background var(--ease), color var(--ease);
+}
+.tlist-zoom-radio input[type="radio"]:checked + span { background: var(--g); color: var(--text-on-accent); }
+.tlist-zoom-radio input[type="radio"]:not(:checked) + span:hover { background: var(--border-2); color: var(--t2); }
 
 .theme-swatches   { display: flex; gap: var(--sp-2); flex-wrap: wrap; }
 .theme-swatch     { width: var(--icon-28); height: var(--icon-28); border-radius: 50%; border: var(--border-w-lg) solid transparent; transition: transform var(--ease), border-color var(--ease), outline-color var(--ease); flex-shrink: 0; padding: 0; cursor: pointer; }

@@ -100,6 +100,7 @@ async function _doSaveCfg() {
     const formatFilter  = get('formatFilter') || '';
     const cdCopyrightAck = get('cdCopyrightAck') === true; // CONFORMITÉ-CD
     const lastSettingsTab = get('lastSettingsTab') || 'appearance'; // UX-Ergo : mémoire onglet
+    const tlistZoom      = get('tlistZoom') || 'normal';            // zoom liste pistes
 
     const likedIds    = liked instanceof Set ? [...liked] : [];
     const curTrackId  = curIdx >= 0 && tracks[curIdx] ? tracks[curIdx].id : null;
@@ -149,6 +150,7 @@ async function _doSaveCfg() {
       formatFilter,
       cdCopyrightAck,
       lastSettingsTab,
+      tlistZoom,
     }, 'state');
   } catch (e) {
     if (isQuotaError(e)) {

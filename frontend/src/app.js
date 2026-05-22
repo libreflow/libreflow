@@ -95,6 +95,7 @@ import { showCtxMenu, closeCtxMenu, ctxToggleLike, ctxDeleteTrack, ctxEditTags, 
 import { initDrop } from './dropin.js';
 import { initKeyNav } from './keynav.js';
 import { initShortcuts } from './shortcuts.js';
+import { setTlistZoom } from './tlistZoom.js';
 import { confirmClear, closeModal } from './modal.js';
 export { confirmClear, closeModal }; // re-export pour handlers.js
 import { updateBar, updateVolSlider, setupMarquee, reflowMarquee } from './playerbar.js';
@@ -480,6 +481,8 @@ async function boot() {
       }
     }
   }
+  // Zoom liste de pistes — appliquer AVANT le premier rendu (tlistZoom.js)
+  setTlistZoom((cfg && cfg.tlistZoom) || 'normal');
   // PERF : charger playlists, playlog et tracks EN PARALLÈLE (était séquentiel → 3× plus lent)
   // Les trois stores sont indépendants — aucun n'a besoin que l'autre soit chargé en premier.
   // Afficher le skeleton adapté à la vue sauvegardée (albums/artistes/genres/liste)

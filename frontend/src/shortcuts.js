@@ -54,6 +54,7 @@ import { showView }                                    from './views.js';
 import { invalidateFilterCache }                       from './search.js';
 import { invalidateGenreGridSig }                      from './genres.js';
 import { SPEEDS }                                      from './cfg.js';
+import { tlistZoomIn, tlistZoomOut, tlistZoomReset }  from './tlistZoom.js';
 
 /**
  * Attache le listener global `keydown` de l'application.
@@ -79,6 +80,22 @@ export function initShortcuts({ updateVolSlider, closeModal, cycleSpeed }) {
       e.preventDefault();
       toggleSettings();
       return;
+    }
+
+    // Zoom liste de pistes — Ctrl+= / Ctrl++ / Ctrl+- / Ctrl+_ / Ctrl+0
+    // Guard : ignorer si le focus est dans un champ de saisie
+    if (e.ctrlKey && !e.altKey) {
+      const _inField = ['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target.tagName)
+        || e.target.isContentEditable;
+      if ((e.key === '=' || e.key === '+') && !_inField) {
+        e.preventDefault(); tlistZoomIn(); return;
+      }
+      if ((e.key === '-' || e.key === '_') && !_inField) {
+        e.preventDefault(); tlistZoomOut(); return;
+      }
+      if (e.key === '0' && !_inField) {
+        e.preventDefault(); tlistZoomReset(); return;
+      }
     }
 
     if (['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target.tagName)) return;

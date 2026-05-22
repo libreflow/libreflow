@@ -318,6 +318,11 @@ export const LANGS = {
     set_theme_section:    'Thème de couleur',
     set_rg_section:       'Normalisation du volume',
     set_crossfade_section:'Fondu enchaîné',
+    // Settings — zoom liste de pistes
+    tlist_zoom_label:       'Densité de la liste',
+    tlist_zoom_compact:     'Compact',
+    tlist_zoom_normal:      'Normal',
+    tlist_zoom_comfortable: 'Confortable',
     set_mini_section:     'Mini-player',
     // Settings — visualiseur
     set_viz_section:      'Visualiseur',
@@ -957,6 +962,11 @@ export const LANGS = {
     set_theme_section:    'Color theme',
     set_rg_section:       'Volume normalization',
     set_crossfade_section:'Crossfade',
+    // Settings — track list zoom
+    tlist_zoom_label:       'List density',
+    tlist_zoom_compact:     'Compact',
+    tlist_zoom_normal:      'Normal',
+    tlist_zoom_comfortable: 'Comfortable',
     set_mini_section:     'Mini-player',
     // Settings — visualizer
     set_viz_section:      'Visualizer',
