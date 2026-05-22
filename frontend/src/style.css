@@ -4513,9 +4513,20 @@ html[data-mode="light"] .pl-folder-h:hover .pl-folder-count { background: var(--
   box-shadow: none;
   will-change: transform;
 }
-#queue-panel          { container: panel-queue / inline-size; width: min(var(--panel-queue-w), calc(100vw - var(--sb) - var(--sp-10))); }
-#eq-panel             { container: panel-eq / inline-size;   width: min(var(--panel-eq-w),        calc(100vw - var(--sb) - var(--sp-10))); }
-#eq-panel.eq-expert   { width: min(var(--panel-eq-expert-w), calc(100vw - var(--sb) - var(--sp-10))); }
+/* T9 : largeur fluide — clamp entre 260px et le token fixe, plafonnée pour
+   garantir ≥320px de contenu dans #main. Les panels sont position:fixed (hors
+   du flux et hors du container #main) → vw est l'unité correcte (pas cqw/cqi). */
+#queue-panel {
+  container: panel-queue / inline-size;
+  width: clamp(260px, var(--panel-queue-w), calc(100vw - var(--sb) - 320px));
+}
+#eq-panel {
+  container: panel-eq / inline-size;
+  width: clamp(260px, var(--panel-eq-w), calc(100vw - var(--sb) - 320px));
+}
+#eq-panel.eq-expert {
+  width: clamp(260px, var(--panel-eq-expert-w), calc(100vw - var(--sb) - 320px));
+}
 #queue-panel.open, #eq-panel.open {
   transform: translateX(0);
   box-shadow: var(--shadow-queue);
@@ -4534,10 +4545,17 @@ html[data-mode="light"] .pl-folder-h:hover .pl-folder-count { background: var(--
 #eq-panel.open::before {
   opacity: 1;
 }
-/* Sidebar push : #main recule pour laisser place au panel */
-#app.panel-queue-open #main                   { padding-right: min(var(--panel-queue-w),        calc(100vw - var(--sb) - var(--sp-10))); }
-#app.panel-eq-open    #main                   { padding-right: min(var(--panel-eq-w),         calc(100vw - var(--sb) - var(--sp-10))); }
-#app.panel-eq-open.eq-expert-mode #main       { padding-right: min(var(--panel-eq-expert-w),  calc(100vw - var(--sb) - var(--sp-10))); }
+/* Sidebar push : padding-right = largeur réelle du panel, plafonné pour que
+   #main garde toujours ≥320px de contenu (plancher de contenu T9). */
+#app.panel-queue-open #main {
+  padding-right: clamp(260px, var(--panel-queue-w), calc(100vw - var(--sb) - 320px));
+}
+#app.panel-eq-open #main {
+  padding-right: clamp(260px, var(--panel-eq-w), calc(100vw - var(--sb) - 320px));
+}
+#app.panel-eq-open.eq-expert-mode #main {
+  padding-right: clamp(260px, var(--panel-eq-expert-w), calc(100vw - var(--sb) - 320px));
+}
 
 /* R-C3 : sous 720px, Queue/EQ passent en overlay flottant — plus de push sur
    #main (sinon la bibliothèque tombe à ~146px à 600px de large). z-index relevé
