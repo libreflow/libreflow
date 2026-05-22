@@ -89,6 +89,22 @@ export function setupMarquee(container, text) {
   _mqRafMap.set(container, rafId);
 }
 
+/**
+ * R-L9 : ré-évalue le marquee titre/artiste de la barre now-playing.
+ * Le débordement n'est mesuré qu'une fois dans `setupMarquee` ; élargir la
+ * fenêtre laisse un titre court continuer à défiler (ou l'inverse). Appelé par
+ * le listener `resize` centralisé d'app.js.
+ */
+export function reflowMarquee() {
+  const curIdx = get('curIdx');
+  if (curIdx < 0) return;
+  const tracks = get('tracks');
+  const t = tracks?.[curIdx];
+  if (!t) return;
+  setupMarquee(document.getElementById('pl-n'), t.name);
+  setupMarquee(document.getElementById('pl-a'), t.artistFull || t.artist || i18n('unknown_artist'));
+}
+
 // ── Now-playing bar update ────────────────────────────────────────────────────
 // Tracking de la dernière notification envoyée (évite les doublons).
 let _lastNotifTrackId = null;

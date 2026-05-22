@@ -34,7 +34,7 @@ import { detectDupes, removeDupeTrack, deleteAllDupes, closeDupes } from './dupe
 import { checkOrphans } from './orphans.js';
 import { selection, selectionMode, clearSelection, toggleTrackSelection, selAddToPlaylist, selAddBatch, selToggleLike, selRemove, selBatchTagEdit, closeBatchTagModal, confirmBatchTagEdit } from './selection.js';
 import { toggleMiniPlayer, updateMiniPlayer, updateMiniProgress, resetMiniProgressThrottle, setMiniPos, getMiniPos } from './miniplayer.js';
-import { toggleMiniOverlay, syncMiniOverlay, updateMiniOverlayProgress, initMiniOverlayDrag } from './minioverlay.js';
+import { toggleMiniOverlay, syncMiniOverlay, updateMiniOverlayProgress, initMiniOverlayDrag, reclampMiniOverlay } from './minioverlay.js';
 import { rgEnabled, rgTargetLUFS, initRgState, initRG, setReplayGain, setRGTarget, analyzeAndApplyRG, applyRGGain, cancelRgAnalysis } from './replaygain.js';
 import { openTagEditor, saveTagEdit, cancelTagEdit } from './tagedit.js';
 import { toast, toastWithAction, confirmAction, resolveConfirm, initRipple } from './ui.js';
@@ -65,7 +65,7 @@ import {
 } from './playlists.js';
 export { playPlaylistFrom, playPlaylistDirect, shufflePlaylist }; // re-export (handlers.js backward compat)
 
-import { toggleNowPlaying, closeNowPlaying, updateNowPlaying, initNpBg } from './nowplaying.js';
+import { toggleNowPlaying, closeNowPlaying, updateNowPlaying, initNpBg, onResizeNowPlaying } from './nowplaying.js';
 import {
   initSettingsVars, getTheme, getDynColor, getDisplayMode, isShortcutsOpen,
   switchSetTab, openSettings, closeSettings,
@@ -97,7 +97,7 @@ import { initKeyNav } from './keynav.js';
 import { initShortcuts } from './shortcuts.js';
 import { confirmClear, closeModal } from './modal.js';
 export { confirmClear, closeModal }; // re-export pour handlers.js
-import { updateBar, updateVolSlider, setupMarquee } from './playerbar.js';
+import { updateBar, updateVolSlider, setupMarquee, reflowMarquee } from './playerbar.js';
 export { updateBar, updateVolSlider }; // re-exports pour library.js, selection.js, tagedit.js, handlers.js
 // ── cfgsave.js (ARCH-1) ──────────────────────────────────────────────────────
 import { saveCfg, saveCfgNow } from './cfgsave.js';
@@ -806,6 +806,24 @@ window.addEventListener('unhandledrejection', (e) => {
   console.error('[LibreFlow] Unhandled rejection:', reason);
   const msg = reason?.message || String(reason) || 'Erreur asynchrone';
   toast(`Erreur asynchrone : ${msg}`, 'error');
+});
+
+// ── Listener `resize` global centralisé (audit responsive 2026-05-22) ─────────
+// Un seul listener debouncé dispatche vers les sous-systèmes ouverts. Le virtual
+// scroll garde son propre ResizeObserver sur #tlist (renderer.js, plus précis).
+// Modèle : le handler resize de cinema.js. Debounce 180ms, aucune allocation
+// dans une boucle rAF.
+//   - R-H4 : Now Playing — redimensionne le canvas plein écran #vnp-canvas.
+//   - R-M6 : mini-overlay — re-clampe left/top aux bornes du viewport.
+//   - R-L9 : barre now-playing — ré-évalue le marquee titre/artiste.
+let _globalResizeTimer = null;
+window.addEventListener('resize', () => {
+  clearTimeout(_globalResizeTimer);
+  _globalResizeTimer = setTimeout(() => {
+    onResizeNowPlaying();  // R-H4 — no-op si Now Playing fermé
+    reclampMiniOverlay();  // R-M6 — no-op si mini-overlay fermé
+    reflowMarquee();       // R-L9 — no-op si aucune piste courante
+  }, 180);
 });
 
 waitForTauri(() => {

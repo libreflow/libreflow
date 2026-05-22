@@ -228,6 +228,7 @@ export function initEQ() {
 
   renderEQBands();
   _drawEQCurve();
+  _attachEqCurveResizeObserver(); // R-M7 : redessine la courbe au resize du wrap
   _syncEQUI();
 }
 
@@ -592,6 +593,29 @@ function _updateCurveHeight() {
     ? eqNodes.some(n => Math.abs(n.gain.value) > 0.05)
     : false;
   panel.classList.toggle('eq-curve-active', active);
+}
+
+// ── _attachEqCurveResizeObserver — R-M7 ──────────────────────────────────────
+/**
+ * Observe #eq-curve-wrap : redessine la courbe quand le wrap change de taille
+ * (resize fenêtre, passage Simple/Expert, panneau qui se réajuste).
+ * Sans ça, le canvas garde le fallback hardcodé 260×116 jusqu'au prochain
+ * événement EQ. Callback debouncé via rAF — aucune allocation dans la boucle.
+ */
+let _eqResizeObserver = null;
+function _attachEqCurveResizeObserver() {
+  if (_eqResizeObserver || typeof ResizeObserver === 'undefined') return;
+  const wrap = document.getElementById('eq-curve-wrap');
+  if (!wrap) return;
+  let _eqRoRaf = null;
+  _eqResizeObserver = new ResizeObserver(() => {
+    if (_eqRoRaf) cancelAnimationFrame(_eqRoRaf);
+    _eqRoRaf = requestAnimationFrame(() => {
+      _eqRoRaf = null;
+      _drawEQCurve();
+    });
+  });
+  _eqResizeObserver.observe(wrap);
 }
 
 // ── _drawEQCurve ──────────────────────────────────────────────────────────────

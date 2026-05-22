@@ -277,6 +277,17 @@ export function toggleNowPlaying() {
   if (nowPlayingOpen) closeNowPlaying(); else openNowPlaying();
 }
 
+/**
+ * R-H4 : appelé par le listener `resize` centralisé d'app.js.
+ * Le canvas plein écran `#vnp-canvas` n'est dimensionné que dans `_applyNpBg()`
+ * (jamais sur resize) — sans ce ré-appel, agrandir la fenêtre avec Now Playing
+ * ouvert laisse le fond animé étiré/flou. No-op si la vue est fermée.
+ */
+export function onResizeNowPlaying() {
+  if (!nowPlayingOpen) return;
+  _applyNpBg();
+}
+
 export function updateNowPlaying(track) {
   if (!nowPlayingOpen || !track) return;
   _renderNowPlaying(track, _techInfoCache.get(track.path) ?? null);

@@ -40,6 +40,9 @@ import { getImports }                                        from './imports.js'
 let _statsTimer   = null;    // debounce updateStats
 let _plHero       = null;    // référence au #pl-hero courant (FIX-B1)
 let _activeRowEl  = null;    // I-1: cache du dernier élément .tr.act
+// R-H9 : true tant que #tlist affiche des lignes squelette — le ResizeObserver
+// de virtAttachScroll recalcule alors le nombre de lignes au lieu de re-rendre la liste.
+let _skeletonActive = false;
 const ART_COLOR_RE = /^rgb\(\s*\d{1,3}\s*,\s*\d{1,3}\s*,\s*\d{1,3}\s*\)$/;
 
 // C-1: caches memoïsés pour _getAlbumMap / _getArtistMap
@@ -235,6 +238,9 @@ export function virtRenderWindow(fl) {
   const listEl = document.getElementById('tlist');
   if (!listEl || !fl) return;
 
+  // R-H9 : un rendu réel de la liste sort de l'état skeleton.
+  _skeletonActive = false;
+
   const sort  = get('sort')  || 'az';
   const query = get('query') || '';
   const view  = get('view')  || 'all';
@@ -374,6 +380,31 @@ export function virtAttachScroll(listEl) {
   listEl.removeEventListener('scroll', listEl._virtScrollHandler);
   listEl._virtScrollHandler = onScroll;
   listEl.addEventListener('scroll', onScroll, { passive: true });
+
+  // R-C4 / R-H9 / R-H10 : recalculer la fenêtre virtuelle quand la hauteur de
+  // #tlist change (resize de la fenêtre, ouverture/fermeture d'un panneau…).
+  // Sans ça, agrandir la fenêtre laisse une bande blanche en bas de la liste
+  // jusqu'au prochain scroll (viole CLAUDE.md §10).
+  // Callback debouncé via rAF — aucune allocation dans la boucle rAF.
+  if (typeof ResizeObserver !== 'undefined') {
+    // Détacher l'ancien observer avant réattache (cf. handler de scroll).
+    if (listEl._virtResizeObserver) listEl._virtResizeObserver.disconnect();
+    let _roRaf = null;
+    const ro = new ResizeObserver(() => {
+      if (_roRaf) cancelAnimationFrame(_roRaf);
+      _roRaf = requestAnimationFrame(() => {
+        _roRaf = null;
+        // R-H9 : tant que la liste est en état skeleton, recalculer le nombre
+        // de lignes squelette plutôt que de rendre la fenêtre virtuelle.
+        if (_skeletonActive) { _showSkeletonRows(); return; }
+        // Forcer un re-rendu même à signature de fenêtre identique.
+        VIRT._lastWindowSig = '';
+        virtRenderWindow(getFiltered());
+      });
+    });
+    ro.observe(listEl);
+    listEl._virtResizeObserver = ro;
+  }
 }
 
 // ── Private album / artist helpers ───────────────────────────────────────────
@@ -646,6 +677,9 @@ export function renderLib() {
 export function _showSkeletonRows(savedView) {
   const listEl = document.getElementById('tlist');
   if (!listEl) return;
+  // R-H9 : marquer l'état skeleton — le ResizeObserver de virtAttachScroll
+  // recalcule le nombre de lignes tant que ce flag est actif.
+  _skeletonActive = true;
   const count = Math.max(8, Math.ceil((listEl.clientHeight || window.innerHeight) / CFG.VIRT_ROW_H));
   let html = '';
   for (let i = 0; i < count; i++) {
