@@ -7387,32 +7387,11 @@ html[data-mode="light"] .rv-start-btn  { background: var(--g); }
 .tr--album-detail .ti      { flex: 1; min-width: 0; } /* compense le manque de 1fr (grid → flex) */
 
 /* ══ RESPONSIVE — Compact layout pour narrower windows (≤ 640px) ════
-   Drill header artwork réduit (120→80px), font-size ajusté (22→17px).
+   Drill header migré vers @container drill (voir ci-dessous).
    Grilles d'album/artiste/genre réduites pour 2 colonnes serrées.
    ═══════════════════════════════════════════════════════════════════ */
-/* R-M3 : px sur la grille recâblés sur tokens exacts (--sp-3 = 12px).
-   14px / 17px / 80px / 6px sans token exact — laissés littéraux (recabler
-   décalerait le rendu compact volontaire). */
+/* R-M3 : px sur la grille recâblés sur tokens exacts (--sp-3 = 12px). */
 @media (max-width: 640px) {
-  #drill-header {
-    gap: var(--sp-3);
-    padding: 14px 14px var(--sp-3);
-  }
-  .dh-art {
-    width: 80px;
-    height: 80px;
-  }
-  .dh-name {
-    font-size: 17px;
-  }
-  .dh-btn {
-    padding: 6px 14px;
-    font-size: var(--fs-caption);
-  }
-  .dh-actions {
-    margin-top: 6px;
-  }
-
   #album-grid,
   #artist-grid {
     padding: var(--sp-3);
@@ -7423,4 +7402,15 @@ html[data-mode="light"] .rv-start-btn  { background: var(--g); }
     padding: var(--sp-3);
     gap: var(--sp-3);
   }
+}
+
+/* ══ CONTAINER QUERY — Drill header (Task 7) ═════════════════════════
+   #drill-header déclare container: drill / inline-size (Task 4).
+   Remplace les anciennes règles @media (max-width: 640px) ciblant
+   #drill-header / .dh-* — la mise en page réagit désormais à la
+   largeur du conteneur, pas à celle du viewport.
+   ═══════════════════════════════════════════════════════════════════ */
+@container drill (max-width: 560px) {
+  .dh-art  { width: clamp(56px, 18cqi, 96px); height: clamp(56px, 18cqi, 96px); }
+  .dh-name { font-size: var(--fs-f-subhead); }
 }
