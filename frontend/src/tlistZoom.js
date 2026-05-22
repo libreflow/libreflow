@@ -83,3 +83,30 @@ export function tlistZoomOut() {
 export function tlistZoomReset() {
   setTlistZoom('normal');
 }
+
+// ── Ctrl + Molette ──────────────────────────────────────────────────────────
+// Throttle pour ne déclencher qu'un seul cran de zoom par « geste molette »
+// (les trackpads/molettes envoient de nombreux événements en rafale).
+const _WHEEL_THROTTLE_MS = 150;
+let   _wheelLastAt       = 0;
+
+/**
+ * Câble le zoom via Ctrl/Cmd + molette sur le conteneur de la liste de pistes.
+ * À appeler une seule fois au boot (idempotent : ne ré-attache pas si déjà fait).
+ */
+export function initTlistZoomWheel() {
+  const tlist = document.getElementById('tlist');
+  if (!tlist) { console.warn('[tlistZoom] #tlist introuvable — wheel zoom non câblé'); return; }
+  if (tlist._tlistZoomWheelBound) return;     // idempotence
+  tlist._tlistZoomWheelBound = true;
+
+  tlist.addEventListener('wheel', (e) => {
+    if (!(e.ctrlKey || e.metaKey)) return;    // requiert Ctrl (ou Cmd sur macOS)
+    e.preventDefault();                       // bloque le zoom navigateur
+    const now = Date.now();
+    if (now - _wheelLastAt < _WHEEL_THROTTLE_MS) return;
+    _wheelLastAt = now;
+    if (e.deltaY < 0)      tlistZoomIn();     // scroll vers le haut → plus grand
+    else if (e.deltaY > 0) tlistZoomOut();    // scroll vers le bas → plus petit
+  }, { passive: false });
+}
