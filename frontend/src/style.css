@@ -492,6 +492,16 @@
   --fs-disp-xl: 72px;                 /* display rare — gardé littéral */
   --fs-hero:    80px;                 /* display rare — gardé littéral */
 
+  /* ── Échelle typographique fluide (responsive niveau Spotify) ──────────
+     clamp(min, préférence-fluide, max). L'unité cqi = 1% de la largeur du
+     conteneur de query le plus proche → le texte respire avec son panneau,
+     pas avec la fenêtre. Adoptée progressivement, remplace les --fs-* fixes. */
+  --fs-f-caption: clamp(0.69rem, 0.66rem + 0.15cqi, 0.78rem);
+  --fs-f-body:    clamp(0.81rem, 0.77rem + 0.25cqi, 0.94rem);
+  --fs-f-subhead: clamp(0.94rem, 0.88rem + 0.4cqi,  1.13rem);
+  --fs-f-title:   clamp(1.06rem, 0.95rem + 0.7cqi,  1.5rem);
+  --fs-f-disp:    clamp(1.4rem,  1.1rem + 2cqi,     2.4rem);
+
   /* Typographie responsive — clamp() fluid (px min, vw fluid, px max) */
   --fs-vw-view:      clamp(26px, 3.5vw, 40px);  /* titre de vue/section responsive */
   --fs-vw-hero:      clamp(18px, 2.6vw, 32px);  /* playlist hero responsive */
