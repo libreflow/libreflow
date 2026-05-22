@@ -142,7 +142,7 @@ const ddel = (s,k) => _raceWithTimeout(new Promise((ok,fail) => {
  */
 export async function getStorageEstimate() {
   if (!navigator.storage?.estimate) return null;
-  try { return await navigator.storage.estimate(); } catch { return null; }
+  try { return await navigator.storage.estimate(); } catch(e) { console.warn('[getStorageEstimate]', e); return null; }
 }
 
 /**

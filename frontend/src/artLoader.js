@@ -23,11 +23,21 @@ import { updateBar }   from './playerbar.js';
 
 // ── Constantes ────────────────────────────────────────────────
 const MAX_CACHE = CFG.MAX_ART_CACHE;   // 60 entrées ≈ 6 MB max
-const ART_MIME_ALLOWLIST = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/bmp', 'image/tiff'];
+export const ART_MIME_ALLOWLIST = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/bmp', 'image/tiff'];
 
 // ── Cache LRU ─────────────────────────────────────────────────
 // Map insertion-ordered : le premier élément est le plus ancien (LRU).
 const _cache = new Map(); // trackId → blob: URL
+
+// PERF-CRIT-2 FIX : Set des blob: URLs actuellement référencées par un <img> dans le DOM.
+// Maintenue par _patchArtDOM (add) et revokeArt (delete).
+// Remplace le document.querySelectorAll('img') global dans _evict() — élimine le
+// scan DOM complet à chaque éviction LRU (5-15 ms/frame sur sessions longues).
+// Compromis accepté : si un innerHTML= efface des <img> sans passer par revokeArt,
+// les URLs restent dans _domBlobUrls jusqu'à leur prochaine éviction. La garde
+// primaire `id === curId` reste correcte — seule la précision du "est-ce en DOM"
+// peut être légèrement pessimiste (évite une révocation, ne cause pas de fuite).
+const _domBlobUrls = new Set(); // blob: URL → présente dans un <img> DOM
 
 /** Éviction LRU — supprime l'entrée la plus ancienne qui n'est NI la piste en
  *  cours NI actuellement affichée dans le DOM (ligne de liste, carte de grille,
@@ -38,13 +48,11 @@ function _evict() {
   const curIdx = get('curIdx');
   const tracks = get('tracks');
   const curId  = curIdx >= 0 ? tracks[curIdx]?.id : null;
-  // blob: URLs actuellement rendues — ne jamais les révoquer.
-  const inDom = new Set();
-  for (const img of document.querySelectorAll('img')) {
-    if (img.src && img.src.startsWith('blob:')) inDom.add(img.src);
-  }
+  // PERF-CRIT-2 FIX : utiliser la Set maintenue plutôt que querySelectorAll('img').
+  const inDom = _domBlobUrls;
   for (const [id, url] of _cache) {
     if (id === curId || inDom.has(url)) continue;
+    _domBlobUrls.delete(url);
     URL.revokeObjectURL(url);
     _cache.delete(id);
     // Effacer la référence dans l'objet track pour que thtml() retombe sur le placeholder
@@ -68,6 +76,9 @@ function _patchArtDOM(t) {
   img.setAttribute('aria-hidden', 'true');
   img.onload    = () => img.classList.add('art-loaded');
   img.src       = t.art;
+  // PERF-CRIT-2 FIX : enregistrer l'URL dans la Set pour que _evict() sache
+  // qu'elle est référencée dans le DOM sans scanner querySelectorAll('img').
+  if (t.art) _domBlobUrls.add(t.art);
   ph.replaceWith(img);
 }
 
@@ -190,6 +201,8 @@ export function prefetchArts(trackList) {
 export function revokeArt(trackId) {
   const url = _cache.get(trackId);
   if (url) {
+    // PERF-CRIT-2 FIX : retirer de la Set avant de révoquer.
+    _domBlobUrls.delete(url);
     URL.revokeObjectURL(url);
     _cache.delete(trackId);
   }

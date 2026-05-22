@@ -64,7 +64,9 @@ export function setTlistZoom(level) {
   saveCfg();
 
   // 5. Forcer un re-render de la liste
-  emit(EVENTS.RENDER_LIB, {});
+  // R1-A FIX : ne pas émettre au boot quand tracks[] est encore vide — évite
+  // l'écran "liste vide" de 300-600 ms causé par le RENDER_LIB prématuré.
+  if (get('tracks')?.length) emit(EVENTS.RENDER_LIB, {});
 }
 
 /** Passe au niveau plus grand si possible (compact → normal → comfortable). */

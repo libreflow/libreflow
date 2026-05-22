@@ -264,7 +264,7 @@ export async function ensureUrl(t) {
  * @returns {void}
  */
 export function setIcon(playing) {
-  invoke('taskbar_set_playing', { playing }).catch(() => {});
+  invoke('taskbar_set_playing', { playing }).catch((e) => console.warn('[taskbar_set_playing]', e));
   // @ts-ignore — audio element guaranteed present in LibreFlow DOM (index.html)
   document.getElementById('ico-play').style.display  = playing ? 'none' : '';
   // @ts-ignore — audio element guaranteed present in LibreFlow DOM (index.html)
@@ -297,19 +297,31 @@ function _postPlaySideEffects(track) {
 // Starts immediate playback of a resolved off-filter track.
 // INVARIANT: caller must call radioRefillQueue() BEFORE emit(TRACK_CHANGE).
 function _playDirect(track, idx) {
-  if (!track.url && track.path) track.url = convertFileSrc(track.path);
-  curIdx = idx;
-  set('curIdx', curIdx);
-  clearCrossfadeTimers();
-  // @ts-ignore — url guaranteed set by convertFileSrc above or by scan
-  audio.src = track.url; ensureEQResumed(); audio.play().catch(() => {});
-  // radioRefillQueue() DOIT précéder _postPlaySideEffects() (qui émet FILTER_CHANGED)
-  // et TRACK_CHANGE — sinon un callback UI peut lire la file radio avant son refill (§3).
-  if (radioActive) radioRefillQueue();
-  _postPlaySideEffects(track);
-  emit(EVENTS.TRACK_CHANGE, { track, idx: curIdx });
-  setTimeout(() => scrollToCurrentTrack(), 50);
-  if (rgEnabled) analyzeAndApplyRG();
+  // R2-A FIX : même garde que playAt() — empêche double TRACK_CHANGE si crossfade
+  // et radio auto-play se déclenchent simultanément.
+  if (_playLock) return;
+  _playLock = true;
+  try {
+    if (!track.url && track.path) track.url = convertFileSrc(track.path);
+    curIdx = idx;
+    set('curIdx', curIdx);
+    clearCrossfadeTimers();
+    // @ts-ignore — url guaranteed set by convertFileSrc above or by scan
+    audio.src = track.url; ensureEQResumed();
+    audio.play().catch((e) => {
+      // R2-A + correctif-6 : échec audio.play() visible (pas silencieux)
+      if (e?.name !== 'AbortError') toast(i18n('t_play_start_err', e?.message), 'error');
+    });
+    // radioRefillQueue() DOIT précéder _postPlaySideEffects() (qui émet FILTER_CHANGED)
+    // et TRACK_CHANGE — sinon un callback UI peut lire la file radio avant son refill (§3).
+    if (radioActive) radioRefillQueue();
+    _postPlaySideEffects(track);
+    emit(EVENTS.TRACK_CHANGE, { track, idx: curIdx });
+    setTimeout(() => scrollToCurrentTrack(), 50);
+    if (rgEnabled) analyzeAndApplyRG();
+  } finally {
+    _playLock = false;
+  }
 }
 
 // ── Playback core ─────────────────────────────────────────────────────────────
@@ -355,7 +367,7 @@ export async function playAt(filteredIdx, { skipScroll = false, keepQueue = fals
     // Mettre à jour le titre de la fenêtre : "Titre — Artiste | LibreFlow"
     // @ts-ignore — filter(Boolean) narrows to string[] at runtime; join returns string
     const _wTitle = [t.name, t.artistFull || t.artist].filter(Boolean).join(' — ');
-    invoke('win_set_title', { title: _wTitle ? `${_wTitle} | LibreFlow` : 'LibreFlow' }).catch(() => {});
+    invoke('win_set_title', { title: _wTitle ? `${_wTitle} | LibreFlow` : 'LibreFlow' }).catch((e) => console.warn('[win_set_title]', e));
     if (!skipScroll) setTimeout(() => scrollToCurrentTrack(), 50);
     if (rgEnabled) analyzeAndApplyRG();
   } finally {
@@ -1136,7 +1148,7 @@ export function updateMediaSessionState() {
         playbackRate: audio.playbackRate || 1,
         position:     Math.min(audio.currentTime, audio.duration),
       });
-    } catch(e) {}
+    } catch(e) { console.warn('[mediaSession]', e); }
   }
 }
 

@@ -77,7 +77,7 @@ function _hydrateArtPlaceholders(rootEl, { observe = false } = {}) {
       if (ph.dataset.artImgClass) img.className = ph.dataset.artImgClass;
       img.src = url;
       ph.replaceWith(img);
-    }).catch(() => {});
+    }).catch((e) => console.warn('[getArtUrl]', t?.id, e));
   };
   const phs = rootEl.querySelectorAll('[data-art-tid]');
   if (observe && 'IntersectionObserver' in window) {
@@ -348,9 +348,16 @@ export function virtRenderWindow(fl) {
     if (id) cancelAnimationFrame(id);
   });
 
+  // R3-A FIX : sauvegarder la position de scroll avant le remplacement du DOM.
+  // innerHTML = reset scrollTop à 0 — l'utilisateur perd sa position à chaque
+  // changement de zoom (Ctrl+Wheel). On restaure dans un rAF après la mise en DOM.
+  const _savedScrollTop = listEl.scrollTop;
   listEl.innerHTML = html;
   // I-1: le DOM a été entièrement reconstruit — invalider la référence de ligne active cachée
   _activeRowEl = null;
+  if (_savedScrollTop > 0) {
+    requestAnimationFrame(() => { listEl.scrollTop = _savedScrollTop; });
+  }
 
   // ARCH-2/PERF-1 : précharger l'artwork des pistes visibles (lazy loading)
   const _artBatch = [];
@@ -602,6 +609,9 @@ export function renderLib() {
     _tracksSig      = _newSig;
     _albumMapCache  = null;
     _artistMapCache = null;
+    // R5-A FIX : vider la Map trackId→piste des grilles — évite les références
+    // à des pistes supprimées et la fuite mémoire associée.
+    _artTrackById.clear();
   }
 
   virtRenderWindow(fl);
@@ -961,6 +971,8 @@ export function drillDown(from, key, displayName) {
     _tracksSig      = _drillSig;
     _albumMapCache  = null;
     _artistMapCache = null;
+    // R5-A FIX : cohérence avec renderLib — vider les références grille obsolètes.
+    _artTrackById.clear();
   }
   emit(EVENTS.FILTER_CHANGED, {});
 
@@ -1165,6 +1177,8 @@ export function patchTrackEl(id) {
   _tracksSig      = '';
   _albumMapCache  = null;
   _artistMapCache = null;
+  // R5-A FIX : idem — invalidation complète de la Map grille pour éviter fuite.
+  _artTrackById.clear();
 
   const idx = trackIdx(id);
   if (idx < 0) return;
