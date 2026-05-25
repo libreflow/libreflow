@@ -42,12 +42,13 @@ export function setLiked(v)      { set('liked',      v); }
 /**
  * Sync tracks dans app.js et dans le store réactif.
  * Utilisé par : selection.js.
+ * Applique l'invariant ARCH-3 : rebuildTrackIdxMap() est garanti en interne.
  * @param {object[]} v
- * ⚠ INVARIANT : tout appelant DOIT appeler rebuildTrackIdxMap() immédiatement après
- *   pour maintenir _trackIdxMap en sync avec tracks[]. Ne pas omettre cette étape
- *   sous peine de corrompre silencieusement tous les lookups par ID.
  */
-export function setTracks(v)     { set('tracks',     v); }
+export function setTracks(v) {
+  set('tracks', v);
+  rebuildTrackIdxMap(); // ARCH-3 : toute mutation tracks[] → rebuild _trackIdxMap
+}
 
 /**
  * Sync ctxTrackId (cible du menu contextuel) dans app.js et dans le store.

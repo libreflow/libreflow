@@ -16,15 +16,22 @@ let _tauriReady = null;
 
 function _waitTauriReady() {
   if (_tauriReady) return _tauriReady;
-  return (_tauriReady = new Promise(res => {
+  return (_tauriReady = new Promise((res, rej) => {
     // @ts-ignore — __TAURI__ injected at runtime by Tauri, not in Window type
     if (window.__TAURI__) { res(); return; }
+    // F9 : annuler le fallback timer dès que tauri://init arrive (évite timer orphelin)
+    let _fallbackTimer;
     const handler = () => {
+      clearTimeout(_fallbackTimer);
       window.removeEventListener('tauri://init', handler);
       res();
     };
     window.addEventListener('tauri://init', handler);
-    setTimeout(res, 5000);
+    // F8 : rejeter explicitement si Tauri n'est pas disponible après 5 s
+    _fallbackTimer = setTimeout(() => {
+      window.removeEventListener('tauri://init', handler);
+      rej(new Error('[ipc] Tauri non initialisé après 5 s — contexte WebView invalide'));
+    }, 5000);
   }));
 }
 

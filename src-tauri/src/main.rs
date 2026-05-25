@@ -25,6 +25,7 @@ fn main() {
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .plugin(WindowStateBuilder::default().build())
         .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_process::init())
         .manage(mini::MiniState(Default::default()))
         .manage(mini::MiniOpenGuard(tokio::sync::Mutex::new(())))
         .manage(watch::WatchState(Default::default()))

@@ -140,7 +140,7 @@ function _onAudioCdInserted(drive) {
 export async function importFromDrive(drivePath) {
   let result;
   try {
-    result = await invoke('open_folder_at', { start_path: drivePath }, { timeout: 0 });
+    result = await invoke('open_folder_at', { startPath: drivePath }, { timeout: 0 });
   } catch (e) {
     toast(`Erreur d'accès au lecteur : ${e}`, 'error');
     return;

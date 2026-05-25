@@ -126,7 +126,7 @@ export async function organizePreview(scheme) {
 
   let dryResult;
   try {
-    dryResult = await invoke('organize_files', { moves, dry_run: true });
+    dryResult = await invoke('organize_files', { moves, dryRun: true });
   } catch (e) {
     toast(`Erreur de validation : ${e}`, 'error');
     return;
@@ -156,7 +156,7 @@ export async function organizeConfirm() {
 
   let result;
   try {
-    result = await invoke('organize_files', { moves: _pendingMoves, dry_run: false });
+    result = await invoke('organize_files', { moves: _pendingMoves, dryRun: false });
   } catch (e) {
     toast(`Erreur lors de l'organisation : ${e}`, 'error');
     organizeCancel();

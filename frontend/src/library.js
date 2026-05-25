@@ -69,11 +69,16 @@ export async function loadTagsAndDurations(newTracks) {
     // OPT-1 : read_tags remplace read_audio_props + read_file + JS readTags() + read_audio_props×2
     // 3 IPC et jusqu'à 50 Mo de transfert → 1 IPC, transfert limité à la pochette (~200 Ko)
     if (t._durPending && t.path) {
-      const rustTags = await invokeRetry('read_tags', { path: t.path }).catch(() => null);
+      let rustTags;
+      try {
+        rustTags = await invokeRetry('read_tags', { path: t.path });
+      } catch (_e) {
+        return 'timeout'; // compte dans _timedOutCount → toast groupé en fin de scan
+      }
       const dur = rustTags?.duration_secs ?? 0;
       t.duration    = dur;
       t._durPending = false;
-      if (dur > 0 && dur < 20) {
+      if (dur > 0 && dur < CFG.SHORT_TRACK_MIN_SECS) {
         // Piste trop courte — supprimer
         const idx = trackIdx(t.id);
         if (idx > -1) {
@@ -87,7 +92,7 @@ export async function loadTagsAndDurations(newTracks) {
           emit(EVENTS.LIBRARY_UPDATED, { tracks: get('tracks') });
           invalidateFilterCache(); emit(EVENTS.FILTER_CHANGED, {});
           _skippedCount++;
-          console.warn('[library] Piste ignorée — durée < 20s :', t.name || t.path);
+          console.warn('[library] Piste ignorée — durée < ' + CFG.SHORT_TRACK_MIN_SECS + 's :', t.name || t.path);
         }
         return;
       }

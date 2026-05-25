@@ -71,14 +71,19 @@ pub fn watch_folder_start(app: AppHandle, path: String) -> Result<(), String> {
                 return;
             }
 
-            // Filtre audio partagé — même liste AUDIO_EXTS existante
+            // Filtre : extension audio ET chemin dans un dossier sûr (même garde que open_folder/read_tags).
             let audio_paths: Vec<String> = event
                 .paths
                 .iter()
                 .filter(|p| {
-                    p.extension()
+                    let is_audio = p.extension()
                         .and_then(|e| e.to_str())
                         .map(|e| AUDIO_EXTS.iter().any(|&ext| e.eq_ignore_ascii_case(ext)))
+                        .unwrap_or(false);
+                    if !is_audio { return false; }
+                    // Dossier parent sûr — bloque chemins système / UNC / racines
+                    p.parent()
+                        .map(|parent| crate::commands::is_safe_dir(parent))
                         .unwrap_or(false)
                 })
                 .filter_map(|p| p.to_str().map(String::from))

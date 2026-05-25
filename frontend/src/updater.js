@@ -11,23 +11,23 @@
 //   3. Variable d'env TAURI_SIGNING_PRIVATE_KEY au moment du build
 //      → GitHub Actions secret : Settings > Secrets > TAURI_SIGNING_PRIVATE_KEY
 //
-// Note : les plugins sont accessibles via window.__TAURI__ (withGlobalTauri: true).
-// Aucune dépendance npm (@tauri-apps/plugin-updater / plugin-process) requise.
+// En Tauri 2, `withGlobalTauri` n'expose QUE les APIs core (app, core, event,
+// path, window…). Les plugins doivent passer par leurs wrappers npm officiels.
 
-import { i18n }             from './i18n.js';
+import { check }      from '@tauri-apps/plugin-updater';
+import { relaunch }   from '@tauri-apps/plugin-process';
+import { getVersion } from '@tauri-apps/api/app';
+
+import { i18n }                   from './i18n.js';
 import { toast, toastWithAction } from './ui.js';
 
 /**
- * Vérifie si une mise à jour est disponible.
- * Affiche un toast avec un bouton "Installer" si une nouvelle version est trouvée.
- * Silencieux en cas d'erreur (endpoint non configuré, pas de réseau, etc.).
- *
- * BUG-9 FIXED : migration de invoke('plugin:updater|check') vers
- *               window.__TAURI__.updater.check() (API officielle).
+ * Affiche la version courante de l'application dans le panneau « À propos ».
+ * Silencieux en cas d'erreur — la valeur statique du HTML sert de fallback.
  */
 export async function initAppVersion() {
   try {
-    const version = await window.__TAURI__.app.getVersion();
+    const version = await getVersion();
     document.querySelectorAll('[data-i18n="set_app_version"]').forEach(el => {
       el.textContent = `v${version}`;
     });
@@ -36,9 +36,14 @@ export async function initAppVersion() {
   }
 }
 
+/**
+ * Vérifie si une mise à jour est disponible.
+ * Affiche un toast avec un bouton "Installer" si une nouvelle version est trouvée.
+ * Silencieux en cas d'erreur (endpoint non configuré, pas de réseau, etc.).
+ */
 export async function checkForUpdate() {
   try {
-    const update = await window.__TAURI__.updater.check();
+    const update = await check();
     if (!update) return;
 
     const version = update.version ?? '?';
@@ -58,7 +63,7 @@ export async function checkForUpdateManual(btn) {
   const span = btn?.querySelector('span') ?? btn;
   if (btn) { btn.disabled = true; if (span) span.textContent = i18n('t_update_checking'); }
   try {
-    const update = await window.__TAURI__.updater.check();
+    const update = await check();
     if (!update) {
       toast(i18n('t_update_uptodate'), 'success', 3000);
     } else {
@@ -71,8 +76,8 @@ export async function checkForUpdateManual(btn) {
         0
       );
     }
-  } catch {
-    toast(i18n('t_update_error', '?'), 'error', 4000);
+  } catch (e) {
+    toast(i18n('t_update_error', String(e)), 'error', 4000);
   } finally {
     if (btn) { btn.disabled = false; if (span) span.textContent = i18n('t_update_check_btn'); }
   }
@@ -80,22 +85,15 @@ export async function checkForUpdateManual(btn) {
 
 // ── Téléchargement + installation avec progress ──────────────────────────────
 
-/**
- * BUG-10 FIXED : suppression des arguments non documentés (bytes, timeout, proxy,
- *                onEvent) — utilisation de update.downloadAndInstall(onEvent).
- * BUG-11 FIXED : ajout de window.__TAURI__.process.relaunch() après installation
- *                (le plugin ne relance pas automatiquement).
- */
 async function _installUpdate(update) {
   let downloaded  = 0;
   let total       = 0;
 
-  // Toast vivant — utilise la méthode .update() ajoutée en P2-3
-  // 'loading' (120 000 ms) garantit l'affichage pendant tout le téléchargement.
+  // Toast vivant — 'loading' (120 000 ms) garantit l'affichage pendant tout
+  // le téléchargement, .update() rafraîchit le texte (progress %).
   const t = toast(i18n('t_update_downloading'), 'loading');
 
   try {
-    // API officielle : downloadAndInstall(onEvent) sans arguments parasites
     await update.downloadAndInstall((event) => {
       if (event.event === 'Started') {
         total = event.data?.contentLength ?? 0;
@@ -110,8 +108,8 @@ async function _installUpdate(update) {
       }
     });
 
-    // Relaunch explicite requis — le plugin n'effectue pas de redémarrage automatique
-    await window.__TAURI__.process.relaunch();
+    // Relaunch explicite requis — le plugin ne relance pas automatiquement
+    await relaunch();
   } catch (e) {
     toast(i18n('t_update_error', String(e)), 'error');
   }

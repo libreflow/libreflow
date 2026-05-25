@@ -138,7 +138,7 @@ export async function playCdTrack(drivePath, idx) {
     try {
       _currentRipId = rip_id;
       await invoke('cd_rip_track', {
-        drive: drivePath, track_idx: tocTrack.idx, dest_path: tempPath, rip_id,
+        drive: drivePath, trackIdx: tocTrack.idx, destPath: tempPath, ripId: rip_id,
       });
     } catch (e) {
       _unsubscribeProgress();
@@ -216,7 +216,7 @@ export async function extractCd(drivePath) {
     try {
       _currentRipId = rip_id;
       await invoke('cd_rip_track', {
-        drive: drivePath, track_idx: tocTrack.idx, dest_path: dest, rip_id,
+        drive: drivePath, trackIdx: tocTrack.idx, destPath: dest, ripId: rip_id,
       });
       written.push(dest);
     } catch (e) {
@@ -244,7 +244,7 @@ export async function extractCd(drivePath) {
 
 export async function cancelCurrentRip() {
   if (!_currentRipId) return;
-  try { await invoke('cd_cancel_rip', { rip_id: _currentRipId }); }
+  try { await invoke('cd_cancel_rip', { ripId: _currentRipId }); }
   catch (e) { console.warn('[cdaudio] cancel failed:', e); }
 }
 
@@ -364,7 +364,7 @@ function _schedulePrefetch(drivePath, nextIdx, totalTracks) {
       const rip_id   = crypto.randomUUID();
       const tempPath = await _tempPathForRip(rip_id);
       await invoke('cd_rip_track', {
-        drive: drivePath, track_idx: nextIdx, dest_path: tempPath, rip_id,
+        drive: drivePath, trackIdx: nextIdx, destPath: tempPath, ripId: rip_id,
       });
       // B22 FIX : mémoriser le rip anticipé pour réutilisation par playCdTrack —
       // sans ça le FLAC est rippé puis jamais référencé (re-rip + orphelin).
