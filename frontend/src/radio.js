@@ -230,7 +230,16 @@ export async function startRadio(trackId) {
 
   radioActive     = true;
   radioSeedId     = seed.id;
-  radioQueue      = await buildRadioQueue(seed);
+  try {
+    radioQueue = await buildRadioQueue(seed);
+  } catch(e) {
+    console.error('[radio] buildRadioQueue failed in startRadio:', e);
+    radioActive = false;
+    radioSeedId = null;
+    _syncRadioButtons(false);
+    toast(i18n('radio_no_track'), 'error');
+    return;
+  }
   _radioPlayedIds = new Set([seed.id]);
 
   _syncRadioButtons(true);
@@ -377,8 +386,10 @@ export async function radioRefillQueue() {
   // synchrone de radioRefillQueue() pour éviter un reflow synchrone dans la
   // chaîne de callback player.js (BUG-D3A-5).
   requestAnimationFrame(() => {
-    _syncRadioLibBar(true);
-    if (get('view') === 'radio') renderRadioView();
+    try {
+      _syncRadioLibBar(true);
+      if (get('view') === 'radio') renderRadioView();
+    } catch(e) { console.warn('[radio] rAF update failed:', e); }
   });
 }
 
@@ -553,9 +564,19 @@ export async function radioRegenerateFromCurrent() {
   }
   const cur = get('tracks')[get('curIdx')]; // Phase 4
   if (!cur) return;
+  const _prevSeedId     = radioSeedId;
+  const _prevPlayedIds  = new Set(_radioPlayedIds);
   radioSeedId     = cur.id;
   _radioPlayedIds = new Set([cur.id]);
-  radioQueue      = await buildRadioQueue(cur);
+  try {
+    radioQueue = await buildRadioQueue(cur);
+  } catch(e) {
+    console.error('[radio] buildRadioQueue failed in radioRegenerateFromCurrent:', e);
+    radioSeedId     = _prevSeedId;
+    _radioPlayedIds = _prevPlayedIds;
+    toast(i18n('radio_no_track'), 'error');
+    return;
+  }
   _radioSyncManualQueue();
   _syncRadioLibBar(true);
   if (get('view') === 'radio') renderRadioView();

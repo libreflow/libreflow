@@ -190,7 +190,7 @@ export function startViz() {
   if (!_vizData  || _vizData.length  !== bins) _vizData  = new Uint8Array(bins);
   if (!_timeData || _timeData.length !== bins) _timeData = new Uint8Array(bins);
   // Ghost oscilloscope — réinitialiser au silence (128 = ligne plate en domaine temporel)
-  _ghostTimeData = new Uint8Array(bins);
+  if (!_ghostTimeData || _ghostTimeData.length !== bins) _ghostTimeData = new Uint8Array(bins);
   _ghostTimeData.fill(128);
   running = true;
   if (eqCtx && eqCtx.state === 'suspended') eqCtx.resume();

@@ -115,7 +115,7 @@ export async function analyzeAndApplyRG() {
     // BUG-M2 FIX : en production, asset:// nécessite que le scope soit accordé avant fetch()
     if (t.path) {
       const _dir = t.path.replace(/[/\\][^/\\]+$/, '');
-      invoke('allow_asset_dir', { path: _dir }).catch(e => console.warn('[replaygain:allow_asset_dir]', _dir, e));
+      await invoke('allow_asset_dir', { path: _dir }).catch(e => console.warn('[replaygain:allow_asset_dir]', _dir, e));
     }
     const resp = await fetch(t.url);
     if (_rgAnalysisId !== myId) return; // piste changée pendant le download

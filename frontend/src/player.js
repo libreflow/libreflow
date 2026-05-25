@@ -314,7 +314,7 @@ function _playDirect(track, idx) {
     });
     // radioRefillQueue() DOIT précéder _postPlaySideEffects() (qui émet FILTER_CHANGED)
     // et TRACK_CHANGE — sinon un callback UI peut lire la file radio avant son refill (§3).
-    if (radioActive) radioRefillQueue();
+    if (radioActive) radioRefillQueue().catch(e => console.warn('[radio] refill failed:', e));
     _postPlaySideEffects(track);
     emit(EVENTS.TRACK_CHANGE, { track, idx: curIdx });
     setTimeout(() => scrollToCurrentTrack(), 50);
@@ -344,7 +344,7 @@ export async function playAt(filteredIdx, { skipScroll = false, keepQueue = fals
     // INP-1 : mise à jour visuelle synchrone avant le premier await
     curIdx = trackIdx(t.id);
     set('curIdx', curIdx);
-    if (radioActive) radioRefillQueue(); // DOIT précéder TRACK_CHANGE (règle critique)
+    if (radioActive) radioRefillQueue().catch(e => console.warn('[radio] refill failed:', e)); // DOIT précéder TRACK_CHANGE (règle critique)
     emit(EVENTS.TRACK_CHANGE, { track: t, idx: curIdx });
 
     const ok = await ensureUrl(t);
@@ -389,10 +389,10 @@ export function togglePlay() {
   if (curIdx < 0) { if (getFiltered().length) playAt(0); return; }
   if (audio.paused) {
     ensureEQResumed();
-    audio.play().catch(() => {});
+    audio.play().catch(e => { if (e?.name !== 'AbortError') console.warn('[player] togglePlay() failed:', e); });
     // BUG-D1-8 FIX: resume audioNext if it was paused mid-crossfade
     if (_crossfadeWasActive && audioNext && audioNext.src && audioNext.src !== location.href) {
-      audioNext.play().catch(() => {});
+      audioNext.play().catch(e => { if (e?.name !== 'AbortError') console.warn('[player] audioNext resume failed:', e); });
     }
     _crossfadeWasActive = false;
   } else {
@@ -410,7 +410,7 @@ export function prev() {
   if (audio.currentTime > 3) { audio.currentTime = 0; return; }
   if (repeat === 'one') {
     clearCrossfadeTimers(); // BUG-D1-2 FIX: clear lingering crossfade timers before replay
-    audio.currentTime = 0; ensureEQResumed(); audio.play().catch(() => {}); return;
+    audio.currentTime = 0; ensureEQResumed(); audio.play().catch(e => { if (e?.name !== 'AbortError') console.warn('[player] prev repeat:one play() failed:', e); }); return;
   }
   const tracks = get('tracks'); // Phase 4
   const fl = getFiltered();
@@ -516,7 +516,7 @@ export function peekNext() {
 export function next(manual = false) {
   if (repeat === 'one' && !manual) {
     clearCrossfadeTimers(); // BUG-D1-2 FIX: clear lingering crossfade timers before replay
-    audio.currentTime = 0; ensureEQResumed(); audio.play().catch(() => {}); return;
+    audio.currentTime = 0; ensureEQResumed(); audio.play().catch(e => { if (e?.name !== 'AbortError') console.warn('[player] next repeat:one play() failed:', e); }); return;
   }
 
   const tracks = get('tracks'); // Phase 4
@@ -540,7 +540,7 @@ export function next(manual = false) {
 
   // ── Radio active, file vide → recharger ──────────────────────────────────
   if (radioActive) {
-    radioRefillQueue();
+    radioRefillQueue().catch(e => console.warn('[radio] refill failed:', e));
     if (manualQueue.length) {
       // @ts-ignore — manualQueue stores numeric indices; store type says Track[] but runtime is number[]
       const ni = /** @type {number} */ (manualQueue.shift());
@@ -892,10 +892,10 @@ function _commitGapless() {
   audio.src = gSrc;
   if (playbackSpeed !== 1) audio.playbackRate = playbackSpeed;
   ensureEQResumed();
-  audio.play().catch(() => {});
+  audio.play().catch(e => { if (e?.name !== 'AbortError') console.warn('[gapless] play() failed:', e); });
 
   _postPlaySideEffects(nt);
-  if (radioActive) radioRefillQueue();
+  if (radioActive) radioRefillQueue().catch(e => console.warn('[radio] refill failed:', e));
   emit(EVENTS.TRACK_CHANGE, { track: nt, idx: curIdx });
   setTimeout(() => scrollToCurrentTrack(), 50);
   if (rgEnabled) analyzeAndApplyRG();
@@ -922,7 +922,7 @@ export function checkCrossfade() {
           if (!ok || crossfadeDur || _gaplessNextIdx !== _gni) { _gaplessNextIdx = -1; return; }
           // @ts-ignore — url guaranteed set by ensureUrl(ok) above
           if (audioNext) { audioNext.src = _gnt.url; audioNext.preload = 'auto'; }
-        }).catch(() => { _gaplessNextIdx = -1; }); // évite _commitGapless sur src invalide
+        }).catch(e => { console.warn('[gapless] ensureUrl failed:', e); _gaplessNextIdx = -1; }); // évite _commitGapless sur src invalide
       }
     }
   }
@@ -943,7 +943,7 @@ export function checkCrossfade() {
   _cfPending = true;
   ensureUrl(nextTrack).then(ok => {
     _cfPending = false;
-    if (!ok || cfFadeTimer || audio.paused) return;
+    if (!ok || cfFadeTimer || audio.paused || !audioNext) return;
     // CROSSFADE-RACE FIX : vérifier que clearCrossfadeTimers() n'a pas été appelé
     if (_cfGen !== _myCfGen) return;
 
@@ -958,7 +958,7 @@ export function checkCrossfade() {
       // R-4 : eqCtx peut être suspendu après sleep OS → reprendre avant audioNext.play()
       ensureEQResumed();
       // @ts-ignore — audioNext guaranteed by initCrossfadeAudio()
-      audioNext.play().catch(() => {});
+      audioNext.play().catch(e => { if (e?.name !== 'AbortError') console.warn('[crossfade] audioNext.play() failed:', e); });
     }, startDelay);
 
     const durationMs = crossfadeDur * 1000;
@@ -1030,13 +1030,13 @@ export function checkCrossfade() {
       // Continuer depuis la position du fondu (ne pas repartir de 0)
       if (_cfPos > 0.05) audio.currentTime = _cfPos;
       _resetGains();
-      ensureEQResumed(); audio.play().catch(() => {});
+      ensureEQResumed(); audio.play().catch(e => { if (e?.name !== 'AbortError') console.warn('[crossfade] play() failed after transition:', e); });
       // @ts-ignore — audioNext guaranteed by initCrossfadeAudio()
       audioNext.pause(); audioNext.src = '';
 
       if (rgEnabled) analyzeAndApplyRG();
       _postPlaySideEffects(nextTrack);
-      if (radioActive) radioRefillQueue(); // DOIT précéder TRACK_CHANGE (règle critique)
+      if (radioActive) radioRefillQueue().catch(e => console.warn('[radio] refill failed:', e)); // DOIT précéder TRACK_CHANGE (règle critique)
       emit(EVENTS.TRACK_CHANGE, { track: nextTrack, idx: curIdx });
       setTimeout(() => scrollToCurrentTrack(), 50);
       if (queueOpen) renderQueue();
@@ -1046,7 +1046,7 @@ export function checkCrossfade() {
         if (!shuffleQ.length && repeat !== 'none') buildQ();
       }
     }, durationMs + 50); // +50 ms de marge pour les ramps AudioParam
-  }).catch(() => { _cfPending = false; });
+  }).catch(e => { _cfPending = false; console.warn('[crossfade] setup failed:', e); });
 }
 
 /** @returns {number} */

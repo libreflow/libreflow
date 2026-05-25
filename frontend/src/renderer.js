@@ -1168,9 +1168,10 @@ export function patchActiveTrack() {
 
 /** Met à jour la classe .playing-row sur la piste active (play vs pause). */
 export function patchPlayState(playing) {
-  document.querySelectorAll('.tr.act, .queue-item--loop').forEach(el => {
-    el.classList.toggle('playing-row', playing);
-  });
+  const tlist = document.getElementById('tlist');
+  const qlist = document.getElementById('queue-list');
+  if (tlist) tlist.querySelectorAll('.tr.act').forEach(el => el.classList.toggle('playing-row', playing));
+  if (qlist) qlist.querySelectorAll('.queue-item--loop').forEach(el => el.classList.toggle('playing-row', playing));
 }
 
 /** Remplace le DOM d'une seule ligne piste (ex: après un tag edit). */

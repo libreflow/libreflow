@@ -57,7 +57,7 @@ function _evict() {
     _cache.delete(id);
     // Effacer la référence dans l'objet track pour que thtml() retombe sur le placeholder
     const idx = trackIdx(id);
-    if (idx >= 0 && tracks[idx]) tracks[idx].art = null;
+    if (idx >= 0 && tracks[idx]) { tracks[idx].art = null; tracks[idx]._artBuf = null; }
     return;
   }
   // Aucune entrée évictable (toutes visibles / piste courante) : on dépasse
@@ -117,7 +117,8 @@ export async function getArtUrl(t) {
   // Bytes déjà en mémoire (LRU évicté, mais _artBuf non effacé) — recréer sans IDB
   if (t._artBuf) {
     _evict();
-    const url = URL.createObjectURL(new Blob([t._artBuf], { type: t._artMime || 'image/jpeg' }));
+    const safeMime = ART_MIME_ALLOWLIST.includes(t._artMime) ? t._artMime : 'image/jpeg';
+    const url = URL.createObjectURL(new Blob([t._artBuf], { type: safeMime }));
     _cache.set(t.id, url);
     t.art = url;
     return url;

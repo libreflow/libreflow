@@ -60,7 +60,7 @@ async function readTags(file) {
         const extSz = ver === 4
           ? ((u8[pos]&0x7f)<<21)|((u8[pos+1]&0x7f)<<14)|((u8[pos+2]&0x7f)<<7)|(u8[pos+3]&0x7f)
           : dv.getUint32(pos);
-        pos += extSz;
+        if (pos + extSz > u8.length) { pos = u8.length; } else { pos += extSz; }
       }
       const end = Math.min(10 + tagSz, u8.length);
 
@@ -174,15 +174,16 @@ async function readTags(file) {
     // ── M4A/AAC ──
     const ext = file.name.split('.').pop().toLowerCase();
     if (['m4a','m4b','aac','mp4','alac'].includes(ext)) {
-      function parseBox(data, start, end) {
+      function parseBox(data, start, end, depth = 0) {
+        if (depth > 16) return;
         let off = start;
         while (off + 8 <= end && off < data.length) {
           let sz = (data[off]<<24)|(data[off+1]<<16)|(data[off+2]<<8)|data[off+3];
           const nm = dec8(data.slice(off+4, off+8));
           if (sz < 8) { off += 4; continue; }
           const inner = Math.min(off + sz, data.length);
-          if (['moov','udta','ilst'].includes(nm)) parseBox(data, off+8, inner);
-          else if (nm === 'meta')                  parseBox(data, off+12, inner);
+          if (['moov','udta','ilst'].includes(nm)) parseBox(data, off+8, inner, depth+1);
+          else if (nm === 'meta')                  parseBox(data, off+12, inner, depth+1);
           else if (['\xa9nam','\xa9ART','\xa9alb','aART','\xa9gen','\xa9day','trkn','covr'].includes(nm)) {
             let di = off + 8;
             while (di + 8 <= inner) {

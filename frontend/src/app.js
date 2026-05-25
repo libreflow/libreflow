@@ -382,7 +382,7 @@ async function boot() {
   }).catch(e => console.warn('[app:storageEstimate]', e));
 
   // Load config
-  const cfg = await dget('cfg','state').catch(()=>null);
+  const cfg = await dget('cfg','state').catch(e => { console.error('[boot] cfg read failed:', e); return null; });
   if (cfg) {
     // Restaurer liked directement par IDs de pistes (Set<string>)
     // cfg.likedIds = array de track.id (source de vérité depuis session 138+)
@@ -440,7 +440,7 @@ async function boot() {
     if (cfg.eqAutoMode)  setEQAutoMode(true);
     if (cfg.eqExpert)    setEQExpert(true);
     if (cfg.eqProfiles)  loadEQProfiles(cfg.eqProfiles);
-    initDeviceEQ(cfg.eqDeviceProfiles ?? {}); // fire-and-forget async — detects current audio output device
+    initDeviceEQ(cfg.eqDeviceProfiles ?? {}).catch(e => console.warn('[boot] initDeviceEQ failed:', e)); // detects current audio output device
     initDevices(); // démarrer le polling USB + CD audio
     // Purge tout résidu de cache CD orphelin (rip interrompu, crash, etc.)
     cleanupCdCache(null).catch(e => console.warn('[boot] CD cache GC failed:', e));
@@ -483,9 +483,9 @@ async function boot() {
   // Afficher le skeleton adapté à la vue sauvegardée (albums/artistes/genres/liste)
   if (cfg) _showSkeletonRows(cfg.view);
   const [savedPl, savedLog, saved] = await Promise.all([
-    dall('playlists').catch(()=>[]),
-    dall('playlog').catch(()=>[]),
-    dall('tracks').catch(()=>[]),
+    dall('playlists').catch(e => { console.error('[boot] playlists read failed:', e); return []; }),
+    dall('playlog').catch(e => { console.error('[boot] playlog read failed:', e); return []; }),
+    dall('tracks').catch(e => { console.error('[boot] tracks read failed — library may appear empty:', e); return []; }),
   ]);
   if (savedPl) {
     playlists = savedPl; set('playlists', playlists); renderPlNav(); setupPlNavDrop();

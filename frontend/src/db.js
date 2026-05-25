@@ -112,7 +112,7 @@ const dall = (s) => _raceWithTimeout(new Promise((ok,fail) => {
  */
 const dput = (s,v,k) => {
   // Skip persisting ephemeral CD tracks — they're tied to the inserted disc's lifetime
-  if (s === 'tracks' && v && v._isEphemeralCd === true) return;
+  if (s === 'tracks' && v && v._isEphemeralCd === true) return Promise.resolve();
   return _raceWithTimeout(new Promise((ok,fail) => {
     const r = k !== undefined ? tx(s,'readwrite').put(v,k) : tx(s,'readwrite').put(v);
     r.onsuccess = () => ok();
