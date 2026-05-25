@@ -17,6 +17,7 @@ import { updateVizColor, getVizMode, getVizEnabled }     from './viz.js';
 import { saveCfg }       from './cfgsave.js';
 import { _allPlayerUI } from './allplayerui.js';
 import { $id, $input, $select } from './dom.js';
+import { setTlistZoom }         from './tlistZoom.js';
 
 // ── État local ────────────────────────────────────────────────────────────────
 let _theme          = 'blue';
@@ -182,6 +183,8 @@ export function openSettings() {
   switchSetTab(_VALID_TABS.includes(_lastTab) ? _lastTab : 'appearance');
   $id('lang-fr')?.classList.toggle('on', getLang() === 'fr');
   $id('lang-en')?.classList.toggle('on', getLang() === 'en');
+  // Sync zoom radios
+  _syncTlistZoomRadios();
   // Sync dynColor checkbox
   _syncDynColorChk();
   syncCinemaBgSettings();
@@ -230,18 +233,40 @@ export function closeSettings() {
   trigger?.setAttribute('aria-expanded', 'false');
 }
 
-document.addEventListener('keydown', e => {
-  if (e.code === 'Escape' && $id('settings-panel')?.classList.contains('on')) {
-    e.stopImmediatePropagation();
-    closeSettings();
-  }
-});
+// BUG-AUDIT HIGH : listeners document/window encapsulés dans initSettingsListeners()
+// avec AbortController (cf. pattern handlers.js registerHandlers). Évite le cumul lors
+// d'un HMR/test et permet le nettoyage. Appelé une seule fois au boot depuis main.js.
+let _settingsListenersInit = false; // garde anti-double-appel
 
-window.addEventListener('focus', () => syncMiniSettingsBtn());
-
-{
+/**
+ * Attache les listeners globaux du panneau settings :
+ *   - Escape sur document → ferme le panneau
+ *   - focus sur window    → resync du bouton mini-player
+ *   - change sur #dyn-color-chk → setDynColor()
+ * Idempotent — à appeler UNE SEULE FOIS au boot (main.js).
+ * @returns {Function} cleanup — retire les listeners (utile pour les tests)
+ */
+export function initSettingsListeners() {
+  if (_settingsListenersInit) { console.warn('[settings] initSettingsListeners() called more than once'); return () => {}; }
+  _settingsListenersInit = true;
+  const ac = new AbortController();
+  const { signal } = ac;
+  document.addEventListener('keydown', e => {
+    if (e.code === 'Escape' && $id('settings-panel')?.classList.contains('on')) {
+      e.stopImmediatePropagation();
+      closeSettings();
+    }
+  }, { signal });
+  window.addEventListener('focus', () => syncMiniSettingsBtn(), { signal });
   const chk = $id('dyn-color-chk');
-  if (chk) chk.addEventListener('change', e => setDynColor(e.target.checked));
+  if (chk) chk.addEventListener('change', e => setDynColor(e.target.checked), { signal });
+  // Zoom liste de pistes
+  document.querySelectorAll('input[name="tlist-zoom"]').forEach(r => {
+    r.addEventListener('change', e => {
+      if (e.target.checked) setTlistZoom(e.target.value);
+    }, { signal });
+  });
+  return () => ac.abort();
 }
 
 // ══ THEMES ════════════════════════════════════════════════════════════════════
@@ -275,6 +300,13 @@ export function setTheme(t) {
   });
   _allPlayerUI();
   saveCfg();
+}
+
+function _syncTlistZoomRadios() {
+  const cur = get('tlistZoom') || 'normal';
+  document.querySelectorAll('input[name="tlist-zoom"]').forEach(r => {
+    r.checked = r.value === cur;
+  });
 }
 
 function _syncDynColorChk() {

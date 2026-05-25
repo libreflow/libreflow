@@ -28,6 +28,7 @@ import { setView, showView }              from './views.js';
 import { loadTagsBg, loadTagsAndDurations } from './library.js';
 import { updateStats }                    from './renderer.js';
 import { pushTracks }                     from './state.js';
+import { isSafePath }                     from './utils.js';
 import { logImport }                                   from './imports.js';
 
 // SEC-9 : Extensions audio autorisées — synchronisé avec la liste de app.js/_onDrop
@@ -127,6 +128,13 @@ async function _doInitialScan(files) {
     if (newTracks.length) logImport('folder-scan', newTracks.map(t => t.path));
     return newTracks.length;
   } finally {
+    // B6 FIX : drainer les events watcher mis en file dans _pendingPaths pendant
+    // que _importing tenait le lock — sinon ces fichiers ne sont importés que si
+    // un autre event watcher arrive ensuite (sinon jamais).
+    while (_pendingPaths.length) {
+      const pending = _pendingPaths.splice(0);
+      await _doImportPaths(pending);
+    }
     _importing = false;
   }
 }
@@ -182,7 +190,7 @@ export async function toggleWatchFolder() {
   // Si un dossier était déjà surveillé, full stop silencieux avant de remplacer
   if (watchPath) stopWatchFolder(true, false);
   watchPath = result.folder;
-  invoke('allow_asset_dir', { path: watchPath }).catch(() => {});
+  invoke('allow_asset_dir', { path: watchPath }).catch(e => console.warn('[watchfolder:allow_asset_dir]', watchPath, e));
   watchSnapshot = new Set(get('tracks').map(t => t.path).filter(Boolean));
   const newFiles = (result.files ?? []).filter(p => _isAudioPath(p) && !watchSnapshot.has(p));
   if (newFiles.length) {
@@ -287,7 +295,7 @@ export function stopWatchFolder(silent = false, keepPath = false) {
   if (_modUnlisten) { _modUnlisten(); _modUnlisten = null; }
   if (_modDebTimer) { clearTimeout(_modDebTimer); _modDebTimer = null; }
   _modRawPaths = [];
-  invoke('watch_folder_stop').catch(() => {});
+  invoke('watch_folder_stop').catch(e => console.warn('[watchfolder:watch_folder_stop]', e));
   _watchActive = false;
   _starting    = false;
   if (!keepPath) {
@@ -345,6 +353,14 @@ export function updateWatchUI() {
  *  Déduplique via watchSnapshot. Retourne le nombre de titres ajoutés.
  *  RACE-2 FIX : si un import est en cours, paths mis en queue → zéro corruption de tracks[]. */
 export async function importPaths(paths) {
+  // SEC : filtre défensif côté JS — Rust reste la garde finale, mais on rejette
+  // les chemins évidemment dangereux (.. / null bytes / contrôle) avant l'IPC.
+  const before = paths.length;
+  paths = paths.filter(isSafePath);
+  if (paths.length !== before) {
+    console.warn('[watchfolder] importPaths: ' + (before - paths.length) + ' chemin(s) rejeté(s) par isSafePath');
+  }
+  if (!paths.length) return 0;
   if (_importing) {
     // Accumuler — watchSnapshot déduplique dans _doImportPaths, pas de double-ajout
     _pendingPaths.push(...paths);
@@ -366,7 +382,8 @@ export async function importPaths(paths) {
 
 async function _doImportPaths(paths) {
   let added = 0;
-  const newPaths = [];
+  const newPaths  = [];
+  const newTracks = []; // B10 : différer loadTagsBg jusqu'après rebuildTrackIdxMap
   const tracks = get('tracks'); // Phase 4
   // RACE-4 FIX : déduplication intra-batch — si `paths` contient des doublons
   // (ex. scan initial + premier événement watcher en chevauchement), watchSnapshot
@@ -394,18 +411,23 @@ async function _doImportPaths(paths) {
       // Sans ça, le badge LOSSLESS et les infos audio restent indéfinis (undefined ≠ null).
       bitrate: null, sampleRate: null, channels: null, bitDepth: null,
     };
-    tracks.push(t);
-    loadTagsBg(t);
+    newTracks.push(t);
     added++;
   }
   if (added) {
-    rebuildTrackIdxMap();
-    notify('tracks'); // BUG-C2 FIX : push() in-place → force-notifie les subscribers
+    // AUDIT-2026-05-22 : accumuler puis pushTracks() une seule fois après la boucle
+    // — pushTracks enchaîne push + rebuildTrackIdxMap + notify('tracks') atomiquement,
+    // évitant la fenêtre d'incohérence _trackIdxMap pendant la boucle (CLAUDE.md §2).
+    pushTracks(newTracks);
     if (VIRT) VIRT._lastListSig = '';
     updateStats();
     const niAll = document.getElementById('ni-all');
     setView('all', niAll ?? null);
     logImport('folder-scan', newPaths);
+    // B10 FIX : loadTagsBg APRÈS rebuildTrackIdxMap — sinon _trackIdxMap n'est
+    // plus une projection exacte de tracks[] (CLAUDE.md §2) pendant la boucle, et
+    // flushTrackBatch exclut les pistes pas encore mappées de l'écriture IDB.
+    for (const t of newTracks) loadTagsBg(t);
   }
   return added;
 }

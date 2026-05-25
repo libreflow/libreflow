@@ -37,8 +37,10 @@ export function renderAmbientFrame(t, canvas, ctx, mode, colorStr, ambientColors
   const H = window.innerHeight || 800;
   if (!ctx) return;
 
-  // Invalidate vignette cache when the rendering context changes.
-  if (ctx !== _lastCtx) { _vignetteGrad = null; _lastCtx = ctx; }
+  // M-03 : invalider les caches dépendants du contexte quand celui-ci change
+  // (cinema ↔ nowplaying partagent ces singletons). _vignetteGrad est un
+  // CanvasGradient lié à son ctx d'origine ; _noiseCanvas est régénéré par cohérence.
+  if (ctx !== _lastCtx) { _vignetteGrad = null; _noiseCanvas = null; _lastCtx = ctx; }
 
   // ── AMOLED : minimal halo, reuses ambient loop ──────────────────────────
   if (mode === 'amoled') {

@@ -112,25 +112,29 @@ export async function importBackup() {
     const backupImports   = _safeJsonParse(payload.imports,   []);
 
     // ── Merge tracks ──────────────────────────────────────────────────────────
-    // INVARIANT : toute mutation de tracks[] → rebuildTrackIdxMap() obligatoire
+    // INVARIANT : toute mutation de tracks[] → rebuildTrackIdxMap() AVANT notify()
     const currentTracks = get('tracks') ?? [];
     const existingIds   = new Set(currentTracks.map(t => t.id));
-    const newTracks     = [...currentTracks];
+    const addedTracks   = [];
 
     for (const t of backupTracks) {
       if (!existingIds.has(t.id)) {
-        newTracks.push(t);
+        addedTracks.push(t);
         existingIds.add(t.id); // évite les doublons si le backup contient des ids dupliqués
         // Fire-and-forget IDB (cohérent avec le pattern importPaths)
         dput('tracks', t).catch(e => console.warn('[backup] track IDB write:', t.id, e));
       }
     }
 
-    set('tracks', newTracks);
-    rebuildTrackIdxMap();
-    invalidateFilterCache();
-    notify('tracks');
-    if (VIRT) VIRT._lastListSig = '';
+    if (addedTracks.length) {
+      // Mutation in-place du tableau du store : pas de set() (qui notifierait
+      // AVANT rebuildTrackIdxMap, exposant un _trackIdxMap stale aux subscribers).
+      get('tracks').push(...addedTracks);
+      rebuildTrackIdxMap();
+      invalidateFilterCache();
+      if (VIRT) VIRT._lastListSig = '';
+      notify('tracks');
+    }
     updateStats();
 
     // ── Playlists : merge par id ──────────────────────────────────────────────

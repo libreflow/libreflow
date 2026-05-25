@@ -264,7 +264,7 @@ export async function ensureUrl(t) {
  * @returns {void}
  */
 export function setIcon(playing) {
-  invoke('taskbar_set_playing', { playing }).catch(() => {});
+  invoke('taskbar_set_playing', { playing }).catch((e) => console.warn('[taskbar_set_playing]', e));
   // @ts-ignore — audio element guaranteed present in LibreFlow DOM (index.html)
   document.getElementById('ico-play').style.display  = playing ? 'none' : '';
   // @ts-ignore — audio element guaranteed present in LibreFlow DOM (index.html)
@@ -297,17 +297,31 @@ function _postPlaySideEffects(track) {
 // Starts immediate playback of a resolved off-filter track.
 // INVARIANT: caller must call radioRefillQueue() BEFORE emit(TRACK_CHANGE).
 function _playDirect(track, idx) {
-  if (!track.url && track.path) track.url = convertFileSrc(track.path);
-  curIdx = idx;
-  set('curIdx', curIdx);
-  clearCrossfadeTimers();
-  // @ts-ignore — url guaranteed set by convertFileSrc above or by scan
-  audio.src = track.url; ensureEQResumed(); audio.play().catch(() => {});
-  _postPlaySideEffects(track);
-  if (radioActive) radioRefillQueue(); // DOIT précéder TRACK_CHANGE (règle critique)
-  emit(EVENTS.TRACK_CHANGE, { track, idx: curIdx });
-  setTimeout(() => scrollToCurrentTrack(), 50);
-  if (rgEnabled) analyzeAndApplyRG();
+  // R2-A FIX : même garde que playAt() — empêche double TRACK_CHANGE si crossfade
+  // et radio auto-play se déclenchent simultanément.
+  if (_playLock) return;
+  _playLock = true;
+  try {
+    if (!track.url && track.path) track.url = convertFileSrc(track.path);
+    curIdx = idx;
+    set('curIdx', curIdx);
+    clearCrossfadeTimers();
+    // @ts-ignore — url guaranteed set by convertFileSrc above or by scan
+    audio.src = track.url; ensureEQResumed();
+    audio.play().catch((e) => {
+      // R2-A + correctif-6 : échec audio.play() visible (pas silencieux)
+      if (e?.name !== 'AbortError') toast(i18n('t_play_start_err', e?.message), 'error');
+    });
+    // radioRefillQueue() DOIT précéder _postPlaySideEffects() (qui émet FILTER_CHANGED)
+    // et TRACK_CHANGE — sinon un callback UI peut lire la file radio avant son refill (§3).
+    if (radioActive) radioRefillQueue();
+    _postPlaySideEffects(track);
+    emit(EVENTS.TRACK_CHANGE, { track, idx: curIdx });
+    setTimeout(() => scrollToCurrentTrack(), 50);
+    if (rgEnabled) analyzeAndApplyRG();
+  } finally {
+    _playLock = false;
+  }
 }
 
 // ── Playback core ─────────────────────────────────────────────────────────────
@@ -353,7 +367,7 @@ export async function playAt(filteredIdx, { skipScroll = false, keepQueue = fals
     // Mettre à jour le titre de la fenêtre : "Titre — Artiste | LibreFlow"
     // @ts-ignore — filter(Boolean) narrows to string[] at runtime; join returns string
     const _wTitle = [t.name, t.artistFull || t.artist].filter(Boolean).join(' — ');
-    invoke('win_set_title', { title: _wTitle ? `${_wTitle} | LibreFlow` : 'LibreFlow' }).catch(() => {});
+    invoke('win_set_title', { title: _wTitle ? `${_wTitle} | LibreFlow` : 'LibreFlow' }).catch((e) => console.warn('[win_set_title]', e));
     if (!skipScroll) setTimeout(() => scrollToCurrentTrack(), 50);
     if (rgEnabled) analyzeAndApplyRG();
   } finally {
@@ -382,14 +396,11 @@ export function togglePlay() {
     }
     _crossfadeWasActive = false;
   } else {
-    // BUG-D1-8 FIX: pause audioNext if crossfade is active so fade-in doesn't continue silently
-    const cfActive = !!(cfFadeTimer || cfNextTimer || _cfRafId);
-    if (cfActive && audioNext && !audioNext.paused) {
-      audioNext.pause();
-      _crossfadeWasActive = true;
-    } else {
-      _crossfadeWasActive = false;
-    }
+    // B3 FIX : annuler tout crossfade en cours au pause. Sans ça, cfFadeTimer
+    // fire ~crossfadeDur plus tard et exécute audio.src=…/audio.play() → la
+    // lecture reprend toute seule alors que l'utilisateur a mis en pause.
+    if (cfFadeTimer || cfNextTimer || _cfRafId) clearCrossfadeTimers();
+    _crossfadeWasActive = false;
     audio.pause();
   }
 }
@@ -551,17 +562,11 @@ export function next(manual = false) {
     const fi  = filteredIdx(_ts); // P4 — O(1)
     if (fi >= 0) { playAt(fi); return; }
     if (tracks[ni]) {
-      curIdx = ni; set('curIdx', curIdx);
-      if (!shuffleQ.length && repeat !== 'none') buildQ(); // buildQ() APRÈS mise à jour de curIdx
-      clearCrossfadeTimers();
-      if (!tracks[ni].url && tracks[ni].path) tracks[ni].url = convertFileSrc(tracks[ni].path);
-      // @ts-ignore — url guaranteed set by convertFileSrc above
-      audio.src = tracks[ni].url; ensureEQResumed(); audio.play().catch(() => {});
-      _postPlaySideEffects(tracks[ni]);
-      if (radioActive) radioRefillQueue(); // DOIT précéder TRACK_CHANGE (règle critique)
-      emit(EVENTS.TRACK_CHANGE, { track: tracks[ni], idx: curIdx });
-      setTimeout(() => scrollToCurrentTrack(), 50);
-      if (rgEnabled) analyzeAndApplyRG();
+      // B15 FIX : router via _playDirect (chemin canonique off-filter, comme
+      // prev() et les autres branches) au lieu de dupliquer audio.src/play()
+      // inline. buildQ() APRÈS — _playDirect a déjà mis curIdx = ni.
+      _playDirect(tracks[ni], ni);
+      if (!shuffleQ.length && repeat !== 'none') buildQ();
     }
     return;
   }
@@ -985,6 +990,9 @@ export function checkCrossfade() {
     // ── Transition finale ─────────────────────────────────────────────────
     cfFadeTimer = setTimeout(() => {
       cfFadeTimer = null;
+      // M-05 : revérifier la génération crossfade — clearCrossfadeTimers() a pu
+      // être appelé pendant le fondu (skip manuel, sleep, suppression de piste).
+      if (_cfGen !== _genAtStart) return;
       if (_cfRafId) { cancelAnimationFrame(_cfRafId); _cfRafId = null; }
 
       // BUG FIX : revalider la piste — elle peut avoir été supprimée pendant le fondu
@@ -1140,7 +1148,7 @@ export function updateMediaSessionState() {
         playbackRate: audio.playbackRate || 1,
         position:     Math.min(audio.currentTime, audio.duration),
       });
-    } catch(e) {}
+    } catch(e) { console.warn('[mediaSession]', e); }
   }
 }
 
@@ -1221,7 +1229,11 @@ audio.addEventListener('error', () => {
       toast(i18n('t_consec_errors'), 'error');
       return;
     }
-    setTimeout(() => { if (audio.paused) next(); }, 350);
+    // B8 FIX : ne skipper que si la source qui a échoué est toujours chargée.
+    // Si l'utilisateur a cliqué une autre piste pendant les 350 ms (encore en
+    // cours de chargement → audio.paused vrai), next() la sauterait à tort.
+    const _failedSrc = audio.src;
+    setTimeout(() => { if (audio.paused && audio.src === _failedSrc) next(); }, 350);
   } else console.warn('[audio:error] erreur répétée sur la même src — pas de skip supplémentaire');
 });
 

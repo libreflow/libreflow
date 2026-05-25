@@ -126,7 +126,7 @@ export async function organizePreview(scheme) {
 
   let dryResult;
   try {
-    dryResult = await invoke('organize_files', { moves, dry_run: true });
+    dryResult = await invoke('organize_files', { moves, dryRun: true });
   } catch (e) {
     toast(`Erreur de validation : ${e}`, 'error');
     return;
@@ -156,7 +156,7 @@ export async function organizeConfirm() {
 
   let result;
   try {
-    result = await invoke('organize_files', { moves: _pendingMoves, dry_run: false });
+    result = await invoke('organize_files', { moves: _pendingMoves, dryRun: false });
   } catch (e) {
     toast(`Erreur lors de l'organisation : ${e}`, 'error');
     organizeCancel();
@@ -187,12 +187,12 @@ export async function organizeConfirm() {
     }
   }
 
-  // INVARIANT: toute mutation de tracks[] → rebuildTrackIdxMap()
+  // INVARIANT: toute mutation de tracks[] → rebuildTrackIdxMap() AVANT notify()
   // mutation in-place — set() would no-op (same array reference)
-  notify('tracks');
   rebuildTrackIdxMap();
   invalidateFilterCache();
   VIRT._lastListSig = '';
+  notify('tracks');
 
   _pendingMoves = [];
   organizeCancel();

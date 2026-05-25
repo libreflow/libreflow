@@ -54,6 +54,7 @@ import { showView }                                    from './views.js';
 import { invalidateFilterCache }                       from './search.js';
 import { invalidateGenreGridSig }                      from './genres.js';
 import { SPEEDS }                                      from './cfg.js';
+import { tlistZoomIn, tlistZoomOut, tlistZoomReset }  from './tlistZoom.js';
 
 /**
  * Attache le listener global `keydown` de l'application.
@@ -81,6 +82,22 @@ export function initShortcuts({ updateVolSlider, closeModal, cycleSpeed }) {
       return;
     }
 
+    // Zoom liste de pistes — Ctrl+= / Ctrl++ / Ctrl+- / Ctrl+_ / Ctrl+0
+    // Guard : ignorer si le focus est dans un champ de saisie
+    if (e.ctrlKey && !e.altKey) {
+      const _inField = ['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target.tagName)
+        || e.target.isContentEditable;
+      if ((e.key === '=' || e.key === '+') && !_inField) {
+        e.preventDefault(); tlistZoomIn(); return;
+      }
+      if ((e.key === '-' || e.key === '_') && !_inField) {
+        e.preventDefault(); tlistZoomOut(); return;
+      }
+      if (e.key === '0' && !_inField) {
+        e.preventDefault(); tlistZoomReset(); return;
+      }
+    }
+
     if (['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target.tagName)) return;
 
     const _anyModalOpen =
@@ -102,7 +119,10 @@ export function initShortcuts({ updateVolSlider, closeModal, cycleSpeed }) {
     if (e.code === 'ArrowRight') { e.preventDefault(); next(true); }
     if (e.code === 'ArrowLeft')  { e.preventDefault(); prev(); }
 
-    if (e.code === 'ArrowUp') {
+    // M-13 : ne pas capter ArrowUp/Down pour le volume si le focus est dans la
+    // liste de pistes — keynav.js gère alors la navigation au clavier (évite la double action).
+    const _inTrackList = document.activeElement?.closest('#tlist');
+    if (e.code === 'ArrowUp' && !_inTrackList) {
       e.preventDefault();
       const _cur = masterGainNode ? masterGainNode.gain.value : audio.volume;
       const v = Math.min(1, _cur + 0.05);
@@ -110,7 +130,7 @@ export function initShortcuts({ updateVolSlider, closeModal, cycleSpeed }) {
       const vel = document.getElementById('vol');
       if (vel) { vel.value = v; updateVolSlider(vel); }
     }
-    if (e.code === 'ArrowDown') {
+    if (e.code === 'ArrowDown' && !_inTrackList) {
       e.preventDefault();
       const _cur = masterGainNode ? masterGainNode.gain.value : audio.volume;
       const v = Math.max(0, _cur - 0.05);

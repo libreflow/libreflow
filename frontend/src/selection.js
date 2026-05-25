@@ -18,7 +18,7 @@ import { VIRT }                                         from './virt.js';
 import { ddel }                                         from './db.js';
 import { invoke, convertFileSrc }                       from './ipc.js';
 import { i18n }                                         from './i18n.js';
-import { get, subscribe }                               from './store.js';
+import { get, subscribe, notify }                       from './store.js';
 import { emit, EVENTS }                                 from './bus.js';
 import { getFiltered, _trackIdxMap, invalidateFilterCache } from './search.js';
 import { audio, resetShuffleQ, clearCrossfadeTimers }   from './player.js';
@@ -35,6 +35,7 @@ export let selection     = new Set(); // trackIds sélectionnés
 export let selectionMode = false;     // actif = affiche les checkboxes
 let _selAnchorId         = null;      // anchor pour Shift+click
 let _bteCoverPath        = null;      // chemin absolu de l'image choisie pour le batch cover
+let _bteSnapshotIds      = null;      // B5 : snapshot des ids sélectionnés à l'ouverture du modal batch-tag
 
 // ── Invalidation automatique de la sélection ─────────────────
 // Quand tracks[] change (scan, suppression, import…), les IDs sélectionnés
@@ -186,6 +187,9 @@ export function selToggleLike() {
     if (liked.has(id)) liked.delete(id);
     else { liked.add(id); likedCount++; }
   }
+  // AUDIT-2026-05-22 (M-09) : liked est mute en place (add/delete) — set('liked')
+  // serait un no-op (meme reference). Notifier explicitement les subscribers.
+  notify('liked');
   saveCfg();
   // clearSelection d'abord (reset VIRT._lastListSig), puis renderLib une seule fois
   clearSelection();
@@ -292,6 +296,10 @@ export function bteCoverSelected(input) {
 export function selBatchTagEdit() {
   if (!selection.size) return;
   const ids = [...selection];
+  // B5 FIX : snapshotter les ids à l'OUVERTURE du modal. Un notify('tracks')
+  // (import watch-folder, rescan auto-genre) déclenche subscribe→clearSelection
+  // pendant que le modal est ouvert → confirmBatchTagEdit lirait une sélection vide.
+  _bteSnapshotIds = ids;
   const selectedTracks = ids
     .map(id => _trackIdxMap.has(id) ? get('tracks')[_trackIdxMap.get(id)] : null) // Phase 4
     .filter(Boolean);
@@ -349,6 +357,7 @@ export function selBatchTagEdit() {
 export function closeBatchTagModal() {
   document.getElementById('batch-tag-modal-bg').classList.remove('on');
   bteCoverClear(); // reset cover state
+  _bteSnapshotIds = null; // B5 : libérer le snapshot batch-tag
 }
 
 export async function confirmBatchTagEdit() {
@@ -380,7 +389,9 @@ export async function confirmBatchTagEdit() {
   const btn = document.getElementById('bte-confirm-btn');
   if (btn) btn.disabled = true;
 
-  const ids = [...selection];
+  // B5 FIX : utiliser le snapshot pris à l'ouverture du modal — `selection` peut
+  // avoir été vidée par un subscribe('tracks') pendant que le modal était ouvert.
+  const ids = _bteSnapshotIds ? [..._bteSnapshotIds] : [...selection];
   closeBatchTagModal();
 
   let saved = 0, failed = 0;

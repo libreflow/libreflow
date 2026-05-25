@@ -12,7 +12,7 @@
 import { CFG }                              from './cfg.js';
 import { i18n }                             from './i18n.js';
 import { audio, audioNext, clearCrossfadeTimers } from './player.js';
-import { radioActive, stopRadio }           from './radio.js';
+import { radioActive, stopRadioSilent }     from './radio.js';
 import { toast }                                        from './ui.js';
 import { masterGainNode, eqCtx, setMasterGain }        from './eq.js';
 
@@ -105,7 +105,9 @@ export function cancelSleepTimer(silent) {
   // DSP-5 : restaurer via masterGainNode (graph) ; sinon fallback HTML
   if (masterGainNode && eqCtx) {
     masterGainNode.gain.setTargetAtTime(_targetVol, eqCtx.currentTime, 0.05);
-  } else if (audio.volume < _targetVol) {
+  } else {
+    // M-04 : toujours restaurer le volume cible (la garde `< _targetVol` skippait
+    // la restauration quand le fade-out l'avait déjà fait descendre puis remonter).
     setMasterGain(_targetVol);
   }
   const indicator = document.getElementById('sleep-indicator');
@@ -125,7 +127,7 @@ function _sleepTick() {
     clearCrossfadeTimers();
     audio.pause();
     if (audioNext) { audioNext.pause(); }
-    if (radioActive) stopRadio(); // prevent auto-resume
+    if (radioActive) stopRadioSilent(); // prevent auto-resume — variante synchrone, pas de dialog
     cancelSleepTimer(true);
     toast(i18n('t_sleep_done'));
     return;
@@ -149,15 +151,19 @@ function _sleepTick() {
     clearCrossfadeTimers();
   }
   if (sleepFading) {
-    const vol = Math.max(0, remaining / (CFG.SLEEP_FADE_SECS * 1000));
+    const ratio = Math.max(0, remaining / (CFG.SLEEP_FADE_SECS * 1000));
+    // B9 FIX : multiplier le ratio par la valeur du slider #vol dans LES DEUX
+    // branches. Avant, la branche masterGainNode écrivait le ratio brut 0..1 →
+    // slider à 50 % : le fade montait d'abord le volume à 100 % avant de le
+    // descendre (saut de volume audible). La branche fallback, elle, multipliait.
+    const _volEl  = document.getElementById('vol');
+    const _maxVol = _volEl ? parseFloat(_volEl.value) : 1;
+    const vol     = ratio * _maxVol;
     // DSP-5 : fade via masterGainNode (sample-accurate) ; fallback audio.volume
     if (masterGainNode && eqCtx) {
       masterGainNode.gain.setTargetAtTime(vol, eqCtx.currentTime, 0.02);
     } else {
-      // Fallback sans masterGainNode : proportion du slider courant (R1 — jamais hardcoder)
-      const _volEl = document.getElementById('vol');
-      const _maxVol = _volEl ? parseFloat(_volEl.value) : 1;
-      setMasterGain(vol * _maxVol);
+      setMasterGain(vol);
     }
   }
   _updateSleepCountdown();

@@ -56,6 +56,24 @@ export function normTag(s) {
     .trim();
 }
 
+/** Valide une année entre 1900 et 2100. Retourne l'entier si valide, null sinon.
+ *  Note : les faux-1970 (TDRC="1970-01-01T00:00:00") sont filtrés en amont dans tags.js. */
+export function validYear(y) {
+  const n = Number(y);
+  return (Number.isInteger(n) && n >= 1900 && n <= 2100) ? n : null;
+}
+
+/** Retourne true si le chemin est safe (pas de .. ni de segments ., pas d'octets
+ *  de contrôle, longueur raisonnable). Filtre défensif côté JS — Rust reste la garde finale. */
+export function isSafePath(p) {
+  if (typeof p !== 'string' || !p.length || p.length > 4096) return false;
+  if (p.includes('\0')) return false;
+  if (/[\x00-\x1f]/.test(p)) return false;
+  const segs = p.replace(/\\/g, '/').split('/');
+  if (segs.some(s => s === '..' || s === '.')) return false;
+  return true;
+}
+
 /** Extract the primary artist from a raw tag, stripping feat./collab suffixes. */
 export function mainArtist(raw) {
   if (!raw) return '';

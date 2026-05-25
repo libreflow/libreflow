@@ -25,8 +25,7 @@ use tokio::time::{timeout, Duration};
 /// Source unique de vérité côté backend — référencée par les commandes
 /// scan/pick locales ET par `watch.rs` (filtrage des événements notify).
 pub(crate) const AUDIO_EXTS: &[&str] = &[
-    "mp3", "flac", "aac", "m4a", "ogg", "opus",
-    "wav", "wma", "aiff", "ape", "alac",
+    "mp3", "flac", "aac", "m4a", "ogg", "opus", "wav", "wma", "aiff", "ape", "alac",
 ];
 
 // ── Types de données IPC ──────────────────────────────────────────────────────
@@ -34,26 +33,26 @@ pub(crate) const AUDIO_EXTS: &[&str] = &[
 #[derive(Serialize)]
 pub struct OpenFolderResult {
     pub folder: String,
-    pub files:  Vec<String>,
+    pub files: Vec<String>,
 }
 
 #[derive(Deserialize)]
 pub struct WriteTagsData {
-    pub path:         String,
-    pub title:        String,
-    pub artist:       String,
-    pub album:        String,
-    pub genre:        String,
-    pub year:         Option<u32>,
+    pub path: String,
+    pub title: String,
+    pub artist: String,
+    pub album: String,
+    pub genre: String,
+    pub year: Option<u32>,
     pub track_number: Option<u32>,
 }
 
 #[derive(Deserialize)]
 pub struct NotifyTrackData {
-    pub title:  String,
+    pub title: String,
     pub artist: String,
     #[allow(dead_code)] // reçu depuis le frontend mais non utilisé côté Rust (pas d'icône notif)
-    pub art:    Option<String>,
+    pub art: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -64,18 +63,18 @@ pub struct WriteCoverData {
 
 #[derive(Deserialize)]
 pub struct WriteReplaygainData {
-    pub path:    String,
+    pub path: String,
     pub gain_db: f64,
-    pub peak:    f64,
+    pub peak: f64,
 }
 
 #[derive(Serialize)]
 pub struct AudioProps {
-    pub bitrate:      Option<u32>,
-    pub sample_rate:  Option<u32>,
-    pub channels:     Option<u8>,
-    pub bit_depth:    Option<u8>,
-    pub file_size:    Option<u64>,  // bytes
+    pub bitrate: Option<u32>,
+    pub sample_rate: Option<u32>,
+    pub channels: Option<u8>,
+    pub bit_depth: Option<u8>,
+    pub file_size: Option<u64>, // bytes
     pub duration_secs: Option<f64>,
 }
 
@@ -84,20 +83,20 @@ pub struct AudioProps {
 /// 3 IPC et jusqu'à 50 Mo de transfert → 1 IPC, transfert limité à la pochette (~200 Ko).
 #[derive(Serialize, Default)]
 pub struct TrackTags {
-    pub title:         Option<String>,
-    pub artist:        Option<String>,
-    pub album:         Option<String>,
-    pub genre:         Option<String>,
-    pub year:          Option<u32>,
-    pub track:         Option<u32>,
-    pub cover_base64:  Option<String>,
-    pub cover_mime:    Option<String>,
-    pub bitrate:       Option<u32>,
-    pub sample_rate:   Option<u32>,
-    pub channels:      Option<u8>,
-    pub bit_depth:     Option<u8>,
+    pub title: Option<String>,
+    pub artist: Option<String>,
+    pub album: Option<String>,
+    pub genre: Option<String>,
+    pub year: Option<u32>,
+    pub track: Option<u32>,
+    pub cover_base64: Option<String>,
+    pub cover_mime: Option<String>,
+    pub bitrate: Option<u32>,
+    pub sample_rate: Option<u32>,
+    pub channels: Option<u8>,
+    pub bit_depth: Option<u8>,
     pub duration_secs: Option<f64>,
-    pub file_size:     Option<u64>,
+    pub file_size: Option<u64>,
 }
 
 // ── Types : organisation de fichiers ─────────────────────────────────────────
@@ -106,22 +105,22 @@ pub struct TrackTags {
 #[derive(Deserialize)]
 pub struct OrganizeMoveEntry {
     pub from: String,
-    pub to:   String,
+    pub to: String,
 }
 
 /// Résultat d'un déplacement individuel.
 #[derive(Serialize)]
 pub struct OrganizeMoveResult {
-    pub from:  String,
-    pub to:    String,
-    pub ok:    bool,
+    pub from: String,
+    pub to: String,
+    pub ok: bool,
     pub error: Option<String>,
 }
 
 /// Résultat global de la commande organize_files.
 #[derive(Serialize)]
 pub struct OrganizeResult {
-    pub moves:       Vec<OrganizeMoveResult>,
+    pub moves: Vec<OrganizeMoveResult>,
     pub error_count: usize,
 }
 
@@ -131,11 +130,11 @@ pub struct OrganizeResult {
 #[derive(Serialize, Clone)]
 pub struct DriveInfo {
     /// Chemin racine du volume (ex: "C:\\", "/Volumes/USB")
-    pub path:  String,
+    pub path: String,
     /// Label du volume (ex: "USB DRIVE", "Macintosh HD")
     pub label: String,
     /// Type de lecteur : "fixed" | "removable" | "network" | "cdrom" | "unknown"
-    pub kind:  String,
+    pub kind: String,
     /// True si CDROM avec au moins une piste audio (Windows uniquement, sinon false).
     #[serde(default)]
     pub audio_cd: bool,
@@ -149,7 +148,7 @@ pub struct DriveInfo {
 fn is_audio(path: &Path) -> bool {
     path.extension()
         .and_then(|e| e.to_str())
-        .map(|e| AUDIO_EXTS.contains(&e.to_lowercase().as_str()))
+        .map(|e| AUDIO_EXTS.iter().any(|&ext| e.eq_ignore_ascii_case(ext)))
         .unwrap_or(false)
 }
 
@@ -158,15 +157,17 @@ pub(crate) fn is_safe_dir(path: &Path) -> bool {
     use std::path::Component;
 
     // Rejeter racine Unix bare "/"
-    if path == Path::new("/") { return false; }
+    if path == Path::new("/") {
+        return false;
+    }
 
     // Rejeter les racines de lecteur Windows : C:\, D:\, etc.
     // Un chemin racine Windows = Prefix(C:) + RootDir, sans aucun composant supplémentaire.
     {
         let mut comps = path.components();
-        let first  = comps.next();
+        let first = comps.next();
         let second = comps.next();
-        let third  = comps.next();
+        let third = comps.next();
         if matches!(first, Some(Component::Prefix(_)))
             && matches!(second, Some(Component::RootDir))
             && third.is_none()
@@ -177,11 +178,14 @@ pub(crate) fn is_safe_dir(path: &Path) -> bool {
 
     // Rejeter chemins Unix système connus
     let blocked = &[
-        "/etc", "/usr", "/bin", "/sbin", "/lib", "/boot",
-        "/dev", "/proc", "/sys", "/root", "/var/log", "/var/run",
+        "/etc", "/usr", "/bin", "/sbin", "/lib", "/boot", "/dev", "/proc", "/sys", "/root",
+        "/var/log", "/var/run",
     ];
     let path_str = path.to_string_lossy().to_lowercase();
-    if blocked.iter().any(|b| path_str == *b || path_str.starts_with(&format!("{}/", b))) {
+    if blocked
+        .iter()
+        .any(|b| path_str == *b || path_str.starts_with(&format!("{}/", b)))
+    {
         return false;
     }
 
@@ -191,8 +195,15 @@ pub(crate) fn is_safe_dir(path: &Path) -> bool {
         // fs::canonicalize() sur Windows ajoute le préfixe \\?\ (extended-length path local).
         // Normaliser avant comparaison pour que les chemins système soient correctement bloqués.
         let check_str: &str = path_str.strip_prefix("\\\\?\\").unwrap_or(&path_str);
-        let win_blocked = ["c:\\windows", "c:\\program files", "c:\\program files (x86)"];
-        if win_blocked.iter().any(|b| check_str == *b || check_str.starts_with(&format!("{}\\", b))) {
+        let win_blocked = [
+            "c:\\windows",
+            "c:\\program files",
+            "c:\\program files (x86)",
+        ];
+        if win_blocked
+            .iter()
+            .any(|b| check_str == *b || check_str.starts_with(&format!("{}\\", b)))
+        {
             return false;
         }
         // Bloquer les vrais chemins UNC réseau (\\server\share).
@@ -203,7 +214,9 @@ pub(crate) fn is_safe_dir(path: &Path) -> bool {
     }
 
     // Exiger au moins un composant non-root (depth > 1 sur Unix, > 2 sur Windows)
-    if path.components().count() <= 1 { return false; }
+    if path.components().count() <= 1 {
+        return false;
+    }
 
     true
 }
@@ -216,7 +229,9 @@ pub(crate) fn is_safe_dir(path: &Path) -> bool {
 fn scan_dir(dir: &Path) -> Vec<PathBuf> {
     let mut results = Vec::new();
     let mut visited: std::collections::HashSet<PathBuf> = std::collections::HashSet::new();
-    if let Ok(c) = fs::canonicalize(dir) { visited.insert(c); }
+    if let Ok(c) = fs::canonicalize(dir) {
+        visited.insert(c);
+    }
     scan_dir_inner(dir, &mut results, &mut visited, 0);
     results
 }
@@ -229,11 +244,17 @@ fn scan_dir_inner(
     visited: &mut std::collections::HashSet<PathBuf>,
     depth: usize,
 ) {
-    if depth >= SCAN_MAX_DEPTH { return; }
-    let Ok(entries) = fs::read_dir(dir) else { return; };
+    if depth >= SCAN_MAX_DEPTH {
+        return;
+    }
+    let Ok(entries) = fs::read_dir(dir) else {
+        return;
+    };
     for entry in entries.flatten() {
         let path = entry.path();
-        let Ok(meta) = entry.metadata() else { continue; };
+        let Ok(meta) = entry.metadata() else {
+            continue;
+        };
         let ft = meta.file_type();
 
         // Reparse points (junctions / mount points sur Windows) ET symlinks classiques.
@@ -252,8 +273,12 @@ fn scan_dir_inner(
 
         if ft.is_dir() {
             // Anti-cycle : canonicalize et insert dans `visited`.
-            let Ok(canon) = fs::canonicalize(&path) else { continue; };
-            if !visited.insert(canon) { continue; }
+            let Ok(canon) = fs::canonicalize(&path) else {
+                continue;
+            };
+            if !visited.insert(canon) {
+                continue;
+            }
             scan_dir_inner(&path, results, visited, depth + 1);
         } else if is_audio(&path) {
             results.push(path);
@@ -262,12 +287,15 @@ fn scan_dir_inner(
 }
 
 /// Retourne ou crée le tag principal d'un TaggedFile.
-fn get_or_create_primary_tag(tagged_file: &mut lofty::file::TaggedFile) -> Result<&mut Tag, String> {
+fn get_or_create_primary_tag(
+    tagged_file: &mut lofty::file::TaggedFile,
+) -> Result<&mut Tag, String> {
     if tagged_file.primary_tag().is_none() {
         let tag_type = tagged_file.primary_tag_type();
         tagged_file.insert_tag(Tag::new(tag_type));
     }
-    tagged_file.primary_tag_mut()
+    tagged_file
+        .primary_tag_mut()
         .ok_or_else(|| "Impossible d'accéder au tag principal".to_string())
 }
 
@@ -297,16 +325,30 @@ pub fn open_folder(app: AppHandle) -> Result<Option<OpenFolderResult>, String> {
     // Retourner le chemin canonique (résolu) pour que les commandes suivantes opèrent sur
     // le même chemin que celui validé par is_safe_dir. Évite une fenêtre TOCTOU sur symlinks.
     let canon_str = canon.to_string_lossy().to_string();
-    Ok(Some(OpenFolderResult { folder: canon_str, files }))
+    Ok(Some(OpenFolderResult {
+        folder: canon_str,
+        files,
+    }))
 }
 
-
 /// Vérifie une liste de chemins et retourne ceux qui n'existent plus (orphelins).
+///
+/// Chaque chemin est d'abord validé via `is_safe_dir` sur son dossier parent : un
+/// chemin hors des dossiers utilisateur (racine système, chemin UNC) est traité
+/// comme orphelin sans test d'existence, évitant de sonder le FS hors périmètre.
 #[tauri::command]
 pub fn check_paths(paths: Vec<String>) -> Vec<String> {
     paths
         .into_par_iter()
-        .filter(|p| !Path::new(p).exists())
+        .filter(|p| {
+            let path = Path::new(p);
+            let parent_safe = path
+                .parent()
+                .map(|parent| parent.as_os_str().is_empty() || is_safe_dir(parent))
+                .unwrap_or(false);
+            // Chemin hors périmètre → considéré orphelin ; sinon test d'existence réel.
+            !parent_safe || !path.exists()
+        })
         .collect()
 }
 
@@ -316,9 +358,21 @@ pub fn check_paths(paths: Vec<String>) -> Vec<String> {
 pub async fn read_audio_props(path: String) -> Option<AudioProps> {
     tokio::task::spawn_blocking(move || {
         let p = Path::new(&path);
-        if !is_audio(p) { return None; }
+        if !is_audio(p) {
+            return None;
+        }
         let canon = std::fs::canonicalize(p).ok()?;
-        if !is_audio(&canon) { return None; }
+        if !is_audio(&canon) {
+            return None;
+        }
+        // B11 FIX : même garde is_safe_dir que read_tags — empêche un appelant JS
+        // de faire parser par lofty un fichier hors des dossiers utilisateur
+        // (C:\Windows\…, /etc, …). Cohérence avec la commande soeur read_tags.
+        if let Some(parent) = canon.parent() {
+            if !is_safe_dir(parent) {
+                return None;
+            }
+        }
         let file_size = std::fs::metadata(&canon).map(|m| m.len()).ok();
         let tagged = Probe::open(&canon)
             .ok()?
@@ -329,13 +383,17 @@ pub async fn read_audio_props(path: String) -> Option<AudioProps> {
         let props = tagged.properties();
         let duration_secs = {
             let d = props.duration().as_secs_f64();
-            if d > 0.0 { Some(d) } else { None }
+            if d > 0.0 {
+                Some(d)
+            } else {
+                None
+            }
         };
         Some(AudioProps {
-            bitrate:      props.overall_bitrate(),
-            sample_rate:  props.sample_rate(),
-            channels:     props.channels(),
-            bit_depth:    props.bit_depth(),
+            bitrate: props.overall_bitrate(),
+            sample_rate: props.sample_rate(),
+            channels: props.channels(),
+            bit_depth: props.bit_depth(),
             file_size,
             duration_secs,
         })
@@ -349,11 +407,19 @@ pub async fn read_audio_props(path: String) -> Option<AudioProps> {
 #[tauri::command]
 pub fn allow_asset_dir(app: AppHandle, path: String) -> Result<(), String> {
     let dir = Path::new(&path);
-    if !dir.is_dir() || !is_safe_dir(dir) {
+    if !dir.is_dir() {
         return Err(format!("allow_asset_dir: chemin refusé — {path}"));
     }
+    // Canonicaliser AVANT la validation : `C:\Music\..\Windows` passe le test de
+    // profondeur de is_safe_dir mais résout vers `C:\Windows`. On valide et on
+    // étend le scope sur le chemin canonique résolu (anti path-traversal).
+    let canon = fs::canonicalize(dir)
+        .map_err(|e| format!("allow_asset_dir: résolution du chemin échouée — {e}"))?;
+    if !is_safe_dir(&canon) {
+        return Err(format!("allow_asset_dir: chemin système refusé — {path}"));
+    }
     app.asset_protocol_scope()
-        .allow_directory(dir, true)
+        .allow_directory(&canon, true)
         .map(|_| ())
         .map_err(|e| e.to_string())
 }
@@ -393,11 +459,17 @@ pub async fn read_tags(path: String) -> Result<Option<TrackTags>, String> {
         Duration::from_secs(8),
         tokio::task::spawn_blocking(move || {
             let p = Path::new(&path);
-            if !is_audio(p) { return None; }
+            if !is_audio(p) {
+                return None;
+            }
             let canon = std::fs::canonicalize(p).ok()?;
-            if !is_audio(&canon) { return None; }
+            if !is_audio(&canon) {
+                return None;
+            }
             if let Some(parent) = canon.parent() {
-                if !is_safe_dir(parent) { return None; }
+                if !is_safe_dir(parent) {
+                    return None;
+                }
             }
             let file_size = std::fs::metadata(&canon).map(|m| m.len()).ok();
 
@@ -421,44 +493,61 @@ pub async fn read_tags(path: String) -> Result<Option<TrackTags>, String> {
                 )
             };
 
-            let (title, artist, album, genre, year, track, cover_base64, cover_mime) =
-                tagged.primary_tag()
-                    .map(|tag| {
-                        let title  = tag.title().map(|s| s.into_owned());
-                        let artist = tag.artist().map(|s| s.into_owned());
-                        let album  = tag.album().map(|s| s.into_owned());
-                        let genre  = tag.genre().map(|s| s.into_owned());
-                        let year   = tag.year();
-                        let track  = tag.track();
-                        // Pochette : CoverFront en priorité, sinon première image disponible.
-                        // Limite 2 Mo : évite de transférer des pochettes hi-res en base64.
-                        const MAX_COVER: usize = 2 * 1024 * 1024;
-                        let (cover_b64, cover_m) = tag.pictures()
-                            .iter()
-                            .find(|pic| pic.pic_type() == PictureType::CoverFront)
-                            .or_else(|| tag.pictures().first())
-                            .filter(|pic| pic.data().len() <= MAX_COVER)
-                            .map(|pic| {
-                                let b64 = general_purpose::STANDARD.encode(pic.data());
-                                let mime = match pic.mime_type() {
-                                    Some(MimeType::Png)  => "image/png",
-                                    Some(MimeType::Gif)  => "image/gif",
-                                    Some(MimeType::Bmp)  => "image/bmp",
-                                    Some(MimeType::Tiff) => "image/tiff",
-                                    _                    => "image/jpeg",
-                                };
-                                (Some(b64), Some(mime.to_string()))
-                            })
-                            .unwrap_or((None, None));
-                        (title, artist, album, genre, year, track, cover_b64, cover_m)
-                    })
-                    .unwrap_or_default();
+            // Cap longueur des champs texte : un fichier hostile peut porter des
+            // tags de plusieurs Mo (lofty parse du contenu non fiable) — 1000 chars
+            // suffisent largement et protègent DOM/IDB d'une explosion mémoire.
+            const MAX_TAG_CHARS: usize = 1000;
+            let cap = |s: String| -> String { s.chars().take(MAX_TAG_CHARS).collect() };
+
+            let (title, artist, album, genre, year, track, cover_base64, cover_mime) = tagged
+                .primary_tag()
+                .map(|tag| {
+                    let title = tag.title().map(|s| cap(s.into_owned()));
+                    let artist = tag.artist().map(|s| cap(s.into_owned()));
+                    let album = tag.album().map(|s| cap(s.into_owned()));
+                    let genre = tag.genre().map(|s| cap(s.into_owned()));
+                    let year = tag.year();
+                    let track = tag.track();
+                    // Pochette : CoverFront en priorité, sinon première image disponible.
+                    // Limite 8 Mo : couvre les pochettes hi-res tout en bornant le transfert base64.
+                    const MAX_COVER: usize = 8 * 1024 * 1024;
+                    let (cover_b64, cover_m) = tag
+                        .pictures()
+                        .iter()
+                        .find(|pic| pic.pic_type() == PictureType::CoverFront)
+                        .or_else(|| tag.pictures().first())
+                        .filter(|pic| pic.data().len() <= MAX_COVER)
+                        .map(|pic| {
+                            let b64 = general_purpose::STANDARD.encode(pic.data());
+                            let mime = match pic.mime_type() {
+                                Some(MimeType::Png) => "image/png",
+                                Some(MimeType::Gif) => "image/gif",
+                                Some(MimeType::Bmp) => "image/bmp",
+                                Some(MimeType::Tiff) => "image/tiff",
+                                _ => "image/jpeg",
+                            };
+                            (Some(b64), Some(mime.to_string()))
+                        })
+                        .unwrap_or((None, None));
+                    (title, artist, album, genre, year, track, cover_b64, cover_m)
+                })
+                .unwrap_or_default();
 
             Some(TrackTags {
-                title, artist, album, genre, year, track,
-                cover_base64, cover_mime,
-                bitrate, sample_rate, channels, bit_depth,
-                duration_secs, file_size,
+                title,
+                artist,
+                album,
+                genre,
+                year,
+                track,
+                cover_base64,
+                cover_mime,
+                bitrate,
+                sample_rate,
+                channels,
+                bit_depth,
+                duration_secs,
+                file_size,
             })
         }),
     )
@@ -478,12 +567,18 @@ pub async fn write_tags(data: WriteTagsData) -> Result<(), String> {
     tokio::task::spawn_blocking(move || {
         let path = Path::new(&data.path);
         if !is_audio(path) {
-            return Err(format!("write_tags: extension non autorisée — {}", data.path));
+            return Err(format!(
+                "write_tags: extension non autorisée — {}",
+                data.path
+            ));
         }
-        let canon = fs::canonicalize(path)
-            .map_err(|e| format!("write_tags: chemin invalide — {e}"))?;
+        let canon =
+            fs::canonicalize(path).map_err(|e| format!("write_tags: chemin invalide — {e}"))?;
         if !is_audio(&canon) {
-            return Err(format!("write_tags: extension non autorisée après résolution — {}", data.path));
+            return Err(format!(
+                "write_tags: extension non autorisée après résolution — {}",
+                data.path
+            ));
         }
         let mut tagged_file = Probe::open(&canon)
             .map_err(|e| format!("Probe::open: {e}"))?
@@ -496,8 +591,12 @@ pub async fn write_tags(data: WriteTagsData) -> Result<(), String> {
             tag.set_artist(data.artist);
             tag.set_album(data.album);
             tag.set_genre(data.genre);
-            if let Some(year) = data.year  { tag.set_year(year); }
-            if let Some(track) = data.track_number { tag.set_track(track); }
+            if let Some(year) = data.year {
+                tag.set_year(year);
+            }
+            if let Some(track) = data.track_number {
+                tag.set_track(track);
+            }
         }
 
         tagged_file
@@ -515,12 +614,18 @@ pub async fn write_cover(data: WriteCoverData) -> Result<(), String> {
     tokio::task::spawn_blocking(move || {
         let audio_path = Path::new(&data.audio_path);
         if !is_audio(audio_path) {
-            return Err(format!("write_cover: audio path non autorisé — {}", data.audio_path));
+            return Err(format!(
+                "write_cover: audio path non autorisé — {}",
+                data.audio_path
+            ));
         }
         let canon_audio = fs::canonicalize(audio_path)
             .map_err(|e| format!("write_cover: chemin audio invalide — {e}"))?;
         if !is_audio(&canon_audio) {
-            return Err(format!("write_cover: extension audio non autorisée après résolution — {}", data.audio_path));
+            return Err(format!(
+                "write_cover: extension audio non autorisée après résolution — {}",
+                data.audio_path
+            ));
         }
         const IMAGE_EXTS: &[&str] = &["png", "jpg", "jpeg", "webp", "bmp", "gif", "tiff", "tif"];
         let image_path_raw = Path::new(&data.image_path);
@@ -528,8 +633,15 @@ pub async fn write_cover(data: WriteCoverData) -> Result<(), String> {
             .extension()
             .and_then(|e| e.to_str())
             .map(|e| e.to_lowercase());
-        if !image_ext_raw.as_deref().map(|e| IMAGE_EXTS.contains(&e)).unwrap_or(false) {
-            return Err(format!("write_cover: image path non autorisé — {}", data.image_path));
+        if !image_ext_raw
+            .as_deref()
+            .map(|e| IMAGE_EXTS.contains(&e))
+            .unwrap_or(false)
+        {
+            return Err(format!(
+                "write_cover: image path non autorisé — {}",
+                data.image_path
+            ));
         }
         let canon_image = fs::canonicalize(image_path_raw)
             .map_err(|e| format!("write_cover: chemin image invalide — {e}"))?;
@@ -537,8 +649,15 @@ pub async fn write_cover(data: WriteCoverData) -> Result<(), String> {
             .extension()
             .and_then(|e| e.to_str())
             .map(|e| e.to_lowercase());
-        if !canon_image_ext.as_deref().map(|e| IMAGE_EXTS.contains(&e)).unwrap_or(false) {
-            return Err(format!("write_cover: extension image non autorisée après résolution — {}", data.image_path));
+        if !canon_image_ext
+            .as_deref()
+            .map(|e| IMAGE_EXTS.contains(&e))
+            .unwrap_or(false)
+        {
+            return Err(format!(
+                "write_cover: extension image non autorisée après résolution — {}",
+                data.image_path
+            ));
         }
 
         // Cap taille image à 10 MB pour éviter qu'un fichier hostile ou un symlink
@@ -549,7 +668,8 @@ pub async fn write_cover(data: WriteCoverData) -> Result<(), String> {
         if meta.len() > MAX_COVER_BYTES {
             return Err(format!(
                 "write_cover: image trop volumineuse ({} octets, max {})",
-                meta.len(), MAX_COVER_BYTES
+                meta.len(),
+                MAX_COVER_BYTES
             ));
         }
 
@@ -560,32 +680,28 @@ pub async fn write_cover(data: WriteCoverData) -> Result<(), String> {
         let ext = canon_image_ext.as_deref().unwrap_or("");
         let mime_ok = match ext {
             "jpg" | "jpeg" => image_data.starts_with(&[0xFF, 0xD8, 0xFF]),
-            "png"          => image_data.starts_with(&[0x89, 0x50, 0x4E, 0x47]),
-            "webp"         => image_data.len() >= 12 && &image_data[8..12] == b"WEBP",
-            _              => true, // unknown ext — pass through
+            "png" => image_data.starts_with(&[0x89, 0x50, 0x4E, 0x47]),
+            "webp" => image_data.len() >= 12 && &image_data[8..12] == b"WEBP",
+            _ => true, // unknown ext — pass through
         };
         if !mime_ok {
             return Err(format!(
-                "write_cover: file magic bytes do not match extension {:?}", ext
+                "write_cover: file magic bytes do not match extension {:?}",
+                ext
             ));
         }
 
         // lofty n'a pas de variant MimeType::Webp — MimeType::Unknown est la représentation correcte.
         let mime = match canon_image_ext.as_deref() {
-            Some("png")  => MimeType::Png,
+            Some("png") => MimeType::Png,
             Some("jpg") | Some("jpeg") => MimeType::Jpeg,
-            Some("bmp")  => MimeType::Bmp,
-            Some("gif")  => MimeType::Gif,
+            Some("bmp") => MimeType::Bmp,
+            Some("gif") => MimeType::Gif,
             Some("tiff") | Some("tif") => MimeType::Tiff,
-            _            => MimeType::Unknown("image/webp".into()),
+            _ => MimeType::Unknown("image/webp".into()),
         };
 
-        let picture = Picture::new_unchecked(
-            PictureType::CoverFront,
-            Some(mime),
-            None,
-            image_data,
-        );
+        let picture = Picture::new_unchecked(PictureType::CoverFront, Some(mime), None, image_data);
 
         let mut tagged_file = Probe::open(&canon_audio)
             .map_err(|e| format!("Probe::open: {e}"))?
@@ -620,12 +736,18 @@ pub async fn write_replaygain_tags(data: WriteReplaygainData) -> Result<(), Stri
 
         let path = Path::new(&data.path);
         if !is_audio(path) {
-            return Err(format!("write_replaygain_tags: extension non autorisée — {}", data.path));
+            return Err(format!(
+                "write_replaygain_tags: extension non autorisée — {}",
+                data.path
+            ));
         }
         let canon = fs::canonicalize(path)
             .map_err(|e| format!("write_replaygain_tags: chemin invalide — {e}"))?;
         if !is_audio(&canon) {
-            return Err(format!("write_replaygain_tags: extension non autorisée après résolution — {}", data.path));
+            return Err(format!(
+                "write_replaygain_tags: extension non autorisée après résolution — {}",
+                data.path
+            ));
         }
         let mut tagged_file = Probe::open(&canon)
             .map_err(|e| format!("Probe::open: {e}"))?
@@ -646,7 +768,11 @@ pub async fn write_replaygain_tags(data: WriteReplaygainData) -> Result<(), Stri
             .map_err(|e| format!("save: {e}"))
     })
     .await
-    .unwrap_or_else(|e| Err(format!("write_replaygain_tags: spawn_blocking paniqué — {e}")))
+    .unwrap_or_else(|e| {
+        Err(format!(
+            "write_replaygain_tags: spawn_blocking paniqué — {e}"
+        ))
+    })
 }
 
 // ── Commandes : notifications OS ─────────────────────────────────────────────
@@ -656,11 +782,15 @@ pub async fn write_replaygain_tags(data: WriteReplaygainData) -> Result<(), Stri
 #[tauri::command]
 pub fn notify_track(app: AppHandle, data: NotifyTrackData) -> Result<(), String> {
     use tauri_plugin_notification::NotificationExt;
-    let title = data.title.chars()
+    let title = data
+        .title
+        .chars()
         .filter(|c| !c.is_control())
         .take(100)
         .collect::<String>();
-    let artist = data.artist.chars()
+    let artist = data
+        .artist
+        .chars()
         .filter(|c| !c.is_control())
         .take(100)
         .collect::<String>();
@@ -687,7 +817,9 @@ pub fn win_close(app: AppHandle) -> Result<(), String> {
 #[tauri::command]
 pub async fn win_minimize(app: AppHandle) -> Result<(), String> {
     // Ouvrir le mini-player (guard interne : idempotent si déjà ouvert)
-    let _ = crate::mini::open_mini(&app).await;
+    if let Err(e) = crate::mini::open_mini(&app).await {
+        eprintln!("[win_minimize] open_mini failed: {e}");
+    }
     // Réduire la fenêtre principale
     app.get_webview_window("main")
         .ok_or_else(|| "Fenêtre main introuvable".to_string())?
@@ -699,7 +831,8 @@ pub async fn win_minimize(app: AppHandle) -> Result<(), String> {
 /// Appelé aussi pour passer en plein écran (F11 côté JS).
 #[tauri::command]
 pub fn win_maximize(app: AppHandle) -> Result<(), String> {
-    let win = app.get_webview_window("main")
+    let win = app
+        .get_webview_window("main")
         .ok_or_else(|| "Fenêtre main introuvable".to_string())?;
     if win.is_maximized().unwrap_or(false) || win.is_fullscreen().unwrap_or(false) {
         win.unmaximize().map_err(|e| e.to_string())
@@ -767,17 +900,32 @@ fn is_cross_device_error(e: &std::io::Error) -> bool {
 /// Refuse `..`, chemins système connus, et chemins vides.
 fn validate_organize_path(raw: &str) -> Result<(), String> {
     use std::path::Component;
-    if raw.is_empty() { return Err("chemin vide".to_string()); }
+    if raw.is_empty() {
+        return Err("chemin vide".to_string());
+    }
+    // Rejeter octets null et caractères de contrôle : un octet null tronque le
+    // chemin au niveau de l'appel système Win32/POSIX, un caractère de contrôle
+    // n'a aucune raison d'apparaître dans un chemin légitime.
+    if raw.contains('\0') || raw.chars().any(|c| c.is_control()) {
+        return Err(format!(
+            "chemin contient des caractères interdits : {}",
+            raw
+        ));
+    }
     let path = Path::new(raw);
     for c in path.components() {
         if matches!(c, Component::ParentDir) {
             return Err(format!("'..' interdit : {}", raw));
         }
     }
-    let parent = path.parent().ok_or_else(|| format!("sans parent : {}", raw))?;
+    let parent = path
+        .parent()
+        .ok_or_else(|| format!("sans parent : {}", raw))?;
     let mut check = parent.to_path_buf();
     let canon = loop {
-        if let Ok(c) = fs::canonicalize(&check) { break c; }
+        if let Ok(c) = fs::canonicalize(&check) {
+            break c;
+        }
         let Some(up) = check.parent() else {
             return Err(format!("aucun ancêtre existant : {}", raw));
         };
@@ -795,7 +943,7 @@ fn validate_organize_path(raw: &str) -> Result<(), String> {
 /// En dry_run = false : effectue les rename atomiques; rollback sur première erreur.
 #[tauri::command]
 pub async fn organize_files(
-    moves:   Vec<OrganizeMoveEntry>,
+    moves: Vec<OrganizeMoveEntry>,
     dry_run: bool,
 ) -> Result<OrganizeResult, String> {
     // Validation préalable : aucun move ne doit pointer hors d'un dossier autorisé.
@@ -810,13 +958,13 @@ pub async fn organize_files(
         if dry_run {
             for m in &moves {
                 let from = Path::new(&m.from);
-                let to   = Path::new(&m.to);
+                let to = Path::new(&m.to);
 
                 if !from.exists() {
                     results.push(OrganizeMoveResult {
-                        from:  m.from.clone(),
-                        to:    m.to.clone(),
-                        ok:    false,
+                        from: m.from.clone(),
+                        to: m.to.clone(),
+                        ok: false,
                         error: Some(format!("Source introuvable : {}", m.from)),
                     });
                     error_count += 1;
@@ -824,20 +972,26 @@ pub async fn organize_files(
                     let same = from.canonicalize().ok() == to.canonicalize().ok();
                     if same {
                         results.push(OrganizeMoveResult {
-                            from: m.from.clone(), to: m.to.clone(), ok: true, error: None,
+                            from: m.from.clone(),
+                            to: m.to.clone(),
+                            ok: true,
+                            error: None,
                         });
                     } else {
                         results.push(OrganizeMoveResult {
-                            from:  m.from.clone(),
-                            to:    m.to.clone(),
-                            ok:    false,
+                            from: m.from.clone(),
+                            to: m.to.clone(),
+                            ok: false,
                             error: Some(format!("Destination occupée : {}", m.to)),
                         });
                         error_count += 1;
                     }
                 } else {
                     results.push(OrganizeMoveResult {
-                        from: m.from.clone(), to: m.to.clone(), ok: true, error: None,
+                        from: m.from.clone(),
+                        to: m.to.clone(),
+                        ok: true,
+                        error: None,
                     });
                 }
             }
@@ -847,11 +1001,14 @@ pub async fn organize_files(
 
             'outer: for m in &moves {
                 let from = Path::new(&m.from);
-                let to   = Path::new(&m.to);
+                let to = Path::new(&m.to);
 
                 if from == to {
                     results.push(OrganizeMoveResult {
-                        from: m.from.clone(), to: m.to.clone(), ok: true, error: None,
+                        from: m.from.clone(),
+                        to: m.to.clone(),
+                        ok: true,
+                        error: None,
                     });
                     continue;
                 }
@@ -861,13 +1018,63 @@ pub async fn organize_files(
                         if let Err(e) = fs::create_dir_all(parent) {
                             error_count += 1;
                             results.push(OrganizeMoveResult {
-                                from:  m.from.clone(),
-                                to:    m.to.clone(),
-                                ok:    false,
+                                from: m.from.clone(),
+                                to: m.to.clone(),
+                                ok: false,
                                 error: Some(format!("Création dossier échouée : {e}")),
                             });
                             for (done_to, done_from) in completed.iter().rev() {
-                                let _ = fs::rename(done_to, done_from);
+                                if let Err(e) = fs::rename(done_to, done_from) {
+                                    eprintln!("[organize] rollback rename failed: {} -> {}: {e}", done_to, done_from);
+                                }
+                            }
+                            break 'outer;
+                        }
+                    }
+                }
+
+                // S-02 : re-vérifier juste avant fs::rename que source et parent
+                // cible vivent dans un dossier sûr. validate_organize_path a déjà
+                // rejeté `..`/null en amont, mais le chemin a pu changer (TOCTOU
+                // sur symlink). On canonicalise la source réelle et le parent de
+                // la cible, puis on re-confronte is_safe_dir.
+                if let Ok(canon_from) = fs::canonicalize(from) {
+                    if !is_safe_dir(&canon_from) {
+                        error_count += 1;
+                        results.push(OrganizeMoveResult {
+                            from: m.from.clone(),
+                            to: m.to.clone(),
+                            ok: false,
+                            error: Some(format!(
+                                "source dans un dossier système refusé : {}",
+                                m.from
+                            )),
+                        });
+                        for (done_to, done_from) in completed.iter().rev() {
+                            if let Err(e) = fs::rename(done_to, done_from) {
+                                eprintln!("[organize] rollback rename failed: {} -> {}: {e}", done_to, done_from);
+                            }
+                        }
+                        break 'outer;
+                    }
+                }
+                if let Some(to_parent) = to.parent() {
+                    if let Ok(canon_to_parent) = fs::canonicalize(to_parent) {
+                        if !is_safe_dir(&canon_to_parent) {
+                            error_count += 1;
+                            results.push(OrganizeMoveResult {
+                                from: m.from.clone(),
+                                to: m.to.clone(),
+                                ok: false,
+                                error: Some(format!(
+                                    "destination dans un dossier système refusé : {}",
+                                    m.to
+                                )),
+                            });
+                            for (done_to, done_from) in completed.iter().rev() {
+                                if let Err(e) = fs::rename(done_to, done_from) {
+                                    eprintln!("[organize] rollback rename failed: {} -> {}: {e}", done_to, done_from);
+                                }
                             }
                             break 'outer;
                         }
@@ -878,12 +1085,25 @@ pub async fn organize_files(
                 // ERROR_NOT_SAME_DEVICE (rename cross-volume échoue sur Windows).
                 let move_res = fs::rename(&m.from, &m.to).or_else(|e| {
                     if is_cross_device_error(&e) {
-                        fs::copy(&m.from, &m.to)
-                            .and_then(|_| fs::remove_file(&m.from))
-                            .map_err(|e2| std::io::Error::new(
+                        // B12 FIX : copy+remove n'est pas atomique. Si la copie réussit
+                        // mais remove_file échoue (source verrouillée — fenêtre TOCTOU),
+                        // retirer la copie fraîchement créée pour ne pas laisser de doublon.
+                        fs::copy(&m.from, &m.to).map_err(|e2| {
+                            std::io::Error::new(
                                 e2.kind(),
                                 format!("rename cross-volume fallback: {e2}"),
-                            ))
+                            )
+                        })?;
+                        if let Err(e2) = fs::remove_file(&m.from) {
+                            if let Err(e3) = fs::remove_file(&m.to) {
+                                eprintln!("[organize] cross-device cleanup failed for {}: {e3}", m.to);
+                            }
+                            return Err(std::io::Error::new(
+                                e2.kind(),
+                                format!("rename cross-volume fallback: {e2}"),
+                            ));
+                        }
+                        Ok(())
                     } else {
                         Err(e)
                     }
@@ -892,15 +1112,18 @@ pub async fn organize_files(
                     Ok(_) => {
                         completed.push((m.to.clone(), m.from.clone()));
                         results.push(OrganizeMoveResult {
-                            from: m.from.clone(), to: m.to.clone(), ok: true, error: None,
+                            from: m.from.clone(),
+                            to: m.to.clone(),
+                            ok: true,
+                            error: None,
                         });
                     }
                     Err(e) => {
                         error_count += 1;
                         results.push(OrganizeMoveResult {
-                            from:  m.from.clone(),
-                            to:    m.to.clone(),
-                            ok:    false,
+                            from: m.from.clone(),
+                            to: m.to.clone(),
+                            ok: false,
                             error: Some(e.to_string()),
                         });
                         // Rollback : tracker les échecs au lieu de les avaler
@@ -909,9 +1132,9 @@ pub async fn organize_files(
                             if let Err(re) = fs::rename(done_to, done_from) {
                                 error_count += 1;
                                 results.push(OrganizeMoveResult {
-                                    from:  done_to.clone(),
-                                    to:    done_from.clone(),
-                                    ok:    false,
+                                    from: done_to.clone(),
+                                    to: done_from.clone(),
+                                    ok: false,
                                     error: Some(format!("rollback failed: {re}")),
                                 });
                             }
@@ -922,7 +1145,10 @@ pub async fn organize_files(
             }
         }
 
-        Ok(OrganizeResult { moves: results, error_count })
+        Ok(OrganizeResult {
+            moves: results,
+            error_count,
+        })
     })
     .await
     .map_err(|e| format!("organize_files: spawn_blocking: {e}"))?
@@ -956,7 +1182,9 @@ pub fn export_backup(
             let canon_parent = fs::canonicalize(parent)
                 .map_err(|e| format!("export_backup: dossier cible invalide — {e}"))?;
             if !is_safe_dir(&canon_parent) {
-                return Err(format!("export_backup: dossier cible refusé (chemin système) — {dest}"));
+                return Err(format!(
+                    "export_backup: dossier cible refusé (chemin système) — {dest}"
+                ));
             }
         }
     }
@@ -987,7 +1215,9 @@ pub fn import_backup(app: AppHandle) -> Result<Option<crate::backup::ImportPaylo
         .to_string();
     if let Some(parent) = std::path::Path::new(&src).parent() {
         if !parent.as_os_str().is_empty() && !is_safe_dir(parent) {
-            return Err(format!("import_backup: chemin refusé (chemin système) — {src}"));
+            return Err(format!(
+                "import_backup: chemin refusé (chemin système) — {src}"
+            ));
         }
     }
     let payload = crate::backup::read_backup_zip(&src)?;
@@ -1005,20 +1235,22 @@ pub fn list_drives() -> Vec<DriveInfo> {
 
 #[cfg(target_os = "windows")]
 fn _list_drives_impl() -> Vec<DriveInfo> {
-    use windows::Win32::Storage::FileSystem::{
-        GetLogicalDriveStringsW, GetDriveTypeW,
-    };
     use windows::core::HSTRING;
+    use windows::Win32::Storage::FileSystem::{GetDriveTypeW, GetLogicalDriveStringsW};
 
     let mut buf = vec![0u16; 256];
     let len = unsafe { GetLogicalDriveStringsW(Some(&mut buf)) } as usize;
-    if len == 0 { return vec![]; }
+    if len == 0 {
+        return vec![];
+    }
 
     let mut drives = vec![];
     let raw = &buf[..len];
 
     for segment in raw.split(|&c| c == 0) {
-        if segment.is_empty() { continue; }
+        if segment.is_empty() {
+            continue;
+        }
         let drive_str = String::from_utf16_lossy(segment).to_string();
         let hstr = HSTRING::from(drive_str.as_str());
         let dtype = unsafe { GetDriveTypeW(&hstr) };
@@ -1029,7 +1261,8 @@ fn _list_drives_impl() -> Vec<DriveInfo> {
             4 => "network",
             5 => "cdrom",
             _ => "unknown",
-        }.to_string();
+        }
+        .to_string();
 
         // Label = lettre de lecteur sans le backslash final (ex: "C:")
         let label = drive_str.trim_end_matches('\\').to_string();
@@ -1038,14 +1271,14 @@ fn _list_drives_impl() -> Vec<DriveInfo> {
         let (audio_cd, track_count) = if dtype == 5 {
             match crate::cdaudio::cd_read_toc(drive_str.clone()) {
                 Ok(toc) => (!toc.tracks.is_empty(), toc.tracks.len().min(255) as u8),
-                Err(_)  => (false, 0), // drive empty, data CD, or read error — silent
+                Err(_) => (false, 0), // drive empty, data CD, or read error — silent
             }
         } else {
             (false, 0)
         };
 
         drives.push(DriveInfo {
-            path:  drive_str,
+            path: drive_str,
             label,
             kind,
             audio_cd,
@@ -1057,17 +1290,23 @@ fn _list_drives_impl() -> Vec<DriveInfo> {
 
 #[cfg(target_os = "macos")]
 fn _list_drives_impl() -> Vec<DriveInfo> {
-    let Ok(dir) = std::fs::read_dir("/Volumes") else { return vec![]; };
+    let Ok(dir) = std::fs::read_dir("/Volumes") else {
+        return vec![];
+    };
     dir.flatten()
         .filter_map(|e| {
             let p = e.path();
-            if !p.is_dir() { return None; }
+            if !p.is_dir() {
+                return None;
+            }
             let label = p.file_name()?.to_string_lossy().to_string();
-            if label.starts_with('.') { return None; } // skip hidden (Preboot, etc.)
+            if label.starts_with('.') {
+                return None;
+            } // skip hidden (Preboot, etc.)
             Some(DriveInfo {
-                path:  p.to_string_lossy().to_string(),
+                path: p.to_string_lossy().to_string(),
                 label,
-                kind:  "unknown".to_string(),
+                kind: "unknown".to_string(),
                 audio_cd: false,
                 track_count: 0,
             })
@@ -1078,23 +1317,52 @@ fn _list_drives_impl() -> Vec<DriveInfo> {
 #[cfg(all(not(target_os = "windows"), not(target_os = "macos")))]
 fn _list_drives_impl() -> Vec<DriveInfo> {
     const PSEUDO_FS: &[&str] = &[
-        "proc", "sysfs", "devtmpfs", "tmpfs", "cgroup", "cgroup2",
-        "debugfs", "securityfs", "pstore", "bpf", "tracefs",
-        "hugetlbfs", "mqueue", "fusectl", "devpts", "efivarfs", "overlay",
+        "proc",
+        "sysfs",
+        "devtmpfs",
+        "tmpfs",
+        "cgroup",
+        "cgroup2",
+        "debugfs",
+        "securityfs",
+        "pstore",
+        "bpf",
+        "tracefs",
+        "hugetlbfs",
+        "mqueue",
+        "fusectl",
+        "devpts",
+        "efivarfs",
+        "overlay",
     ];
-    let Ok(content) = std::fs::read_to_string("/proc/mounts") else { return vec![]; };
-    content.lines()
+    let Ok(content) = std::fs::read_to_string("/proc/mounts") else {
+        return vec![];
+    };
+    content
+        .lines()
         .filter_map(|line| {
             let parts: Vec<&str> = line.split_whitespace().collect();
-            if parts.len() < 3 { return None; }
+            if parts.len() < 3 {
+                return None;
+            }
             let mountpoint = parts[1];
-            let fstype     = parts[2];
-            if PSEUDO_FS.contains(&fstype) { return None; }
-            let label = mountpoint.split('/').last().unwrap_or(mountpoint).to_string();
+            let fstype = parts[2];
+            if PSEUDO_FS.contains(&fstype) {
+                return None;
+            }
+            let label = mountpoint
+                .split('/')
+                .last()
+                .unwrap_or(mountpoint)
+                .to_string();
             Some(DriveInfo {
-                path:  mountpoint.to_string(),
-                label: if label.is_empty() { "/".to_string() } else { label },
-                kind:  "unknown".to_string(),
+                path: mountpoint.to_string(),
+                label: if label.is_empty() {
+                    "/".to_string()
+                } else {
+                    label
+                },
+                kind: "unknown".to_string(),
                 audio_cd: false,
                 track_count: 0,
             })
@@ -1125,7 +1393,10 @@ pub fn open_folder_at(
     let canon = fs::canonicalize(&folder_str)
         .map_err(|e| format!("open_folder_at: canonicalize échoué — {e}"))?;
     if !is_safe_dir(&canon) {
-        return Err(format!("open_folder_at: dossier non autorisé — {}", canon.display()));
+        return Err(format!(
+            "open_folder_at: dossier non autorisé — {}",
+            canon.display()
+        ));
     }
 
     let raw_paths = scan_dir(&canon);
@@ -1134,5 +1405,11 @@ pub fn open_folder_at(
         .filter_map(|p| p.to_str().map(String::from))
         .collect();
 
-    Ok(Some(OpenFolderResult { folder: folder_str, files }))
+    // Retourner le chemin canonique (cohérence avec open_folder) : les commandes
+    // suivantes opèrent sur le même chemin validé par is_safe_dir, pas sur le brut.
+    let canon_str = canon.to_string_lossy().to_string();
+    Ok(Some(OpenFolderResult {
+        folder: canon_str,
+        files,
+    }))
 }

@@ -97,6 +97,26 @@ export function updateMiniOverlayProgress() {
   if (fill) fill.style.width = (audio.currentTime / audio.duration * 100).toFixed(1) + '%';
 }
 
+// ── R-M6 : re-clamp au resize ──────────────────────────────────────
+/**
+ * Appelé par le listener `resize` centralisé d'app.js.
+ * Après un drag, l'overlay passe en positionnement `left/top` absolu : si la
+ * fenêtre rétrécit, il peut se retrouver hors écran et inatteignable. On
+ * re-clampe `left/top` aux bornes du viewport. No-op si fermé ou si l'overlay
+ * est encore ancré en `right/bottom` (jamais déplacé).
+ */
+export function reclampMiniOverlay() {
+  if (!miniOvOpen) return;
+  const el = document.getElementById('mp-ov');
+  if (!el || !el.style.left) return; // pas encore déplacé → ancrage CSS right/bottom
+  const maxX = Math.max(0, window.innerWidth  - el.offsetWidth);
+  const maxY = Math.max(0, window.innerHeight - el.offsetHeight);
+  const x = Math.min(parseFloat(el.style.left) || 0, maxX);
+  const y = Math.min(parseFloat(el.style.top)  || 0, maxY);
+  el.style.left = Math.max(0, x) + 'px';
+  el.style.top  = Math.max(0, y) + 'px';
+}
+
 // ── Drag (pointerdown — support souris + touch) ────────────────────
 export function initMiniOverlayDrag() {
   const el = document.getElementById('mp-ov');

@@ -17,24 +17,24 @@ const MAX_BACKUP_TOTAL_UNCOMPRESSED: u64 = 50 * 1024 * 1024;
 /// Chaque champ est un JSON sérialisé en String (dall() → JSON.stringify()).
 #[derive(serde::Deserialize)]
 pub struct ExportPayload {
-    pub manifest:  String,
-    pub library:   String,
+    pub manifest: String,
+    pub library: String,
     pub playlists: String,
-    pub playlog:   String,
-    pub imports:   String,
-    pub config:    String,
+    pub playlog: String,
+    pub imports: String,
+    pub config: String,
 }
 
 /// Données retournées au frontend lors de l'import.
 /// Chaque champ est un JSON brut à parser côté JS.
 #[derive(serde::Serialize)]
 pub struct ImportPayload {
-    pub manifest:  String,
-    pub library:   String,
+    pub manifest: String,
+    pub library: String,
     pub playlists: String,
-    pub playlog:   String,
-    pub imports:   String,
-    pub config:    String,
+    pub playlog: String,
+    pub imports: String,
+    pub config: String,
 }
 
 /// Crée un fichier .libreflow (ZIP Deflate) au chemin indiqué.
@@ -51,16 +51,16 @@ pub fn write_backup_zip(dest_path: &str, payload: &ExportPayload) -> Result<(), 
         let file = std::fs::File::create(&tmp_path)
             .map_err(|e| format!("backup: création fichier temp échouée — {e}"))?;
         let mut zip = zip::ZipWriter::new(file);
-        let opts = SimpleFileOptions::default()
-            .compression_method(zip::CompressionMethod::Deflated);
+        let opts =
+            SimpleFileOptions::default().compression_method(zip::CompressionMethod::Deflated);
 
         let entries = [
-            ("manifest.json",  payload.manifest.as_str()),
-            ("library.json",   payload.library.as_str()),
+            ("manifest.json", payload.manifest.as_str()),
+            ("library.json", payload.library.as_str()),
             ("playlists.json", payload.playlists.as_str()),
-            ("playlog.json",   payload.playlog.as_str()),
-            ("imports.json",   payload.imports.as_str()),
-            ("config.json",    payload.config.as_str()),
+            ("playlog.json", payload.playlog.as_str()),
+            ("imports.json", payload.imports.as_str()),
+            ("config.json", payload.config.as_str()),
         ];
 
         for (name, content) in &entries {
@@ -75,11 +75,10 @@ pub fn write_backup_zip(dest_path: &str, payload: &ExportPayload) -> Result<(), 
     } // file handle closed here
 
     // Atomic rename — only happens if ZIP was written successfully
-    std::fs::rename(&tmp_path, dest_path)
-        .map_err(|e| {
-            let _ = std::fs::remove_file(&tmp_path); // cleanup temp on rename failure
-            format!("backup: renommage fichier échoué — {e}")
-        })?;
+    std::fs::rename(&tmp_path, dest_path).map_err(|e| {
+        let _ = std::fs::remove_file(&tmp_path); // cleanup temp on rename failure
+        format!("backup: renommage fichier échoué — {e}")
+    })?;
 
     Ok(())
 }
@@ -91,10 +90,11 @@ pub fn write_backup_zip(dest_path: &str, payload: &ExportPayload) -> Result<(), 
 /// annoncée dans l'entête ZIP est mensongère (lecture cappée via `Read::take`).
 fn _read_entry(
     archive: &mut zip::ZipArchive<std::fs::File>,
-    name:    &str,
-    budget:  &mut u64,
+    name: &str,
+    budget: &mut u64,
 ) -> Result<String, String> {
-    let entry = archive.by_name(name)
+    let entry = archive
+        .by_name(name)
         .map_err(|e| format!("backup: entrée '{name}' introuvable dans l'archive — {e}"))?;
     let declared = entry.size();
     if declared > *budget {
@@ -106,7 +106,9 @@ fn _read_entry(
     // Lit AU PLUS `budget+1` octets — un mensonge de taille (déclarée < réelle)
     // est détecté quand `take` rend des données dépassant le budget.
     let mut s = String::new();
-    let n = entry.take(*budget + 1).read_to_string(&mut s)
+    let n = entry
+        .take(*budget + 1)
+        .read_to_string(&mut s)
         .map_err(|e| format!("backup: lecture '{name}' échouée — {e}"))? as u64;
     if n > *budget {
         return Err(format!(
@@ -121,8 +123,8 @@ fn _read_entry(
 /// Lit un fichier .libreflow et retourne les JSON internes.
 /// Vérifie que toutes les entrées attendues sont présentes.
 pub fn read_backup_zip(src_path: &str) -> Result<ImportPayload, String> {
-    let file = std::fs::File::open(src_path)
-        .map_err(|e| format!("backup: ouverture échouée — {e}"))?;
+    let file =
+        std::fs::File::open(src_path).map_err(|e| format!("backup: ouverture échouée — {e}"))?;
     let mut archive = zip::ZipArchive::new(file)
         .map_err(|e| format!("backup: lecture ZIP échouée (fichier corrompu ?) — {e}"))?;
 
@@ -130,12 +132,19 @@ pub fn read_backup_zip(src_path: &str) -> Result<ImportPayload, String> {
     // dont la somme totale décompressée dépasse MAX_BACKUP_TOTAL_UNCOMPRESSED,
     // même si chaque entrée prise individuellement reste petite.
     let mut budget = MAX_BACKUP_TOTAL_UNCOMPRESSED;
-    let manifest  = _read_entry(&mut archive, "manifest.json",  &mut budget)?;
-    let library   = _read_entry(&mut archive, "library.json",   &mut budget)?;
+    let manifest = _read_entry(&mut archive, "manifest.json", &mut budget)?;
+    let library = _read_entry(&mut archive, "library.json", &mut budget)?;
     let playlists = _read_entry(&mut archive, "playlists.json", &mut budget)?;
-    let playlog   = _read_entry(&mut archive, "playlog.json",   &mut budget)?;
-    let imports   = _read_entry(&mut archive, "imports.json",   &mut budget)?;
-    let config    = _read_entry(&mut archive, "config.json",    &mut budget)?;
+    let playlog = _read_entry(&mut archive, "playlog.json", &mut budget)?;
+    let imports = _read_entry(&mut archive, "imports.json", &mut budget)?;
+    let config = _read_entry(&mut archive, "config.json", &mut budget)?;
 
-    Ok(ImportPayload { manifest, library, playlists, playlog, imports, config })
+    Ok(ImportPayload {
+        manifest,
+        library,
+        playlists,
+        playlog,
+        imports,
+        config,
+    })
 }

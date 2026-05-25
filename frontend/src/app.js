@@ -25,7 +25,7 @@ import { initDevices }                                 from './devices.js';
 import { cleanupCdCache }                              from './cdaudio.js';
 import { initViz, startViz, stopViz, updateVizColor, setVizMode, getVizMode, setVizEnabled, getVizEnabled } from './viz.js';
 import { sleepFading, setSleepFading, sleepEndOfTrack, toggleSleepMenu, setSleepTimer, setSleepEndOfTrack, setSleepCustom, cancelSleepTimer } from './sleep.js';
-import { esc, fmt, fmtd, extEmoji, normTag, mainArtist } from './utils.js';
+import { esc, fmt, fmtd, extEmoji, normTag, mainArtist, validYear } from './utils.js';
 import { radioActive, startRadio, stopRadio, resetRadio, radioRefillQueue, toggleRadio, ctxStartRadio, radioRegenerateFromCurrent, radioSaveAsPlaylist, getRadioQueue, renderRadioView, openRadioView, syncRadioLibBar, getRadioSeedId, initRadioSeedId } from './radio.js';
 import { initWatchPath, getWatchPath, stopWatchFolder, updateWatchUI, importPaths, startWatchNative } from './watchfolder.js'; // Bug #7 fix : startWatchNative ajouté
 import { renderStats, getHeatPeriod, initHeatPeriod } from './stats.js';
@@ -34,7 +34,7 @@ import { detectDupes, removeDupeTrack, deleteAllDupes, closeDupes } from './dupe
 import { checkOrphans } from './orphans.js';
 import { selection, selectionMode, clearSelection, toggleTrackSelection, selAddToPlaylist, selAddBatch, selToggleLike, selRemove, selBatchTagEdit, closeBatchTagModal, confirmBatchTagEdit } from './selection.js';
 import { toggleMiniPlayer, updateMiniPlayer, updateMiniProgress, resetMiniProgressThrottle, setMiniPos, getMiniPos } from './miniplayer.js';
-import { toggleMiniOverlay, syncMiniOverlay, updateMiniOverlayProgress, initMiniOverlayDrag } from './minioverlay.js';
+import { toggleMiniOverlay, syncMiniOverlay, updateMiniOverlayProgress, initMiniOverlayDrag, reclampMiniOverlay } from './minioverlay.js';
 import { rgEnabled, rgTargetLUFS, initRgState, initRG, setReplayGain, setRGTarget, analyzeAndApplyRG, applyRGGain, cancelRgAnalysis } from './replaygain.js';
 import { openTagEditor, saveTagEdit, cancelTagEdit } from './tagedit.js';
 import { toast, toastWithAction, confirmAction, resolveConfirm, initRipple } from './ui.js';
@@ -65,7 +65,7 @@ import {
 } from './playlists.js';
 export { playPlaylistFrom, playPlaylistDirect, shufflePlaylist }; // re-export (handlers.js backward compat)
 
-import { toggleNowPlaying, closeNowPlaying, updateNowPlaying, initNpBg } from './nowplaying.js';
+import { toggleNowPlaying, closeNowPlaying, updateNowPlaying, initNpBg, onResizeNowPlaying } from './nowplaying.js';
 import {
   initSettingsVars, getTheme, getDynColor, getDisplayMode, isShortcutsOpen,
   switchSetTab, openSettings, closeSettings,
@@ -95,9 +95,10 @@ import { showCtxMenu, closeCtxMenu, ctxToggleLike, ctxDeleteTrack, ctxEditTags, 
 import { initDrop } from './dropin.js';
 import { initKeyNav } from './keynav.js';
 import { initShortcuts } from './shortcuts.js';
+import { setTlistZoom, initTlistZoomWheel } from './tlistZoom.js';
 import { confirmClear, closeModal } from './modal.js';
 export { confirmClear, closeModal }; // re-export pour handlers.js
-import { updateBar, updateVolSlider, setupMarquee } from './playerbar.js';
+import { updateBar, updateVolSlider, setupMarquee, reflowMarquee } from './playerbar.js';
 export { updateBar, updateVolSlider }; // re-exports pour library.js, selection.js, tagedit.js, handlers.js
 // ── cfgsave.js (ARCH-1) ──────────────────────────────────────────────────────
 import { saveCfg, saveCfgNow } from './cfgsave.js';
@@ -106,13 +107,6 @@ export { saveCfg, saveCfgNow }; // re-exports pour cinema.js, ctxmenu.js, player
 import { setCurIdx, setTracks, setLiked, setCtxTrackId } from './state.js';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
-
-/** Retourne l'année si elle est plausible (1900–2100), null sinon.
- *  Note : les faux-1970 (TDRC="1970-01-01T00:00:00") sont filtrés en amont dans tags.js. */
-function validYear(y) {
-  const n = Number(y);
-  return (Number.isInteger(n) && n >= 1900 && n <= 2100) ? n : null;
-}
 
 // ── JSDoc type definitions ────────────────────────────────────────────────────
 
@@ -301,7 +295,10 @@ on(EVENTS.RENDER_LIB, () => updateSidebarCounts());
  * entre les deux branches du boot (PERF-BOOT Fix B).
  * @param {object|null} cfgObj — objet cfg tel que lu depuis IDB (peut être null)
  */
+let _bootUIApplied = false; // BUG-AUDIT HIGH : garde anti-double-appel (_applyBootUI ajoute des listeners)
 function _applyBootUI(cfgObj) {
+  if (_bootUIApplied) return; // idempotent — évite le double-câblage des listeners de panneau
+  _bootUIApplied = true;
   applyLang();
   setMode(getDisplayMode());
   document.getElementById('pc-shuf')?.classList.toggle('on', shuffle);
@@ -382,7 +379,7 @@ async function boot() {
         'warning'
       );
     }
-  }).catch(() => {});
+  }).catch(e => console.warn('[app:storageEstimate]', e));
 
   // Load config
   const cfg = await dget('cfg','state').catch(()=>null);
@@ -452,7 +449,7 @@ async function boot() {
     // La surveillance était inactive jusqu'au prochain clic sur le bouton.
     if (cfg.watchPath) {
       initWatchPath(cfg.watchPath);
-      startWatchNative().catch(() => {}); // fire-and-forget — timeout géré dans startWatchNative
+      startWatchNative().catch(e => console.warn('[app:startWatchNative]', e)); // fire-and-forget — timeout géré dans startWatchNative
     }
     // Position mini-player
     setMiniPos(cfg.miniPos ?? null);
@@ -477,6 +474,10 @@ async function boot() {
       }
     }
   }
+  // Zoom liste de pistes — appliquer AVANT le premier rendu (tlistZoom.js)
+  setTlistZoom((cfg && cfg.tlistZoom) || 'normal');
+  // Ctrl/Cmd + molette → cycle le niveau de zoom sur #tlist (throttle 150ms).
+  initTlistZoomWheel();
   // PERF : charger playlists, playlog et tracks EN PARALLÈLE (était séquentiel → 3× plus lent)
   // Les trois stores sont indépendants — aucun n'a besoin que l'autre soit chargé en premier.
   // Afficher le skeleton adapté à la vue sauvegardée (albums/artistes/genres/liste)
@@ -551,7 +552,7 @@ async function boot() {
     const _assetDirs = [...new Set(
       tracks.map(t => t.path ? t.path.replace(/[/\\][^/\\]+$/, '') : null).filter(Boolean)
     )];
-    _assetDirs.forEach(dir => invoke('allow_asset_dir', { path: dir }).catch(() => {}));
+    _assetDirs.forEach(dir => invoke('allow_asset_dir', { path: dir }).catch(e => console.warn('[app:allow_asset_dir]', dir, e)));
     // Reconstruire liked par IDs si disponible (robuste aux réordres)
     updateStats();
     renderLib();
@@ -634,7 +635,8 @@ async function boot() {
           updateBar();
           patchActiveTrack();
           // UX-5: toast de session restaurée
-          const _resumeTitle = resumeTrack.name || resumeTrack.file?.split(/[\\/]/).pop() || '…';
+          // L-08 : resumeTrack.file est toujours null sur les pistes restaurées depuis l'IDB — branche file?.split retirée.
+          const _resumeTitle = resumeTrack.name || '…';
           toast(i18n('t_session_restored', _resumeTitle), 'info');
           // On ne relance PAS la lecture — l'utilisateur choisit de reprendre
         }
@@ -647,10 +649,10 @@ async function boot() {
     // UX-3 : masquer le spinner de boot même si la bibliothèque est vide
     document.getElementById('boot-spinner')?.remove();
   }
-  initAppVersion().catch(() => {});
+  initAppVersion().catch(e => console.warn('[app:initAppVersion]', e));
   // Vérifier les mises à jour 10s après le boot (non bloquant, silencieux si pas configuré)
   if (_autoUpdate) {
-    setTimeout(() => checkForUpdate().catch(() => {}), 10_000);
+    setTimeout(() => checkForUpdate().catch(e => console.warn('[app:checkForUpdate]', e)), 10_000);
   }
 
   listen('win-state', (e) => { const s = e.payload;
@@ -662,7 +664,7 @@ async function boot() {
     else if (cmd === 'prev')        prev();
     else if (cmd === 'stop')        { audio.pause(); audio.currentTime = 0; setIcon(false); patchPlayState(false); }
   }).then(u => _unlisteners.push(u));
-  window.addEventListener('pagehide', () => { _unlisteners.forEach(u => { try { u(); } catch {} }); });
+  window.addEventListener('pagehide', () => { _unlisteners.forEach(u => { try { u(); } catch(e) { console.warn('[app:unlisten]', e); } }); });
 
   // ── Sauvegarde complète avant fermeture ──────────────────────────────────
   // beforeunload seul ne suffit pas sous Tauri : les promises async ne sont pas attendues.
@@ -724,9 +726,8 @@ export function invalidateFilter() {
 // Logique extraite dans dropin.js ; initDrop() appelé dans DOMContentLoaded ci-dessous.
 
 // ══ Keyboard shortcuts → shortcuts.js (CQ-2) ════════════════════
-// Handler attaché ici après définition de updateVolSlider, closeModal, cycleSpeed
-// (fonctions injectées comme callbacks pour éviter la dépendance circulaire).
-initShortcuts({ updateVolSlider, closeModal, cycleSpeed });
+// initShortcuts() est appelé dans le callback waitForTauri (voir bas de fichier),
+// pour garantir que __TAURI__ est prêt (raccourcis F11/F12 → invoke) et le DOM chargé.
 
 // ══ Persistence ═════════════════════════════════
 
@@ -805,8 +806,29 @@ window.addEventListener('unhandledrejection', (e) => {
   toast(`Erreur asynchrone : ${msg}`, 'error');
 });
 
+// ── Listener `resize` global centralisé (audit responsive 2026-05-22) ─────────
+// Un seul listener debouncé dispatche vers les sous-systèmes ouverts. Le virtual
+// scroll garde son propre ResizeObserver sur #tlist (renderer.js, plus précis).
+// Modèle : le handler resize de cinema.js. Debounce 180ms, aucune allocation
+// dans une boucle rAF.
+//   - R-H4 : Now Playing — redimensionne le canvas plein écran #vnp-canvas.
+//   - R-M6 : mini-overlay — re-clampe left/top aux bornes du viewport.
+//   - R-L9 : barre now-playing — ré-évalue le marquee titre/artiste.
+let _globalResizeTimer = null;
+window.addEventListener('resize', () => {
+  clearTimeout(_globalResizeTimer);
+  _globalResizeTimer = setTimeout(() => {
+    onResizeNowPlaying();  // R-H4 — no-op si Now Playing fermé
+    reclampMiniOverlay();  // R-M6 — no-op si mini-overlay fermé
+    reflowMarquee();       // R-L9 — no-op si aucune piste courante
+  }, 180);
+});
+
 waitForTauri(() => {
   boot().catch(e => console.error('[LibreFlow] boot failed:', e)); // FIX #19
+  // BUG-AUDIT HIGH : initShortcuts() déplacé ici depuis le niveau module — garantit
+  // que __TAURI__ est prêt (F11/F12 → invoke) et le DOM chargé avant d'attacher le handler.
+  initShortcuts({ updateVolSlider, closeModal, cycleSpeed });
   initMediaSession(); // Contrôles Windows 11 SMTC / taskbar
   initMiniOverlayDrag(); // Drag du mini-player overlay in-page
   initRipple(); // Ripple feedback sur boutons et lignes
@@ -897,7 +919,7 @@ export async function clearAppCache() {
   cancelTrackBatch();
   cancelPlayLogFlush();
   // 2. Fermer la connexion IDB.
-  if (DB) { try { DB.close(); } catch(e) {} }
+  if (DB) { try { DB.close(); } catch(e) { console.warn('[app:DB.close]', e); } }
   // 3. Supprimer la base. On track `deleted` séparément :
   //    onblocked = resolve était un bug silencieux — la DB n'était pas supprimée
   //    mais l'app rechargait quand même, laissant les données intactes.
@@ -933,8 +955,8 @@ export async function clearLibrary() {
   setPlayLog([]);
   // Révoquer tous les blob URLs pour libérer la mémoire (B4 FIX : guard blob: — data: URIs ne doivent pas être révoquées)
   for (const t of tracks) {
-    if (t.url && t.url.startsWith('blob:'))  try { URL.revokeObjectURL(t.url);  } catch {}
-    if (t.art && t.art.startsWith('blob:'))  try { URL.revokeObjectURL(t.art);  } catch {}
+    if (t.url && t.url.startsWith('blob:'))  try { URL.revokeObjectURL(t.url);  } catch(e) { console.warn('[app:revokeObjectURL url]', e); }
+    if (t.art && t.art.startsWith('blob:'))  try { URL.revokeObjectURL(t.art);  } catch(e) { console.warn('[app:revokeObjectURL art]', e); }
   }
   tracks  = []; set('tracks', tracks); rebuildTrackIdxMap(); notify('tracks'); invalidateFilter(); // INVARIANT : map must stay in sync; store gets same ref as local var so openFolder mutations stay visible to updateBar()
   liked   = new Set(); set('liked', liked);

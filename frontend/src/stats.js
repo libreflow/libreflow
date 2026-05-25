@@ -10,6 +10,8 @@ import { playLog } from './playlog.js';
 import { esc, extEmoji, fmtDuration } from './utils.js';
 import { getLang, i18n } from './i18n.js';
 import { statsGoToGenre, statsGoToArtist } from './views.js'; // ARCH-1 — no longer from app.js
+import { _normalizeGenre, _trackIdxMap } from './search.js'; // B35 : clé de drill genre normalisée
+import { get } from './store.js';
 
 // ── État UI persistent entre re-renders ───────────────────────
 let _heatPeriod        = 30;   // 7 | 30 | 90 jours
@@ -48,7 +50,12 @@ export function setHeatPeriod(d) {
     document.querySelectorAll('#stats-content .hm-cell.hm-active')
             .forEach(c => c.classList.remove('hm-active'));
   }
-  if (_cachedTracks) renderStats(_cachedTracks, _cachedTrackIdxMap);
+  // AUDIT-2026-05-22 (M-08) : relire tracks[] / _trackIdxMap frais depuis les
+  // sources de verite plutot que les caches module-local (potentiellement stale
+  // si tracks[] a mute depuis le dernier renderStats — import, suppression...).
+  const _freshTracks = get('tracks');
+  if (_freshTracks) renderStats(_freshTracks, _trackIdxMap);
+  else if (_cachedTracks) renderStats(_cachedTracks, _cachedTrackIdxMap);
 }
 
 export function renderStats(tracks, trackIdxMap) {
@@ -218,7 +225,7 @@ export function renderStats(tracks, trackIdxMap) {
       <div class="stats-heading">${i18n('stats_genres')} <span style="font-size:9px;opacity:.5;font-weight:400;letter-spacing:0">${i18n('stats_genres_hint')}</span></div>
       <div class="stats-genres">
         ${topGenres.map(([g, n]) => `
-        <div class="genre-bar-row" data-genre="${esc(g)}" data-genre-key="${esc(g.toLowerCase())}">
+        <div class="genre-bar-row" data-genre="${esc(g)}" data-genre-key="${esc(_normalizeGenre(g))}">
           <span class="genre-bar-name">${esc(g)}</span>
           <div class="genre-bar-wrap"><div class="genre-bar-fill" style="width:${Math.round(n / maxGenre * 100)}%"></div></div>
           <span class="genre-bar-pct">${Math.round(n / tracks.length * 100)}%</span>

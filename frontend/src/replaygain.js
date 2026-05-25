@@ -52,7 +52,7 @@ export function initRG() {
     rgGainNode = eqCtx.createGain();
     rgGainNode.gain.value = 1.0;
     // Recâbler : déconnecter eqSource → audioOutGain, puis eqSource → rgGainNode → audioOutGain
-    try { eqSource.disconnect(audioOutGain ?? eqNodes[0]); } catch(e) {}
+    try { eqSource.disconnect(audioOutGain ?? eqNodes[0]); } catch(e) { console.warn('[replaygain:disconnect]', e); }
     eqSource.connect(rgGainNode);
     rgGainNode.connect(audioOutGain ?? eqNodes[0]);
   } catch(e) { console.warn('[RG init]', e); }
@@ -106,10 +106,16 @@ export async function analyzeAndApplyRG() {
       return;
     }
 
+    // Garde offline (§15) : ne fetch que des URLs asset: produites par convertFileSrc.
+    // Une URL d'un autre schéma (donnée corrompue, dossier réseau) sortirait du périmètre offline.
+    if (!t.url || !t.url.startsWith('asset:')) {
+      console.warn('[replaygain] skip — URL non-asset:', t.url);
+      return;
+    }
     // BUG-M2 FIX : en production, asset:// nécessite que le scope soit accordé avant fetch()
     if (t.path) {
       const _dir = t.path.replace(/[/\\][^/\\]+$/, '');
-      invoke('allow_asset_dir', { path: _dir }).catch(() => {});
+      invoke('allow_asset_dir', { path: _dir }).catch(e => console.warn('[replaygain:allow_asset_dir]', _dir, e));
     }
     const resp = await fetch(t.url);
     if (_rgAnalysisId !== myId) return; // piste changée pendant le download
@@ -117,7 +123,7 @@ export async function analyzeAndApplyRG() {
     // (qui peuvent atteindre 5-10 Mo/min). Ce second test utilise la taille réelle du fichier.
     const contentLen = parseInt(resp.headers.get('content-length') || '0', 10);
     if (contentLen > 0 && contentLen > RG_MAX_BYTES) {
-      resp.body?.cancel().catch(() => {}); // ne pas charger un FLAC de 200 Mo
+      resp.body?.cancel().catch(e => console.warn('[replaygain:body.cancel]', e)); // ne pas charger un FLAC de 200 Mo
       t.rgGain = 1.0; applyRGGain(1.0);  // gain neutre — mieux que rien
       return;
     }
@@ -176,9 +182,13 @@ export async function analyzeAndApplyRG() {
     t.rgGainDB     = gainDB;   // F-7 — stocker en dB pour écriture dans les tags
     // F-7 — Peak depuis les données originales décodées (avant K-weighting)
     // srcBuf contient le PCM brut ; le K-weighting est appliqué via les nœuds filtres, pas via decodeAudioData.
-    const _pcm = srcBuf.getChannelData(0);
+    // B32 FIX : balayer TOUS les canaux (cap 2) — un peak calculé sur le canal 0
+    // seul sous-estime REPLAYGAIN_TRACK_PEAK si le canal droit est plus fort.
     let _peak = 0;
-    for (let i = 0; i < _pcm.length; i++) { const a = Math.abs(_pcm[i]); if (a > _peak) _peak = a; }
+    for (let ch = 0; ch < nch; ch++) {
+      const _pcm = srcBuf.getChannelData(ch);
+      for (let i = 0; i < _pcm.length; i++) { const a = Math.abs(_pcm[i]); if (a > _peak) _peak = a; }
+    }
     t.rgPeak = Math.min(1.0, _peak);
     srcBuf = null; // allow GC of the 30 MB AudioBuffer
     applyRGGain(t.rgGain);

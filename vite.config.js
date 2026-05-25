@@ -55,16 +55,17 @@ export default defineConfig(({ mode }) => {
       emptyOutDir: true,
 
       // Target modern Chromium/WebKit — what Tauri's WebView ships
-      // This lets esbuild skip ES5 polyfills → smaller, faster bundle
+      // This lets Oxc skip ES5 polyfills → smaller, faster bundle
       target: ['chrome105', 'safari15'],
 
-      // esbuild is faster than terser; both achieve equivalent output size
-      minify: 'esbuild',
+      // Oxc minifier (Vite 8 default) — significantly faster than terser/esbuild
+      // with comparable compression. esbuild minifier deprecated in Vite 8.
+      minify: 'oxc',
 
       // Source maps only in dev; strip them from production to keep bundle lean
       sourcemap: !isProd,
 
-      rollupOptions: {
+      rolldownOptions: {
         // Multi-page: main window + mini player window
         input: {
           main: resolve(__dirname, 'frontend/index.html'),
@@ -82,46 +83,51 @@ export default defineConfig(({ mode }) => {
           // pas requis au premier paint (boot perceived ↓ ~150 ms sur cold load).
           // Un seul chunk "extras" (et non plusieurs) pour éviter les chunks
           // circulaires : ces modules ont entre eux des dépendances bidirectionnelles
-          // (cinema ↔ nowplaying, settings ↔ replaygain, etc.) que Rollup ne peut
+          // (cinema ↔ nowplaying, settings ↔ replaygain, etc.) que Rolldown ne peut
           // pas résoudre proprement entre chunks séparés.
-          manualChunks: {
-            'libreflow-core': [
-              './frontend/src/ipc.js',
-              './frontend/src/cfg.js',
-              './frontend/src/db.js',
-            ],
+          // Vite 8 / Rolldown impose la forme fonction (l'ancienne forme objet de
+          // Rollup n'est plus supportée).
+          manualChunks(id) {
+            const p = id.replace(/\\/g, '/');
+            const CORE = new Set([
+              'frontend/src/ipc.js',
+              'frontend/src/cfg.js',
+              'frontend/src/db.js',
+            ]);
             // Modules lourds chargés à la demande après le premier paint :
             // panneaux secondaires (EQ, cinéma, viz, replaygain, nowplaying)
             // + outils (stats, smart-pl, backup, CD, dupes/orphans, tag editor, m3u).
-            'libreflow-extras': [
-              './frontend/src/eq.js',
-              './frontend/src/eqdevice.js',
-              './frontend/src/cinema.js',
-              './frontend/src/viz.js',
-              './frontend/src/replaygain.js',
-              './frontend/src/nowplaying.js',
-              './frontend/src/stats.js',
-              './frontend/src/smartplaylist.js',
-              './frontend/src/backup.js',
-              './frontend/src/cdaudio.js',
-              './frontend/src/cdaudio_pure.js',
-              './frontend/src/dupes.js',
-              './frontend/src/orphans.js',
-              './frontend/src/settings.js',
-              './frontend/src/tagedit.js',
-              './frontend/src/m3u.js',
-            ],
+            const EXTRAS = new Set([
+              'frontend/src/eq.js',
+              'frontend/src/eqdevice.js',
+              'frontend/src/cinema.js',
+              'frontend/src/viz.js',
+              'frontend/src/replaygain.js',
+              'frontend/src/nowplaying.js',
+              'frontend/src/stats.js',
+              'frontend/src/smartplaylist.js',
+              'frontend/src/backup.js',
+              'frontend/src/cdaudio.js',
+              'frontend/src/cdaudio_pure.js',
+              'frontend/src/dupes.js',
+              'frontend/src/orphans.js',
+              'frontend/src/settings.js',
+              'frontend/src/tagedit.js',
+              'frontend/src/m3u.js',
+            ]);
+            for (const f of CORE) if (p.endsWith('/' + f)) return 'libreflow-core';
+            for (const f of EXTRAS) if (p.endsWith('/' + f)) return 'libreflow-extras';
           },
         },
       },
     },
 
-    // esbuild transform options (applied during both dev transforms and prod minify)
-    esbuild: {
+    // Oxc transform options (Vite 8 replaced esbuild with Oxc for JS transforms)
+    oxc: {
       // Strip console.* and debugger in production builds
       drop: isProd ? ['console', 'debugger'] : [],
-      // Legal comments → keep in a separate file to avoid cluttering the bundle
-      legalComments: 'none',
+      // Note: esbuild's `legalComments: 'none'` is not portable to Rolldown.
+      // Vite 8 / Rolldown handles license comments via its own pipeline.
     },
 
     // Optimise dep pre-bundling (dev only — speeds up first page load)

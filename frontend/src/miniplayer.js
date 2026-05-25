@@ -102,12 +102,12 @@ export async function updateMiniPlayer() {
     miniPos: _miniPos,                       // restauration position (premier applyState)
   };
   if (curIdx < 0) {
-    await invoke('mini_update', { data: { ...base, title:'–', artist:'–', art:null, liked:false } }).catch(() => {});
+    await invoke('mini_update', { data: { ...base, title:'–', artist:'–', art:null, liked:false } }).catch(e => console.warn('[miniplayer:mini_update idle]', e));
     return;
   }
   const t = tracks[curIdx];
   // Guard : curIdx peut être un index persisté devenu invalide (ex. bibliothèque plus petite au redémarrage)
-  if (!t) { await invoke('mini_update', { data: { ...base, title:'–', artist:'–', art:null, liked:false } }).catch(() => {}); return; }
+  if (!t) { await invoke('mini_update', { data: { ...base, title:'–', artist:'–', art:null, liked:false } }).catch(e => console.warn('[miniplayer:mini_update invalid-idx]', e)); return; }
   // BUG 3 FIX : convertir blob: en base64 pour cross-window (les blob: URLs
   // ne sont pas accessibles depuis une autre WebView Tauri)
   let artForMini = null;
@@ -146,7 +146,7 @@ export async function updateMiniPlayer() {
     album:  t.album || '',
     art:    artForMini,
     liked:  liked.has(t.id),
-  } }).catch(() => {});
+  } }).catch(e => console.warn('[miniplayer:mini_update]', e));
 
   // ── Notification système (Windows toast) ──────────────────
   // Déclenche uniquement quand la piste change, pas à chaque updateMiniPlayer
@@ -189,5 +189,5 @@ export function updateMiniProgress() {
   invoke('mini_progress', { data: {
     progress: audio.currentTime / audio.duration * 100,
     time: fmt(audio.currentTime),
-  } }).catch(() => {});
+  } }).catch(e => console.warn('[miniplayer:mini_progress]', e));
 }

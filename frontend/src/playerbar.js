@@ -89,6 +89,22 @@ export function setupMarquee(container, text) {
   _mqRafMap.set(container, rafId);
 }
 
+/**
+ * R-L9 : ré-évalue le marquee titre/artiste de la barre now-playing.
+ * Le débordement n'est mesuré qu'une fois dans `setupMarquee` ; élargir la
+ * fenêtre laisse un titre court continuer à défiler (ou l'inverse). Appelé par
+ * le listener `resize` centralisé d'app.js.
+ */
+export function reflowMarquee() {
+  const curIdx = get('curIdx');
+  if (curIdx < 0) return;
+  const tracks = get('tracks');
+  const t = tracks?.[curIdx];
+  if (!t) return;
+  setupMarquee(document.getElementById('pl-n'), t.name);
+  setupMarquee(document.getElementById('pl-a'), t.artistFull || t.artist || i18n('unknown_artist'));
+}
+
 // ── Now-playing bar update ────────────────────────────────────────────────────
 // Tracking de la dernière notification envoyée (évite les doublons).
 let _lastNotifTrackId = null;
@@ -144,7 +160,7 @@ export function updateBar() {
   // Phase 2 : opérations lourdes — différées après le premier paint
   requestAnimationFrame(() => setTimeout(() => {
     if (t.artColor) applyArtColor(t.artColor);
-    else if (t.art) extractColor(t.art).then(c => { if (c) { t.artColor = c; applyArtColor(c); } }).catch(() => {});
+    else if (t.art) extractColor(t.art).then(c => { if (c) { t.artColor = c; applyArtColor(c); } }).catch(e => console.warn('[playerbar:extractColor]', e));
     else clearArtColor();
     _updateArtBlur(t.art || null);
     if (cinemaOpen) updateCinema();
@@ -164,7 +180,7 @@ export function updateBar() {
           });
           t._b64 = artUrl; // cache pour le prochain changement de piste
         }
-        invoke('notify_track', { data: { title: t.name, artist: t.artistFull || t.artist || '', art: artUrl } }).catch(() => {});
+        invoke('notify_track', { data: { title: t.name, artist: t.artistFull || t.artist || '', art: artUrl } }).catch(e => console.warn('[playerbar:notify_track]', e));
       })();
       updateMediaSession(t);
     }

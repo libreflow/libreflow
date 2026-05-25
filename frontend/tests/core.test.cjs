@@ -1354,6 +1354,29 @@ function _nextTabIndex(key, cur, len) {
   assert(_nextTabIndex('ArrowDown', 0, 0) === -1, '_nextTabIndex: liste vide → -1');
 }());
 
+// =============================================================================
+// tlistZoom — logique pure de cycling (_nextZoomLevel)
+// =============================================================================
+section('tlistZoom.js -- _nextZoomLevel cycling');
+
+(function () {
+  // Reproduit la logique pure inline (pas d'import ESM)
+  const TLIST_ZOOM_LEVELS = ['compact', 'normal', 'comfortable'];
+  function _nextZoomLevel(current, dir) {
+    const idx = TLIST_ZOOM_LEVELS.indexOf(current);
+    if (idx === -1) return 'normal';
+    if (dir === 'in')  return TLIST_ZOOM_LEVELS[Math.min(idx + 1, TLIST_ZOOM_LEVELS.length - 1)];
+    if (dir === 'out') return TLIST_ZOOM_LEVELS[Math.max(idx - 1, 0)];
+    return current;
+  }
+
+  assert(_nextZoomLevel('compact',     'in')  === 'normal',      'zoomIn depuis compact → normal');
+  assert(_nextZoomLevel('comfortable', 'in')  === 'comfortable', 'zoomIn depuis comfortable → reste comfortable');
+  assert(_nextZoomLevel('comfortable', 'out') === 'normal',      'zoomOut depuis comfortable → normal');
+  assert(_nextZoomLevel('compact',     'out') === 'compact',     'zoomOut depuis compact → reste compact');
+  assert(_nextZoomLevel('normal',      'out') === 'compact',     'zoomReset depuis normal → compact via zoomOut');
+}());
+
 // -- Résultat -----------------------------------------------------------
 console.log('\n═══════════════════════════════════════════════════════════');
 console.log(`  Total : ${_ok + _ko}   OK: ${_ok}   KO: ${_ko}`);

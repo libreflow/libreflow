@@ -100,6 +100,77 @@
   --gd:    rgba(59,130,246,.14);
   --gg:    rgba(59,130,246,.28);
 
+  /* ════════════════════════════════════════════════════════════════
+     R1 — ÉCHELLES CANONIQUES D'HARMONISATION (audit 2026-05-21)
+     Réf : docs/superpowers/audits/ui-harmonization-audit.md §2.
+     Couche CIBLE. Additive : aucun consommateur n'y est encore recâblé,
+     donc rendu strictement inchangé. La migration des consommateurs
+     (--sp-* / --r-* / --fs-* / --dur-* / --shadow-* → ces tokens) se
+     fait écran par écran dans les lots R2–R5, avec vérification visuelle.
+     ════════════════════════════════════════════════════════════════ */
+
+  /* Espacement — grille 4px stricte (cible de --sp-*, 25 → 8) */
+  --space-0: 0;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+
+  /* Rayons (cible de --r-*, 17 → 5) */
+  --radius-xs:   4px;
+  --radius-sm:   8px;
+  --radius-md:   12px;
+  --radius-lg:   16px;
+  --radius-pill: 999px;
+
+  /* Typographie — tailles (cible de --fs-*, 28 → 7 + 2 display) */
+  --text-xs:      11px;
+  --text-sm:      12px;
+  --text-base:    13px;
+  --text-md:      14px;
+  --text-lg:      16px;
+  --text-xl:      20px;
+  --text-2xl:     26px;
+  --text-display: 32px;
+  --text-hero:    clamp(40px, 6vw, 80px);
+
+  /* Graisses */
+  --fw-regular:  400;
+  --fw-medium:   500;
+  --fw-semibold: 600;
+  --fw-bold:     700;
+
+  /* Élévations (cible de --shadow-*, 62 → 4 + 1 lueur) */
+  --elev-1: 0 1px 3px var(--scrim-1);
+  --elev-2: 0 6px 20px var(--scrim-2);
+  --elev-3: 0 16px 48px var(--scrim-3);
+  --elev-4: 0 24px 64px var(--scrim-3);
+  --glow-accent: 0 0 0 3px var(--accent-subtle);
+
+  /* Motion (cible de --dur-* 19 → 3 et easings 6 → 2) */
+  --motion-fast: 120ms;
+  --motion-base: 200ms;
+  --motion-slow: 320ms;
+  --ease-standard: cubic-bezier(.4, 0, .2, 1);
+  --ease-spring:   cubic-bezier(.34, 1.4, .64, 1);
+
+  /* Flou (cible de --blur-*, 19 → 4) */
+  --blur-sm: 4px;
+  --blur-md: 8px;
+  --blur-lg: 16px;
+  --blur-xl: 48px;
+
+  /* Voiles & teintes (cible des rgba(0/255…) littéraux) */
+  --scrim-1: rgba(0,0,0,.4);
+  --scrim-2: rgba(0,0,0,.55);
+  --scrim-3: rgba(0,0,0,.75);
+  --tint-1:  rgba(255,255,255,.06);
+  --tint-2:  rgba(255,255,255,.10);
+  --tint-3:  rgba(255,255,255,.16);
+
   /* Surfaces — palette sombre raffinée */
   --bg:  #080808;
   --bg1: #0d0d0d;
@@ -114,6 +185,19 @@
   --t2:  #b8ada5;     /* Secondary — artistes  (~9.1:1 on #080808) */
   --t3:  #8a847f;     /* Tertiary — metadata   (WCAG: 5.4:1 on bg, 4.5:1 on bg3 hover, 4.5:1 on bg4) */
   --t4:  #2e2e2e;     /* Ghost — invisible par défaut */
+
+  /* Rôles sémantiques surface/texte — alias des --bg* / --t* (audit §2.6).
+     Couche CIBLE additive : permet aux re-skins de référencer un rôle plutôt
+     qu'un palier. La réduction 7→4 des --bg* eux-mêmes exige une vérification
+     de contraste WCAG (texte --t3 ne doit jamais passer sur une surface plus
+     claire que --bg4) et n'est donc PAS faite à l'aveugle ici. */
+  --surface-base:    var(--bg);
+  --surface-raised:  var(--bg3);
+  --surface-overlay: var(--bg4);
+  --surface-hover:   var(--bg5);
+  --fg-primary:      var(--t);
+  --fg-secondary:    var(--t2);
+  --fg-muted:        var(--t3);
 
   /* États — sémantique partagée (toasts, trends, stop/delete) */
   --red:     #e84040;
@@ -133,9 +217,6 @@
   --eq-warm:       #f48a3d;   /* bande grave chaude (band 2) */
   --eq-cool:       #5baeff;   /* bande aiguë froide (band 10) */
   --eq-cut:        #ff7a45;   /* valeur en coupe active */
-  --eq-warm-light: #c45f10;   /* bande grave — thème clair */
-  --eq-cool-light: #1a6fcc;   /* bande aiguë — thème clair */
-  --eq-cut-light:  #d9520a;   /* coupe active — thème clair */
 
   /* États sémantiques contextuels */
   --cinema-active: #fb923c;   /* genre/tag actif dans le cinéma */
@@ -147,55 +228,64 @@
   --sb-sm: 54px;   /* sidebar compacte icônes-only (< 720px) */
   --pb: 96px;
 
-  /* Spacing — 2px grid */
-  --sp-nano:  1px;   /* séparateurs fins, gaps d'un pixel */
-  --sp-micro: 2px;  /* séparateurs, micro-ajustements, borders visuels */
-  --sp-1q: 3px;      /* quart — séparateurs légers */
-  --sp-1: 4px;
-  --sp-1p: 5px;      /* intermédiaire 4→6 — petits gaps */
-  --sp-1h: 6px;      /* intermédiaire 4→8 — gaps compacts */
-  --sp-1d: 7px;      /* intermédiaire 6→8 — gaps semi-compacts */
-  --sp-2: 8px;
-  --sp-2q: 9px;      /* intermédiaire 8→10 — gaps légèrement modérés */
-  --sp-2h: 10px;     /* intermédiaire 8→12 — gaps modérés */
-  --sp-3: 12px;
-  --sp-3h: 14px;     /* intermédiaire 12→16 — gaps confortables */
-  --sp-4: 16px;
-  --sp-5: 20px;
-  --sp-6: 24px;
-  --sp-7: 28px;      /* gaps généreux */
-  --sp-4h: 18px;     /* intermédiaire 16→20 */
-  --sp-5h: 22px;     /* intermédiaire 20→24 */
-  --sp-7h: 30px;     /* intermédiaire 28→36 */
-  --sp-2d: 11px;     /* intermédiaire 10→12 — usage rare */
-  --sp-3d: 15px;     /* intermédiaire 14→16 — usage rare */
-  --sp-8:  32px;     /* 2×sp-4 — modaux, dupes */
-  --sp-10: 40px;     /* états vides, padding généreux */
-  --sp-12: 48px;     /* padding héros */
-  --sp-15: 60px;     /* padding vues larges */
+  /* Spacing — recâblé sur l'échelle canonique --space-* (harmonisation, audit §2.1).
+     25 paliers → 8. nano/micro/1q restent littéraux : hairlines/bordures
+     sous-grille intentionnelles (les snapper à 4px casserait les séparateurs 1px). */
+  --sp-nano:  1px;            /* hairline — gardé littéral */
+  --sp-micro: 2px;            /* hairline — gardé littéral */
+  --sp-1q: 3px;               /* sous-grille — gardé littéral */
+  --sp-1:  var(--space-1);    /* 4 */
+  --sp-1p: var(--space-1);    /* 5  → 4 */
+  --sp-1h: var(--space-2);    /* 6  → 8 */
+  --sp-1d: var(--space-2);    /* 7  → 8 */
+  --sp-2:  var(--space-2);    /* 8 */
+  --sp-2q: var(--space-2);    /* 9  → 8 */
+  --sp-2h: var(--space-3);    /* 10 → 12 */
+  --sp-3:  var(--space-3);    /* 12 */
+  --sp-3h: var(--space-4);    /* 14 → 16 */
+  --sp-4:  var(--space-4);    /* 16 */
+  --sp-5:  var(--space-5);    /* 20 → 24 */
+  --sp-6:  var(--space-5);    /* 24 */
+  --sp-7:  var(--space-6);    /* 28 → 32 */
+  --sp-4h: var(--space-4);    /* 18 → 16 */
+  --sp-5h: var(--space-5);    /* 22 → 24 */
+  --sp-7h: var(--space-6);    /* 30 → 32 */
+  --sp-2d: var(--space-3);    /* 11 → 12 */
+  --sp-3d: var(--space-4);    /* 15 → 16 */
+  --sp-8:  var(--space-6);    /* 32 */
+  --sp-10: var(--space-7);    /* 40 → 48 */
+  --sp-12: var(--space-7);    /* 48 */
+  --sp-15: var(--space-7);    /* 60 → 48 */
 
-  /* Icon scale — remplace les px hardcodés dans les SVG */
-  --icon-2xs:  10px;   /* micro-indicateurs (sort, heatmap) */
-  --icon-xs:   12px;   /* icônes compagnon (vol, search, drag) */
-  --icon-sm:   13px;   /* icônes action standard (track, playlist) */
-  --icon-md:   14px;   /* icônes player & modal */
-  --icon-lg:   15px;   /* icônes navigation & toolbar */
-  --icon-xl:   16px;   /* icônes action proéminentes */
-  --icon-2xl:  18px;   /* icônes sidebar list */
-  --icon-3xl:  20px;   /* grandes icônes contextuelles */
-  --icon-4xl:  24px;   /* icônes jumbo (close panels, empty states) */
-  --icon-11:   11px;   /* icônes compagnon fine (pl-icon) */
-  --icon-22:   22px;   /* icônes action large (cbtn-play, cover-ph) */
-  --icon-26:   26px;   /* icônes conteneur (wf-ico, ni-pl, pl-icon) */
-  --icon-32:   32px;   /* icônes affichage (genre-emoji, stat-card) */
-  --icon-dot:   6px;   /* indicateurs ponctuels (dot, badge-dot) */
-  --icon-28:   28px;   /* boutons compacts (set-close, theme-swatch, sel-action) */
-  --icon-36:   36px;   /* art queue, stat-ico */
-  --icon-40:   40px;   /* boutons ronds xl (cbtn, pcplay, drago-msg) */
-  --icon-44:   44px;   /* player art, mini-player buttons */
-  --icon-4:     4px;   /* dot xs — indicateurs micro */
-  --icon-9:     9px;   /* chevron — radio next */
-  --ctrl-30:   30px;   /* bouton mini-player overlay */
+  /* Échelle de breakpoints canonique — 3 seuils intentionnels (voir le plan). */
+  --bp-compact: 720px;
+  --bp-wide:    1100px;
+  --bp-short:   560px;  /* seuil vertical (height) — déclaré ici pour cohérence, @media ne peut pas lire les vars CSS */
+
+  /* Icônes — sous-échelle SVG resserrée (harmonisation, audit §2.7 / FND-09).
+     Ancres icône : xs 12 / xl 16 / 3xl 20 / 4xl 24 / 32. Les tokens servant de
+     dimension de conteneur (dot, 22/26/28/30/36/40/44, icon-4) restent littéraux. */
+  --icon-2xs:  var(--icon-xs);   /* 10 → 12 */
+  --icon-xs:   12px;             /* ancre */
+  --icon-sm:   var(--icon-xs);   /* 13 → 12 */
+  --icon-md:   var(--icon-xl);   /* 14 → 16 */
+  --icon-lg:   var(--icon-xl);   /* 15 → 16 */
+  --icon-xl:   16px;             /* ancre */
+  --icon-2xl:  var(--icon-xl);   /* 18 → 16 */
+  --icon-3xl:  20px;             /* ancre */
+  --icon-4xl:  24px;             /* ancre */
+  --icon-11:   var(--icon-xs);   /* 11 → 12 */
+  --icon-22:   22px;   /* conteneur — gardé littéral */
+  --icon-26:   26px;   /* conteneur — gardé littéral */
+  --icon-32:   32px;   /* ancre display */
+  --icon-dot:   6px;   /* indicateur — gardé littéral */
+  --icon-28:   28px;   /* conteneur bouton — gardé littéral */
+  --icon-36:   36px;   /* conteneur — gardé littéral */
+  --icon-40:   40px;   /* conteneur — gardé littéral */
+  --icon-44:   44px;   /* conteneur — gardé littéral */
+  --icon-4:     4px;   /* dot xs — gardé littéral */
+  --icon-9:    var(--icon-xs);   /* 9 → 12 */
+  --ctrl-30:   30px;   /* conteneur — gardé littéral */
 
   /* Artwork display sizes */
   --art-cinema:    42px;   /* miniature cinéma inline */
@@ -209,6 +299,7 @@
   --art-cover:    100px;   /* cover placeholder modal */
   --art-hero:     148px;   /* hero cover — taille pleine */
   --art-list:      56px;   /* colonne artwork dans rangée track (grid) */
+  --tr-h:          48px;   /* hauteur d'une ligne piste — pilotée par data-tlist-zoom */
 
   /* Éléments structurels — tracks & sliders */
   --track-h-xs: 2px;   /* indicateurs fins, tab active line */
@@ -226,18 +317,21 @@
   --sep-h:              1px;    /* séparateurs horizontaux fins (.ns, .ctx-sep) */
   --vh-min-h:          52px;    /* min-height en-têtes de vue (.vh) */
   --folder-row-h:      34px;    /* hauteur rangée dossier playlist (.pl-folder-h) */
-  --eq-slider-min-h:   90px;    /* min-height zone slider EQ */
+  --eq-slider-min-h:   92px;    /* min-height zone slider EQ — aligné grille 4px (UIH-eq-01) */
   --viz-canvas-h:     160px;    /* hauteur canvas visualiseur cinéma */
   --cinema-pbar-hover-h: 7px;   /* pbar élargie au hover — cinéma */
   --cinema-vol-hover-h:  5px;   /* vol slider élargi au hover — cinéma */
   --orphan-list-max-h: 260px;   /* cap liste orphelins modale (scroll) */
-  --eq-presets-max-h:  126px;   /* cap zone presets EQ (scroll) */
-  --eq-spacer-min:      10px;   /* respiration min espace-courbe EQ */
+  --spl-results-max-h: 120px;   /* cap liste résultats smart playlist (scroll) — R-L5 */
+  --spl-preview-max-h: 100px;   /* cap liste preview smart playlist (scroll) — R-L5 */
+  --eq-presets-max-h:  128px;   /* cap zone presets EQ (scroll) — aligné grille 4px (UIH-eq-01) */
+  --eq-spacer-min:      12px;   /* respiration min espace-courbe EQ — aligné grille 4px (UIH-eq-01) */
   --eq-spacer-max:      52px;   /* plafond espace-courbe EQ */
   --eq-bands-max-h:    280px;   /* cap panneau bandes EQ */
   --scrollbar-w:         5px;   /* épaisseur scrollbar Webkit */
 
-  /* Largeurs composants — tiroirs & modales */
+  /* Largeurs composants — tiroirs & modales. Dimensions structurelles,
+     hors échelle d'espacement — exceptions assumées (UIH-settings-07). */
   --set-sidebar-w:     200px;   /* barre latérale du panneau settings */
   --set-content-w:     720px;   /* largeur max de la colonne contenu settings */
   --shelf-w:           280px;   /* étagère mini-player / shelf flottant */
@@ -303,62 +397,64 @@
   --border-w-xl:   3px;    /* épaisseur border xl — spinner, track-active left */
   --border-w-2xl:  4px;    /* épaisseur border 2xl — tooltips flèche */
 
-  /* Flou design — filter & backdrop-filter */
-  --blur-1:    1px;   /* animation blur minimal */
-  --blur-1h:   1.5px; /* animation blur micro */
-  --blur-2:    2px;   /* animation blur sortie */
-  --blur-3:    3px;   /* animation blur entrée */
-  --blur-4:    4px;   /* modal backdrop léger */
-  --blur-6:    6px;   /* overlay semi-transparent */
-  --blur-8:    8px;   /* cinema btn backdrop */
-  --blur-10:  10px;   /* waveform backdrop */
-  --blur-12:  12px;   /* backdrop modal/settings */
-  --blur-14:  14px;   /* cinema cover glow */
-  --blur-16:  16px;   /* cinema next backdrop */
-  --blur-18:  18px;   /* cinema next glassmorphism */
-  --blur-20:  20px;   /* mini-player overlay */
-  --blur-24:  24px;   /* cinema backdrop principal */
-  --blur-26:  26px;   /* artwork hero blur */
-  --blur-28:  28px;   /* modal glassmorphism large */
-  --blur-48:  48px;   /* hero blur profond */
-  --blur-60:  60px;   /* cover background blur max */
-  --blur-64:  64px;   /* blur très profond */
+  /* Flou — recâblé sur --blur-sm/md/lg/xl (harmonisation, audit §2.7). 19 → 4. */
+  --blur-1:   var(--blur-sm);   /* 1   → 4 */
+  --blur-1h:  var(--blur-sm);   /* 1.5 → 4 */
+  --blur-2:   var(--blur-sm);   /* 2   → 4 */
+  --blur-3:   var(--blur-sm);   /* 3   → 4 */
+  --blur-4:   var(--blur-sm);   /* 4 */
+  --blur-6:   var(--blur-md);   /* 6   → 8 */
+  --blur-8:   var(--blur-md);   /* 8 */
+  --blur-10:  var(--blur-md);   /* 10  → 8 */
+  --blur-12:  var(--blur-lg);   /* 12  → 16 */
+  --blur-14:  var(--blur-lg);   /* 14  → 16 */
+  --blur-16:  var(--blur-lg);   /* 16 */
+  --blur-18:  var(--blur-lg);   /* 18  → 16 */
+  --blur-20:  var(--blur-lg);   /* 20  → 16 */
+  --blur-24:  var(--blur-lg);   /* 24  → 16 */
+  --blur-26:  var(--blur-lg);   /* 26  → 16 */
+  --blur-28:  var(--blur-xl);   /* 28  → 48 */
+  --blur-48:  var(--blur-xl);   /* 48 */
+  --blur-60:  var(--blur-xl);   /* 60  → 48 */
+  --blur-64:  var(--blur-xl);   /* 64  → 48 */
 
-  /* Typographie étendue — line-height & letter-spacing */
-  --lh-tight:   1.2;
-  --lh-base:    1.5;
-  --lh-loose:   1.75;
-  --lh-1:       1;      /* leading ras — badges, stat-val, queue */
-  --lh-compact: 1.1;    /* ultra-dense — headings display */
-  --lh-snug:    1.3;    /* légèrement resserré — tooltips, listes denses */
-  --lh-relaxed: 1.15;   /* intermédiaire — hero titles */
-  --lh-comfort: 1.4;    /* confortable — cards, nav labels */
-  --lh-airy:    1.6;    /* aéré — modal-s, descriptions */
-  --lh-spacious:1.65;   /* large — stat descriptions */
-  --lh-2:       1.9;    /* très large — sidebar stats */
-  --lh-px-14:   14px;   /* hauteur fixe — badges pill, q-count */
-  --ls-tight:   -0.01em;  /* tracking serré — btn-scan, wbtn, nav */
-  --ls-display: -0.02em;  /* display font — titres, modal-h */
-  --ls-heading: -.03em;   /* grands titres display — stat-card, cinema */
-  --ls-slight:  .01em;    /* légèrement ouvert — metadata, card-sub */
-  --ls-micro:   .02em;    /* petite ouverture — badges, subtitles */
-  --ls-wide:    .04em;    /* tracking moyen — tags, uppercase small */
-  --ls-label:   .06em;    /* labels uppercase — section headers */
-  --ls-caps:    1.2px;    /* uppercase tracking px — section settings */
-  --ls-subtle:  .03em;    /* légère ouverture — badges secondaires */
-  --ls-xwide:   .08em;    /* grande ouverture — tabs, stats labels */
-  --ls-display-fine: -.005em;  /* tracking fin display — modal-title */
-  --ls-numeric:      -.008em;  /* tracking numérique — tiempo, counters */
-  --ls-caps-sm:      1px;      /* uppercase px fins — section headers */
-  --ls-tag:          .3px;     /* tracking tags inline */
-  --ls-badge:        .07em;    /* tracking badges */
-  --ls-cinema:       .10em;    /* tracking cinema overlay */
-  --ls-hero:         -.025em;  /* tracking hero display */
-  --ls-stat:         1.3px;    /* tracking stats labels */
-  --ls-stat-val:     -.04em;   /* tracking stat values */
-  --ls-filter:       .4px;     /* tracking filter buttons */
-  --ls-tag-meta:     .05em;    /* tracking tag metadata */
-  --ls-reset:        0;        /* reset tracking */
+  /* Line-height — recâblé (harmonisation, audit §2.3). 12 → 4 ancres.
+     tight/snug/base/loose = ancres ; lh-1 et lh-px-14 restent littéraux. */
+  --lh-tight:   1.2;                /* ancre */
+  --lh-snug:    1.3;                /* ancre */
+  --lh-base:    1.5;                /* ancre */
+  --lh-loose:   1.75;               /* ancre */
+  --lh-1:       1;                  /* leading ras — gardé littéral */
+  --lh-compact: var(--lh-tight);    /* 1.1  → 1.2 */
+  --lh-relaxed: var(--lh-tight);    /* 1.15 → 1.2 */
+  --lh-comfort: var(--lh-base);     /* 1.4  → 1.5 */
+  --lh-airy:    var(--lh-base);     /* 1.6  → 1.5 */
+  --lh-spacious:var(--lh-loose);    /* 1.65 → 1.75 */
+  --lh-2:       var(--lh-loose);    /* 1.9  → 1.75 */
+  --lh-px-14:   14px;               /* hauteur fixe badges — gardé littéral */
+  /* Letter-spacing — recâblé (harmonisation, audit §2.3). 22 → 4 ancres. */
+  --ls-display: -0.02em;            /* ancre — display serré */
+  --ls-tight:   -0.01em;            /* ancre — tracking serré */
+  --ls-reset:    0;                 /* ancre — normal */
+  --ls-label:    .06em;             /* ancre — caps / labels */
+  --ls-heading:      var(--ls-display);  /* -.03  → -.02 */
+  --ls-hero:         var(--ls-display);  /* -.025 → -.02 */
+  --ls-stat-val:     var(--ls-display);  /* -.04  → -.02 */
+  --ls-display-fine: var(--ls-tight);    /* -.005 → -.01 */
+  --ls-numeric:      var(--ls-tight);    /* -.008 → -.01 */
+  --ls-slight:  var(--ls-reset);    /* .01  → 0 */
+  --ls-micro:   var(--ls-reset);    /* .02  → 0 */
+  --ls-subtle:  var(--ls-reset);    /* .03  → 0 */
+  --ls-tag:     var(--ls-reset);    /* .3px → 0 */
+  --ls-filter:  var(--ls-reset);    /* .4px → 0 */
+  --ls-wide:    var(--ls-label);    /* .04  → .06 */
+  --ls-tag-meta:var(--ls-label);    /* .05  → .06 */
+  --ls-badge:   var(--ls-label);    /* .07  → .06 */
+  --ls-xwide:   var(--ls-label);    /* .08  → .06 */
+  --ls-cinema:  var(--ls-label);    /* .10  → .06 */
+  --ls-caps:    var(--ls-label);    /* 1.2px → .06em */
+  --ls-caps-sm: var(--ls-label);    /* 1px   → .06em */
+  --ls-stat:    var(--ls-label);    /* 1.3px → .06em */
 
   /* Alias sémantiques accent — --gd/--gg restent les sources (mis à jour par settings.js) */
   --accent-subtle:  var(--gd);   /* remplace var(--gd) dans les rules CSS */
@@ -378,145 +474,166 @@
   --border-default: var(--border-2);
   --border-strong:  var(--border-3);
 
-  /* Typography */
-  --fs-3xs:      8px;   /* micro-labels extrêmes (rep-one dot, queue badge) */
-  --fs-2xs:      9px;   /* micro-badges numériques (queue count, rep-one, freq) */
-  --fs-xs:      10px;
-  --fs-sm:      11px;
-  --fs-caption: 12px;  /* zone sm↔md : labels, métadonnées secondaires, inputs modaux */
-  --fs-md:      13px;
-  --fs-base:    14px;
-  --fs-subhead: 15px;  /* titres de modales secondaires (pl-modal, shortcuts) */
-  --fs-body:    16px;  /* taille body standard (active track, stats display) */
-  --fs-inter:   18px;  /* intermédiaire — compteurs affichage playlist */
-  --fs-lg:      17px;
-  --fs-xl:      19px;
-  --fs-lg2:     20px;  /* affichage info-count, accents numériques */
-  --fs-2xl:     26px;
-  --fs-disp:    32px;  /* stat-card-val, modal-ico emoji */
-  --fs-disp-sm: 36px;  /* welcome display icon */
-  --fs-disp-md: 48px;  /* stat numérique héros */
-  --fs-disp-lg: 52px;  /* empty-state display large */
-  --fs-disp-xl: 72px;  /* emoji cinéma large */
-  --fs-hero:    80px;  /* art-em cinéma plein écran */
+  /* Typography — recâblé sur --text-* (harmonisation, audit §2.3). 20 tailles fixes → 7.
+     3xs/2xs restent littéraux (micro-badges, sous-échelle volontaire).
+     disp-md/lg/xl/hero restent littéraux (grandes tailles display rares). */
+  --fs-3xs:      8px;                 /* micro-badge — gardé littéral */
+  --fs-2xs:      9px;                 /* micro-badge — gardé littéral */
+  --fs-xs:      var(--text-xs);       /* 10 → 11 */
+  --fs-sm:      var(--text-xs);       /* 11 */
+  --fs-caption: var(--text-sm);       /* 12 */
+  --fs-md:      var(--text-base);     /* 13 */
+  --fs-base:    var(--text-md);       /* 14 */
+  --fs-subhead: var(--text-lg);       /* 15 → 16 */
+  --fs-body:    var(--text-lg);       /* 16 */
+  --fs-inter:   var(--text-lg);       /* 18 → 16 */
+  --fs-lg:      var(--text-lg);       /* 17 → 16 */
+  --fs-xl:      var(--text-xl);       /* 19 → 20 */
+  --fs-lg2:     var(--text-xl);       /* 20 */
+  --fs-2xl:     var(--text-2xl);      /* 26 */
+  --fs-disp:    var(--text-display);  /* 32 */
+  --fs-disp-sm: var(--text-display);  /* 36 → 32 */
+  --fs-disp-md: 48px;                 /* display rare — gardé littéral */
+  --fs-disp-lg: 52px;                 /* display rare — gardé littéral */
+  --fs-disp-xl: 72px;                 /* display rare — gardé littéral */
+  --fs-hero:    80px;                 /* display rare — gardé littéral */
+
+  /* ── Échelle typographique fluide (responsive niveau Spotify) ──────────
+     clamp(min, préférence-fluide, max). L'unité cqi = 1% de la largeur du
+     conteneur de query le plus proche → le texte respire avec son panneau,
+     pas avec la fenêtre. Adoptée progressivement, remplace les --fs-* fixes.
+     ATTENTION : cqi résout à 0 si l'élément n'est pas enfant d'un named container — toujours consommer dans un container context. */
+  --fs-f-caption: clamp(0.69rem, 0.66rem + 0.15cqi, 0.78rem);
+  --fs-f-body:    clamp(0.81rem, 0.77rem + 0.25cqi, 0.94rem);
+  --fs-f-subhead: clamp(0.94rem, 0.88rem + 0.4cqi,  1.13rem);
+  --fs-f-title:   clamp(1.06rem, 0.95rem + 0.7cqi,  1.5rem);
+  --fs-f-disp:    clamp(1.4rem,  1.1rem + 2cqi,     2.4rem);
 
   /* Typographie responsive — clamp() fluid (px min, vw fluid, px max) */
   --fs-vw-view:      clamp(26px, 3.5vw, 40px);  /* titre de vue/section responsive */
   --fs-vw-hero:      clamp(18px, 2.6vw, 32px);  /* playlist hero responsive */
-  --fs-vw-hero-sm:   clamp(16px, 5vw, 22px);    /* playlist hero compact (< 600px) */
+  /* --fs-vw-hero-sm retiré (R-H1) — son seul consommateur, le @media 520px mort, a été supprimé */
   --fs-vw-clock:     clamp(44px, 7.5vw, 90px);  /* cinéma horloge idle responsive */
   --fs-vw-date:      clamp(11px, 1.4vw, 15px);  /* cinéma date idle responsive */
   --fs-vw-cin-title: clamp(16px, 3.2vw, 34px);  /* cinéma titre piste responsive */
   --fs-vw-cin-art:   clamp(11px, 1.8vw, 17px);  /* cinéma artiste responsive */
   --fs-vw-cin-alb:   clamp(9px, 1.3vw, 13px);   /* cinéma album responsive */
 
-  /* Design tokens — border-radius scale */
-  --r-micro:  1px;    /* indicateurs ultra-fins (eq bar, thin line) */
-  --r-xs:     2px;    /* sliders, barres de progression, heatmap */
-  --r-sm:     3px;    /* scrollbar, micro-badges, labels inline */
-  --r-md:     4px;    /* éléments compacts (tags, petits boutons) */
-  --r-lg:     5px;    /* medium-small (kbd, search-clear) */
-  --r:        6px;    /* standard — boutons, inputs, dropdowns */
-  --r-badge:  7px;    /* badge pill (queue-count, speed-lbl) */
-  --r-art:    8px;    /* artwork thumbnails (srch, card-art, skel-art) */
-  --r-9:      9px;    /* eq-curve-wrap spécifique */
-  --r2:      10px;    /* popups, tooltips, menus */
-  --r-card:  12px;    /* cards conteneurs (album, artiste) */
-  --r3:      14px;    /* grands panneaux */
-  --r-4xl:   16px;    /* cinéma overlay arrondi */
-  --r-pill:  20px;    /* pilule (tags, presets, filter-btns) */
-  --r-32:    32px;    /* sélection-filter compacte */
-  --r-round: 50px;    /* ultra-arrondi (toast progress) */
-  --r-full:  60px;    /* circulaire (cinema vol btn) */
+  /* Rayons — recâblés sur l'échelle canonique --radius-* (harmonisation, audit §2.2).
+     17 rayons → 5. --r-micro reste littéral (hairline 1px). */
+  --r-micro:  1px;                 /* hairline — gardé littéral */
+  --r-xs:     var(--radius-xs);    /* 2  → 4 */
+  --r-sm:     var(--radius-xs);    /* 3  → 4 */
+  --r-md:     var(--radius-xs);    /* 4 */
+  --r-lg:     var(--radius-sm);    /* 5  → 8 */
+  --r:        var(--radius-sm);    /* 6  → 8  (rayon standard) */
+  --r-badge:  var(--radius-sm);    /* 7  → 8 */
+  --r-art:    var(--radius-sm);    /* 8 */
+  --r-9:      var(--radius-sm);    /* 9  → 8 */
+  --r2:       var(--radius-md);    /* 10 → 12 */
+  --r-card:   var(--radius-md);    /* 12 */
+  --r3:       var(--radius-md);    /* 14 → 12 */
+  --r-4xl:    var(--radius-lg);    /* 16 */
+  --r-pill:   var(--radius-pill);  /* 20 → pilule pleine */
+  --r-32:     var(--radius-lg);    /* 32 → 16 */
+  --r-round:  var(--radius-pill);  /* 50 → pilule pleine */
+  --r-full:   var(--radius-pill);  /* 60 → pilule pleine */
 
-  /* Transitions — hiérarchie temporelle */
-  --dur:           140ms;   /* micro-interactions (hover, bg) */
-  --dur-fast:       80ms;   /* feedback immédiat (click) */
-  --dur-interact:  160ms;   /* transforms d'interaction (hover scale, nav) */
-  --dur-mid:       220ms;   /* entrées de panneau */
-  --dur-slow:      400ms;   /* macro-transitions (pochette, couleur) */
-
-  /* Durées supplémentaires — transitions composants spécifiques */
-  --dur-micro:     120ms;   /* micro-animations courtes (swap-out, ctx-item) */
-  --dur-menu:      130ms;   /* ctx-menu entrée/sortie */
-  --dur-tooltip:   150ms;   /* tooltip / vol-tip fade */
-  --dur-card:      200ms;   /* card enter + row animations */
-  --dur-cinema:    420ms;   /* cinema art swap / overlay transitions */
-  --dur-overlay:   350ms;   /* panneau cinema content fade */
-  --dur-reveal:    700ms;   /* cinema panel reveal (clock, next) */
-  --dur-nav:       240ms;   /* view navigation slide-in */
-
-  --dur-exit:      180ms;   /* exit animations (vtOut, rowInDown/Up) */
-  --dur-art-color: 900ms;   /* art-color property transitions */
-  --dur-flash:      60ms;   /* anti-flash panel opacity (précède slide) */
-  --dur-modal:     260ms;   /* entrée modale principale (spring-soft) */
-  --dur-card-in:   280ms;   /* entrée carte (.card / .genre-card cardIn) */
-  --dur-enter:     300ms;   /* entrées toast, vtIn, scan-bar, actBar */
+  /* Transitions — recâblées sur --motion-* (harmonisation, audit §2.5). 19 durées → 3.
+     Les durées de boucle infinie (--anim-*) et les durées fonctionnelles
+     (reveal, art-color, flash) restent littérales. */
+  --dur:           var(--motion-fast);   /* 140 → 120 */
+  --dur-fast:      var(--motion-fast);   /* 80  → 120 */
+  --dur-interact:  var(--motion-fast);   /* 160 → 120 */
+  --dur-mid:       var(--motion-base);   /* 220 → 200 */
+  --dur-slow:      var(--motion-slow);   /* 400 → 320 */
+  --dur-micro:     var(--motion-fast);   /* 120 */
+  --dur-menu:      var(--motion-fast);   /* 130 → 120 */
+  --dur-tooltip:   var(--motion-fast);   /* 150 → 120 */
+  --dur-card:      var(--motion-base);   /* 200 */
+  --dur-cinema:    var(--motion-slow);   /* 420 → 320 */
+  --dur-overlay:   var(--motion-slow);   /* 350 → 320 */
+  --dur-reveal:    700ms;                /* reveal long délibéré — gardé littéral */
+  --dur-nav:       var(--motion-base);   /* 240 → 200 */
+  --dur-exit:      var(--motion-base);   /* 180 → 200 */
+  --dur-art-color: 900ms;                /* fondu couleur pochette — gardé littéral */
+  --dur-flash:      60ms;                /* anti-flash fonctionnel — gardé littéral */
+  --dur-modal:     var(--motion-slow);   /* 260 → 320 */
+  --dur-card-in:   var(--motion-slow);   /* 280 → 320 */
+  --dur-enter:     var(--motion-slow);   /* 300 → 320 */
   --anim-glow:     2.6s;    /* playGlow / logopulse infinite glow */
 
-  /* Durées animations longues (infini) */
+  /* Durées animations longues (infini) — gardées littérales */
   --anim-pulse:    1.6s;    /* radio-pulse / dotpulse animation period */
   --anim-shim:     1.8s;    /* skeleton shimmer / drago border / radio-cbtn — boucles lentes */
   --anim-art:      0.8s;    /* art-color background transition */
   --ease:       var(--dur) ease;
-  --spring:     cubic-bezier(.34,1.56,.64,1);     /* rebond expressif */
-  --spring-soft:cubic-bezier(.34,1.28,.64,1);     /* rebond doux (pochette) */
-  --snappy:     cubic-bezier(.32,.72,0,1);        /* settle rapide (panels) */
-  --smooth:     cubic-bezier(.4,0,.2,1);          /* MD3 standard */
-  --decelerate: cubic-bezier(0,0,.2,1);           /* entrée de panel */
-  --accelerate: cubic-bezier(.4,0,1,1);           /* sortie de panel */
+  /* Easings — recâblés sur --ease-standard / --ease-spring (6 → 2) */
+  --spring:      var(--ease-spring);
+  --spring-soft: var(--ease-spring);
+  --snappy:      var(--ease-standard);
+  --smooth:      var(--ease-standard);
+  --decelerate:  var(--ease-standard);
+  --accelerate:  var(--ease-standard);
 
   --font: 'DM Sans', -apple-system, 'Segoe UI', sans-serif;
   --font-display: 'Syne', -apple-system, sans-serif;
 
-  /* Ombres */
-  --shadow-sm:  0 2px 8px rgba(0,0,0,.4);
-  --shadow-md:  0 8px 32px rgba(0,0,0,.55);
-  --shadow-lg:  0 20px 60px rgba(0,0,0,.75);
-  --shadow-xl:  0 24px 64px rgba(0,0,0,.65);
+  /* Ombres — l'échelle de base est recâblée sur les élévations canoniques
+     (harmonisation, audit §2.4 / FND-04). Les ombres spécialisées plus bas
+     (insets indicateurs, anneaux d'accent, text-shadows, drop-shadows filter,
+     valeurs de keyframes) ne sont PAS des élévations : elles restent inchangées
+     et seront traitées au re-skin par composant. */
+  --shadow-sm:  var(--elev-1);
+  --shadow-md:  var(--elev-2);
+  --shadow-lg:  var(--elev-3);
+  --shadow-xl:  var(--elev-4);
 
-  /* Ombres composants & thème clair */
-  --shadow-xs:     0 2px 6px rgba(0,0,0,.35);   /* toolbar */
-  --shadow-sm-lt:  0 2px 8px rgba(0,0,0,.15);   /* sm légère */
-  --shadow-sm-pl:  0 2px 8px rgba(0,0,0,.1);    /* sm très légère */
-  --shadow-sm-tip: 0 2px 8px rgba(0,0,0,.35);   /* tooltip */
-  --shadow-logo:   0 3px 10px rgba(0,0,0,.12);  /* logo light */
-  --shadow-logo-d: 0 3px 10px rgba(0,0,0,.22);  /* logo ctx dark */
-  --shadow-pop:    0 8px 24px rgba(0,0,0,.12);  /* quick-pop light */
-  --shadow-art:    0 4px 12px rgba(0,0,0,.3);   /* artwork thumbnail */
-  --shadow-art-hv: 0 8px 24px rgba(0,0,0,.5);  /* artwork hover */
-  --shadow-card:   0 6px 20px rgba(0,0,0,.32);  /* card hover */
-  --shadow-card-lt:0 6px 20px rgba(0,0,0,.18);  /* card light mode */
-  --shadow-card-hv:0 12px 32px rgba(0,0,0,.5);  /* genre card hover */
-  --shadow-pl-hv:  0 12px 36px rgba(0,0,0,.6);  /* playlist hero hover */
-  --shadow-pl-hv-lt: 0 8px 28px rgba(0,0,0,.45); /* pl hero base */
-  --shadow-modal2: 0 12px 48px rgba(0,0,0,.16); /* modal light mode */
-  --shadow-modal3: 0 12px 40px rgba(0,0,0,.5);  /* search modal */
-  --shadow-cin-btn:0 4px 20px rgba(0,0,0,.4);   /* cinema corner btn */
-  --shadow-cin-vol:0 0 6px rgba(0,0,0,.4);      /* cinema vol btn */
-  --shadow-mp-drag:0 16px 48px rgba(0,0,0,.65); /* mini-player dragging */
-  --shadow-tart:   0 4px 14px rgba(0,0,0,.5);   /* track art hover */
-  --shadow-sb-tip: 0 4px 16px rgba(0,0,0,.45);  /* sidebar tooltip */
-  --shadow-radio:  0 8px 32px rgba(0,0,0,.14), 0 2px 6px rgba(0,0,0,.08); /* radio banner */
+  /* Ombres composants — drop-shadows recâblées sur --elev-* (audit §2.4 / FND-04).
+     Les variantes thème clair (-lt / -pl) restent littérales (re-définies par mode
+     au re-skin couleur), ainsi que les composites et glows spécifiques. */
+  --shadow-xs:     var(--elev-1);               /* toolbar */
+  --shadow-sm-lt:  0 2px 8px rgba(0,0,0,.15);   /* variante claire — gardée littérale */
+  --shadow-sm-pl:  0 2px 8px rgba(0,0,0,.1);    /* variante claire — gardée littérale */
+  --shadow-sm-tip: var(--elev-1);               /* tooltip */
+  --shadow-logo:   0 3px 10px rgba(0,0,0,.12);  /* logo clair — gardée littérale */
+  --shadow-logo-d: var(--elev-1);               /* logo ctx dark */
+  --shadow-pop:    0 8px 24px rgba(0,0,0,.12);  /* quick-pop clair — gardée littérale */
+  --shadow-art:    var(--elev-1);               /* artwork thumbnail */
+  --shadow-art-hv: var(--elev-2);               /* artwork hover */
+  --shadow-card:   var(--elev-2);               /* card */
+  --shadow-card-lt:0 6px 20px rgba(0,0,0,.18);  /* variante claire — gardée littérale */
+  --shadow-card-hv:var(--elev-3);               /* card hover */
+  --shadow-pl-hv:  var(--elev-3);               /* playlist hero hover */
+  --shadow-pl-hv-lt: 0 8px 28px rgba(0,0,0,.45); /* variante de base — gardée littérale */
+  --shadow-modal2: 0 12px 48px rgba(0,0,0,.16); /* modale claire — gardée littérale */
+  --shadow-modal3: var(--elev-3);               /* search modal */
+  --shadow-cin-btn:var(--elev-2);               /* cinema corner btn */
+  --shadow-cin-vol:0 0 6px rgba(0,0,0,.4);      /* glow spécifique — gardée littérale */
+  --shadow-mp-drag:var(--elev-4);               /* mini-player dragging */
+  --shadow-tart:   var(--elev-2);               /* track art hover */
+  --shadow-sb-tip: var(--elev-2);               /* sidebar tooltip */
+  --shadow-radio:  0 8px 32px rgba(0,0,0,.14), 0 2px 6px rgba(0,0,0,.08); /* composite — gardée littérale */
   --shadow-cin-art:var(--shadow-cin-art);  /* cinema artwork */
-  --shadow-ring:   0 0 0 var(--border-w-xl) rgba(var(--g-rgb),.35); /* pbar thumb ring */
-  --shadow-thumb:  0 2px 8px rgba(0,0,0,.5);    /* pbar thumb shadow */
-  --shadow-big-modal: 0 16px 48px rgba(0,0,0,.7), 0 0 0 0.5px rgba(0,0,0,.5); /* big modal multi */
+  --shadow-ring:   var(--glow-accent);          /* pbar thumb ring → lueur accent */
+  --shadow-thumb:  var(--elev-1);               /* pbar thumb shadow */
+  --shadow-big-modal: var(--elev-3);            /* big modal */
 
-  /* Ombres accent (teintées --g-rgb) */
-  --shadow-pcplay:    0 0 0 3px rgba(var(--g-rgb),.22), 0 2px 6px rgba(0,0,0,.18); /* pcplay ring */
-  --shadow-pcplay-hv: 0 0 0 5px rgba(var(--g-rgb),.2),  0 6px 20px rgba(var(--g-rgb),.5); /* pcplay hover */
-  --shadow-pcplay-lt: 0 0 0 5px rgba(var(--g-rgb),.18), 0 6px 20px rgba(var(--g-rgb),.4); /* pcplay light */
-  --shadow-acc-glow:  0 2px 12px rgba(var(--g-rgb),.3); /* accent glow doux */
-  --shadow-srch-dk:   0 0 0 3px rgba(var(--g-rgb),.12); /* search focus dark */
-  --shadow-srch-lt:   0 0 0 3px rgba(var(--g-rgb),.1);  /* search focus light */
-  --shadow-wbtn-hv:   0 6px 24px rgba(var(--g-rgb),.35); /* wbtn hover */
-  --shadow-pbar-thumb: 0 0 0 3px rgba(var(--g-rgb),.35), 0 2px 8px rgba(0,0,0,.5); /* pbar thumb */
-  --shadow-pl-icon:   0 2px 8px rgba(var(--g-rgb),.35); /* pl-icon playing */
-  --shadow-dot-glow:  0 0 8px rgba(var(--g-rgb),.45), 0 0 2px rgba(var(--g-rgb),.25); /* dot glow */
-  --shadow-dot-pulse: 0 0 10px rgba(var(--g-rgb),.65), 0 0 3px rgba(var(--g-rgb),.9); /* dotpulse */
-  --shadow-vslider:   0 0 0 2px rgba(var(--g-rgb),.25), 0 1px 4px rgba(0,0,0,.4); /* vol thumb */
-  --shadow-pbar-glow: 0 0 6px rgba(var(--g-rgb),.5); /* pbar fill glow */
+  /* Ombres accent — glows simples recâblés sur --glow-accent ; les anneaux
+     multi-état (hover/light) et composites restent littéraux. */
+  --shadow-pcplay:    var(--glow-accent);       /* pcplay ring */
+  --shadow-pcplay-hv: 0 0 0 5px rgba(var(--g-rgb),.2),  0 6px 20px rgba(var(--g-rgb),.5); /* état hover — gardé littéral */
+  --shadow-pcplay-lt: 0 0 0 5px rgba(var(--g-rgb),.18), 0 6px 20px rgba(var(--g-rgb),.4); /* variante claire — gardée littérale */
+  --shadow-acc-glow:  var(--glow-accent);       /* accent glow doux */
+  --shadow-srch-dk:   var(--glow-accent);       /* search focus */
+  --shadow-srch-lt:   0 0 0 3px rgba(var(--g-rgb),.1);  /* variante claire — gardée littérale */
+  --shadow-wbtn-hv:   var(--glow-accent);       /* wbtn hover */
+  --shadow-pbar-thumb: 0 0 0 3px rgba(var(--g-rgb),.35), 0 2px 8px rgba(0,0,0,.5); /* composite — gardé littéral */
+  --shadow-pl-icon:   var(--glow-accent);       /* pl-icon playing */
+  --shadow-dot-glow:  var(--glow-accent);       /* dot glow */
+  --shadow-dot-pulse: 0 0 10px rgba(var(--g-rgb),.65), 0 0 3px rgba(var(--g-rgb),.9); /* keyframe — gardé littéral */
+  --shadow-vslider:   0 0 0 2px rgba(var(--g-rgb),.25), 0 1px 4px rgba(0,0,0,.4); /* composite — gardé littéral */
+  --shadow-pbar-glow: var(--glow-accent);       /* pbar fill glow */
 
   /* Ombres inset & indicateurs */
   --shadow-act-bar:   inset 3px 0 0 var(--g); /* barre active gauche */
@@ -539,8 +656,7 @@
   --shadow-cn-img:    0 4px 12px rgba(0,0,0,.4);  /* cinema img */
 
   /* Ombres latérales (side panels) */
-  --shadow-settings:  -24px 0 72px rgba(0,0,0,.65), -1px 0 0 var(--sep);
-  --shadow-queue:     -6px 0 24px rgba(0,0,0,.30), -1px 0 0 var(--sep);
+  --shadow-queue:     -6px 0 24px var(--scrim-1), -1px 0 0 var(--sep);
   --shadow-radio-bar: inset 3px 0 0 var(--g), 0 2px 12px rgba(var(--g-rgb),.08);
   --shadow-radio-lt:  inset 3px 0 0 var(--g), 0 2px 8px rgba(var(--g-rgb),.06);
 
@@ -600,7 +716,7 @@
   --panel-queue-w:      300px;  /* largeur panneau queue latéral */
   --panel-eq-w:         320px;  /* largeur panneau EQ latéral (mode simple) */
   --panel-eq-expert-w:  400px;  /* largeur panneau EQ latéral (mode expert) */
-  --sp-3q:              13px;   /* spacing intermédiaire 12→14 — padding compact */
+  --sp-3q:              var(--space-3);   /* 13 → 12 (harmonisation) */
 
   /* Dimensions cinéma & artwork */
   --art-cinema-max:     420px;  /* taille max pochette cinéma (min(46vh,46vw,N)) */
@@ -609,12 +725,6 @@
   --artist-month-col-min: 90px; /* min colonne nom artiste (stats month) */
   --heatmap-cell-min:     10px; /* min cellule heatmap (grid auto-fill) */
 
-  /* Grilles responsive player bar (breakpoints < 900px / < 720px) */
-  --pl-shelf-900-l-min: 160px;  /* shelf gauche < 900px — min */
-  --pl-shelf-900-l-max: 240px;  /* shelf gauche < 900px — max */
-  --pl-shelf-900-r-min: 120px;  /* shelf droite < 900px (= shelf gauche < 720px) — min */
-  --pl-shelf-900-r-max: 200px;  /* shelf droite < 900px (= shelf gauche < 720px) — max */
-  --pl-shelf-720-r-max: 140px;  /* shelf droite < 720px — max (min = --art-hero-sm) */
 
   /* Ombres composées — sel-bar ring */
   --shadow-sep-ring:    0 0 0 1px var(--sep);  /* ring séparateur fin autour d'éléments flottants */
@@ -680,6 +790,11 @@
 [data-theme="orange"] { --g:#f97316; --g-rgb:249,115,22;  --gd:rgba(249,115,22,.14);  --gg:rgba(249,115,22,.28); }
 [data-theme="pink"]   { --g:#ec4899; --g-rgb:236,72,153;  --gd:rgba(236,72,153,.14);  --gg:rgba(236,72,153,.28); }
 [data-theme="cyan"]   { --g:#06b6d4; --g-rgb:6,182,212;   --gd:rgba(6,182,212,.14);   --gg:rgba(6,182,212,.28); }
+
+/* ── Zoom liste de pistes ────────────────────────────────── */
+:root[data-tlist-zoom="compact"]     { --tr-h: 36px; --art-list: 42px; }
+:root[data-tlist-zoom="normal"]      { --tr-h: 48px; --art-list: 56px; }  /* Normal = pré-feature (intouché) */
+:root[data-tlist-zoom="comfortable"] { --tr-h: 60px; --art-list: 70px; }
 
 /* ── EQ par appareil ──────────────────────────────────────────────────────── */
 .eq-device-profiles-list {
@@ -759,7 +874,7 @@
   border-radius: 12px;
   padding: 24px;
   width: min(520px, 90vw);
-  max-height: 70vh;
+  max-height: calc(100vh - var(--sp-8)); /* R-C1 : pattern modal unifié */
   overflow-y: auto;
   box-shadow: 0 8px 32px rgba(0,0,0,0.5);
   display: flex;
@@ -821,7 +936,7 @@
   border-radius: 12px;
   padding: 24px;
   width: min(480px, 90vw);
-  max-height: 70vh;
+  max-height: calc(100vh - var(--sp-8)); /* R-C1 : pattern modal unifié */
   overflow-y: auto;
   box-shadow: var(--shadow-xl);
   display: flex;
@@ -890,7 +1005,7 @@
   border-radius: 12px;
   padding: 24px;
   width: min(480px, 90vw);
-  max-height: 70vh;
+  max-height: calc(100vh - var(--sp-8)); /* R-C1 : pattern modal unifié */
   overflow-y: auto;
   box-shadow: var(--shadow-xl);
   display: flex;
@@ -947,6 +1062,10 @@ html[data-mode="light"] {
   --scrim:         rgba(0,0,0,.30);
   --scrim-heavy:   rgba(0,0,0,.40);
   --blend-viz:     multiply;
+  /* EQ — couleurs de bande en mode clair (remplace les tokens --eq-*-light, UIH-eq-02) */
+  --eq-warm: #c45f10;
+  --eq-cool: #1a6fcc;
+  --eq-cut:  #d9520a;
 }
 
 /* ── Base ── */
@@ -1135,7 +1254,7 @@ html[data-mode="light"] .organize-move-to   { color: var(--t2); }
 html[data-mode="light"] #usb-modal { background: var(--bg2, #f5f5f8); }
 
 /* ── Settings ── */
-html[data-mode="light"] #settings-box    { background:var(--bg2); border:var(--border-w-sm) solid var(--bg5); box-shadow:var(--shadow-modal2); }
+html[data-mode="light"] #settings-box    { background:var(--bg2); }
 html[data-mode="light"] .set-section     { border-bottom:var(--border-w-sm) solid var(--bg5); }
 html[data-mode="light"] .set-row-t       { color:var(--t); }
 html[data-mode="light"] .set-row-sub     { color:var(--t3); }
@@ -1620,7 +1739,9 @@ button { cursor: pointer; }
 
 /* ═══ MAIN ═══════════════════════════════════════════════════ */
 #main {
+  container: main / inline-size;
   grid-area: main; display: flex; flex-direction: column; overflow: hidden;
+  min-width: 0; /* R-M5 : défense en profondeur — un descendant nowrap large ne gonfle pas la piste grid */
   background:
     radial-gradient(ellipse 70% 35% at 50% 0%, rgba(var(--g-rgb),.04) 0%, transparent 60%),
     var(--bg);
@@ -1653,16 +1774,18 @@ button { cursor: pointer; }
 }
 
 /* ── Dupes badge (header bibliothèque) ─────────────── */
+/* R-L3 : valeurs sur la grille recâblées (--r-pill, --border-w-sm, --fs-sm,
+   --sp-1q=3px). 5/7/9px sans token exact — laissés littéraux. */
 .dupes-badge {
   display: flex;
   align-items: center;
   gap: 5px;
-  padding: 3px 9px 3px 7px;
-  border-radius: 20px;
-  border: 1px solid rgba(234,179,8,.35);
+  padding: var(--sp-1q) 9px var(--sp-1q) 7px;
+  border-radius: var(--r-pill);
+  border: var(--border-w-sm) solid rgba(234,179,8,.35);
   background: rgba(234,179,8,.10);
   color: rgb(234,179,8);
-  font-size: 11px;
+  font-size: var(--fs-sm);
   font-weight: 600;
   cursor: pointer;
   white-space: nowrap;
@@ -1754,10 +1877,11 @@ button { cursor: pointer; }
 }
 
 .tr {
-  display: grid; grid-template-columns: var(--art-list) 1fr minmax(0, 12em) auto;
+  display: grid; grid-template-columns: var(--art-list) minmax(0,1fr) minmax(0,12em) auto;
   align-items: center; gap: var(--sp-3);
   padding: var(--sp-1h) var(--sp-2h) var(--sp-1h) var(--sp-2);
-  min-height: 48px; /* doit correspondre à VIRT_ROW_H dans cfg.js */
+  height: var(--tr-h); /* piloté par data-tlist-zoom → tlistZoom.js */
+  min-height: 36px; /* plancher compact — ne jamais descendre en dessous */
   border-radius: var(--r);
   transition: background var(--dur-fast) ease, transform var(--dur-interact) var(--spring-soft);
   cursor: pointer;
@@ -1928,9 +2052,17 @@ html[data-mode="light"] mark.srch-hl { background: rgba(var(--g-rgb), .22); }
   letter-spacing: var(--ls-slight);
 }
 
-@media (max-width: 899px) {
+/* R-C3 : container query — la liste réagit à la largeur RÉELLE de #main,
+   pas au viewport. Ainsi, quand un panneau latéral (Queue/EQ) est ouvert,
+   le titre garde la priorité sur l'album. */
+/* Conteneur moyen : l'album rétrécit AVANT le titre */
+@container main (max-width: 820px) {
+  .tr { grid-template-columns: var(--art-list) minmax(0,1fr) minmax(0,7em) auto; }
+}
+/* Conteneur étroit : l'album disparaît, le titre reste */
+@container main (max-width: 680px) {
+  .tr { grid-template-columns: var(--art-list) minmax(0,1fr) auto; }
   .ta { display: none; }
-  .tr { grid-template-columns: var(--art-list) 1fr auto; }
 }
 
 .tdur {
@@ -2003,9 +2135,16 @@ html[data-mode="light"] mark.srch-hl { background: rgba(var(--g-rgb), .22); }
 /* ═══ GRILLES Albums / Artistes ══════════════════════════════ */
 .grid-view {
   flex: 1; overflow-y: auto; padding: var(--sp-5) var(--sp-6) var(--sp-6);
-  display: grid; grid-template-columns: repeat(auto-fill, minmax(var(--card-min-w), 1fr)); gap: var(--sp-4);
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, clamp(140px, 22cqi, 200px)), 1fr)); gap: clamp(var(--sp-2), 2cqi, var(--sp-4));
   min-height: 0; align-content: start;
 }
+
+/* ── Densité container — panneau ouvert ou fenêtre étroite ── */
+@container content (max-width: 480px) { /* couvre album-grid, artist-grid ET genre-grid (tous enfants de #content-area container:content) */
+  .card-sub  { display: none; }
+  .card-info { padding: var(--sp-1h) var(--sp-2); }
+}
+
 .card {
   background: var(--bg2); border: var(--border-w-sm) solid var(--bg4); border-radius: var(--r-card);
   padding: var(--sp-3); cursor: pointer;
@@ -2046,9 +2185,11 @@ html[data-mode="light"] mark.srch-hl { background: rgba(var(--g-rgb), .22); }
 }
 .card:hover .card-art::after { opacity: 1; }
 /* Hover play overlay sur les cartes album/artiste */
+/* R-L4 : conteneur recâblé sur --icon-40 (exact). svg 18px sans token exact
+   (--icon-2xl vaut 16) — laissé littéral pour ne pas rétrécir l'icône. */
 .card-play-btn {
   position: absolute;
-  width: 40px; height: 40px;
+  width: var(--icon-40); height: var(--icon-40);
   top: 50%; left: 50%;
   transform: translate(-50%, -50%) scale(0.8);
   border: none; cursor: pointer;
@@ -2067,13 +2208,13 @@ html[data-mode="light"] mark.srch-hl { background: rgba(var(--g-rgb), .22); }
 .card:hover .card-play-btn svg { transform: none; }
 .card-play-btn:hover { background: rgba(0,0,0,0.75) !important; }
 .card-name {
-  font-size: var(--fs-md); font-weight: 700;
+  font-size: var(--fs-f-body); font-weight: 700;
   font-family: var(--font-display);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   line-height: var(--lh-comfort); margin-bottom: var(--sp-1); color: var(--t);
   letter-spacing: var(--ls-display);
 }
-.card-sub { font-size: var(--fs-sm); color: var(--t2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: var(--lh-comfort); }
+.card-sub { font-size: var(--fs-f-caption); color: var(--t2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: var(--lh-comfort); }
 .card-ct  { font-size: var(--fs-xs); color: var(--t3); margin-top: var(--sp-nano); }
 .card-year { font-size: var(--fs-xs); color: var(--t3); margin-left: var(--sp-1); }
 
@@ -2149,6 +2290,7 @@ html[data-mode="light"] mark.srch-hl { background: rgba(var(--g-rgb), .22); }
 
 /* ═══ CONTENT AREA + VUE GENRES ═════════════════════════════ */
 #content-area {
+  container: content / inline-size;
   flex: 1; min-height: 0;
   display: flex; flex-direction: column;
   overflow: hidden;
@@ -2381,7 +2523,9 @@ html[data-mode="light"] .empty-cta {
   justify-content: center;
   position: relative;
   overflow: hidden;
-  padding: 0 8% 0 10%;
+  /* R-H8 : padding fluide borné (était 0 8% 0 10% en %) — symétrique et capé
+     pour rester lisible de 600px à plein écran. */
+  padding: 0 clamp(var(--sp-5), 6vw, var(--sp-15));
   /* Atmosphère gradient multi-couche */
   background:
     radial-gradient(ellipse 55% 55% at 88% 18%, rgba(var(--g-rgb),.13) 0%, transparent 65%),
@@ -2469,6 +2613,11 @@ html[data-mode="light"] .empty-cta {
   width: 100%;
   max-width: var(--modal-mid-max);
 }
+/* R-H8 : sous 700px les deux colonnes de cartes features sont à l'étroit —
+   repli sur une seule colonne. */
+@media (max-width: 700px) { /* modale waveform — grille features repliée en colonne, non-containerisable (modale hors flux principal) */
+  .wfeats { grid-template-columns: 1fr; }
+}
 
 /* Individual card */
 .wf {
@@ -2551,6 +2700,7 @@ html[data-mode="light"] .empty-cta {
 
 /* ═══ PLAYER BAR ═════════════════════════════════════════════ */
 #pl {
+  container: playerbar / inline-size;
   grid-area: pl; height: var(--pb);
   position: relative; /* ancre le canvas absolu du visualiseur */
   overflow: hidden;
@@ -2564,8 +2714,14 @@ html[data-mode="light"] .empty-cta {
   -webkit-backdrop-filter: blur(var(--blur-12)) saturate(1.2);
   border-top: var(--border-w-sm) solid var(--border-1);
   box-shadow: var(--player-shadow), var(--shadow-player-ring);
-  display: grid; grid-template-columns: var(--shelf-w) 1fr var(--shelf-w);
-  align-items: center; padding: 0 var(--sp-5); gap: var(--sp-4);
+  /* R-C5 : minmax(0,…) sur chaque colonne — évite que la colonne centrale
+     (.pl-prog flex:1) force un débordement clippé par overflow:hidden.
+     T8 : grille intrinsèquement fluide — les étagères rétrécissent avec la fenêtre
+     via clamp(), éliminant les overrides @media sur #pl lui-même.
+     Left shelf : clamp(160px, 22vw, 280px) → 280px à ≥1273px, 160px à ≤727px.
+     Right shelf : clamp(88px, 18vw, 280px) → 280px à ≥1556px, 88px à ≤489px. */
+  display: grid; grid-template-columns: minmax(0, clamp(160px, 22vw, var(--shelf-w))) minmax(0, 1fr) minmax(0, clamp(88px, 18vw, var(--shelf-w)));
+  align-items: center; padding: 0 clamp(var(--sp-2), 2vw, var(--sp-5)); gap: clamp(var(--sp-1h), 1.5vw, var(--sp-4));
   transition: background 1.2s ease;
   view-transition-name: player-bar; contain: layout;
 }
@@ -2670,7 +2826,7 @@ html[data-mode="light"] .empty-cta {
 }
 
 /* Contrôles centraux */
-.pl-c    { display: flex; flex-direction: column; align-items: center; gap: var(--sp-2); }
+.pl-c    { display: flex; flex-direction: column; align-items: center; gap: var(--sp-2); min-width: 0; /* R-C5 */ }
 .pl-btns { display: flex; align-items: center; gap: var(--sp-1); }
 
 .pc {
@@ -2800,6 +2956,7 @@ html[data-mode="light"] .empty-cta {
   padding: var(--sp-1q) var(--sp-2q);
   border-radius: var(--r-lg);
   white-space: nowrap;
+  max-width: min(220px, 90vw); /* R-M2 : ne déborde pas près d'un bord */
   pointer-events: none;
   opacity: 0;
   transition: opacity var(--dur-fast) var(--smooth);
@@ -2826,7 +2983,7 @@ html[data-mode="light"] .empty-cta {
 /* Tooltip temps au survol progress bar */
 
 /* Contrôles droite */
-.pl-r   { display: flex; align-items: center; justify-content: flex-end; gap: var(--sp-1h); }
+.pl-r   { display: flex; align-items: center; justify-content: flex-end; gap: var(--sp-1h); min-width: 0; /* R-C5 */ }
 .vol    { display: flex; align-items: center; gap: var(--sp-1h); position: relative; }
 .vol svg { width: var(--icon-xs); height: var(--icon-xs); fill: var(--t3); flex-shrink: 0; transition: fill var(--ease); }
 .vol:hover svg { fill: var(--t2); }
@@ -2838,6 +2995,7 @@ html[data-mode="light"] .empty-cta {
   font-size: var(--fs-sm); font-weight: 600; border-radius: var(--r);
   padding: var(--sp-1q) var(--sp-1d); opacity: 0; pointer-events: none;
   white-space: nowrap; box-shadow: var(--shadow-sm-tip);
+  max-width: min(220px, 90vw); /* R-M2 : ne déborde pas près d'un bord */
   transition: opacity var(--dur-tooltip) var(--smooth), transform var(--dur-tooltip) var(--spring-soft);
 }
 .vol-tip.on { opacity: 1; transform: translateX(-50%) translateY(0); }
@@ -2861,7 +3019,7 @@ html[data-mode="light"] .empty-cta {
   align-items: center;
   gap: var(--sp-2h);
   min-width: 160px;
-  max-width: 220px;
+  max-width: min(220px, 90vw); /* R-M2 : ne déborde pas près d'un bord */
   opacity: 0;
   pointer-events: none;
   transition: opacity var(--dur-tooltip) var(--smooth),
@@ -3245,8 +3403,11 @@ html[data-mode="light"] .sleep-custom-inp:focus { border-color: var(--g); backgr
   box-shadow: var(--shadow-lg), var(--shadow-inset-hi);
   /* Animation déplacée sous backdrop.on — voir règle ci-dessous */
 }
-#modal    { padding: var(--sp-6) var(--sp-7); width: var(--modal-w); max-width: 90vw; }
-#pl-modal { padding: var(--sp-5) var(--sp-5h); width: var(--modal-pl-w); max-width: 95vw; }
+#modal    { padding: var(--sp-6) var(--sp-7); width: var(--modal-w); max-width: 90vw;
+            max-height: calc(100vh - var(--sp-8)); overflow-y: auto; }
+/* R-C1 : #pl-modal scrollable — corps qui défile, tabs collés en haut (cf. .pl-modal-tabs sticky) */
+#pl-modal { padding: var(--sp-5) var(--sp-5h); width: var(--modal-pl-w); max-width: 95vw;
+            max-height: calc(100vh - var(--sp-8)); overflow-y: auto; }
 
 /* Confirm modal — même système que #modal-bg (visibility+opacity pour fade animé) */
 #confirm-modal-bg {
@@ -3262,6 +3423,8 @@ html[data-mode="light"] .sleep-custom-inp:focus { border-color: var(--g); backgr
   background: var(--glass-surface); border: var(--border-w-sm) solid var(--border-2);
   border-radius: var(--r3); padding: var(--sp-7) var(--sp-7) var(--sp-5h);
   max-width: var(--text-sf-max); width: 90vw; box-shadow: var(--shadow-xl);
+  /* R-C1 : reste accessible sous ~550px de haut */
+  max-height: calc(100vh - var(--sp-8)); overflow-y: auto;
   /* Animation déplacée sous backdrop.on — même raison que #modal */
 }
 #confirm-modal-bg.on #confirm-modal { animation: modalBoxIn var(--dur-nav) var(--spring-soft) both; }
@@ -3290,8 +3453,7 @@ html[data-mode="light"] .sleep-custom-inp:focus { border-color: var(--g); backgr
 /* DS — Variant secondary (utilisé par promptAction et par les CTAs neutres : "ouvrir dossier", "exporter", etc.) */
 .mbtn.secondary    { background: var(--bg3); color: var(--t2); border: var(--border-w-sm) solid var(--bg5); }
 .mbtn.secondary:hover { background: var(--bg4); color: var(--t); border-color: var(--g); }
-/* DS — Utility size : équivalent des inline `font-size:11px;padding:5px 14px` dans index.html (à migrer) */
-.mbtn--sm          { font-size: var(--fs-sm); padding: var(--sp-1h) var(--sp-3h); }
+/* Variante compacte unique : .mbtn-sm (doublon mort .mbtn--sm supprimé — audit UIH-settings-04). */
 /* État disabled global — couvre les cas où le composant individuel n'en a pas défini */
 .mbtn:disabled, button:disabled[disabled] { opacity: .5; cursor: not-allowed; pointer-events: none; }
 #set-viz-shape-group { transition: opacity var(--dur-mid) var(--smooth); }
@@ -3318,7 +3480,7 @@ html[data-mode="light"] .sleep-custom-inp:focus { border-color: var(--g); backgr
 }
 .prompt-bg.on { visibility: visible; opacity: 1; pointer-events: auto; }
 .prompt-bg.on .modal { animation: modalBoxIn var(--dur-mid) var(--spring-soft) both; }
-.prompt-modal { background: var(--glass-surface); border: var(--border-w-sm) solid var(--border-2); border-radius: var(--r3); padding: var(--sp-7) var(--sp-7) var(--sp-5h); max-width: var(--text-sf-max); width: 90vw; box-shadow: var(--shadow-xl); display: flex; flex-direction: column; gap: var(--sp-3); }
+.prompt-modal { background: var(--glass-surface); border: var(--border-w-sm) solid var(--border-2); border-radius: var(--r3); padding: var(--sp-7) var(--sp-7) var(--sp-5h); max-width: var(--text-sf-max); width: 90vw; box-shadow: var(--shadow-xl); display: flex; flex-direction: column; gap: var(--sp-3); max-height: calc(100vh - var(--sp-8)); overflow-y: auto; /* R-C1 */ }
 .modal-title { font-size: var(--fs-base); font-weight: 700; font-family: var(--font-display); letter-spacing: var(--ls-display); }
 .prompt-input { background: var(--bg3); border: var(--border-w-sm) solid var(--border-2); border-radius: var(--r); padding: var(--sp-2) var(--sp-3); color: var(--t); font-size: var(--fs-md); outline: none; }
 .prompt-input:focus { border-color: var(--g); }
@@ -3450,6 +3612,8 @@ html[data-mode="light"] .orphan-item { border-bottom-color: var(--bg5); }
   box-shadow: var(--shadow-lg), var(--shadow-inset-hi);
   padding: var(--sp-6) var(--sp-7);
   width: var(--modal-bte-w); max-width: 92vw;
+  /* R-C1 : reste accessible sous ~550px de haut */
+  max-height: calc(100vh - var(--sp-8)); overflow-y: auto;
   /* animation ici retirée — elle jouait au boot. La bonne animation est sous .on ci-dessus. */
 }
 .bte-fields {
@@ -3578,6 +3742,8 @@ html[data-mode="light"] .bte-cover-clear    { background: var(--bg3); border-col
 .pl-modal-tabs {
   display: flex; gap: var(--sp-micro); margin-bottom: var(--sp-4);
   background: var(--bg4); border-radius: var(--r-art); padding: var(--sp-1q);
+  /* R-C1 : tabs collés en haut quand le corps de #pl-modal défile */
+  position: sticky; top: 0; z-index: var(--z-base);
 }
 .pl-tab {
   flex: 1; padding: var(--sp-1d) var(--sp-2h);
@@ -3655,6 +3821,27 @@ html[data-mode="light"] .bte-cover-clear    { background: var(--bg3); border-col
   transition: color var(--dur-fast) var(--smooth), background var(--dur-fast) var(--smooth);
 }
 .spl-rule-del:hover { color: var(--red); background: rgba(var(--red-rgb),.10); }
+
+/* ─── Constructeur de playlist intelligente — layout extrait des styles inline
+       (audit §4 UIH-spl-01/02 ; conformité CLAUDE.md §13). ─── */
+.spl-modes        { display: flex; gap: var(--space-2); margin-bottom: var(--space-4); }
+.spl-mode-btn     { flex: 1; font-size: var(--text-xs); padding: var(--space-2) var(--space-3); }
+.spl-desc         { font-size: var(--text-sm); color: var(--t2); margin-bottom: var(--space-4); line-height: var(--lh-base); }
+.spl-field        { margin-bottom: var(--space-3); }
+.spl-section-lbl  { font-size: var(--text-xs); color: var(--t3); font-weight: 600; letter-spacing: var(--ls-label); text-transform: uppercase; margin-bottom: var(--space-2); }
+.spl-seed-name    { font-size: var(--text-sm); color: var(--t2); }
+.spl-seed-search  { margin-top: var(--space-2); }
+.spl-results      { max-height: var(--spl-results-max-h); overflow-y: auto; background: var(--bg3); border-radius: var(--r); border: var(--border-w-sm) solid var(--bg5); margin-top: var(--space-1); }
+.spl-preview-list { max-height: var(--spl-preview-max-h); overflow-y: auto; border-radius: var(--r); border: var(--border-w-sm) solid var(--bg4); }
+.spl-grid-2       { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-3); margin-bottom: var(--space-4); }
+.spl-combinator   { display: flex; align-items: center; gap: var(--space-2); margin-bottom: var(--space-3); font-size: var(--text-sm); color: var(--t2); }
+.spl-select       { cursor: pointer; }
+.spl-select-auto  { width: auto; cursor: pointer; }
+.spl-rules-list   { display: flex; flex-direction: column; gap: var(--space-2); margin-bottom: var(--space-3); }
+.spl-add-rule     { width: 100%; font-size: var(--text-xs); padding: var(--space-2) var(--space-3); margin-bottom: var(--space-4); }
+.spl-preview      { margin-bottom: var(--space-3); }
+.spl-preview-count{ color: var(--g); font-weight: 700; }
+.spl-ico-mr       { margin-right: var(--space-1); }
 
 /* ═══ SIDEBAR PLAYLISTS ══════════════════════════════════════ */
 .ni-pl { padding-left: var(--sp-2h); padding-right: var(--sp-2); font-size: var(--fs-md); }
@@ -4144,13 +4331,9 @@ html[data-mode="light"] .pl-folder-h:hover { background: var(--bg4); }
 html[data-mode="light"] .pl-folder-count   { background: var(--bg5); color: var(--t3); }
 html[data-mode="light"] .pl-folder-h:hover .pl-folder-count { background: var(--bg6); }
 
-/* FIX-V1 : Hero playlist — breakpoint responsive (fenêtre étroite, split-view Tauri) */
-@media (max-width: 520px) {
-  #pl-hero { flex-direction: column; align-items: flex-start; padding: var(--sp-3h) var(--sp-4) var(--sp-3); gap: var(--sp-3); }
-  .pl-hero-cover { width: var(--art-hero-sm); height: var(--art-hero-sm); }
-  .pl-hero-name { font-size: var(--fs-vw-hero-sm); }
-  .pl-hero-stats { font-size: var(--fs-xs); }
-}
+/* R-H1 : bloc @media (max-width:520px) supprimé — fenêtre Tauri minWidth:600,
+   ce breakpoint était mort (inatteignable). Token --fs-vw-hero-sm retiré du
+   :root en conséquence (plus aucun consommateur). */
 
 /* ═══ SETTINGS PANEL ═════════════════════════════════════════ */
 /* UX FIX : même pattern que les modales — visibility+opacity pour animer ouverture ET fermeture */
@@ -4186,7 +4369,8 @@ html[data-mode="light"] .pl-folder-h:hover .pl-folder-count { background: var(--
 }
 
 /* En-tête — barre supérieure pleine largeur */
-.set-head        { display: flex; align-items: center; justify-content: space-between; padding: var(--sp-3h) var(--sp-4h); border-bottom: var(--border-w-sm) solid var(--bg4); flex-shrink: 0; }
+/* R2 — panneau Settings recâblé sur les échelles canoniques (audit §4 UIH-settings) */
+.set-head        { display: flex; align-items: center; justify-content: space-between; padding: var(--space-3) var(--space-5); border-bottom: var(--border-w-sm) solid var(--bg4); flex-shrink: 0; }
 .set-head-title  { font-size: var(--fs-base); font-weight: 700; display: flex; align-items: center; gap: var(--sp-2); }
 .set-head-title svg { width: var(--icon-lg); height: var(--icon-lg); fill: var(--g); }
 .set-close       { background: none; border: none; color: var(--t3); width: var(--icon-28); height: var(--icon-28); border-radius: var(--r); display: flex; align-items: center; justify-content: center; transition: background var(--ease), color var(--ease); }
@@ -4221,12 +4405,29 @@ html[data-mode="light"] .pl-folder-h:hover .pl-folder-count { background: var(--
 .set-tab-btn.on   { color: var(--g); border-left-color: var(--g); background: rgba(var(--g-rgb), .1); }
 .set-tab-btn.on svg { stroke: var(--g); }
 
+/* R-M4 : sous ~680px la barre latérale Settings (200px fixe) mange trop de
+   largeur — elle passe en barre horizontale scrollable au-dessus du contenu,
+   indicateur actif déplacé du bord gauche au bord bas. */
+@media (max-width: 680px) { /* = --bp-compact — barre tabs Settings passe en horizontal, non-containerisable (panneau positionné fixe) */
+  .set-body { flex-direction: column; }
+  .set-tabs {
+    flex-direction: row; width: 100%; flex-shrink: 0;
+    overflow-x: auto; overflow-y: hidden;
+    border-right: none; border-bottom: var(--border-w-sm) solid var(--sep);
+  }
+  .set-tab-btn {
+    border-left: none; border-bottom: var(--border-w-lg) solid transparent;
+    flex-shrink: 0;
+  }
+  .set-tab-btn.on { border-left-color: transparent; border-bottom-color: var(--g); }
+}
+
 /* ── Pages de contenu — colonne lisible centrée ── */
 .set-page     { display: none; flex-direction: column; width: 100%; max-width: var(--set-content-w); margin-inline: auto; }
 .set-page.on  { display: flex; }
 
 /* Bouton compact — variante de .mbtn pour les rangées de settings */
-.mbtn-sm { font-size: 11px; padding: 6px 12px; }
+.mbtn-sm { font-size: var(--text-xs); padding: var(--space-2) var(--space-3); }
 
 /* Groupe de boutons aligné à droite dans une .set-row */
 .set-btn-group { display: flex; gap: var(--sp-2); flex-wrap: wrap; flex-shrink: 0; }
@@ -4234,9 +4435,9 @@ html[data-mode="light"] .pl-folder-h:hover .pl-folder-count { background: var(--
 /* Le contrôle de droite d'une rangée ne se comprime jamais */
 .set-row > .mbtn { flex-shrink: 0; }
 
-.set-section     { padding: var(--sp-4) var(--sp-4h); border-bottom: var(--border-w-sm) solid var(--sep); }
-.set-section-lbl { font-size: var(--fs-xs); font-weight: 700; color: var(--t3); letter-spacing: var(--ls-caps); text-transform: uppercase; margin-bottom: var(--sp-3); }
-.set-row         { display: flex; align-items: center; justify-content: space-between; margin-bottom: var(--sp-2h); gap: var(--sp-3); }
+.set-section     { padding: var(--space-4) var(--space-5); border-bottom: var(--border-w-sm) solid var(--sep); }
+.set-section-lbl { font-size: var(--fs-xs); font-weight: 700; color: var(--t3); letter-spacing: var(--ls-caps); text-transform: uppercase; margin-bottom: var(--space-3); }
+.set-row         { display: flex; align-items: center; justify-content: space-between; margin-bottom: var(--space-3); gap: var(--space-3); }
 .set-row:last-child { margin-bottom: 0; }
 .set-row-label   { font-size: var(--fs-md); color: var(--t2); line-height: var(--lh-comfort); }
 .set-row-sub     { font-size: var(--fs-sm); color: var(--t3); margin-top: var(--sp-micro); }
@@ -4264,6 +4465,21 @@ html[data-mode="light"] .pl-folder-h:hover .pl-folder-count { background: var(--
 .lang-btn.on  { background: var(--g); color: var(--text-on-accent); }
 .lang-btn:not(.on):hover { background: var(--border-2); color: var(--t2); }
 
+/* ── Zoom liste de pistes — radio group ─────────────────── */
+.tlist-zoom-radios { display: flex; background: var(--bg4); border-radius: var(--r); padding: var(--sp-1q); gap: var(--sp-micro); }
+.tlist-zoom-radio  { display: flex; }
+.tlist-zoom-radio input[type="radio"] { display: none; }
+.tlist-zoom-radio span {
+  padding: var(--sp-1p) var(--sp-3h);
+  border-radius: var(--r);
+  font-size: var(--fs-caption); font-weight: 600;
+  color: var(--t3); background: transparent;
+  cursor: pointer;
+  transition: background var(--ease), color var(--ease);
+}
+.tlist-zoom-radio input[type="radio"]:checked + span { background: var(--g); color: var(--text-on-accent); }
+.tlist-zoom-radio input[type="radio"]:not(:checked) + span:hover { background: var(--border-2); color: var(--t2); }
+
 .theme-swatches   { display: flex; gap: var(--sp-2); flex-wrap: wrap; }
 .theme-swatch     { width: var(--icon-28); height: var(--icon-28); border-radius: 50%; border: var(--border-w-lg) solid transparent; transition: transform var(--ease), border-color var(--ease), outline-color var(--ease); flex-shrink: 0; padding: 0; cursor: pointer; }
 .theme-swatch:focus-visible { outline: var(--border-w-lg) solid var(--t); outline-offset: var(--sp-1q); }
@@ -4284,6 +4500,21 @@ html[data-mode="light"] .pl-folder-h:hover .pl-folder-count { background: var(--
 .mp-toggle-btn:hover { background: var(--bg4); color: var(--t); }
 .mp-toggle-btn svg   { width: var(--icon-md); height: var(--icon-md); fill: none; stroke: currentColor; stroke-width: 2; }
 
+/* ─── Styles extraits du markup Settings / ctx-menu / file d'attente
+       (audit §4 UIH-settings-01/05/06, UIH-ctxmenu-01/02, UIH-queue-01 ; CLAUDE.md §13). ─── */
+.set-range       { width: 90px; accent-color: var(--g); }
+.set-viz-toggle  { min-width: 82px; }
+.set-mp-btn      { width: auto; padding: var(--space-2) var(--space-3); }
+.set-row--wrap   { flex-wrap: wrap; }
+.set-btn-ico     { margin-right: var(--space-1); }
+.set-about-row   { display: flex; align-items: center; gap: var(--space-3); }
+.set-about-logo  { border-radius: var(--radius-sm); flex-shrink: 0; }
+.set-version     { color: var(--t3); font-size: var(--text-sm); }
+.ctx-track-name  { color: var(--t); font-weight: 600; max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ctx-sep--first  { margin-top: var(--space-1); }
+.queue-head-actions { display: flex; align-items: center; gap: var(--space-1); }
+.queue-util-btn  { opacity: .7; }
+
 /* ═══ FILE D'ATTENTE + EQ (panels latéraux partagés) ════════ */
 #queue-panel, #eq-panel {
   position: fixed; top: var(--tb); right: 0;
@@ -4298,9 +4529,20 @@ html[data-mode="light"] .pl-folder-h:hover .pl-folder-count { background: var(--
   box-shadow: none;
   will-change: transform;
 }
-#queue-panel          { width: min(var(--panel-queue-w), calc(100vw - var(--sb) - var(--sp-10))); }
-#eq-panel             { width: min(var(--panel-eq-w),        calc(100vw - var(--sb) - var(--sp-10))); }
-#eq-panel.eq-expert   { width: min(var(--panel-eq-expert-w), calc(100vw - var(--sb) - var(--sp-10))); }
+/* T9 : largeur fluide — clamp entre 260px et le token fixe, plafonnée pour
+   garantir ≥320px de contenu dans #main. Les panels sont position:fixed (hors
+   du flux et hors du container #main) → vw est l'unité correcte (pas cqw/cqi). */
+#queue-panel {
+  container: panel-queue / inline-size;
+  width: clamp(260px, var(--panel-queue-w), calc(100vw - var(--sb) - 320px));
+}
+#eq-panel {
+  container: panel-eq / inline-size;
+  width: clamp(260px, var(--panel-eq-w), calc(100vw - var(--sb) - 320px));
+}
+#eq-panel.eq-expert {
+  width: clamp(260px, var(--panel-eq-expert-w), calc(100vw - var(--sb) - 320px));
+}
 #queue-panel.open, #eq-panel.open {
   transform: translateX(0);
   box-shadow: var(--shadow-queue);
@@ -4319,10 +4561,50 @@ html[data-mode="light"] .pl-folder-h:hover .pl-folder-count { background: var(--
 #eq-panel.open::before {
   opacity: 1;
 }
-/* Sidebar push : #main recule pour laisser place au panel */
-#app.panel-queue-open #main                   { padding-right: min(var(--panel-queue-w),        calc(100vw - var(--sb) - var(--sp-10))); }
-#app.panel-eq-open    #main                   { padding-right: min(var(--panel-eq-w),         calc(100vw - var(--sb) - var(--sp-10))); }
-#app.panel-eq-open.eq-expert-mode #main       { padding-right: min(var(--panel-eq-expert-w),  calc(100vw - var(--sb) - var(--sp-10))); }
+/* Sidebar push : padding-right = largeur réelle du panel, plafonné pour que
+   #main garde toujours ≥320px de contenu (plancher de contenu T9). */
+#app.panel-queue-open #main {
+  padding-right: clamp(260px, var(--panel-queue-w), calc(100vw - var(--sb) - 320px));
+}
+#app.panel-eq-open #main {
+  padding-right: clamp(260px, var(--panel-eq-w), calc(100vw - var(--sb) - 320px));
+}
+#app.panel-eq-open.eq-expert-mode #main {
+  padding-right: clamp(260px, var(--panel-eq-expert-w), calc(100vw - var(--sb) - 320px));
+}
+
+/* R-C3 : sous 720px, Queue/EQ passent en overlay flottant — plus de push sur
+   #main (sinon la bibliothèque tombe à ~146px à 600px de large). z-index relevé
+   au niveau dropdown et ombre portée forte pour décoller du contenu. */
+@media (max-width: 720px) { /* = --bp-compact — panneaux Queue/EQ passent en overlay flottant, non-containerisable (panels positionnés fixed/absolute hors conteneur) */
+  #queue-panel, #eq-panel { z-index: var(--z-dropdown); }
+  #queue-panel.open, #eq-panel.open { box-shadow: var(--shadow-xl); }
+  #app.panel-queue-open #main,
+  #app.panel-eq-open    #main,
+  #app.panel-eq-open.eq-expert-mode #main { padding-right: 0; }
+}
+
+/* ════════════════════════════════════════════════════════════════
+   R-C2 / R-H5 / R-M11 — Breakpoints VERTICAUX (audit responsive 2026-05-22).
+   La fenêtre desktop descend à minHeight:400. À cette hauteur, --tb+--pb
+   fixes (134px) laissent trop peu pour #main : le panneau EQ expert et les
+   modals débordent. On réduit la barre de transport, la barre de titre et
+   la zone courbe EQ, et on rend le panneau EQ scrollable en dernier recours.
+   ════════════════════════════════════════════════════════════════ */
+@media (max-height: 560px) {
+  :root { --pb: 76px; --tb: 32px; }
+  /* EQ : zone courbe réduite + panneau scrollable pour ne jamais clipper les bandes */
+  #eq-panel { overflow-y: auto; }
+  #eq-panel.eq-expert.eq-curve-active #eq-curve-wrap { height: 120px; }
+}
+@media (max-height: 480px) {
+  :root { --pb: 64px; --tb: 28px; }
+  #eq-panel.eq-expert            #eq-curve-wrap { height: 56px; }
+  #eq-panel.eq-expert.eq-curve-active #eq-curve-wrap { height: 88px; }
+  /* R-M11 : la rangée de mini-cartes albums du drill artiste mange ~110px —
+     masquée quand la hauteur est critique pour préserver la zone de liste. */
+  .dh-albums-section { display: none; }
+}
 
 /* En-têtes panneau — style commun (queue) */
 .queue-head {
@@ -4534,7 +4816,7 @@ html[data-mode="light"] .pl-folder-h:hover .pl-folder-count { background: var(--
   100% { opacity: 0;   transform: scale(.92) translateY(var(--sp-2)); }
 }
 .queue-ghost--spring {
-  animation: qSpringBack var(--dur-modal) ease forwards;
+  animation: qSpringBack var(--dur-modal) var(--ease-spring) forwards;
 }
 
 /* ═══ ÉGALISEUR ══════════════════════════════════════════════ */
@@ -4615,7 +4897,7 @@ html[data-mode="light"] .pl-folder-h:hover .pl-folder-count { background: var(--
   100% { background: transparent; }
 }
 .eq-slider-wrap.eq-band-reset {
-  animation: eqBandReset 300ms var(--smooth) forwards;
+  animation: eqBandReset var(--motion-slow) var(--smooth) forwards;
 }
 
 /* ── Spacers flexibles — encadrent le canvas pour le centrer verticalement ── */
@@ -4683,7 +4965,6 @@ html[data-mode="light"] .eq-bands {
 .eq-val--cut   { color: var(--eq-cut) !important; font-weight: 600; }
 /* Flat (0dB) → très atténué */
 .eq-val--flat  { color: var(--t4) !important; font-weight: 400; }
-html[data-mode="light"] .eq-val--cut { color: var(--eq-cut-light) !important; }
 
 /* ── Wrap slider : zone interactive avec ligne 0 dB ─────────────────────── */
 .eq-slider-wrap {
@@ -4758,10 +5039,8 @@ html[data-mode="light"] .eq-slider-wrap::before {
 .eq-band:nth-child(9)  .eq-freq,
 .eq-band:nth-child(10) .eq-freq { color: var(--eq-cool); }
 html[data-mode="light"] .eq-band:nth-child(1) .eq-freq,
-html[data-mode="light"] .eq-band:nth-child(2) .eq-freq { color: var(--eq-warm-light); }
 html[data-mode="light"] .eq-band:nth-child(8) .eq-freq,
 html[data-mode="light"] .eq-band:nth-child(9) .eq-freq,
-html[data-mode="light"] .eq-band:nth-child(10) .eq-freq { color: var(--eq-cool-light); }
 
 /* ── Footer EQ — barre d'actions basse, toujours en bas du panel ────────── */
 .eq-footer {
@@ -5555,8 +5834,11 @@ kbd              { display: inline-flex; align-items: center; justify-content: c
 .stats-row-2 { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-3h); }
 /* Genre seul (pas de top titres encore) → s'étend sur toute la largeur */
 .stats-row-2 > :only-child { grid-column: 1 / -1; }
-@media (max-width: 880px) { .stats-row-2 { grid-template-columns: 1fr; } }
-@media (max-width: 700px) { .stats-cards  { grid-template-columns: 1fr 1fr; } }
+@media (max-width: 880px) { .stats-row-2 { grid-template-columns: 1fr; } } /* stats — deux colonnes de cartes trop étroites < 880px, non-containerisable (vue plein écran sans conteneur nommé) */
+@media (max-width: 700px) { .stats-cards  { grid-template-columns: 1fr 1fr; } } /* stats — grille cartes repasse à 2 col < 700px, non-containerisable (idem) */
+/* R-M12 : sous 560px les cartes stats passent en colonne unique (étaient
+   bloquées à 2 colonnes, trop serrées à 600px). */
+@media (max-width: 560px) { .stats-cards  { grid-template-columns: 1fr; } } /* = --bp-short — cartes stats en colonne unique < 560px, non-containerisable (idem) */
 
 /* ═══ MULTI-SÉLECTION ════════════════════════════════════════ */
 .tr.selected    { background: rgba(var(--g-rgb), .1) !important; }
@@ -5586,6 +5868,16 @@ kbd              { display: inline-flex; align-items: center; justify-content: c
   opacity: 0; pointer-events: none;
   transition: opacity var(--dur-mid) ease, transform var(--dur-mid) var(--spring-soft);
   z-index: var(--z-sticky); white-space: nowrap; backdrop-filter: blur(var(--blur-12)); /* TOKEN-2: 90 → var(--z-sticky) */
+  /* R-M1 : ne déborde jamais le viewport, même avec i18n long */
+  max-width: calc(100vw - var(--sp-6));
+}
+/* R-M1 : sous ~700px la barre de sélection compacte ses actions —
+   libellés texte masqués (icône seule) + retour à la ligne autorisé. */
+@media (max-width: 700px) { /* sel-bar — positionnée fixed hors flux, non-containerisable ; compacte sous ~700px */
+  #sel-bar { flex-wrap: wrap; justify-content: center; white-space: normal; }
+  .sel-action { font-size: 0; gap: 0; padding: var(--sp-1p) var(--sp-2h); }
+  .sel-action svg { width: var(--icon-md); height: var(--icon-md); }
+  #sel-count { font-size: var(--fs-caption); }
 }
 #sel-bar.on  { opacity: 1; pointer-events: all; transform: translateX(-50%) translateY(0); }
 #sel-count   { font-size: var(--fs-caption); font-weight: 700; color: var(--t); padding-right: var(--sp-micro); }
@@ -6523,18 +6815,37 @@ html[data-mode="light"] .rv-start-btn  { background: var(--g); }
      <720px  : Compact        — sidebar icon-only (54px) + tooltips
    ═══════════════════════════════════════════════════════════════════ */
 
-/* ── Normal (<900px) ──────────────────────────────────────────────── */
-@media (max-width: 899px) {
-  #pl {
-    grid-template-columns: minmax(var(--pl-shelf-900-l-min), var(--pl-shelf-900-l-max)) 1fr minmax(var(--pl-shelf-900-r-min), var(--pl-shelf-900-r-max));
-    padding: 0 var(--sp-3);
-    gap: var(--sp-2);
-  }
-  .vol .vslider { width: var(--vol-slider-sm); }
+/* ── Player bar — container queries (T8) ──────────────────────────
+   #pl est le conteneur « playerbar » (container: playerbar / inline-size).
+   Un conteneur NE PEUT PAS se requêter lui-même → seuls les descendants
+   sont ciblables ici. La grille de #pl est rendue fluide via clamp() dans
+   la règle base #pl (voir ci-dessus). Les @media (max-width:899px) et
+   les règles descendantes du @media (max-width:719px) sont supprimés :
+   ces containers queries les remplacent.
+   R-H2 : note de redondance — les seuils 880px et 899px étaient à 19px
+   d'écart ; consolidation non faite initialement. Désormais sans objet :
+   la grille est fluide et les extras se masquent via @container. */
+
+/* Étagères latérales rétrécissent ; la colonne centrale est prioritaire. */
+@container playerbar (max-width: 900px) {
+  .vol .vslider    { width: var(--vol-slider-sm); }
+  /* R-H6 : la pilule #sleep-indicator (largeur variable) surcharge .pl-r
+     entre 720 et 900px — masquée comme les autres extras de la player bar. */
+  #sleep-indicator { display: none; }
+}
+
+/* Extras cèdent au transport (jamais touché) */
+@container playerbar (max-width: 720px) {
+  #btn-speed,
+  .vol          { display: none; }
+  #sleep-indicator { display: none !important; }
 }
 
 /* ── Compact (<720px) — sidebar icon-only ─────────────────────────── */
-@media (max-width: 719px) {
+/* T8 : les règles player bar (#pl grid, .pl-art, .vol, #btn-speed,
+   #sleep-indicator, .pl-n, .pl-a) migrées vers @container playerbar
+   ci-dessus. Seules les règles sidebar + sort-btn restent ici. */
+@media (max-width: 719px) { /* = --bp-compact — sidebar passe en icon-only + overflow visible pour tooltips, non-containerisable (règle :root + sidebar positionnée fixed) */
   :root { --sb: var(--sb-sm); }
 
   /* Sidebar : permettre aux tooltips de déborder + stacking au-dessus de #main */
@@ -6598,22 +6909,10 @@ html[data-mode="light"] .rv-start-btn  { background: var(--g); }
   }
   .btn-scan svg { margin: 0; width: var(--icon-xl); height: var(--icon-xl); }
 
-  /* Player bar */
-  #pl {
-    grid-template-columns: minmax(var(--pl-shelf-900-r-min), var(--pl-shelf-900-r-max)) 1fr minmax(var(--art-hero-sm), var(--pl-shelf-720-r-max));
-    padding: 0 var(--sp-2);
-    gap: var(--sp-1h);
-  }
-  .pl-art { width: var(--icon-44); height: var(--icon-44); flex-shrink: 0; }
-
-  /* Masquer volume, vitesse, sleep */
-  .vol,
-  #btn-speed { display: none; }
-  #sleep-indicator { display: none !important; }
-
-  /* Textes piste plus compacts */
-  .pl-n { font-size: var(--fs-sm); }
-  .pl-a { font-size: var(--fs-xs); }
+  /* R-H3 : .vh tient sur une seule ligne — le libellé texte des .sort-btn
+     (text node) est masqué via font-size:0, seule l'icône SVG reste. */
+  .sort-btn { font-size: 0; gap: 0; padding: var(--sp-1h) var(--sp-1h); }
+  .sort-btn svg { width: var(--icon-xs); height: var(--icon-xs); }
 
   /* Reduced motion */
   @media (prefers-reduced-motion: reduce) {
@@ -6691,11 +6990,17 @@ html[data-mode="light"] .rv-start-btn  { background: var(--g); }
   display: none;
 }
 
+/* R-H5 : flux normal en colonne — l'artwork et le bloc infos s'empilent et
+   défilent au lieu que .vnp-bottom (auparavant position:absolute) recouvre
+   la pochette sous ~400px de haut. */
 #vnp.on {
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding-bottom: calc(var(--pb) - var(--tb));
+  gap: var(--sp-5);
+  overflow-y: auto;
+  padding: var(--sp-6) var(--sp-5) calc(var(--pb) - var(--tb) + var(--sp-5));
 }
 
 .vnp-bg {
@@ -6790,19 +7095,19 @@ html[data-mode="light"] .rv-start-btn  { background: var(--g); }
   pointer-events: none;
 }
 
+/* R-H5 : .vnp-bottom passe en flux normal (plus position:absolute) —
+   ne recouvre plus l'artwork. Reste centré et plafonné en largeur. */
 .vnp-bottom {
-  position: absolute;
-  bottom: var(--sp-6, 24px);
-  left: 50%;
-  transform: translateX(-50%);
+  position: relative;
   z-index: 2;
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: var(--sp-3, 12px);
-  padding: 0 var(--sp-6, 24px) var(--sp-6, 24px);
+  padding: 0 var(--sp-6, 24px);
   width: 100%;
   max-width: 480px;
+  flex-shrink: 0;
   text-align: center;
 }
 
@@ -6812,6 +7117,7 @@ html[data-mode="light"] .rv-start-btn  { background: var(--g); }
   justify-content: center;
   position: relative;
   z-index: 2;
+  flex-shrink: 0; /* R-H5 : ne se comprime pas dans la colonne scrollable */
 }
 
 .vnp-art {
@@ -6964,11 +7270,16 @@ html[data-mode="light"] .rv-start-btn  { background: var(--g); }
 #vnp-bg-btn:hover { background: rgba(255,255,255,.22); }
 
 /* ── Drill Header (album-detail / artist-detail) ─────────────────────────── */
+/* R-M10 : px sur la grille 4px recâblés sur tokens exacts (--sp-2/3/4,
+   --border-w-sm, --r-pill). Les valeurs off-grid (20px → aucun token exact ;
+   --sp-5 vaut 24px et changerait le rendu), les tailles de police et
+   l'artwork restent littérales — recabler décalerait le rendu. */
 #drill-header {
+  container: drill / inline-size;
   display: flex;
   align-items: flex-start;
   gap: 20px;
-  padding: 20px 20px 16px;
+  padding: 20px 20px var(--sp-4);
   background: linear-gradient(to bottom, var(--bg2), transparent);
   flex-shrink: 0;
 }
@@ -6986,12 +7297,12 @@ html[data-mode="light"] .rv-start-btn  { background: var(--g); }
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: var(--sp-1);
 }
 .dh-name {
   font-size: 22px;
   font-weight: 800;
-  color: var(--t1);
+  color: var(--t); /* R-L1 : --t1 inexistant → --t (texte primaire) */
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -6999,18 +7310,18 @@ html[data-mode="light"] .rv-start-btn  { background: var(--g); }
 .dh-sub {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: var(--sp-1h);
   font-size: 12px;
   color: var(--t2);
   align-items: center;
 }
 .dh-sub span { white-space: nowrap; }
-.dh-sub span + span::before { content: '·'; margin-right: 6px; }
+.dh-sub span + span::before { content: '·'; margin-right: var(--sp-1h); }
 .dh-artist-link {
   background: none;
   border: none;
   padding: 0;
-  color: var(--t1);
+  color: var(--t); /* R-L1 : --t1 inexistant → --t */
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
@@ -7020,12 +7331,12 @@ html[data-mode="light"] .rv-start-btn  { background: var(--g); }
 .dh-artist-link:hover { color: var(--g); }
 .dh-actions {
   display: flex;
-  gap: 8px;
+  gap: var(--sp-2);
   margin-top: 10px;
 }
 .dh-btn {
-  padding: 8px 18px;
-  border-radius: 99px;
+  padding: var(--sp-2) 18px;
+  border-radius: var(--r-pill);
   font-size: 13px;
   font-weight: 700;
   cursor: pointer;
@@ -7033,14 +7344,14 @@ html[data-mode="light"] .rv-start-btn  { background: var(--g); }
   transition: opacity .15s;
 }
 .dh-btn:hover { opacity: .85; }
-.dh-play { background: var(--g); color: #fff; }
-.dh-shuf { background: var(--bg3); color: var(--t1); border: 1px solid var(--bg5); }
+.dh-play { background: var(--g); color: var(--text-on-accent); } /* R-L2 : #fff → token */
+.dh-shuf { background: var(--bg3); color: var(--t); border: var(--border-w-sm) solid var(--bg5); } /* R-L1 */
 
 /* Artist drill: albums section */
 .drill-header--artist { flex-wrap: wrap; }
 .dh-albums-section {
   width: 100%;
-  padding: 0 20px 16px;
+  padding: 0 20px var(--sp-4);
 }
 .dh-albums-title {
   font-size: 11px;
@@ -7052,9 +7363,9 @@ html[data-mode="light"] .rv-start-btn  { background: var(--g); }
 }
 .dh-albums-mini {
   display: flex;
-  gap: 12px;
+  gap: var(--sp-3);
   overflow-x: auto;
-  padding-bottom: 4px;
+  padding-bottom: var(--sp-1);
   scrollbar-width: thin;
 }
 .dh-mini-card {
@@ -7064,10 +7375,10 @@ html[data-mode="light"] .rv-start-btn  { background: var(--g); }
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 4px;
+  gap: var(--sp-1);
   flex-shrink: 0;
-  width: 88px;
-  padding: 8px;
+  width: var(--art-hero-sm);
+  padding: var(--sp-2);
   border-radius: var(--r);
   transition: background .15s;
 }
@@ -7082,7 +7393,7 @@ html[data-mode="light"] .rv-start-btn  { background: var(--g); }
 .dh-mini-name {
   font-size: 11px;
   font-weight: 600;
-  color: var(--t1);
+  color: var(--t); /* R-L1 : --t1 inexistant → --t */
   text-align: center;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -7109,37 +7420,31 @@ html[data-mode="light"] .rv-start-btn  { background: var(--g); }
 .tr--album-detail .ti      { flex: 1; min-width: 0; } /* compense le manque de 1fr (grid → flex) */
 
 /* ══ RESPONSIVE — Compact layout pour narrower windows (≤ 640px) ════
-   Drill header artwork réduit (120→80px), font-size ajusté (22→17px).
+   Drill header migré vers @container drill (voir ci-dessous).
    Grilles d'album/artiste/genre réduites pour 2 colonnes serrées.
    ═══════════════════════════════════════════════════════════════════ */
-@media (max-width: 640px) {
-  #drill-header {
-    gap: var(--sp-3);
-    padding: 14px 14px 12px;
-  }
-  .dh-art {
-    width: 80px;
-    height: 80px;
-  }
-  .dh-name {
-    font-size: 17px;
-  }
-  .dh-btn {
-    padding: 6px 14px;
-    font-size: 12px;
-  }
-  .dh-actions {
-    margin-top: 6px;
-  }
-
+/* R-M3 : px sur la grille recâblés sur tokens exacts (--sp-3 = 12px). */
+@media (max-width: 640px) { /* = ~--bp-compact — grilles album/artiste/genre réduites en compact, non-containerisable (grids enfants directs de #content-area) */
   #album-grid,
   #artist-grid {
     padding: var(--sp-3);
     gap: var(--sp-3);
-    --card-min-w: 150px;
   }
   #genre-grid {
     padding: var(--sp-3);
     gap: var(--sp-3);
   }
+}
+
+/* ══ CONTAINER QUERY — Drill header (Task 7) ═════════════════════════
+   #drill-header déclare container: drill / inline-size (Task 4).
+   Remplace les anciennes règles @media (max-width: 640px) ciblant
+   #drill-header / .dh-* — la mise en page réagit désormais à la
+   largeur du conteneur, pas à celle du viewport.
+   ═══════════════════════════════════════════════════════════════════ */
+@container drill (max-width: 560px) {
+  .dh-art     { width: clamp(56px, 18cqi, 96px); height: clamp(56px, 18cqi, 96px); }
+  .dh-name    { font-size: var(--fs-f-subhead); }
+  .dh-btn     { padding: var(--sp-1h) var(--sp-3); font-size: var(--fs-caption); }
+  .dh-actions { margin-top: var(--sp-1h); }
 }

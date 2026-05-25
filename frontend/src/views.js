@@ -416,6 +416,10 @@ export function setView(v, btn, plId) {
     if (mainSortBtn) mainSortBtn.style.display = NO_MAIN_SORT.includes(v) ? 'none' : '';
     if (albumSortBtn) albumSortBtn.style.display = (v === 'albums') ? '' : 'none';
 
+    // M-14 : boutons de tri créés paresseusement (artist/genre/album-detail/pl-new/pl-smart).
+    // Le pattern `if (!getElementById(id))` est lui-même la garde d'idempotence : chaque
+    // bouton n'est créé — et donc .onclick câblé — qu'une seule fois. Les appels suivants
+    // ne font que toggler `display`. Aucun double-câblage possible tant que l'id reste unique.
     let artistSortBtn = document.getElementById('artist-sort-btn');
     if (!artistSortBtn) {
       artistSortBtn = document.createElement('button');
@@ -542,11 +546,13 @@ export function statsGoToGenre(key, displayName) {
 /** Navigue depuis le panneau Stats vers la vue artist-detail. */
 export function statsGoToArtist(displayName) {
   _withVT(() => {
-    const key = displayName.toLowerCase().replace(/[^\w\s]/g, '').replace(/\s+/g, ' ').trim();
     set('view', 'artists');
     invalidateFilter(); // émet FILTER_CHANGED + invalide genre grid (correctif rev-3a)
     renderArtistsGrid();
-    requestAnimationFrame(() => drillDown('artists', key, displayName));
+    // B36 FIX : passer le nom brut comme clé de drill. getFiltered() le compare
+    // (en lowercase) à t.artist / t.artistFull bruts ; l'ancien strip [^\w\s]
+    // retirait accents et ponctuation → 0 résultat pour « Beyoncé », « AC/DC »…
+    requestAnimationFrame(() => drillDown('artists', displayName, displayName));
   });
 }
 

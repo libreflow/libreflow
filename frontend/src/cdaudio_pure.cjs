@@ -1,6 +1,5 @@
-// cdaudio_pure.cjs — CJS mirror of cdaudio_pure.js for the zero-dep test suite.
-// Source of truth is cdaudio_pure.js (ESM). Keep in sync manually — small file.
-
+// cdaudio_pure.cjs — AUTO-GENERATED from cdaudio_pure.js — do not edit manually.
+// Run: npm run gen:cdaudio-cjs
 'use strict';
 
 const FORBIDDEN_PATH_CHARS = /[\\/:*?"<>|]/g;
@@ -60,11 +59,4 @@ function calculateRipPercent(sectorCurrent, sectorTotal) {
   return Math.floor((sectorCurrent / sectorTotal) * 100);
 }
 
-module.exports = {
-  formatTrackLabel,
-  detectNewAudioCds,
-  buildEphemeralCdTrack,
-  cleanupEphemeralForDrive,
-  extractDestPath,
-  calculateRipPercent,
-};
+module.exports = { formatTrackLabel, detectNewAudioCds, buildEphemeralCdTrack, cleanupEphemeralForDrive, extractDestPath, calculateRipPercent };

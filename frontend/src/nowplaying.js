@@ -242,7 +242,9 @@ export async function openNowPlaying() {
   const vnp = document.getElementById('vnp');
   if (vnp) { updateAmbient(vnp); _applyNpBg(); }
   const info = await _loadTechInfo(t.path);
-  if (nowPlayingOpen) {
+  // La piste courante a pu changer pendant l'await (skip rapide) — ne pas
+  // peindre des infos techniques périmées sur la nouvelle pochette.
+  if (nowPlayingOpen && (get('tracks') || [])[get('curIdx')]?.id === t.id) {
     _renderNowPlaying(t, info);
     const vnp2 = document.getElementById('vnp');
     if (vnp2) { updateAmbient(vnp2); _applyNpBg(); }
@@ -275,13 +277,25 @@ export function toggleNowPlaying() {
   if (nowPlayingOpen) closeNowPlaying(); else openNowPlaying();
 }
 
+/**
+ * R-H4 : appelé par le listener `resize` centralisé d'app.js.
+ * Le canvas plein écran `#vnp-canvas` n'est dimensionné que dans `_applyNpBg()`
+ * (jamais sur resize) — sans ce ré-appel, agrandir la fenêtre avec Now Playing
+ * ouvert laisse le fond animé étiré/flou. No-op si la vue est fermée.
+ */
+export function onResizeNowPlaying() {
+  if (!nowPlayingOpen) return;
+  _applyNpBg();
+}
+
 export function updateNowPlaying(track) {
   if (!nowPlayingOpen || !track) return;
   _renderNowPlaying(track, _techInfoCache.get(track.path) ?? null);
   const vnp = document.getElementById('vnp');
   if (vnp) { updateAmbient(vnp); _applyNpBg(); }
   _loadTechInfo(track.path).then(info => {
-    if (nowPlayingOpen) {
+    // Revérifier que `track` est toujours la piste courante après l'await async.
+    if (nowPlayingOpen && (get('tracks') || [])[get('curIdx')]?.id === track.id) {
       _renderNowPlaying(track, info);
       const vnp2 = document.getElementById('vnp');
       if (vnp2) { updateAmbient(vnp2); _applyNpBg(); }

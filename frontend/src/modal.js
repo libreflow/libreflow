@@ -147,10 +147,16 @@ export function closeModal() {
   const bg = document.getElementById('modal-bg');
   if (!bg) return; // W9 FIX : guard contre l'absence du DOM element
   bg.classList.add('modal-closing');
-  bg.addEventListener('animationend', () => {
+  // L-07 : flag _closeHandled — animationend + setTimeout sont tous deux idempotents
+  // (aligné sur le pattern de settings.js closeSettings) : la première exécution gagne.
+  let _closeHandled = false;
+  const _onClose = () => {
+    if (_closeHandled) return;
+    _closeHandled = true;
     bg.classList.remove('on', 'modal-closing');
-  }, { once: true });
-  setTimeout(() => bg.classList.remove('on', 'modal-closing'), 250);
+  };
+  bg.addEventListener('animationend', _onClose, { once: true });
+  setTimeout(_onClose, 250); // fallback si animationend ne se déclenche jamais
   const modal = document.getElementById('modal');
   if (modal && _modalFocusTrap) {
     modal.removeEventListener('keydown', _modalFocusTrap);

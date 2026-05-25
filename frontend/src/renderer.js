@@ -28,7 +28,7 @@ import { VIRT, virtBuildRows, virtIdxAtScroll,
 import { esc, fmtd, extEmoji, fmt }                         from './utils.js';
 import { i18n }                                              from './i18n.js';
 import { CFG }                                               from './cfg.js';
-import { prefetchArts }                                      from './artLoader.js';
+import { prefetchArts, getArtUrl }                           from './artLoader.js';
 
 // Imports circulaires — OK en ES modules (appelés à l'exécution, pas à l'init)
 import { playAt, audio }                                     from './player.js';
@@ -40,12 +40,60 @@ import { getImports }                                        from './imports.js'
 let _statsTimer   = null;    // debounce updateStats
 let _plHero       = null;    // référence au #pl-hero courant (FIX-B1)
 let _activeRowEl  = null;    // I-1: cache du dernier élément .tr.act
+// R-H9 : true tant que #tlist affiche des lignes squelette — le ResizeObserver
+// de virtAttachScroll recalcule alors le nombre de lignes au lieu de re-rendre la liste.
+let _skeletonActive = false;
 const ART_COLOR_RE = /^rgb\(\s*\d{1,3}\s*,\s*\d{1,3}\s*,\s*\d{1,3}\s*\)$/;
 
 // C-1: caches memoïsés pour _getAlbumMap / _getArtistMap
 let _albumMapCache  = null;
 let _artistMapCache = null;
 let _tracksSig = ''; // content hash for selective map invalidation
+
+// ── Hydratation paresseuse de l'artwork (grilles albums/artistes + drill header) ──
+// Les cartes de grille ne sont PAS virtualisées : on rend un placeholder portant
+// data-art-tid, puis on charge l'artwork à la demande (IntersectionObserver) pour
+// ne pas instancier des centaines de blob: URLs d'un coup. Corrige le bug
+// "certaines pochettes n'apparaissent pas en vue Albums/Artistes".
+const _artTrackById    = new Map();   // trackId → piste représentative (carte grille/drill)
+let   _gridArtObserver = null;
+
+/**
+ * Hydrate les placeholders [data-art-tid] d'un conteneur : résout l'artwork via
+ * getArtUrl() et remplace le placeholder par un <img>.
+ * @param {Element|null} rootEl
+ * @param {{observe?: boolean}} [opts] - observe:true → ne charge que les cartes proches du viewport
+ */
+function _hydrateArtPlaceholders(rootEl, { observe = false } = {}) {
+  if (!rootEl) return;
+  const hydrate = (ph) => {
+    const t = _artTrackById.get(ph.getAttribute('data-art-tid'));
+    if (!t) return;
+    getArtUrl(t).then(url => {
+      if (!url || !ph.isConnected) return;
+      const img = document.createElement('img');
+      img.alt = '';
+      img.setAttribute('aria-hidden', 'true');
+      if (ph.dataset.artImgClass) img.className = ph.dataset.artImgClass;
+      img.src = url;
+      ph.replaceWith(img);
+    }).catch((e) => console.warn('[getArtUrl]', t?.id, e));
+  };
+  const phs = rootEl.querySelectorAll('[data-art-tid]');
+  if (observe && 'IntersectionObserver' in window) {
+    if (_gridArtObserver) _gridArtObserver.disconnect();
+    _gridArtObserver = new IntersectionObserver((entries, obs) => {
+      for (const e of entries) {
+        if (!e.isIntersecting) continue;
+        obs.unobserve(e.target);
+        hydrate(e.target);
+      }
+    }, { rootMargin: '300px' });
+    for (const ph of phs) _gridArtObserver.observe(ph);
+  } else {
+    for (const ph of phs) hydrate(ph);
+  }
+}
 
 // Restore art-loaded fade-in without inline onload (load events don't bubble → capture phase)
 document.addEventListener('load', (e) => {
@@ -190,6 +238,9 @@ export function virtRenderWindow(fl) {
   const listEl = document.getElementById('tlist');
   if (!listEl || !fl) return;
 
+  // R-H9 : un rendu réel de la liste sort de l'état skeleton.
+  _skeletonActive = false;
+
   const sort  = get('sort')  || 'az';
   const query = get('query') || '';
   const view  = get('view')  || 'all';
@@ -297,9 +348,16 @@ export function virtRenderWindow(fl) {
     if (id) cancelAnimationFrame(id);
   });
 
+  // R3-A FIX : sauvegarder la position de scroll avant le remplacement du DOM.
+  // innerHTML = reset scrollTop à 0 — l'utilisateur perd sa position à chaque
+  // changement de zoom (Ctrl+Wheel). On restaure dans un rAF après la mise en DOM.
+  const _savedScrollTop = listEl.scrollTop;
   listEl.innerHTML = html;
   // I-1: le DOM a été entièrement reconstruit — invalider la référence de ligne active cachée
   _activeRowEl = null;
+  if (_savedScrollTop > 0) {
+    requestAnimationFrame(() => { listEl.scrollTop = _savedScrollTop; });
+  }
 
   // ARCH-2/PERF-1 : précharger l'artwork des pistes visibles (lazy loading)
   const _artBatch = [];
@@ -329,6 +387,31 @@ export function virtAttachScroll(listEl) {
   listEl.removeEventListener('scroll', listEl._virtScrollHandler);
   listEl._virtScrollHandler = onScroll;
   listEl.addEventListener('scroll', onScroll, { passive: true });
+
+  // R-C4 / R-H9 / R-H10 : recalculer la fenêtre virtuelle quand la hauteur de
+  // #tlist change (resize de la fenêtre, ouverture/fermeture d'un panneau…).
+  // Sans ça, agrandir la fenêtre laisse une bande blanche en bas de la liste
+  // jusqu'au prochain scroll (viole CLAUDE.md §10).
+  // Callback debouncé via rAF — aucune allocation dans la boucle rAF.
+  if (typeof ResizeObserver !== 'undefined') {
+    // Détacher l'ancien observer avant réattache (cf. handler de scroll).
+    if (listEl._virtResizeObserver) listEl._virtResizeObserver.disconnect();
+    let _roRaf = null;
+    const ro = new ResizeObserver(() => {
+      if (_roRaf) cancelAnimationFrame(_roRaf);
+      _roRaf = requestAnimationFrame(() => {
+        _roRaf = null;
+        // R-H9 : tant que la liste est en état skeleton, recalculer le nombre
+        // de lignes squelette plutôt que de rendre la fenêtre virtuelle.
+        if (_skeletonActive) { _showSkeletonRows(); return; }
+        // Forcer un re-rendu même à signature de fenêtre identique.
+        VIRT._lastWindowSig = '';
+        virtRenderWindow(getFiltered());
+      });
+    });
+    ro.observe(listEl);
+    listEl._virtResizeObserver = ro;
+  }
 }
 
 // ── Private album / artist helpers ───────────────────────────────────────────
@@ -348,6 +431,7 @@ function _getAlbumMap() {
         displayName:   key,
         artist:        t.artist || '',
         art:           null,
+        artTrack:      null,
         count:         0,
         totalDuration: 0,
         year:          (t.year && t.year !== 1970) ? t.year : null,
@@ -357,6 +441,8 @@ function _getAlbumMap() {
     a.count++;
     a.totalDuration += t.duration || 0;
     if (t.art && !a.art) a.art = t.art;
+    // C1 — piste représentative pour l'hydratation paresseuse du drill header.
+    if (!a.artTrack && t._hasArt && !t.noArt) { a.artTrack = t; _artTrackById.set(t.id, t); }
     if (t.year && t.year !== 1970 && !a.year) a.year = t.year;
   }
   _albumMapCache = [...map.values()];
@@ -373,11 +459,13 @@ function _getArtistMap() {
   for (const t of tracks) {
     const key = t.artist || '';
     if (!map.has(key)) {
-      map.set(key, { key, displayName: key, art: null, count: 0 });
+      map.set(key, { key, displayName: key, art: null, artTrack: null, count: 0 });
     }
     const a = map.get(key);
     a.count++;
     if (t.art && !a.art) a.art = t.art;
+    // C1 — piste représentative pour l'hydratation paresseuse du drill header.
+    if (!a.artTrack && t._hasArt && !t.noArt) { a.artTrack = t; _artTrackById.set(t.id, t); }
   }
   _artistMapCache = [...map.values()];
   return _artistMapCache;
@@ -409,7 +497,9 @@ function renderDrillHeader(view, key) {
     const el   = _getOrCreateDrillHeader();
     const artH = entry.art
       ? `<img src="${esc(entry.art)}" class="dh-art" alt="">`
-      : `<div class="dh-art dh-art-ph"></div>`;
+      : entry.artTrack
+        ? `<div class="dh-art dh-art-ph" data-art-tid="${esc(entry.artTrack.id)}" data-art-img-class="dh-art"></div>`
+        : `<div class="dh-art dh-art-ph"></div>`;
     const mins      = Math.floor((entry.totalDuration || 0) / 60);
     const artistKey = entry.artist || '';
 
@@ -434,6 +524,7 @@ function renderDrillHeader(view, key) {
           <button class="dh-btn dh-shuf" data-action="dh-shuffle-all" aria-label="Mélanger"><span aria-hidden="true">⤮</span> Mélanger</button>
         </div>
       </div>`;
+    _hydrateArtPlaceholders(el);   // C1 — artwork paresseux du drill header
     return;
   }
 
@@ -451,12 +542,16 @@ function renderDrillHeader(view, key) {
     const el   = _getOrCreateDrillHeader();
     const artH = entry.art
       ? `<img src="${esc(entry.art)}" class="dh-art dh-art-circle" alt="">`
-      : `<div class="dh-art dh-art-ph dh-art-circle"></div>`;
+      : entry.artTrack
+        ? `<div class="dh-art dh-art-ph dh-art-circle" data-art-tid="${esc(entry.artTrack.id)}" data-art-img-class="dh-art dh-art-circle"></div>`
+        : `<div class="dh-art dh-art-ph dh-art-circle"></div>`;
 
     const albumCards = albums.map(a => {
       const cardArt = a.art
         ? `<img src="${esc(a.art)}" class="dh-mini-art" alt="">`
-        : `<div class="dh-mini-art dh-mini-art-ph"></div>`;
+        : a.artTrack
+          ? `<div class="dh-mini-art dh-mini-art-ph" data-art-tid="${esc(a.artTrack.id)}" data-art-img-class="dh-mini-art"></div>`
+          : `<div class="dh-mini-art dh-mini-art-ph"></div>`;
       return `<button class="dh-mini-card" data-action="dh-drill-album"
                 data-album-key="${esc(a.key)}" data-album-name="${esc(a.displayName)}">
         ${cardArt}
@@ -485,6 +580,7 @@ function renderDrillHeader(view, key) {
           <div class="dh-albums-title">Albums</div>
           <div class="dh-albums-mini">${albumCards}</div>
         </div>` : ''}`;
+    _hydrateArtPlaceholders(el);   // C1 — artwork paresseux du drill header
     return;
   }
 
@@ -513,6 +609,9 @@ export function renderLib() {
     _tracksSig      = _newSig;
     _albumMapCache  = null;
     _artistMapCache = null;
+    // R5-A FIX : vider la Map trackId→piste des grilles — évite les références
+    // à des pistes supprimées et la fuite mémoire associée.
+    _artTrackById.clear();
   }
 
   virtRenderWindow(fl);
@@ -588,6 +687,9 @@ export function renderLib() {
 export function _showSkeletonRows(savedView) {
   const listEl = document.getElementById('tlist');
   if (!listEl) return;
+  // R-H9 : marquer l'état skeleton — le ResizeObserver de virtAttachScroll
+  // recalcule le nombre de lignes tant que ce flag est actif.
+  _skeletonActive = true;
   const count = Math.max(8, Math.ceil((listEl.clientHeight || window.innerHeight) / CFG.VIRT_ROW_H));
   let html = '';
   for (let i = 0; i < count; i++) {
@@ -633,12 +735,15 @@ export function renderAlbumsGrid() {
     if (queryLc && !key.toLowerCase().includes(queryLc) &&
         !(t.artist || '').toLowerCase().includes(queryLc)) continue;
     if (!albumMap.has(key)) {
-      albumMap.set(key, { name: key, artist: t.artist || '', arts: [], count: 0, totalDur: 0, year: (t.year && t.year !== 1970) ? t.year : null });
+      albumMap.set(key, { name: key, artist: t.artist || '', artUrl: null, artTrack: null, count: 0, totalDur: 0, year: (t.year && t.year !== 1970) ? t.year : null });
     }
     const a = albumMap.get(key);
     a.count++;
     a.totalDur += t.duration || 0;
-    if (t.art && a.arts.length < 1) a.arts.push(t.art);
+    // C1 — artUrl : artwork déjà résolu (réutilisé direct). artTrack : 1re piste
+    // porteuse d'artwork, chargée paresseusement par _hydrateArtPlaceholders.
+    if (!a.artUrl && t.art) a.artUrl = t.art;
+    if (!a.artTrack && t._hasArt && !t.noArt) { a.artTrack = t; _artTrackById.set(t.id, t); }
     if (t.year && t.year !== 1970 && !a.year) a.year = t.year;
   }
 
@@ -660,9 +765,11 @@ export function renderAlbumsGrid() {
   }
 
   grid.innerHTML = albums.map(a => {
-    const artHtml = a.arts[0]
-      ? `<img src="${esc(a.arts[0])}" alt="" aria-hidden="true">`
-      : `<div class="card-art-ph" aria-hidden="true">💿</div>`;
+    const artHtml = a.artUrl
+      ? `<img src="${esc(a.artUrl)}" alt="" aria-hidden="true">`
+      : a.artTrack
+        ? `<div class="card-art-ph" aria-hidden="true" data-art-tid="${esc(a.artTrack.id)}">💿</div>`
+        : `<div class="card-art-ph" aria-hidden="true">💿</div>`;
     const meta = a.year ? `<span class="card-year">${a.year}</span>` : '';
     return `<div class="card" role="button" tabindex="0"
       data-action="drill-album" data-key="${esc(a.name)}" data-name="${esc(a.name)}"
@@ -679,6 +786,7 @@ export function renderAlbumsGrid() {
     </div>`;
   }).join('');
 
+  _hydrateArtPlaceholders(grid, { observe: true });   // C1 — artwork paresseux des cartes
   updateBreadcrumb();
 }
 
@@ -712,12 +820,14 @@ export function renderArtistsGrid() {
     if (queryLc && !key.toLowerCase().includes(queryLc) &&
         !(t.name || '').toLowerCase().includes(queryLc)) continue;
     if (!artistMap.has(key)) {
-      artistMap.set(key, { name: key, arts: [], count: 0, albumCount: new Set() });
+      artistMap.set(key, { name: key, artUrl: null, artTrack: null, count: 0, albumCount: new Set() });
     }
     const a = artistMap.get(key);
     a.count++;
     a.albumCount.add(t.album);
-    if (t.art && a.arts.length < 1) a.arts.push(t.art);
+    // C1 — voir renderAlbumsGrid : artUrl direct, artTrack chargé paresseusement.
+    if (!a.artUrl && t.art) a.artUrl = t.art;
+    if (!a.artTrack && t._hasArt && !t.noArt) { a.artTrack = t; _artTrackById.set(t.id, t); }
   }
 
   let artists = [...artistMap.values()];
@@ -734,9 +844,11 @@ export function renderArtistsGrid() {
   }
 
   grid.innerHTML = artists.map(a => {
-    const artHtml = a.arts[0]
-      ? `<img src="${esc(a.arts[0])}" alt="" aria-hidden="true">`
-      : `<div class="card-art-ph card-art-circle" aria-hidden="true">${esc(a.name?.[0]?.toUpperCase() || '?')}</div>`;
+    const artHtml = a.artUrl
+      ? `<img src="${esc(a.artUrl)}" alt="" aria-hidden="true">`
+      : a.artTrack
+        ? `<div class="card-art-ph card-art-circle" aria-hidden="true" data-art-tid="${esc(a.artTrack.id)}">${esc(a.name?.[0]?.toUpperCase() || '?')}</div>`
+        : `<div class="card-art-ph card-art-circle" aria-hidden="true">${esc(a.name?.[0]?.toUpperCase() || '?')}</div>`;
     const nbAlbums = a.albumCount.size;
     return `<div class="card card-artist" role="button" tabindex="0"
       data-action="drill-artist" data-key="${esc(a.name)}" data-name="${esc(a.name)}"
@@ -752,6 +864,7 @@ export function renderArtistsGrid() {
     </div>`;
   }).join('');
 
+  _hydrateArtPlaceholders(grid, { observe: true });   // C1 — artwork paresseux des cartes
   updateBreadcrumb();
 }
 
@@ -849,12 +962,18 @@ export function drillDown(from, key, displayName) {
                  : 'artist-detail';
   set('view', viewName);
   invalidateFilterCache();
-  // C-1: invalider les caches album/artist quand les filtres changent
-  // Réinitialiser _tracksSig pour que renderLib() reconstruise les maps même si
-  // la signature de tracks[] n'a pas changé (le contexte de filtre a changé).
-  _tracksSig      = '';
-  _albumMapCache  = null;
-  _artistMapCache = null;
+  // AUDIT-2026-05-22 (M-06) : les maps album/artist derivent de tracks[], pas du
+  // contexte de filtre. Un drill-down ne modifie pas tracks[] → n'invalider les
+  // caches que si la signature de tracks[] a reellement change (evite un rebuild
+  // couteux des maps a chaque navigation sur une bibliotheque de 50k pistes).
+  const _drillSig = _computeTracksSig(get('tracks') || []);
+  if (_drillSig !== _tracksSig) {
+    _tracksSig      = _drillSig;
+    _albumMapCache  = null;
+    _artistMapCache = null;
+    // R5-A FIX : cohérence avec renderLib — vider les références grille obsolètes.
+    _artTrackById.clear();
+  }
   emit(EVENTS.FILTER_CHANGED, {});
 
   // Masquer les grilles, basculer en vue liste
@@ -1047,11 +1166,19 @@ export function patchPlayState(playing) {
 
 /** Remplace le DOM d'une seule ligne piste (ex: après un tag edit). */
 export function patchTrackEl(id) {
+  const el = document.querySelector(`.tr[data-track-id="${CSS.escape(id)}"]`);
+  if (!el) return; // hors viewport — ignoré (prochain virtRenderWindow le prendra)
+
+  // B7 FIX : invalider les caches album/artiste APRÈS l'early-return. Avant, un
+  // gros batch loadTagsBg (pistes hors-viewport) vidait les caches à chaque piste
+  // → reconstruction O(n) répétée (comportement O(n²) sur un gros import).
+  // Reste correct : un import change tracks.length → _computeTracksSig change →
+  // renderLib() reconstruit les maps album/artiste de toute façon.
   _tracksSig      = '';
   _albumMapCache  = null;
   _artistMapCache = null;
-  const el = document.querySelector(`.tr[data-track-id="${CSS.escape(id)}"]`);
-  if (!el) return; // hors viewport — ignoré (prochain virtRenderWindow le prendra)
+  // R5-A FIX : idem — invalidation complète de la Map grille pour éviter fuite.
+  _artTrackById.clear();
 
   const idx = trackIdx(id);
   if (idx < 0) return;

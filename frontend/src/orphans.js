@@ -194,8 +194,8 @@ async function _deleteOrphans(orphanTracks) {
   for (const idx of toRemove) {
     const t = tracks[idx];
     if (!t) continue;
-    if (t.art && t.art.startsWith('blob:')) try { URL.revokeObjectURL(t.art); } catch(e) {}
-    if (t.url && t.url.startsWith('blob:')) try { URL.revokeObjectURL(t.url); } catch(e) {}
+    if (t.art && t.art.startsWith('blob:')) try { URL.revokeObjectURL(t.art); } catch(e) { console.warn('[orphans:revokeObjectURL art]', e); }
+    if (t.url && t.url.startsWith('blob:')) try { URL.revokeObjectURL(t.url); } catch(e) { console.warn('[orphans:revokeObjectURL url]', e); }
   }
 
   // Pré-passe : ajuster shuffle queue + curIdx AVANT splice (idx encore valides).

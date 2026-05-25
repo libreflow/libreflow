@@ -54,6 +54,7 @@ let _bootGains      = null;   // Float32Array ou null
 let _bootEnabled    = false;
 let _bootPreset     = null;
 let _eqInitialized  = false;  // R6 — singleton guard : empêche createMediaElementSource × N
+let _eqInitFailed   = false;  // B30 — true si new AudioContext() a échoué : court-circuite les retries
 
 // ── Presets ───────────────────────────────────────────────────────────────────
 // Gains en dB pour [32,64,125,250,500,1k,2k,4k,8k,16k]
@@ -130,7 +131,10 @@ export function initBootEQ(gains, enabled, preset) {
 /** Initialise le pipeline Web Audio. Appel idempotent (singleton).
  *  N'accepte aucun argument — lit la config via _bootGains / _bootEnabled. */
 export function initEQ() {
-  if (_eqInitialized) return;   // R6 — singleton : createMediaElementSource ne doit être appelé qu'une fois
+  // B30 FIX : _eqInitFailed court-circuite les retries — sans ça, un échec de
+  // `new AudioContext()` laisse eqCtx=null sans flag et chaque setEQBand /
+  // applyEQPreset / toggleEQAB re-tente (et re-échoue) indéfiniment.
+  if (_eqInitialized || _eqInitFailed) return;   // R6 — singleton : createMediaElementSource ne doit être appelé qu'une fois
 
   const audio = document.getElementById('audio');
   if (!audio) { console.warn('[eq] <audio> introuvable'); return; }
@@ -140,6 +144,7 @@ export function initEQ() {
     eqCtx = new (window.AudioContext || window.webkitAudioContext)();
   } catch (e) {
     console.warn('[eq] AudioContext non disponible', e);
+    _eqInitFailed = true;
     return;
   }
 
@@ -223,6 +228,7 @@ export function initEQ() {
 
   renderEQBands();
   _drawEQCurve();
+  _attachEqCurveResizeObserver(); // R-M7 : redessine la courbe au resize du wrap
   _syncEQUI();
 }
 
@@ -230,7 +236,7 @@ export function initEQ() {
 /** Relance l'AudioContext si suspendu ou interrompu (autoplay policy, OS interrupt). */
 export function ensureEQResumed() {
   if (eqCtx && (eqCtx.state === 'suspended' || eqCtx.state === 'interrupted')) {
-    eqCtx.resume().catch(() => {});
+    eqCtx.resume().catch(e => console.warn('[eq:resume]', e));
   }
 }
 
@@ -587,6 +593,29 @@ function _updateCurveHeight() {
     ? eqNodes.some(n => Math.abs(n.gain.value) > 0.05)
     : false;
   panel.classList.toggle('eq-curve-active', active);
+}
+
+// ── _attachEqCurveResizeObserver — R-M7 ──────────────────────────────────────
+/**
+ * Observe #eq-curve-wrap : redessine la courbe quand le wrap change de taille
+ * (resize fenêtre, passage Simple/Expert, panneau qui se réajuste).
+ * Sans ça, le canvas garde le fallback hardcodé 260×116 jusqu'au prochain
+ * événement EQ. Callback debouncé via rAF — aucune allocation dans la boucle.
+ */
+let _eqResizeObserver = null;
+function _attachEqCurveResizeObserver() {
+  if (_eqResizeObserver || typeof ResizeObserver === 'undefined') return;
+  const wrap = document.getElementById('eq-curve-wrap');
+  if (!wrap) return;
+  let _eqRoRaf = null;
+  _eqResizeObserver = new ResizeObserver(() => {
+    if (_eqRoRaf) cancelAnimationFrame(_eqRoRaf);
+    _eqRoRaf = requestAnimationFrame(() => {
+      _eqRoRaf = null;
+      _drawEQCurve();
+    });
+  });
+  _eqResizeObserver.observe(wrap);
 }
 
 // ── _drawEQCurve ──────────────────────────────────────────────────────────────

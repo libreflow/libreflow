@@ -471,35 +471,35 @@
       <div class="pl-modal-h" data-i18n="spl_title">Playlist intelligente</div>
 
       <!-- Mode switcher : Similarité vs Règles -->
-      <div style="display:flex;gap:6px;margin-bottom:14px">
-        <button id="spl-mode-seed" class="mbtn spl-mode-btn active" data-action="spl-mode" data-mode="seed" style="flex:1;font-size:11px;padding:6px 10px">
-          <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="margin-right:4px"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
+      <div class="spl-modes">
+        <button id="spl-mode-seed" class="mbtn secondary spl-mode-btn active" data-action="spl-mode" data-mode="seed">
+          <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" class="spl-ico-mr"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
           <span data-i18n="spl_mode_seed">Similarité</span>
         </button>
-        <button id="spl-mode-rules" class="mbtn spl-mode-btn" data-action="spl-mode" data-mode="rules" style="flex:1;font-size:11px;padding:6px 10px;background:var(--bg3);color:var(--t2);border:1px solid var(--bg5)">
-          <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="margin-right:4px"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+        <button id="spl-mode-rules" class="mbtn secondary spl-mode-btn" data-action="spl-mode" data-mode="rules">
+          <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" class="spl-ico-mr"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
           <span data-i18n="spl_mode_rules">Règles</span>
         </button>
       </div>
 
       <!-- ─ Panel Similarité (seed-based) ── -->
       <div id="smart-seed-panel">
-      <p style="font-size:11.5px;color:var(--t2);margin-bottom:14px;line-height:1.5" data-i18n="spl_seed_desc">Génère une playlist cohérente à partir d'un titre de base. LibreFlow analyse l'artiste, le genre et l'album pour construire une sélection musicalement cohérente.</p>
+      <p class="spl-desc" data-i18n="spl_seed_desc">Génère une playlist cohérente à partir d'un titre de base. LibreFlow analyse l'artiste, le genre et l'album pour construire une sélection musicalement cohérente.</p>
 
       <!-- Seed track selector -->
-      <div style="margin-bottom:12px">
-        <div style="font-size:11px;color:var(--t3);font-weight:600;letter-spacing:.05em;text-transform:uppercase;margin-bottom:6px">Titre de base</div>
+      <div class="spl-field">
+        <div class="spl-section-lbl">Titre de base</div>
         <div id="smart-seed-display" class="smart-seed-box">
           <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" opacity=".4"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
-          <span id="smart-seed-name" style="font-size:12px;color:var(--t2)">Titre en cours de lecture…</span>
+          <span id="smart-seed-name" class="spl-seed-name">Titre en cours de lecture…</span>
         </div>
-        <input id="smart-seed-search" class="pl-modal-inp" type="text" placeholder="Ou recherche un titre…" style="margin-top:6px;font-size:12px;padding:7px 11px" autocomplete="off" autocorrect="off" spellcheck="false" data-input-action="smart-seed-search" data-i18n-aria="aria_smart_seed_search" aria-label="Rechercher un titre de base">
-        <div id="smart-seed-results" style="display:none;max-height:120px;overflow-y:auto;background:var(--bg3);border-radius:var(--r);border:1px solid var(--bg5);margin-top:4px"></div>
+        <input id="smart-seed-search" class="pl-modal-inp spl-seed-search" type="text" placeholder="Ou recherche un titre…" autocomplete="off" autocorrect="off" spellcheck="false" data-input-action="smart-seed-search" data-i18n-aria="aria_smart_seed_search" aria-label="Rechercher un titre de base">
+        <div id="smart-seed-results" class="spl-results" style="display:none"></div>
       </div>
 
       <!-- Criteria -->
-      <div style="margin-bottom:12px">
-        <div style="font-size:11px;color:var(--t3);font-weight:600;letter-spacing:.05em;text-transform:uppercase;margin-bottom:8px">Critères de sélection</div>
+      <div class="spl-field">
+        <div class="spl-section-lbl">Critères de sélection</div>
         <div class="smart-criteria-grid">
           <label class="smart-crit">
             <input type="checkbox" id="crit-artist" checked data-input-action="smart-preview-if-visible">
@@ -533,10 +533,10 @@
       </div>
 
       <!-- Size + name -->
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">
+      <div class="spl-grid-2">
         <div>
-          <div style="font-size:11px;color:var(--t3);font-weight:600;letter-spacing:.05em;text-transform:uppercase;margin-bottom:6px">Titres max</div>
-          <select id="smart-size" class="pl-modal-inp" style="font-size:12px;padding:7px 10px;cursor:pointer" data-input-action="smart-preview-if-visible">
+          <div class="spl-section-lbl">Titres max</div>
+          <select id="smart-size" class="pl-modal-inp spl-select" data-input-action="smart-preview-if-visible">
             <option value="10">10 titres</option>
             <option value="20" selected>20 titres</option>
             <option value="30">30 titres</option>
@@ -545,8 +545,8 @@
           </select>
         </div>
         <div>
-          <div style="font-size:11px;color:var(--t3);font-weight:600;letter-spacing:.05em;text-transform:uppercase;margin-bottom:6px">Nom de la playlist</div>
-          <input id="smart-pl-name" class="pl-modal-inp" type="text" placeholder="Auto-généré…" style="font-size:12px;padding:7px 11px" maxlength="60">
+          <div class="spl-section-lbl">Nom de la playlist</div>
+          <input id="smart-pl-name" class="pl-modal-inp" type="text" placeholder="Auto-généré…" maxlength="60">
         </div>
       </div>
 
@@ -555,24 +555,24 @@
       <!-- ─ Panel Règles (rule-based) ── -->
       <div id="smart-rules-panel" style="display:none">
         <!-- Combinator -->
-        <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;font-size:12px;color:var(--t2)">
+        <div class="spl-combinator">
           <span data-i18n="spl_match">Correspondre à</span>
-          <select id="spl-combinator" class="pl-modal-inp" style="font-size:12px;padding:5px 8px;width:auto;cursor:pointer" data-input-action="spl-rules-preview">
+          <select id="spl-combinator" class="pl-modal-inp spl-select-auto" data-input-action="spl-rules-preview">
             <option value="all" data-i18n="spl_comb_all">toutes les règles (ET)</option>
             <option value="any" data-i18n="spl_comb_any">au moins une (OU)</option>
           </select>
         </div>
         <!-- Rules list -->
-        <div id="spl-rules-list" style="display:flex;flex-direction:column;gap:6px;margin-bottom:10px"></div>
-        <button class="mbtn" data-action="spl-add-rule" style="font-size:11px;padding:5px 10px;background:var(--bg3);color:var(--t2);border:1px solid var(--bg5);margin-bottom:14px;width:100%">
-          <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="margin-right:4px"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        <div id="spl-rules-list" class="spl-rules-list"></div>
+        <button class="mbtn secondary spl-add-rule" data-action="spl-add-rule">
+          <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" class="spl-ico-mr"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
           <span data-i18n="spl_add_rule">Ajouter une règle</span>
         </button>
         <!-- Size + name shared with seed mode (rendered from JS) -->
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">
+        <div class="spl-grid-2">
           <div>
-            <div style="font-size:11px;color:var(--t3);font-weight:600;letter-spacing:.05em;text-transform:uppercase;margin-bottom:6px" data-i18n="spl_max">Titres max</div>
-            <select id="spl-rules-size" class="pl-modal-inp" style="font-size:12px;padding:7px 10px;cursor:pointer" data-input-action="spl-rules-preview">
+            <div class="spl-section-lbl" data-i18n="spl_max">Titres max</div>
+            <select id="spl-rules-size" class="pl-modal-inp spl-select" data-input-action="spl-rules-preview">
               <option value="10">10 titres</option>
               <option value="20" selected>20 titres</option>
               <option value="30">30 titres</option>
@@ -581,26 +581,26 @@
             </select>
           </div>
           <div>
-            <div style="font-size:11px;color:var(--t3);font-weight:600;letter-spacing:.05em;text-transform:uppercase;margin-bottom:6px" data-i18n="spl_name">Nom de la playlist</div>
-            <input id="spl-rules-name" class="pl-modal-inp" type="text" placeholder="Règles perso…" style="font-size:12px;padding:7px 11px" maxlength="60">
+            <div class="spl-section-lbl" data-i18n="spl_name">Nom de la playlist</div>
+            <input id="spl-rules-name" class="pl-modal-inp" type="text" placeholder="Règles perso…" maxlength="60">
           </div>
         </div>
       </div><!-- /#smart-rules-panel -->
 
       <!-- Preview (shared) -->
-      <div id="smart-preview" style="display:none;margin-bottom:12px">
-        <div style="font-size:11px;color:var(--t3);font-weight:600;letter-spacing:.05em;text-transform:uppercase;margin-bottom:6px">Aperçu <span id="smart-preview-count" style="color:var(--g);font-weight:700"></span></div>
-        <div id="smart-preview-list" style="max-height:100px;overflow-y:auto;border-radius:var(--r);border:1px solid var(--bg4);"></div>
+      <div id="smart-preview" class="spl-preview" style="display:none">
+        <div class="spl-section-lbl">Aperçu <span id="smart-preview-count" class="spl-preview-count"></span></div>
+        <div id="smart-preview-list" class="spl-preview-list"></div>
       </div>
 
       <div class="pl-modal-btns">
         <button class="mbtn cancel" data-action="close-pl-modal" data-i18n="btn_cancel">Annuler</button>
-        <button class="mbtn" style="background:var(--bg3);color:var(--t2);border:1px solid var(--bg5)" data-action="smart-preview">
-          <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="margin-right:4px"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+        <button class="mbtn secondary" data-action="smart-preview">
+          <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" class="spl-ico-mr"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
           <span data-i18n="spl_preview_btn">Aperçu</span>
         </button>
         <button class="mbtn confirm" data-action="confirm-smart-pl">
-          <svg viewBox="0 0 24 24" width="12" height="12" fill="currentColor" stroke="none" style="margin-right:4px"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+          <svg viewBox="0 0 24 24" width="12" height="12" fill="currentColor" stroke="none" class="spl-ico-mr"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
           <span data-i18n="spl_create_btn">Créer</span>
         </button>
       </div>
@@ -610,8 +610,8 @@
 
 <!-- TRACK CONTEXT MENU — A11Y-01: role="menu", items role="menuitem" -->
 <div id="ctx-menu" role="menu" data-i18n-aria="aria_ctx_menu" aria-label="Actions pour ce titre">
-  <div class="ctx-submenu-lbl" id="ctx-track-name" role="presentation" style="color:var(--t);font-weight:600;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></div>
-  <div class="ctx-sep" style="margin-top:4px"></div>
+  <div class="ctx-submenu-lbl ctx-track-name" id="ctx-track-name" role="presentation"></div>
+  <div class="ctx-sep ctx-sep--first"></div>
   <div class="ctx-item" role="menuitem" tabindex="-1" data-action="ctx-toggle-like" id="ctx-like-item">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" id="ctx-like-icon" aria-hidden="true"><path d="M20.42 4.58a5.4 5.4 0 0 0-7.65 0L12 5.35l-.77-.77a5.4 5.4 0 0 0-7.65 7.65l.77.77L12 20.77l7.65-7.77.77-.77a5.4 5.4 0 0 0 0-7.65z"/></svg>
     <span id="ctx-like-lbl">Liker</span>
@@ -769,20 +769,40 @@
           </div>
         </div>
       </div>
+      <!-- ── Densité de la liste ──────────────────────────── -->
+      <div class="set-section">
+        <div class="set-section-lbl" data-i18n="tlist_zoom_label">Densité de la liste</div>
+        <div class="set-row">
+          <div class="tlist-zoom-radios" id="tlist-zoom-radios" role="radiogroup" aria-label="Densité de la liste">
+            <label class="tlist-zoom-radio">
+              <input type="radio" name="tlist-zoom" value="compact" data-action="tlist-zoom">
+              <span data-i18n="tlist_zoom_compact">Compact</span>
+            </label>
+            <label class="tlist-zoom-radio">
+              <input type="radio" name="tlist-zoom" value="normal" data-action="tlist-zoom" checked>
+              <span data-i18n="tlist_zoom_normal">Normal</span>
+            </label>
+            <label class="tlist-zoom-radio">
+              <input type="radio" name="tlist-zoom" value="comfortable" data-action="tlist-zoom">
+              <span data-i18n="tlist_zoom_comfortable">Confortable</span>
+            </label>
+          </div>
+        </div>
+      </div>
     </div>
 
     <!-- ── Onglet Audio ────────────────────────────────── -->
     <div class="set-page" id="set-page-audio" role="tabpanel" aria-labelledby="set-tab-audio" tabindex="0">
       <div class="set-section" id="eq-device-section">
-        <div class="set-section-lbl">EQ par appareil</div>
+        <div class="set-section-lbl" data-i18n="set_eq_per_device">EQ par appareil</div>
         <div class="set-row">
           <div>
-            <div class="set-row-label">Appareil actuel</div>
+            <div class="set-row-label" data-i18n="set_eq_current_device">Appareil actuel</div>
             <div class="set-row-sub" id="eq-device-current-label">Détection en cours…</div>
           </div>
           <button id="eq-device-save-btn" class="mbtn mbtn-sm"
             data-action="save-device-eq"
-            title="Enregistrer l'EQ actuel pour cet appareil">
+            title="Enregistrer l'EQ actuel pour cet appareil" data-i18n-title="set_eq_save_tooltip">
             Enregistrer
           </button>
         </div>
@@ -810,7 +830,7 @@
           <input type="range" min="-23" max="-9" step="1" value="-14"
             id="rg-target" data-input-action="rg-target"
             data-i18n-aria="aria_rg_target" aria-label="Volume cible ReplayGain"
-            style="width:90px;accent-color:var(--g)">
+            class="set-range">
         </div>
       </div>
       <div class="set-section">
@@ -837,7 +857,7 @@
             <div class="set-row-sub" data-i18n="set_viz_toggle_sub">Afficher le visualiseur dans la barre de lecture</div>
           </div>
           <button id="set-viz-toggle"
-            class="mbtn mbtn-sm" style="min-width:82px"
+            class="mbtn mbtn-sm set-viz-toggle"
             aria-pressed="true"
             data-action="viz-toggle">
             <span data-i18n="set_viz_on">Activé</span>
@@ -876,7 +896,7 @@
             <div class="set-row-label" data-i18n="set_mini_label">Fenêtre flottante</div>
             <div class="set-row-sub" data-i18n="set_mini_sub">Contrôles visibles sur l'écran</div>
           </div>
-          <button class="mp-toggle-btn" style="width:auto;padding:6px 14px" data-action="toggle-mini-player" aria-pressed="false">
+          <button class="mp-toggle-btn set-mp-btn" data-action="toggle-mini-player" aria-pressed="false">
             <svg viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
             <span data-i18n="set_mini_btn">Ouvrir</span>
           </button>
@@ -940,20 +960,20 @@
         </div>
       </div>
       <div class="set-section">
-        <div class="set-section-lbl">Historique des imports</div>
+        <div class="set-section-lbl" data-i18n="set_import_history">Historique des imports</div>
         <div id="import-history-list" class="import-history-list">
           <!-- injecté par renderImportHistory() -->
         </div>
       </div>
       <div class="set-section">
-        <div class="set-section-lbl">Arborescence fichiers</div>
+        <div class="set-section-lbl" data-i18n="set_file_tree">Arborescence fichiers</div>
         <div class="set-row">
           <div>
-            <div class="set-row-label">Organiser la bibliothèque</div>
+            <div class="set-row-label" data-i18n="set_organize_library">Organiser la bibliothèque</div>
             <div class="set-row-sub">Déplace les fichiers audio dans des dossiers Artiste/Album. Aperçu avant confirmation.</div>
           </div>
         </div>
-        <div class="set-row" style="flex-wrap:wrap">
+        <div class="set-row set-row--wrap">
           <button class="mbtn mbtn-sm organize-btn"
             data-action="organize-trigger"
             data-scheme="artist-album">
@@ -972,13 +992,13 @@
         </div>
       </div>
       <div class="set-section">
-        <div class="set-section-lbl">Sauvegarde &amp; Portabilité</div>
+        <div class="set-section-lbl" data-i18n="set_backup_portability">Sauvegarde &amp; Portabilité</div>
         <div class="set-row">
           <div>
             <div class="set-row-label">Exporter la bibliothèque</div>
             <div class="set-row-sub">Sauvegarde les pistes, playlists et historique dans un fichier .libreflow.</div>
           </div>
-          <button class="mbtn" id="backup-export-btn" data-action="backup-export">
+          <button class="mbtn mbtn-sm" id="backup-export-btn" data-action="backup-export">
             Exporter
           </button>
         </div>
@@ -987,25 +1007,25 @@
             <div class="set-row-label">Restaurer une sauvegarde</div>
             <div class="set-row-sub">Importe les pistes d'un fichier .libreflow (les données locales sont conservées).</div>
           </div>
-          <button class="mbtn" id="backup-import-btn" data-action="backup-import">
+          <button class="mbtn mbtn-sm" id="backup-import-btn" data-action="backup-import">
             Restaurer
           </button>
         </div>
       </div>
       <div class="set-section">
-        <div class="set-section-lbl">Import USB</div>
+        <div class="set-section-lbl" data-i18n="set_usb_import">Import USB</div>
         <div class="set-row">
           <div>
             <div class="set-row-label">Importer depuis un disque externe</div>
             <div class="set-row-sub">Détecte les clés USB et disques externes, importe la musique via le pipeline existant.</div>
           </div>
-          <button class="mbtn" data-action="usb-open-modal">
+          <button class="mbtn mbtn-sm" data-action="usb-open-modal">
             Importer depuis USB
           </button>
         </div>
       </div>
       <div class="set-section">
-        <div class="set-section-lbl" data-i18n="set_reset_section">Réinitialisation</div>
+        <div class="set-section-lbl" data-i18n="set_reset_library">Réinitialisation de la bibliothèque</div>
         <div class="set-row">
           <div>
             <div class="set-row-label" data-i18n="set_clear_label">Vider la bibliothèque</div>
@@ -1021,14 +1041,14 @@
     <!-- ── Onglet Système ──────────────────────────────── -->
     <div class="set-page" id="set-page-system" role="tabpanel" aria-labelledby="set-tab-system" tabindex="0">
       <div class="set-section">
-        <div class="set-section-lbl" data-i18n="set_reset_section">Réinitialisation</div>
+        <div class="set-section-lbl" data-i18n="set_reset_caches">Réinitialisation des caches</div>
         <div class="set-row">
           <div>
             <div class="set-row-label" data-i18n="set_cache_label">Vider les caches</div>
             <div class="set-row-sub" data-i18n="set_cache_sub">Supprime toutes les données de l'application (bibliothèque, config, playlists, historique) puis redémarre</div>
           </div>
           <button class="mbtn mbtn-sm danger" data-action="settings-clear-cache">
-            <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:5px"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M9 6V4h6v2"/></svg>
+            <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="set-btn-ico"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M9 6V4h6v2"/></svg>
             <span data-i18n="set_cache_btn">Vider les caches</span>
           </button>
         </div>
@@ -1050,14 +1070,14 @@
       <div class="set-section">
         <div class="set-section-lbl" data-i18n="set_about_section">À propos</div>
         <div class="set-row">
-          <div style="display:flex;align-items:center;gap:12px;">
-            <img src="/icon-32.png" width="36" height="36" style="border-radius:8px;flex-shrink:0;" alt="LibreFlow">
+          <div class="set-about-row">
+            <img src="/icon-32.png" width="36" height="36" class="set-about-logo" alt="LibreFlow">
             <div>
               <div class="set-row-label" data-i18n="set_app_name">LibreFlow</div>
               <div class="set-row-sub" data-i18n="set_about_desc">Lecteur audio local pour Windows. Aucune donnée envoyée.</div>
             </div>
           </div>
-          <div class="set-row-sub" style="color:var(--t3);font-size:12px;" data-i18n="set_app_version">v1.0.0</div>
+          <div class="set-row-sub set-version" data-i18n="set_app_version">v1.0.0</div>
         </div>
         <div class="set-row">
           <div class="set-row-label" data-i18n="set_shortcuts_label">Aide &amp; raccourcis</div>
@@ -1083,9 +1103,9 @@
 <div id="queue-panel" role="complementary" data-i18n-aria="aria_queue_panel" aria-label="File d'attente">
   <div class="queue-head">
     <h3><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="margin-right:6px;vertical-align:middle"><line x1="9" y1="6" x2="21" y2="6"/><line x1="9" y1="12" x2="21" y2="12"/><line x1="9" y1="18" x2="21" y2="18"/><circle cx="3.5" cy="6" r="1.2" fill="currentColor" stroke="none"/><circle cx="3.5" cy="12" r="1.2" fill="currentColor" stroke="none"/><circle cx="3.5" cy="18" r="1.2" fill="currentColor" stroke="none"/></svg>File d'attente</h3>
-    <div style="display:flex;align-items:center;gap:4px">
+    <div class="queue-head-actions">
       <!-- A11Y-17: aria-label on queue utility buttons -->
-      <button class="queue-close" data-action="scroll-to-current" title="Aller à la piste en cours" data-i18n-aria="aria_scroll_to_current" aria-label="Aller à la piste en cours" style="opacity:.7">
+      <button class="queue-close queue-util-btn" data-action="scroll-to-current" title="Aller à la piste en cours" data-i18n-aria="aria_scroll_to_current" aria-label="Aller à la piste en cours">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg>
       </button>
       <button class="queue-close" data-action="close-queue" data-i18n-aria="aria_close_queue" aria-label="Fermer la file d'attente">

@@ -4,10 +4,10 @@
 //! Other platforms get harmless `Err` stubs so the build stays portable.
 
 use serde::Serialize;
-use std::sync::Arc;
-use std::sync::atomic::AtomicBool;
-use std::sync::Mutex;
 use std::collections::HashMap;
+use std::sync::atomic::AtomicBool;
+use std::sync::Arc;
+use std::sync::Mutex;
 use tauri::AppHandle;
 
 // ── Shared types ──────────────────────────────────────────────────────────────
@@ -51,11 +51,22 @@ fn rip_cancel_lock() -> std::sync::MutexGuard<'static, Option<HashMap<String, Ar
 }
 
 #[allow(dead_code)]
-fn register_cancel(rip_id: &str) -> Arc<AtomicBool> {
+fn register_cancel(rip_id: &str) -> Result<Arc<AtomicBool>, String> {
     let flag = Arc::new(AtomicBool::new(false));
     let mut guard = rip_cancel_lock();
-    guard.as_mut().unwrap().insert(rip_id.to_string(), flag.clone());
-    flag
+    // rip_cancel_lock() garantit Some via lazy-init, mais on ne s'appuie pas sur
+    // cet invariant implicite : une erreur explicite vaut mieux qu'un panic.
+    let map = guard
+        .as_mut()
+        .ok_or_else(|| "RIP_CANCEL map non initialisée".to_string())?;
+    // B23 FIX : refuser un rip_id déjà actif. Sinon le 2e insert écrase le flag
+    // du 1er rip (qui devient inannulable) et le Drop du 1er CancelGuard retire
+    // l'entrée du 2e.
+    if map.contains_key(rip_id) {
+        return Err(format!("rip_id déjà actif : {}", rip_id));
+    }
+    map.insert(rip_id.to_string(), flag.clone());
+    Ok(flag)
 }
 
 #[allow(dead_code)]
@@ -71,9 +82,14 @@ fn unregister_cancel(rip_id: &str) {
 #[tauri::command]
 pub fn cd_read_toc(drive: String) -> Result<CdToc, String> {
     #[cfg(target_os = "windows")]
-    { windows_impl::read_toc(&drive) }
+    {
+        windows_impl::read_toc(&drive)
+    }
     #[cfg(not(target_os = "windows"))]
-    { let _ = drive; Err("CD audio non supporté sur cette plateforme".to_string()) }
+    {
+        let _ = drive;
+        Err("CD audio non supporté sur cette plateforme".to_string())
+    }
 }
 
 #[tauri::command]
@@ -90,7 +106,7 @@ pub async fn cd_rip_track(
 
     #[cfg(target_os = "windows")]
     {
-        let cancel = register_cancel(&rip_id);
+        let cancel = register_cancel(&rip_id)?;
         let rip_id_inner = rip_id.clone();
         // CancelGuard garantit l'unregister même si spawn_blocking panique.
         let _guard = CancelGuard(&rip_id);
@@ -112,7 +128,9 @@ pub async fn cd_rip_track(
 struct CancelGuard<'a>(&'a str);
 #[cfg(target_os = "windows")]
 impl<'a> Drop for CancelGuard<'a> {
-    fn drop(&mut self) { unregister_cancel(self.0); }
+    fn drop(&mut self) {
+        unregister_cancel(self.0);
+    }
 }
 
 /// Vérifie qu'un `dest_path` est sûr :
@@ -124,28 +142,50 @@ fn validate_rip_dest(dest_path: &str) -> Result<(), String> {
     if dest_path.is_empty() {
         return Err("dest_path vide".to_string());
     }
+    // Rejeter octets null et caractères de contrôle : un octet null tronque le
+    // chemin au niveau de l'appel système, un caractère de contrôle n'a aucune
+    // raison d'apparaître dans un chemin de fichier légitime.
+    if dest_path.contains('\0') || dest_path.chars().any(|c| c.is_control()) {
+        return Err(format!(
+            "dest_path contient des caractères interdits : {}",
+            dest_path
+        ));
+    }
     let p = Path::new(dest_path);
-    if !p.extension().is_some_and(|e| e.eq_ignore_ascii_case("flac")) {
-        return Err(format!("dest_path doit se terminer par .flac : {}", dest_path));
+    if !p
+        .extension()
+        .is_some_and(|e| e.eq_ignore_ascii_case("flac"))
+    {
+        return Err(format!(
+            "dest_path doit se terminer par .flac : {}",
+            dest_path
+        ));
     }
     for c in p.components() {
         if matches!(c, Component::ParentDir) {
             return Err(format!("dest_path contient '..' : {}", dest_path));
         }
     }
-    let parent = p.parent().ok_or_else(|| format!("dest_path sans parent : {}", dest_path))?;
+    let parent = p
+        .parent()
+        .ok_or_else(|| format!("dest_path sans parent : {}", dest_path))?;
     // Le parent peut ne pas exister encore (encode_flac le crée). Si canonicalize échoue,
     // on remonte jusqu'à un ancêtre existant pour la validation.
     let mut check = parent.to_path_buf();
     let canon = loop {
-        if let Ok(c) = std::fs::canonicalize(&check) { break c; }
+        if let Ok(c) = std::fs::canonicalize(&check) {
+            break c;
+        }
         let Some(p) = check.parent() else {
             return Err(format!("aucun ancêtre existant pour : {}", dest_path));
         };
         check = p.to_path_buf();
     };
     if !crate::commands::is_safe_dir(&canon) {
-        return Err(format!("dest_path dans un dossier système refusé : {}", dest_path));
+        return Err(format!(
+            "dest_path dans un dossier système refusé : {}",
+            dest_path
+        ));
     }
     Ok(())
 }
@@ -172,8 +212,7 @@ pub fn cd_cache_dir(app: AppHandle) -> Result<String, String> {
         .app_data_dir()
         .map_err(|e| format!("app_data_dir failed: {}", e))?;
     let dir = base.join("cd-cache");
-    std::fs::create_dir_all(&dir)
-        .map_err(|e| format!("create cd-cache dir failed: {}", e))?;
+    std::fs::create_dir_all(&dir).map_err(|e| format!("create cd-cache dir failed: {}", e))?;
     dir.into_os_string()
         .into_string()
         .map_err(|s| format!("non-UTF8 cache path: {:?}", s))
@@ -198,10 +237,10 @@ pub fn cd_purge_cache(app: AppHandle) -> Result<(), String> {
 
 #[cfg(target_os = "windows")]
 mod windows_impl {
-    use super::{CdTrack, CdToc};
-    use crate::cdaudio_toc::{parse_toc_lba, frames_to_seconds};
-    use std::sync::Arc;
+    use super::{CdToc, CdTrack};
+    use crate::cdaudio_toc::{frames_to_seconds, parse_toc_lba};
     use std::sync::atomic::AtomicBool;
+    use std::sync::Arc;
     use tauri::AppHandle;
 
     use windows::core::PCWSTR;
@@ -219,7 +258,9 @@ mod windows_impl {
     /// même si une fonction panique entre l'ouverture et la fermeture.
     pub(super) struct DriveHandle(pub HANDLE);
     impl DriveHandle {
-        pub fn raw(&self) -> HANDLE { self.0 }
+        pub fn raw(&self) -> HANDLE {
+            self.0
+        }
     }
     impl Drop for DriveHandle {
         fn drop(&mut self) {
@@ -233,7 +274,15 @@ mod windows_impl {
     /// `drive` must be a Windows drive root like "D:\\" — only the first letter is used.
     fn open_drive(drive: &str) -> Result<DriveHandle, String> {
         // drive comes in as "D:\\" — convert to "\\\\.\\D:"
-        let letter = drive.chars().next().ok_or_else(|| "empty drive string".to_string())?;
+        let letter = drive
+            .chars()
+            .next()
+            .ok_or_else(|| "empty drive string".to_string())?;
+        // Garde : refuser tout ce qui n'est pas une lettre de lecteur (A-Z/a-z).
+        // Évite de fabriquer un chemin de device Win32 à partir d'un caractère arbitraire.
+        if !letter.is_ascii_alphabetic() {
+            return Err(format!("invalid drive letter: {letter:?}"));
+        }
         let path = format!("\\\\.\\{}:", letter);
         let wide: Vec<u16> = path.encode_utf16().chain(std::iter::once(0)).collect();
         let handle = unsafe {
@@ -247,10 +296,14 @@ mod windows_impl {
                 None,
             )
         }
-        .map_err(|e| format!(
-            "CreateFileW({}) failed: {} (os: {})",
-            path, e, std::io::Error::last_os_error()
-        ))?;
+        .map_err(|e| {
+            format!(
+                "CreateFileW({}) failed: {} (os: {})",
+                path,
+                e,
+                std::io::Error::last_os_error()
+            )
+        })?;
         Ok(DriveHandle(handle))
     }
 
@@ -276,10 +329,13 @@ mod windows_impl {
 
         // handle est fermé automatiquement au drop en fin de fonction
 
-        result.map_err(|e| format!(
-            "IOCTL_CDROM_READ_TOC failed: {:?} (os: {})",
-            e, std::io::Error::last_os_error()
-        ))?;
+        result.map_err(|e| {
+            format!(
+                "IOCTL_CDROM_READ_TOC failed: {:?} (os: {})",
+                e,
+                std::io::Error::last_os_error()
+            )
+        })?;
 
         out_buf.truncate(bytes_returned as usize);
         let parsed = parse_toc_lba(&out_buf)?;
@@ -308,10 +364,14 @@ mod windows_impl {
 
     const IOCTL_CDROM_RAW_READ: u32 = 0x0002403E;
     const TRACK_MODE_CDDA: u32 = 2;
-    const SECTOR_BYTES: usize = 2352;       // CD audio sector size
-    const FRAMES_PER_CHUNK: u32 = 50;        // ~117KB per IOCTL call
-    const FRAMES_PER_SECTOR: usize = 588;    // 588 stereo PCM frames per CDDA sector
-    const MAX_SECTORS_GUARD: u32 = 400_000;  // ~88 min — longer than any real CD; OOM safety
+    const SECTOR_BYTES: usize = 2352; // CD audio sector size
+    const FRAMES_PER_CHUNK: u32 = 50; // ~117KB per IOCTL call
+    const FRAMES_PER_SECTOR: usize = 588; // 588 stereo PCM frames per CDDA sector
+    const MAX_SECTORS_GUARD: u32 = 400_000; // ~88 min — longer than any real CD; OOM safety
+    /// Nombre maximal d'échecs de lecture consécutifs avant abandon du rip.
+    /// Un CD très rayé peut faire échouer chaque chunk → sans cap, le backoff
+    /// `thread::sleep` accumulé saturerait le pool `spawn_blocking` de Tokio.
+    const MAX_CONSECUTIVE_ERRORS: u32 = 10;
 
     /// RAW_READ_INFO struct expected by IOCTL_CDROM_RAW_READ (ntddcdrm.h).
     #[repr(C)]
@@ -355,7 +415,9 @@ mod windows_impl {
         if ok.is_err() {
             return Err(format!(
                 "IOCTL_CDROM_RAW_READ failed at LBA {}: {:?} (os: {})",
-                start_lba, ok.err(), std::io::Error::last_os_error()
+                start_lba,
+                ok.err(),
+                std::io::Error::last_os_error()
             ));
         }
 
@@ -381,8 +443,11 @@ mod windows_impl {
         lba_start: u32,
         sectors_total: u32,
         lba_cursor: u32,
-        sample_buf: Vec<i32>,       // interleaved L,R,L,R...
+        sample_buf: Vec<i32>, // interleaved L,R,L,R...
         sample_cursor: usize,
+        out_buf: Vec<i32>, // M-R1 : buffer de sortie réutilisé entre appels read_samples
+        consecutive_errors: u32, // compteur d'échecs de lecture consécutifs (cap MAX_CONSECUTIVE_ERRORS)
+        aborted: Arc<AtomicBool>, // positionné si le rip est abandonné après trop d'erreurs consécutives
         cancel: Arc<AtomicBool>,
         app: &'a AppHandle,
         rip_id: &'a str,
@@ -405,6 +470,9 @@ mod windows_impl {
                 lba_cursor: 0,
                 sample_buf: Vec::with_capacity(FRAMES_PER_CHUNK as usize * FRAMES_PER_SECTOR * 2),
                 sample_cursor: 0,
+                out_buf: Vec::new(),
+                consecutive_errors: 0,
+                aborted: Arc::new(AtomicBool::new(false)),
                 cancel,
                 app,
                 rip_id,
@@ -413,14 +481,19 @@ mod windows_impl {
         }
 
         /// Lit le prochain chunk de secteurs et remplit sample_buf.
-        /// Retourne true si des données ont été produites, false si EOF.
+        /// Retourne true si des données ont été produites, false si EOF (ou abandon).
         fn refill_buffer(&mut self) -> bool {
-            if self.lba_cursor >= self.sectors_total { return false; }
+            if self.lba_cursor >= self.sectors_total {
+                return false;
+            }
             let chunk = FRAMES_PER_CHUNK.min(self.sectors_total - self.lba_cursor);
             let lba = self.lba_start + self.lba_cursor;
 
             let pcm = match read_audio_sectors(self.handle.raw(), lba, chunk) {
-                Ok(b) => b,
+                Ok(b) => {
+                    self.consecutive_errors = 0; // succès → réarmer le compteur
+                    b
+                }
                 Err(_e) => {
                     // Retry × 3 avec backoff
                     let mut retry_pcm = None;
@@ -431,13 +504,31 @@ mod windows_impl {
                             break;
                         }
                     }
-                    retry_pcm.unwrap_or_else(|| {
-                        eprintln!(
-                            "[cdaudio] WARN: LBA {} — read failed after 3 retries; padding {} sectors with silence",
-                            lba, chunk
-                        );
-                        vec![0u8; SECTOR_BYTES * chunk as usize]
-                    })
+                    match retry_pcm {
+                        Some(b) => {
+                            self.consecutive_errors = 0;
+                            b
+                        }
+                        None => {
+                            // Échec après 3 retries : incrémenter le compteur d'échecs
+                            // consécutifs. Au-delà du cap, abandonner le rip pour ne pas
+                            // saturer le pool spawn_blocking sur un CD irrécupérable.
+                            self.consecutive_errors += 1;
+                            if self.consecutive_errors >= MAX_CONSECUTIVE_ERRORS {
+                                eprintln!(
+                                    "[cdaudio] ERROR: LBA {} — {} échecs de lecture consécutifs; abandon du rip",
+                                    lba, self.consecutive_errors
+                                );
+                                self.aborted.store(true, Ordering::SeqCst);
+                                return false; // EOF forcé — read_samples détectera l'abandon
+                            }
+                            eprintln!(
+                                "[cdaudio] WARN: LBA {} — read failed after 3 retries; padding {} sectors with silence ({}/{})",
+                                lba, chunk, self.consecutive_errors, MAX_CONSECUTIVE_ERRORS
+                            );
+                            vec![0u8; SECTOR_BYTES * chunk as usize]
+                        }
+                    }
                 }
             };
 
@@ -453,12 +544,17 @@ mod windows_impl {
 
             if self.last_emit.elapsed() >= std::time::Duration::from_millis(500) {
                 let percent = ((self.lba_cursor as f64 / self.sectors_total as f64) * 100.0) as u32;
-                let _ = self.app.emit("cd-rip-progress", serde_json::json!({
-                    "rip_id":         self.rip_id,
-                    "percent":        percent,
-                    "sector_current": self.lba_cursor,
-                    "sector_total":   self.sectors_total,
-                }));
+                if let Err(e) = self.app.emit(
+                    "cd-rip-progress",
+                    serde_json::json!({
+                        "rip_id":         self.rip_id,
+                        "percent":        percent,
+                        "sector_current": self.lba_cursor,
+                        "sector_total":   self.sectors_total,
+                    }),
+                ) {
+                    eprintln!("[cdaudio] emit cd-rip-progress failed: {e}");
+                }
                 self.last_emit = std::time::Instant::now();
             }
             true
@@ -466,9 +562,15 @@ mod windows_impl {
     }
 
     impl<'a> flacenc::source::Source for CdRipSource<'a> {
-        fn channels(&self) -> usize { 2 }
-        fn bits_per_sample(&self) -> usize { 16 }
-        fn sample_rate(&self) -> usize { 44100 }
+        fn channels(&self) -> usize {
+            2
+        }
+        fn bits_per_sample(&self) -> usize {
+            16
+        }
+        fn sample_rate(&self) -> usize {
+            44100
+        }
         fn len_hint(&self) -> Option<usize> {
             Some((self.sectors_total as usize) * FRAMES_PER_SECTOR)
         }
@@ -480,34 +582,37 @@ mod windows_impl {
         ) -> Result<usize, flacenc::error::SourceError> {
             // block_size = frames per channel ; on a besoin de block_size * 2 i32 interleaved.
             let needed_samples = block_size * 2;
-            // Buffer de sortie : pas d'allocation par appel grâce à un Vec réutilisé serait possible,
-            // mais block_size est petit (~4096 frames = 8192 i32 = 32 KB) donc l'alloc est négligeable.
-            let mut out: Vec<i32> = Vec::with_capacity(needed_samples);
+            // M-R1 : buffer de sortie réutilisé entre appels (clear + extend) au lieu
+            // d'une allocation par appel. read_samples est invoqué des milliers de fois
+            // par track ; recycler le Vec évite autant d'allocations/libérations.
+            self.out_buf.clear();
+            self.out_buf.reserve(needed_samples);
 
-            while out.len() < needed_samples {
+            while self.out_buf.len() < needed_samples {
                 if self.cancel.load(Ordering::SeqCst) {
                     break; // EOF gracieux — l'encode courant se termine sur ce qu'on a déjà
                 }
                 if self.sample_cursor >= self.sample_buf.len() && !self.refill_buffer() {
-                    break; // fin du track
+                    break; // fin du track (ou abandon après trop d'erreurs — self.aborted)
                 }
-                let take = (needed_samples - out.len()).min(self.sample_buf.len() - self.sample_cursor);
-                out.extend_from_slice(&self.sample_buf[self.sample_cursor..self.sample_cursor + take]);
+                let take = (needed_samples - self.out_buf.len())
+                    .min(self.sample_buf.len() - self.sample_cursor);
+                let slice = &self.sample_buf[self.sample_cursor..self.sample_cursor + take];
+                self.out_buf.extend_from_slice(slice);
                 self.sample_cursor += take;
             }
 
-            if out.is_empty() { return Ok(0); }
-            dest.fill_interleaved(&out)
+            if self.out_buf.is_empty() {
+                return Ok(0);
+            }
+            dest.fill_interleaved(&self.out_buf)
                 .map_err(|_| flacenc::error::SourceError::from_unknown())?;
             // Nombre de frames par-canal délivrés
-            Ok(out.len() / 2)
+            Ok(self.out_buf.len() / 2)
         }
     }
 
-    fn encode_flac_streaming(
-        source: CdRipSource<'_>,
-        dest_path: &str,
-    ) -> Result<bool, String> {
+    fn encode_flac_streaming(source: CdRipSource<'_>, dest_path: &str) -> Result<bool, String> {
         use flacenc::bitsink::ByteSink;
         use flacenc::component::BitRepr;
         use flacenc::config::Encoder as EncoderConfig;
@@ -530,16 +635,25 @@ mod windows_impl {
         // mais comme la source est moved, on doit aussi tracer le flag via le retour
         // de cancellation. On utilise un Arc cloné pour le check post-encode.
         let cancel_check = source.cancel.clone();
+        // Idem pour le flag d'abandon (trop d'erreurs de lecture consécutives) :
+        // la source est moved dans l'encodeur, on garde un clone pour le check post-encode.
+        let abort_check = source.aborted.clone();
 
         let stream = flacenc::encode_with_fixed_block_size(&config, source, block_size)
             .map_err(|e| format!("flacenc encode failed: {:?}", e))?;
+
+        if abort_check.load(Ordering::SeqCst) {
+            // Rip abandonné : ne pas écrire de FLAC tronqué/corrompu sur disque.
+            return Err("rip abandonné : trop d'erreurs de lecture consécutives".to_string());
+        }
 
         if cancel_check.load(Ordering::SeqCst) {
             return Ok(true); // cancelled — caller skip écriture disque
         }
 
         let mut sink = ByteSink::new();
-        stream.write(&mut sink)
+        stream
+            .write(&mut sink)
             .map_err(|e| format!("flacenc write failed: {:?}", e))?;
 
         let bytes = sink.as_slice();
@@ -553,8 +667,7 @@ mod windows_impl {
                     .map_err(|e| format!("create FLAC parent dir failed: {}", e))?;
             }
         }
-        std::fs::write(dest_path, bytes)
-            .map_err(|e| format!("write FLAC file failed: {}", e))?;
+        std::fs::write(dest_path, bytes).map_err(|e| format!("write FLAC file failed: {}", e))?;
 
         Ok(false) // not cancelled
     }
@@ -568,7 +681,9 @@ mod windows_impl {
         cancel: Arc<AtomicBool>,
     ) -> Result<(), String> {
         let toc = read_toc(drive)?;
-        let track = toc.tracks.iter()
+        let track = toc
+            .tracks
+            .iter()
             .find(|t| t.idx == track_idx)
             .ok_or_else(|| format!("track {} not in TOC", track_idx))?;
 
@@ -587,19 +702,33 @@ mod windows_impl {
 
         // Source streaming : lit les secteurs à la demande au lieu de pré-allouer
         // ~1.76 GB de PCM. Mémoire bornée à ~235 KB (FRAMES_PER_CHUNK * 588 * 2 * i32).
-        let source = CdRipSource::new(handle, track.lba_start, total_sectors, cancel.clone(), app, rip_id);
+        let source = CdRipSource::new(
+            handle,
+            track.lba_start,
+            total_sectors,
+            cancel.clone(),
+            app,
+            rip_id,
+        );
         let was_cancelled = encode_flac_streaming(source, dest_path)?;
-        if was_cancelled {
+        // B23 FIX : re-vérifier le flag après l'encode — il a pu être positionné
+        // juste après le dernier check interne de l'encodeur (fichier alors non désiré).
+        if was_cancelled || cancel.load(Ordering::SeqCst) {
             let _ = std::fs::remove_file(dest_path); // pas de fichier partiel laissé sur disque
             return Err("cancelled".to_string());
         }
 
-        let _ = app.emit("cd-rip-progress", serde_json::json!({
-            "rip_id": rip_id,
-            "percent": 100,
-            "sector_current": total_sectors,
-            "sector_total": total_sectors,
-        }));
+        if let Err(e) = app.emit(
+            "cd-rip-progress",
+            serde_json::json!({
+                "rip_id": rip_id,
+                "percent": 100,
+                "sector_current": total_sectors,
+                "sector_total": total_sectors,
+            }),
+        ) {
+            eprintln!("[cdaudio] emit cd-rip-progress 100% failed: {e}");
+        }
 
         Ok(())
     }

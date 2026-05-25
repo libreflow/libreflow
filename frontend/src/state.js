@@ -42,12 +42,13 @@ export function setLiked(v)      { set('liked',      v); }
 /**
  * Sync tracks dans app.js et dans le store réactif.
  * Utilisé par : selection.js.
+ * Applique l'invariant ARCH-3 : rebuildTrackIdxMap() est garanti en interne.
  * @param {object[]} v
- * ⚠ INVARIANT : tout appelant DOIT appeler rebuildTrackIdxMap() immédiatement après
- *   pour maintenir _trackIdxMap en sync avec tracks[]. Ne pas omettre cette étape
- *   sous peine de corrompre silencieusement tous les lookups par ID.
  */
-export function setTracks(v)     { set('tracks',     v); }
+export function setTracks(v) {
+  set('tracks', v);
+  rebuildTrackIdxMap(); // ARCH-3 : toute mutation tracks[] → rebuild _trackIdxMap
+}
 
 /**
  * Sync ctxTrackId (cible du menu contextuel) dans app.js et dans le store.
@@ -122,14 +123,18 @@ export function replaceTracks(newArray) {
 export function removeTracksBatch(sortedDescIndices) {
   if (!sortedDescIndices.length) return;
   const tracks = get('tracks');
-  // Garde-fou : vérifier l'ordre en debug uniquement
-  for (let i = 1; i < sortedDescIndices.length; i++) {
-    if (sortedDescIndices[i] >= sortedDescIndices[i - 1]) {
-      console.warn('[state] removeTracksBatch: indices NON triés décroissants', sortedDescIndices);
+  // B24 FIX : le splice (haut → bas) EXIGE un ordre strictement décroissant.
+  // Avant, le garde-fou warn + break mais laissait la boucle splicer avec les
+  // indices erronés (corruption silencieuse) — on trie défensivement à la place.
+  let indices = sortedDescIndices;
+  for (let i = 1; i < indices.length; i++) {
+    if (indices[i] >= indices[i - 1]) {
+      console.warn('[state] removeTracksBatch: indices NON triés décroissants — tri défensif appliqué', sortedDescIndices);
+      indices = [...sortedDescIndices].sort((a, b) => b - a);
       break;
     }
   }
-  for (const idx of sortedDescIndices) {
+  for (const idx of indices) {
     if (idx >= 0 && idx < tracks.length) tracks.splice(idx, 1);
   }
   rebuildTrackIdxMap();

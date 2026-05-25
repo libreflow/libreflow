@@ -13,6 +13,7 @@
 //   initQueueDrag (Task 4)
 
 import { esc, extEmoji, fmtd }            from './utils.js';
+import { CFG }                            from './cfg.js';
 import { eqOpen, closeEQ }                from './eq.js';
 import { i18n }                           from './i18n.js';
 import { get, set }                       from './store.js';
@@ -33,7 +34,7 @@ let _queueOverride        = null; // null | Array<string> (IDs dans l'ordre voul
 let _queueOverrideTrackId = null; // ID de la piste en cours au moment du reorder (pas l'index)
 
 // ── Drag Pointer Events ──────────────────────────────────────────────────────
-const Q_ROW_H = 50; // hauteur px d'un .queue-item — padding 7px*2 + art 36px
+const Q_ROW_H = CFG.QUEUE_ROW_H; // hauteur px d'un .queue-item — padding 7px*2 + art 36px
 
 let _ptrState = null; // null quand inactif
 let _springBackTimer = null;
