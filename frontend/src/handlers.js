@@ -60,7 +60,7 @@ import { openRadioView, ctxStartRadio,
          radioSaveAsPlaylist, radioRegenerateFromCurrent,
          stopRadio, playRadioTrackAt, removeRadioTrack }       from './radio.js';
 import { changeWatchFolder, toggleWatchFolder }               from './watchfolder.js';
-import { setVizMode, setVizEnabled, getVizEnabled }            from './viz.js';
+import { setVizMode, setVizEnabled }                           from './viz.js';
 import { resolveConfirm }                                      from './ui.js';
 import { setCrossfade }                                        from './player.js';
 import { importM3U, exportM3U, exportXSPF }                    from './m3u.js';
@@ -227,7 +227,6 @@ const _ACTIONS = {
   'viz-bars':        ()    => { setVizMode('bars');         _syncVizBtns(true); },
   'viz-oscilloscope':()    => { setVizMode('oscilloscope'); _syncVizBtns(true); },
   'viz-circle':      ()    => { setVizMode('circle');       _syncVizBtns(true); },
-  'viz-toggle':      ()    => { setVizEnabled(!getVizEnabled()); _syncVizBtns(true); },
 
   // ── Window controls ───────────────────────────────────────
   'win-minimize':    ()    => openMiniAndMinimize(),
@@ -536,6 +535,11 @@ function _handleInput(e) {
 
     case 'rg-enabled':
       setReplayGain(el.checked);
+      break;
+
+    case 'viz-enabled':
+      setVizEnabled(el.checked);
+      _syncVizBtns(true);
       break;
 
     case 'rg-target':

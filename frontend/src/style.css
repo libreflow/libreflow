@@ -31,7 +31,7 @@
   z-index: 9999;
   padding: 8px 16px;
   background: var(--g);
-  color: #fff;
+  color: var(--text-on-accent);
   font-weight: 600;
   font-size: 14px;
   border-radius: 6px;
@@ -165,8 +165,8 @@
 
   /* Voiles & teintes (cible des rgba(0/255…) littéraux) */
   --scrim-1: rgba(0,0,0,.4);
-  --scrim-2: rgba(0,0,0,.55);
-  --scrim-3: rgba(0,0,0,.75);
+  --scrim-2: rgba(0,0,0,.30);
+  --scrim-3: rgba(0,0,0,.45);
   --tint-1:  rgba(255,255,255,.06);
   --tint-2:  rgba(255,255,255,.10);
   --tint-3:  rgba(255,255,255,.16);
@@ -605,7 +605,7 @@
   --shadow-card-lt:0 6px 20px rgba(0,0,0,.18);  /* variante claire — gardée littérale */
   --shadow-card-hv:var(--elev-3);               /* card hover */
   --shadow-pl-hv:  var(--elev-3);               /* playlist hero hover */
-  --shadow-pl-hv-lt: 0 8px 28px rgba(0,0,0,.45); /* variante de base — gardée littérale */
+  --shadow-pl-hv-lt: 0 8px 28px rgba(0,0,0,.22); /* variante de base — gardée littérale */
   --shadow-modal2: 0 12px 48px rgba(0,0,0,.16); /* modale claire — gardée littérale */
   --shadow-modal3: var(--elev-3);               /* search modal */
   --shadow-cin-btn:var(--elev-2);               /* cinema corner btn */
@@ -622,7 +622,7 @@
   /* Ombres accent — glows simples recâblés sur --glow-accent ; les anneaux
      multi-état (hover/light) et composites restent littéraux. */
   --shadow-pcplay:    var(--glow-accent);       /* pcplay ring */
-  --shadow-pcplay-hv: 0 0 0 5px rgba(var(--g-rgb),.2),  0 6px 20px rgba(var(--g-rgb),.5); /* état hover — gardé littéral */
+  --shadow-pcplay-hv: 0 0 0 5px rgba(var(--g-rgb),.16),  0 6px 20px rgba(var(--g-rgb),.4); /* état hover — gardé littéral */
   --shadow-pcplay-lt: 0 0 0 5px rgba(var(--g-rgb),.18), 0 6px 20px rgba(var(--g-rgb),.4); /* variante claire — gardée littérale */
   --shadow-acc-glow:  var(--glow-accent);       /* accent glow doux */
   --shadow-srch-dk:   var(--glow-accent);       /* search focus */
@@ -651,9 +651,9 @@
   --shadow-stat-lt:   0 1px 4px rgba(0,0,0,.06);  /* stat card light */
   --shadow-stat-hv:   0 1px 4px rgba(0,0,0,.07), 0 0 0 1px rgba(0,0,0,.04); /* stat hover */
   --shadow-el-sm:     0 1px 5px rgba(0,0,0,.08);  /* élément léger */
-  --shadow-tab-act:   0 1px 4px rgba(0,0,0,.3);   /* pl-tab active */
+  --shadow-tab-act:   0 1px 4px rgba(0,0,0,.20);   /* pl-tab active */
   --shadow-cf-thumb:  0 0 0 3px rgba(0,0,0,.3);   /* cf slider thumb */
-  --shadow-cn-img:    0 4px 12px rgba(0,0,0,.4);  /* cinema img */
+  --shadow-cn-img:    0 4px 12px rgba(0,0,0,.28);  /* cinema img */
 
   /* Ombres latérales (side panels) */
   --shadow-queue:     -6px 0 24px var(--scrim-1), -1px 0 0 var(--sep);
@@ -661,25 +661,25 @@
   --shadow-radio-lt:  inset 3px 0 0 var(--g), 0 2px 8px rgba(var(--g-rgb),.06);
 
   /* Ombres playlist */
-  --shadow-pl-list:   0 12px 32px rgba(0,0,0,.45), 0 0 0 1px rgba(var(--g-rgb),.06);
-  --shadow-pl-list2:  0 12px 32px rgba(0,0,0,.45), 0 0 0 1px rgba(var(--g-rgb),.12);
+  --shadow-pl-list:   0 12px 32px rgba(0,0,0,.30), 0 0 0 1px rgba(var(--g-rgb),.10);
+  --shadow-pl-list2:  0 12px 32px rgba(0,0,0,.30), 0 0 0 1px rgba(var(--g-rgb),.16);
   --shadow-pl-card:   0 0 0 1px rgba(var(--g-rgb),.18); /* pl-card active */
 
   /* Ombres texte & drop-shadow */
   --tshadow-genre:    0 1px 3px rgba(255,255,255,.5);   /* genre name light */
-  --tshadow-title:    0 1px 4px rgba(0,0,0,.6);          /* track title dark */
+  --tshadow-title:    0 1px 4px rgba(0,0,0,.45);          /* track title dark */
   --tshadow-glow:     0 0 8px rgba(var(--g-rgb),.7);    /* text glow cinéma */
-  --dropshadow-art:   0 1px 4px rgba(0,0,0,.5);         /* pochette art */
-  --dropshadow-card:  0 2px 8px rgba(0,0,0,.6);         /* card play btn */
-  --dropshadow-art-sm:0 2px 4px rgba(0,0,0,.5);         /* art sm player */
+  --dropshadow-art:   0 1px 4px rgba(0,0,0,.30);         /* pochette art */
+  --dropshadow-card:  0 2px 8px rgba(0,0,0,.40);         /* card play btn */
+  --dropshadow-art-sm:0 2px 4px rgba(0,0,0,.34);         /* art sm player */
   --dropshadow-tlk:   0 0 5px rgba(var(--g-rgb),.5);   /* tlk icon glow */
   --dropshadow-heart: 0 0 16px rgba(255,60,100,.7);     /* like heart glow */
   --dropshadow-art-glow: 0 0 6px;                        /* art glow (color via keyframe) */
 
   /* Ombres animation/motion (keyframes) */
   --shadow-kbd:        0 1px 0 var(--bg6);              /* kbd bottom */
-  --shadow-pl-hero-sh: 0 8px 32px rgba(0,0,0,.5), inset 0 1px 0 var(--border-1);
-  --shadow-big-gl:     0 16px 48px rgba(0,0,0,.7), 0 0 0 0.5px rgba(0,0,0,.5);
+  --shadow-pl-hero-sh: 0 8px 32px rgba(0,0,0,.30), inset 0 1px 0 var(--border-1);
+  --shadow-big-gl:     0 16px 48px rgba(0,0,0,.45), 0 0 0 0.5px rgba(0,0,0,.3);
   --shadow-pcplay-anim:0 2px 12px rgba(var(--g-rgb),.4), 0 0 0 0 rgba(var(--g-rgb),0);
   --shadow-pcplay-glow:0 4px 18px rgba(var(--g-rgb),.6), 0 0 0 5px rgba(var(--g-rgb),.1);
   --shadow-art-col:    0 0 0 1px rgba(var(--g-rgb),.20); /* art-color ring 1 */
@@ -774,7 +774,7 @@
   --player-shadow: 0 -1px 0 rgba(255,255,255,.04), 0 -8px 32px rgba(0,0,0,.5);
 
   /* Mini-player brand glow — dynamique via --g-rgb */
-  --mini-glow: 0 0 0 1px rgba(var(--g-rgb),.20), 0 8px 40px rgba(0,0,0,.7);
+  --mini-glow: 0 0 0 1px rgba(var(--g-rgb),.20), 0 8px 40px rgba(0,0,0,.45);
 
   /* Ambient art color — géré par @property ci-dessus */
   --art-color: transparent;
@@ -1828,9 +1828,11 @@ button { cursor: pointer; }
   background: var(--bg2); border: var(--border-w-sm) solid var(--bg4);
   color: var(--t3); padding: var(--sp-1h) var(--sp-2h); border-radius: var(--r);
   font-size: var(--fs-caption); font-weight: 500; white-space: nowrap;
-  transition: background var(--dur-fast) ease, color var(--dur-fast) ease, border-color var(--dur-fast) ease;
+  transition: background var(--dur-fast) ease, color var(--dur-fast) ease, border-color var(--dur-fast) ease, transform var(--dur-fast) ease;
 }
 .sort-btn:hover { background: var(--bg3); color: var(--t2); border-color: var(--bg5); }
+.sort-btn:active { transform: scale(.97); }
+.sort-btn:focus-visible { outline: var(--focus-ring); outline-offset: var(--focus-offset); }
 .sort-btn svg   { width: var(--icon-2xs); height: var(--icon-2xs); fill: currentColor; }
 
 /* ── Filtre format (chips) ── */
@@ -1842,14 +1844,16 @@ button { cursor: pointer; }
 .format-bar:empty { display: none; }
 .fmt-chip {
   display: inline-flex; align-items: center;
-  padding: var(--sp-1q) var(--sp-2); border-radius: 999px;
+  padding: var(--sp-1q) var(--sp-2); border-radius: var(--r-pill);
   border: var(--border-w-sm) solid var(--bg4);
   background: var(--bg2); color: var(--t3);
   font-size: var(--fs-caption); font-weight: 500; white-space: nowrap;
   cursor: pointer;
-  transition: background var(--dur-fast) ease, color var(--dur-fast) ease, border-color var(--dur-fast) ease;
+  transition: background var(--dur-fast) ease, color var(--dur-fast) ease, border-color var(--dur-fast) ease, transform var(--dur-fast) ease;
 }
 .fmt-chip:hover { background: var(--bg3); color: var(--t2); border-color: var(--bg5); }
+.fmt-chip:active { transform: scale(.97); }
+.fmt-chip:focus-visible { outline: var(--focus-ring); outline-offset: var(--focus-offset); }
 .fmt-chip.active { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
 
 /* ── Historique imports (settings) ── */
@@ -1983,11 +1987,11 @@ button { cursor: pointer; }
 /* Overlay play icon sur l'artwork au hover */
 .tart-hover-play {
   position: absolute; inset: 0;
-  background: rgba(0,0,0,.48);
+  background: var(--scrim-3);
   display: flex; align-items: center; justify-content: center;
   border-radius: var(--r);
   opacity: 0;
-  transition: opacity var(--dur-fast) var(--smooth);
+  transition: opacity var(--dur-fast) var(--smooth), background var(--dur-fast) var(--smooth);
   /* Button reset */
   border: none; padding: 0; cursor: pointer; color: inherit;
 }
@@ -2010,10 +2014,10 @@ button { cursor: pointer; }
    Renforce aria-current="true" par un signal NON-couleur (icône visible) →
    WCAG 1.4.1 (Use of Color). Le bouton overlay est déjà câblé play/pause via
    .playing-row : on le rend simplement visible (légèrement plus opaque au hover). */
-.tr.act .tart-hover-play           { opacity: 1; background: rgba(0,0,0,.36); }
-.tr.act:hover .tart-hover-play     { background: rgba(0,0,0,.48); }
+.tr.act .tart-hover-play           { opacity: 1; background: var(--scrim-2); }
+.tr.act:hover .tart-hover-play     { background: var(--scrim-3); }
 /* A11Y — rendre le bouton visible quand il reçoit le focus clavier (sinon opacity:0 = invisible) */
-.tart-hover-play:focus-visible     { opacity: 1; background: rgba(0,0,0,.48); }
+.tart-hover-play:focus-visible     { opacity: 1; background: var(--scrim-3); outline: var(--focus-ring); outline-offset: calc(-1 * var(--sp-nano)); }
 
 /* Hiérarchie texte — primary / secondary / tertiary */
 .ti   { min-width: 0; }
@@ -2177,7 +2181,7 @@ html[data-mode="light"] mark.srch-hl { background: rgba(var(--g-rgb), .22); }
 .card-art::after {
   content: '';
   position: absolute; inset: 0;
-  background: linear-gradient(to top, rgba(0,0,0,.55) 0%, transparent 55%);
+  background: linear-gradient(to top, var(--scrim-3) 0%, transparent 55%);
   opacity: 0;
   transition: opacity var(--dur-card, .2s) ease;
   pointer-events: none;
@@ -2193,20 +2197,20 @@ html[data-mode="light"] mark.srch-hl { background: rgba(var(--g-rgb), .22); }
   top: 50%; left: 50%;
   transform: translate(-50%, -50%) scale(0.8);
   border: none; cursor: pointer;
-  background: rgba(0,0,0,0.60);
-  backdrop-filter: blur(4px);
-  -webkit-backdrop-filter: blur(4px);
+  background: var(--scrim-2);
+  backdrop-filter: blur(var(--blur-sm));
+  -webkit-backdrop-filter: blur(var(--blur-sm));
   border-radius: 50%;
   display: flex; align-items: center; justify-content: center;
   opacity: 0;
   transition: opacity var(--dur-card, .2s) ease, transform var(--dur-card, .2s) var(--spring-soft, cubic-bezier(.34,1.56,.64,1));
-  color: #fff;
+  color: var(--c-white);
   z-index: 1;
 }
-.card-play-btn svg { width: 18px; height: 18px; fill: currentColor; filter: drop-shadow(0 2px 8px rgba(0,0,0,0.6)); transform: none; transition: none; }
-.card:hover .card-play-btn { opacity: 1; background: rgba(0,0,0,0.60); transform: translate(-50%, -50%) scale(1); }
+.card-play-btn svg { width: 18px; height: 18px; fill: currentColor; filter: drop-shadow(var(--dropshadow-art-sm)); transform: none; transition: none; }
+.card:hover .card-play-btn { opacity: 1; background: var(--scrim-2); transform: translate(-50%, -50%) scale(1); }
 .card:hover .card-play-btn svg { transform: none; }
-.card-play-btn:hover { background: rgba(0,0,0,0.75) !important; }
+.card-play-btn:hover { background: var(--scrim-3) !important; }
 .card-name {
   font-size: var(--fs-f-body); font-weight: 700;
   font-family: var(--font-display);
@@ -2451,11 +2455,13 @@ html[data-mode="light"] mark.srch-hl { background: rgba(var(--g-rgb), .22); }
   transition: background var(--ease), color var(--ease);
 }
 .bc-back:hover { background: var(--bg3); color: var(--t); }
+.bc-back:focus-visible { outline: var(--focus-ring); outline-offset: var(--focus-offset); color: var(--t); }
 .bc-back svg   { width: var(--icon-md); height: var(--icon-md); fill: currentColor; }
 .bc-sep  { color: var(--t3); font-size: var(--fs-caption); }
 .bc-cur  { font-size: var(--fs-md); color: var(--t); font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: min(var(--text-empty-max), 45vw); }
 .bc-link { background: none; border: none; cursor: pointer; color: var(--t3); font-size: var(--fs-md); padding: 0 var(--sp-1); border-radius: var(--r-sm); transition: color var(--ease); white-space: nowrap; }
 .bc-link:hover { color: var(--t); }
+.bc-link:focus-visible { outline: var(--focus-ring); outline-offset: var(--focus-offset); color: var(--t); }
 
 /* ═══ ÉTATS VIDES ════════════════════════════════════════════ */
 .empty {
@@ -2675,6 +2681,10 @@ html[data-mode="light"] .empty-cta {
 .wbtn:hover  { transform: translateY(calc(-1 * var(--sp-micro))); box-shadow: var(--shadow-wbtn-hv); filter: brightness(1.08); }
 .wbtn:active { transform: scale(.96); }
 .wbtn svg    { width: var(--icon-md); height: var(--icon-md); stroke: var(--text-on-accent); fill: none; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+.wbtn-m3u    { background: var(--bg3); color: var(--t2); border: 1px solid var(--bg5); margin-top: 0; }
+
+/* Panel title icon (queue-head, eq-head h3 SVG) */
+.panel-title-ico { margin-right: 6px; vertical-align: middle; }
 
 /* Drag-drop hint */
 .whint {
@@ -3036,16 +3046,16 @@ html[data-mode="light"] .empty-cta {
   pointer-events: auto;
 }
 #next-preview img, #next-preview .np-em {
-  width: 32px;
-  height: 32px;
+  width: var(--icon-32);
+  height: var(--icon-32);
   border-radius: var(--r-xs);
   flex-shrink: 0;
   object-fit: cover;
-  font-size: 20px;
-  line-height: 32px;
+  font-size: var(--fs-lg);
+  line-height: var(--icon-32);
   text-align: center;
 }
-.np-info { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.np-info { display: flex; flex-direction: column; gap: var(--sp-micro); min-width: 0; }
 .np-name {
   font-size: var(--fs-xs);
   color: var(--t);
@@ -3306,25 +3316,30 @@ html[data-mode="light"] .sleep-custom-inp:focus { border-color: var(--g); backgr
 .t-item.t-loading .t-icon { background: var(--g); animation: t-spin .9s linear infinite; }
 /* Bouton action intégré dans un toast (ex : "Annuler") */
 .t-action {
-  background: rgba(255,255,255,.14); border: none; border-radius: var(--r-pill);
+  background: var(--tint-3); border: none; border-radius: var(--r-pill);
   padding: var(--sp-micro) var(--sp-2h); margin-left: var(--sp-micro); font-size: var(--fs-sm); font-weight: 700;
   color: var(--text-on-accent); cursor: pointer; flex-shrink: 0; white-space: nowrap;
-  transition: background var(--dur-fast) ease;
+  transition: background var(--dur-fast) ease, transform var(--dur-fast) ease;
 }
-.t-action:hover { background: rgba(255,255,255,.26); }
+.t-action:hover { background: color-mix(in srgb, var(--tint-3) 100%, var(--c-white) 12%); }
+.t-action:active { transform: scale(.96); }
+.t-action:focus-visible { outline: var(--focus-ring); outline-offset: var(--focus-offset); }
 /* Bouton fermeture des toasts error/warning (UX-2) */
 .t-close {
   background: none;
   border: none;
   color: inherit;
   cursor: pointer;
-  font-size: 1.1em;
-  padding: 0 4px;
+  font-size: var(--fs-md);
+  padding: 0 var(--sp-1);
   opacity: 0.7;
-  line-height: 1;
+  line-height: var(--lh-1);
   flex-shrink: 0;
+  border-radius: var(--r-xs);
+  transition: opacity var(--dur-fast) ease, background var(--dur-fast) ease;
 }
-.t-close:hover { opacity: 1; }
+.t-close:hover { opacity: 1; background: var(--tint-1); }
+.t-close:focus-visible { opacity: 1; outline: var(--focus-ring); outline-offset: var(--focus-offset); }
 
 /* ═══ DRAG OVERLAY ═══════════════════════════════════════════ */
 #drago {
@@ -3337,8 +3352,8 @@ html[data-mode="light"] .sleep-custom-inp:focus { border-color: var(--g); backgr
 /* Bordure visible lors du drag-over (UX-13) — app.js doit ajouter/retirer .drag-over sur dragenter/dragleave */
 #drago.drag-over,
 #drago:focus-within {
-  border: 2px dashed var(--accent, #7c6af5);
-  border-radius: 12px;
+  border: var(--border-w-md) dashed var(--g);
+  border-radius: var(--r-md);
 }
 /* Bordure pointillée en pseudo-élément animé */
 #drago::before {
@@ -3442,6 +3457,7 @@ html[data-mode="light"] .sleep-custom-inp:focus { border-color: var(--g); backgr
 }
 .mbtn:hover        { filter: brightness(1.1); }
 .mbtn:active       { transform: scale(.96); }
+.mbtn:focus-visible { outline: var(--focus-ring); outline-offset: var(--focus-offset); }
 .mbtn.cancel       { background: var(--bg5); color: var(--t); }
 .mbtn.danger       { background: var(--red); color: var(--text-on-accent); }
 .mbtn.primary      { background: var(--g); color: var(--text-on-accent); }
@@ -3659,9 +3675,11 @@ html[data-mode="light"] .orphan-item { border-bottom-color: var(--bg5); }
   background: var(--bg4); border: var(--border-w-sm) solid var(--bg5);
   color: var(--t2); font-size: var(--fs-md); cursor: pointer;
   display: flex; align-items: center; justify-content: center;
-  transition: background var(--ease), color var(--ease);
+  transition: background var(--ease), color var(--ease), transform var(--dur-fast) ease;
 }
 .bte-cover-clear:hover { background: var(--red); color: var(--text-on-accent); }
+.bte-cover-clear:active { transform: scale(.92); }
+.bte-cover-clear:focus-visible { outline: var(--focus-ring); outline-offset: var(--focus-offset); }
 
 .bte-hint {
   font-size: var(--fs-sm); color: var(--t3); margin: 0 0 var(--sp-5);
@@ -3725,7 +3743,7 @@ html[data-mode="light"] .bte-cover-clear    { background: var(--bg3); border-col
 .ni-pl.has-cover .pl-icon { background: transparent !important; border: none !important; padding: 0; overflow: hidden; }
 .ni-pl.has-cover .pl-icon .pl-cover-img { width: 100%; height: 100%; border-radius: inherit; }
 .ni-pl.has-cover.on .pl-icon { box-shadow: var(--shadow-pl-icon); }
-.ni-pl.has-cover .pl-icon { width: 28px; height: 28px; border-radius: var(--r-sm); }
+.ni-pl.has-cover .pl-icon { width: var(--icon-28); height: var(--icon-28); border-radius: var(--r-sm); }
 
 /* S90 — Drag & drop reorder des playlists */
 .ni-pl.pl-dragging { opacity: .45; }
@@ -3755,6 +3773,8 @@ html[data-mode="light"] .bte-cover-clear    { background: var(--bg3); border-col
 }
 .pl-tab.active { background: var(--bg2); color: var(--t); box-shadow: var(--shadow-tab-act); }
 .pl-tab:not(.active):hover { background: var(--bg5); color: var(--t2); }
+.pl-tab:active { transform: scale(.97); }
+.pl-tab:focus-visible { outline: var(--focus-ring); outline-offset: calc(-1 * var(--sp-micro)); }
 .pl-tab svg { flex-shrink: 0; }
 
 /* Smart playlist seed box */
@@ -4437,7 +4457,7 @@ html[data-mode="light"] .pl-folder-h:hover .pl-folder-count { background: var(--
 
 .set-section     { padding: var(--space-4) var(--space-5); border-bottom: var(--border-w-sm) solid var(--sep); }
 .set-section-lbl { font-size: var(--fs-xs); font-weight: 700; color: var(--t3); letter-spacing: var(--ls-caps); text-transform: uppercase; margin-bottom: var(--space-3); }
-.set-row         { display: flex; align-items: center; justify-content: space-between; margin-bottom: var(--space-3); gap: var(--space-3); }
+.set-row         { display: flex; align-items: center; justify-content: space-between; margin-bottom: var(--space-3); gap: var(--space-3); transition: opacity var(--dur-fast) var(--smooth); }
 .set-row:last-child { margin-bottom: 0; }
 .set-row-label   { font-size: var(--fs-md); color: var(--t2); line-height: var(--lh-comfort); }
 .set-row-sub     { font-size: var(--fs-sm); color: var(--t3); margin-top: var(--sp-micro); }
@@ -4461,9 +4481,11 @@ html[data-mode="light"] .pl-folder-h:hover .pl-folder-count { background: var(--
 .toggle-wrap input:focus-visible + .toggle-slider      { outline: var(--border-w-lg) solid var(--g); outline-offset: 2px; }
 
 .lang-toggle  { display: flex; background: var(--bg4); border-radius: var(--r); padding: var(--sp-1q); gap: var(--sp-micro); }
-.lang-btn     { padding: var(--sp-1p) var(--sp-3h); border-radius: var(--r); border: none; font-size: var(--fs-caption); font-weight: 600; color: var(--t3); background: transparent; transition: background var(--ease), color var(--ease); }
+.lang-btn     { padding: var(--sp-1p) var(--sp-3h); border-radius: var(--r); border: none; font-size: var(--fs-caption); font-weight: 600; color: var(--t3); background: transparent; transition: background var(--ease), color var(--ease), transform var(--ease); }
 .lang-btn.on  { background: var(--g); color: var(--text-on-accent); }
 .lang-btn:not(.on):hover { background: var(--border-2); color: var(--t2); }
+.lang-btn:active { transform: scale(.97); }
+.lang-btn:focus-visible { outline: var(--focus-ring); outline-offset: var(--focus-offset); }
 
 /* ── Zoom liste de pistes — radio group ─────────────────── */
 .tlist-zoom-radios { display: flex; background: var(--bg4); border-radius: var(--r); padding: var(--sp-1q); gap: var(--sp-micro); }
@@ -4475,10 +4497,11 @@ html[data-mode="light"] .pl-folder-h:hover .pl-folder-count { background: var(--
   font-size: var(--fs-caption); font-weight: 600;
   color: var(--t3); background: transparent;
   cursor: pointer;
-  transition: background var(--ease), color var(--ease);
+  transition: background var(--ease), color var(--ease), transform var(--ease);
 }
 .tlist-zoom-radio input[type="radio"]:checked + span { background: var(--g); color: var(--text-on-accent); }
 .tlist-zoom-radio input[type="radio"]:not(:checked) + span:hover { background: var(--border-2); color: var(--t2); }
+.tlist-zoom-radio input[type="radio"]:active + span { transform: scale(.97); }
 
 .theme-swatches   { display: flex; gap: var(--sp-2); flex-wrap: wrap; }
 .theme-swatch     { width: var(--icon-28); height: var(--icon-28); border-radius: 50%; border: var(--border-w-lg) solid transparent; transition: transform var(--ease), border-color var(--ease), outline-color var(--ease); flex-shrink: 0; padding: 0; cursor: pointer; }
@@ -4503,7 +4526,6 @@ html[data-mode="light"] .pl-folder-h:hover .pl-folder-count { background: var(--
 /* ─── Styles extraits du markup Settings / ctx-menu / file d'attente
        (audit §4 UIH-settings-01/05/06, UIH-ctxmenu-01/02, UIH-queue-01 ; CLAUDE.md §13). ─── */
 .set-range       { width: 90px; accent-color: var(--g); }
-.set-viz-toggle  { min-width: 82px; }
 .set-mp-btn      { width: auto; padding: var(--space-2) var(--space-3); }
 .set-row--wrap   { flex-wrap: wrap; }
 .set-btn-ico     { margin-right: var(--space-1); }
@@ -4513,7 +4535,9 @@ html[data-mode="light"] .pl-folder-h:hover .pl-folder-count { background: var(--
 .ctx-track-name  { color: var(--t); font-weight: 600; max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ctx-sep--first  { margin-top: var(--space-1); }
 .queue-head-actions { display: flex; align-items: center; gap: var(--space-1); }
-.queue-util-btn  { opacity: .7; }
+.queue-util-btn  { opacity: .7; transition: opacity var(--dur-fast) var(--smooth), color var(--dur-fast) var(--smooth), background var(--dur-fast) var(--smooth); }
+.queue-util-btn:hover { opacity: 1; }
+.queue-util-btn:focus-visible { outline: var(--focus-ring); outline-offset: var(--focus-offset); opacity: 1; }
 
 /* ═══ FILE D'ATTENTE + EQ (panels latéraux partagés) ════════ */
 #queue-panel, #eq-panel {
@@ -5090,17 +5114,20 @@ html[data-mode="light"] .eq-footer-reset { border-color: var(--bg5); color: var(
 /* Toggle Simple / Expert */
 .eq-mode-switch {
   display: flex; background: var(--bg3); border-radius: var(--r-pill);
-  padding: 2px; gap: 2px; flex-shrink: 0;
+  padding: var(--sp-micro); gap: var(--sp-micro); flex-shrink: 0;
 }
 .eq-mode-btn {
-  padding: 3px 10px; border-radius: var(--r-pill);
+  padding: var(--sp-1q) var(--sp-2h); border-radius: var(--r-pill);
   border: none; background: none; color: var(--t3);
   font-size: var(--fs-xs); font-weight: 500; cursor: pointer;
   transition: background var(--dur-fast) var(--smooth),
-              color     var(--dur-fast) var(--smooth);
+              color     var(--dur-fast) var(--smooth),
+              transform var(--dur-fast) var(--smooth);
 }
 .eq-mode-btn.active { background: var(--bg5); color: var(--t); }
 .eq-mode-btn:hover:not(.active) { color: var(--t2); }
+.eq-mode-btn:active { transform: scale(.97); }
+.eq-mode-btn:focus-visible { outline: var(--focus-ring); outline-offset: var(--focus-offset); }
 
 /* Bands wrap : margin horizontal + annule le double margin de .eq-bands interne */
 .eq-bands-wrap {
@@ -7128,7 +7155,7 @@ html[data-mode="light"] .rv-start-btn  { background: var(--g); }
   aspect-ratio: 1;
   object-fit: cover;
   border-radius: var(--r-card, 12px);
-  box-shadow: 0 24px 64px rgba(0,0,0,.5);
+  box-shadow: 0 24px 64px rgba(0,0,0,.30);
 }
 
 .vnp-art-ph {

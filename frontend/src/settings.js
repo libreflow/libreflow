@@ -473,14 +473,8 @@ export function _syncVizBtns(save = false) {
     btn.classList.toggle('on', active);
     btn.setAttribute('aria-pressed', String(active));
   });
-  const toggleBtn = $id('set-viz-toggle');
-  if (toggleBtn) {
-    toggleBtn.classList.toggle('on', enabled);
-    toggleBtn.setAttribute('aria-pressed', String(enabled));
-    const span = toggleBtn.querySelector('span');
-    if (span) span.setAttribute('data-i18n', enabled ? 'set_viz_on' : 'set_viz_off');
-    if (span) span.textContent = i18n(enabled ? 'set_viz_on' : 'set_viz_off');
-  }
+  const toggleEl = $id('set-viz-toggle');
+  if (toggleEl?.type === 'checkbox') toggleEl.checked = enabled;
   const shapeGroup = $id('set-viz-shape-group');
   if (shapeGroup) shapeGroup.style.opacity = enabled ? '' : '0.35';
   ['set-viz-bars', 'set-viz-oscilloscope', 'set-viz-circle'].forEach(id => {
