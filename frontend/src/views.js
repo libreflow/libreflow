@@ -244,7 +244,6 @@ export function clearAllFilters() {
   if (!changed) return;
   cancelSearchDebounce();
   invalidateFilter();
-  emit(EVENTS.FILTER_CHANGED, {});
   saveCfg();
   // Remettre le focus sur la recherche pour fluidité clavier
   if (srch) srch.focus();
@@ -252,17 +251,20 @@ export function clearAllFilters() {
 
 export function onSearch(q) {
   const clr = document.getElementById('srch-clear');
-  if (clr) clr.style.display = q ? 'flex' : 'none';
+  if (clr) clr.style.display = q.trim() ? 'flex' : 'none';
   if (_searchDebounceTimer) clearTimeout(_searchDebounceTimer);
   _searchDebounceTimer = setTimeout(() => {
     const trimmed = q.trim();
     set('query', trimmed);
-    invalidateFilter();
+    // N'émet PAS FILTER_CHANGED ici — le rendu est déclenché explicitement ci-dessous
+    // pour éviter le double-render (invalidateFilter() émettrait l'event → app.js renderLib()
+    // puis le renderAlbumsGrid/renderLib explicite ci-dessous en ferait un second).
+    invalidateFilterCache();
+    invalidateGenreGridSig();
     const view = _v();
     if (!trimmed) {
       const lbl = document.getElementById('sort-lbl');
       if (lbl) lbl.textContent = i18n(SLBLS[_s()] || 'sort_az');
-      _updateSrchBadge(0);
     }
     if (view === 'albums')  { renderAlbumsGrid();  _updateSrchBadge(getFiltered().length); return; }
     if (view === 'artists') { renderArtistsGrid(); _updateSrchBadge(getFiltered().length); return; }

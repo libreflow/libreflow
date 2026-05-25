@@ -119,13 +119,20 @@ function _computeTracksSig(tracks) {
 /** Wraps matching parts of `text` with <mark> for search highlighting.
  *  Regex is applied on the raw text first, then each segment is HTML-escaped
  *  individually so that marks are never inserted inside HTML entities.
+ *  Words are highlighted individually to match the multi-term filter logic.
  *  @param {string}  text  - Raw text to highlight
  *  @param {string}  query - Search query string
  *  @param {RegExp}  [re]  - M-2: optional pre-compiled regex (avoids re-creation per call) */
 export function hlText(text, query, re) {
   if (!text) return '';
   if (!query) return esc(text);
-  const r = re || new RegExp(`(${escapeRegex(query)})`, 'gi');
+  // Build per-word alternation regex when no pre-compiled re provided.
+  // Matches "dark side" as /dark|side/ so both words are highlighted even when
+  // they appear in different fields (consistent with multi-term filter logic).
+  const r = re || new RegExp(
+    `(${query.trim().split(/\s+/).filter(Boolean).map(escapeRegex).join('|')})`,
+    'gi'
+  );
   // Split the raw text around matches using sentinel bytes, then escape each part.
   return text.replace(r, '\x00$1\x01').split('\x00').map((seg, i) => {
     if (i === 0) return esc(seg);
@@ -291,8 +298,10 @@ export function virtRenderWindow(fl) {
   // M-1: hoist isAlbumDetail + albumDetailSort — évite un get() par ligne dans la boucle
   const isAlbumDetail   = view === 'album-detail';
   const albumDetailSort = isAlbumDetail ? (get('albumDetailSort') || 'track') : null;
-  // M-2: pré-compiler la regex de recherche une seule fois avant la boucle
-  const hlRe = query ? new RegExp(`(${escapeRegex(query)})`, 'gi') : null;
+  // M-2: pré-compiler la regex de recherche une seule fois avant la boucle (per-word alternation)
+  const hlRe = query
+    ? new RegExp(`(${query.trim().split(/\s+/).filter(Boolean).map(escapeRegex).join('|')})`, 'gi')
+    : null;
 
   // A11Y-ROVING: déterminer quel fi reçoit tabindex="0"
   // La piste courante (curTrack) est le tab stop si elle est dans la liste filtrée.

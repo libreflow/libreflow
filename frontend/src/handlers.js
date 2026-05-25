@@ -511,12 +511,9 @@ function _handleInput(e) {
       break;
     }
 
-    case 'search': {
+    case 'search':
       onSearch(el.value);
-      const clr = document.getElementById('srch-clear');
-      if (clr) clr.style.display = el.value ? 'flex' : 'none';
       break;
-    }
 
     case 'smart-seed-search':
       smartSeedSearch(el.value);
