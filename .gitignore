@@ -33,6 +33,8 @@ dist-ssr
 docs/maestro/
 PATHFINDER-*/
 !.claude/rules/
+!.claude/hooks/
+!.claude/settings.json
 
 # Playwright visual-regression run artifacts (baselines under __snapshots__/ are kept)
 test-results/
