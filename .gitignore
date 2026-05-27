@@ -41,3 +41,6 @@ test-results/
 playwright-report/
 blob-report/
 .playwright/
+
+# Perf benchmarks (current run artifacts, not committed)
+.perf-current.json
