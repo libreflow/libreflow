@@ -20,116 +20,63 @@ export function esc(str) {
   return (str || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 
-// ── Constantes ────────────────────────────────────────────────────────────
+// ── Lit Web Component delegation ─────────────────────────────────────────
+// Phase 0 Lit : les constantes _TOAST_ICONS et _TOAST_DUR vivent désormais
+// dans frontend/src/components/lf-toast-stack.{js,logic.js}. ui.js délègue.
 
-const _TOAST_ICONS = {
-  info:    `<svg viewBox="0 0 10 10" fill="#fff" width="9" height="9"><circle cx="5" cy="3" r="1"/><rect x="4.2" y="4.8" width="1.6" height="3.2" rx=".8"/></svg>`,
-  success: `<svg viewBox="0 0 10 10" fill="none" stroke="#fff" stroke-width="1.6" stroke-linecap="round" width="9" height="9"><polyline points="2,5.5 4,7.5 8,3"/></svg>`,
-  error:   `<svg viewBox="0 0 10 10" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round" width="9" height="9"><line x1="2.5" y1="2.5" x2="7.5" y2="7.5"/><line x1="7.5" y1="2.5" x2="2.5" y2="7.5"/></svg>`,
-  warning: `<svg viewBox="0 0 10 10" fill="#fff" width="9" height="9"><path d="M5 1.5L9 8.5H1Z" fill="none" stroke="#fff" stroke-width="1.4"/><rect x="4.3" y="4" width="1.4" height="2.5" rx=".7"/><circle cx="5" cy="7.3" r=".65"/></svg>`,
-  loading: `<svg viewBox="0 0 10 10" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round" width="9" height="9"><path d="M5 1.5A3.5 3.5 0 1 1 1.7 3.7"/></svg>`,
-};
-const _TOAST_DUR = { info: 3000, success: 2600, error: 8000, warning: 6000, loading: 120000 };
+import './components/lf-toast-stack.js';
+
+let _stack = null;
+
+/** Trouve ou crée le singleton <lf-toast-stack> attaché à document.body. */
+function _getStack() {
+  if (_stack && _stack.isConnected) return _stack;
+  _stack = document.querySelector('lf-toast-stack');
+  if (!_stack) {
+    _stack = document.createElement('lf-toast-stack');
+    document.body.appendChild(_stack);
+  }
+  return _stack;
+}
 
 // ── Toast ─────────────────────────────────────────────────────────────────
 
 /**
  * Affiche une notification temporaire.
- * @param {string} m    Message (HTML autorisé)
+ * @param {string} m    Message
  * @param {string} type 'info' | 'success' | 'error' | 'warning' | 'loading'
- * @returns {Function} Fonction remove() — ferme le toast manuellement
+ * @returns {Function & { update: Function }} Fonction remove() — ferme le toast manuellement.
+ *          La fonction expose aussi remove.update(newMsg) pour modifier le message.
  */
 export function toast(m, type = 'info') {
-  const shelf = document.getElementById('toast-shelf');
-  if (!shelf) return () => {};
-  const dur  = _TOAST_DUR[type] ?? 3000;
-  const icon = _TOAST_ICONS[type] ?? _TOAST_ICONS.info;
-
-  const el = document.createElement('div');
-  el.className = `t-item t-${type}`;
-  // A11Y : les erreurs / warnings sont annoncées en assertive (interrompent ce qui parle).
-  // Le shelf parent reste aria-live=polite pour les autres types (success/info/loading).
-  if (type === 'error' || type === 'warning') {
-    el.setAttribute('role', 'alert');
-    el.setAttribute('aria-live', 'assertive');
-  }
-  el.innerHTML = `<span class="t-icon" aria-hidden="true">${icon}</span><span class="t-msg"></span><span class="t-bar" aria-hidden="true"></span>`;
-  el.querySelector('.t-msg').textContent = m;
-  // Cap stacking — au-delà de 5 toasts simultanés, on retire les plus anciens pour éviter de spam le SR.
-  const MAX_TOASTS = 5;
-  while (shelf.children.length >= MAX_TOASTS) shelf.firstElementChild?.remove();
-  shelf.appendChild(el);
-
-  const bar = el.querySelector('.t-bar');
-  bar.style.transition = `transform ${dur}ms linear`;
-  requestAnimationFrame(() => { bar.style.transform = 'scaleX(0)'; });
-
-  const remove = () => {
-    if (el._removed) return;
-    el._removed = true;
-    el.classList.add('t-out');
-    el.addEventListener('animationend', () => el.remove(), { once: true });
-  };
-  // Permet de mettre à jour le message après création (ex. progress counter)
-  remove.update = (newMsg) => {
-    const msgEl = el.querySelector('.t-msg');
-    if (msgEl) msgEl.textContent = newMsg;
-  };
-  if (type === 'error' || type === 'warning') {
-    const closeBtn = document.createElement('button');
-    closeBtn.className = 't-close';
-    closeBtn.textContent = '×';
-    closeBtn.setAttribute('aria-label', 'Fermer');
-    closeBtn.addEventListener('click', (e) => { e.stopPropagation(); clearTimeout(timer); remove(); });
-    el.appendChild(closeBtn);
-  }
-  const timer = setTimeout(remove, dur);
-  el.addEventListener('click', () => { clearTimeout(timer); remove(); });
+  const stack = _getStack();
+  if (!stack) return Object.assign(() => {}, { update: () => {} });
+  const handle = stack.push({ message: m, type });
+  const remove = () => handle.remove();
+  remove.update = (newMsg) => handle.update(newMsg);
   return remove;
 }
 
 /**
  * Toast avec bouton d'action intégré (ex : "Annuler" après suppression).
  * @param {string}   m        Message principal
- * @param {string}   type     Type ('success'|'info'|...)
+ * @param {string}   type     Type
  * @param {string}   label    Label du bouton action
- * @param {Function} onAction Callback exécuté au clic sur le bouton
- * @param {number}   [dur]    Durée ms (défaut = _TOAST_DUR[type])
- * @returns {Function} Fonction remove()
+ * @param {Function} onAction Callback exécuté au clic
+ * @param {number}   [dur]    Durée ms (défaut = durée par type)
+ * @returns {Function & { update: Function }}
  */
 export function toastWithAction(m, type = 'info', label, onAction, dur) {
-  const shelf = document.getElementById('toast-shelf');
-  if (!shelf) return () => {};
-  const d    = dur ?? (_TOAST_DUR[type] ?? 3000);
-  const icon = _TOAST_ICONS[type] ?? _TOAST_ICONS.info;
-
-  const el = document.createElement('div');
-  el.className = `t-item t-${type}`;
-  el.innerHTML = `<span class="t-icon">${icon}</span><span class="t-msg"></span><button class="t-action"></button><span class="t-bar"></span>`;
-  el.querySelector('.t-msg').textContent = m;
-  el.querySelector('.t-action').textContent = label; // SEC-1 : label via textContent, jamais innerHTML
-  shelf.appendChild(el);
-
-  const bar = el.querySelector('.t-bar');
-  bar.style.transition = `transform ${d}ms linear`;
-  requestAnimationFrame(() => { bar.style.transform = 'scaleX(0)'; });
-
-  const remove = () => {
-    if (el._removed) return;
-    el._removed = true;
-    el.classList.add('t-out');
-    el.addEventListener('animationend', () => el.remove(), { once: true });
-  };
-  const timer = setTimeout(remove, d);
-
-  const btn = el.querySelector('.t-action');
-  btn.addEventListener('click', (e) => {
-    e.stopPropagation();
-    clearTimeout(timer);
-    remove();
-    onAction?.();
+  const stack = _getStack();
+  if (!stack) return Object.assign(() => {}, { update: () => {} });
+  const handle = stack.push({
+    message: m,
+    type,
+    duration: dur,
+    action: { label, onClick: onAction },
   });
-  el.addEventListener('click', () => { clearTimeout(timer); remove(); });
+  const remove = () => handle.remove();
+  remove.update = (newMsg) => handle.update(newMsg);
   return remove;
 }
 
