@@ -1,0 +1,8 @@
+{
+  "_tolerancePct": 5,
+  "scenarios": {
+    "scenario A": { "medianMs": 10.0 },
+    "scenario B": { "medianMs": 20.0 },
+    "scenario C": { "medianMs": 0.5, "tolerancePct": 10 }
+  }
+}

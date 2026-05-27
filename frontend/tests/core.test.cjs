@@ -1486,6 +1486,91 @@ section('scripts/perf-bundle.js — bundle gate');
   }
 }());
 
+// =============================================================================
+// X. scripts/bench-compare.js — runtime regression gate
+// =============================================================================
+section('scripts/bench-compare.js — runtime gate');
+
+(function () {
+  const { spawnSync } = require('child_process');
+  const fs   = require('fs');
+  const os   = require('os');
+  const path = require('path');
+
+  const SCRIPT  = path.resolve('scripts/bench-compare.js');
+  const FIXTURE = path.resolve('frontend/tests/fixtures/perf/baseline-fixture.json');
+
+  function writeCurrent(lines) {
+    const f = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'libreflow-bench-')), 'current.json');
+    fs.writeFileSync(f, lines.map(o => JSON.stringify(o)).join('\n') + '\n');
+    return f;
+  }
+
+  function run(currentPath) {
+    return spawnSync(process.execPath, [SCRIPT, currentPath], {
+      encoding: 'utf8',
+      timeout: 10000,
+      env: { ...process.env, LIBREFLOW_BENCH_BASELINE: FIXTURE },
+    });
+  }
+
+  // 6. Identical → exit 0
+  {
+    const f = writeCurrent([
+      { label: 'scenario A', medianMs: 10.0 },
+      { label: 'scenario B', medianMs: 20.0 },
+      { label: 'scenario C', medianMs: 0.5 },
+    ]);
+    assert(run(f).status === 0, 'bench-compare identical exits 0');
+  }
+
+  // 7. +4% on one → exit 0 (under 5% tolerance)
+  {
+    const f = writeCurrent([
+      { label: 'scenario A', medianMs: 10.4 },
+      { label: 'scenario B', medianMs: 20.0 },
+      { label: 'scenario C', medianMs: 0.5 },
+    ]);
+    assert(run(f).status === 0, 'bench-compare +4% under tolerance exits 0');
+  }
+
+  // 8. +7% on one → exit 1, names the scenario
+  {
+    const f = writeCurrent([
+      { label: 'scenario A', medianMs: 10.0 },
+      { label: 'scenario B', medianMs: 21.4 },
+      { label: 'scenario C', medianMs: 0.5 },
+    ]);
+    const r = run(f);
+    assert(r.status === 1, 'bench-compare +7% over tolerance exits 1');
+    assert(/scenario B/.test(r.stdout), 'bench-compare FAIL stdout names the scenario');
+  }
+
+  // 9. Missing scenario → exit 1, mentions deleted
+  {
+    const f = writeCurrent([
+      { label: 'scenario A', medianMs: 10.0 },
+      { label: 'scenario B', medianMs: 20.0 },
+    ]);
+    const r = run(f);
+    assert(r.status === 1, 'bench-compare missing scenario exits 1');
+    assert(/deleted|missing/i.test(r.stdout + r.stderr), 'missing-scenario stdout mentions deleted/missing');
+  }
+
+  // 10. Extra scenario → exit 0 with WARN
+  {
+    const f = writeCurrent([
+      { label: 'scenario A', medianMs: 10.0 },
+      { label: 'scenario B', medianMs: 20.0 },
+      { label: 'scenario C', medianMs: 0.5 },
+      { label: 'scenario D (new)', medianMs: 5.0 },
+    ]);
+    const r = run(f);
+    assert(r.status === 0, 'bench-compare extra scenario exits 0');
+    assert(/WARN/.test(r.stdout), 'extra scenario stdout contains WARN');
+  }
+}());
+
 // -- Résultat -----------------------------------------------------------
 console.log('\n═══════════════════════════════════════════════════════════');
 console.log(`  Total : ${_ok + _ko}   OK: ${_ok}   KO: ${_ko}`);
