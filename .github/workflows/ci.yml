@@ -46,6 +46,15 @@ jobs:
       - name: Vite build
         run: npm run vite:build
 
+      - name: Bundle size budget
+        run: npm run perf:bundle
+
+      - name: Bench (synthetic perf)
+        run: npm run perf:bench
+
+      - name: Bench regression check
+        run: npm run perf:bench-compare
+
   rust:
     name: Rust (cargo check, Windows target)
     runs-on: windows-latest
