@@ -1623,6 +1623,114 @@ section('scripts/bench-compare.js — runtime gate');
   }
 }());
 
+// =============================================================================
+// N. lf-toast-stack.logic — reducer pur
+// =============================================================================
+section('components/lf-toast-stack.logic.js -- toastReducer');
+
+const TOAST_TYPES = ['info', 'success', 'error', 'warning', 'loading'];
+const TOAST_DUR = { info: 3000, success: 2600, error: 8000, warning: 6000, loading: 120000 };
+
+function normalizeType(t) {
+  return TOAST_TYPES.includes(t) ? t : 'info';
+}
+
+function resolveDuration(type, explicitDur) {
+  if (typeof explicitDur === 'number' && explicitDur > 0) return explicitDur;
+  return TOAST_DUR[normalizeType(type)];
+}
+
+function toastReducer(items, action) {
+  switch (action && action.type) {
+    case 'add': {
+      const next = [...items, action.item];
+      if (typeof action.max === 'number' && next.length > action.max) {
+        return next.slice(next.length - action.max);
+      }
+      return next;
+    }
+    case 'update': {
+      let touched = false;
+      const next = items.map(t => {
+        if (t.id === action.id) {
+          touched = true;
+          return { ...t, message: action.message };
+        }
+        return t;
+      });
+      return touched ? next : items;
+    }
+    case 'dismiss': {
+      const next = items.filter(t => t.id !== action.id);
+      return next.length === items.length ? items : next;
+    }
+    default:
+      return items;
+  }
+}
+
+(function () {
+  // normalizeType
+  assert(normalizeType('info')     === 'info',    'normalizeType: info → info');
+  assert(normalizeType('unknown')  === 'info',    'normalizeType: inconnu → info');
+  assert(normalizeType(undefined)  === 'info',    'normalizeType: undefined → info');
+  assert(normalizeType('error')    === 'error',   'normalizeType: error → error');
+
+  // resolveDuration
+  assert(resolveDuration('info')         === 3000,   'resolveDuration: info défaut');
+  assert(resolveDuration('error')        === 8000,   'resolveDuration: error défaut');
+  assert(resolveDuration('loading')      === 120000, 'resolveDuration: loading défaut');
+  assert(resolveDuration('info', 5000)   === 5000,   'resolveDuration: override explicite');
+  assert(resolveDuration('info', 0)      === 3000,   'resolveDuration: 0 → défaut');
+  assert(resolveDuration('info', -1)     === 3000,   'resolveDuration: négatif → défaut');
+  assert(resolveDuration('xxx', undefined) === 3000, 'resolveDuration: type inconnu → info default');
+
+  // reducer add
+  let s = [];
+  s = toastReducer(s, { type: 'add', item: { id: 1, message: 'a', type: 'info' } });
+  assert(s.length === 1 && s[0].id === 1, 'reducer add: empile 1');
+
+  s = toastReducer(s, { type: 'add', item: { id: 2, message: 'b', type: 'info' } });
+  assert(s.length === 2 && s[1].id === 2, 'reducer add: empile 2 (ordre préservé)');
+
+  // immutabilité
+  const prev = s;
+  s = toastReducer(s, { type: 'add', item: { id: 3, message: 'c', type: 'info' } });
+  assert(prev.length === 2, 'reducer add: ne mute pas l\'array source');
+  assert(s !== prev, 'reducer add: retourne un nouvel array');
+
+  // cap max
+  s = toastReducer([{ id: 1 }, { id: 2 }, { id: 3 }, { id: 4 }, { id: 5 }],
+                   { type: 'add', item: { id: 6 }, max: 5 });
+  assert(s.length === 5,            'reducer add+max: respecte la cap');
+  assert(s[0].id === 2,             'reducer add+max: drop le plus ancien');
+  assert(s[4].id === 6,             'reducer add+max: garde le plus récent');
+
+  // dismiss
+  s = toastReducer([{ id: 1 }, { id: 2 }, { id: 3 }], { type: 'dismiss', id: 2 });
+  assert(s.length === 2 && !s.find(t => t.id === 2), 'reducer dismiss: retire l\'id');
+
+  // dismiss id absent
+  const before = [{ id: 1 }, { id: 2 }];
+  const after  = toastReducer(before, { type: 'dismiss', id: 999 });
+  assert(after === before, 'reducer dismiss: id absent → retourne la même référence');
+
+  // update
+  s = toastReducer([{ id: 1, message: 'old' }], { type: 'update', id: 1, message: 'new' });
+  assert(s[0].message === 'new',   'reducer update: message changé');
+  assert(s.length === 1,           'reducer update: pile inchangée en taille');
+
+  // update id absent
+  const beforeU = [{ id: 1, message: 'x' }];
+  const afterU  = toastReducer(beforeU, { type: 'update', id: 999, message: 'y' });
+  assert(afterU === beforeU, 'reducer update: id absent → retourne la même référence');
+
+  // action inconnue
+  const sameRef = [{ id: 1 }];
+  assert(toastReducer(sameRef, { type: 'wat' }) === sameRef, 'reducer: action inconnue → no-op identité');
+  assert(toastReducer(sameRef, null) === sameRef,            'reducer: action null → no-op identité');
+}());
+
 // -- Résultat -----------------------------------------------------------
 console.log('\n═══════════════════════════════════════════════════════════');
 console.log(`  Total : ${_ok + _ko}   OK: ${_ok}   KO: ${_ko}`);
