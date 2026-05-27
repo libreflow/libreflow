@@ -36,8 +36,8 @@ const b = spawnSync(npmCmd, ['run', 'vite:build'], { stdio: 'inherit', shell: pr
 if (b.status !== 0) die(b.status || 1, '[perf-baseline] vite:build failed');
 
 log('Measuring bundle…');
-// Vite 8 content hashes are base58-like (alphanumeric, may include uppercase).
-const RE_HASHED = /^(.+)-[a-zA-Z0-9]{8,}\.(js|css)$/;
+// Vite 8 content hashes are base58-like (alphanumeric, may include - and _).
+const RE_HASHED = /^(.+)-[a-zA-Z0-9_-]{8,}\.(js|css)$/;
 const RE_PLAIN  = /^(.+)\.(js|css)$/;
 const assetsDir = path.join(DIST_DIR, 'assets');
 const totals = new Map();

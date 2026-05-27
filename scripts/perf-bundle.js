@@ -24,8 +24,8 @@ const tolPct  = Number(budgets._tolerancePct ?? 10);
 const unknownPolicy = budgets._unknownBucketPolicy ?? 'warn';
 
 // Classify filename → bucket. Try hashed pattern first, fallback to plain.
-// Vite 8 content hashes are base58-like (alphanumeric, may include uppercase).
-const RE_HASHED = /^(.+)-[a-zA-Z0-9]{8,}\.(js|css)$/;
+// Vite 8 content hashes are base58-like (alphanumeric, may include - and _).
+const RE_HASHED = /^(.+)-[a-zA-Z0-9_-]{8,}\.(js|css)$/;
 const RE_PLAIN  = /^(.+)\.(js|css)$/;
 function bucketFor(file) {
   let m = RE_HASHED.exec(file);
