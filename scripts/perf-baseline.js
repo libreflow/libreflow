@@ -30,12 +30,14 @@ for (const f of [BUDGETS_FILE, BASELINE_FILE]) {
 }
 
 log('Running vite:build…');
+// On Windows, .cmd batch files require shell:true (spawnSync with 'npm.cmd' gives EINVAL otherwise).
 const npmCmd = process.platform === 'win32' ? 'npm.cmd' : 'npm';
-const b = spawnSync(npmCmd, ['run', 'vite:build'], { stdio: 'inherit' });
+const b = spawnSync(npmCmd, ['run', 'vite:build'], { stdio: 'inherit', shell: process.platform === 'win32' });
 if (b.status !== 0) die(b.status || 1, '[perf-baseline] vite:build failed');
 
 log('Measuring bundle…');
-const RE_HASHED = /^(.+)-[a-f0-9]{8,}\.(js|css)$/;
+// Vite 8 content hashes are base58-like (alphanumeric, may include uppercase).
+const RE_HASHED = /^(.+)-[a-zA-Z0-9]{8,}\.(js|css)$/;
 const RE_PLAIN  = /^(.+)\.(js|css)$/;
 const assetsDir = path.join(DIST_DIR, 'assets');
 const totals = new Map();

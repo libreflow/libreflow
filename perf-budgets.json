@@ -1,0 +1,25 @@
+{
+  "_tolerancePct": 10,
+  "_unknownBucketPolicy": "warn",
+  "_note": "Edited by `npm run perf:baseline`. Manual overrides preserved.",
+  "buckets": {
+    "libreflow-core": {
+      "rawBytes": 4183
+    },
+    "libreflow-extras": {
+      "rawBytes": 357494
+    },
+    "_css": {
+      "rawBytes": 226207
+    },
+    "main": {
+      "rawBytes": 50170
+    },
+    "mini": {
+      "rawBytes": 10938
+    },
+    "modulepreload-polyfill-Dezn_h7o": {
+      "rawBytes": 698
+    }
+  }
+}

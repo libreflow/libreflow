@@ -1,0 +1,39 @@
+{
+  "_tolerancePct": 5,
+  "_note": "Edited by `npm run perf:baseline`. Per-scenario tolerance overrides preserved.",
+  "_toleranceNote": "Windows CI variance is high; per-scenario tolerances set to 2× observed peak drift.",
+  "scenarios": {
+    "filterExact()           full pass empty": {
+      "medianMs": 0,
+      "tolerancePct": 10
+    },
+    "filterExact()           query \"shadow\"": {
+      "medianMs": 167.02,
+      "tolerancePct": 20
+    },
+    "filterExact()           query \"queen pulse\"": {
+      "medianMs": 166.46,
+      "tolerancePct": 20
+    },
+    "filterExact()           cache hit  \"shadow\"": {
+      "medianMs": 3.27,
+      "tolerancePct": 30
+    },
+    "filterFuzzy()           query \"shdaow\"": {
+      "medianMs": 180.38,
+      "tolerancePct": 15
+    },
+    "virtBuildRows()         sort=az (grouped)": {
+      "medianMs": 9.4,
+      "tolerancePct": 15
+    },
+    "virtBuildRows()         sort=artist (grouped)": {
+      "medianMs": 1.91,
+      "tolerancePct": 30
+    },
+    "virtBuildRows()         sort=date (flat)": {
+      "medianMs": 1.08,
+      "tolerancePct": 60
+    }
+  }
+}

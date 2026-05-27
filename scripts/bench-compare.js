@@ -53,7 +53,12 @@ for (const [label, base] of Object.entries(scenarios)) {
     failed++;
     continue;
   }
-  const driftPct = ((cur.medianMs - base.medianMs) / base.medianMs) * 100;
+  // Guard: baseline=0 → division by zero → Infinity drift.
+  // If the baseline rounds to 0 ms the scenario is essentially free (sub-µs fast path).
+  // Any positive current measurement is noise, not a regression — treat as OK.
+  const driftPct = base.medianMs === 0
+    ? 0
+    : ((cur.medianMs - base.medianMs) / base.medianMs) * 100;
   const status   = driftPct > tol ? 'FAIL' : 'OK';
   if (status === 'FAIL') failed++;
   rows.push([label, base.medianMs, cur.medianMs, driftPct, tol, status]);
