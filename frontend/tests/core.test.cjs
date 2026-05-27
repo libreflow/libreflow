@@ -908,6 +908,58 @@ section('imports.js -- structure ImportEntry');
   }
 }());
 
+// =============================================================================
+// 29. motion.js — surface (static source check)
+// =============================================================================
+// We can't dynamically require() the ESM module from CJS (it pulls gsap, which
+// needs a browser-shaped window.matchMedia). Instead, we statically read the
+// source and assert the public surface — catches accidental rename/removal of
+// a named export, missing Object.freeze on the token tables, or missing plugin
+// registration call.
+section('motion.js -- public surface (static source check)');
+
+(function () {
+  const fs   = require('fs');
+  const path = require('path');
+  const src  = fs.readFileSync(path.join(__dirname, '..', 'src', 'motion.js'), 'utf8');
+
+  const expectedExports = [
+    'prefersReducedMotion',
+    'eases',
+    'tween',
+    'from',
+    'set',
+    'timeline',
+    'kill',
+    'flip',
+    '_meta',
+  ];
+  for (const name of expectedExports) {
+    const re = new RegExp('export\\s+(?:function|const|class)\\s+' + name + '\\b');
+    assert(re.test(src), 'motion.js exports ' + name);
+  }
+
+  assert(/gsap\.registerPlugin\(\s*Flip\s*,\s*CustomEase\s*\)/.test(src),
+    'motion.js registers Flip + CustomEase at load');
+
+  assert(/eases\s*=\s*Object\.freeze\(/.test(src),
+    'eases token table is Object.freeze-d');
+  assert(/flip\s*=\s*Object\.freeze\(/.test(src),
+    'flip namespace is Object.freeze-d');
+
+  for (const easeName of ['lf-premium', 'lf-snap', 'lf-overshoot']) {
+    assert(src.includes("'" + easeName + "'"),
+      "CustomEase '" + easeName + "' is registered");
+  }
+
+  assert(/from\s+['"]gsap['"]/.test(src), 'imports from "gsap"');
+  assert(/from\s+['"]gsap\/Flip['"]/.test(src), 'imports from "gsap/Flip"');
+  assert(/from\s+['"]gsap\/CustomEase['"]/.test(src), 'imports from "gsap/CustomEase"');
+
+  assert(/prefers-reduced-motion/.test(src),
+    'motion.js honors prefers-reduced-motion');
+}());
+
 // ─── eqdevice.js — profil EQ par appareil ────────────────────────────────────
 {
   const assert = require('assert');

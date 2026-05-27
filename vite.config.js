@@ -89,6 +89,11 @@ export default defineConfig(({ mode }) => {
           // Rollup n'est plus supportée).
           manualChunks(id) {
             const p = id.replace(/\\/g, '/');
+            // Isole GSAP (core + Flip + CustomEase) dans son propre chunk.
+            // Sépare le coût animation du libreflow-extras budget, permet au
+            // browser de paralléliser le download avec le code app, et tient
+            // un bucket "gsap" lisible dans perf-budgets.json.
+            if (p.includes('/node_modules/gsap/')) return 'gsap';
             const CORE = new Set([
               'frontend/src/ipc.js',
               'frontend/src/cfg.js',

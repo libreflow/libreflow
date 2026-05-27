@@ -13,13 +13,16 @@
       "rawBytes": 226207
     },
     "main": {
-      "rawBytes": 50170
+      "rawBytes": 50860
     },
     "mini": {
       "rawBytes": 10938
     },
     "modulepreload-polyfill": {
       "rawBytes": 698
+    },
+    "gsap": {
+      "rawBytes": 100540
     }
   }
 }
