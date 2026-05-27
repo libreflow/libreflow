@@ -15,6 +15,11 @@
     "test:visual": "playwright test -c frontend/tests/visual/playwright.config.js",
     "test:visual:update": "playwright test -c frontend/tests/visual/playwright.config.js --update-snapshots",
     "bench": "node frontend/tests/bench.cjs",
+    "perf:bundle": "node scripts/perf-bundle.js",
+    "perf:bench": "node frontend/tests/bench.cjs --json > .perf-current.json",
+    "perf:bench-compare": "node scripts/bench-compare.js .perf-current.json",
+    "perf:check": "npm run vite:build && npm run perf:bundle && npm run perf:bench && npm run perf:bench-compare",
+    "perf:baseline": "node scripts/perf-baseline.js",
     "sbom:npm": "npx --yes @cyclonedx/cyclonedx-npm --output-file dist/sbom-npm.cdx.json --output-format JSON",
     "sbom:rust": "cd src-tauri && cargo install --quiet --locked cargo-cyclonedx && cargo cyclonedx --format json --override-filename sbom-rust",
     "sbom": "npm run sbom:npm && npm run sbom:rust"
