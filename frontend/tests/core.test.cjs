@@ -1377,6 +1377,35 @@ section('tlistZoom.js -- _nextZoomLevel cycling');
   assert(_nextZoomLevel('normal',      'out') === 'compact',     'zoomReset depuis normal → compact via zoomOut');
 }());
 
+// =============================================================================
+// X. bench.cjs --json flag emits one JSON line per scenario
+// =============================================================================
+section('bench.cjs --json — emits valid JSON lines');
+
+(function () {
+  const { spawnSync } = require('child_process');
+  const r = spawnSync(process.execPath, ['frontend/tests/bench.cjs', '1000', '--json'], {
+    encoding: 'utf8',
+    timeout: 30000,
+  });
+  assert(r.status === 0, 'bench.cjs --json exits 0');
+
+  const lines = r.stdout.trim().split('\n').filter(Boolean);
+  // 8 scenarios expected: 5 filterExact + filterFuzzy + 3 virtBuildRows
+  assert(lines.length === 8, `bench.cjs --json emits 8 lines (got ${lines.length})`);
+
+  let allValid = true;
+  for (const line of lines) {
+    try {
+      const obj = JSON.parse(line);
+      if (typeof obj.label !== 'string' || typeof obj.medianMs !== 'number') {
+        allValid = false; break;
+      }
+    } catch { allValid = false; break; }
+  }
+  assert(allValid, 'every line is JSON.parse-able with {label, medianMs}');
+}());
+
 // -- Résultat -----------------------------------------------------------
 console.log('\n═══════════════════════════════════════════════════════════');
 console.log(`  Total : ${_ok + _ko}   OK: ${_ok}   KO: ${_ko}`);

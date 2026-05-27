@@ -11,7 +11,9 @@
 
 'use strict';
 
-const N = parseInt(process.argv[2], 10) || 50000;
+const ARGS = process.argv.slice(2);
+const JSON_MODE = ARGS.includes('--json');
+const N = parseInt(ARGS.find(a => /^\d+$/.test(a)), 10) || 50000;
 const RUNS = 5; // chaque scénario tourné 5× pour la médiane
 
 // ── Synthèse d'une bibliothèque déterministe ──────────────────────────────────
@@ -174,41 +176,47 @@ function bench(label, fn) {
   }
   const afterMB = mbDelta();
   const med = median(runs);
-  console.log(
-    label.padEnd(40),
-    `median ${med.toFixed(2).padStart(8)} ms`,
-    `ops/sec ${(1000 / med).toFixed(0).padStart(7)}`,
-    `Δheap ${(afterMB - beforeMB).toFixed(1).padStart(6)} MB`,
-  );
+  if (JSON_MODE) {
+    process.stdout.write(JSON.stringify({ label, medianMs: med, deltaMB: afterMB - beforeMB }) + '\n');
+  } else {
+    console.log(
+      label.padEnd(40),
+      `median ${med.toFixed(2).padStart(8)} ms`,
+      `ops/sec ${(1000 / med).toFixed(0).padStart(7)}`,
+      `Δheap ${(afterMB - beforeMB).toFixed(1).padStart(6)} MB`,
+    );
+  }
   return med;
 }
 
 // ── Run ───────────────────────────────────────────────────────────────────────
 
-console.log('\n══ LibreFlow synthetic bench ═════════════════════════════════');
-console.log(`  N = ${N} tracks   ·   RUNS = ${RUNS}   ·   node ${process.version}\n`);
+if (!JSON_MODE) {
+  console.log('\n══ LibreFlow synthetic bench ═════════════════════════════════');
+  console.log(`  N = ${N} tracks   ·   RUNS = ${RUNS}   ·   node ${process.version}\n`);
+}
 
-console.log('Building synthetic library...');
+if (!JSON_MODE) console.log('Building synthetic library...');
 const t0 = process.hrtime.bigint();
 const tracks = buildLibrary(N);
 const buildMs = Number(process.hrtime.bigint() - t0) / 1e6;
-console.log(`  built in ${buildMs.toFixed(1)} ms  (${(buildMs / N * 1e6).toFixed(2)} ns/track)\n`);
+if (!JSON_MODE) console.log(`  built in ${buildMs.toFixed(1)} ms  (${(buildMs / N * 1e6).toFixed(2)} ns/track)\n`);
 
 // Reset _nlcGen between scenarios — sinon le 2e run réutilise le cache
 function resetCache() {
   _filterGen++;
 }
 
-console.log('── Filter / search ─────────────────────────────────────────');
+if (!JSON_MODE) console.log('── Filter / search ─────────────────────────────────────────');
 bench('filterExact()           full pass empty', () => { resetCache(); return filterExact(tracks, ''); });
 bench('filterExact()           query "shadow"',  () => { resetCache(); return filterExact(tracks, 'shadow'); });
 bench('filterExact()           query "queen pulse"', () => { resetCache(); return filterExact(tracks, 'queen pulse'); });
 bench('filterExact()           cache hit  "shadow"', () => filterExact(tracks, 'shadow'));
 bench('filterFuzzy()           query "shdaow"',  () => { resetCache(); return filterFuzzy(tracks, 'shdaow'); });
 
-console.log('\n── Virtual scroll build ────────────────────────────────────');
+if (!JSON_MODE) console.log('\n── Virtual scroll build ────────────────────────────────────');
 bench('virtBuildRows()         sort=az (grouped)',    () => virtBuildRows(tracks, 'az'));
 bench('virtBuildRows()         sort=artist (grouped)', () => virtBuildRows(tracks, 'artist'));
 bench('virtBuildRows()         sort=date (flat)',     () => virtBuildRows(tracks, 'date'));
 
-console.log('\n══ Done ══════════════════════════════════════════════════════\n');
+if (!JSON_MODE) console.log('\n══ Done ══════════════════════════════════════════════════════\n');
