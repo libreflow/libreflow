@@ -1406,6 +1406,86 @@ section('bench.cjs --json — emits valid JSON lines');
   assert(allValid, 'every line is JSON.parse-able with {label, medianMs}');
 }());
 
+// =============================================================================
+// X. scripts/perf-bundle.js — bundle size gate
+// =============================================================================
+section('scripts/perf-bundle.js — bundle gate');
+
+(function () {
+  const { spawnSync } = require('child_process');
+  const fs   = require('fs');
+  const os   = require('os');
+  const path = require('path');
+
+  function makeSandbox(files, budgets) {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'libreflow-perf-'));
+    const assetsDir = path.join(root, 'dist', 'assets');
+    fs.mkdirSync(assetsDir, { recursive: true });
+    for (const [name, size] of Object.entries(files)) {
+      fs.writeFileSync(path.join(assetsDir, name), Buffer.alloc(size, 0x61)); // 'a'
+    }
+    fs.writeFileSync(path.join(root, 'perf-budgets.json'), JSON.stringify(budgets, null, 2));
+    return root;
+  }
+
+  function run(cwd) {
+    return spawnSync(process.execPath, [path.resolve('scripts/perf-bundle.js')], {
+      cwd, encoding: 'utf8', timeout: 10000,
+    });
+  }
+
+  // 1. Under-budget → exit 0, stdout contains OK
+  {
+    const cwd = makeSandbox(
+      { 'main-abcd1234.js': 1000, 'mini-ef567890.js': 500 },
+      { _tolerancePct: 10, _unknownBucketPolicy: 'warn', buckets: { main: { rawBytes: 2000 }, mini: { rawBytes: 2000 } } },
+    );
+    const r = run(cwd);
+    assert(r.status === 0, 'perf-bundle under-budget exits 0');
+    assert(/\bOK\b/.test(r.stdout), 'under-budget stdout contains OK');
+  }
+
+  // 2. Over-budget → exit 1, stdout names the bucket + FAIL
+  {
+    const cwd = makeSandbox(
+      { 'libreflow-extras-aaaaaaaa.js': 300000 },
+      { _tolerancePct: 10, _unknownBucketPolicy: 'warn', buckets: { 'libreflow-extras': { rawBytes: 100000 } } },
+    );
+    const r = run(cwd);
+    assert(r.status === 1, 'perf-bundle over-budget exits 1');
+    assert(/libreflow-extras/.test(r.stdout) && /FAIL/.test(r.stdout), 'over-budget stdout names bucket + FAIL');
+  }
+
+  // 3. Unknown chunk → exit 0 with WARN
+  {
+    const cwd = makeSandbox(
+      { 'main-abcd1234.js': 1000, 'mystery-cccccccc.js': 500 },
+      { _tolerancePct: 10, _unknownBucketPolicy: 'warn', buckets: { main: { rawBytes: 2000 } } },
+    );
+    const r = run(cwd);
+    assert(r.status === 0, 'perf-bundle unknown chunk exits 0');
+    assert(/WARN/.test(r.stdout), 'unknown chunk stdout contains WARN');
+  }
+
+  // 4. Missing dist/ → exit 2
+  {
+    const cwd = makeSandbox({}, { _tolerancePct: 10, _unknownBucketPolicy: 'warn', buckets: {} });
+    fs.rmSync(path.join(cwd, 'dist'), { recursive: true, force: true });
+    const r = run(cwd);
+    assert(r.status === 2, 'missing dist/ exits 2');
+    assert(/vite:build/.test(r.stdout + r.stderr), 'missing dist/ message mentions vite:build');
+  }
+
+  // 5. Missing perf-budgets.json → exit 2
+  {
+    const cwd = makeSandbox({ 'main-abcd1234.js': 1000 }, { _tolerancePct: 10, _unknownBucketPolicy: 'warn', buckets: {} });
+    fs.rmSync(path.join(cwd, 'perf-budgets.json'));
+    const r = run(cwd);
+    assert(r.status === 2, 'missing perf-budgets.json exits 2');
+    assert(/perf:baseline/.test(r.stdout + r.stderr), 'missing budgets message mentions perf:baseline');
+  }
+}());
+
 // -- Résultat -----------------------------------------------------------
 console.log('\n═══════════════════════════════════════════════════════════');
 console.log(`  Total : ${_ok + _ko}   OK: ${_ok}   KO: ${_ko}`);
