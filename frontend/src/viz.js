@@ -16,6 +16,7 @@
 import { eqAnalyser, eqCtx } from './eq.js';
 import { audio }               from './player.js';
 import { saveCfg } from './cfgsave.js';
+import { createPremiumOscilloscope } from './oscPremium.js';
 
 /* ── Mode ─────────────────────────────────────────────────── */
 let vizMode    = 'bars'; // 'bars' | 'oscilloscope' | 'circle'
@@ -28,8 +29,7 @@ let running     = false;
 let smoothed    = null;   // Float32Array lissé entre frames
 // PERF : Uint8Array pré-alloué — évite new Uint8Array(128) à chaque frame (7680 bytes/s de GC)
 let _vizData    = null;
-let _timeData      = null;   // Uint8Array pour l'oscilloscope (domaine temporel)
-let _ghostTimeData = null;   // copie du frame précédent — effet traîne fantôme oscilloscope
+let _premiumOsc = null;   // instance oscilloscope premium (lazy) — possède son propre rAF + RO
 let _circleAngle   = 0;      // offset de rotation du cercle (rad) — incrémenté chaque frame
 let _circlecx      = null;   // X centre du cercle en px canvas — aligné sur #pcplay (calculé au resize)
 let _circlecy      = null;   // Y centre du cercle en px canvas — aligné sur #pcplay (calculé au resize)
@@ -37,19 +37,13 @@ let vizR = 59, vizG = 130, vizB = 246; // couleur courante (défaut : --g bleu)
 // PERF : chaîne RGB mise en cache pour éviter le template literal à chaque barre × frame
 let _vizRGB     = '59,130,246';
 // PERF : rgba strings à alpha statique pré-construites quand _vizRGB change.
-// Évite 4-6 allocations de template literal par frame en mode oscilloscope/circle.
-let _vizRgbaGhost = `rgba(59,130,246, 0.15)`;
-let _vizRgbaBase  = `rgba(59,130,246, 0.1)`;
+// Évite des allocations de template literal par frame en mode circle.
 let _vizRgbaHalo  = `rgba(59,130,246, 0.18)`;
-let _vizRgbaMain  = `rgba(59,130,246, 0.88)`;
 let _vizRgbaFill  = `rgba(59,130,246, 0.55)`;
 // 8 strings une par bucket d'alpha (utilisé en mode circle)
 const _vizRgbaBuckets = new Array(8);
 function _rebuildVizRgbaCache() {
-  _vizRgbaGhost = `rgba(${_vizRGB}, 0.15)`;
-  _vizRgbaBase  = `rgba(${_vizRGB}, 0.1)`;
   _vizRgbaHalo  = `rgba(${_vizRGB}, 0.18)`;
-  _vizRgbaMain  = `rgba(${_vizRGB}, 0.88)`;
   _vizRgbaFill  = `rgba(${_vizRGB}, 0.55)`;
   for (let b = 0; b < 8; b++) {
     _vizRgbaBuckets[b] = `rgba(${_vizRGB}, ${((b + 0.5) / 8).toFixed(2)})`;
@@ -149,10 +143,15 @@ function _resizeCanvas() {
  *  @param {'bars'|'oscilloscope'|'circle'} mode */
 export function setVizMode(mode) {
   if (!['bars', 'oscilloscope', 'circle'].includes(mode)) return;
+  if (vizMode === mode) return;
+  // Bars/circle et oscilloscope utilisent deux moteurs différents (rAF interne vs
+  // composant premium autonome). Stop défensif des deux, puis redémarrage du bon.
+  const wasRunning = running;
+  if (wasRunning) _stopEngine();
   vizMode = mode;
-  _grad = null; // invalider le cache gradient lors du changement de mode
-  if (_ghostTimeData) _ghostTimeData.fill(128); // réinitialiser la traîne oscilloscope
+  _grad = null;
   saveCfg();
+  if (wasRunning) _startEngine();
 }
 
 export function getVizMode() { return vizMode; }
@@ -188,19 +187,14 @@ export function startViz() {
   _vizBins = bins; // P8 — cache pour _draw() : eqAnalyser.frequencyBinCount est constant après init
   if (!smoothed  || smoothed.length  !== bins) smoothed  = new Float32Array(bins);
   if (!_vizData  || _vizData.length  !== bins) _vizData  = new Uint8Array(bins);
-  if (!_timeData || _timeData.length !== bins) _timeData = new Uint8Array(bins);
-  // Ghost oscilloscope — réinitialiser au silence (128 = ligne plate en domaine temporel)
-  if (!_ghostTimeData || _ghostTimeData.length !== bins) _ghostTimeData = new Uint8Array(bins);
-  _ghostTimeData.fill(128);
   running = true;
   if (eqCtx && eqCtx.state === 'suspended') eqCtx.resume();
-  _draw();
+  _startEngine();
 }
 
 export function stopViz() {
   running = false;
-  cancelAnimationFrame(raf);
-  raf = null;
+  _stopEngine();
   // Ne pas déconnecter _resizeObs : le canvas doit continuer à se redimensionner pendant les pauses
   // (sinon la fenêtre redimensionnée pendant une pause laisse un canvas périmé jusqu'au play suivant)
   if (canvasCtx && canvas) {
@@ -256,10 +250,37 @@ export function updateVizColor(color) {
   }
 }
 
-/* ── Rendu principal ──────────────────────────────────────── */
+/* ── Moteur de rendu (sélection bars/circle vs oscilloscope premium) ── */
+
+function _ensurePremiumOsc() {
+  if (_premiumOsc) return _premiumOsc;
+  if (!canvas || !eqAnalyser) return null;
+  _premiumOsc = createPremiumOscilloscope(canvas, eqAnalyser);
+  return _premiumOsc;
+}
+
+function _startEngine() {
+  if (vizMode === 'oscilloscope') {
+    const p = _ensurePremiumOsc();
+    if (p) p.start();
+  } else {
+    if (!raf) raf = requestAnimationFrame(_draw);
+  }
+}
+
+function _stopEngine() {
+  // Toujours stopper les deux — évite que les deux moteurs tournent en parallèle
+  // si l'utilisateur switch de mode plus vite qu'un frame
+  if (_premiumOsc) _premiumOsc.stop();
+  if (raf) { cancelAnimationFrame(raf); raf = null; }
+}
+
+/* ── Rendu principal (bars / circle) ──────────────────────── */
 
 function _draw() {
   if (!running) return;
+  // Garde défensive : si on est en oscilloscope, le moteur premium possède le canvas
+  if (vizMode === 'oscilloscope') return;
   // Vérifier eqAnalyser AVANT de planifier le prochain frame — évite une boucle infinie si l'analyser disparaît
   if (!eqAnalyser) { running = false; return; }
 
@@ -269,16 +290,14 @@ function _draw() {
   const h = canvas.height;
   if (w === 0 || h === 0) { raf = requestAnimationFrame(_draw); return; }
 
-  // P8 FIX : bins, _vizData, _timeData, smoothed sont tous pré-alloués dans startViz()
+  // P8 FIX : bins, _vizData, smoothed sont tous pré-alloués dans startViz()
   // → supprimé les guards de taille qui tournaient à chaque frame (480 checks/sec inutiles)
   const bins = _vizBins; // P8 — lecture du cache startViz(), jamais de re-read par frame
 
   canvasCtx.clearRect(0, 0, w, h);
   canvasCtx.globalAlpha = 1;
 
-  if (vizMode === 'oscilloscope') {
-    _drawOscilloscope(bins, w, h);
-  } else if (vizMode === 'circle') {
+  if (vizMode === 'circle') {
     eqAnalyser.getByteFrequencyData(_vizData);
     for (let i = 0; i < bins; i++) {
       smoothed[i] = smoothed[i] * 0.72 + _vizData[i] * 0.28;
@@ -352,66 +371,7 @@ function _drawBars(bins, w, h) {
   canvasCtx.globalAlpha = 1;
 }
 
-/* ── Mode oscilloscope ────────────────────────────────────── */
-
-function _drawOscilloscope(bins, w, h) {
-  eqAnalyser.getByteTimeDomainData(_timeData);
-  const dpr = _dpr;
-  const mid  = h / 2;
-  const amp  = h * 0.38; // amplitude max = 38% du demi-canvas
-  const sliceW = w / bins;
-
-  // Traîne fantôme — frame précédent à faible opacité (dessiné avant le clear principal)
-  if (_ghostTimeData) {
-    canvasCtx.beginPath();
-    canvasCtx.lineWidth   = 2 * dpr;
-    canvasCtx.strokeStyle = _vizRgbaGhost;
-    canvasCtx.lineJoin    = 'round';
-    canvasCtx.lineCap     = 'round';
-    canvasCtx.shadowBlur  = 0;
-    for (let i = 0; i < bins; i++) {
-      const v = _ghostTimeData[i] / 128 - 1;
-      const y = mid + v * amp;
-      const x = i * sliceW;
-      if (i === 0) canvasCtx.moveTo(x, y);
-      else         canvasCtx.lineTo(x, y);
-    }
-    canvasCtx.stroke();
-  }
-
-  // Ligne de base centrale (guide discret)
-  canvasCtx.beginPath();
-  canvasCtx.strokeStyle = _vizRgbaBase;
-  canvasCtx.lineWidth = 1 * dpr;
-  canvasCtx.moveTo(0, mid);
-  canvasCtx.lineTo(w, mid);
-  canvasCtx.stroke();
-
-  // P1 FIX : shadowBlur supprimé — forçait un composite GPU complet à chaque frame.
-  // Le même effet de lueur est obtenu par 2 passes sur le même path (halo d'abord, trait fin dessus).
-  // Construire le path une seule fois, le réutiliser pour les deux passes.
-  canvasCtx.lineJoin = 'round';
-  canvasCtx.lineCap  = 'round';
-  canvasCtx.beginPath();
-  for (let i = 0; i < bins; i++) {
-    const v = _timeData[i] / 128 - 1;
-    const y = mid + v * amp;
-    const x = i * sliceW;
-    if (i === 0) canvasCtx.moveTo(x, y);
-    else         canvasCtx.lineTo(x, y);
-  }
-  // Passe 1 : halo large (glow simulé, aucun GPU composite layer)
-  canvasCtx.lineWidth   = 10 * dpr;
-  canvasCtx.strokeStyle = _vizRgbaHalo;
-  canvasCtx.stroke();
-  // Passe 2 : trait principal fin par-dessus
-  canvasCtx.lineWidth   = 2 * dpr;
-  canvasCtx.strokeStyle = _vizRgbaMain;
-  canvasCtx.stroke();
-
-  // Sauvegarder le frame courant pour la traîne du prochain frame
-  if (_ghostTimeData) _ghostTimeData.set(_timeData);
-}
+/* ── Mode oscilloscope : géré par createPremiumOscilloscope() (oscPremium.js) ── */
 
 /* ── Mode circle ──────────────────────────────────────────── */
 
