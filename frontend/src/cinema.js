@@ -26,6 +26,7 @@ import { saveCfg }                   from './cfgsave.js';
 import { updateVolSlider }            from './playerbar.js';
 import { rgbToHsl, hslToRgb, boostSat, regionAvg, sampleArtColors } from './artcolor.js';
 import { renderAmbientFrame }                from './ambientRenderer.js';
+import { timeline, set as motionSet, kill as motionKill, eases } from './motion.js';
 
 // ── State ───────────────────────────────────────────────────
 export let cinemaOpen     = false;
@@ -58,6 +59,10 @@ let _clockInterval = null;
 // Timers pour l'animation de swap pochette — stockés pour annulation dans closeCinema()
 let _cinSwapOutTimer = null;
 let _cinSwapInTimer  = null;
+
+// GSAP timeline pour la chorégraphie d'ouverture — kill au close + au re-open
+// (évite que deux séquences se superposent si l'utilisateur toggle vite).
+let _openTl = null;
 
 // ── Constantes ──────────────────────────────────────────────
 // ── Modes d'arrière-plan disponibles ────────────────────────
@@ -462,6 +467,54 @@ export function openCinema() {
   _artWrapDb?.removeEventListener('dblclick', _onArtDblClick);
   _artWrapDb?.addEventListener('dblclick', _onArtDblClick);
   _showControls();
+  _runOpenChoreography();
+}
+
+// Chorégraphie d'ouverture GSAP — complémente la CSS .cin-enter sur .cinema-art-wrap
+// (qui gère le scale + fade de la pochette). Cette timeline anime title / artist /
+// progress / contrôles / horloge avec un séquencement type Apple Music.
+// L'animation collapse en gsap.set instantané si prefers-reduced-motion = reduce.
+function _runOpenChoreography() {
+  // Killer d'éventuelle timeline en vol (re-open rapide) + reset des inline styles
+  // qu'elle aurait laissés pour éviter le drift visuel à la prochaine séquence.
+  if (_openTl) { _openTl.kill(); _openTl = null; }
+  const targets = [
+    '#cinema-info',
+    '#cinema-pbar', '#cinema-tc', '#cinema-td',
+    '#cinema-controls',
+    '#cinema-clock',
+  ];
+  for (const sel of targets) motionKill(sel);
+
+  // État initial : utiliser gsap.set (pas inline CSS) — évite tout flash visible
+  // avant la première frame de la timeline (les éléments seraient sinon rendus
+  // dans leur état CSS naturel pendant 1 frame).
+  motionSet('#cinema-info',     { y: 24, autoAlpha: 0 });
+  motionSet('#cinema-pbar',     { scaleX: 0.7, transformOrigin: 'left center', autoAlpha: 0 });
+  motionSet('#cinema-tc',       { autoAlpha: 0 });
+  motionSet('#cinema-td',       { autoAlpha: 0 });
+  motionSet('#cinema-controls > *', { y: 14, autoAlpha: 0 });
+  motionSet('#cinema-clock',    { autoAlpha: 0 });
+
+  _openTl = timeline({
+    defaults: { ease: eases.PREMIUM },
+    onComplete() {
+      // Libère l'inline transform sur les éléments fixes (info/pbar) pour que
+      // tout repaint déclenché par updateCinema repose sur la CSS d'origine.
+      motionSet('#cinema-info, #cinema-pbar, #cinema-controls > *', { clearProps: 'transform' });
+      _openTl = null;
+    },
+  });
+
+  _openTl
+    .to('#cinema-info', { y: 0, autoAlpha: 1, duration: 0.45 }, 0.08)
+    .to('#cinema-pbar', { scaleX: 1, autoAlpha: 1, duration: 0.50 }, '-=0.30')
+    .to('#cinema-tc',   { autoAlpha: 1, duration: 0.35 }, '<')
+    .to('#cinema-td',   { autoAlpha: 1, duration: 0.35 }, '<')
+    .to('#cinema-controls > *', {
+      y: 0, autoAlpha: 1, duration: 0.42, stagger: 0.035,
+    }, '-=0.32')
+    .to('#cinema-clock', { autoAlpha: 1, duration: 0.55, ease: eases.SNAP }, '-=0.40');
 }
 
 export function closeCinema() {
@@ -484,6 +537,11 @@ export function closeCinema() {
   clearTimeout(_cinSwapOutTimer); _cinSwapOutTimer = null;
   clearTimeout(_cinSwapInTimer);  _cinSwapInTimer  = null;
   clearTimeout(_resizeTimer);     _resizeTimer     = null; // évite applyCinemaBg() orphelin après fermeture
+  // Killer la timeline d'ouverture si elle est encore en vol + reset des inline
+  // styles laissés par gsap (autoAlpha posé display:none / opacity:0 sur l'élément).
+  if (_openTl) { _openTl.kill(); _openTl = null; }
+  motionSet('#cinema-info, #cinema-pbar, #cinema-tc, #cinema-td, #cinema-controls > *, #cinema-clock',
+    { clearProps: 'transform,opacity,visibility,display' });
   // Libérer les refs cachées
   _cinFill = _cinTc = _cinTd = null;
   _lastCinArt = null; // reset pour forcer le swap à la prochaine ouverture
