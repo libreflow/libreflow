@@ -80,7 +80,7 @@
           "$APPDATA/**",
           "$AUDIO/**",
           "$MUSIC/**",
-          "$DOCUMENT/**"
+          "$DOCUMENT/libreflow/**"
         ]
       }
     }
