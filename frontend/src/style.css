@@ -5630,6 +5630,51 @@ html[data-mode="light"] .eq-slider::-moz-range-track { background: var(--bg6); }
   background: var(--c-white); cursor: pointer;
 }
 
+/* ── Cinema mode — light overrides (B3) ──────────────────────────────────────────── */
+html[data-mode="light"] #cinema-overlay {
+  background: linear-gradient(180deg, var(--bg-elevated) 0%, var(--bg-surface) 100%);
+  color: var(--text-primary);
+}
+
+html[data-mode="light"] .cinema-title,
+html[data-mode="light"] .cinema-artist {
+  color: var(--text-primary);
+  text-shadow: 0 1px 2px rgba(255, 255, 255, 0.6);  /* lisibilité sur covers très colorées */
+}
+
+html[data-mode="light"] .cinema-corner-btn {
+  background: rgba(255, 255, 255, 0.55);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  color: var(--text-primary);
+}
+html[data-mode="light"] .cinema-corner-btn:hover {
+  background: rgba(255, 255, 255, 0.75);
+}
+
+html[data-mode="light"] #art-blur-bg {
+  background: rgba(255, 255, 255, 0.45);   /* voile clair au lieu du noir 72% */
+}
+
+html[data-mode="light"] .cinema-next {
+  background: rgba(0, 0, 0, 0.08);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: var(--border-w-sm) solid rgba(0, 0, 0, 0.12);
+}
+
+html[data-mode="light"] .cn-label {
+  color: var(--text-secondary);
+}
+
+html[data-mode="light"] .cn-title {
+  color: var(--text-primary);
+}
+
+html[data-mode="light"] .cn-artist {
+  color: var(--text-secondary);
+}
+
 /* ═══ PANNEAUX OVERLAY (raccourcis + doublons) ═══════════════ */
 #shortcuts-panel, #dupes-panel {
   position: fixed; inset: 0; z-index: calc(var(--z-dropdown) + 100);
