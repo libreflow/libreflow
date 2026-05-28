@@ -1193,6 +1193,16 @@ html[data-mode="light"] #cd-modal .modal-s {
   color: var(--text-secondary);
 }
 
+/* ── Organize modal — light scrim override (B3) ─────────────────────────── */
+html[data-mode="light"] #organize-modal-bg {
+  background: rgba(0, 0, 0, 0.35);
+}
+
+/* ── USB modal — light scrim override (B3) ──────────────────────────────── */
+html[data-mode="light"] #usb-modal-bg {
+  background: rgba(0, 0, 0, 0.35);
+}
+
 /* ── Settings ── */
 html[data-mode="light"] #settings-box    { background:var(--bg2); }
 html[data-mode="light"] .set-section     { border-bottom:var(--border-w-sm) solid var(--bg5); }
