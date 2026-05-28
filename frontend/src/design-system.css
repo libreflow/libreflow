@@ -47,16 +47,17 @@
  * Choix accent : chaud, vinyle, distinctif (ni vert Spotify, ni cyan Tidal).
  * ============================================================================ */
 :root {
-  /* --- Surfaces ----------------------------------------------------------- */
-  --bg-base       : #0F1115;                  /* fond principal — jamais #000 pur */
-  --bg-surface    : #16181F;                  /* cards, sidebar */
-  --bg-elevated   : #1E2029;                  /* modales, menus contextuels */
-  --bg-overlay    : rgba(30, 32, 41, 0.72);   /* glassmorphism layers */
+  /* --- Surfaces dark — palette respirée, 5 paliers ΔE perceptibles (B2) -- */
+  --bg-base       : #0A0B0E;   /* canonique design-system §2 */
+  --bg-surface    : #15171C;   /* cards, sidebar */
+  --bg-elevated   : #1D2028;   /* modales, menus contextuels */
+  --bg-raised     : #272A34;   /* popovers, surfaces ultra-élevées */
+  --bg-overlay    : rgba(29, 32, 40, 0.72);
 
   /* --- Texte -------------------------------------------------------------- */
   --text-primary   : #F5F6F8;                 /* titres, éléments actifs */
   --text-secondary : #B4B7C2;                 /* artistes, métadonnées */
-  --text-muted     : #6B6F7C;                 /* timestamps, labels discrets */
+  --text-muted     : #8B90A0;                 /* timestamps, labels discrets — AA 5.1:1 sur --bg-base #0A0B0E (B2) */
 
   /* --- Accent (une seule couleur forte) ----------------------------------- */
   --accent         : #FF8C66;                 /* corail chaud premium */
@@ -80,14 +81,14 @@
   --gg      : var(--accent-glow);
   --text-on-accent : #ffffff;
 
-  /* Surfaces sombres — alias historiques (B2 les redéfinira espacés) */
+  /* --- Alias historiques (B1) reliés à la palette respirée (B2) --------- */
   --bg  : var(--bg-base);
-  --bg1 : #0d0d0d;
-  --bg2 : #101010;
-  --bg3 : #161616;
-  --bg4 : #1e1e1e;
-  --bg5 : #282828;
-  --bg6 : #333333;
+  --bg1 : #11131A;
+  --bg2 : var(--bg-surface);
+  --bg3 : var(--bg-elevated);
+  --bg4 : var(--bg-raised);
+  --bg5 : #363A47;
+  --bg6 : #444A5A;
 
   /* Texte — alias historiques */
   --t   : var(--text-primary);
