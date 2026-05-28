@@ -1361,6 +1361,9 @@ html[data-mode="light"] #seek-tip  { background:var(--bg-elevated); color:var(--
 /* ── Context submenu (B3.7) ── */
 html[data-mode="light"] .ctx-submenu { background:var(--bg2); border-color:var(--bg5); box-shadow:var(--shadow-ctx-lt); }
 
+/* ── Smart-playlist rule row (B3.7) ── */
+html[data-mode="light"] .spl-rule-row { background:var(--bg3); border-color:var(--bg5); color:var(--t); }
+
 /* ── Base ────────────────────────────────────────────────── */
 html, body {
   height: 100%; width: 100%;

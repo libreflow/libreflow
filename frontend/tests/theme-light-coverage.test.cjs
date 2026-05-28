@@ -36,6 +36,7 @@ const REQUIRED_LIGHT_SURFACES = [
   // B3.7 residual sweep
   ['#seek-tip',          'seek-time tooltip (#seek-tip)'],
   ['.ctx-submenu',       'context menu submenu (.ctx-submenu)'],
+  ['.spl-rule-row',      'smart playlist rule row (.spl-rule-row)'],
 ];
 
 async function run() {
