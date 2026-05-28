@@ -1846,6 +1846,9 @@ section('components/lf-toast-stack.logic.js -- import-smoke');
   // Token integrity (B1)
   await require('./theme-tokens.test.cjs').run();
 
+  // Palette definition + WCAG compliance (B2)
+  await require('./theme-palette.test.cjs').run();
+
   // -- Résultat -----------------------------------------------------------
   console.log('\n═══════════════════════════════════════════════════════════');
   console.log(`  Total : ${_ok + _ko}   OK: ${_ok}   KO: ${_ko}`);
