@@ -367,6 +367,59 @@
   border-radius  : var(--radius-sm);
 }
 
+/* ============================================================================
+ * 12. LIGHT THEME — palette miroir, ΔE équivalent à dark (B2)
+ *
+ * Activé par `html[data-mode="light"]` posé par handlers.js sur clic
+ * du bouton #mode-toggle-btn (titlebar). Les overrides ne couvrent QUE les
+ * tokens chromatiques ; spacing/radius/typo/motion restent communs.
+ * ============================================================================ */
+html[data-mode="light"] {
+  /* Surfaces light — 5 paliers espacés, ΔRGB ~12 entre étages */
+  --bg-base       : #F7F8FA;
+  --bg-surface    : #E5E8EE;
+  --bg-elevated   : #D9DDE6;
+  --bg-raised     : #CAD0DC;
+  --bg-overlay    : rgba(217, 221, 230, 0.78);
+
+  --bg  : var(--bg-base);
+  --bg1 : #EEF0F4;
+  --bg2 : var(--bg-surface);
+  --bg3 : var(--bg-elevated);
+  --bg4 : var(--bg-raised);
+  --bg5 : #B0B6C2;
+  --bg6 : #98A0AE;
+
+  /* Texte light — hiérarchie inverse, chroma neutre (pas l'ochre dark) */
+  --text-primary   : #0F1117;
+  --text-secondary : #3A4050;
+  --text-muted     : #5A6080;
+  --t   : var(--text-primary);
+  --t2  : var(--text-secondary);
+  --t3  : var(--text-muted);
+  --t4  : #95A0B4;
+
+  /* Accent corail : --accent reste constant (la même couleur sur dark et light).
+     Seul --accent-subtle est ajusté pour la lisibilité sur fond clair. */
+  --accent-subtle : rgba(255, 140, 102, 0.14);
+
+  /* Bordures light — alpha noir au lieu d'alpha blanc */
+  --border-subtle  : rgba(0, 0, 0, 0.06);
+  --border-default : rgba(0, 0, 0, 0.12);
+
+  /* Voiles & teintes light */
+  --scrim-1 : rgba(0, 0, 0, 0.15);
+  --scrim-2 : rgba(0, 0, 0, 0.22);
+  --scrim-3 : rgba(0, 0, 0, 0.35);
+  --tint-1  : rgba(0, 0, 0, 0.04);
+  --tint-2  : rgba(0, 0, 0, 0.08);
+  --tint-3  : rgba(0, 0, 0, 0.14);
+
+  /* Halo focus — sur fond clair, blanc plutôt que noir */
+  --focus-halo : rgba(255, 255, 255, 0.55);
+}
+
+
 /* Respect des préférences utilisateur — anti-motion */
 @media (prefers-reduced-motion: reduce) {
   :root {

@@ -968,21 +968,9 @@
 }
 
 /* ── Thème clair ─────────────────────────────────────────── */
+/* --bg, --bg1-6, --t, --t2-4, --focus-halo, --border-subtle/default,
+   --scrim-1/2/3, --tint-1/2/3, --accent-subtle now owned by design-system.css §12 */
 html[data-mode="light"] {
-  /* A11Y-30 : halo focus blanc/clair pour contraster contre l'accent --g sur fond clair */
-  --focus-halo: rgba(255,255,255,.85);
-  /* Palette principale — blanc propre, gris froids */
-  --bg:  #f0f2f5;   /* fond global */
-  --bg1: #e4e7ec;   /* titlebar / player */
-  --bg2: #ffffff;   /* sidebar / modales */
-  --bg3: #f7f8fa;   /* cartes, hover léger */
-  --bg4: #e8eaef;   /* hover, inputs */
-  --bg5: #d0d5df;   /* bordures */
-  --bg6: #b0b8c8;   /* bordures fortes, scrollbar */
-  --t:   #0f1117;   /* texte principal */
-  --t2:  #3a4050;   /* texte secondaire (~7.8:1 on #f0f2f5 — OK) */
-  --t3:  #5a6080;   /* texte tertiaire  (A11Y-12: ~5.4:1 on #f0f2f5) */
-  --t4:  #7e859a;   /* placeholder (WCAG: 3.3:1 on #f0f2f5 — passe SC 1.4.11 Non-text Contrast) */
   --sep: rgba(0,0,0,.07);
   --player-shadow: 0 -1px 0 rgba(0,0,0,.08), 0 -4px 20px rgba(0,0,0,.06);
   color-scheme: light;
