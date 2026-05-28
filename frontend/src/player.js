@@ -894,8 +894,8 @@ function _commitGapless() {
   ensureEQResumed();
   audio.play().catch(e => { if (e?.name !== 'AbortError') console.warn('[gapless] play() failed:', e); });
 
-  _postPlaySideEffects(nt);
   if (radioActive) radioRefillQueue().catch(e => console.warn('[radio] refill failed:', e));
+  _postPlaySideEffects(nt);
   emit(EVENTS.TRACK_CHANGE, { track: nt, idx: curIdx });
   setTimeout(() => scrollToCurrentTrack(), 50);
   if (rgEnabled) analyzeAndApplyRG();
@@ -1035,8 +1035,8 @@ export function checkCrossfade() {
       audioNext.pause(); audioNext.src = '';
 
       if (rgEnabled) analyzeAndApplyRG();
-      _postPlaySideEffects(nextTrack);
       if (radioActive) radioRefillQueue().catch(e => console.warn('[radio] refill failed:', e)); // DOIT précéder TRACK_CHANGE (règle critique)
+      _postPlaySideEffects(nextTrack);
       emit(EVENTS.TRACK_CHANGE, { track: nextTrack, idx: curIdx });
       setTimeout(() => scrollToCurrentTrack(), 50);
       if (queueOpen) renderQueue();
