@@ -24,7 +24,10 @@ const _TOAST_ICONS = {
   loading: html`<svg viewBox="0 0 10 10" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round" width="9" height="9"><path d="M5 1.5A3.5 3.5 0 1 1 1.7 3.7"/></svg>`,
 };
 
+// LOW: aria-label hardcoded FR — to be parameterized via prop when WC i18n strategy is finalized.
 export class LfToastStack extends LitElement {
+  static _seq = 0;
+
   static properties = {
     _items: { state: true },
   };
@@ -91,6 +94,7 @@ export class LfToastStack extends LitElement {
       width: 100%;
       transform-origin: left center;
       background: rgba(255,255,255,.4);
+      transform: scaleX(1);
     }
     @keyframes t-in  { from { transform: translateX(20px); opacity: 0; } }
     @keyframes t-out { to   { transform: translateX(20px); opacity: 0; } }
@@ -100,7 +104,7 @@ export class LfToastStack extends LitElement {
     super();
     /** @type {Array<{ id: number, message: string, type: string, duration: number,
      *                 action?: { label: string, onClick: Function },
-     *                 closable: boolean }>} */
+     *                 closable: boolean, dismissing: boolean }>} */
     this._items = [];
     this._timers = new Map();  // id → setTimeout handle (jamais sérialisé)
   }
@@ -127,6 +131,7 @@ export class LfToastStack extends LitElement {
       duration,
       action: opts.action || null,
       closable,
+      dismissing: false,
     };
 
     this._items = toastReducer(this._items, { type: 'add', item, max: MAX_TOASTS });
@@ -142,13 +147,31 @@ export class LfToastStack extends LitElement {
     };
   }
 
+  /**
+   * Two-phase dismiss: mark item as dismissing (triggers t-out animation),
+   * then finalize removal on animationend. Guards against double-call.
+   */
   _dismiss(id) {
-    const t = this._timers.get(id);
-    if (t) { clearTimeout(t); this._timers.delete(id); }
-    this._items = toastReducer(this._items, { type: 'dismiss', id });
+    // Guard: if already dismissing, do nothing.
+    const existing = this._items.find(t => t.id === id);
+    if (!existing || existing.dismissing) return;
+
+    const handle = this._timers.get(id);
+    if (handle) { clearTimeout(handle); this._timers.delete(id); }
+
+    // Phase 1: mark as dismissing → triggers t-out animation via render().
+    this._items = toastReducer(this._items, { type: 'mark-dismissing', id });
+
     this.dispatchEvent(new CustomEvent('lf-toast-dismiss', {
       detail: { id }, bubbles: true, composed: true,
     }));
+  }
+
+  /**
+   * Phase 2: actually remove the item from state after t-out animation completes.
+   */
+  _finalize(id) {
+    this._items = toastReducer(this._items, { type: 'dismiss', id });
   }
 
   _update(id, message) {
@@ -164,6 +187,9 @@ export class LfToastStack extends LitElement {
     this._dismiss(id);
   }
 
+  // MEDIUM 2: _onActionClick fires AFTER _dismiss by design — the action callback
+  // runs first (in finally), then the dismiss event fires. The lf-toast-action
+  // CustomEvent is dispatched last so listeners can tell apart action vs plain dismiss.
   _onActionClick(ev, id, onClick) {
     ev.stopPropagation();
     try { typeof onClick === 'function' && onClick(); }
@@ -173,14 +199,38 @@ export class LfToastStack extends LitElement {
     }));
   }
 
+  /**
+   * After each Lit DOM commit, find newly added .t-bar elements and start their
+   * shrink animation via two nested rAFs (first rAF commits the scaleX(1) baseline
+   * from CSS; second rAF flips to scaleX(0) so the CSS transition plays).
+   */
+  updated(changedProps) {
+    super.updated(changedProps);
+    if (!this.shadowRoot) return;
+    const bars = this.shadowRoot.querySelectorAll('.t-bar:not([data-bar-started])');
+    bars.forEach(bar => {
+      bar.dataset.barStarted = '1';
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => { bar.style.transform = 'scaleX(0)'; });
+      });
+    });
+  }
+
+  disconnectedCallback() {
+    super.disconnectedCallback();
+    for (const handle of this._timers.values()) clearTimeout(handle);
+    this._timers.clear();
+  }
+
   render() {
     return html`
       ${this._items.map(t => html`
         <div
-          class="t-item t-${t.type}"
+          class="t-item t-${t.type}${t.dismissing ? ' t-out' : ''}"
           role=${t.closable ? 'alert' : 'status'}
           aria-live=${t.closable ? 'assertive' : 'polite'}
           @click=${() => this._onItemClick(t.id)}
+          @animationend=${t.dismissing ? () => this._finalize(t.id) : null}
         >
           <span class="t-icon" aria-hidden="true">${_TOAST_ICONS[t.type] ?? _TOAST_ICONS.info}</span>
           <span class="t-msg">${t.message}</span>
@@ -195,12 +245,11 @@ export class LfToastStack extends LitElement {
                     @click=${(ev) => this._onCloseClick(ev, t.id)}>×</button>
           ` : null}
           <span class="t-bar" aria-hidden="true"
-                style="transition: transform ${t.duration}ms linear; transform: scaleX(0);">
+                style="transition: transform ${t.duration}ms linear;">
           </span>
         </div>
       `)}
     `;
   }
 }
-LfToastStack._seq = 0;
 customElements.define('lf-toast-stack', LfToastStack);

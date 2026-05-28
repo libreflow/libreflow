@@ -1660,6 +1660,17 @@ function toastReducer(items, action) {
       });
       return touched ? next : items;
     }
+    case 'mark-dismissing': {
+      let touched = false;
+      const next = items.map(t => {
+        if (t.id === action.id && !t.dismissing) {
+          touched = true;
+          return { ...t, dismissing: true };
+        }
+        return t;
+      });
+      return touched ? next : items;
+    }
     case 'dismiss': {
       const next = items.filter(t => t.id !== action.id);
       return next.length === items.length ? items : next;
@@ -1714,6 +1725,23 @@ function toastReducer(items, action) {
   const before = [{ id: 1 }, { id: 2 }];
   const after  = toastReducer(before, { type: 'dismiss', id: 999 });
   assert(after === before, 'reducer dismiss: id absent → retourne la même référence');
+
+  // mark-dismissing
+  const md1 = toastReducer([{ id: 1, dismissing: false }, { id: 2, dismissing: false }],
+                            { type: 'mark-dismissing', id: 1 });
+  assert(md1[0].dismissing === true,  'reducer mark-dismissing: cible marquée');
+  assert(md1[1].dismissing === false, 'reducer mark-dismissing: autres non affectés');
+  assert(md1 !== before,              'reducer mark-dismissing: retourne un nouvel array');
+
+  // mark-dismissing idempotent (déjà dismissing → référence stable)
+  const md2src = [{ id: 1, dismissing: true }];
+  const md2 = toastReducer(md2src, { type: 'mark-dismissing', id: 1 });
+  assert(md2 === md2src, 'reducer mark-dismissing: déjà dismissing → no-op identité');
+
+  // mark-dismissing id absent
+  const md3src = [{ id: 1, dismissing: false }];
+  const md3 = toastReducer(md3src, { type: 'mark-dismissing', id: 999 });
+  assert(md3 === md3src, 'reducer mark-dismissing: id absent → no-op identité');
 
   // update
   s = toastReducer([{ id: 1, message: 'old' }], { type: 'update', id: 1, message: 'new' });

@@ -38,11 +38,12 @@ export function resolveDuration(type, explicitDur) {
  * @returns {Array} nouvelle pile
  *
  * Actions supportées :
- *   - { type: 'add',     item: {...} }        → empile
- *   - { type: 'add',     item: {...}, max: N } → empile en respectant cap N (drop oldest)
- *   - { type: 'update',  id, message }        → modifie le message du toast id (no-op si absent)
- *   - { type: 'dismiss', id }                 → retire (no-op si absent)
- *   - autre                                   → renvoie items inchangé
+ *   - { type: 'add',             item: {...} }        → empile
+ *   - { type: 'add',             item: {...}, max: N } → empile en respectant cap N (drop oldest)
+ *   - { type: 'update',          id, message }        → modifie le message du toast id (no-op si absent)
+ *   - { type: 'mark-dismissing', id }                 → active l'animation de sortie (phase 1 dismiss)
+ *   - { type: 'dismiss',         id }                 → retire définitivement (phase 2 dismiss / no-op si absent)
+ *   - autre                                           → renvoie items inchangé
  */
 export function toastReducer(items, action) {
   switch (action && action.type) {
@@ -59,6 +60,17 @@ export function toastReducer(items, action) {
         if (t.id === action.id) {
           touched = true;
           return { ...t, message: action.message };
+        }
+        return t;
+      });
+      return touched ? next : items;
+    }
+    case 'mark-dismissing': {
+      let touched = false;
+      const next = items.map(t => {
+        if (t.id === action.id && !t.dismissing) {
+          touched = true;
+          return { ...t, dismissing: true };
         }
         return t;
       });
