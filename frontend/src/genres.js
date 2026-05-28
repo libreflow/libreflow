@@ -327,17 +327,21 @@ export async function rescanGenres(force = false, silent = false) {
   if (!silent) toast(i18n('t_genre_start', toProcess.length, force));
 
   // Passe 1 — heuristique tags (instantané, par chunks pour ne pas bloquer l'UI)
+  // M-11 FIX: accumuler les pistes modifiées et appeler saveTracks() une seule fois
+  // après tous les chunks — évite de réinitialiser le timer debounce à chaque piste.
   const CHUNK = 200;
   let countHeuristic = 0;
+  const genreModified = [];
   for (let i = 0; i < toProcess.length; i += CHUNK) {
     const end = Math.min(i + CHUNK, toProcess.length);
     for (let j = i; j < end; j++) {
       const t = toProcess[j];
       const guessed = guessGenre(t);
-      if (guessed) { t.genre = guessed; saveTracks(t); countHeuristic++; }
+      if (guessed) { t.genre = guessed; genreModified.push(t); countHeuristic++; }
     }
     await new Promise(r => setTimeout(r, 0));
   }
+  if (genreModified.length) saveTracks(...genreModified);
   invalidateFilterCache(); emit(EVENTS.FILTER_CHANGED, {}); emit(EVENTS.RENDER_LIB, {}); updateStats();
 
   if (!silent && countHeuristic > 0) {
