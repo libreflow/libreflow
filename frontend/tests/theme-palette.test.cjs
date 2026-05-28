@@ -48,6 +48,24 @@ function extractLightOverride(css) {
   return out;
 }
 
+/**
+ * Résout une chaîne d'alias `--token: var(--other-token)` jusqu'à un hex.
+ * Retourne undefined si la chaîne ne se termine pas sur une valeur résoluble.
+ * Si le token n'existe pas dans `primary`, retombe sur `fallback`.
+ */
+function resolveVar(primary, fallback, token, depth = 0) {
+  if (depth > 10) return undefined;  // anti-boucle
+  const val = (primary && primary[token] !== undefined) ? primary[token] : (fallback && fallback[token]);
+  if (val === undefined || val === null) return undefined;
+  const m = /^var\(\s*(--[a-z0-9-]+)\s*(?:,\s*([^)]+))?\s*\)$/i.exec(val.trim());
+  if (m) {
+    const inner = resolveVar(primary, fallback, m[1], depth + 1);
+    if (inner !== undefined) return inner;
+    return m[2] ? m[2].trim() : undefined;   // fallback dans var(..., fallback)
+  }
+  return val.trim();
+}
+
 async function run() {
   let pass = 0, fail = 0;
   const t = async (name, fn) => {
@@ -71,17 +89,26 @@ async function run() {
   });
 
   await t('dark --t on --bg passes AA (4.5:1)', () => {
-    const ratio = contrastRatio(root['--t'], root['--bg']);
+    const fg = resolveVar(root, null, '--t');
+    const bg = resolveVar(root, null, '--bg');
+    assert.ok(fg && bg, `cannot resolve --t (${fg}) or --bg (${bg}) to hex in dark`);
+    const ratio = contrastRatio(fg, bg);
     assert.ok(ratio >= 4.5, `--t on --bg = ${ratio.toFixed(2)}:1 (need 4.5)`);
   });
 
   await t('dark --t3 on --bg passes AA (4.5:1)', () => {
-    const ratio = contrastRatio(root['--t3'], root['--bg']);
+    const fg = resolveVar(root, null, '--t3');
+    const bg = resolveVar(root, null, '--bg');
+    assert.ok(fg && bg, `cannot resolve --t3 (${fg}) or --bg (${bg}) to hex in dark`);
+    const ratio = contrastRatio(fg, bg);
     assert.ok(ratio >= 4.5, `--t3 on --bg = ${ratio.toFixed(2)}:1 (need 4.5)`);
   });
 
   await t('light --t on --bg passes AA (4.5:1)', () => {
-    const ratio = contrastRatio(lightRoot['--t'] || root['--t'], lightRoot['--bg'] || root['--bg']);
+    const fg = resolveVar(lightRoot, root, '--t');
+    const bg = resolveVar(lightRoot, root, '--bg');
+    assert.ok(fg && bg, `cannot resolve light --t (${fg}) or --bg (${bg}) to hex`);
+    const ratio = contrastRatio(fg, bg);
     assert.ok(ratio >= 4.5, `light --t on light --bg = ${ratio.toFixed(2)}:1`);
   });
 
@@ -109,6 +136,8 @@ async function run() {
   ];
   for (const [a, b] of pairs) {
     await t(`dark elevation ${a} -> ${b} has ΔRGB >= 8`, () => {
+      assert.ok(root[a], `missing ${a}`);
+      assert.ok(root[b], `missing ${b}`);
       const d = deltaRGB(root[a], root[b]);
       assert.ok(d >= 8, `${a}→${b} ΔRGB = ${d} (need 8)`);
     });
