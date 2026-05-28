@@ -228,10 +228,12 @@ If a module grows beyond 800 lines, extract a focused sub-module. Do not create 
 
 ### Styling
 
-- Single global stylesheet: `frontend/src/style.css`
-- CSS custom properties (`--lf-*`) for theming, defined on `:root`
-- Shadow DOM encapsulation for Lit components (§18)
-- No CSS-in-JS, no utility frameworks (Tailwind, etc.)
+- **Single source of truth for tokens:** `frontend/src/design-system.css` declares all colors, typography, spacing, radius, shadows, motion, z-index, breakpoints, layout. **No `:root { --... }` block elsewhere.**
+- Component styles live in `frontend/src/style.css` (vanilla selectors) and inside Lit `static styles = css\`...\`` (Shadow DOM, `lf-*` components).
+- CSS custom properties (`--g`, `--bg*`, `--t*`, `--space-*`, `--radius-*`, `--text-*`, `--motion-*`, `--elev-*`) for theming, defined on `:root`.
+- Shadow DOM encapsulation for Lit components (§18). Lit components inherit `:root` tokens by CSS inheritance.
+- No CSS-in-JS, no utility frameworks (Tailwind, etc.).
+- Legacy alias tokens (`--sp-*`, `--r-*`, `--fs-*`, `--dur-*`) remain in `style.css` for one release cycle, then get removed. New code MUST use canonical names.
 
 ### State management
 
