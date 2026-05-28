@@ -88,19 +88,34 @@ static SUBCLASS_CALLS: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU
 //
 // Thread OS dédié (STA). Crée ITaskbarList3 une fois, le garde vivant,
 // traite les commandes via PostThreadMessageW → GetMessageW.
+//
+// Le corps du thread est découpé en quatre sous-fonctions pour rester sous
+// 50 lignes chacune :
+//   com_init_sta()          — initialise COM STA sur le thread appelant
+//   create_taskbar_list3()  — crée et initialise ITaskbarList3
+//   rebuild_image_lists()   — reconstruit les deux HIMAGELISTs
+//   run_message_loop()      — boucle de messages CMD_*
 
-fn com_thread_loop(main_hwnd_raw: isize) {
-    dlog!("[taskbar] COM thread démarré");
-    // Initialiser COM STA sur ce thread (sera uninit à la sortie via guard)
-    struct ComGuard;
-    impl Drop for ComGuard {
-        fn drop(&mut self) {
-            unsafe {
-                CoUninitialize();
-            }
-        }
+// ── Sous-fonction 1 : COM STA init ──────────────────────────────────────────
+
+struct ComGuard;
+impl Drop for ComGuard {
+    fn drop(&mut self) {
+        // SAFETY: CoUninitialize est appelé exactement une fois, depuis le même
+        // thread STA qui a appelé CoInitializeEx — garanti par la durée de vie du
+        // guard (il est créé et droppé sur le COM thread).
+        unsafe { CoUninitialize() }
     }
-    let _com = unsafe {
+}
+
+/// Initialise COM STA sur le thread appelant.
+/// Retourne `Some(ComGuard)` si succès ; `None` si CoInitializeEx échoue
+/// (l'appelant peut continuer sans COM si l'appel échoue avec S_FALSE — déjà init).
+fn com_init_sta() -> Option<ComGuard> {
+    // SAFETY: CoInitializeEx initialise COM sur le thread courant ; l'appel est sûr
+    // sans précondition particulière. Le guard appelera CoUninitialize au drop
+    // depuis le même thread, respectant la symétrie exigée par COM.
+    unsafe {
         let hr = CoInitializeEx(None, COINIT_APARTMENTTHREADED);
         if hr.is_ok() {
             dlog!("[taskbar] CoInitializeEx OK (hr={hr:?})");
@@ -109,56 +124,86 @@ fn com_thread_loop(main_hwnd_raw: isize) {
             eprintln!("[taskbar] CoInitializeEx ERREUR : {hr:?}");
             None
         }
-    };
+    }
+}
 
-    // Créer ITaskbarList3 une fois, le garder vivant toute la durée du thread
-    let tb3 = unsafe {
+// ── Sous-fonction 2 : créer ITaskbarList3 ───────────────────────────────────
+
+/// Crée et initialise ITaskbarList3. Retourne `None` et loggue en cas d'échec.
+/// Doit être appelée depuis un thread STA COM (après `com_init_sta()`).
+fn create_taskbar_list3() -> Option<ITaskbarList3> {
+    // SAFETY: CoCreateInstance et HrInit sont des appels COM standards.
+    // Prérequis : le thread courant est un STA COM (assuré par com_init_sta()).
+    // ITaskbarList3 est un objet COM in-process (CLSCTX_ALL) ; sa durée de vie
+    // est gérée par le système de comptage de références COM (Drop automatique).
+    unsafe {
         match CoCreateInstance::<_, ITaskbarList3>(&TaskbarList, None, CLSCTX_ALL) {
             Err(e) => {
                 eprintln!("[taskbar] CoCreateInstance ERREUR : {e:?}");
-                return;
+                None
             }
             Ok(tb3) => {
                 dlog!("[taskbar] ITaskbarList3 créé");
                 match tb3.HrInit() {
                     Err(e) => {
                         eprintln!("[taskbar] HrInit ERREUR : {e:?}");
-                        return;
+                        None
                     }
                     Ok(_) => {
                         dlog!("[taskbar] HrInit OK");
-                        tb3
+                        Some(tb3)
                     }
                 }
             }
         }
-    };
-
-    // Register thread ID only after ITaskbarList3 is confirmed ready, then self-post
-    // CMD_INIT so the message loop triggers initialization at a guaranteed safe time.
-    // This eliminates the race where the on_window_event Once closure fires before this
-    // thread has published its ID — the Once now only installs the subclass.
-    let thread_id = unsafe { GetCurrentThreadId() };
-    COM_THREAD_ID.set(thread_id).ok();
-    dlog!("[taskbar] COM_THREAD_ID = {thread_id}");
-    unsafe {
-        let _ = PostThreadMessageW(thread_id, CMD_INIT, WPARAM(0), LPARAM(0));
     }
-    dlog!("[taskbar] CMD_INIT posté au COM thread");
+}
 
-    let main_hwnd = HWND(main_hwnd_raw as *mut _);
-    let mut playing = *lock_recover(&PLAYING);
+// ── Sous-fonction 3 : reconstruire les image lists ───────────────────────────
+
+/// Détruit les deux HIMAGELIST précédents (si non NULL) et en construit de nouveaux.
+/// Retourne `(il_play_raw, il_pause_raw)` — isize wrapping du handle Win32 (0 = NULL).
+/// Appelée sur CMD_INIT et CMD_TASKBAR_CREATED (Windows libère ses listes au restart).
+fn rebuild_image_lists(old_play: isize, old_pause: isize) -> (isize, isize) {
+    if old_play != 0 {
+        // SAFETY: old_play est un HIMAGELIST non-NULL produit par build_image_list() ;
+        // on en est propriétaire et on n'y accède plus après ce point.
+        unsafe { let _ = ImageList_Destroy(HIMAGELIST(old_play)); }
+    }
+    if old_pause != 0 {
+        // SAFETY: identique à old_play.
+        unsafe { let _ = ImageList_Destroy(HIMAGELIST(old_pause)); }
+    }
+    let il_play_raw  = build_image_list(false).0 as isize;
+    let il_pause_raw = build_image_list(true).0  as isize;
+    (il_play_raw, il_pause_raw)
+}
+
+// ── Sous-fonction 4 : boucle de messages CMD_* ───────────────────────────────
+
+/// Boucle principale du COM thread.  Reçoit les CMD_* via GetMessageW et met à jour
+/// la thumbnail toolbar en conséquence.  Retourne quand CMD_QUIT est reçu.
+///
+/// # Safety
+///
+/// `tb3` doit être un `ITaskbarList3` valide et initialisé (HrInit succès).
+/// `main_hwnd` doit être un handle de fenêtre Win32 valide et vivant pendant
+/// toute la durée de la boucle (la fenêtre principale de l'application).
+/// Cette fonction doit s'exécuter depuis le thread STA COM du taskbar.
+unsafe fn run_message_loop(tb3: &ITaskbarList3, main_hwnd: HWND) {
+    let mut playing    = *lock_recover(&PLAYING);
     let mut has_tracks = *lock_recover(&HAS_TRACKS);
     // Deux HIMAGELIST mises en cache : icône play (paused) et icône pause (playing).
     // Le rasterizer (~36K itérations × icône) ne tourne donc qu'au boot / taskbar restart,
     // pas à chaque toggle play/pause.
-    let mut il_play_raw: isize = 0; // playing=false → icône ▶
+    let mut il_play_raw:  isize = 0; // playing=false → icône ▶
     let mut il_pause_raw: isize = 0; // playing=true  → icône ⏸
     let mut buttons_added = false;
 
-    // Message loop — reçoit les CMD_* postés via PostThreadMessageW
     loop {
         let mut msg = MSG::default();
+        // SAFETY: GetMessageW attend un message destiné au thread courant.
+        // HWND(null) = tous les messages de ce thread ; plages 0,0 = tous les msg.
         let ret = unsafe { GetMessageW(&mut msg, HWND(std::ptr::null_mut()), 0, 0) };
         // GetMessageW retourne 0 sur WM_QUIT, -1 sur erreur
         match ret.0 {
@@ -169,29 +214,15 @@ fn com_thread_loop(main_hwnd_raw: isize) {
         match msg.message {
             // ── Initialiser ou réinitialiser la toolbar (ex: taskbar restart) ──
             CMD_INIT | CMD_TASKBAR_CREATED => {
-                let _label = if msg.message == CMD_INIT {
-                    "CMD_INIT"
-                } else {
-                    "CMD_TASKBAR_CREATED"
-                };
+                let _label = if msg.message == CMD_INIT { "CMD_INIT" } else { "CMD_TASKBAR_CREATED" };
                 dlog!("[taskbar] {_label} reçu — ThumbBarAddButtons en cours…");
-                playing = *lock_recover(&PLAYING);
+                playing    = *lock_recover(&PLAYING);
                 has_tracks = *lock_recover(&HAS_TRACKS);
                 // (Re)construire les deux image lists. Sur taskbar restart Windows libère
                 // ses HIMAGELIST internes → on doit en fournir des nouvelles.
-                if il_play_raw != 0 {
-                    unsafe {
-                        let _ = ImageList_Destroy(HIMAGELIST(il_play_raw));
-                    }
-                }
-                if il_pause_raw != 0 {
-                    unsafe {
-                        let _ = ImageList_Destroy(HIMAGELIST(il_pause_raw));
-                    }
-                }
-                il_play_raw = build_image_list(false).0 as isize;
-                il_pause_raw = build_image_list(true).0 as isize;
+                (il_play_raw, il_pause_raw) = rebuild_image_lists(il_play_raw, il_pause_raw);
                 let cur_il_raw = if playing { il_pause_raw } else { il_play_raw };
+                // SAFETY: tb3 et main_hwnd sont valides (cf. contrat Safety de cette fn).
                 let ok = unsafe {
                     if cur_il_raw != 0 {
                         let _r = tb3.ThumbBarSetImageList(main_hwnd, HIMAGELIST(cur_il_raw));
@@ -211,12 +242,12 @@ fn com_thread_loop(main_hwnd_raw: isize) {
                 *lock_recover(&PLAYING) = playing;
                 if buttons_added {
                     let cur_il_raw = if playing { il_pause_raw } else { il_play_raw };
+                    // SAFETY: tb3 et main_hwnd sont valides (cf. contrat Safety de cette fn).
                     unsafe {
                         if cur_il_raw != 0 {
                             let _ = tb3.ThumbBarSetImageList(main_hwnd, HIMAGELIST(cur_il_raw));
                         }
-                        let _ =
-                            tb3.ThumbBarUpdateButtons(main_hwnd, &mk_buttons(playing, has_tracks));
+                        let _ = tb3.ThumbBarUpdateButtons(main_hwnd, &mk_buttons(playing, has_tracks));
                     }
                 }
             }
@@ -226,9 +257,9 @@ fn com_thread_loop(main_hwnd_raw: isize) {
                 has_tracks = msg.wParam.0 != 0;
                 *lock_recover(&HAS_TRACKS) = has_tracks;
                 if buttons_added {
+                    // SAFETY: tb3 et main_hwnd sont valides (cf. contrat Safety de cette fn).
                     unsafe {
-                        let _ =
-                            tb3.ThumbBarUpdateButtons(main_hwnd, &mk_buttons(playing, has_tracks));
+                        let _ = tb3.ThumbBarUpdateButtons(main_hwnd, &mk_buttons(playing, has_tracks));
                     }
                 }
             }
@@ -241,16 +272,45 @@ fn com_thread_loop(main_hwnd_raw: isize) {
         }
     }
 
+    // Libérer les image lists en fin de boucle
     if il_play_raw != 0 {
-        unsafe {
-            let _ = ImageList_Destroy(HIMAGELIST(il_play_raw));
-        }
+        // SAFETY: il_play_raw est non-NULL et on en est propriétaire.
+        unsafe { let _ = ImageList_Destroy(HIMAGELIST(il_play_raw)); }
     }
     if il_pause_raw != 0 {
-        unsafe {
-            let _ = ImageList_Destroy(HIMAGELIST(il_pause_raw));
-        }
+        // SAFETY: identique à il_play_raw.
+        unsafe { let _ = ImageList_Destroy(HIMAGELIST(il_pause_raw)); }
     }
+    // tb3 droppé par l'appelant → ITaskbarList3::Release() automatique
+}
+
+// ── Boucle principale du COM thread ─────────────────────────────────────────
+
+fn com_thread_loop(main_hwnd_raw: isize) {
+    dlog!("[taskbar] COM thread démarré");
+    // Initialiser COM STA sur ce thread (sera uninit à la sortie via guard)
+    let _com = com_init_sta();
+
+    // Créer ITaskbarList3 une fois, le garder vivant toute la durée du thread.
+    // Si la création échoue, on sort : rien à faire sans ITaskbarList3.
+    let Some(tb3) = create_taskbar_list3() else { return };
+
+    // Enregistrer le thread ID après que ITaskbarList3 est prêt, puis s'auto-poster
+    // CMD_INIT pour que la boucle de messages déclenche l'initialisation à coup sûr.
+    // SAFETY: GetCurrentThreadId n'a pas de précondition.
+    let thread_id = unsafe { GetCurrentThreadId() };
+    COM_THREAD_ID.set(thread_id).ok();
+    dlog!("[taskbar] COM_THREAD_ID = {thread_id}");
+    // SAFETY: PostThreadMessageW est sûr ici car thread_id est l'ID du thread courant
+    // (vient d'être obtenu) et le message WM_USER est dans la plage réservée privée.
+    unsafe { let _ = PostThreadMessageW(thread_id, CMD_INIT, WPARAM(0), LPARAM(0)); }
+    dlog!("[taskbar] CMD_INIT posté au COM thread");
+
+    let main_hwnd = HWND(main_hwnd_raw as *mut _);
+    // SAFETY: tb3 est initialisé (HrInit succès dans create_taskbar_list3) ;
+    // main_hwnd est le handle de la fenêtre principale, valide pour toute la durée
+    // de l'application ; on est sur le thread STA COM dédié.
+    unsafe { run_message_loop(&tb3, main_hwnd) }
     // tb3 droppé ici → ITaskbarList3::Release() automatique
     // _com droppé ici → CoUninitialize() automatique
 }
@@ -562,6 +622,18 @@ fn make_icon_next() -> HICON {
 }
 
 // ── Subclass proc ─────────────────────────────────────────────────────────────
+//
+// # Safety
+//
+// `subclass_proc` est enregistrée via `SetWindowSubclass` sur le thread propriétaire
+// de la fenêtre. Windows garantit que le callback est invoqué depuis ce même thread
+// et uniquement tant que le subclass est actif (entre `SetWindowSubclass` et
+// `RemoveWindowSubclass`/`DestroyWindow`). Tous les paramètres (`hwnd`, `wparam`,
+// `lparam`) sont fournis par le système et sont valides pour la durée de l'appel.
+// `PostThreadMessageW` est sûr car `tid` est obtenu depuis `COM_THREAD_ID` (OnceLock
+// écrit par le COM thread avant toute utilisation) et le thread COM tourne tant que
+// l'application est ouverte. `DefSubclassProc` est sûr avec les mêmes paramètres
+// reçus du système.
 
 unsafe extern "system" fn subclass_proc(
     hwnd: HWND,
