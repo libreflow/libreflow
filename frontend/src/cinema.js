@@ -440,7 +440,7 @@ export function openCinema() {
   _cinTd   = document.getElementById('cinema-td');
   // Synchroniser le slider volume avec l'état courant de l'audio
   const volSlider = document.getElementById('cinema-vol');
-  if (volSlider) volSlider.value = (typeof masterGainNode !== 'undefined' && masterGainNode) ? masterGainNode.gain.value : (audio ? audio.volume : 1);
+  if (volSlider) volSlider.value = _readVol();
   applyCinemaBg();
   updateCinema();
   _startClock();
@@ -760,7 +760,7 @@ export function updateCinema() {
   _updateNextTrack();
 
   // Sync volume slider + icône (muet / bas / haut)
-  const vol = (typeof masterGainNode !== 'undefined' && masterGainNode) ? masterGainNode.gain.value : audio.volume;
+  const vol = _readVol();
   const muted = audio.muted || vol === 0;
   const volSlider = document.getElementById('cinema-vol');
   if (volSlider && !volSlider.matches(':active')) volSlider.value = vol;
