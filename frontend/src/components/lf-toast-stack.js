@@ -17,11 +17,11 @@ import { toastReducer, resolveDuration, normalizeType } from './lf-toast-stack.l
 const MAX_TOASTS = 5;
 
 const _TOAST_ICONS = {
-  info:    html`<svg viewBox="0 0 10 10" fill="#fff" width="9" height="9"><circle cx="5" cy="3" r="1"/><rect x="4.2" y="4.8" width="1.6" height="3.2" rx=".8"/></svg>`,
-  success: html`<svg viewBox="0 0 10 10" fill="none" stroke="#fff" stroke-width="1.6" stroke-linecap="round" width="9" height="9"><polyline points="2,5.5 4,7.5 8,3"/></svg>`,
-  error:   html`<svg viewBox="0 0 10 10" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round" width="9" height="9"><line x1="2.5" y1="2.5" x2="7.5" y2="7.5"/><line x1="7.5" y1="2.5" x2="2.5" y2="7.5"/></svg>`,
-  warning: html`<svg viewBox="0 0 10 10" fill="#fff" width="9" height="9"><path d="M5 1.5L9 8.5H1Z" fill="none" stroke="#fff" stroke-width="1.4"/><rect x="4.3" y="4" width="1.4" height="2.5" rx=".7"/><circle cx="5" cy="7.3" r=".65"/></svg>`,
-  loading: html`<svg viewBox="0 0 10 10" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round" width="9" height="9"><path d="M5 1.5A3.5 3.5 0 1 1 1.7 3.7"/></svg>`,
+  info:    html`<svg viewBox="0 0 20 20" fill="currentColor" width="20" height="20" aria-hidden="true"><path d="M10 2a8 8 0 1 0 0 16 8 8 0 0 0 0-16zm0 4a1 1 0 1 1 0 2 1 1 0 0 1 0-2zm1.25 8.75h-2.5v-5h2.5v5z"/></svg>`,
+  success: html`<svg viewBox="0 0 20 20" fill="currentColor" width="20" height="20" aria-hidden="true"><path d="M10 2a8 8 0 1 0 0 16 8 8 0 0 0 0-16zm-1.2 11.4L5.4 10l1.2-1.2 2.2 2.2 4.6-4.6 1.2 1.2-5.8 5.8z"/></svg>`,
+  error:   html`<svg viewBox="0 0 20 20" fill="currentColor" width="20" height="20" aria-hidden="true"><path d="M10 2a8 8 0 1 0 0 16 8 8 0 0 0 0-16zm3.5 11.3-1.2 1.2L10 12.2l-2.3 2.3-1.2-1.2L8.8 11 6.5 8.7l1.2-1.2L10 9.8l2.3-2.3 1.2 1.2L11.2 11l2.3 2.3z"/></svg>`,
+  warning: html`<svg viewBox="0 0 20 20" fill="currentColor" width="20" height="20" aria-hidden="true"><path d="M10 2 1 18h18L10 2zm0 5a1 1 0 0 1 1 1v4a1 1 0 1 1-2 0V8a1 1 0 0 1 1-1zm0 8.4a1.1 1.1 0 1 1 0-2.2 1.1 1.1 0 0 1 0 2.2z"/></svg>`,
+  loading: html`<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" width="20" height="20" aria-hidden="true"><path d="M10 2.5A7.5 7.5 0 1 1 3.2 6.8"><animateTransform attributeName="transform" type="rotate" from="0 10 10" to="360 10 10" dur="0.9s" repeatCount="indefinite"/></path></svg>`,
 };
 
 export class LfToastStack extends LitElement {
@@ -32,71 +32,103 @@ export class LfToastStack extends LitElement {
   };
 
   static styles = css`
+    /* Google Material Snackbar look — single dark slab, accent via icon + thin progress bar. */
     :host {
       position: fixed;
-      bottom: 16px;
-      right: 16px;
+      bottom: calc(var(--pb, 96px) + 16px);
+      left: 50%;
+      transform: translateX(-50%);
       display: flex;
-      flex-direction: column;
+      flex-direction: column-reverse;
+      align-items: center;
       gap: 8px;
       z-index: 9999;
       pointer-events: none;
-      font-family: var(--lf-font-ui, system-ui, sans-serif);
+      font-family: var(--lf-font-ui, 'Roboto', system-ui, -apple-system, 'Segoe UI', sans-serif);
     }
     .t-item {
       pointer-events: auto;
       position: relative;
-      color: var(--lf-toast-fg, #fff);
-      padding: 8px 12px;
-      border-radius: 6px;
-      box-shadow: 0 2px 8px rgba(0, 0, 0, .3);
+      background: var(--lf-toast-bg, #2d2e30);
+      color: var(--lf-toast-fg, rgba(255, 255, 255, .92));
+      padding: 14px 16px;
+      border-radius: 4px;
+      box-shadow:
+        0 6px 10px rgba(0, 0, 0, .14),
+        0 1px 18px rgba(0, 0, 0, .12),
+        0 3px 5px rgba(0, 0, 0, .20);
       display: flex;
       align-items: center;
-      gap: 8px;
-      min-width: 220px;
+      gap: 12px;
+      min-width: 288px;
+      max-width: 568px;
+      font-size: 14px;
+      line-height: 20px;
+      letter-spacing: .01786em;
       overflow: hidden;
-      animation: t-in 150ms ease-out;
+      animation: t-in 200ms cubic-bezier(.4, 0, .2, 1);
       cursor: pointer;
     }
-    .t-item.t-out { animation: t-out 200ms ease-in forwards; }
-    .t-info    { background: var(--lf-toast-bg-info,    #222); }
-    .t-success { background: var(--lf-toast-bg-success, #2a7); }
-    .t-error   { background: var(--lf-toast-bg-error,   #a33); }
-    .t-warning { background: var(--lf-toast-bg-warning, #c80); }
-    .t-loading { background: var(--lf-toast-bg-loading, #46a); }
-    .t-icon { flex: 0 0 auto; display: flex; align-items: center; }
+    .t-item.t-out { animation: t-out 150ms cubic-bezier(.4, 0, 1, 1) forwards; }
+
+    /* Per-type accent — applied to the icon glyph and the thin bottom bar only. */
+    .t-info    { --lf-toast-accent: var(--lf-toast-bg-info,    #8ab4f8); }
+    .t-success { --lf-toast-accent: var(--lf-toast-bg-success, #81c995); }
+    .t-error   { --lf-toast-accent: var(--lf-toast-bg-error,   #f28b82); }
+    .t-warning { --lf-toast-accent: var(--lf-toast-bg-warning, #fdd663); }
+    .t-loading { --lf-toast-accent: var(--lf-toast-bg-loading, #8ab4f8); }
+
+    .t-icon {
+      flex: 0 0 auto;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--lf-toast-accent);
+    }
     .t-msg  { flex: 1 1 auto; }
+
     .t-action {
       flex: 0 0 auto;
-      background: rgba(255,255,255,.18);
+      background: transparent;
       border: none;
-      color: inherit;
-      padding: 2px 8px;
+      color: var(--lf-toast-action, var(--lf-toast-accent, #8ab4f8));
+      padding: 6px 8px;
+      margin: -4px -4px -4px 8px;
       border-radius: 4px;
       cursor: pointer;
       font: inherit;
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: .0892857em;
     }
+    .t-action:hover { background: rgba(255, 255, 255, .08); }
+
     .t-close {
       flex: 0 0 auto;
       background: transparent;
       border: none;
-      color: inherit;
-      font-size: 16px;
+      color: rgba(255, 255, 255, .6);
+      font-size: 20px;
       line-height: 1;
       cursor: pointer;
-      padding: 0 4px;
+      padding: 2px 4px;
+      border-radius: 4px;
     }
+    .t-close:hover { color: rgba(255, 255, 255, .92); background: rgba(255, 255, 255, .08); }
+
     .t-bar {
       position: absolute;
       left: 0; bottom: 0;
       height: 2px;
       width: 100%;
       transform-origin: left center;
-      background: rgba(255,255,255,.4);
+      background: var(--lf-toast-accent, rgba(255, 255, 255, .4));
+      opacity: .85;
       transform: scaleX(1);
     }
-    @keyframes t-in  { from { transform: translateX(20px); opacity: 0; } }
-    @keyframes t-out { to   { transform: translateX(20px); opacity: 0; } }
+
+    @keyframes t-in  { from { transform: translateY(20px); opacity: 0; } }
+    @keyframes t-out { to   { transform: translateY(20px); opacity: 0; } }
   `;
 
   constructor() {
