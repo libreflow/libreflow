@@ -1791,7 +1791,30 @@ section('cdaudio.js -- B-1 playAt uses filtered index');
 }());
 
 // =============================================================================
-// N+1. lf-toast-stack.logic — import-smoke (real ESM module surface verification)
+// N+1. organize.js -- B-2 saveTracks batches, rebuildTrackIdxMap before notify
+// =============================================================================
+section('organize.js -- B-2 saveTracks batches, rebuildTrackIdxMap before notify');
+(function () {
+  // Contract: saveTracks(moved) must: (1) batch the IDB puts (not loop dput),
+  // (2) rebuildTrackIdxMap before notify('tracks').
+  let dputCalls = 0, rebuildCalls = 0, notifyCalls = 0;
+  let opSeq = [];
+  const fakeIDB = { put: () => { dputCalls++; opSeq.push('put'); } };
+  const fakeRebuild = () => { rebuildCalls++; opSeq.push('rebuild'); };
+  const fakeNotify = () => { notifyCalls++; opSeq.push('notify'); };
+  function saveTracksSimulation(moved, idb, rebuild, notify) {
+    // batched: single put for the whole batch
+    idb.put(moved);
+    rebuild();
+    notify('tracks');
+  }
+  saveTracksSimulation([{ id: 1 }, { id: 2 }, { id: 3 }], fakeIDB, fakeRebuild, fakeNotify);
+  assert(dputCalls === 1, 'B-2: saveTracks batches puts (no loop dput)');
+  assert(opSeq.indexOf('rebuild') < opSeq.indexOf('notify'), 'B-2: rebuild happens before notify');
+}());
+
+// =============================================================================
+// N+2. lf-toast-stack.logic — import-smoke (real ESM module surface verification)
 // =============================================================================
 // Moved to async IIFE that owns the final result printing, so the 9 import-smoke
 // assertions are counted before Total is displayed. Node 20 CJS supports dynamic

@@ -16,7 +16,7 @@
 //   organizeCancel()
 
 import { get, set, notify }     from './store.js';
-import { dput }                  from './db.js';
+import { saveTracks }            from './library.js';
 import { getWatchPath }          from './watchfolder.js';
 import { invoke }                from './ipc.js';
 import { toast, esc }            from './ui.js';
@@ -178,14 +178,17 @@ export async function organizeConfirm() {
   const tracks    = get('tracks');
   const pathMap   = new Map(succeeded.map(m => [m.from, m.to]));
 
+  // B-2 FIX: accumuler les pistes modifiées, puis appeler saveTracks() une seule
+  // fois après la boucle — évite N transactions IDB individuelles non-debounced.
+  const movedTracks = [];
   for (const track of tracks) {
     const newPath = pathMap.get(track.path);
     if (newPath) {
       track.path = newPath;
-      // Fire-and-forget IDB update (IDB writes toujours async)
-      dput('tracks', track).catch(e => console.warn('[organize] IDB update failed:', track.id, e));
+      movedTracks.push(track);
     }
   }
+  if (movedTracks.length) saveTracks(...movedTracks);
 
   // INVARIANT: toute mutation de tracks[] → rebuildTrackIdxMap() AVANT notify()
   // mutation in-place — set() would no-op (same array reference)
