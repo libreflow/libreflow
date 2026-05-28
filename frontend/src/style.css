@@ -460,11 +460,11 @@
   --r-sm:     var(--radius-xs);    /* 3  → 4 */
   --r-md:     var(--radius-xs);    /* 4 */
   --r-lg:     var(--radius-sm);    /* 5  → 8 */
-  --r:        var(--radius-md);    /* 6  → 12  (rayon standard) */
+  --r:        var(--radius-sm);    /* 6  → 8  (rayon standard) */
   --r-badge:  var(--radius-sm);    /* 7  → 8 */
   --r-art:    var(--radius-sm);    /* 8 */
   --r-9:      var(--radius-sm);    /* 9  → 8 */
-  --r2:       var(--radius-lg);    /* 10 → 16 */
+  --r2:       var(--radius-md);    /* 10 → 12 */
   --r-card:   var(--radius-md);    /* 12 */
   --r3:       var(--radius-md);    /* 14 → 12 */
   --r-4xl:    var(--radius-lg);    /* 16 */
