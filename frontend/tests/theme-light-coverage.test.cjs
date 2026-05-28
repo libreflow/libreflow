@@ -33,6 +33,8 @@ const REQUIRED_LIGHT_SURFACES = [
   ['#mp-ov',             'miniplayer overlay (#mp-ov)'],
   ['.vol-tip',           'volume tooltip (.vol-tip)'],
   ['.cinema-next',       'cinema next panel (.cinema-next)'],
+  // B3.7 residual sweep
+  ['#seek-tip',          'seek-time tooltip (#seek-tip)'],
 ];
 
 async function run() {

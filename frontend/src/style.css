@@ -1355,6 +1355,9 @@ html[data-mode="light"] .top-bar-track { background:var(--bg4); }
 /* Settings — theme-dot base */
 html[data-mode="light"] .theme-dot { border:var(--border-w-lg) solid transparent; }
 
+/* ── Seek-tip (B3.7) ── */
+html[data-mode="light"] #seek-tip  { background:var(--bg-elevated); color:var(--text-primary); border-color:var(--border-default); box-shadow:var(--elev-2); }
+
 /* ── Base ────────────────────────────────────────────────── */
 html, body {
   height: 100%; width: 100%;
