@@ -56,7 +56,11 @@ let _tracksSig = ''; // content hash for selective map invalidation
 // ne pas instancier des centaines de blob: URLs d'un coup. Corrige le bug
 // "certaines pochettes n'apparaissent pas en vue Albums/Artistes".
 const _artTrackById    = new Map();   // trackId → piste représentative (carte grille/drill)
-let   _gridArtObserver = null;
+// R5-B FIX : un IntersectionObserver par grille (Albums / Artistes) au lieu d'un unique
+// partagé. L'ancien code déconnectait l'observer Albums quand la grille Artistes en créait
+// un nouveau, laissant des placeholders non-hydratés dans la grille Albums si les deux
+// grilles étaient rendues dans la même session.
+const _gridArtObservers = new Map(); // gridEl → IntersectionObserver
 
 /**
  * Hydrate les placeholders [data-art-tid] d'un conteneur : résout l'artwork via
@@ -81,15 +85,18 @@ function _hydrateArtPlaceholders(rootEl, { observe = false } = {}) {
   };
   const phs = rootEl.querySelectorAll('[data-art-tid]');
   if (observe && 'IntersectionObserver' in window) {
-    if (_gridArtObserver) _gridArtObserver.disconnect();
-    _gridArtObserver = new IntersectionObserver((entries, obs) => {
+    // R5-B FIX : déconnecter l'observer existant POUR CE rootEl uniquement
+    const prev = _gridArtObservers.get(rootEl);
+    if (prev) prev.disconnect();
+    const obs = new IntersectionObserver((entries, observer) => {
       for (const e of entries) {
         if (!e.isIntersecting) continue;
-        obs.unobserve(e.target);
+        observer.unobserve(e.target);
         hydrate(e.target);
       }
     }, { rootMargin: '300px' });
-    for (const ph of phs) _gridArtObserver.observe(ph);
+    _gridArtObservers.set(rootEl, obs);
+    for (const ph of phs) obs.observe(ph);
   } else {
     for (const ph of phs) hydrate(ph);
   }
@@ -736,27 +743,29 @@ export function renderAlbumsGrid() {
   if (rg) rg.style.display = 'none';
   if (pg) pg.style.display = 'none';
 
-  // Construire la map albums
+  // PERF-H1 FIX : réutiliser _getAlbumMap() (memoïsée) plutôt que de reconstruire
+  // la map depuis tracks[] à chaque navigation dans la grille Albums.
+  // _getAlbumMap() invalide son cache quand tracks[] change (via _computeTracksSig).
   const queryLc = query ? query.toLowerCase() : '';
-  const albumMap = new Map();
-  for (const t of tracks) {
-    const key = t.album || '';
-    if (queryLc && !key.toLowerCase().includes(queryLc) &&
-        !(t.artist || '').toLowerCase().includes(queryLc)) continue;
-    if (!albumMap.has(key)) {
-      albumMap.set(key, { name: key, artist: t.artist || '', artUrl: null, artTrack: null, count: 0, totalDur: 0, year: (t.year && t.year !== 1970) ? t.year : null });
-    }
-    const a = albumMap.get(key);
-    a.count++;
-    a.totalDur += t.duration || 0;
-    // C1 — artUrl : artwork déjà résolu (réutilisé direct). artTrack : 1re piste
-    // porteuse d'artwork, chargée paresseusement par _hydrateArtPlaceholders.
-    if (!a.artUrl && t.art) a.artUrl = t.art;
-    if (!a.artTrack && t._hasArt && !t.noArt) { a.artTrack = t; _artTrackById.set(t.id, t); }
-    if (t.year && t.year !== 1970 && !a.year) a.year = t.year;
+  let albums = _getAlbumMap();
+  // Filtrage par requête : appliquer en post-filtre sur le résultat caché
+  if (queryLc) {
+    albums = albums.filter(a =>
+      (a.key || '').toLowerCase().includes(queryLc) ||
+      (a.artist || '').toLowerCase().includes(queryLc)
+    );
   }
-
-  let albums = [...albumMap.values()];
+  // Adapter les noms de champs pour la couche de rendu (displayName→name, art→artUrl, totalDuration→totalDur)
+  // On crée une vue légère (pas de copie profonde — les valeurs sont scalaires ou refs partagées).
+  albums = albums.map(a => ({
+    name:    a.key,
+    artist:  a.artist,
+    artUrl:  a.art,
+    artTrack: a.artTrack,
+    count:   a.count,
+    totalDur: a.totalDuration,
+    year:    a.year,
+  }));
 
   // Tri
   if (albumSort === 'count')    albums.sort((a, b) => b.count - a.count);

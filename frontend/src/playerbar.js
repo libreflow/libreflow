@@ -157,8 +157,15 @@ export function updateBar() {
   const _shouldNotify = t.id !== _lastNotifTrackId;
   if (_shouldNotify) _lastNotifTrackId = t.id;
 
-  // Phase 2 : opérations lourdes — différées après le premier paint
+  // Phase 2 : opérations lourdes — différées après le premier paint.
+  // RACE-3 FIX : re-lire curIdx depuis le store — la closure `t` peut être périmée
+  // si un changement de piste rapide survient entre Phase 1 et Phase 2.
   requestAnimationFrame(() => setTimeout(() => {
+    const _p2Idx = get('curIdx');
+    if (_p2Idx < 0) return;
+    const _p2Tracks = get('tracks');
+    const t = _p2Tracks[_p2Idx]; // re-read — may differ from Phase-1 t if track changed
+    if (!t) return;
     if (t.artColor) applyArtColor(t.artColor);
     else if (t.art) extractColor(t.art).then(c => { if (c) { t.artColor = c; applyArtColor(c); } }).catch(e => console.warn('[playerbar:extractColor]', e));
     else clearArtColor();

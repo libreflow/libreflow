@@ -289,8 +289,10 @@ function _updateRecentPlays(trackId) {
 function _postPlaySideEffects(track) {
   _updateRecentPlays(track.id);
   logPlay(track);
+  // PERF-H5 FIX : ne pas émettre FILTER_CHANGED (→ renderLib() complet) à chaque lecture.
+  // On invalide seulement le cache ; le re-rendu survient sur le prochain changement de vue.
+  // La vue 'recent' se met à jour naturellement lors de la prochaine navigation.
   invalidateFilterCache();
-  emit(EVENTS.FILTER_CHANGED, {});
   saveCfg();
 }
 
@@ -341,11 +343,9 @@ export async function playAt(filteredIdx, { skipScroll = false, keepQueue = fals
     const t  = fl[filteredIdx];
     if (!t) return;
 
-    // INP-1 : mise à jour visuelle synchrone avant le premier await
     curIdx = trackIdx(t.id);
     set('curIdx', curIdx);
     if (radioActive) radioRefillQueue().catch(e => console.warn('[radio] refill failed:', e)); // DOIT précéder TRACK_CHANGE (règle critique)
-    emit(EVENTS.TRACK_CHANGE, { track: t, idx: curIdx });
 
     const ok = await ensureUrl(t);
     if (!ok) { toast(i18n('t_not_found'), 'error'); return; }
@@ -363,6 +363,9 @@ export async function playAt(filteredIdx, { skipScroll = false, keepQueue = fals
       if (e.name !== 'AbortError') toast(i18n('t_play_start_err', e.message), 'error');
     }
 
+    // RACE-4 FIX : émettre TRACK_CHANGE APRÈS audio.play() pour que les handlers
+    // (updateBar, patchActiveTrack) voient l'audio déjà démarré.
+    emit(EVENTS.TRACK_CHANGE, { track: t, idx: curIdx });
     _postPlaySideEffects(t);
     // Mettre à jour le titre de la fenêtre : "Titre — Artiste | LibreFlow"
     // @ts-ignore — filter(Boolean) narrows to string[] at runtime; join returns string
