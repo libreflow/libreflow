@@ -1849,6 +1849,9 @@ section('components/lf-toast-stack.logic.js -- import-smoke');
   // Palette definition + WCAG compliance (B2)
   await require('./theme-palette.test.cjs').run();
 
+  // Light theme surface coverage (B3)
+  await require('./theme-light-coverage.test.cjs').run();
+
   // -- Résultat -----------------------------------------------------------
   console.log('\n═══════════════════════════════════════════════════════════');
   console.log(`  Total : ${_ok + _ko}   OK: ${_ok}   KO: ${_ko}`);
