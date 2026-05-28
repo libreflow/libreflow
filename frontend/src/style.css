@@ -717,13 +717,13 @@
 }
 
 /* ── Thèmes couleur ──────────────────────────────────────── */
-[data-theme="green"]  { --g:#1db954; --g-rgb:29,185,84;   --gd:rgba(29,185,84,.14);   --gg:rgba(29,185,84,.28); }
+[data-theme="green"]  { --g:#34d399; --g-rgb:52,211,153;  --gd:rgba(52,211,153,.14);  --gg:rgba(52,211,153,.28); }
 [data-theme="blue"]   { --g:#3b82f6; --g-rgb:59,130,246; --gd:rgba(59,130,246,.14); --gg:rgba(59,130,246,.28); }
 [data-theme="purple"] { --g:#a855f7; --g-rgb:168,85,247;  --gd:rgba(168,85,247,.14);  --gg:rgba(168,85,247,.28); }
 [data-theme="red"]    { --g:#ef4444; --g-rgb:239,68,68;   --gd:rgba(239,68,68,.14);   --gg:rgba(239,68,68,.28); }
 [data-theme="orange"] { --g:#f97316; --g-rgb:249,115,22;  --gd:rgba(249,115,22,.14);  --gg:rgba(249,115,22,.28); }
 [data-theme="pink"]   { --g:#ec4899; --g-rgb:236,72,153;  --gd:rgba(236,72,153,.14);  --gg:rgba(236,72,153,.28); }
-[data-theme="cyan"]   { --g:#06b6d4; --g-rgb:6,182,212;   --gd:rgba(6,182,212,.14);   --gg:rgba(6,182,212,.28); }
+[data-theme="cyan"]   { --g:#22d3ee; --g-rgb:34,211,238;  --gd:rgba(34,211,238,.14);  --gg:rgba(34,211,238,.28); }
 
 /* ── Zoom liste de pistes ────────────────────────────────── */
 :root[data-tlist-zoom="compact"]     { --tr-h: 36px; --art-list: 42px; }
