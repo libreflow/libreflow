@@ -1759,12 +1759,43 @@ function toastReducer(items, action) {
   assert(toastReducer(sameRef, null) === sameRef,            'reducer: action null → no-op identité');
 }());
 
-// -- Résultat -----------------------------------------------------------
-console.log('\n═══════════════════════════════════════════════════════════');
-console.log(`  Total : ${_ok + _ko}   OK: ${_ok}   KO: ${_ko}`);
-if (_ko > 0) {
-  console.error(`  ⚠ ${_ko} test(s) en échec`);
-  process.exit(1);
-} else {
-  console.log('  ✓ Tous les tests passent');
-}
+// =============================================================================
+// N+1. lf-toast-stack.logic — import-smoke (real ESM module surface verification)
+// =============================================================================
+// Moved to async IIFE that owns the final result printing, so the 9 import-smoke
+// assertions are counted before Total is displayed. Node 20 CJS supports dynamic
+// import() natively; no transpile needed.
+
+section('components/lf-toast-stack.logic.js -- import-smoke');
+
+(async function () {
+  try {
+    const mod = await import('../src/components/lf-toast-stack.logic.js');
+    assert(typeof mod.toastReducer === 'function',    'real module: toastReducer exported');
+    assert(typeof mod.normalizeType === 'function',   'real module: normalizeType exported');
+    assert(typeof mod.resolveDuration === 'function', 'real module: resolveDuration exported');
+    assert(typeof mod.TOAST_DUR === 'object',         'real module: TOAST_DUR exported');
+    assert(Array.isArray(mod.TOAST_TYPES),            'real module: TOAST_TYPES exported');
+    // Verify real module behaves identically for representative cases
+    assert(mod.normalizeType('error') === 'error',    'real module: normalizeType("error") === "error"');
+    assert(mod.resolveDuration('info') === 3000,      'real module: resolveDuration("info") === 3000');
+    const s1 = mod.toastReducer([], { type: 'add', item: { id: 42 } });
+    assert(s1.length === 1 && s1[0].id === 42,        'real module: toastReducer add works');
+    // mark-dismissing action present in real module
+    const s2 = mod.toastReducer([{ id: 1, dismissing: false }], { type: 'mark-dismissing', id: 1 });
+    assert(s2[0].dismissing === true,                 'real module: toastReducer mark-dismissing works');
+  } catch (e) {
+    console.error('  KO  import-smoke crashed:', e.message);
+    _ko++;
+  }
+
+  // -- Résultat -----------------------------------------------------------
+  console.log('\n═══════════════════════════════════════════════════════════');
+  console.log(`  Total : ${_ok + _ko}   OK: ${_ok}   KO: ${_ko}`);
+  if (_ko > 0) {
+    console.error(`  ⚠ ${_ko} test(s) en échec`);
+    process.exit(1);
+  } else {
+    console.log('  ✓ Tous les tests passent');
+  }
+})();
