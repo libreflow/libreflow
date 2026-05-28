@@ -64,6 +64,9 @@ async function _onDrop(e) {
   const allFiles = [];
 
   // Support dossiers via DataTransferItem API (webkitGetAsEntry)
+  // M-15 FIX: streamer les entrées de dossier par batch de 100 (readEntries max)
+  // au lieu d'accumuler l'arbre complet en RAM avant de traiter — réduit l'empreinte
+  // mémoire pour les dossiers profonds avec de nombreux sous-dossiers.
   async function traverseEntry(entry) {
     if (entry.isFile) {
       await new Promise(res => entry.file(
@@ -72,20 +75,19 @@ async function _onDrop(e) {
       ));
     } else if (entry.isDirectory) {
       const reader = entry.createReader();
-      // readEntries() retourne max 100 entrées à la fois — boucler jusqu'au tableau vide
-      const readAll = () => new Promise(res => {
-        const batch = [];
-        const readBatch = () => {
-          reader.readEntries(async entries => {
-            if (!entries.length) { res(batch); return; }
-            batch.push(...entries);
-            readBatch();
-          }, (err) => { console.warn('[dropin] readEntries error', err); res(batch); });
-        };
-        readBatch();
-      });
-      const allEntries = await readAll();
-      for (const sub of allEntries) await traverseEntry(sub);
+      // Lire et traiter chaque batch de 100 entrées dès sa réception (streaming),
+      // sans attendre la totalité de l'arborescence (évite l'accumulation RAM).
+      let done = false;
+      while (!done) {
+        const batch = await new Promise(res => {
+          reader.readEntries(
+            entries => res(entries),
+            err => { console.warn('[dropin] readEntries error', err); res([]); },
+          );
+        });
+        if (!batch.length) { done = true; break; }
+        for (const sub of batch) await traverseEntry(sub);
+      }
     }
   }
 
