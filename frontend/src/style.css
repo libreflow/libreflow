@@ -2734,14 +2734,23 @@ html[data-mode="light"] .empty-cta {
 .pl-art img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .pl-tr  { min-width: 0; flex: 1; }
 .pl-n   {
-  font-size: var(--fs-md); font-weight: 600; color: var(--t);
-  font-family: var(--font-display);
-  overflow: hidden; /* text-overflow géré par .mq quand pas de défilement */
-  letter-spacing: var(--ls-display); line-height: var(--lh-snug);
+  font-family   : var(--font-display, 'Syne', system-ui, sans-serif);
+  font-size     : 17px;
+  font-weight   : var(--fw-bold, 700);
+  letter-spacing: -0.01em;
+  line-height   : var(--lh-tight, 1.2);
+  color         : var(--text-primary);
+  overflow      : hidden; /* text-overflow géré par .mq quand pas de défilement */
 }
 .pl-a   {
-  font-size: var(--fs-sm); font-weight: 400; color: var(--t2); margin-top: var(--sp-1q); cursor: pointer; transition: color var(--dur) ease;
-  overflow: hidden;
+  font-size     : 13px;
+  font-weight   : var(--fw-medium, 500);
+  color         : var(--text-secondary);
+  line-height   : var(--lh-snug, 1.3);
+  margin-top    : var(--sp-1q);
+  cursor        : pointer;
+  transition    : color var(--dur) ease;
+  overflow      : hidden;
 }
 
 /* ── Marquee — défilement smooth des titres/artistes longs ── */
