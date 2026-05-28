@@ -107,7 +107,7 @@ export { updateBar, updateVolSlider }; // re-exports pour library.js, selection.
 import { saveCfg, saveCfgNow } from './cfgsave.js';
 export { saveCfg, saveCfgNow }; // re-exports pour cinema.js, ctxmenu.js, player.js, etc.
 // ── state.js (ARCH-1) ────────────────────────────────────────────────────────
-import { setCurIdx, setTracks, setLiked, setCtxTrackId } from './state.js';
+import { setCurIdx, setTracks, setLiked, setCtxTrackId, replaceTracks } from './state.js';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -503,8 +503,9 @@ async function boot() {
   if (saved && saved.length > 0) {
     // FIX BUG 4: tracks from DB have no blob URL → must be loaded on demand
     // We store them but flag them as needing file load
-    // PERF-BOOT : traitement par tranches de 500 — évite le blocage main-thread sur grandes bibliothèques
-    const _BOOT_CHUNK = 500;
+    // PERF-BOOT : traitement par tranches — évite le blocage main-thread sur grandes bibliothèques.
+    // BOOT-2 FIX : cadence réduite à 10-20 yields pour 50k pistes (était 100 yields × setTimeout(0) ≈ +400ms).
+    const _BOOT_CHUNK = 5000;
     const _tracksArr = [];
     for (let _bi = 0; _bi < saved.length; _bi += _BOOT_CHUNK) {
       const _slice = saved.slice(_bi, _bi + _BOOT_CHUNK);
@@ -544,8 +545,9 @@ async function boot() {
       if (_bi + _BOOT_CHUNK < saved.length) await new Promise(res => setTimeout(res, 0));
     }
     tracks = _tracksArr;
-    set('tracks', tracks); // Jalon 3/4
-    rebuildTrackIdxMap(); // FIX #3 — doit précéder updateStats(), renderLib() et LIBRARY_UPDATED
+    // RACE-1 FIX : replaceTracks() atomically does set('tracks') + rebuildTrackIdxMap()
+    // so subscribers that call trackIdx() during the set notification see a consistent map.
+    replaceTracks(tracks); // Jalon 3/4
     emit(EVENTS.LIBRARY_UPDATED, { tracks });
 
     // IPC-ASSET : restaurer l'accès asset:// pour chaque dossier parent unique des pistes
