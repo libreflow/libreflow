@@ -1025,7 +1025,10 @@ pub async fn organize_files(
                             });
                             for (done_to, done_from) in completed.iter().rev() {
                                 if let Err(e) = fs::rename(done_to, done_from) {
-                                    eprintln!("[organize] rollback rename failed: {} -> {}: {e}", done_to, done_from);
+                                    eprintln!(
+                                        "[organize] rollback rename failed: {} -> {}: {e}",
+                                        done_to, done_from
+                                    );
                                 }
                             }
                             break 'outer;
@@ -1052,7 +1055,10 @@ pub async fn organize_files(
                         });
                         for (done_to, done_from) in completed.iter().rev() {
                             if let Err(e) = fs::rename(done_to, done_from) {
-                                eprintln!("[organize] rollback rename failed: {} -> {}: {e}", done_to, done_from);
+                                eprintln!(
+                                    "[organize] rollback rename failed: {} -> {}: {e}",
+                                    done_to, done_from
+                                );
                             }
                         }
                         break 'outer;
@@ -1073,7 +1079,10 @@ pub async fn organize_files(
                             });
                             for (done_to, done_from) in completed.iter().rev() {
                                 if let Err(e) = fs::rename(done_to, done_from) {
-                                    eprintln!("[organize] rollback rename failed: {} -> {}: {e}", done_to, done_from);
+                                    eprintln!(
+                                        "[organize] rollback rename failed: {} -> {}: {e}",
+                                        done_to, done_from
+                                    );
                                 }
                             }
                             break 'outer;
@@ -1096,7 +1105,10 @@ pub async fn organize_files(
                         })?;
                         if let Err(e2) = fs::remove_file(&m.from) {
                             if let Err(e3) = fs::remove_file(&m.to) {
-                                eprintln!("[organize] cross-device cleanup failed for {}: {e3}", m.to);
+                                eprintln!(
+                                    "[organize] cross-device cleanup failed for {}: {e3}",
+                                    m.to
+                                );
                             }
                             return Err(std::io::Error::new(
                                 e2.kind(),
