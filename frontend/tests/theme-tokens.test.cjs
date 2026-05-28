@@ -23,6 +23,19 @@ const CANONICAL = [
   '--t', '--t2', '--t3', '--t4',
 ];
 
+// Aliases legacy qui DOIVENT pointer vers un token canonique (pas de valeur littérale).
+const ALIAS_TARGETS = {
+  '--sp-1':  '--space-1',
+  '--sp-2':  '--space-2',
+  '--sp-3':  '--space-3',
+  '--sp-4':  '--space-4',
+  '--r':     '--radius-md',
+  '--r2':    '--radius-lg',
+  '--dur-fast': '--motion-fast',
+  '--dur-mid':  '--motion-base',
+  '--dur-slow': '--motion-slow',
+};
+
 function declaredInRoot(css, token) {
   // Cherche `--token:` à l'intérieur d'un bloc :root { ... }.
   const re = new RegExp(`:root\\s*\\{[^}]*${token.replace(/-/g, '\\-')}\\s*:`, 'g');
@@ -44,6 +57,13 @@ async function run() {
     });
     await t(`style.css :root does NOT declare ${tok}`, () => {
       assert.ok(!declaredInRoot(SS, tok), `duplicate ${tok} in style.css`);
+    });
+  }
+
+  for (const [alias, target] of Object.entries(ALIAS_TARGETS)) {
+    await t(`${alias} aliases ${target}`, () => {
+      const re = new RegExp(`${alias.replace(/-/g, '\\-')}\\s*:\\s*var\\(\\s*${target.replace(/-/g, '\\-')}\\s*\\)`, 'g');
+      assert.ok(re.test(SS), `${alias} should be var(${target}) in style.css`);
     });
   }
 
