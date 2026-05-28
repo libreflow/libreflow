@@ -38,6 +38,7 @@ const REQUIRED_LIGHT_SURFACES = [
   ['.ctx-submenu',       'context menu submenu (.ctx-submenu)'],
   ['.spl-rule-row',      'smart playlist rule row (.spl-rule-row)'],
   ['.spl-results',       'smart playlist search results (.spl-results)'],
+  ['.prompt-input',      'prompt modal input (.prompt-input)'],
 ];
 
 async function run() {
