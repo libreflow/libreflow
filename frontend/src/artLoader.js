@@ -227,3 +227,69 @@ export function cacheArt(t) {
   _cache.set(t.id, url);
   return url;
 }
+
+/**
+ * Résout les bytes bruts de l'artwork depuis le track.
+ * Consolidé depuis library.js (DUP-1) — utilisé par flushTrackBatch pour persister
+ * les bytes en IDB sans dépendre d'une blob: URL (qui peut être révoquée par le LRU).
+ *
+ * Priorité : _artBuf (en mémoire) → IDB → décodage base64 data: URL (migration) → fetch blob:.
+ * Met à jour t._artBuf/_artMime en cache pour éviter des lectures IDB répétées.
+ *
+ * @param {object} t - Track object
+ * @returns {Promise<{buf: ArrayBuffer, mime: string}|null>}
+ */
+export async function resolveArtBuf(t) {
+  if (t._artBuf) return { buf: t._artBuf, mime: t._artMime || 'image/jpeg' };
+  // ARCH-2/PERF-1 : artwork paresseux — art existe en IDB mais pas encore chargé en RAM.
+  if (t._hasArt && !t.noArt && !t.art) {
+    try {
+      const rec = await dget('tracks', t.id);
+      if (rec?.artBuf) {
+        t._artBuf  = rec.artBuf;
+        t._artMime = ART_MIME_ALLOWLIST.includes(rec.artMime) ? rec.artMime : 'image/jpeg';
+        return { buf: t._artBuf, mime: t._artMime };
+      }
+    } catch(e) { console.warn('[resolveArtBuf] IDB fallback failed for', t.id, e); }
+    return null;
+  }
+  if (!t.art)    return null;
+  // Migration : ancienne IDB avec data: URL base64
+  if (t.art.startsWith('data:')) {
+    const rawMime = t.art.match(/data:([^;]+)/)?.[1] || 'image/jpeg';
+    const mime = ART_MIME_ALLOWLIST.includes(rawMime) ? rawMime : 'image/jpeg';
+    const b64  = t.art.split(',')[1];
+    if (!b64) return null;
+    const arr  = Uint8Array.from(atob(b64), c => c.charCodeAt(0));
+    t._artBuf  = arr.buffer;
+    t._artMime = mime;
+    return { buf: t._artBuf, mime };
+  }
+  // Fallback : blob: URL (ne devrait plus arriver post-migration)
+  if (t.art.startsWith('blob:')) {
+    try {
+      const resp = await fetch(t.art);
+      const blob = await resp.blob();
+      t._artBuf  = await blob.arrayBuffer();
+      t._artMime = ART_MIME_ALLOWLIST.includes(blob.type) ? blob.type : 'image/jpeg';
+      return { buf: t._artBuf, mime: t._artMime };
+    } catch(e) {
+      // PM-6 : le blob: URL a été révoqué par le LRU avant flushTrackBatch.
+      // Tenter une récupération depuis IDB.
+      console.warn('[resolveArtBuf] blob fetch failed (URL révoquée?), tentative IDB:', e);
+      if (t._hasArt && !t.noArt) {
+        try {
+          const rec = await dget('tracks', t.id);
+          if (rec?.artBuf) {
+            t._artBuf  = rec.artBuf;
+            t._artMime = ART_MIME_ALLOWLIST.includes(rec.artMime) ? rec.artMime : 'image/jpeg';
+            t.art      = null; // invalider l'URL révoquée pour éviter de retomber ici
+            return { buf: t._artBuf, mime: t._artMime };
+          }
+        } catch(e2) { console.warn('[resolveArtBuf] IDB fallback after blob failure failed for', t.id, e2); }
+      }
+      return null;
+    }
+  }
+  return null;
+}

@@ -11,6 +11,7 @@
     "vite:build": "vite build",
     "gen:cdaudio-cjs": "node -e \"const fs=require('fs');let s=fs.readFileSync('frontend/src/cdaudio_pure.js','utf8');s=s.replace(/^export (function|const|let|var)/gm,'$1').replace(/^export \\{[^}]*\\};?$/gm,'');s+='\\nmodule.exports = { formatTrackLabel, detectNewAudioCds, buildEphemeralCdTrack, cleanupEphemeralForDrive, extractDestPath, calculateRipPercent };\\n';fs.writeFileSync('frontend/src/cdaudio_pure.cjs','// cdaudio_pure.cjs — AUTO-GENERATED from cdaudio_pure.js — do not edit manually.\\n// Run: npm run gen:cdaudio-cjs\\n\\x27use strict\\x27;\\n\\n'+s.replace(/^\\/\\/.*/gm,'').replace(/^\\s*$/gm,'').trimStart());\"",
     "vite:preview": "vite preview",
+    "pretest": "npm run gen:cdaudio-cjs",
     "test": "node frontend/tests/core.test.cjs",
     "test:visual": "playwright test -c frontend/tests/visual/playwright.config.js",
     "test:visual:update": "playwright test -c frontend/tests/visual/playwright.config.js --update-snapshots",

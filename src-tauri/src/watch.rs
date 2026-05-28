@@ -76,11 +76,14 @@ pub fn watch_folder_start(app: AppHandle, path: String) -> Result<(), String> {
                 .paths
                 .iter()
                 .filter(|p| {
-                    let is_audio = p.extension()
+                    let is_audio = p
+                        .extension()
                         .and_then(|e| e.to_str())
                         .map(|e| AUDIO_EXTS.iter().any(|&ext| e.eq_ignore_ascii_case(ext)))
                         .unwrap_or(false);
-                    if !is_audio { return false; }
+                    if !is_audio {
+                        return false;
+                    }
                     // Dossier parent sûr — bloque chemins système / UNC / racines
                     p.parent()
                         .map(|parent| crate::commands::is_safe_dir(parent))

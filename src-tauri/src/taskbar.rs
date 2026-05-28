@@ -168,14 +168,18 @@ fn rebuild_image_lists(old_play: isize, old_pause: isize) -> (isize, isize) {
     if old_play != 0 {
         // SAFETY: old_play est un HIMAGELIST non-NULL produit par build_image_list() ;
         // on en est propriétaire et on n'y accède plus après ce point.
-        unsafe { let _ = ImageList_Destroy(HIMAGELIST(old_play)); }
+        unsafe {
+            let _ = ImageList_Destroy(HIMAGELIST(old_play));
+        }
     }
     if old_pause != 0 {
         // SAFETY: identique à old_play.
-        unsafe { let _ = ImageList_Destroy(HIMAGELIST(old_pause)); }
+        unsafe {
+            let _ = ImageList_Destroy(HIMAGELIST(old_pause));
+        }
     }
-    let il_play_raw  = build_image_list(false).0 as isize;
-    let il_pause_raw = build_image_list(true).0  as isize;
+    let il_play_raw = build_image_list(false).0 as isize;
+    let il_pause_raw = build_image_list(true).0 as isize;
     (il_play_raw, il_pause_raw)
 }
 
@@ -191,12 +195,12 @@ fn rebuild_image_lists(old_play: isize, old_pause: isize) -> (isize, isize) {
 /// toute la durée de la boucle (la fenêtre principale de l'application).
 /// Cette fonction doit s'exécuter depuis le thread STA COM du taskbar.
 unsafe fn run_message_loop(tb3: &ITaskbarList3, main_hwnd: HWND) {
-    let mut playing    = *lock_recover(&PLAYING);
+    let mut playing = *lock_recover(&PLAYING);
     let mut has_tracks = *lock_recover(&HAS_TRACKS);
     // Deux HIMAGELIST mises en cache : icône play (paused) et icône pause (playing).
     // Le rasterizer (~36K itérations × icône) ne tourne donc qu'au boot / taskbar restart,
     // pas à chaque toggle play/pause.
-    let mut il_play_raw:  isize = 0; // playing=false → icône ▶
+    let mut il_play_raw: isize = 0; // playing=false → icône ▶
     let mut il_pause_raw: isize = 0; // playing=true  → icône ⏸
     let mut buttons_added = false;
 
@@ -214,9 +218,13 @@ unsafe fn run_message_loop(tb3: &ITaskbarList3, main_hwnd: HWND) {
         match msg.message {
             // ── Initialiser ou réinitialiser la toolbar (ex: taskbar restart) ──
             CMD_INIT | CMD_TASKBAR_CREATED => {
-                let _label = if msg.message == CMD_INIT { "CMD_INIT" } else { "CMD_TASKBAR_CREATED" };
+                let _label = if msg.message == CMD_INIT {
+                    "CMD_INIT"
+                } else {
+                    "CMD_TASKBAR_CREATED"
+                };
                 dlog!("[taskbar] {_label} reçu — ThumbBarAddButtons en cours…");
-                playing    = *lock_recover(&PLAYING);
+                playing = *lock_recover(&PLAYING);
                 has_tracks = *lock_recover(&HAS_TRACKS);
                 // (Re)construire les deux image lists. Sur taskbar restart Windows libère
                 // ses HIMAGELIST internes → on doit en fournir des nouvelles.
@@ -247,7 +255,8 @@ unsafe fn run_message_loop(tb3: &ITaskbarList3, main_hwnd: HWND) {
                         if cur_il_raw != 0 {
                             let _ = tb3.ThumbBarSetImageList(main_hwnd, HIMAGELIST(cur_il_raw));
                         }
-                        let _ = tb3.ThumbBarUpdateButtons(main_hwnd, &mk_buttons(playing, has_tracks));
+                        let _ =
+                            tb3.ThumbBarUpdateButtons(main_hwnd, &mk_buttons(playing, has_tracks));
                     }
                 }
             }
@@ -259,7 +268,8 @@ unsafe fn run_message_loop(tb3: &ITaskbarList3, main_hwnd: HWND) {
                 if buttons_added {
                     // SAFETY: tb3 et main_hwnd sont valides (cf. contrat Safety de cette fn).
                     unsafe {
-                        let _ = tb3.ThumbBarUpdateButtons(main_hwnd, &mk_buttons(playing, has_tracks));
+                        let _ =
+                            tb3.ThumbBarUpdateButtons(main_hwnd, &mk_buttons(playing, has_tracks));
                     }
                 }
             }
@@ -275,11 +285,15 @@ unsafe fn run_message_loop(tb3: &ITaskbarList3, main_hwnd: HWND) {
     // Libérer les image lists en fin de boucle
     if il_play_raw != 0 {
         // SAFETY: il_play_raw est non-NULL et on en est propriétaire.
-        unsafe { let _ = ImageList_Destroy(HIMAGELIST(il_play_raw)); }
+        unsafe {
+            let _ = ImageList_Destroy(HIMAGELIST(il_play_raw));
+        }
     }
     if il_pause_raw != 0 {
         // SAFETY: identique à il_play_raw.
-        unsafe { let _ = ImageList_Destroy(HIMAGELIST(il_pause_raw)); }
+        unsafe {
+            let _ = ImageList_Destroy(HIMAGELIST(il_pause_raw));
+        }
     }
     // tb3 droppé par l'appelant → ITaskbarList3::Release() automatique
 }
@@ -293,7 +307,9 @@ fn com_thread_loop(main_hwnd_raw: isize) {
 
     // Créer ITaskbarList3 une fois, le garder vivant toute la durée du thread.
     // Si la création échoue, on sort : rien à faire sans ITaskbarList3.
-    let Some(tb3) = create_taskbar_list3() else { return };
+    let Some(tb3) = create_taskbar_list3() else {
+        return;
+    };
 
     // Enregistrer le thread ID après que ITaskbarList3 est prêt, puis s'auto-poster
     // CMD_INIT pour que la boucle de messages déclenche l'initialisation à coup sûr.
@@ -303,7 +319,9 @@ fn com_thread_loop(main_hwnd_raw: isize) {
     dlog!("[taskbar] COM_THREAD_ID = {thread_id}");
     // SAFETY: PostThreadMessageW est sûr ici car thread_id est l'ID du thread courant
     // (vient d'être obtenu) et le message WM_USER est dans la plage réservée privée.
-    unsafe { let _ = PostThreadMessageW(thread_id, CMD_INIT, WPARAM(0), LPARAM(0)); }
+    unsafe {
+        let _ = PostThreadMessageW(thread_id, CMD_INIT, WPARAM(0), LPARAM(0));
+    }
     dlog!("[taskbar] CMD_INIT posté au COM thread");
 
     let main_hwnd = HWND(main_hwnd_raw as *mut _);

@@ -29,8 +29,12 @@ pub async fn open_mini(app: &AppHandle) -> Result<(), String> {
 
 fn do_open(app: &AppHandle) -> Result<(), String> {
     if let Some(w) = app.get_webview_window("mini") {
-        if let Err(e) = w.show() { eprintln!("[mini:do_open] show failed: {e}"); }
-        if let Err(e) = w.set_focus() { eprintln!("[mini:do_open] set_focus failed: {e}"); }
+        if let Err(e) = w.show() {
+            eprintln!("[mini:do_open] show failed: {e}");
+        }
+        if let Err(e) = w.set_focus() {
+            eprintln!("[mini:do_open] set_focus failed: {e}");
+        }
         return Ok(());
     }
     create_mini_window(app)
@@ -85,7 +89,9 @@ pub async fn mini_close(app: AppHandle) -> Result<(), String> {
     }
     // Restaurer la fenêtre principale
     if let Some(main_win) = app.get_webview_window("main") {
-        if let Err(e) = main_win.unminimize() { eprintln!("[mini_close] unminimize failed: {e}"); }
+        if let Err(e) = main_win.unminimize() {
+            eprintln!("[mini_close] unminimize failed: {e}");
+        }
         // Remettre une taille raisonnable si la fenêtre était minimisée
         // (le plugin window-state restaure la dernière taille connue,
         //  mais après unminimize la fenêtre reste parfois à taille nulle)
@@ -108,7 +114,9 @@ pub async fn mini_close(app: AppHandle) -> Result<(), String> {
                 }
             }
         }
-        if let Err(e) = main_win.set_focus() { eprintln!("[mini_close] set_focus failed: {e}"); }
+        if let Err(e) = main_win.set_focus() {
+            eprintln!("[mini_close] set_focus failed: {e}");
+        }
     }
     Ok(())
 }

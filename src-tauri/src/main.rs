@@ -77,17 +77,17 @@ fn main() {
             ];
             for (key, cmd) in shortcuts {
                 let cmd_str = cmd.to_string();
-                if let Err(e) = app
-                    .global_shortcut()
-                    .on_shortcut(key, move |app, _shortcut, event| {
-                        if event.state == ShortcutState::Pressed {
-                            if let Some(win) = app.get_webview_window("main") {
-                                if let Err(e) = win.emit("media-key", &cmd_str) {
-                                    eprintln!("[shortcuts] emit media-key failed: {e}");
+                if let Err(e) =
+                    app.global_shortcut()
+                        .on_shortcut(key, move |app, _shortcut, event| {
+                            if event.state == ShortcutState::Pressed {
+                                if let Some(win) = app.get_webview_window("main") {
+                                    if let Err(e) = win.emit("media-key", &cmd_str) {
+                                        eprintln!("[shortcuts] emit media-key failed: {e}");
+                                    }
                                 }
                             }
-                        }
-                    })
+                        })
                 {
                     eprintln!("[shortcuts] on_shortcut({key}) failed: {e}");
                 }
@@ -134,8 +134,11 @@ fn main() {
                                                     }
                                                 }
                                             });
-                                            if let Err(e) = mini_win.emit("mini-will-close", &token) {
-                                                eprintln!("[main] emit mini-will-close failed: {e}");
+                                            if let Err(e) = mini_win.emit("mini-will-close", &token)
+                                            {
+                                                eprintln!(
+                                                    "[main] emit mini-will-close failed: {e}"
+                                                );
                                             }
                                             let _ = tokio::time::timeout(
                                                 std::time::Duration::from_millis(300),

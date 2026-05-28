@@ -24,7 +24,7 @@ import { normTag, mainArtist, fmtd, validYear }       from './utils.js';
 
 import { adjustShuffleQAfterDelete }                  from './player.js';
 import { VIRT }                                       from './virt.js';
-import { cacheArt, ART_MIME_ALLOWLIST }               from './artLoader.js';
+import { cacheArt, resolveArtBuf, ART_MIME_ALLOWLIST } from './artLoader.js';
 import { get, set }                                   from './store.js'; // Phase 4
 import { toast, toastWithAction }                                        from './ui.js';
 import { setCurIdx, removeTrackAt } from './state.js';
@@ -264,72 +264,6 @@ export async function loadTagsBg(t, rustTags = null) {
 
 
 
-/**
- * Résout les bytes bruts de l'artwork depuis le track.
- * Priorité : _artBuf (nouveau) → décodage base64 data: URL (migration IDB)
- *          → fetch blob: URL (compat ultime, ne devrait plus arriver).
- * Met à jour t._artBuf/_artMime pour accélérer les appels suivants.
- * @returns {{ buf: ArrayBuffer, mime: string }|null}
- */
-async function _resolveArtBuf(t) {
-  if (t._artBuf) return { buf: t._artBuf, mime: t._artMime || 'image/jpeg' };
-  // ARCH-2/PERF-1 : artwork paresseux — art existe en IDB mais pas encore chargé en RAM.
-  // Lire depuis IDB pour éviter d'écraser artBuf avec null lors du flush (flushTrackBatch).
-  // Après ce fetch, _artBuf est mis en cache pour éviter les lectures IDB répétées.
-  if (t._hasArt && !t.noArt && !t.art) {
-    try {
-      const rec = await dget('tracks', t.id);
-      if (rec?.artBuf) {
-        t._artBuf  = rec.artBuf;
-        t._artMime = ART_MIME_ALLOWLIST.includes(rec.artMime) ? rec.artMime : 'image/jpeg';
-        return { buf: t._artBuf, mime: t._artMime };
-      }
-    } catch(e) { console.warn('[_resolveArtBuf] IDB fallback failed for', t.id, e); }
-    return null;
-  }
-  if (!t.art)    return null;
-  // Migration : ancienne IDB avec data: URL base64
-  if (t.art.startsWith('data:')) {
-    const rawMime = t.art.match(/data:([^;]+)/)?.[1] || 'image/jpeg';
-    const mime = ART_MIME_ALLOWLIST.includes(rawMime) ? rawMime : 'image/jpeg';
-    const b64  = t.art.split(',')[1];
-    if (!b64) return null;
-    const arr  = Uint8Array.from(atob(b64), c => c.charCodeAt(0)); // P10 — évite la boucle manuelle
-    t._artBuf  = arr.buffer;
-    t._artMime = mime;
-    return { buf: t._artBuf, mime };
-  }
-  // Fallback : blob: URL (ne devrait plus arriver post-migration)
-  if (t.art.startsWith('blob:')) {
-    try {
-      const resp = await fetch(t.art);
-      const blob = await resp.blob();
-      t._artBuf  = await blob.arrayBuffer();
-      t._artMime = ART_MIME_ALLOWLIST.includes(blob.type) ? blob.type : 'image/jpeg';
-      return { buf: t._artBuf, mime: t._artMime };
-    } catch(e) {
-      // PM-6 : le blob: URL a été révoqué par le cache LRU avant que flushTrackBatch puisse
-      // le lire. t.art est encore non-null (la révocation ne le remet pas à null dans ce
-      // chemin), donc le fallback IDB du bloc _hasArt ci-dessus n'a pas été atteint.
-      // On tente une dernière récupération depuis IDB plutôt que de perdre l'artwork.
-      console.warn('[library] _resolveArtBuf blob fetch failed (URL révoquée?), tentative IDB:', e);
-      if (t._hasArt && !t.noArt) {
-        try {
-          const rec = await dget('tracks', t.id);
-          if (rec?.artBuf) {
-            t._artBuf  = rec.artBuf;
-            t._artMime = ART_MIME_ALLOWLIST.includes(rec.artMime) ? rec.artMime : 'image/jpeg';
-            t.art      = null; // invalider l'URL révoquée pour éviter de retomber ici
-            return { buf: t._artBuf, mime: t._artMime };
-          }
-        } catch(e2) { console.warn('[_resolveArtBuf] IDB fallback after blob failure failed for', t.id, e2); }
-      }
-      return null;
-    }
-  }
-  return null;
-}
-
 // ── Persistence ───────────────────────────────────────────────────────────────
 
 /**
@@ -344,7 +278,7 @@ export async function flushTrackBatch() {
 
   const records = await Promise.all(batch.map(async t => {
     if (!_trackIdxMap.has(t.id)) return null;
-    const artRes = t.noArt ? null : await _resolveArtBuf(t);
+    const artRes = t.noArt ? null : await resolveArtBuf(t);
     return {
       id: t.id, name: t.name, artist: t.artist, artistFull: t.artistFull || t.artist,
       album: t.album, ext: t.ext, path: t.path, duration: t.duration, dateAdded: t.dateAdded,
@@ -452,7 +386,7 @@ export async function saveTrackNow(t) {
   _saveTrackBatch.delete(t.id);
   if (!DB) return;
   try {
-    const artRes = t.noArt ? null : await _resolveArtBuf(t);
+    const artRes = t.noArt ? null : await resolveArtBuf(t);
     const rec = {
       id: t.id, name: t.name, artist: t.artist, artistFull: t.artistFull || t.artist,
       album: t.album, ext: t.ext, path: t.path, duration: t.duration, dateAdded: t.dateAdded,
