@@ -1635,6 +1635,11 @@ function normalizeType(t) {
   return TOAST_TYPES.includes(t) ? t : 'info';
 }
 
+/**
+ * @param {string} type
+ * @param {number} [explicitDur] — only used if a strictly positive number.
+ *        0 and negative values fall back to the type default duration.
+ */
 function resolveDuration(type, explicitDur) {
   if (typeof explicitDur === 'number' && explicitDur > 0) return explicitDur;
   return TOAST_DUR[normalizeType(type)];

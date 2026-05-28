@@ -24,7 +24,6 @@ const _TOAST_ICONS = {
   loading: html`<svg viewBox="0 0 10 10" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round" width="9" height="9"><path d="M5 1.5A3.5 3.5 0 1 1 1.7 3.7"/></svg>`,
 };
 
-// LOW: aria-label hardcoded FR — to be parameterized via prop when WC i18n strategy is finalized.
 export class LfToastStack extends LitElement {
   static _seq = 0;
 
@@ -222,6 +221,7 @@ export class LfToastStack extends LitElement {
     this._timers.clear();
   }
 
+  // LOW: aria-label hardcoded FR — to be parameterized via prop when WC i18n strategy is finalized.
   render() {
     return html`
       ${this._items.map(t => html`
