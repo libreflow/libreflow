@@ -35,6 +35,7 @@ const REQUIRED_LIGHT_SURFACES = [
   ['.cinema-next',       'cinema next panel (.cinema-next)'],
   // B3.7 residual sweep
   ['#seek-tip',          'seek-time tooltip (#seek-tip)'],
+  ['.ctx-submenu',       'context menu submenu (.ctx-submenu)'],
 ];
 
 async function run() {
