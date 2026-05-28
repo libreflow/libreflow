@@ -67,6 +67,14 @@ async function run() {
     });
   }
 
+  await t('style.css has <=36 hardcoded hex colors outside :root', async () => {
+    const cleaned = SS
+      .replace(/:root\s*\{[^}]*\}/g, '')
+      .replace(/@keyframes\s+\w+\s*\{[\s\S]*?\n\}/g, '');
+    const hexes = cleaned.match(/#[0-9a-f]{3}([0-9a-f]{3})?\b/gi) || [];
+    assert.ok(hexes.length <= 36, `style.css has ${hexes.length} hardcoded hex colors outside :root — exceed cap of 36`);
+  });
+
   if (fail) { console.log(`\nTHEME-TOKENS FAIL: ${fail}/${pass + fail}`); process.exit(1); }
   console.log(`\nTHEME-TOKENS OK: ${pass}/${pass}`);
 }

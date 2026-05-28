@@ -62,15 +62,15 @@
   align-items: center;
   justify-content: center;
   gap: 16px;
-  background: var(--bg, #080808);
-  color: var(--t2, #b8ada5);
+  background: var(--bg);
+  color: var(--t2);
   z-index: 99999;
   font-size: 13px;
   letter-spacing: .04em;
 }
 #boot-spinner svg {
   animation: boot-spin 1.2s linear infinite;
-  color: var(--g, #3b82f6);
+  color: var(--g);
 }
 @keyframes boot-spin {
   from { transform: rotate(0deg); }
@@ -775,7 +775,7 @@
   border-radius: 1px;
   min-height: 1px;
 }
-.eq-bar-boost { background: var(--g, #64b4ff); }
+.eq-bar-boost { background: var(--g); }
 .eq-bar-cut   { background: rgba(255,80,80,0.7); }
 .eq-bar-flat  { background: rgba(255,255,255,0.15); }
 .eq-device-del-btn {
@@ -804,7 +804,7 @@
 }
 #organize-modal-bg.on { visibility: visible; opacity: 1; pointer-events: auto; }
 #organize-modal {
-  background: var(--bg2, #1e1e2e);
+  background: var(--bg2);
   border-radius: 12px;
   padding: 24px;
   width: min(520px, 90vw);
@@ -839,7 +839,7 @@
   white-space: nowrap;
   color: var(--t2);
 }
-.organize-move-to   { color: var(--g, #64b4ff); }
+.organize-move-to   { color: var(--g); }
 .organize-move-arrow { color: var(--t3); text-align: center; }
 .organize-move-more {
   font-size: 11px;
@@ -866,7 +866,7 @@
 }
 #usb-modal-bg.on { visibility: visible; opacity: 1; pointer-events: auto; }
 #usb-modal {
-  background: var(--bg2, #1e1e2e);
+  background: var(--bg2);
   border-radius: 12px;
   padding: 24px;
   width: min(480px, 90vw);
@@ -935,7 +935,7 @@
 }
 #cd-modal-bg.on { visibility: visible; opacity: 1; pointer-events: auto; }
 #cd-modal {
-  background: var(--bg2, #1e1e2e);
+  background: var(--bg2);
   border-radius: 12px;
   padding: 24px;
   width: min(480px, 90vw);
@@ -958,7 +958,7 @@
 #cd-progress-fill {
   height: 100%;
   width: 0%;
-  background: var(--accent, #4a9eff);
+  background: var(--accent);
   transition: width 200ms ease-out;
 }
 #cd-progress-text {
@@ -1181,11 +1181,11 @@ html[data-mode="light"] .modal-btn     { background:var(--bg3); color:var(--t2);
 html[data-mode="light"] .modal-btn:hover { background:var(--bg4); }
 html[data-mode="light"] .modal-btn.primary { background:var(--g); color: var(--text-on-accent); border:none; }
 html[data-mode="light"] .mbtn.cancel  { background:var(--bg4); color:var(--t2); }
-html[data-mode="light"] #organize-modal { background: var(--bg2, #f5f5f8); }
+html[data-mode="light"] #organize-modal { background: var(--bg2); }
 html[data-mode="light"] .organize-move-row { border-color: rgba(0,0,0,0.06); }
 html[data-mode="light"] .organize-move-from,
 html[data-mode="light"] .organize-move-to   { color: var(--t2); }
-html[data-mode="light"] #usb-modal { background: var(--bg2, #f5f5f8); }
+html[data-mode="light"] #usb-modal { background: var(--bg2); }
 
 /* ── Settings ── */
 html[data-mode="light"] #settings-box    { background:var(--bg2); }
@@ -6993,7 +6993,7 @@ html[data-mode="light"] .rv-start-btn  { background: var(--g); }
 }
 
 #vnp.art-light {
-  --vnp-text:  #1a1a1a;
+  --vnp-text:  var(--c-1a);
   --vnp-text2: rgba(26,26,26,.65);
 }
 
@@ -7218,7 +7218,7 @@ html[data-mode="light"] .rv-start-btn  { background: var(--g); }
   border-radius: 50%;
   border: none;
   background: rgba(255,255,255,.12);
-  color: var(--vnp-text, #f0ece4);
+  color: var(--vnp-text);
   display: flex;
   align-items: center;
   justify-content: center;
