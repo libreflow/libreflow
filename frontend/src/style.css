@@ -186,19 +186,6 @@
   --t3:  #8a847f;     /* Tertiary — metadata   (WCAG: 5.4:1 on bg, 4.5:1 on bg3 hover, 4.5:1 on bg4) */
   --t4:  #2e2e2e;     /* Ghost — invisible par défaut */
 
-  /* Rôles sémantiques surface/texte — alias des --bg* / --t* (audit §2.6).
-     Couche CIBLE additive : permet aux re-skins de référencer un rôle plutôt
-     qu'un palier. La réduction 7→4 des --bg* eux-mêmes exige une vérification
-     de contraste WCAG (texte --t3 ne doit jamais passer sur une surface plus
-     claire que --bg4) et n'est donc PAS faite à l'aveugle ici. */
-  --surface-base:    var(--bg);
-  --surface-raised:  var(--bg3);
-  --surface-overlay: var(--bg4);
-  --surface-hover:   var(--bg5);
-  --fg-primary:      var(--t);
-  --fg-secondary:    var(--t2);
-  --fg-muted:        var(--t3);
-
   /* États — sémantique partagée (toasts, trends, stop/delete) */
   --red:     #e84040;
   --red-rgb: 232,64,64;
