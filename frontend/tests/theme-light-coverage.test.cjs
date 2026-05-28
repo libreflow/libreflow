@@ -37,6 +37,7 @@ const REQUIRED_LIGHT_SURFACES = [
   ['#seek-tip',          'seek-time tooltip (#seek-tip)'],
   ['.ctx-submenu',       'context menu submenu (.ctx-submenu)'],
   ['.spl-rule-row',      'smart playlist rule row (.spl-rule-row)'],
+  ['.spl-results',       'smart playlist search results (.spl-results)'],
 ];
 
 async function run() {
