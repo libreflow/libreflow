@@ -1623,12 +1623,184 @@ section('scripts/bench-compare.js — runtime gate');
   }
 }());
 
-// -- Résultat -----------------------------------------------------------
-console.log('\n═══════════════════════════════════════════════════════════');
-console.log(`  Total : ${_ok + _ko}   OK: ${_ok}   KO: ${_ko}`);
-if (_ko > 0) {
-  console.error(`  ⚠ ${_ko} test(s) en échec`);
-  process.exit(1);
-} else {
-  console.log('  ✓ Tous les tests passent');
+// =============================================================================
+// N. lf-toast-stack.logic — reducer pur
+// =============================================================================
+section('components/lf-toast-stack.logic.js -- toastReducer');
+
+const TOAST_TYPES = ['info', 'success', 'error', 'warning', 'loading'];
+const TOAST_DUR = { info: 3000, success: 2600, error: 8000, warning: 6000, loading: 120000 };
+
+function normalizeType(t) {
+  return TOAST_TYPES.includes(t) ? t : 'info';
 }
+
+/**
+ * @param {string} type
+ * @param {number} [explicitDur] — only used if a strictly positive number.
+ *        0 and negative values fall back to the type default duration.
+ */
+function resolveDuration(type, explicitDur) {
+  if (typeof explicitDur === 'number' && explicitDur > 0) return explicitDur;
+  return TOAST_DUR[normalizeType(type)];
+}
+
+function toastReducer(items, action) {
+  switch (action && action.type) {
+    case 'add': {
+      const next = [...items, action.item];
+      if (typeof action.max === 'number' && next.length > action.max) {
+        return next.slice(next.length - action.max);
+      }
+      return next;
+    }
+    case 'update': {
+      let touched = false;
+      const next = items.map(t => {
+        if (t.id === action.id) {
+          touched = true;
+          return { ...t, message: action.message };
+        }
+        return t;
+      });
+      return touched ? next : items;
+    }
+    case 'mark-dismissing': {
+      let touched = false;
+      const next = items.map(t => {
+        if (t.id === action.id && !t.dismissing) {
+          touched = true;
+          return { ...t, dismissing: true };
+        }
+        return t;
+      });
+      return touched ? next : items;
+    }
+    case 'dismiss': {
+      const next = items.filter(t => t.id !== action.id);
+      return next.length === items.length ? items : next;
+    }
+    default:
+      return items;
+  }
+}
+
+(function () {
+  // normalizeType
+  assert(normalizeType('info')     === 'info',    'normalizeType: info → info');
+  assert(normalizeType('unknown')  === 'info',    'normalizeType: inconnu → info');
+  assert(normalizeType(undefined)  === 'info',    'normalizeType: undefined → info');
+  assert(normalizeType('error')    === 'error',   'normalizeType: error → error');
+
+  // resolveDuration
+  assert(resolveDuration('info')         === 3000,   'resolveDuration: info défaut');
+  assert(resolveDuration('error')        === 8000,   'resolveDuration: error défaut');
+  assert(resolveDuration('loading')      === 120000, 'resolveDuration: loading défaut');
+  assert(resolveDuration('info', 5000)   === 5000,   'resolveDuration: override explicite');
+  assert(resolveDuration('info', 0)      === 3000,   'resolveDuration: 0 → défaut');
+  assert(resolveDuration('info', -1)     === 3000,   'resolveDuration: négatif → défaut');
+  assert(resolveDuration('xxx', undefined) === 3000, 'resolveDuration: type inconnu → info default');
+
+  // reducer add
+  let s = [];
+  s = toastReducer(s, { type: 'add', item: { id: 1, message: 'a', type: 'info' } });
+  assert(s.length === 1 && s[0].id === 1, 'reducer add: empile 1');
+
+  s = toastReducer(s, { type: 'add', item: { id: 2, message: 'b', type: 'info' } });
+  assert(s.length === 2 && s[1].id === 2, 'reducer add: empile 2 (ordre préservé)');
+
+  // immutabilité
+  const prev = s;
+  s = toastReducer(s, { type: 'add', item: { id: 3, message: 'c', type: 'info' } });
+  assert(prev.length === 2, 'reducer add: ne mute pas l\'array source');
+  assert(s !== prev, 'reducer add: retourne un nouvel array');
+
+  // cap max
+  s = toastReducer([{ id: 1 }, { id: 2 }, { id: 3 }, { id: 4 }, { id: 5 }],
+                   { type: 'add', item: { id: 6 }, max: 5 });
+  assert(s.length === 5,            'reducer add+max: respecte la cap');
+  assert(s[0].id === 2,             'reducer add+max: drop le plus ancien');
+  assert(s[4].id === 6,             'reducer add+max: garde le plus récent');
+
+  // dismiss
+  s = toastReducer([{ id: 1 }, { id: 2 }, { id: 3 }], { type: 'dismiss', id: 2 });
+  assert(s.length === 2 && !s.find(t => t.id === 2), 'reducer dismiss: retire l\'id');
+
+  // dismiss id absent
+  const before = [{ id: 1 }, { id: 2 }];
+  const after  = toastReducer(before, { type: 'dismiss', id: 999 });
+  assert(after === before, 'reducer dismiss: id absent → retourne la même référence');
+
+  // mark-dismissing
+  const md1 = toastReducer([{ id: 1, dismissing: false }, { id: 2, dismissing: false }],
+                            { type: 'mark-dismissing', id: 1 });
+  assert(md1[0].dismissing === true,  'reducer mark-dismissing: cible marquée');
+  assert(md1[1].dismissing === false, 'reducer mark-dismissing: autres non affectés');
+  assert(md1 !== before,              'reducer mark-dismissing: retourne un nouvel array');
+
+  // mark-dismissing idempotent (déjà dismissing → référence stable)
+  const md2src = [{ id: 1, dismissing: true }];
+  const md2 = toastReducer(md2src, { type: 'mark-dismissing', id: 1 });
+  assert(md2 === md2src, 'reducer mark-dismissing: déjà dismissing → no-op identité');
+
+  // mark-dismissing id absent
+  const md3src = [{ id: 1, dismissing: false }];
+  const md3 = toastReducer(md3src, { type: 'mark-dismissing', id: 999 });
+  assert(md3 === md3src, 'reducer mark-dismissing: id absent → no-op identité');
+
+  // update
+  s = toastReducer([{ id: 1, message: 'old' }], { type: 'update', id: 1, message: 'new' });
+  assert(s[0].message === 'new',   'reducer update: message changé');
+  assert(s.length === 1,           'reducer update: pile inchangée en taille');
+
+  // update id absent
+  const beforeU = [{ id: 1, message: 'x' }];
+  const afterU  = toastReducer(beforeU, { type: 'update', id: 999, message: 'y' });
+  assert(afterU === beforeU, 'reducer update: id absent → retourne la même référence');
+
+  // action inconnue
+  const sameRef = [{ id: 1 }];
+  assert(toastReducer(sameRef, { type: 'wat' }) === sameRef, 'reducer: action inconnue → no-op identité');
+  assert(toastReducer(sameRef, null) === sameRef,            'reducer: action null → no-op identité');
+}());
+
+// =============================================================================
+// N+1. lf-toast-stack.logic — import-smoke (real ESM module surface verification)
+// =============================================================================
+// Moved to async IIFE that owns the final result printing, so the 9 import-smoke
+// assertions are counted before Total is displayed. Node 20 CJS supports dynamic
+// import() natively; no transpile needed.
+
+section('components/lf-toast-stack.logic.js -- import-smoke');
+
+(async function () {
+  try {
+    const mod = await import('../src/components/lf-toast-stack.logic.js');
+    assert(typeof mod.toastReducer === 'function',    'real module: toastReducer exported');
+    assert(typeof mod.normalizeType === 'function',   'real module: normalizeType exported');
+    assert(typeof mod.resolveDuration === 'function', 'real module: resolveDuration exported');
+    assert(typeof mod.TOAST_DUR === 'object',         'real module: TOAST_DUR exported');
+    assert(Array.isArray(mod.TOAST_TYPES),            'real module: TOAST_TYPES exported');
+    // Verify real module behaves identically for representative cases
+    assert(mod.normalizeType('error') === 'error',    'real module: normalizeType("error") === "error"');
+    assert(mod.resolveDuration('info') === 3000,      'real module: resolveDuration("info") === 3000');
+    const s1 = mod.toastReducer([], { type: 'add', item: { id: 42 } });
+    assert(s1.length === 1 && s1[0].id === 42,        'real module: toastReducer add works');
+    // mark-dismissing action present in real module
+    const s2 = mod.toastReducer([{ id: 1, dismissing: false }], { type: 'mark-dismissing', id: 1 });
+    assert(s2[0].dismissing === true,                 'real module: toastReducer mark-dismissing works');
+  } catch (e) {
+    console.error('  KO  import-smoke crashed:', e.message);
+    _ko++;
+  }
+
+  // -- Résultat -----------------------------------------------------------
+  console.log('\n═══════════════════════════════════════════════════════════');
+  console.log(`  Total : ${_ok + _ko}   OK: ${_ok}   KO: ${_ko}`);
+  if (_ko > 0) {
+    console.error(`  ⚠ ${_ko} test(s) en échec`);
+    process.exit(1);
+  } else {
+    console.log('  ✓ Tous les tests passent');
+  }
+})();
