@@ -50,7 +50,6 @@ function _getStack() {
  */
 export function toast(m, type = 'info') {
   const stack = _getStack();
-  if (!stack) return Object.assign(() => {}, { update: () => {} });
   const handle = stack.push({ message: m, type });
   const remove = () => handle.remove();
   remove.update = (newMsg) => handle.update(newMsg);
@@ -68,7 +67,6 @@ export function toast(m, type = 'info') {
  */
 export function toastWithAction(m, type = 'info', label, onAction, dur) {
   const stack = _getStack();
-  if (!stack) return Object.assign(() => {}, { update: () => {} });
   const handle = stack.push({
     message: m,
     type,
