@@ -26,6 +26,31 @@ import { emit, EVENTS } from './bus.js';
 import { toast } from './ui.js';
 import { setView } from './views.js';
 
+// ── Focus trap ──────────────────────────────────────────────
+// FOCUS-1 FIX : trap Tab/Shift+Tab dans #queue-panel quand ouvert.
+const _FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
+let _queueFocusTrap = null;
+
+function _setupQueueFocusTrap(panel) {
+  if (_queueFocusTrap) panel.removeEventListener('keydown', _queueFocusTrap);
+  _queueFocusTrap = (e) => {
+    if (e.code !== 'Tab') return;
+    const focusable = [...panel.querySelectorAll(_FOCUSABLE)].filter(el => {
+      const r = el.getBoundingClientRect();
+      return r.width > 0 && r.height > 0;
+    });
+    if (!focusable.length) return;
+    const first = focusable[0];
+    const last  = focusable[focusable.length - 1];
+    if (e.shiftKey && document.activeElement === first) {
+      e.preventDefault(); last.focus();
+    } else if (!e.shiftKey && document.activeElement === last) {
+      e.preventDefault(); first.focus();
+    }
+  };
+  panel.addEventListener('keydown', _queueFocusTrap);
+}
+
 // ── State ────────────────────────────────────────────────────
 export let queueOpen  = false;
 // BUG FIX : mémoriser l'ordre de la queue après un drag-drop utilisateur.
@@ -162,7 +187,11 @@ export function toggleQueue() {
   document.getElementById('app')?.classList.toggle('panel-queue-open', queueOpen);
   if (eqOpen) closeEQ();
   if (queueOpen && document.getElementById('settings-panel').classList.contains('on')) closeSettings();
-  if (queueOpen) { renderQueue(); initQueueDrag(); }
+  if (queueOpen) {
+    renderQueue(); initQueueDrag();
+    const panel = document.getElementById('queue-panel');
+    if (panel) _setupQueueFocusTrap(panel);
+  }
 }
 
 export function closeQueue() {

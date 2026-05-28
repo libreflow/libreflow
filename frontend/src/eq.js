@@ -259,6 +259,30 @@ export function setMasterGain(v, immediate = false) {
   }
 }
 
+// ── Focus trap EQ (FOCUS-1) ───────────────────────────────────────────────────
+const _EQ_FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
+let _eqFocusTrap = null;
+
+function _setupEQFocusTrap(panel) {
+  if (_eqFocusTrap) panel.removeEventListener('keydown', _eqFocusTrap);
+  _eqFocusTrap = (e) => {
+    if (e.code !== 'Tab') return;
+    const focusable = [...panel.querySelectorAll(_EQ_FOCUSABLE)].filter(el => {
+      const r = el.getBoundingClientRect();
+      return r.width > 0 && r.height > 0;
+    });
+    if (!focusable.length) return;
+    const first = focusable[0];
+    const last  = focusable[focusable.length - 1];
+    if (e.shiftKey && document.activeElement === first) {
+      e.preventDefault(); last.focus();
+    } else if (!e.shiftKey && document.activeElement === last) {
+      e.preventDefault(); first.focus();
+    }
+  };
+  panel.addEventListener('keydown', _eqFocusTrap);
+}
+
 // ── toggleEQ / closeEQ ───────────────────────────────────────────────────────
 export function toggleEQ() {
   const panel = document.getElementById('eq-panel');
@@ -272,6 +296,8 @@ export function toggleEQ() {
     renderEQBands();
     _drawEQCurve();
     _syncEQUI();
+    // FOCUS-1 FIX : activer le trap quand le panneau est ouvert
+    _setupEQFocusTrap(panel);
   }
 }
 
