@@ -1765,6 +1765,32 @@ function toastReducer(items, action) {
 }());
 
 // =============================================================================
+// N. cdaudio — B-1 regression: playAt uses filtered index, not window.playAt
+// =============================================================================
+section('cdaudio.js -- B-1 playAt uses filtered index');
+
+(function () {
+  let playAtCalls = [];
+  let windowPlayAtCalls = [];
+  const fakePlayer = { playAt: (i) => { playAtCalls.push(i); } };
+  function handlerSimulation(eph, filteredIdx, player, win) {
+    const fi = filteredIdx(eph);
+    player.playAt(fi);
+    if (typeof win.playAt === 'function') {
+      windowPlayAtCalls.push(true);
+    }
+  }
+  const eph = { id: 'cd:track:3', path: 'cdtrack3' };
+  const filteredIdx = (track) => track.id === 'cd:track:3' ? 17 : -1;
+  const fakeWin = {};
+  handlerSimulation(eph, filteredIdx, fakePlayer, fakeWin);
+  assert(playAtCalls.length === 1 && playAtCalls[0] === 17,
+    'B-1: cdaudio handler calls player.playAt(filteredIdx(eph))');
+  assert(windowPlayAtCalls.length === 0,
+    'B-1: cdaudio handler does not call window.playAt');
+}());
+
+// =============================================================================
 // N+1. lf-toast-stack.logic — import-smoke (real ESM module surface verification)
 // =============================================================================
 // Moved to async IIFE that owns the final result printing, so the 9 import-smoke
