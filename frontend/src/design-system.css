@@ -1,0 +1,305 @@
+/* ============================================================================
+ * LibreFlow — Design System
+ * ----------------------------------------------------------------------------
+ * Source de vérité unique pour TOUS les tokens visuels.
+ *
+ * Règle d'or : aucun composant Lit ou module CSS de LibreFlow n'écrit une
+ * valeur hardcodée. Tout passe par une variable définie ici.
+ *
+ * Adaptation PC / Mobile :
+ *   <html data-platform="pc">     → layout desktop, hover, sidebar 240px
+ *   <html data-platform="mobile"> → layout mobile, tap targets 48px, bottom nav
+ *
+ * L'attribut `data-platform` est posé au runtime par le boot Tauri.
+ * Aucune media query côté composant — les tokens font tout le travail.
+ *
+ * Contrainte projet (CLAUDE.md §15 / §12) :
+ *   Pas d'@import url() externe. Les fonts sont déjà chargées localement
+ *   par style.css via @font-face (/fonts/syne-*.woff2, /fonts/dm-sans-*.woff2).
+ *   Les packages @fontsource/syne et @fontsource/dm-sans sont déclarés
+ *   dans package.json — aucune connexion réseau.
+ *
+ * Sommaire :
+ *   1. Breakpoints
+ *   2. Couleurs (surfaces, texte, accent, bordures, états)
+ *   3. Typographie (familles, tailles fluides, weights)
+ *   4. Spacing (échelle base 4px)
+ *   5. Tailles composants audio (adaptatif PC/Mobile)
+ *   6. Border radius
+ *   7. Ombres
+ *   8. Transitions & easings
+ *   9. Z-index
+ *  10. Layout grid (adaptatif PC/Mobile)
+ *  11. Defaults sains (sélection, scrollbars, focus, reduced-motion)
+ * ============================================================================ */
+
+
+/* ----------------------------------------------------- 1. Breakpoints ----- */
+:root {
+  --screen-mobile : 768px;   /* < 768px = mobile */
+  --screen-pc     : 1280px;  /* >= 1280px = pc full */
+}
+
+
+/* ============================================================================
+ * 2. COULEURS — Thème dark premium audio
+ * Palette : charbon bleuté profond + accent corail chaud (#FF8C66).
+ * Choix accent : chaud, vinyle, distinctif (ni vert Spotify, ni cyan Tidal).
+ * ============================================================================ */
+:root {
+  /* --- Surfaces ----------------------------------------------------------- */
+  --bg-base       : #0F1115;                  /* fond principal — jamais #000 pur */
+  --bg-surface    : #16181F;                  /* cards, sidebar */
+  --bg-elevated   : #1E2029;                  /* modales, menus contextuels */
+  --bg-overlay    : rgba(30, 32, 41, 0.72);   /* glassmorphism layers */
+
+  /* --- Texte -------------------------------------------------------------- */
+  --text-primary   : #F5F6F8;                 /* titres, éléments actifs */
+  --text-secondary : #B4B7C2;                 /* artistes, métadonnées */
+  --text-muted     : #6B6F7C;                 /* timestamps, labels discrets */
+
+  /* --- Accent (une seule couleur forte) ----------------------------------- */
+  --accent         : #FF8C66;                 /* corail chaud premium */
+  --accent-hover   : #FFA37F;                 /* +10% luminosité */
+  --accent-glow    : rgba(255, 140, 102, 0.45);
+  --accent-subtle  : rgba(255, 140, 102, 0.10);
+
+  /* --- Bordures ----------------------------------------------------------- */
+  --border-subtle  : rgba(255, 255, 255, 0.06);
+  --border-default : rgba(255, 255, 255, 0.10);
+  --border-focus   : var(--accent);
+
+  /* --- États -------------------------------------------------------------- */
+  --state-playing  : var(--accent);
+  --state-error    : #FF5A5F;
+  --state-success  : #4ADE80;
+}
+
+
+/* ============================================================================
+ * 3. TYPOGRAPHIE — fonts locales (déjà chargées par style.css), offline
+ * Display : Syne     — caractériel, géométrique, signature premium audio.
+ * Body    : DM Sans  — humaniste moderne, ultra-lisible UI.
+ * Mono    : système  — ui-monospace prioritaire, pas de fetch externe.
+ * Tailles fluides via clamp(min, vw, max).
+ * ============================================================================ */
+:root {
+  /* --- Familles ----------------------------------------------------------- */
+  --font-display : 'Syne', system-ui, -apple-system, Segoe UI, sans-serif;
+  --font-body    : 'DM Sans', system-ui, -apple-system, Segoe UI, sans-serif;
+  --font-mono    : ui-monospace, 'SF Mono', 'Cascadia Mono', Consolas, Menlo, monospace;
+
+  /* --- Tailles fluides ---------------------------------------------------- */
+  --text-xs      : clamp(10px, 1vw,   12px);
+  --text-sm      : clamp(12px, 1.2vw, 14px);
+  --text-base    : clamp(13px, 1.4vw, 15px);
+  --text-md      : clamp(15px, 1.6vw, 18px);
+  --text-lg      : clamp(18px, 2vw,   24px);
+  --text-xl      : clamp(22px, 2.8vw, 32px);
+  --text-display : clamp(28px, 4vw,   48px);
+
+  /* --- Weights ------------------------------------------------------------ */
+  --weight-regular  : 400;
+  --weight-medium   : 500;
+  --weight-semibold : 600;
+  --weight-bold     : 700;
+
+  /* --- Line heights ------------------------------------------------------- */
+  --leading-tight   : 1.15;
+  --leading-snug    : 1.35;
+  --leading-normal  : 1.55;
+
+  /* --- Letter spacing ----------------------------------------------------- */
+  --tracking-tight  : -0.01em;
+  --tracking-normal : 0;
+  --tracking-wide   : 0.04em;
+}
+
+
+/* ============================================================================
+ * 4. SPACING — base 4px
+ * ============================================================================ */
+:root {
+  --space-1  : 4px;
+  --space-2  : 8px;
+  --space-3  : 12px;
+  --space-4  : 16px;
+  --space-5  : 20px;
+  --space-6  : 24px;
+  --space-8  : 32px;
+  --space-10 : 40px;
+  --space-12 : 48px;
+  --space-16 : 64px;
+}
+
+
+/* ============================================================================
+ * 5. TAILLES COMPOSANTS AUDIO — adaptatives PC / Mobile
+ * Le boot Tauri pose data-platform="pc" ou "mobile" sur <html>.
+ * Les composants Lit lisent ces variables sans media query interne.
+ * ============================================================================ */
+
+/* --- Defaults (PC desktop) — appliqués si data-platform absent ----------- */
+:root {
+  --player-height    : 90px;
+  --sidebar-width    : 240px;
+  --track-row-height : 48px;
+  --cover-sm         : 40px;
+  --cover-md         : 56px;
+  --cover-lg         : 200px;
+  --control-size     : 36px;
+  --tap-target       : 36px;
+}
+
+:root[data-platform="pc"] {
+  --player-height    : 90px;
+  --sidebar-width    : 240px;
+  --track-row-height : 48px;
+  --cover-sm         : 40px;
+  --cover-md         : 56px;
+  --cover-lg         : 200px;
+  --control-size     : 36px;
+  --tap-target       : 36px;
+}
+
+:root[data-platform="mobile"] {
+  --player-height    : 64px;
+  --sidebar-width    : 0px;       /* bottom nav remplace la sidebar */
+  --track-row-height : 64px;
+  --cover-sm         : 48px;
+  --cover-md         : 64px;
+  --cover-lg         : 100%;      /* cover full-width sur mobile */
+  --control-size     : 48px;
+  --tap-target       : 48px;      /* minimum tactile WCAG */
+}
+
+
+/* ============================================================================
+ * 6. BORDER RADIUS
+ * ============================================================================ */
+:root {
+  --radius-sm   : 6px;    /* tags, badges */
+  --radius-md   : 10px;   /* boutons, inputs */
+  --radius-lg   : 14px;   /* cards, covers */
+  --radius-xl   : 20px;   /* modales, drawers */
+  --radius-full : 9999px; /* pills, avatars */
+}
+
+
+/* ============================================================================
+ * 7. OMBRES — multicouches, tintées avec l'accent
+ * --shadow-glow utilise --accent-glow pour le cover art en lecture.
+ * ============================================================================ */
+:root {
+  --shadow-sm :
+    0 1px 2px rgba(0, 0, 0, 0.30),
+    0 1px 1px rgba(0, 0, 0, 0.20);
+
+  --shadow-md :
+    0 4px 8px  rgba(0, 0, 0, 0.32),
+    0 2px 4px  rgba(0, 0, 0, 0.20);
+
+  --shadow-lg :
+    0 12px 28px rgba(0, 0, 0, 0.45),
+    0 6px  12px rgba(0, 0, 0, 0.28);
+
+  --shadow-glow :
+    0 8px 32px var(--accent-glow),
+    0 2px 8px  rgba(0, 0, 0, 0.40);
+}
+
+
+/* ============================================================================
+ * 8. TRANSITIONS & ANIMATIONS
+ * ============================================================================ */
+:root {
+  --duration-fast  : 100ms;
+  --duration-base  : 150ms;
+  --duration-slow  : 250ms;
+  --duration-enter : 300ms;
+
+  --ease-default : cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-spring  : cubic-bezier(0.34, 1.56, 0.64, 1);
+  --ease-out     : cubic-bezier(0, 0, 0.2, 1);
+}
+
+
+/* ============================================================================
+ * 9. Z-INDEX SYSTEM
+ * Pas de magic numbers : tout passe par ces tokens.
+ * --z-player toujours au-dessus de tout (le player ne disparaît jamais).
+ * ============================================================================ */
+:root {
+  --z-base     : 0;
+  --z-raised   : 10;
+  --z-dropdown : 100;
+  --z-sticky   : 200;
+  --z-overlay  : 300;
+  --z-modal    : 400;
+  --z-toast    : 500;
+  --z-player   : 600;
+}
+
+
+/* ============================================================================
+ * 10. LAYOUT GRID — adaptatif PC / Mobile
+ * PC     : sidebar + main, player en bas full-width.
+ * Mobile : main, player, bottom nav empilés.
+ * ============================================================================ */
+:root[data-platform="pc"] {
+  --layout-columns  : 240px 1fr;
+  --layout-rows     : 1fr 90px;
+  --layout-areas    : "sidebar main" "player player";
+  --content-max     : 1600px;
+  --content-padding : var(--space-8);
+}
+
+:root[data-platform="mobile"] {
+  --layout-columns  : 1fr;
+  --layout-rows     : 1fr 64px 56px;
+  --layout-areas    : "main" "player" "nav";
+  --content-max     : 100%;
+  --content-padding : var(--space-4);
+}
+
+
+/* ============================================================================
+ * 11. DEFAULTS SAINS
+ * Sélection, scrollbars tintées, focus ring, reduced-motion.
+ * ============================================================================ */
+
+::selection {
+  background : var(--accent-subtle);
+  color      : var(--text-primary);
+}
+
+/* Scrollbars (Webkit + Firefox) */
+* {
+  scrollbar-width : thin;
+  scrollbar-color : var(--border-default) transparent;
+}
+*::-webkit-scrollbar              { width: 10px; height: 10px; }
+*::-webkit-scrollbar-track        { background: transparent; }
+*::-webkit-scrollbar-thumb        { background: var(--border-default); border-radius: var(--radius-full); }
+*::-webkit-scrollbar-thumb:hover  { background: var(--text-muted); }
+
+/* Focus ring uniforme — respect du token --border-focus */
+:focus-visible {
+  outline        : 2px solid var(--border-focus);
+  outline-offset : 2px;
+  border-radius  : var(--radius-sm);
+}
+
+/* Respect des préférences utilisateur — anti-motion */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --duration-fast  : 0ms;
+    --duration-base  : 0ms;
+    --duration-slow  : 0ms;
+    --duration-enter : 0ms;
+  }
+  *, *::before, *::after {
+    animation-duration  : 0ms !important;
+    transition-duration : 0ms !important;
+  }
+}
