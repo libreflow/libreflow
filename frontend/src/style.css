@@ -1175,6 +1175,24 @@ html[data-mode="light"] .organize-move-from,
 html[data-mode="light"] .organize-move-to   { color: var(--t2); }
 html[data-mode="light"] #usb-modal { background: var(--bg2); }
 
+/* ── CD audio modal — light overrides (B3) ──────────────────────────────── */
+html[data-mode="light"] #cd-modal-bg {
+  background: rgba(0, 0, 0, 0.35);
+}
+html[data-mode="light"] #cd-modal {
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+  box-shadow: var(--shadow-modal2);
+  border: 1px solid var(--border-default);
+}
+html[data-mode="light"] #cd-modal .modal-h {
+  color: var(--text-primary);
+  border-bottom: 1px solid var(--border-subtle);
+}
+html[data-mode="light"] #cd-modal .modal-s {
+  color: var(--text-secondary);
+}
+
 /* ── Settings ── */
 html[data-mode="light"] #settings-box    { background:var(--bg2); }
 html[data-mode="light"] .set-section     { border-bottom:var(--border-w-sm) solid var(--bg5); }
