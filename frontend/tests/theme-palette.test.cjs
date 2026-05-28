@@ -112,6 +112,14 @@ async function run() {
     assert.ok(ratio >= 4.5, `light --t on light --bg = ${ratio.toFixed(2)}:1`);
   });
 
+  await t('welcome description (uses --t3) passes AA in light', () => {
+    const fg = resolveVar(lightRoot, root, '--t3');
+    const bg = resolveVar(lightRoot, root, '--bg');
+    assert.ok(fg && bg, `cannot resolve light --t3 (${fg}) or --bg (${bg})`);
+    const ratio = contrastRatio(fg, bg);
+    assert.ok(ratio >= 4.5, `light --t3 = ${ratio.toFixed(2)}:1 (need 4.5)`);
+  });
+
   await t('cyan accent on dark bg-surface passes AA (4.5:1)', () => {
     const ratio = contrastRatio('#22d3ee', '#15171C');
     assert.ok(ratio >= 4.5, `cyan on bg-surface = ${ratio.toFixed(2)}:1`);

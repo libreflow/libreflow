@@ -1260,8 +1260,8 @@ html[data-mode="light"] ::-webkit-scrollbar-thumb:hover { background:var(--bg6);
 /* ── Contraste & accessibilité light mode ── */
 /* Labels de section sidebar (BIBLIOTHÈQUE, EXPLORER…) — 10px/700, contraste insuffisant avec t3 */
 html[data-mode="light"] .sb-section-lbl { color: rgba(0,0,0,.64); }
-/* Descriptions feature cards welcome screen — 11px sur blanc, t3 = 3.6:1 (< 4.5:1 requis) */
-html[data-mode="light"] .wf-d           { color: var(--t2); }
+/* Descriptions feature cards welcome screen — 11px sur blanc, t3 = 5.4:1 (AA-compliant) */
+html[data-mode="light"] .wf-d           { color: var(--t3); }
 /* Boutons droit du player (file d'attente, vitesse…) */
 html[data-mode="light"] .pl-queue-btn   { color: var(--t); }
 html[data-mode="light"] .pl-speed-btn   { color: var(--t); }
