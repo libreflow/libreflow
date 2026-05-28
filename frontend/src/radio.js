@@ -629,9 +629,9 @@ export function renderRadioView() {
           <path d="M21.5 17a24.12 24.12 0 0 0 0-10"/><path d="M18.5 7a18.5 18.5 0 0 0 0 10"/>
           <circle cx="12" cy="12" r="2"/>
         </svg>
-        <div class="rv-empty-title">${i18n('radio_empty_title')}</div>
-        <div class="rv-empty-sub">${i18n('radio_empty_sub')}</div>
-        <button class="rv-start-btn" data-action="open-radio">${i18n('radio_start_current')}</button>
+        <div class="rv-empty-title">${esc(i18n('radio_empty_title'))}</div>
+        <div class="rv-empty-sub">${esc(i18n('radio_empty_sub'))}</div>
+        <button class="rv-start-btn" data-action="open-radio">${esc(i18n('radio_start_current'))}</button>
       </div>`;
     return;
   }
