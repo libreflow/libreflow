@@ -1028,6 +1028,7 @@ html[data-mode="light"] .pbar:hover .pfill::after {
 
 html[data-mode="light"] .vslider      { accent-color:var(--g); }
 html[data-mode="light"] .vol svg      { fill:var(--t2); }
+html[data-mode="light"] .vol-tip      { background:var(--bg-elevated); color:var(--text-primary); box-shadow:var(--elev-1); border:1px solid var(--border-default); }
 html[data-mode="light"] #pl-n         { color:var(--t); }
 html[data-mode="light"] .pl-a         { color:var(--t3); }
 html[data-mode="light"] #pl-art       { background:var(--bg4); }
