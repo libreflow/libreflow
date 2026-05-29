@@ -130,6 +130,14 @@ async function run() {
     }
   });
 
+  // --- WCAG 2.2 SC 2.4.11 Focus Not Obscured — scroll-padding sous l'en-tête collant ---
+  await t('#tlist reserves sticky-header height via scroll-padding (SC 2.4.11)', () => {
+    const m = /#content-area #tlist\s*\{[^}]*\}/.exec(SS);
+    assert.ok(m, 'règle #content-area #tlist introuvable');
+    assert.ok(/scroll-padding-top\s*:/.test(m[0]),
+      "#tlist doit déclarer scroll-padding-top (focus jamais masqué sous .grp-lbl/.tr-grp collants)");
+  });
+
   if (fail) { console.log(`\nA11Y FAIL: ${fail}/${pass + fail}`); process.exit(1); }
   console.log(`\nA11Y OK: ${pass}/${pass}`);
 }
