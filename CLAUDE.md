@@ -30,6 +30,7 @@ Any commit touching these areas must verify each invariant before merge.
 6. **IPC calls go through `ipc.js` with a timeout** — no bare `__TAURI__.invoke()` in feature modules (§4).
 7. **`radioRefillQueue()` called BEFORE UI update tied to the new track** — order of operations in the playback change path is load-bearing.
 8. **Virtual scroll constants referenced from `CFG`** — `CFG.VIRT_ROW_H` and `CFG.VIRT_GRP_H` are never duplicated in render code (§10).
+9. **WCAG 2.1 AA accessibility** — every interactive element exposes accessible name/role/value; non-text contrast ≥3:1 on flat-Vantablack; modals declare `role=dialog` + `aria-modal` and trap focus (released + focus restored on close); single-key shortcuts ignore typing targets; `aria-current="true"` mirrors the playing-row `.act` class exactly; the virtualized track list announces position via `aria-setsize`/`aria-posinset` on `role="listitem"` rows. Guardrails live in `frontend/tests/a11y.test.cjs`.
 
 ---
 
