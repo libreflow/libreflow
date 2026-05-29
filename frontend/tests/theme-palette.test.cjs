@@ -151,6 +151,25 @@ async function run() {
     });
   }
 
+  // ── AAA SC 1.4.6 Contrast Enhanced — texte normal >=7:1 sur --bg ──────────
+  const AAA_TOKENS = [['--t', 'primary'], ['--t2', 'secondary'], ['--t3', 'muted']];
+  for (const [tok, label] of AAA_TOKENS) {
+    await t(`dark ${tok} (${label}) on --bg passes AAA (7:1)`, () => {
+      const fg = resolveVar(root, null, tok);
+      const bg = resolveVar(root, null, '--bg');
+      assert.ok(fg && bg, `cannot resolve dark ${tok}/${bg}`);
+      const r = contrastRatio(fg, bg);
+      assert.ok(r >= 7.0, `dark ${tok} = ${r.toFixed(2)}:1 (need 7.0)`);
+    });
+    await t(`light ${tok} (${label}) on --bg passes AAA (7:1)`, () => {
+      const fg = resolveVar(lightRoot, root, tok);
+      const bg = resolveVar(lightRoot, root, '--bg');
+      assert.ok(fg && bg, `cannot resolve light ${tok}/${bg}`);
+      const r = contrastRatio(fg, bg);
+      assert.ok(r >= 7.0, `light ${tok} = ${r.toFixed(2)}:1 (need 7.0)`);
+    });
+  }
+
   if (fail) { console.log(`\nTHEME-PALETTE FAIL: ${fail}/${pass + fail}`); process.exit(1); }
   console.log(`\nTHEME-PALETTE OK: ${pass}/${pass}`);
 }

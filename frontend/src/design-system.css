@@ -62,7 +62,7 @@
   /* --- Texte — neutres calibrés AAA sur Vantablack ----------------------- */
   --text-primary   : #F5F6F8;                 /* titres — 19:1 sur #030303 */
   --text-secondary : #B4B7C2;                 /* artistes — 10.3:1 sur #030303 */
-  --text-muted     : #8B90A0;                 /* metadata — 6.5:1 sur #030303 */
+  --text-muted     : #979CAC;                 /* metadata — 7.5:1 sur #030303, 7.05:1 sur --bg-raised (AAA SC 1.4.6) */
 
   /* --- Accent — Electric Indigo (signature unique) ----------------------- */
   --accent         : #8B6BFF;                 /* indigo vif — 5.2:1 sur --bg-surface */
@@ -399,8 +399,8 @@ html[data-mode="light"] {
 
   /* Texte light — hiérarchie inverse, chroma neutre (pas l'ochre dark) */
   --text-primary   : #0F1117;
-  --text-secondary : #3A4050;
-  --text-muted     : #5A6080;
+  --text-secondary : #232939;                 /* AAA SC 1.4.6 — 13.6:1 base, 9.4:1 sur --bg-raised */
+  --text-muted     : #373C4C;                 /* AAA SC 1.4.6 — 10.3:1 base, 7.1:1 sur --bg-raised */
   --t   : var(--text-primary);
   --t2  : var(--text-secondary);
   --t3  : var(--text-muted);
