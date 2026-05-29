@@ -138,6 +138,24 @@ async function run() {
       "#tlist doit déclarer scroll-padding-top (focus jamais masqué sous .grp-lbl/.tr-grp collants)");
   });
 
+  // --- WCAG 2.2 SC 2.4.13 Focus Appearance (AAA) ----------------------------
+  await t('focus ring is >=2px solid (SC 2.4.13)', () => {
+    const m = /--focus-ring\s*:\s*(\d+)px\s+solid/.exec(SS);
+    assert.ok(m && parseInt(m[1], 10) >= 2, `--focus-ring doit être >=2px solid (trouvé ${m ? m[1] : 'aucun'})`);
+  });
+  await t('focus-ring-contrast token defined in both themes (SC 2.4.13)', () => {
+    assert.ok(/--focus-ring-contrast\s*:/.test(SS), '--focus-ring-contrast manquant (base sombre, style.css)');
+    assert.ok(/--focus-ring-contrast\s*:/.test(DS), '--focus-ring-contrast manquant (override clair, design-system.css)');
+  });
+  await t('icon buttons show a focus ring on :focus-visible (SC 2.4.13)', () => {
+    for (const sel of ['\\.tlk', '\\.tr-add-btn', '\\.tr-edit-btn']) {
+      const m = new RegExp(`${sel}:focus-visible\\s*\\{[^}]*\\}`).exec(SS);
+      assert.ok(m, `règle ${sel}:focus-visible introuvable`);
+      assert.ok(/box-shadow\s*:[^;}]*var\(--g\)/.test(m[0]),
+        `${sel}:focus-visible doit déclarer un anneau box-shadow (var(--g))`);
+    }
+  });
+
   if (fail) { console.log(`\nA11Y FAIL: ${fail}/${pass + fail}`); process.exit(1); }
   console.log(`\nA11Y OK: ${pass}/${pass}`);
 }

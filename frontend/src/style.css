@@ -326,6 +326,10 @@
      (cyan/jaune vs panneaux clairs). Le halo garantit la lisibilité du ring
      sur n'importe quel fond. Override en light mode plus bas. */
   --focus-halo:    rgba(139, 107, 255, .35);   /* A11Y-11 : halo indigo lisible sur Vantablack (#030303) */
+  /* AAA SC 2.4.13 Focus Appearance : anneau neutre opaque ajouté en plus de
+     l'outline accent. Garantit un indicateur ≥3:1 même si l'utilisateur choisit
+     un accent --g peu contrasté. Override clair plus bas. */
+  --focus-ring-contrast: rgba(255, 255, 255, .92);
   --border-w-sm:   1px;    /* épaisseur border fine — bordures standard (1px hairline) */
   --border-w-md:   1.5px;  /* épaisseur border medium — inputs actifs, modal highlight */
   --border-w-lg:   2px;    /* épaisseur border forte — tabs, drag-over, queue-act */
@@ -1401,7 +1405,10 @@ button { cursor: pointer; }
      pour garantir ≥3:1 contraste contre n'importe quel bg. Le box-shadow fill
      le gap intérieur (0→2px) avec --focus-halo ET ajoute 2px de halo extérieur
      (4→6px) — l'outline (--g) reste peint au-dessus au plan 2→4px. */
-  box-shadow: 0 0 0 calc(var(--focus-offset) + 4px) var(--focus-halo);
+  /* AAA SC 2.4.13 : double anneau — halo indigo (4→6px) PLUS un liseré neutre
+     opaque (6→7px) toujours ≥3:1 contre le fond, indépendant de l'accent. */
+  box-shadow: 0 0 0 calc(var(--focus-offset) + 4px) var(--focus-halo),
+              0 0 0 calc(var(--focus-offset) + 5px) var(--focus-ring-contrast);
   border-radius: var(--r);
 }
 
@@ -2080,7 +2087,8 @@ html[data-mode="light"] mark.srch-hl { background: rgba(var(--g-rgb), .22); }
 }
 .tlk:active       { transform: scale(1.3); }
 /* A11Y — visible au focus clavier (sinon opacity:0 = bouton like introuvable au clavier) */
-.tlk:focus-visible { opacity: 1; color: var(--t3); }
+/* AAA SC 2.4.13 : anneau 2px (accent) + liseré neutre — suit border-radius:50%. */
+.tlk:focus-visible { opacity: 1; color: var(--t3); box-shadow: 0 0 0 2px var(--g), 0 0 0 3px var(--focus-ring-contrast); }
 .tlk svg          { width: var(--icon-sm); height: var(--icon-sm); fill: currentColor; }
 
 /* Bouton ajouter à playlist — visible seulement au hover */
@@ -2095,7 +2103,7 @@ html[data-mode="light"] mark.srch-hl { background: rgba(var(--g-rgb), .22); }
 .tr:hover .tr-add-btn    { color: var(--t3); opacity: 1; }
 .tr-add-btn:hover        { color: var(--g) !important; background: var(--bg4); opacity: 1 !important; }
 /* A11Y — visible au focus clavier */
-.tr-add-btn:focus-visible { opacity: 1; color: var(--t3); background: var(--bg4); }
+.tr-add-btn:focus-visible { opacity: 1; color: var(--t3); background: var(--bg4); box-shadow: 0 0 0 2px var(--g), 0 0 0 3px var(--focus-ring-contrast); }
 .tr-add-btn svg          { width: var(--icon-sm); height: var(--icon-sm); stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; }
 
 /* Bouton édition tags — visible au hover */
@@ -2110,7 +2118,7 @@ html[data-mode="light"] mark.srch-hl { background: rgba(var(--g-rgb), .22); }
 .tr:hover .tr-edit-btn   { color: var(--t3); opacity: 1; }
 .tr-edit-btn:hover       { color: var(--g) !important; background: var(--bg4); opacity: 1 !important; }
 /* A11Y — visible au focus clavier */
-.tr-edit-btn:focus-visible { opacity: 1; color: var(--t3); background: var(--bg4); }
+.tr-edit-btn:focus-visible { opacity: 1; color: var(--t3); background: var(--bg4); box-shadow: 0 0 0 2px var(--g), 0 0 0 3px var(--focus-ring-contrast); }
 .tr-edit-btn svg         { width: var(--icon-xs); height: var(--icon-xs); stroke: currentColor; }
 
 /* Drag & drop */

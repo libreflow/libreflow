@@ -424,6 +424,8 @@ html[data-mode="light"] {
 
   /* Halo focus — sur fond clair, blanc plutôt que noir */
   --focus-halo : rgba(255, 255, 255, 0.55);
+  /* AAA SC 2.4.13 : anneau de contraste neutre — sombre sur fond clair. */
+  --focus-ring-contrast : rgba(0, 0, 0, 0.85);
 }
 
 
