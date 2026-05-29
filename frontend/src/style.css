@@ -276,6 +276,7 @@
   --search-input-w:    170px;   /* champ input recherche */
   --search-input-min:  120px;   /* min-width input recherche (responsive) */
   --tb-btn-min:         34px;   /* min-width boutons toolbar / track-r */
+  --target-min:         24px;   /* WCAG 2.2 SC 2.5.8 — cible tactile minimale (boutons icône inline) */
   --time-min-w:         32px;   /* min-width affichage temps (dur, pos) */
   --tag-lbl-w:          46px;   /* largeur label tag-edit-lbl */
   --dropdown-min-w:    150px;   /* min-width menus contextuels */
@@ -1789,7 +1790,7 @@ button { cursor: pointer; }
 .srch:focus-within svg { fill: var(--t2); }
 .srch input        { border: none; outline: none; background: transparent; color: var(--t); font-size: var(--fs-md); width: var(--search-input-w); }
 .srch input::placeholder { color: var(--t3); }
-.srch-clear { background: none; border: none; padding: var(--sp-micro); color: var(--t3); flex-shrink: 0; cursor: pointer; display: flex; align-items: center; justify-content: center; border-radius: var(--r-sm); transition: color var(--ease), background var(--ease); }
+.srch-clear { background: none; border: none; padding: var(--sp-micro); color: var(--t3); flex-shrink: 0; cursor: pointer; display: flex; align-items: center; justify-content: center; min-width: var(--target-min); min-height: var(--target-min); border-radius: var(--r-sm); transition: color var(--ease), background var(--ease); }
 .srch-clear:hover { color: var(--t); background: var(--bg5); }
 /* UX — badge nombre de résultats de recherche */
 .srch-ct {
@@ -2057,7 +2058,9 @@ html[data-mode="light"] mark.srch-hl { background: rgba(var(--g-rgb), .22); }
 /* Bouton like — visible seulement au hover ou si actif */
 .tlk {
   background: none; border: none; color: var(--t3); padding: var(--sp-1p);
-  border-radius: 50%; display: flex; align-items: center;
+  border-radius: 50%; display: flex; align-items: center; justify-content: center;
+  /* WCAG 2.2 SC 2.5.8 : cible tactile >=24px (l'icône reste à --icon-sm). */
+  min-width: var(--target-min); min-height: var(--target-min);
   transition: color var(--dur-fast) ease, transform var(--dur-fast) ease, opacity var(--dur-fast) ease;
   opacity: 0.45;
 }
@@ -2083,7 +2086,9 @@ html[data-mode="light"] mark.srch-hl { background: rgba(var(--g-rgb), .22); }
 /* Bouton ajouter à playlist — visible seulement au hover */
 .tr-add-btn {
   background: none; border: none; color: var(--t3); padding: var(--sp-1p);
-  border-radius: 50%; display: flex; align-items: center;
+  border-radius: 50%; display: flex; align-items: center; justify-content: center;
+  /* WCAG 2.2 SC 2.5.8 : cible tactile >=24px. */
+  min-width: var(--target-min); min-height: var(--target-min);
   transition: color var(--dur-fast) ease, background var(--dur-fast) ease, opacity var(--dur-fast) ease;
   opacity: 0.45;
 }
@@ -2096,7 +2101,9 @@ html[data-mode="light"] mark.srch-hl { background: rgba(var(--g-rgb), .22); }
 /* Bouton édition tags — visible au hover */
 .tr-edit-btn {
   background: none; border: none; color: var(--t3); padding: var(--sp-1p);
-  border-radius: 50%; display: flex; align-items: center; flex-shrink: 0;
+  border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+  /* WCAG 2.2 SC 2.5.8 : cible tactile >=24px. */
+  min-width: var(--target-min); min-height: var(--target-min);
   transition: color var(--dur-fast) ease, background var(--dur-fast) ease, opacity var(--dur-fast) ease;
   opacity: 0.45;
 }
@@ -3335,6 +3342,9 @@ html[data-mode="light"] .sleep-custom-inp:focus { border-color: var(--g); backgr
   opacity: 0.7;
   line-height: var(--lh-1);
   flex-shrink: 0;
+  /* WCAG 2.2 SC 2.5.8 : cible tactile >=24px (glyphe ✕ centré). */
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: var(--target-min); min-height: var(--target-min);
   border-radius: var(--r-xs);
   transition: opacity var(--dur-fast) ease, background var(--dur-fast) ease;
 }
@@ -4788,6 +4798,9 @@ html[data-mode="light"] .pl-folder-h:hover .pl-folder-count { background: var(--
   font-size: var(--fs-md);
   line-height: var(--lh-1);
   padding: var(--sp-1) var(--sp-1h);
+  /* WCAG 2.2 SC 2.5.8 : cible tactile >=24px (devient inline-flex au hover). */
+  justify-content: center;
+  min-width: var(--target-min); min-height: var(--target-min);
   border-radius: var(--r-md);
   flex-shrink: 0;
   transition: color var(--ease), background var(--ease);

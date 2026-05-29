@@ -116,6 +116,20 @@ async function run() {
       'thtml() doit poser aria-posinset (fi+1) sur les lignes de piste');
   });
 
+  // --- WCAG 2.2 SC 2.5.8 Target Size (>=24px) sur les boutons icône inline ----
+  await t('icon buttons declare >=24px target size (SC 2.5.8)', () => {
+    const tm = /--target-min\s*:\s*(\d+)px/.exec(SS);
+    assert.ok(tm && parseInt(tm[1], 10) >= 24,
+      `--target-min doit être >=24px (trouvé ${tm ? tm[1] : 'aucun'})`);
+    for (const sel of ['\\.tlk', '\\.tr-add-btn', '\\.tr-edit-btn']) {
+      const m = new RegExp(`${sel}\\s*\\{[^}]*\\}`).exec(SS);
+      assert.ok(m, `règle de base ${sel} introuvable`);
+      assert.ok(/min-width\s*:\s*var\(--target-min\)/.test(m[0])
+        && /min-height\s*:\s*var\(--target-min\)/.test(m[0]),
+        `${sel} doit déclarer min-width/min-height: var(--target-min)`);
+    }
+  });
+
   if (fail) { console.log(`\nA11Y FAIL: ${fail}/${pass + fail}`); process.exit(1); }
   console.log(`\nA11Y OK: ${pass}/${pass}`);
 }
