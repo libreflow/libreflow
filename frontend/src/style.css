@@ -3422,7 +3422,10 @@ html[data-mode="light"] .sleep-custom-inp:focus { border-color: var(--g); backgr
 #confirm-modal-bg.on #confirm-modal { animation: modalBoxIn var(--dur-nav) var(--spring-soft) both; }
 
 .modal-ico  { font-size: var(--fs-disp); margin-bottom: var(--sp-2h); }
-.modal-h    { font-size: var(--fs-base); font-weight: 700; margin-bottom: var(--sp-1h); font-family: var(--font-display); letter-spacing: var(--ls-display); }
+.modal-h    { font-size: var(--fs-base); font-weight: 700; margin-bottom: var(--sp-1h); font-family: var(--font-display); letter-spacing: var(--ls-display); border-bottom: 1px solid var(--tint-1, rgba(255,255,255,.06)); padding-bottom: var(--space-3); margin-bottom: var(--space-3); }
+html[data-mode="light"] .modal-h {
+  border-bottom-color: var(--border-subtle);
+}
 .modal-s    { font-size: var(--fs-caption); color: var(--t2); line-height: var(--lh-airy); margin-bottom: var(--sp-5); }
 .modal-btns { display: flex; gap: var(--sp-2); justify-content: flex-end; }
 
