@@ -495,8 +495,8 @@ function _handleInput(e) {
       // DSP-5 : volume via masterGainNode (graph) — fallback audio.volume si graph absent
       setMasterGain(v);
       updateVolSlider(el);
-      // A11Y : aria-valuetext humain ("74%") au lieu de "0.74" lu brut par les SR.
-      el.setAttribute('aria-valuetext', `${Math.round(v * 100)} %`);
+      // A11Y-08 : aria-valuetext lisible par les SR ("74 pour cent" au lieu de "0.74").
+      setAriaValueText(el, _v => `${Math.round(_v * 100)} pour cent`, v);
       break;
     }
 
@@ -505,8 +505,8 @@ function _handleInput(e) {
       const v = +el.value;
       setMasterGain(v);
       if (main) { main.value = el.value; updateVolSlider(main); }
-      el.setAttribute('aria-valuetext', `${Math.round(v * 100)} %`);
-      main?.setAttribute('aria-valuetext', `${Math.round(v * 100)} %`);
+      setAriaValueText(el,   _v => `${Math.round(_v * 100)} pour cent`, v);
+      if (main) setAriaValueText(main, _v => `${Math.round(_v * 100)} pour cent`, v);
       break;
     }
 
@@ -676,6 +676,7 @@ export function registerHandlers() {
       _volEl.value = String(v);
       setMasterGain(v);
       updateVolSlider(_volEl);
+      setAriaValueText(_volEl, _v => `${Math.round(_v * 100)} pour cent`, v);
     }, { passive: false, signal });
   }
 

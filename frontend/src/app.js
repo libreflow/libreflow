@@ -108,6 +108,7 @@ import { saveCfg, saveCfgNow } from './cfgsave.js';
 export { saveCfg, saveCfgNow }; // re-exports pour cinema.js, ctxmenu.js, player.js, etc.
 // ── state.js (ARCH-1) ────────────────────────────────────────────────────────
 import { setCurIdx, setTracks, setLiked, setCtxTrackId, replaceTracks } from './state.js';
+import { setAriaValueText }                                    from './a11y.js';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -464,6 +465,8 @@ async function boot() {
         // DSP-5 : setMasterGain — masterGainNode sera initialisé par initEQ() ensuite
         // Si EQ déjà prêt, met à jour le gain; sinon audio.volume = cfg.volume comme fallback
         setMasterGain(cfg.volume);
+        // A11Y-08 : initialiser aria-valuetext au boot
+        setAriaValueText(_volEl, _v => `${Math.round(_v * 100)} pour cent`, parseFloat(_volEl.value));
       }
     }
     // Position mini-overlay flottant
@@ -850,9 +853,9 @@ waitForTauri(() => {
     else if (cmd === 'toggle-shuffle') toggleShuffle();
     else if (cmd === 'toggle-repeat')  toggleRepeat();
     else if (cmd === 'go-home')        goHome();
-    else if (cmd === 'volume-down') { const _c=masterGainNode?masterGainNode.gain.value:audio.volume; const v=Math.max(0,_c-0.05); setMasterGain(v); const vel=document.getElementById('vol'); if(vel){vel.value=v; updateVolSlider(vel);} saveCfg(); _allPlayerUI(); }
-    else if (cmd === 'volume-up')   { const _c=masterGainNode?masterGainNode.gain.value:audio.volume; const v=Math.min(1,_c+0.05); setMasterGain(v); const vel=document.getElementById('vol'); if(vel){vel.value=v; updateVolSlider(vel);} saveCfg(); _allPlayerUI(); }
-    else if (cmd === 'volume-set' && data != null) { const v=Math.max(0,Math.min(1,data)); setMasterGain(v); const vel=document.getElementById('vol'); if(vel){vel.value=v; updateVolSlider(vel);} saveCfg(); _allPlayerUI(); } // QW-10
+    else if (cmd === 'volume-down') { const _c=masterGainNode?masterGainNode.gain.value:audio.volume; const v=Math.max(0,_c-0.05); setMasterGain(v); const vel=document.getElementById('vol'); if(vel){vel.value=v; updateVolSlider(vel); setAriaValueText(vel, _v => `${Math.round(_v * 100)} pour cent`, v);} saveCfg(); _allPlayerUI(); }
+    else if (cmd === 'volume-up')   { const _c=masterGainNode?masterGainNode.gain.value:audio.volume; const v=Math.min(1,_c+0.05); setMasterGain(v); const vel=document.getElementById('vol'); if(vel){vel.value=v; updateVolSlider(vel); setAriaValueText(vel, _v => `${Math.round(_v * 100)} pour cent`, v);} saveCfg(); _allPlayerUI(); }
+    else if (cmd === 'volume-set' && data != null) { const v=Math.max(0,Math.min(1,data)); setMasterGain(v); const vel=document.getElementById('vol'); if(vel){vel.value=v; updateVolSlider(vel); setAriaValueText(vel, _v => `${Math.round(_v * 100)} pour cent`, v);} saveCfg(); _allPlayerUI(); } // QW-10
     else if (cmd === 'seek' && data != null && audio.duration) {
       audio.currentTime = data * audio.duration;
       resetMiniProgressThrottle(); // le prochain timeupdate passe immédiatement
