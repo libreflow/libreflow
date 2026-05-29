@@ -1852,6 +1852,9 @@ section('components/lf-toast-stack.logic.js -- import-smoke');
   // Light theme surface coverage (B3)
   await require('./theme-light-coverage.test.cjs').run();
 
+  // A11y static guardrails (WCAG 2.1 AA)
+  await require('./a11y.test.cjs').run();
+
   // -- Résultat -----------------------------------------------------------
   console.log('\n═══════════════════════════════════════════════════════════');
   console.log(`  Total : ${_ok + _ko}   OK: ${_ok}   KO: ${_ko}`);
