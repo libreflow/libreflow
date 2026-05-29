@@ -66,6 +66,7 @@ import { resolveConfirm }                                      from './ui.js';
 import { setCrossfade }                                        from './player.js';
 import { importM3U, exportM3U, exportXSPF }                    from './m3u.js';
 import { invoke }                                              from './ipc.js';
+import { setAriaValueText }                                    from './a11y.js';
 import { cycleSpeed, closeModal, clearLibrary, confirmClear, clearAppCache, updateVolSlider, playPlaylistFrom, shufflePlaylist, playPlaylistDirect, playCardByKey, saveCfg } from './app.js';
 import { _syncVizBtns, openSettings, closeSettings, toggleSettings, toggleMode, toggleShortcuts, closeShortcuts, setTheme, setMode, switchSetTab, syncMiniSettingsBtn } from './settings.js';
 import { goHome, setView, nextSort, nextAlbumSort, onSearch, clearAllFilters } from './views.js';
