@@ -455,6 +455,18 @@ const _ACTIONS = {
   'set-smart-seed':        btn  => _setSmartSeed(btn.dataset.trackId),
 };
 
+// ── A11Y-10 : guard typage ────────────────────────────────────────────────
+// Vérifie si l'élément focalisé est un champ de saisie texte.
+// Utilisé pour bloquer les raccourcis single-key pendant la frappe.
+function _isTypingTarget(target) {
+  if (!target) return false;
+  const tag = target.tagName;
+  if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return true;
+  if (target.isContentEditable) return true;
+  if (target.getAttribute && target.getAttribute('role') === 'textbox') return true;
+  return false;
+}
+
 // ── Delegation de clic ────────────────────────────────────────────────────
 
 function _handleClick(e) {
@@ -615,10 +627,10 @@ function _handleKeydown(e) {
     setSleepCustom();
     return;
   }
-  // BUG-1 FIX : ne pas intercepter si le focus est dans un champ de saisie ou
-  // du contenu éditable (ex. éditeur de tags inline, renommage playlist).
-  if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA'
-      || e.target.isContentEditable) return;
+  // BUG-1 FIX / A11Y-10 : ne pas intercepter si le focus est dans un champ de
+  // saisie ou du contenu éditable (INPUT, TEXTAREA, SELECT, contenteditable,
+  // role=textbox) — ex. éditeur de tags inline, renommage playlist.
+  if (_isTypingTarget(e.target)) return;
   // Éléments non-button/link avec data-action (ex: .sb-brand role=button) → simuler click
   const tag = e.target.tagName;
   if (tag !== 'BUTTON' && tag !== 'A') {
