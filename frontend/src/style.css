@@ -324,7 +324,7 @@
      L'accent dynamique --g peut tomber sous 3:1 contre certains backgrounds
      (cyan/jaune vs panneaux clairs). Le halo garantit la lisibilité du ring
      sur n'importe quel fond. Override en light mode plus bas. */
-  --focus-halo:    rgba(0,0,0,.55);
+  --focus-halo:    rgba(139, 107, 255, .35);   /* A11Y-11 : halo indigo lisible sur Vantablack (#030303) */
   --border-w-sm:   1px;    /* épaisseur border fine — bordures standard (1px hairline) */
   --border-w-md:   1.5px;  /* épaisseur border medium — inputs actifs, modal highlight */
   --border-w-lg:   2px;    /* épaisseur border forte — tabs, drag-over, queue-act */
