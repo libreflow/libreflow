@@ -89,6 +89,24 @@ async function run() {
       'eq.js does not set aria-orientation on band sliders');
   });
 
+  // --- SC 4.1.2 / 2.1.1 : div|span avec data-action doivent être opérables ---
+  // Tout élément générique cliquable doit exposer un role + tabindex pour le
+  // clavier et les technologies d'assistance. Exception : les backdrops purement
+  // décoratifs marqués aria-hidden="true" (fermeture via Escape + bouton dédié).
+  await t('non-button data-action elements have role + tabindex', () => {
+    const re = /<(div|span)\s+([^>]*?data-action="[^"]+"[^>]*?)>/gi;
+    let m; const offenders = [];
+    while ((m = re.exec(HTML))) {
+      const attrs = m[2];
+      if (/aria-hidden="true"/.test(attrs)) continue;
+      const hasRole = /role="(button|link|menuitem|tab|switch|checkbox|option)"/i.test(attrs);
+      const hasTab  = /tabindex="(0|-1)"/.test(attrs);
+      if (!hasRole || !hasTab) offenders.push(m[0].slice(0, 90));
+    }
+    assert.ok(offenders.length === 0,
+      `data-action sans role/tabindex : ${offenders.length}\n   ${offenders.slice(0, 3).join('\n   ')}`);
+  });
+
   if (fail) { console.log(`\nA11Y FAIL: ${fail}/${pass + fail}`); process.exit(1); }
   console.log(`\nA11Y OK: ${pass}/${pass}`);
 }

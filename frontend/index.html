@@ -317,7 +317,7 @@
         <span class="speed-lbl">1×</span>
       </button>
       <span id="np-speed-live" aria-live="polite" class="sr-only"></span>
-      <div id="sleep-indicator" data-action="toggle-sleep" title="" data-i18n-title="pl_sleep_title" data-i18n-aria="aria_sleep" role="button" aria-label="Minuterie sommeil">
+      <div id="sleep-indicator" data-action="toggle-sleep" title="" data-i18n-title="pl_sleep_title" data-i18n-aria="aria_sleep" role="button" tabindex="0" aria-label="Minuterie sommeil">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 15"/></svg>
         <span id="sleep-countdown"></span>
       </div>
@@ -679,7 +679,7 @@
 
 <!-- SETTINGS PANEL — A11Y-05: role=dialog, aria-modal, aria-labelledby -->
 <div id="settings-panel" role="dialog" aria-modal="true" aria-labelledby="settings-panel-title">
-  <div id="settings-overlay" data-action="close-settings"></div>
+  <div id="settings-overlay" data-action="close-settings" aria-hidden="true"></div>
   <div id="settings-box">
 
     <div class="set-head">
@@ -1368,7 +1368,7 @@
     <div class="modal-h">✏ Édition en lot</div>
     <div id="bte-count" class="modal-s"></div>
     <div class="bte-cover-zone">
-      <div id="bte-cover-preview" class="bte-cover-preview" data-action="bte-cover-click">
+      <div id="bte-cover-preview" class="bte-cover-preview" data-action="bte-cover-click" role="button" tabindex="0">
         <span id="bte-cover-label" class="bte-cover-label">Cliquer pour choisir une pochette</span>
         <img id="bte-cover-img" class="bte-cover-img" style="display:none" alt="">
       </div>
