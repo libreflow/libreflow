@@ -2119,6 +2119,7 @@ html[data-mode="light"] mark.srch-hl { background: rgba(var(--g-rgb), .22); }
 .card {
   background: var(--bg2); border: var(--border-w-sm) solid var(--bg4); border-radius: var(--r-card);
   padding: var(--sp-3); cursor: pointer;
+  box-shadow: var(--shadow-card);
   transition: background var(--dur-fast) ease, transform var(--dur-mid) var(--spring-soft), box-shadow var(--dur-mid) ease, border-color var(--dur-fast) ease;
   /* PERF : will-change retiré du base — créait un layer GPU pour chaque carte visible en
      permanence. Déplacé dans :hover pour n'allouer le layer qu'au moment pertinent. */
