@@ -29,6 +29,7 @@ import { openNewPlaylistModal, renderPlHero }                        from './pla
 import { openSmartPlaylistModal }                                    from './smartplaylist.js';
 import { saveCfg }                                                   from './cfgsave.js';
 import { clearSelection }                                            from './selection.js';
+import { runViewTransition }                                         from './view-transition.js';
 
 // Inline helper — équivalent de app.js:invalidateFilter() (ARCH-1, no circular dep)
 function invalidateFilter() {
@@ -329,6 +330,7 @@ export function nextGenreSort() {
 // ══ CHANGEMENT DE VUE ════════════════════════════════════════════════════════
 
 export function setView(v, btn, plId) {
+  runViewTransition();
   // Annuler le debounce de recherche en cours
   if (_searchDebounceTimer) { clearTimeout(_searchDebounceTimer); _searchDebounceTimer = null; }
   // Nettoyer la sélection active avant tout changement de vue (BUG-1 FIX)

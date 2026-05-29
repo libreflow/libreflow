@@ -7497,3 +7497,15 @@ html[data-mode="light"] .rv-start-btn  { background: var(--g); }
   .dh-btn     { padding: var(--sp-1h) var(--sp-3); font-size: var(--fs-caption); }
   .dh-actions { margin-top: var(--sp-1h); }
 }
+
+/* ── View transitions (B4-H5) ───────────────────────────────────────────── */
+@keyframes view-fade-in {
+  from { opacity: 0.6; }
+  to   { opacity: 1; }
+}
+#main.view-fade {
+  animation: view-fade-in var(--motion-base, 200ms) var(--ease-standard) both;
+}
+@media (prefers-reduced-motion: reduce) {
+  #main.view-fade { animation: none; }
+}
