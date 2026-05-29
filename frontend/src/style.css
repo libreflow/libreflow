@@ -7524,3 +7524,17 @@ html[data-mode="light"] .rv-start-btn  { background: var(--g); }
   box-shadow: 0 0 0 3px rgba(var(--g-rgb), 0.35),
               0 0 12px rgba(var(--g-rgb), 0.45);
 }
+
+/* ── Cursors premium (B4-M5) ────────────────────────────────────────────── */
+.pbar, .vslider, .cf-slider, .eq-slider { cursor: ew-resize; }
+.pl-art-glow,
+.tart img,
+.card-art,
+#cinema-overlay .cinema-art-wrap {
+  cursor: pointer;
+}
+.card-art:active,
+.tart:active,
+.pl-art-glow:active {
+  cursor: grabbing;
+}
