@@ -2896,7 +2896,7 @@ html[data-mode="light"] .empty-cta {
 
 /* Progress bar — raffinée */
 .pbar    {
-  flex: 1; height: var(--track-h); background: var(--bg5); border-radius: var(--r-xs);
+  flex: 1; height: var(--track-h); background: rgba(var(--g-rgb), 0.12); border-radius: var(--r-xs);
   cursor: pointer; position: relative; overflow: hidden;
   transition: height var(--dur-fast) var(--spring-soft);
 }
@@ -2986,7 +2986,7 @@ html[data-mode="light"] .empty-cta {
   transition: opacity var(--dur-tooltip) var(--smooth), transform var(--dur-tooltip) var(--spring-soft);
 }
 .vol-tip.on { opacity: 1; transform: translateX(-50%) translateY(0); }
-.vslider { -webkit-appearance: none; width: var(--slider-w); height: var(--track-h); border-radius: var(--r-xs); background: var(--bg5); outline: none; cursor: pointer; }
+.vslider { -webkit-appearance: none; width: var(--slider-w); height: var(--track-h); border-radius: var(--r-xs); background: rgba(var(--g-rgb), 0.12); outline: none; cursor: pointer; }
 .vslider::-webkit-slider-thumb { -webkit-appearance: none; width: var(--icon-xs); height: var(--icon-xs); border-radius: 50%; background: var(--g); box-shadow: var(--shadow-vslider); transition: transform var(--ease), background var(--ease); }
 .vslider:hover::-webkit-slider-thumb { transform: scale(1.25); }
 
@@ -4490,7 +4490,7 @@ html[data-mode="light"] .pl-folder-h:hover .pl-folder-count { background: var(--
 .theme-swatch.on    { border-color: var(--t); transform: scale(1.1); }
 
 .crossfade-row   { display: flex; align-items: center; gap: var(--sp-2h); }
-.cf-slider       { -webkit-appearance: none; appearance: none; flex: 1; height: var(--track-h-md); border-radius: var(--r-xs); background: linear-gradient(to right, var(--g) 0%, var(--g) var(--cf-pct, 0%), var(--bg5) var(--cf-pct, 0%)); outline: none; }
+.cf-slider       { -webkit-appearance: none; appearance: none; flex: 1; height: var(--track-h-md); border-radius: var(--r-xs); background: linear-gradient(to right, var(--g) 0%, var(--g) var(--cf-pct, 0%), rgba(var(--g-rgb), 0.12) var(--cf-pct, 0%)); outline: none; }
 .cf-slider::-webkit-slider-thumb { -webkit-appearance: none; width: var(--icon-md); height: var(--icon-md); border-radius: 50%; background: var(--g); box-shadow: var(--shadow-cf-thumb); transition: transform var(--ease); }
 /* CONSISTENCY-1 — hover thumb manquant (vslider l'avait, cf-slider non) */
 .cf-slider:hover::-webkit-slider-thumb { transform: scale(1.2); }
