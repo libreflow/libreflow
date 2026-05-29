@@ -12,7 +12,7 @@
 //   addToQueueNext, addToQueueEnd, playQueueItem
 //   initQueueDrag (Task 4)
 
-import { esc, extEmoji, fmtd }            from './utils.js';
+import { esc, extEmoji, fmtd, moveByOne }  from './utils.js';
 import { CFG }                            from './cfg.js';
 import { eqOpen, closeEQ }                from './eq.js';
 import { i18n }                           from './i18n.js';
@@ -131,6 +131,24 @@ export function clearQueueOverride() {
 }
 
 /** Retire un ID de la queue explicite. */
+/**
+ * WCAG 2.2 SC 2.5.7 — alternative non-drag à la réorganisation de la file
+ * explicite : déplace l'item `id` d'un cran (dir -1 = haut, +1 = bas). No-op
+ * (false) si absent de la file explicite ou en butée.
+ * @param {string} id
+ * @param {-1|1}   dir
+ * @returns {boolean}
+ */
+export function moveQueueItem(id, dir) {
+  const ex  = _buildExplicitQueue();
+  const idx = ex.findIndex(t => t.id === id);
+  if (moveByOne(ex, idx, dir) < 0) return false;
+  _queueOverride        = ex.map(t => t.id);
+  _queueOverrideTrackId = get('tracks')[get('curIdx')]?.id ?? null;
+  renderQueue();
+  return true;
+}
+
 export function removeFromQueue(id) {
   if (!_queueOverride) return;
   _queueOverride = _queueOverride.filter(x => x !== id);
@@ -307,6 +325,8 @@ export function renderQueue() {
           <div class="q-artist">${esc(t.artistFull || t.artist || '–')}</div>
         </div>
         <div class="q-dur" aria-hidden="true">${fmtd(t.duration)}</div>
+        <button class="queue-move-btn" data-action="queue-move-up" data-id="${t.id}" aria-label="${esc(i18n('ctx_move_up') || 'Déplacer vers le haut')}" title="${esc(i18n('ctx_move_up') || 'Déplacer vers le haut')}"><span aria-hidden="true">▲</span></button>
+        <button class="queue-move-btn" data-action="queue-move-down" data-id="${t.id}" aria-label="${esc(i18n('ctx_move_down') || 'Déplacer vers le bas')}" title="${esc(i18n('ctx_move_down') || 'Déplacer vers le bas')}"><span aria-hidden="true">▼</span></button>
         <button class="queue-remove-btn" data-action="remove-from-queue" data-track-id="${t.id}" aria-label="${esc(rmvLbl)}" title="Retirer"><span aria-hidden="true">✕</span></button>
       </div>`;
     }).join('');

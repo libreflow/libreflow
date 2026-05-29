@@ -25,7 +25,7 @@ import { togglePlay, prev, next, toggleShuffle, toggleRepeat, toggleLike,
          likeat, playAt, isCurrentTrack, audio }              from './player.js';
 import { toggleQueue, closeQueue, playQueueItem,
          addToQueueNext, addToQueueEnd,
-         removeFromQueue, clearExplicitQueue }                 from './queue.js';
+         removeFromQueue, clearExplicitQueue, moveQueueItem }  from './queue.js';
 import { toggleEQ, closeEQ, applyEQPreset,
          filterEQPresets, setMasterGain,
          setEQExpert }                                         from './eq.js';
@@ -141,6 +141,8 @@ const _ACTIONS = {
   'close-queue':           ()    => closeQueue(),
   'clear-queue':           ()    => clearExplicitQueue(),
   'remove-from-queue':     btn  => { removeFromQueue(btn.dataset.trackId); },
+  'queue-move-up':         btn  => moveQueueItem(btn.dataset.id, -1),
+  'queue-move-down':       btn  => moveQueueItem(btn.dataset.id,  1),
 
   // ── EQ ────────────────────────────────────────────────────
   'toggle-eq':             ()    => { closeNowPlaying(); toggleEQ(); },

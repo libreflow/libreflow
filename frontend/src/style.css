@@ -4817,6 +4817,21 @@ html[data-mode="light"] .pl-folder-h:hover .pl-folder-count { background: var(--
   color: var(--red);
   background: rgba(var(--red-rgb), .1);
 }
+/* WCAG 2.2 SC 2.5.7 : alternative non-drag (réorganiser la file au clic) +
+   SC 2.5.8 : cible >=24px. Révélés au hover/focus comme le bouton retirer. */
+.queue-move-btn {
+  display: none;
+  background: none; border: none; cursor: pointer;
+  color: var(--t3); font-size: var(--fs-sm); line-height: var(--lh-1);
+  align-items: center; justify-content: center;
+  min-width: var(--target-min); min-height: var(--target-min);
+  border-radius: var(--r-md); flex-shrink: 0;
+  transition: color var(--ease), background var(--ease);
+}
+.queue-item--explicit:hover .queue-move-btn,
+.queue-move-btn:focus-visible { display: inline-flex; }
+.queue-move-btn:hover { color: var(--t); background: var(--tint-2); }
+.queue-move-btn:focus-visible { outline: var(--focus-ring); outline-offset: calc(-1 * var(--sp-nano)); }
 
 /* Items naturels (lecture seule sauf promotion) */
 .queue-item--natural {
