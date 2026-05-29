@@ -44,13 +44,18 @@ function _moveFocus(fromEl, toEl) {
   toEl.focus({ preventScroll: true });
 }
 
+// WCAG 2.2 SC 2.5.7 — callback de réordonnancement injecté par app.js (évite un
+// import croisé keynav→playlists, cf. CLAUDE.md §6). Signature: (trackId, dir)=>bool.
+let _reorderTrack = null;
+
 // ── Main init ─────────────────────────────────────────────────────────────────
 
 /**
  * Initialise keyboard navigation for the virtual-scroll track list.
  * Called once from app.js after DOM is ready.
  */
-export function initKeyNav() {
+export function initKeyNav(opts = {}) {
+  _reorderTrack = typeof opts.reorderTrack === 'function' ? opts.reorderTrack : null;
   const listEl = document.getElementById('tlist');
   if (!listEl) return;
 
@@ -59,6 +64,23 @@ export function initKeyNav() {
     if (!listEl.contains(document.activeElement)) return;
     // Don't intercept when a modal/input is active
     if (_isModalOpen()) return;
+
+    // WCAG 2.2 SC 2.5.7 — Alt+↑/↓ réordonne la piste focusée dans une playlist
+    // manuelle (alternative clavier au glisser-déposer). No-op hors playlist.
+    if (_reorderTrack && e.altKey && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
+      const row = document.activeElement?.closest('.tr:not(.tr-skel)');
+      const id  = row?.dataset.trackId;
+      if (id) {
+        e.preventDefault();
+        if (_reorderTrack(id, e.key === 'ArrowUp' ? -1 : 1)) {
+          requestAnimationFrame(() => {
+            const moved = document.getElementById('tr-' + id);
+            if (moved) { _moveFocus(null, moved); moved.scrollIntoView({ block: 'nearest' }); }
+          });
+        }
+        return;
+      }
+    }
 
     const key = e.key;
     const handled = key === 'ArrowDown' || key === 'ArrowUp'

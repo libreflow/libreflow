@@ -52,7 +52,7 @@ import {
   savePlaylists, renderPlNav, setupPlNavDrop,
   renderPlHero, setPlSort, setPlModalMode,
   openNewPlaylistModal, openRenamePlaylistModal, closePlModal, confirmPlaylistModal,
-  deletePlaylist, addTrackToPlaylist, removeTrackFromPlaylist,
+  deletePlaylist, addTrackToPlaylist, removeTrackFromPlaylist, movePlaylistTrack,
   showPlCtxMenu, ctxPlayPlaylist, ctxShufflePlaylist,
   showPlQuickPop, closePlQuickPop, pqpAdd, pqpNew,
   onTrackDragStart, onPlNavDragStart,
@@ -840,7 +840,7 @@ waitForTauri(() => {
   initMediaSession(); // Contrôles Windows 11 SMTC / taskbar
   initMiniOverlayDrag(); // Drag du mini-player overlay in-page
   initRipple(); // Ripple feedback sur boutons et lignes
-  initKeyNav(); // A11Y: roving tabindex arrow-key navigation in track list
+  initKeyNav({ reorderTrack: movePlaylistTrack }); // A11Y: roving tabindex arrow-key nav + Alt+↑/↓ reorder (SC 2.5.7)
 
   // Commandes depuis le mini-player (fenêtre séparée)
   // BUG FIX F6 : stocker l'unlistener mini-cmd avec les autres (voir boot())
