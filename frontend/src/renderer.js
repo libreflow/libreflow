@@ -1155,12 +1155,16 @@ export function patchActiveTrack() {
   const curTrack = curIdx >= 0 ? tracks[curIdx] : null;
 
   // I-1: retirer .act de la ligne précédente via la référence cachée si elle est encore dans le DOM
+  // A11Y-15 : aria-current="true" doit suivre .act exactement (set au render dans renderTrackRow,
+  // donc on le retire ici lors du déplacement incrémental sinon il reste sur l'ancienne ligne).
   if (_activeRowEl?.isConnected) {
     _activeRowEl.classList.remove('act', 'playing-row');
+    _activeRowEl.removeAttribute('aria-current');
   } else {
     // Fallback : le DOM a changé depuis la dernière fois — balayage complet
-    document.querySelectorAll('.tr.act').forEach(el => {
+    document.querySelectorAll('.tr.act, .tr[aria-current="true"]').forEach(el => {
       el.classList.remove('act', 'playing-row');
+      el.removeAttribute('aria-current');
     });
   }
   _activeRowEl = null;
@@ -1169,6 +1173,7 @@ export function patchActiveTrack() {
     const el = document.querySelector(`.tr[data-track-id="${CSS.escape(curTrack.id)}"]`);
     if (el) {
       el.classList.add('act');
+      el.setAttribute('aria-current', 'true');
       // I-1: mémoriser la référence pour le prochain appel
       _activeRowEl = el;
     }
