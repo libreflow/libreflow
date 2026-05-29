@@ -2056,7 +2056,7 @@ html[data-mode="light"] mark.srch-hl { background: rgba(var(--g-rgb), .22); }
 
 /* Bouton like — visible seulement au hover ou si actif */
 .tlk {
-  background: none; border: none; color: var(--t4); padding: var(--sp-1p);
+  background: none; border: none; color: var(--t3); padding: var(--sp-1p);
   border-radius: 50%; display: flex; align-items: center;
   transition: color var(--dur-fast) ease, transform var(--dur-fast) ease, opacity var(--dur-fast) ease;
   opacity: 0.45;
