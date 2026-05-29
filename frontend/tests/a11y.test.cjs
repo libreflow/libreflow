@@ -183,6 +183,19 @@ async function run() {
       'style.css doit couper les animations sous prefers-reduced-motion');
   });
 
+  // --- SC 1.3.1 Info & Relationships — landmarks de navigation/recherche -----
+  await t('document declares main + search + navigation landmarks (SC 1.3.1)', () => {
+    assert.ok(/role="main"/.test(HTML),       'landmark role="main" manquant');
+    assert.ok(/role="search"/.test(HTML),     'landmark role="search" manquant (boîte de recherche)');
+    assert.ok(/<nav[^>]*aria-label=/.test(HTML), '<nav> de navigation doit porter un aria-label');
+  });
+  await t('no nested duplicate navigation landmark on #sb (SC 1.3.1)', () => {
+    const m = /<div id="sb"([^>]*)>/.exec(HTML);
+    assert.ok(m, '#sb introuvable');
+    assert.ok(!/role="navigation"/.test(m[1]),
+      '#sb ne doit pas être role="navigation" (le <nav class="sb-nav"> est le landmark) — évite un double nav imbriqué');
+  });
+
   if (fail) { console.log(`\nA11Y FAIL: ${fail}/${pass + fail}`); process.exit(1); }
   console.log(`\nA11Y OK: ${pass}/${pass}`);
 }
