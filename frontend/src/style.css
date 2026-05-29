@@ -716,9 +716,10 @@
   transition: --art-color var(--dur-art-color) ease;
 }
 
-/* ── Thèmes couleur ──────────────────────────────────────── */
+/* ── Thèmes couleur (accent par défaut = Electric Indigo via --accent) ─── */
+[data-theme="indigo"] { --g:#8B6BFF; --g-rgb:139,107,255; --gd:rgba(139,107,255,.14); --gg:rgba(139,107,255,.28); }
 [data-theme="green"]  { --g:#34d399; --g-rgb:52,211,153;  --gd:rgba(52,211,153,.14);  --gg:rgba(52,211,153,.28); }
-[data-theme="blue"]   { --g:#1D9BF0; --g-rgb:29,155,240; --gd:rgba(29,155,240,.14); --gg:rgba(29,155,240,.28); }
+[data-theme="blue"]   { --g:#1D9BF0; --g-rgb:29,155,240;  --gd:rgba(29,155,240,.14);  --gg:rgba(29,155,240,.28); }
 [data-theme="purple"] { --g:#a855f7; --g-rgb:168,85,247;  --gd:rgba(168,85,247,.14);  --gg:rgba(168,85,247,.28); }
 [data-theme="red"]    { --g:#ef4444; --g-rgb:239,68,68;   --gd:rgba(239,68,68,.14);   --gg:rgba(239,68,68,.28); }
 [data-theme="orange"] { --g:#f97316; --g-rgb:249,115,22;  --gd:rgba(249,115,22,.14);  --gg:rgba(249,115,22,.28); }

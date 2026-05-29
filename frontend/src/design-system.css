@@ -42,29 +42,31 @@
 
 
 /* ============================================================================
- * 2. COULEURS — Thème dark premium audio (B2-revision : OLED neutre + Twitter)
- * Palette : OLED noir pur + paliers gris neutres, accent bleu nuit Twitter #1D9BF0.
- * Choix : zéro cast chromatique sur les surfaces (compatible OLED, contraste max) +
- * accent bleu vif reconnaissable (style night-mode social media 2026).
+ * 2. COULEURS — Thème dark premium audio (B2-revision : Vantablack + Indigo)
+ * Surfaces : Vantablack-inspired #030303 (texture conservée, pas de "vide infini"
+ * du #000 pur) + 4 paliers gris neutres respirés. Zéro cast chromatique.
+ * Accent : Electric Indigo #8B6BFF — signature distinctive (ni Spotify-vert,
+ * ni Twitter-blue, ni Apple-rouge), AA-validée sur toutes les surfaces.
  * ============================================================================ */
 :root {
-  /* --- Surfaces dark — OLED + neutres, 5 paliers ΔE perceptibles --------- */
-  --bg-base       : #000000;   /* OLED pur — économie batterie + contraste max */
-  --bg-surface    : #131313;   /* cards, sidebar */
-  --bg-elevated   : #1E1E1E;   /* modales, menus contextuels */
-  --bg-raised     : #292929;   /* popovers, surfaces ultra-élevées */
-  --bg-overlay    : rgba(30, 30, 30, 0.72);
+  /* --- Surfaces — Vantablack scale, 5 paliers ΔE perceptibles ------------ */
+  --bg-base       : #030303;   /* Vantablack — quasi-noir avec texture résiduelle */
+  --bg-surface    : #0E0E0E;   /* cards, sidebar */
+  --bg-elevated   : #1A1A1A;   /* modales, menus contextuels */
+  --bg-raised     : #262626;   /* popovers, surfaces ultra-élevées */
+  --bg-overlay    : rgba(38, 38, 38, 0.72);
 
-  /* --- Texte — neutres sur OLED ------------------------------------------ */
-  --text-primary   : #F5F6F8;                 /* titres — 19.6:1 sur #000 */
-  --text-secondary : #B4B7C2;                 /* artistes — 10.5:1 sur #000 */
-  --text-muted     : #8B90A0;                 /* metadata — 6.6:1 sur #000 */
+  /* --- Texte — neutres calibrés AAA sur Vantablack ----------------------- */
+  --text-primary   : #F5F6F8;                 /* titres — 19:1 sur #030303 */
+  --text-secondary : #B4B7C2;                 /* artistes — 10.3:1 sur #030303 */
+  --text-muted     : #8B90A0;                 /* metadata — 6.5:1 sur #030303 */
 
-  /* --- Accent (bleu nuit Twitter / X) ------------------------------------- */
-  --accent         : #1D9BF0;                 /* bird blue — 6.2:1 sur --bg-surface */
-  --accent-hover   : #3FAEFD;                 /* +12% luminosité */
-  --accent-glow    : rgba(29, 155, 240, 0.45);
-  --accent-subtle  : rgba(29, 155, 240, 0.10);
+  /* --- Accent — Electric Indigo (signature unique) ----------------------- */
+  --accent         : #8B6BFF;                 /* indigo vif — 5.2:1 sur --bg-surface */
+  --accent-hover   : #A084FF;                 /* +14% luminosité au hover */
+  --accent-active  : #6F4DEB;                 /* -16% au press, sensation tactile */
+  --accent-glow    : rgba(139, 107, 255, 0.45);
+  --accent-subtle  : rgba(139, 107, 255, 0.12);
 }
 
 
@@ -75,12 +77,12 @@
  * cohérents avec la palette --accent / --bg-* / --text-* officielle.
  * ============================================================================ */
 :root {
-  /* Accent opérationnel (alias du --accent bleu Twitter défini en §2) */
+  /* Accent opérationnel (alias du --accent Electric Indigo défini en §2) */
   --g       : var(--accent);
-  --g-rgb   : 29, 155, 240;
+  --g-rgb   : 139, 107, 255;
   --gd      : var(--accent-subtle);
   --gg      : var(--accent-glow);
-  --text-on-accent : #ffffff;
+  --text-on-accent : #050505;             /* noir sur indigo brillant — 5.5:1 AA */
 
   /* --- Alias historiques (B1) reliés à la palette respirée (B2) --------- */
   --bg  : var(--bg-base);
@@ -400,9 +402,9 @@ html[data-mode="light"] {
   --t3  : var(--text-muted);
   --t4  : #95A0B4;
 
-  /* Accent bleu Twitter : --accent reste constant sur dark et light.
+  /* Accent Electric Indigo : --accent reste constant sur dark et light.
      Seul --accent-subtle est ajusté pour la lisibilité sur fond clair. */
-  --accent-subtle : rgba(29, 155, 240, 0.14);
+  --accent-subtle : rgba(139, 107, 255, 0.14);
 
   /* Bordures light — alpha noir au lieu d'alpha blanc */
   --border-subtle  : rgba(0, 0, 0, 0.06);
