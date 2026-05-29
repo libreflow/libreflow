@@ -2071,7 +2071,7 @@ html[data-mode="light"] mark.srch-hl { background: rgba(var(--g-rgb), .22); }
 
 /* Bouton ajouter à playlist — visible seulement au hover */
 .tr-add-btn {
-  background: none; border: none; color: transparent; padding: var(--sp-1p);
+  background: none; border: none; color: var(--t3); padding: var(--sp-1p);
   border-radius: 50%; display: flex; align-items: center;
   transition: color var(--dur-fast) ease, background var(--dur-fast) ease, opacity var(--dur-fast) ease;
   opacity: 0.45;
@@ -2084,7 +2084,7 @@ html[data-mode="light"] mark.srch-hl { background: rgba(var(--g-rgb), .22); }
 
 /* Bouton édition tags — visible au hover */
 .tr-edit-btn {
-  background: none; border: none; color: transparent; padding: var(--sp-1p);
+  background: none; border: none; color: var(--t3); padding: var(--sp-1p);
   border-radius: 50%; display: flex; align-items: center; flex-shrink: 0;
   transition: color var(--dur-fast) ease, background var(--dur-fast) ease, opacity var(--dur-fast) ease;
   opacity: 0.45;
