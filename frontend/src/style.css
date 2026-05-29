@@ -5423,11 +5423,13 @@ html[data-mode="light"] .eq-slider::-moz-range-track { background: var(--bg6); }
   opacity: 0;
   transform: translateY(calc(-1 * var(--sp-3)));
   pointer-events: none;
-  /* Transition unifiée : hover bg/color rapide + animation entrée/sortie */
-  transition: background var(--dur-fast) ease, color var(--dur-fast) ease,
-              opacity 320ms ease, transform 380ms cubic-bezier(.34,1.4,.64,1);
+  /* Transition unifiée : hover bg/color rapide + animation entrée/sortie + hover/press scale */
+  transition: background var(--motion-fast) var(--ease-standard),
+              transform var(--motion-fast) var(--ease-standard), color var(--dur-fast) ease,
+              opacity 320ms ease;
 }
-.cinema-corner-btn:hover { background: rgba(255,255,255,.2); color: var(--text-on-accent); }
+.cinema-corner-btn:hover { background: rgba(255,255,255,.2); color: var(--text-on-accent); transform: scale(1.08); }
+.cinema-corner-btn:active { transform: scale(0.95); }
 .cinema-corner-btn svg   { width: var(--icon-lg); height: var(--icon-lg); }
 .cinema-close  { top: var(--cinema-corner-top); right: var(--cinema-corner-x); }
 .cinema-close svg { stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; width: var(--icon-md); height: var(--icon-md); }
@@ -5719,6 +5721,10 @@ html[data-mode="light"] .cinema-corner-btn {
 }
 html[data-mode="light"] .cinema-corner-btn:hover {
   background: rgba(255, 255, 255, 0.75);
+  transform: scale(1.08);
+}
+html[data-mode="light"] .cinema-corner-btn:active {
+  transform: scale(0.95);
 }
 
 html[data-mode="light"] #art-blur-bg {
