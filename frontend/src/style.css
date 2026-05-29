@@ -4257,13 +4257,13 @@ html[data-mode="light"] .pl-folder-h:hover .pl-folder-count { background: var(--
 
 /* Onglets de catégorie de presets */
 .eq-cats {
-  display: flex; gap: var(--sp-micro);
+  display: flex; flex-wrap: wrap; gap: var(--sp-micro);
   padding: var(--sp-3) var(--sp-4) 0;
   flex-shrink: 0;
   border-bottom: var(--border-w-sm) solid var(--sep);
-  overflow-x: auto; scrollbar-width: none;
+  /* #6 : passe à la ligne au lieu de scroller — « World » n'est plus coupé sur
+     les panneaux étroits (scroll horizontal sans affordance retiré). */
 }
-.eq-cats::-webkit-scrollbar { display: none; }
 .eq-cat {
   flex-shrink: 0;
   padding: var(--sp-1p) var(--sp-2d) var(--sp-2);
@@ -4521,6 +4521,19 @@ html[data-mode="light"] .eq-footer-reset { border-color: var(--bg5); color: var(
 #eq-panel.eq-expert            #eq-curve-wrap { height: 80px; }
 #eq-panel.eq-expert.eq-curve-active #eq-curve-wrap { height: 160px; }
 
+/* Mode Simple : les spacers de centrage sont .eq-expert-only (masqués) et les
+   bandes sont cachées → la courbe est le seul contenu du bas. On la laisse
+   GRANDIR pour remplir l'espace entre presets et footer (au lieu d'une mini
+   courbe 60px perdue dans un grand vide, cf. #10). flex-grow prime sur le
+   margin-top:auto du footer → la courbe occupe l'espace, le footer reste en bas.
+   Scopé :not(.eq-expert) → le mode Expert (qui utilise ses spacers) est intact. */
+#eq-panel:not(.eq-expert) #eq-curve-wrap {
+  flex: 1 1 auto;
+  height: auto;
+  min-height: var(--track-h-2xl, 96px);
+  max-height: 300px;
+}
+
 /* Toggle Simple / Expert */
 .eq-mode-switch {
   display: flex; background: var(--bg3); border-radius: var(--r-pill);
@@ -4539,6 +4552,48 @@ html[data-mode="light"] .eq-footer-reset { border-color: var(--bg5); color: var(
 .eq-mode-btn:active { transform: scale(.97); }
 .eq-mode-btn:focus-visible { outline: var(--focus-ring); outline-offset: var(--focus-offset); }
 
+/* ── Barre de contrôles EQ : power (bypass) / AUTO / A-B / profil appareil ──── */
+.eq-toolbar {
+  display: flex; align-items: center; gap: var(--sp-1h);
+  padding: var(--sp-2h) var(--sp-4);
+  flex-shrink: 0;
+  border-bottom: var(--border-w-sm) solid var(--sep);
+}
+.eq-tool-spacer { flex: 1; }
+.eq-tool-btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: var(--sp-1);
+  min-height: var(--target-min); /* WCAG 2.5.8 cible ≥24px */
+  padding: var(--sp-1q) var(--sp-2h);
+  border-radius: var(--r-pill);
+  border: var(--border-w-sm) solid var(--border-1);
+  background: none; color: var(--t2);
+  font-size: var(--fs-xs); font-weight: 600; letter-spacing: var(--ls-slight);
+  cursor: pointer;
+  transition: border-color var(--dur-fast) var(--smooth),
+              color        var(--dur-fast) var(--smooth),
+              background    var(--dur-fast) var(--smooth),
+              transform     var(--dur-fast) var(--smooth);
+}
+.eq-tool-btn svg { flex-shrink: 0; }
+.eq-tool-btn:hover  { color: var(--t); border-color: rgba(var(--g-rgb), .40); }
+.eq-tool-btn:active { transform: scale(.97); }
+.eq-tool-btn:focus-visible { outline: var(--focus-ring); outline-offset: var(--focus-offset); }
+.eq-tool-icon { padding: var(--sp-1q); }
+/* AUTO / A-B pressés → accent plein */
+.eq-auto-btn.active, .eq-ab-btn.active {
+  background: var(--g); border-color: var(--g); color: var(--text-on-accent);
+}
+/* Power : activé = accent doux ; off (bypass) = grisé */
+.eq-power            { color: var(--g); border-color: rgba(var(--g-rgb), .45); }
+.eq-power.eq-power--off      { color: var(--t3); border-color: var(--border-1); }
+.eq-power.eq-power--off svg  { opacity: .65; }
+html[data-mode="light"] .eq-tool-btn { border-color: var(--bg5); color: var(--t2); }
+/* Bypass (power off) : grise + neutralise bandes & courbe (cohérent avec l'audio
+   aplati). Les presets restent cliquables → en choisir un réactive l'EQ. */
+#eq-panel.eq-off .eq-bands,
+#eq-panel.eq-off #eq-curve-wrap { opacity: .45; transition: opacity var(--dur-mid) ease; }
+#eq-panel.eq-off .eq-bands { pointer-events: none; }
+
 /* Bands wrap : margin horizontal + annule le double margin de .eq-bands interne */
 .eq-bands-wrap {
   flex-direction: row; align-items: stretch; gap: 0;
@@ -4546,10 +4601,32 @@ html[data-mode="light"] .eq-footer-reset { border-color: var(--bg5); color: var(
 }
 .eq-bands-wrap .eq-bands { margin: 0; flex: 1; }
 
-/* Échelle dB : padding vertical aligné sur .eq-bands (sp-3h top / sp-3 bottom) */
+/* #1 : sur panneau étroit, les 10 bandes débordaient et 4k/8k/16k étaient
+   coupées (inatteignables). On les compresse via container query (le panneau
+   est `container: panel-eq / inline-size`), + filet de sécurité overflow-x. */
+.eq-bands { overflow-x: auto; scrollbar-width: none; }
+.eq-bands::-webkit-scrollbar { display: none; }
+@container panel-eq (max-width: 360px) {
+  .eq-bands-wrap { margin-left: var(--sp-2); margin-right: var(--sp-2); }
+  .eq-bands  { padding-left: var(--sp-1); padding-right: var(--sp-1); gap: 0; }
+  .eq-band   { padding: 0; }
+  .eq-band:nth-child(3), .eq-band:nth-child(6), .eq-band:nth-child(8) { margin-left: 0; }
+  .eq-slider { width: 18px; }
+  .eq-val    { min-width: 0; }
+  .eq-scale  { width: 20px; }
+}
+
+/* Échelle dB : alignée sur la COURSE des sliders (.eq-slider-wrap), pas sur la
+   carte .eq-bands entière. Chaque bande réserve en haut la valeur dB (.eq-val,
+   1 ligne « +0.0 » ≈ 18px) + un gap sp-1, et en bas la fréquence (.eq-freq,
+   1 ligne ≈ 14px) + un gap sp-1. Sans ces décalages, « 0 » ne tombait pas sur
+   les thumbs et « +12/−12 » débordaient la course. On insère ces zones dans le
+   padding pour que +12 / 0 / −12 correspondent au sommet / centre / bas de course.
+   (Les bandes ne s'affichent qu'en mode Expert, à largeur fixe → zones stables.) */
 .eq-scale {
   display: flex; flex-direction: column; justify-content: space-between;
-  width: 26px; padding: var(--sp-3h) 4px var(--sp-3) 0;
+  width: 26px;
+  padding: calc(var(--sp-3h) + 22px) 4px calc(var(--sp-3) + 18px) 0;
   font-size: 9px; line-height: 1; color: var(--t3); /* A11Y: échelle dB — --t4→--t3 */
   text-align: right; user-select: none; flex-shrink: 0;
 }

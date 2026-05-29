@@ -24,6 +24,7 @@
 
 import { get, set } from './store.js';
 import { emit, EVENTS } from './bus.js';
+import { i18n } from './i18n.js';
 
 // ── Fréquences Bark (10 bandes) ──────────────────────────────────────────────
 const EQ_FREQS = [32, 64, 125, 250, 500, 1000, 2000, 4000, 8000, 16000];
@@ -110,6 +111,7 @@ const GENRE_TO_PRESET = Object.freeze({
 let _activePreset  = 'flat';
 let _abMode        = false;      // true = affiche preset A (flat), false = preset courant
 let _abSavedGains  = null;       // gains sauvegardés avant mode A/B
+let _preBypassGains = null;      // gains sauvegardés avant bypass (power off) — restaurés au ré-enable
 
 // ── Profiles utilisateur ──────────────────────────────────────────────────────
 let _eqProfiles = {};
@@ -289,8 +291,18 @@ export function toggleEQ() {
   if (!panel) return;
   eqOpen = !eqOpen;
   panel.classList.toggle('open', eqOpen);
-  // A11Y : aria-expanded reflète l'état d'ouverture du panneau EQ.
-  document.getElementById('btn-eq')?.setAttribute('aria-expanded', eqOpen ? 'true' : 'false');
+  // Parité avec la file d'attente : pousser #main (padding-right) au lieu de le
+  // recouvrir. La règle CSS #app.panel-eq-open #main existait mais la classe
+  // n'était jamais posée — le panneau EQ chevauchait la bibliothèque.
+  document.getElementById('app')?.classList.toggle('panel-eq-open', eqOpen);
+  // A11Y : aria-expanded reflète l'ouverture du panneau ; .active = repère visuel
+  // d'ouverture (cohérent avec #btn-queue). L'état ACTIVÉ de l'EQ vit désormais
+  // sur le bouton power du panneau (.eq-power), plus sur #btn-eq (levée de l'ambiguïté).
+  const _eqBtn = document.getElementById('btn-eq');
+  if (_eqBtn) {
+    _eqBtn.setAttribute('aria-expanded', eqOpen ? 'true' : 'false');
+    _eqBtn.classList.toggle('active', eqOpen);
+  }
   if (eqOpen) {
     if (!eqCtx) initEQ();
     renderEQBands();
@@ -306,7 +318,10 @@ export function closeEQ() {
   eqOpen = false;
   const panel = document.getElementById('eq-panel');
   if (panel) panel.classList.remove('open');
-  document.getElementById('btn-eq')?.setAttribute('aria-expanded', 'false'); // A11Y
+  const _eqBtn = document.getElementById('btn-eq');
+  _eqBtn?.setAttribute('aria-expanded', 'false'); // A11Y
+  _eqBtn?.classList.remove('active');              // repère d'ouverture
+  document.getElementById('app')?.classList.remove('panel-eq-open'); // libère le push de #main
 }
 
 // ── setEQBand ─────────────────────────────────────────────────────────────────
@@ -317,18 +332,26 @@ export function setEQBand(idx, db) {
   if (!eqNodes[idx]) return;
   const val = Math.max(-12, Math.min(12, db));
   eqNodes[idx].gain.setTargetAtTime(val, eqCtx.currentTime, 0.01);
-  // Mettre à jour l'affichage du slider
+  // Mettre à jour l'affichage du slider. Le libellé visible n'affiche plus « dB »
+  // (l'échelle l'implique, ça évite le retour à la ligne) ; aria-valuetext le garde.
+  const num = (val >= 0 ? '+' : '') + val.toFixed(1);
   const slider = document.querySelector(`#eq-bands [data-band="${idx}"]`);
   if (slider) {
     slider.value = val;
-    slider.setAttribute('aria-valuetext', (val >= 0 ? '+' : '') + val.toFixed(1) + ' dB');
+    slider.setAttribute('aria-valuetext', num + ' dB');
   }
   const label = document.querySelector(`#eq-bands [data-band-label="${idx}"]`);
   if (label) {
-    label.textContent = (val >= 0 ? '+' : '') + val.toFixed(1) + ' dB';
+    label.textContent = num;
     label.classList.toggle('eq-val--boost', val > 0);
     label.classList.toggle('eq-val--cut',   val < 0);
     label.classList.toggle('eq-val--flat',  val === 0);
+  }
+  // Une édition manuelle rend le réglage « personnalisé » : on désélectionne le
+  // preset actif et on met à jour l'indicateur (sinon le footer mentait encore).
+  if (_activePreset !== 'custom') {
+    _activePreset = 'custom';
+    _updatePresetBtns('custom');
   }
   _drawEQCurve();
 }
@@ -387,7 +410,7 @@ function _animateSlidersTo(targetGains) {
       if (slider) slider.value = v;
       if (label) {
         const cls = v > 0.05 ? 'eq-val--boost' : v < -0.05 ? 'eq-val--cut' : 'eq-val--flat';
-        label.textContent = (v >= 0 ? '+' : '') + v.toFixed(1) + ' dB';
+        label.textContent = (v >= 0 ? '+' : '') + v.toFixed(1); // sans « dB » (cf. #11)
         label.className   = `eq-val ${cls}`;
       }
     });
@@ -405,7 +428,10 @@ export function applyEQPreset(presetName) {
   _applyGains(gains);              // audio : setTargetAtTime (sans click)
   _updatePresetBtns(presetName);
   _animateSlidersTo(gains);        // visuel : spring 220ms
-  if (!eqEnabled) _setEQEnabled(true);
+  // Les gains du preset priment sur une éventuelle sauvegarde de bypass, et on
+  // active sans repasser par _setEQEnabled (qui ré-appliquerait des gains).
+  _preBypassGains = null;
+  if (!eqEnabled) { eqEnabled = true; _updatePowerBtn(); }
 }
 
 export function getActiveEqPreset() {
@@ -421,30 +447,43 @@ export function applyEQGains(bands) {
   _applyGains(bands);
   _updatePresetBtns('custom'); // aucun preset bouton actif
   _animateSlidersTo(bands);
-  if (!eqEnabled) {
-    eqEnabled = true;
-    const _eqBtn = document.getElementById('btn-eq');
-    if (_eqBtn) {
-      _eqBtn.setAttribute('aria-pressed', 'true');
-      _eqBtn.classList.add('active');
-    }
-  }
+  _preBypassGains = null;
+  if (!eqEnabled) { eqEnabled = true; _updatePowerBtn(); }
 }
 
 // ── toggleEQ enabled (bypass) ─────────────────────────────────────────────────
 function _setEQEnabled(val) {
   eqEnabled = !!val;
-  const btn = document.getElementById('btn-eq');
-  if (btn) {
-    btn.setAttribute('aria-pressed', String(eqEnabled));
-    btn.classList.toggle('active', eqEnabled);
-  }
+  _updatePowerBtn();
+  // Cohérence visuelle du bypass : .eq-off grise + neutralise les bandes/courbe
+  // (cf. _drawEQCurve qui lit les noeuds aplatis) → ce qu'on voit = ce qu'on entend.
+  document.getElementById('eq-panel')?.classList.toggle('eq-off', !eqEnabled);
+  const zeros = new Array(EQ_BAND_COUNT).fill(0);
   if (!eqEnabled) {
-    _applyGains(new Array(EQ_BAND_COUNT).fill(0));
+    // Bypass : mémoriser les gains courants (custom inclus) puis aplatir (audio + visuel).
+    _preBypassGains = eqNodes.length ? eqNodes.map(n => n.gain.value) : null;
+    _applyGains(zeros);
+    _animateSlidersTo(zeros);
+  } else if (_preBypassGains) {
+    // Ré-enable : restaurer exactement ce qui était là avant le bypass.
+    _applyGains(_preBypassGains);
+    _animateSlidersTo(_preBypassGains);
+    _preBypassGains = null;
   } else {
     const gains = EQ_PRESETS[_activePreset] ?? EQ_PRESETS.flat;
     _applyGains(gains);
+    _animateSlidersTo(gains);
   }
+}
+
+/** Reflète l'état ACTIVÉ/bypass sur le bouton power du panneau (.eq-power). */
+function _updatePowerBtn() {
+  const btn = document.querySelector('#eq-panel .eq-power');
+  if (!btn) return;
+  btn.setAttribute('aria-pressed', String(eqEnabled));
+  btn.classList.toggle('eq-power--off', !eqEnabled);
+  const lbl = btn.querySelector('.eq-tool-label');
+  if (lbl) lbl.textContent = i18n(eqEnabled ? 'eq_on' : 'eq_off');
 }
 
 // ── applyGenreEQ ─────────────────────────────────────────────────────────────
@@ -489,7 +528,21 @@ export function updateSmartEQLoudness(lufs) {
 // ── setEQAutoMode / toggleEQAutoMode ─────────────────────────────────────────
 export function setEQAutoMode(val) {
   eqAutoMode = !!val;
-  if (!eqAutoMode) stopSmartEQ();
+  // Refléter l'état AUTO dans l'UI : presets/catégories grisés, bandes en lecture
+  // seule (teinte art-color), bouton AUTO pressé. (Les éléments peuvent ne pas
+  // exister au boot → querySelector null-safe.)
+  document.getElementById('eq-presets')?.classList.toggle('eq-presets--disabled', eqAutoMode);
+  document.getElementById('eq-cats')?.classList.toggle('eq-cats--disabled', eqAutoMode);
+  document.getElementById('eq-bands')?.classList.toggle('eq-bands--auto', eqAutoMode);
+  const btn = document.querySelector('#eq-panel .eq-auto-btn');
+  if (btn) { btn.setAttribute('aria-pressed', String(eqAutoMode)); btn.classList.toggle('active', eqAutoMode); }
+  if (eqAutoMode) {
+    startSmartEQ();
+    const t = get('tracks')?.[get('curIdx')];
+    if (t?.genre) applyGenreEQ(t.genre); // applique tout de suite le preset du genre courant
+  } else {
+    stopSmartEQ();
+  }
 }
 
 export function toggleEQAutoMode() {
@@ -509,7 +562,16 @@ export function toggleEQAB() {
     if (_abSavedGains) _applyGains(_abSavedGains);
     _abSavedGains = null;
   }
+  const btn = document.querySelector('#eq-panel .eq-ab-btn');
+  if (btn) { btn.setAttribute('aria-pressed', String(_abMode)); btn.classList.toggle('active', _abMode); }
   _drawEQCurve();
+}
+
+// ── toggleEQEnabled — bypass on/off (bouton power du panneau) ──────────────────
+/** Active/désactive l'EQ (bypass). Sauvegarde/restaure les gains courants. */
+export function toggleEQEnabled() {
+  if (!eqCtx) initEQ();
+  _setEQEnabled(!eqEnabled);
 }
 
 // ── Profiles utilisateur ──────────────────────────────────────────────────────
@@ -531,7 +593,9 @@ export function filterEQPresets(cat) {
   const btns = container.querySelectorAll('.eq-preset');
   btns.forEach(btn => {
     const bcat = btn.dataset.cat || 'all';
-    btn.style.display = (cat === 'all' || bcat === cat || bcat === 'all') ? '' : 'none';
+    // « Tous » montre tout ; une catégorie précise ne montre que SES presets
+    // (on ne réinjecte plus les presets « all » partout → moins de bruit).
+    btn.style.display = (cat === 'all' || bcat === cat) ? '' : 'none';
   });
   // Marquer le bouton de catégorie actif
   const catBtns = document.querySelectorAll('#eq-cats .eq-cat');
@@ -552,20 +616,22 @@ export function renderEQBands() {
     ? eqNodes.map(n => n.gain.value)
     : new Array(EQ_BAND_COUNT).fill(0);
 
+  const resetHint = i18n('eq_band_reset_hint');
   let html = '';
   for (let i = 0; i < EQ_BAND_COUNT; i++) {
     const g   = gains[i];
     const v   = g.toFixed(1);
-    const lbl = (g >= 0 ? '+' : '') + v + ' dB';
+    const num = (g >= 0 ? '+' : '') + v;   // libellé visible — sans « dB » (1 ligne)
+    const aria = num + ' dB';              // aria-valuetext — garde l'unité pour le SR
     const mod = g > 0 ? 'eq-val--boost' : g < 0 ? 'eq-val--cut' : 'eq-val--flat';
     html += `<div class="eq-band">
-  <span class="eq-val ${mod}" data-band-label="${i}">${lbl}</span>
+  <span class="eq-val ${mod}" data-band-label="${i}">${num}</span>
   <div class="eq-slider-wrap">
     <input type="range" class="eq-slider" orient="vertical"
       data-band="${i}" data-input-action="eq-band-input"
       min="-12" max="12" step="0.5" value="${v}"
-      aria-orientation="vertical"
-      aria-label="${LABELS[i]} Hz" aria-valuetext="${lbl}">
+      aria-orientation="vertical" title="${LABELS[i]} Hz — ${resetHint}"
+      aria-label="${LABELS[i]} Hz" aria-valuetext="${aria}">
   </div>
   <span class="eq-freq">${LABELS[i]}</span>
 </div>`;
@@ -576,24 +642,37 @@ export function renderEQBands() {
   container._eqDblClick && container.removeEventListener('dblclick', container._eqDblClick);
   container._eqDblClick = (e) => {
     const slider = e.target.closest('.eq-slider');
-    if (!slider || !eqCtx) return;
-    const idx = parseInt(slider.dataset.band, 10);
-    if (isNaN(idx) || !eqNodes[idx]) return;
-    // Audio : reset immédiat via setTargetAtTime (pas de glitch)
-    eqNodes[idx].gain.setTargetAtTime(0, eqCtx.currentTime, 0.01);
-    // Visuel : les autres bandes gardent leur position, only idx → 0
-    const targetGains = eqNodes.map(n => n.gain.value);
-    targetGains[idx] = 0;
-    _animateSlidersTo(targetGains);
-    // Flash de confirmation
-    const wrap = slider.closest('.eq-slider-wrap');
-    if (wrap) {
-      wrap.classList.remove('eq-band-reset');
-      void wrap.offsetWidth; // force reflow pour relancer l'animation
-      wrap.classList.add('eq-band-reset');
-    }
+    if (slider) _resetBand(parseInt(slider.dataset.band, 10), slider);
   };
   container.addEventListener('dblclick', container._eqDblClick);
+
+  // WCAG 2.5.7 + découvrabilité : alternative clavier au double-clic — Suppr /
+  // Retour arrière / 0 sur un slider focalisé réinitialise cette bande à 0 dB.
+  container._eqKeyDown && container.removeEventListener('keydown', container._eqKeyDown);
+  container._eqKeyDown = (e) => {
+    if (e.key !== 'Delete' && e.key !== 'Backspace' && e.key !== '0') return;
+    const slider = e.target.closest('.eq-slider');
+    if (!slider) return;
+    e.preventDefault();
+    _resetBand(parseInt(slider.dataset.band, 10), slider);
+  };
+  container.addEventListener('keydown', container._eqKeyDown);
+}
+
+/** Réinitialise une bande à 0 dB (audio sans glitch + spring visuel + flash). */
+function _resetBand(idx, slider) {
+  if (isNaN(idx) || !eqCtx || !eqNodes[idx]) return;
+  eqNodes[idx].gain.setTargetAtTime(0, eqCtx.currentTime, 0.01);
+  const targetGains = eqNodes.map(n => n.gain.value);
+  targetGains[idx] = 0;
+  _animateSlidersTo(targetGains);
+  if (_activePreset !== 'custom') { _activePreset = 'custom'; _updatePresetBtns('custom'); }
+  const wrap = slider?.closest('.eq-slider-wrap');
+  if (wrap) {
+    wrap.classList.remove('eq-band-reset');
+    void wrap.offsetWidth; // force reflow pour relancer l'animation
+    wrap.classList.add('eq-band-reset');
+  }
 }
 
 // ── _getArtRgb — couleur d'accent dynamique depuis --art-color ───────────────
@@ -753,7 +832,8 @@ function _updatePresetBtns(active) {
   const footerLabel = document.getElementById('eq-preset-label');
   if (footerLabel) {
     const activeBtn = document.querySelector(`#eq-presets .eq-preset[data-preset="${active}"]`);
-    footerLabel.textContent = activeBtn ? activeBtn.textContent.trim() : active;
+    footerLabel.textContent = activeBtn ? activeBtn.textContent.trim()
+                            : active === 'custom' ? i18n('eq_custom') : active;
   }
 }
 
@@ -781,6 +861,13 @@ export function toggleEQExpert() { setEQExpert(!eqExpert); }
 // ── _syncEQUI ─────────────────────────────────────────────────────────────────
 function _syncEQUI() {
   _updatePresetBtns(_activePreset);
+  _updatePowerBtn();
+  // Refléter AUTO si restauré depuis cfg avant l'ouverture du panneau.
+  const autoBtn = document.querySelector('#eq-panel .eq-auto-btn');
+  if (autoBtn) { autoBtn.setAttribute('aria-pressed', String(eqAutoMode)); autoBtn.classList.toggle('active', eqAutoMode); }
+  document.getElementById('eq-presets')?.classList.toggle('eq-presets--disabled', eqAutoMode);
+  document.getElementById('eq-cats')?.classList.toggle('eq-cats--disabled', eqAutoMode);
+  document.getElementById('eq-bands')?.classList.toggle('eq-bands--auto', eqAutoMode);
 }
 
 // ── Handler input slider (wired via data-input-action="eq-band-input") ────────

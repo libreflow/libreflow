@@ -1150,15 +1150,33 @@
     </button>
   </div>
 
+  <!-- Barre de contrôles EQ : marche/arrêt (bypass), AUTO (genre), A/B (comparer), profil appareil -->
+  <div class="eq-toolbar" role="group" data-i18n-aria="aria_eq_mode_group" aria-label="Contrôles EQ">
+    <button class="eq-tool-btn eq-power" data-action="eq-toggle-enabled" aria-pressed="true"
+            data-i18n-title="aria_eq_power" data-i18n-aria="aria_eq_power" aria-label="Activer ou désactiver l'égaliseur">
+      <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 2v9"/><path d="M5.6 7.6a8 8 0 1 0 12.8 0"/></svg>
+      <span class="eq-tool-label" data-i18n="eq_on">Activé</span>
+    </button>
+    <button class="eq-tool-btn eq-auto-btn" data-action="eq-toggle-auto" aria-pressed="false"
+            data-i18n="eq_auto" data-i18n-title="aria_eq_auto" data-i18n-aria="aria_eq_auto" aria-label="EQ automatique selon le genre">AUTO</button>
+    <button class="eq-tool-btn eq-ab-btn" data-action="eq-ab" aria-pressed="false"
+            data-i18n="eq_ab" data-i18n-title="aria_eq_ab" data-i18n-aria="aria_eq_ab" aria-label="Comparer avec le son d'origine (A/B)">A/B</button>
+    <span class="eq-tool-spacer" aria-hidden="true"></span>
+    <button class="eq-tool-btn eq-tool-icon" data-action="save-device-eq"
+            data-i18n-title="aria_eq_device" data-i18n-aria="aria_eq_device" aria-label="Enregistrer ce réglage pour la sortie audio actuelle">
+      <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M17 21v-8H7v8"/><path d="M7 3v5h8"/></svg>
+    </button>
+  </div>
+
   <!-- Onglets de catégorie — nouvelle taxonomie par couleur sonore -->
-  <!-- A11Y : data-cat doublé corrigé, aria-controls ajouté vers #eq-presets -->
+  <!-- A11Y : data-cat doublé corrigé, aria-controls ajouté vers #eq-presets ; data-i18n pour traduction (FR/EN) -->
   <div class="eq-cats" id="eq-cats" role="tablist" data-i18n-aria="aria_eq_cats" aria-label="Catégories de presets EQ">
-    <button class="eq-cat active" role="tab" aria-selected="true"  aria-controls="eq-presets" data-action="filter-eq-presets" data-cat="all">Tous</button>
-    <button class="eq-cat"        role="tab" aria-selected="false" aria-controls="eq-presets" data-action="filter-eq-presets" data-cat="bass">Bass</button>
-    <button class="eq-cat"        role="tab" aria-selected="false" aria-controls="eq-presets" data-action="filter-eq-presets" data-cat="electro">Électro</button>
-    <button class="eq-cat"        role="tab" aria-selected="false" aria-controls="eq-presets" data-action="filter-eq-presets" data-cat="urban">Urban</button>
-    <button class="eq-cat"        role="tab" aria-selected="false" aria-controls="eq-presets" data-action="filter-eq-presets" data-cat="live">Live</button>
-    <button class="eq-cat"        role="tab" aria-selected="false" aria-controls="eq-presets" data-action="filter-eq-presets" data-cat="world">World</button>
+    <button class="eq-cat active" role="tab" aria-selected="true"  aria-controls="eq-presets" data-action="filter-eq-presets" data-cat="all"     data-i18n="eq_cat_all">Tous</button>
+    <button class="eq-cat"        role="tab" aria-selected="false" aria-controls="eq-presets" data-action="filter-eq-presets" data-cat="bass"    data-i18n="eq_cat_bass">Bass</button>
+    <button class="eq-cat"        role="tab" aria-selected="false" aria-controls="eq-presets" data-action="filter-eq-presets" data-cat="electro" data-i18n="eq_cat_electro">Électro</button>
+    <button class="eq-cat"        role="tab" aria-selected="false" aria-controls="eq-presets" data-action="filter-eq-presets" data-cat="urban"   data-i18n="eq_cat_urban">Urban</button>
+    <button class="eq-cat"        role="tab" aria-selected="false" aria-controls="eq-presets" data-action="filter-eq-presets" data-cat="live"    data-i18n="eq_cat_live">Live</button>
+    <button class="eq-cat"        role="tab" aria-selected="false" aria-controls="eq-presets" data-action="filter-eq-presets" data-cat="world"   data-i18n="eq_cat_world">World</button>
   </div>
 
   <!-- Presets filtrés par catégorie -->

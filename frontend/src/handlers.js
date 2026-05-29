@@ -28,7 +28,8 @@ import { toggleQueue, closeQueue, playQueueItem,
          removeFromQueue, clearExplicitQueue, moveQueueItem }  from './queue.js';
 import { toggleEQ, closeEQ, applyEQPreset,
          filterEQPresets, setMasterGain,
-         setEQExpert }                                         from './eq.js';
+         setEQExpert, eqOpen,
+         toggleEQEnabled, toggleEQAutoMode, toggleEQAB }       from './eq.js';
 import { saveCurrentDeviceProfile, deleteDeviceProfile,
          renderDeviceProfiles }                                from './eqdevice.js';
 import { organizePreview, organizeConfirm,
@@ -146,10 +147,22 @@ const _ACTIONS = {
   'queue-move-down':       btn  => moveQueueItem(btn.dataset.id,  1),
 
   // ── EQ ────────────────────────────────────────────────────
-  'toggle-eq':             ()    => { closeNowPlaying(); toggleEQ(); },
+  'toggle-eq':             ()    => {
+    closeNowPlaying();
+    // Exclusivité de panneau, symétrique à toggleQueue() (qui ferme l'EQ) :
+    // à l'ouverture, fermer la file d'attente et les réglages s'ils sont ouverts.
+    if (!eqOpen) {
+      closeQueue();
+      if (document.getElementById('settings-panel')?.classList.contains('on')) closeSettings();
+    }
+    toggleEQ();
+  },
   'close-eq':              ()    => closeEQ(),
   'eq-preset':             btn  => applyEQPreset(btn.dataset.preset),
   'eq-mode':               btn  => setEQExpert(btn.dataset.mode === 'expert'),
+  'eq-toggle-enabled':     ()    => toggleEQEnabled(),
+  'eq-toggle-auto':        ()    => toggleEQAutoMode(),
+  'eq-ab':                 ()    => toggleEQAB(),
   // ── Sleep timer ───────────────────────────────────────────
   'toggle-sleep':          ()    => toggleSleepMenu(),
   'sleep-timer':           btn  => setSleepTimer(+btn.dataset.minutes),

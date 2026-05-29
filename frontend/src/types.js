@@ -203,7 +203,7 @@
 /** @typedef {'toggle-queue'|'close-queue'|'clear-queue'|'remove-from-queue'} QueueAction */
 
 /** Actions EQ */
-/** @typedef {'toggle-eq'|'close-eq'|'eq-preset'|'eq-mode'|'filter-eq-presets'|'save-device-eq'|'delete-device-eq'} EQAction */
+/** @typedef {'toggle-eq'|'close-eq'|'eq-preset'|'eq-mode'|'filter-eq-presets'|'save-device-eq'|'delete-device-eq'|'eq-toggle-enabled'|'eq-toggle-auto'|'eq-ab'} EQAction */
 
 /** Actions sleep timer */
 /** @typedef {'toggle-sleep'|'sleep-timer'|'sleep-end-track'|'sleep-custom'|'cancel-sleep'} SleepAction */
