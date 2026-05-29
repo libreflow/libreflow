@@ -166,6 +166,23 @@ async function run() {
     }
   });
 
+  // --- WCAG SC 2.3.1 Three Flashes (Level A) — garde-fou anti-stroboscope ----
+  // Le seul effet synchronisé à la musique (cinema-beat-pulse) doit rester sous
+  // 3 flashs/s : BEAT_COOLDOWN >= 334 ms. (Audit : le visualizer lisse + clear
+  // chaque frame, prefers-reduced-motion coupe toutes les boucles — pas de flash.)
+  await t('cinema beat cooldown keeps flashes <=3/sec (SC 2.3.1)', () => {
+    const cj = readRepoFile('frontend/src/cinema.js');
+    const m = /BEAT_COOLDOWN\s*=\s*(\d+)/.exec(cj);
+    assert.ok(m, 'BEAT_COOLDOWN introuvable dans cinema.js');
+    assert.ok(parseInt(m[1], 10) >= 334,
+      `BEAT_COOLDOWN ${m[1]}ms < 334ms → risque de >3 flashs/s (SC 2.3.1)`);
+  });
+  await t('global prefers-reduced-motion kill-switch present (SC 2.3.3)', () => {
+    assert.ok(/@media\s*\(prefers-reduced-motion:\s*reduce\)[^}]*\{[^}]*\*[^}]*\{[^}]*animation-duration/s.test(SS)
+      || /prefers-reduced-motion:\s*reduce/.test(SS),
+      'style.css doit couper les animations sous prefers-reduced-motion');
+  });
+
   if (fail) { console.log(`\nA11Y FAIL: ${fail}/${pass + fail}`); process.exit(1); }
   console.log(`\nA11Y OK: ${pass}/${pass}`);
 }
