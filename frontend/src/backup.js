@@ -168,7 +168,7 @@ export async function importBackup() {
       dput('imports', i).catch(e => console.warn('[backup] imports IDB write:', e));
     }
 
-    const added = newTracks.length - currentTracks.length;
+    const added = addedTracks.length;
     toast(
       `Restauration terminée — ${added} nouvelle(s) piste(s) ajoutée(s) / ${manifest.track_count ?? backupTracks.length} dans la sauvegarde`,
       'success'
