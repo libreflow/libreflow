@@ -1833,6 +1833,13 @@ section('components/lf-toast-stack.logic.js -- import-smoke');
     // Verify real module behaves identically for representative cases
     assert(mod.normalizeType('error') === 'error',    'real module: normalizeType("error") === "error"');
     assert(mod.resolveDuration('info') === 3000,      'real module: resolveDuration("info") === 3000');
+    // A11Y-13 : la durée s'étire avec la longueur du message (SC 2.2.1)
+    assert(mod.resolveDuration('info', null, 'OK') === 3000,
+      'real module: short message keeps base duration');
+    assert(mod.resolveDuration('info', null, 'a'.repeat(150)) >= 11500,
+      'real module: long message bumps duration (>=11500)');
+    assert(mod.resolveDuration('info', 5000, 'a'.repeat(150)) === 5000,
+      'real module: explicit duration overrides message scaling');
     const s1 = mod.toastReducer([], { type: 'add', item: { id: 42 } });
     assert(s1.length === 1 && s1[0].id === 42,        'real module: toastReducer add works');
     // mark-dismissing action present in real module

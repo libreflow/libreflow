@@ -174,7 +174,7 @@ export class LfToastStack extends LitElement {
     const type = normalizeType(opts.type);
     const id = ++LfToastStack._seq;
     const closable = (type === 'error' || type === 'warning');
-    const duration = resolveDuration(type, opts.duration);
+    const duration = resolveDuration(type, opts.duration, opts.message);
 
     const item = {
       id,

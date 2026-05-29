@@ -30,10 +30,16 @@ export function normalizeType(t) {
  * @param {string} type
  * @param {number} [explicitDur] — only used if a strictly positive number.
  *        0 and negative values fall back to the type default duration.
+ * @param {string} [message] — A11Y-13 (SC 2.2.1) : si fourni, la durée s'étire
+ *        avec la longueur du message (~15 car./s de lecture + 1,5 s de marge),
+ *        sans jamais descendre sous la base du type. Un explicitDur > 0 gagne.
  */
-export function resolveDuration(type, explicitDur) {
+export function resolveDuration(type, explicitDur, message) {
   if (typeof explicitDur === 'number' && explicitDur > 0) return explicitDur;
-  return TOAST_DUR[normalizeType(type)];
+  const base = TOAST_DUR[normalizeType(type)];
+  if (!message) return base;
+  const required = Math.ceil(String(message).length / 15) * 1000 + 1500;
+  return Math.max(base, required);
 }
 
 /**
