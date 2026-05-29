@@ -648,6 +648,7 @@ export const LANGS = {
     t_sel_unliked:         '♡ Likes retirés',
     t_sel_deleted:         (n) => `🗑 ${n} titre${n!==1?'s':''} supprimé${n!==1?'s':''}`,
     t_sel_undo_delete:     'Suppression annulée',
+    t_sel_undo_hint:       'Ctrl+Z pour annuler',
     // Cinema fullscreen
     t_cin_fs_enter:        'Plein écran [F]',
     t_cin_fs_exit:         'Quitter le plein écran [F]',
@@ -1299,6 +1300,7 @@ export const LANGS = {
     t_sel_unliked:         '♡ Likes removed',
     t_sel_deleted:         (n) => `🗑 ${n} track${n!==1?'s':''} deleted`,
     t_sel_undo_delete:     'Deletion undone',
+    t_sel_undo_hint:       'Ctrl+Z to undo',
     // Cinema fullscreen
     t_cin_fs_enter:        'Full screen [F]',
     t_cin_fs_exit:         'Exit full screen [F]',

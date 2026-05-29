@@ -199,6 +199,27 @@ export function selToggleLike() {
   toast(likedCount ? i18n('t_sel_liked', likedCount) : i18n('t_sel_unliked'), 'success');
 }
 
+/**
+ * A11Y-07 (SC 2.2.1 / 2.1.1) : permet d'annuler une action destructive au
+ * clavier via Ctrl+Z (ou Cmd+Z) pendant `durationMs`. Le handler s'auto-détache
+ * à l'expiration ou après un déclenchement. Ne vole pas le Ctrl+Z natif d'un
+ * champ de saisie (input / textarea / contenteditable).
+ * @param {Function} undoFn
+ * @param {number}   durationMs
+ */
+function _attachOneShotUndo(undoFn, durationMs) {
+  const handler = (e) => {
+    if (!((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z')) return;
+    const t = e.target;
+    if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
+    e.preventDefault();
+    document.removeEventListener('keydown', handler);
+    undoFn();
+  };
+  document.addEventListener('keydown', handler);
+  setTimeout(() => document.removeEventListener('keydown', handler), durationMs);
+}
+
 export function selRemove() {
   if (!selection.size) return;
   const n   = selection.size;
@@ -231,7 +252,9 @@ export function selRemove() {
   resetShuffleQ();
 
   // ── Différer la suppression IDB pour permettre l'annulation ─
-  const UNDO_MS = 5000;
+  // A11Y-07 (SC 2.2.1) : fenêtre d'annulation portée à 15 s pour laisser le temps
+  // aux utilisateurs de technologies d'assistance de lire le toast et de réagir.
+  const UNDO_MS = 15000;
   let undone = false;
   const idbTimer = setTimeout(() => {
     if (undone) return;
@@ -245,7 +268,10 @@ export function selRemove() {
 
   invalidateFilterCache(); emit(EVENTS.FILTER_CHANGED, {}); clearSelection(); emit(EVENTS.RENDER_LIB, {}); updateStats();
 
-  toastWithAction(i18n('t_sel_deleted', n), 'success', i18n('te_cancel'), () => {
+  // Annulation partagée entre le bouton du toast et le raccourci clavier Ctrl+Z.
+  // Idempotente : le guard `undone` empêche un double-undo si les deux se déclenchent.
+  const doUndo = () => {
+    if (undone) return;
     undone = true;
     clearTimeout(idbTimer);
     // Restaurer l'état complet
@@ -254,7 +280,11 @@ export function selRemove() {
     resetShuffleQ();
     invalidateFilterCache(); emit(EVENTS.FILTER_CHANGED, {}); emit(EVENTS.RENDER_LIB, {}); updateStats();
     toast(i18n('t_sel_undo_delete'), 'info');
-  }, UNDO_MS);
+  };
+
+  toastWithAction(`${i18n('t_sel_deleted', n)} · ${i18n('t_sel_undo_hint')}`,
+                  'success', i18n('te_cancel'), doUndo, UNDO_MS);
+  _attachOneShotUndo(doUndo, UNDO_MS);
 }
 
 // ── Édition de tags en lot ─────────────────────────────────────
