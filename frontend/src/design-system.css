@@ -42,28 +42,29 @@
 
 
 /* ============================================================================
- * 2. COULEURS — Thème dark premium audio
- * Palette : charbon bleuté profond + accent corail chaud (#FF8C66).
- * Choix accent : chaud, vinyle, distinctif (ni vert Spotify, ni cyan Tidal).
+ * 2. COULEURS — Thème dark premium audio (B2-revision : OLED neutre + Twitter)
+ * Palette : OLED noir pur + paliers gris neutres, accent bleu nuit Twitter #1D9BF0.
+ * Choix : zéro cast chromatique sur les surfaces (compatible OLED, contraste max) +
+ * accent bleu vif reconnaissable (style night-mode social media 2026).
  * ============================================================================ */
 :root {
-  /* --- Surfaces dark — palette respirée, 5 paliers ΔE perceptibles (B2) -- */
-  --bg-base       : #0A0B0E;   /* canonique design-system §2 */
-  --bg-surface    : #15171C;   /* cards, sidebar */
-  --bg-elevated   : #1D2028;   /* modales, menus contextuels */
-  --bg-raised     : #272A34;   /* popovers, surfaces ultra-élevées */
-  --bg-overlay    : rgba(29, 32, 40, 0.72);
+  /* --- Surfaces dark — OLED + neutres, 5 paliers ΔE perceptibles --------- */
+  --bg-base       : #000000;   /* OLED pur — économie batterie + contraste max */
+  --bg-surface    : #131313;   /* cards, sidebar */
+  --bg-elevated   : #1E1E1E;   /* modales, menus contextuels */
+  --bg-raised     : #292929;   /* popovers, surfaces ultra-élevées */
+  --bg-overlay    : rgba(30, 30, 30, 0.72);
 
-  /* --- Texte -------------------------------------------------------------- */
-  --text-primary   : #F5F6F8;                 /* titres, éléments actifs */
-  --text-secondary : #B4B7C2;                 /* artistes, métadonnées */
-  --text-muted     : #8B90A0;                 /* timestamps, labels discrets — AA 5.1:1 sur --bg-base #0A0B0E (B2) */
+  /* --- Texte — neutres sur OLED ------------------------------------------ */
+  --text-primary   : #F5F6F8;                 /* titres — 19.6:1 sur #000 */
+  --text-secondary : #B4B7C2;                 /* artistes — 10.5:1 sur #000 */
+  --text-muted     : #8B90A0;                 /* metadata — 6.6:1 sur #000 */
 
-  /* --- Accent (une seule couleur forte) ----------------------------------- */
-  --accent         : #FF8C66;                 /* corail chaud premium */
-  --accent-hover   : #FFA37F;                 /* +10% luminosité */
-  --accent-glow    : rgba(255, 140, 102, 0.45);
-  --accent-subtle  : rgba(255, 140, 102, 0.10);
+  /* --- Accent (bleu nuit Twitter / X) ------------------------------------- */
+  --accent         : #1D9BF0;                 /* bird blue — 6.2:1 sur --bg-surface */
+  --accent-hover   : #3FAEFD;                 /* +12% luminosité */
+  --accent-glow    : rgba(29, 155, 240, 0.45);
+  --accent-subtle  : rgba(29, 155, 240, 0.10);
 }
 
 
@@ -74,9 +75,9 @@
  * cohérents avec la palette --accent / --bg-* / --text-* officielle.
  * ============================================================================ */
 :root {
-  /* Accent opérationnel (alias du --accent corail défini en §2) */
+  /* Accent opérationnel (alias du --accent bleu Twitter défini en §2) */
   --g       : var(--accent);
-  --g-rgb   : 255, 140, 102;
+  --g-rgb   : 29, 155, 240;
   --gd      : var(--accent-subtle);
   --gg      : var(--accent-glow);
   --text-on-accent : #ffffff;
@@ -399,9 +400,9 @@ html[data-mode="light"] {
   --t3  : var(--text-muted);
   --t4  : #95A0B4;
 
-  /* Accent corail : --accent reste constant (la même couleur sur dark et light).
+  /* Accent bleu Twitter : --accent reste constant sur dark et light.
      Seul --accent-subtle est ajusté pour la lisibilité sur fond clair. */
-  --accent-subtle : rgba(255, 140, 102, 0.14);
+  --accent-subtle : rgba(29, 155, 240, 0.14);
 
   /* Bordures light — alpha noir au lieu d'alpha blanc */
   --border-subtle  : rgba(0, 0, 0, 0.06);

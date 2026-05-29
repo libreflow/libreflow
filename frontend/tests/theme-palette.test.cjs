@@ -12,10 +12,10 @@ const DS = fs.readFileSync(path.join(__dirname, '../src/design-system.css'), 'ut
 
 // Cible : palette dark à 5 paliers, ΔRGB total >= 35 entre --bg et --bg5.
 const DARK_TARGET = {
-  '--bg-base'      : '#0A0B0E',
-  '--bg-surface'   : '#15171C',
-  '--bg-elevated'  : '#1D2028',
-  '--bg-raised'    : '#272A34',
+  '--bg-base'      : '#000000',
+  '--bg-surface'   : '#131313',
+  '--bg-elevated'  : '#1E1E1E',
+  '--bg-raised'    : '#292929',
 };
 
 function extractRoot(css) {
@@ -121,12 +121,12 @@ async function run() {
   });
 
   await t('cyan accent on dark bg-surface passes AA (4.5:1)', () => {
-    const ratio = contrastRatio('#22d3ee', '#15171C');
+    const ratio = contrastRatio('#22d3ee', '#131313');
     assert.ok(ratio >= 4.5, `cyan on bg-surface = ${ratio.toFixed(2)}:1`);
   });
 
   await t('green accent on dark bg-surface passes AA (4.5:1)', () => {
-    const ratio = contrastRatio('#34d399', '#15171C');
+    const ratio = contrastRatio('#34d399', '#131313');
     assert.ok(ratio >= 4.5, `green on bg-surface = ${ratio.toFixed(2)}:1`);
   });
 
