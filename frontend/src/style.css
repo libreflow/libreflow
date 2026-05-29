@@ -1053,7 +1053,7 @@ html[data-mode="light"] .pcplay:hover  { filter:brightness(1.08); transform:scal
 /* Autres boutons player */
 html[data-mode="light"] .pc           { color:var(--t2); }
 html[data-mode="light"] .pc:hover     { color:var(--t); background:var(--bg4); transform:scale(1.08); }
-html[data-mode="light"] .pc.on        { color:var(--g); }
+html[data-mode="light"] .pc.on        { color:var(--g); background:var(--accent-subtle); }
 html[data-mode="light"] #pl-n-time,
 html[data-mode="light"] .pl-dur       { color:var(--t3); }
 
@@ -2874,7 +2874,9 @@ html[data-mode="light"] .empty-cta {
 }
 .pc:hover  { color: var(--t); background: var(--bg4); transform: scale(1.12); }
 .pc:active { transform: scale(.88); transition-duration: var(--dur-fast); }
-.pc.on     { color: var(--g); }
+/* SC 1.4.1 Use of Color : l'état actif ne repose pas que sur la couleur —
+   fond teinté en plus de l'accent (cohérent avec .pl-queue-btn.active). */
+.pc.on     { color: var(--g); background: var(--accent-subtle); }
 .pc svg    { width: var(--icon-lg); height: var(--icon-lg); fill: currentColor; }
 
 /* Repeat-one badge "1" sur le bouton repeat — player principal + cinéma */
@@ -5612,6 +5614,16 @@ html[data-mode="light"] .eq-slider::-moz-range-track { background: var(--bg6); }
 #cinema-art-img.cin-kb-1 { animation: cin-kb-1 28s cubic-bezier(.4,0,.6,1) forwards; transform-origin: 38% 38%; }
 #cinema-art-img.cin-kb-2 { animation: cin-kb-2 32s cubic-bezier(.4,0,.6,1) forwards; transform-origin: 60% 40%; }
 #cinema-art-img.cin-kb-3 { animation: cin-kb-3 26s cubic-bezier(.4,0,.6,1) forwards; transform-origin: 40% 60%; }
+
+/* A11Y SC 2.3.1 / 2.2.2 — reduced-motion : neutraliser le flash beat et le Ken
+   Burns. Placé APRÈS leurs définitions car .cinema-art-wrap.beat (0,2,0 !important)
+   et le shorthand `animation … forwards` battaient le kill-switch global
+   (* { animation-duration:0 !important }) par spécificité — laissant le flash
+   jouer et l'image figée à scale(1.10). */
+@media (prefers-reduced-motion: reduce) {
+  .cinema-art-wrap.beat             { animation: none !important; }
+  #cinema-art-img[class*="cin-kb-"] { animation: none !important; transform: none !important; }
+}
 
 #cinema-art-img  { position: relative; z-index: 1; width: 100%; height: 100%; object-fit: contain; display: block; border-radius: inherit; }
 #cinema-art-em   { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: var(--fs-hero); background: var(--c-1a); }

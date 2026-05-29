@@ -436,12 +436,12 @@
 <div id="pl-modal-bg" data-backdrop-action="close-pl-modal">
   <div id="pl-modal" role="dialog" aria-modal="true" aria-labelledby="pl-modal-title">
     <!-- Mode tabs -->
-    <div class="pl-modal-tabs">
-      <button class="pl-tab active" id="pl-tab-manual" data-action="pl-tab" data-tab="manual">
+    <div class="pl-modal-tabs" role="tablist" data-i18n-aria="aria_pl_tablist" aria-label="Type de playlist">
+      <button class="pl-tab active" id="pl-tab-manual" role="tab" aria-selected="true" aria-controls="pl-panel-manual" data-action="pl-tab" data-tab="manual">
         <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
         Manuelle
       </button>
-      <button class="pl-tab" id="pl-tab-smart" data-action="pl-tab" data-tab="smart">
+      <button class="pl-tab" id="pl-tab-smart" role="tab" aria-selected="false" aria-controls="pl-panel-smart" data-action="pl-tab" data-tab="smart">
         <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
         Intelligente
       </button>
@@ -539,7 +539,7 @@
       <div class="spl-grid-2">
         <div>
           <div class="spl-section-lbl">Titres max</div>
-          <select id="smart-size" class="pl-modal-inp spl-select" data-input-action="smart-preview-if-visible">
+          <select id="smart-size" class="pl-modal-inp spl-select" data-i18n-aria="aria_smart_size" aria-label="Nombre de titres maximum" data-input-action="smart-preview-if-visible">
             <option value="10">10 titres</option>
             <option value="20" selected>20 titres</option>
             <option value="30">30 titres</option>
@@ -549,7 +549,7 @@
         </div>
         <div>
           <div class="spl-section-lbl">Nom de la playlist</div>
-          <input id="smart-pl-name" class="pl-modal-inp" type="text" placeholder="Auto-généré…" maxlength="60">
+          <input id="smart-pl-name" class="pl-modal-inp" type="text" placeholder="Auto-généré…" maxlength="60" data-i18n-aria="aria_smart_pl_name" aria-label="Nom de la playlist">
         </div>
       </div>
 
@@ -560,7 +560,7 @@
         <!-- Combinator -->
         <div class="spl-combinator">
           <span data-i18n="spl_match">Correspondre à</span>
-          <select id="spl-combinator" class="pl-modal-inp spl-select-auto" data-input-action="spl-rules-preview">
+          <select id="spl-combinator" class="pl-modal-inp spl-select-auto" data-i18n-aria="aria_spl_combinator" aria-label="Mode de correspondance des règles" data-input-action="spl-rules-preview">
             <option value="all" data-i18n="spl_comb_all">toutes les règles (ET)</option>
             <option value="any" data-i18n="spl_comb_any">au moins une (OU)</option>
           </select>
@@ -575,7 +575,7 @@
         <div class="spl-grid-2">
           <div>
             <div class="spl-section-lbl" data-i18n="spl_max">Titres max</div>
-            <select id="spl-rules-size" class="pl-modal-inp spl-select" data-input-action="spl-rules-preview">
+            <select id="spl-rules-size" class="pl-modal-inp spl-select" data-i18n-aria="aria_spl_rules_size" aria-label="Nombre de titres maximum" data-input-action="spl-rules-preview">
               <option value="10">10 titres</option>
               <option value="20" selected>20 titres</option>
               <option value="30">30 titres</option>
@@ -585,7 +585,7 @@
           </div>
           <div>
             <div class="spl-section-lbl" data-i18n="spl_name">Nom de la playlist</div>
-            <input id="spl-rules-name" class="pl-modal-inp" type="text" placeholder="Règles perso…" maxlength="60">
+            <input id="spl-rules-name" class="pl-modal-inp" type="text" placeholder="Règles perso…" maxlength="60" data-i18n-aria="aria_spl_rules_name" aria-label="Nom de la playlist">
           </div>
         </div>
       </div><!-- /#smart-rules-panel -->
@@ -858,6 +858,7 @@
         <div class="crossfade-row">
           <input type="range" class="cf-slider" id="cf-slider"
             min="0" max="12" step="1" value="0"
+            data-i18n-aria="aria_cf_slider" aria-label="Durée du fondu enchaîné"
             data-input-action="crossfade">
         </div>
       </div>
@@ -1376,8 +1377,8 @@
 
 <!-- BATCH TAG EDIT MODAL -->
 <div id="batch-tag-modal-bg" data-backdrop-action="close-batch-tag-modal">
-  <div id="batch-tag-modal">
-    <div class="modal-h">✏ Édition en lot</div>
+  <div id="batch-tag-modal" role="dialog" aria-modal="true" aria-labelledby="batch-tag-modal-title">
+    <div class="modal-h" id="batch-tag-modal-title">✏ Édition en lot</div>
     <div id="bte-count" class="modal-s"></div>
     <div class="bte-cover-zone">
       <div id="bte-cover-preview" class="bte-cover-preview" data-action="bte-cover-click" role="button" tabindex="0">

@@ -341,8 +341,14 @@ export function switchPlTab(tab) {
   const tabSmart    = document.getElementById('pl-tab-smart');
   if (panelManual) panelManual.style.display = tab==='manual' ? '' : 'none';
   if (panelSmart)  panelSmart.style.display  = tab==='smart'  ? '' : 'none';
-  if (tabManual)   tabManual.classList.toggle('active', tab==='manual');
-  if (tabSmart)    tabSmart.classList.toggle('active',  tab==='smart');
+  if (tabManual) {
+    tabManual.classList.toggle('active', tab==='manual');
+    tabManual.setAttribute('aria-selected', String(tab==='manual'));
+  }
+  if (tabSmart) {
+    tabSmart.classList.toggle('active',  tab==='smart');
+    tabSmart.setAttribute('aria-selected', String(tab==='smart'));
+  }
 }
 
 export function openSmartPlaylistModal(seedTrackId) {

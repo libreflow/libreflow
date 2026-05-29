@@ -202,6 +202,61 @@ async function run() {
       'le titre défilant (.mq.mq-on) doit passer en animation-play-state: paused au survol/focus');
   });
 
+  // --- SC 4.1.2 / 3.3.2 : tout contrôle de formulaire a un nom accessible ------
+  // Les <select>/<input> dont le libellé visible est un <div>/<span> (pas un
+  // <label for>) doivent porter aria-label OU data-i18n-aria OU aria-labelledby.
+  function openTagById(html, id) {
+    const m = new RegExp(`<[^>]*\\bid="${id}"[^>]*>`).exec(html);
+    return m ? m[0] : null;
+  }
+  function hasAccessibleName(tag) {
+    return /\saria-label="[^"]+"/.test(tag)
+        || /\sdata-i18n-aria="[^"]+"/.test(tag)
+        || /\saria-labelledby="[^"]+"/.test(tag);
+  }
+  for (const id of [
+    'cf-slider',          // A11Y-H1 : curseur de fondu enchaîné
+    'smart-size', 'smart-pl-name',                    // A11Y-H2 : panneau similarité
+    'spl-combinator', 'spl-rules-size', 'spl-rules-name', // A11Y-H2 : panneau règles
+  ]) {
+    await t(`#${id} declares an accessible name (SC 4.1.2/3.3.2)`, () => {
+      const tag = openTagById(HTML, id);
+      assert.ok(tag, `#${id} introuvable dans index.html`);
+      assert.ok(hasAccessibleName(tag),
+        `#${id} doit porter aria-label / data-i18n-aria / aria-labelledby (libellé .spl-section-lbl/.set-row-label non associé)`);
+    });
+  }
+
+  // --- SC 1.3.1 / 4.1.2 : les onglets de la modale playlist exposent le motif tab ---
+  await t('playlist modal tabs use the tab pattern (SC 1.3.1/4.1.2)', () => {
+    assert.ok(/class="pl-modal-tabs"[^>]*role="tablist"/.test(HTML),
+      '.pl-modal-tabs doit être role="tablist"');
+    for (const id of ['pl-tab-manual', 'pl-tab-smart']) {
+      const tag = openTagById(HTML, id);
+      assert.ok(tag, `#${id} introuvable`);
+      assert.ok(/\srole="tab"/.test(tag), `#${id} doit être role="tab"`);
+      assert.ok(/\saria-selected="(true|false)"/.test(tag), `#${id} doit déclarer aria-selected`);
+      assert.ok(/\saria-controls="pl-panel-(manual|smart)"/.test(tag), `#${id} doit pointer aria-controls vers son panneau`);
+    }
+  });
+  await t('switchPlTab keeps aria-selected in sync (SC 4.1.2)', () => {
+    const sp = readRepoFile('frontend/src/smartplaylist.js');
+    assert.ok(/setAttribute\(\s*'aria-selected'/.test(sp),
+      "switchPlTab() doit mettre à jour aria-selected sur les onglets (sinon l'état devient obsolète)");
+  });
+
+  // --- SC 1.4.1 Use of Color — bascule shuffle/repeat a un indice non-coloré ----
+  await t('.pc.on declares a non-color cue (SC 1.4.1)', () => {
+    const m = /\.pc\.on\s*\{[^}]*\}/.exec(SS);
+    assert.ok(m, '.pc.on rule not found');
+    const hasCue = /background(-color)?\s*:/i.test(m[0])
+      || /font-weight\s*:/i.test(m[0])
+      || /box-shadow\s*:/i.test(m[0])
+      || /text-decoration\s*:/i.test(m[0]);
+    assert.ok(hasCue,
+      '.pc.on (shuffle/repeat actif) ne doit pas reposer sur la couleur seule — ajouter un fond/poids/anneau');
+  });
+
   if (fail) { console.log(`\nA11Y FAIL: ${fail}/${pass + fail}`); process.exit(1); }
   console.log(`\nA11Y OK: ${pass}/${pass}`);
 }
