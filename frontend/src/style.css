@@ -1651,11 +1651,11 @@ button { cursor: pointer; }
   letter-spacing: var(--ls-display-fine);
   position: relative; overflow: hidden;
 }
-.ni:hover  { background: var(--sep); color: var(--t); }
-.ni:active { transform: scale(.97); transition-duration: var(--dur-fast); }
+.ni:hover  { background: var(--sep); color: var(--t); transform: translateX(2px); }
+.ni:active { transform: scale(.97) translateX(0); transition-duration: var(--dur-fast); }
 .ni.on     {
   background: rgba(var(--g-rgb),.10); color: var(--t);
-  position: relative;
+  position: relative; transform: translateX(0);
 }
 .ni.on::before {
   content: '';
