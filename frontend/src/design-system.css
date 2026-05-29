@@ -102,31 +102,11 @@
   --t3  : var(--text-muted);
   --t4  : #2e2e2e;
 
-  /* Échelle d'espacement opérationnelle */
-  --space-0 : 0;
-  --space-1 : 4px;
-  --space-2 : 8px;
-  --space-3 : 12px;
-  --space-4 : 16px;
-  --space-5 : 24px;
-  --space-6 : 32px;
-  --space-7 : 48px;
-
-  /* Radius opérationnels */
-  --radius-xs   : 4px;
-  --radius-sm   : 8px;
-  --radius-md   : 12px;
-  --radius-lg   : 16px;
-  --radius-pill : 999px;
-
-  /* Typo opérationnelle */
-  --text-xs      : 11px;
-  --text-sm      : 12px;
-  --text-base    : 13px;
-  --text-md      : 14px;
-  --text-lg      : 16px;
-  --text-xl      : 20px;
-  --text-2xl     : 26px;
+  /* Espacement / radius / typo : source unique dans leurs sections
+     canoniques (§3 typo, §4 spacing, §6 radius). Les doublons §2bis
+     (morts — écrasés par la cascade) ont été retirés (S3). Les seuls tokens
+     uniques (--space-0/--space-7, --radius-xs/--radius-pill, --text-2xl) sont
+     relocalisés dans §3/§4/§6 — zéro changement de valeur calculée. */
 
   /* Élévations opérationnelles */
   --elev-1 : 0 1px 3px rgba(0,0,0,.4);
@@ -180,6 +160,7 @@
   --text-md      : clamp(15px, 1.6vw, 18px);
   --text-lg      : clamp(18px, 2vw,   24px);
   --text-xl      : clamp(22px, 2.8vw, 32px);
+  --text-2xl     : 26px;                       /* relocalisé depuis §2bis — seul palier fixe (pas de clamp), consommé par --fs-2xl */
   --text-display : clamp(28px, 4vw,   48px);
 
   /* --- Weights ------------------------------------------------------------ */
@@ -204,12 +185,14 @@
  * 4. SPACING — base 4px
  * ============================================================================ */
 :root {
+  --space-0  : 0;     /* relocalisé depuis §2bis — seul palier unique */
   --space-1  : 4px;
   --space-2  : 8px;
   --space-3  : 12px;
   --space-4  : 16px;
   --space-5  : 20px;
   --space-6  : 24px;
+  --space-7  : 48px;  /* relocalisé depuis §2bis — consommé par --sp-10/12/15 */
   --space-8  : 32px;
   --space-10 : 40px;
   --space-12 : 48px;
@@ -262,11 +245,13 @@
  * 6. BORDER RADIUS
  * ============================================================================ */
 :root {
+  --radius-xs   : 4px;    /* relocalisé depuis §2bis — consommé par --r-xs/sm/md */
   --radius-sm   : 6px;    /* tags, badges */
   --radius-md   : 10px;   /* boutons, inputs */
   --radius-lg   : 14px;   /* cards, covers */
   --radius-xl   : 20px;   /* modales, drawers */
   --radius-full : 9999px; /* pills, avatars */
+  --radius-pill : 999px;  /* relocalisé depuis §2bis — consommé par --r-pill/round/full */
 }
 
 
