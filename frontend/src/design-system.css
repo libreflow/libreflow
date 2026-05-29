@@ -49,12 +49,15 @@
  * ni Twitter-blue, ni Apple-rouge), AA-validée sur toutes les surfaces.
  * ============================================================================ */
 :root {
-  /* --- Surfaces — Vantablack scale, 5 paliers ΔE perceptibles ------------ */
-  --bg-base       : #030303;   /* Vantablack — quasi-noir avec texture résiduelle */
-  --bg-surface    : #0E0E0E;   /* cards, sidebar */
-  --bg-elevated   : #1A1A1A;   /* modales, menus contextuels */
-  --bg-raised     : #262626;   /* popovers, surfaces ultra-élevées */
-  --bg-overlay    : rgba(38, 38, 38, 0.72);
+  /* --- Surfaces — flat-Vantablack uniforme (panneaux = base) ------------- */
+  /* Tous les paliers convergent vers #030303. Élévation perceptible via
+     ΔRGB minimal + bordures hairline renforcées (§2ter). Les modales,
+     menus, popovers et sidebar partagent désormais l'identité Vantablack. */
+  --bg-base       : #030303;   /* canonique — toutes les surfaces partent d'ici */
+  --bg-surface    : #060606;   /* cards, sidebar (Δ minimal) */
+  --bg-elevated   : #0A0A0A;   /* modales, menus contextuels */
+  --bg-raised     : #0E0E0E;   /* popovers, surfaces ultra-élevées */
+  --bg-overlay    : rgba(14, 14, 14, 0.82);
 
   /* --- Texte — neutres calibrés AAA sur Vantablack ----------------------- */
   --text-primary   : #F5F6F8;                 /* titres — 19:1 sur #030303 */
@@ -144,9 +147,10 @@
  * 2ter. (suite §2 couleurs) — Bordures, États
  * ============================================================================ */
 :root {
-  /* --- Bordures ----------------------------------------------------------- */
-  --border-subtle  : rgba(255, 255, 255, 0.06);
-  --border-default : rgba(255, 255, 255, 0.10);
+  /* --- Bordures — renforcées (flat-Vantablack délègue l'élévation ici) -- */
+  --border-subtle  : rgba(255, 255, 255, 0.08);
+  --border-default : rgba(255, 255, 255, 0.14);
+  --border-strong  : rgba(255, 255, 255, 0.22);  /* modales, popovers */
   --border-focus   : var(--accent);
 
   /* --- États -------------------------------------------------------------- */
