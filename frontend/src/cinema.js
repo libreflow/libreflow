@@ -33,6 +33,11 @@ export let cinemaOpen     = false;
 export let cinemaBg       = 'ambient'; // default mode
 let cinemaHideTimer       = null;
 
+// ── A11Y: focus management (A.8) ────────────────────────────
+// Stores the element that had focus before cinema opened so it
+// can be restored when the overlay closes.
+let _cinemaLastFocus = null;
+
 // DOM cache (peuplé dans openCinema, vidé dans closeCinema)
 // Utilisé par updateCinemaProgress() pour les mises à jour timeupdate à 60 fps.
 let _cinFill    = null;
@@ -404,6 +409,33 @@ function _onCinKey(e) {
   }
 }
 
+// ── A11Y A.8 — Tab trap + ESC-to-close ──────────────────────
+// Separate from _onCinKey so it can be removed cleanly in closeCinema().
+// ESC handling here complements _onCinKey's ESC (which also exits fullscreen).
+// Tab cycles focus within the overlay; ESC closes cinema (unless fullscreen
+// is active, in which case _onCinKey handles exiting fullscreen first).
+function _onCinemaTrapKey(e) {
+  const overlay = document.getElementById('cinema-overlay');
+  if (!overlay || !overlay.classList.contains('active')) return;
+
+  if (e.key === 'Tab') {
+    const focusables = overlay.querySelectorAll(
+      'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+    );
+    if (!focusables.length) { e.preventDefault(); return; }
+    const first  = focusables[0];
+    const last   = focusables[focusables.length - 1];
+    const active = document.activeElement;
+    if (e.shiftKey && active === first) {
+      e.preventDefault();
+      last.focus();
+    } else if (!e.shiftKey && active === last) {
+      e.preventDefault();
+      first.focus();
+    }
+  }
+}
+
 // ── Scroll molette → volume ──────────────────────────────────
 function _syncCinVol(v) {
   const cvol = document.getElementById('cinema-vol');
@@ -430,6 +462,10 @@ export function openCinema() {
   cinemaOpen = true;
   const overlay = document.getElementById('cinema-overlay');
   if (!overlay) return;
+  // A11Y A.8 — capture previous focus; move focus into overlay on next paint
+  // (overlay has tabindex="-1" from A.7, so it is programmatically focusable)
+  _cinemaLastFocus = document.activeElement;
+  requestAnimationFrame(() => overlay.focus());
   overlay.classList.add('active');
   // Marquer le bouton toolbar comme actif (état toggle visible)
   const tbtCinema = document.getElementById('tbt-cinema');
@@ -462,6 +498,8 @@ export function openCinema() {
   overlay.addEventListener('wheel',     _onCinWheel, { passive: false });
   document.removeEventListener('keydown',  _onCinKey);
   document.addEventListener('keydown',  _onCinKey);
+  document.removeEventListener('keydown', _onCinemaTrapKey);
+  document.addEventListener('keydown', _onCinemaTrapKey);
   // Double-clic pochette → like/unlike (removeEventListener d'abord : évite les listeners zombies)
   const _artWrapDb = document.querySelector('.cinema-art-wrap');
   _artWrapDb?.removeEventListener('dblclick', _onArtDblClick);
@@ -532,6 +570,7 @@ export function closeCinema() {
   overlay.removeEventListener('click',     onCinemaMouseMove);
   overlay.removeEventListener('wheel',     _onCinWheel);
   document.removeEventListener('keydown',  _onCinKey);
+  document.removeEventListener('keydown',  _onCinemaTrapKey);
   _aw?.removeEventListener('dblclick', _onArtDblClick);
   if (cinemaHideTimer) { clearTimeout(cinemaHideTimer); cinemaHideTimer = null; } // Bug 5 fix
   clearTimeout(_cinSwapOutTimer); _cinSwapOutTimer = null;
@@ -546,6 +585,11 @@ export function closeCinema() {
   _cinFill = _cinTc = _cinTd = null;
   _lastCinArt = null; // reset pour forcer le swap à la prochaine ouverture
   _lastCinIdx = -1;   // reset pour détecter le changement de piste à la prochaine ouverture
+  // A11Y A.8 — restore focus to the element that was focused before cinema opened
+  if (_cinemaLastFocus && document.contains(_cinemaLastFocus) && typeof _cinemaLastFocus.focus === 'function') {
+    _cinemaLastFocus.focus();
+  }
+  _cinemaLastFocus = null;
   _stopKenBurns();
   _stopAmbientAnim();
   _ambientColors = null;
