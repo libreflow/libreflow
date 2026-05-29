@@ -63,7 +63,9 @@ async function run() {
   for (const [alias, target] of Object.entries(ALIAS_TARGETS)) {
     await t(`${alias} aliases ${target}`, () => {
       const re = new RegExp(`${alias.replace(/-/g, '\\-')}\\s*:\\s*var\\(\\s*${target.replace(/-/g, '\\-')}\\s*\\)`, 'g');
-      assert.ok(re.test(SS), `${alias} should be var(${target}) in style.css`);
+      // Token-unification (§17): the operational/alias layer was relocated from
+      // style.css into design-system.css. Aliases now live in DS, not SS.
+      assert.ok(re.test(DS), `${alias} should be var(${target}) in design-system.css`);
     });
   }
 

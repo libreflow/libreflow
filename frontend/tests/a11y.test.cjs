@@ -118,7 +118,7 @@ async function run() {
 
   // --- WCAG 2.2 SC 2.5.8 Target Size (>=24px) sur les boutons icône inline ----
   await t('icon buttons declare >=24px target size (SC 2.5.8)', () => {
-    const tm = /--target-min\s*:\s*(\d+)px/.exec(SS);
+    const tm = /--target-min\s*:\s*(\d+)px/.exec(DS);   // §17: token defs live in design-system.css
     assert.ok(tm && parseInt(tm[1], 10) >= 24,
       `--target-min doit être >=24px (trouvé ${tm ? tm[1] : 'aucun'})`);
     for (const sel of ['\\.tlk', '\\.tr-add-btn', '\\.tr-edit-btn']) {
@@ -140,12 +140,13 @@ async function run() {
 
   // --- WCAG 2.2 SC 2.4.13 Focus Appearance (AAA) ----------------------------
   await t('focus ring is >=2px solid (SC 2.4.13)', () => {
-    const m = /--focus-ring\s*:\s*(\d+)px\s+solid/.exec(SS);
+    const m = /--focus-ring\s*:\s*(\d+)px\s+solid/.exec(DS);   // §17: token defs live in design-system.css
     assert.ok(m && parseInt(m[1], 10) >= 2, `--focus-ring doit être >=2px solid (trouvé ${m ? m[1] : 'aucun'})`);
   });
   await t('focus-ring-contrast token defined in both themes (SC 2.4.13)', () => {
-    assert.ok(/--focus-ring-contrast\s*:/.test(SS), '--focus-ring-contrast manquant (base sombre, style.css)');
-    assert.ok(/--focus-ring-contrast\s*:/.test(DS), '--focus-ring-contrast manquant (override clair, design-system.css)');
+    // §17: both the dark base and the light override now live in design-system.css.
+    const occ = (DS.match(/--focus-ring-contrast\s*:/g) || []).length;
+    assert.ok(occ >= 2, `--focus-ring-contrast doit être défini pour les deux thèmes dans design-system.css (trouvé ${occ})`);
   });
   await t('icon buttons show a focus ring on :focus-visible (SC 2.4.13)', () => {
     for (const sel of ['\\.tlk', '\\.tr-add-btn', '\\.tr-edit-btn']) {
