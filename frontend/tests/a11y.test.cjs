@@ -107,6 +107,15 @@ async function run() {
       `data-action sans role/tabindex : ${offenders.length}\n   ${offenders.slice(0, 3).join('\n   ')}`);
   });
 
+  // --- SC 1.3.1 : liste virtualisée annonce la position (X sur Y) -------------
+  await t('renderer.js emits aria-setsize/aria-posinset on track rows', () => {
+    const rj = readRepoFile('frontend/src/renderer.js');
+    assert.ok(/aria-setsize="\$\{setSize\}"/.test(rj),
+      'thtml() doit poser aria-setsize sur les lignes de piste');
+    assert.ok(/aria-posinset="\$\{fi \+ 1\}"/.test(rj),
+      'thtml() doit poser aria-posinset (fi+1) sur les lignes de piste');
+  });
+
   if (fail) { console.log(`\nA11Y FAIL: ${fail}/${pass + fail}`); process.exit(1); }
   console.log(`\nA11Y OK: ${pass}/${pass}`);
 }

@@ -200,7 +200,7 @@ export function makeEqHTML(_t) { return ''; }
  *   hlRe          — M-2: regex pré-compilée pour la recherche (évite new RegExp par appel)
  *   isTabStop     — A11Y-ROVING: true → tabindex="0", false/undefined → tabindex="-1"
  */
-export function thtml(t, fi, { active = false, liked = false, likedSet, query = '', isAlbumDetail: _isAlbumDetail, albumDetailSort: _albumDetailSort, hlRe, isTabStop = false } = {}) {
+export function thtml(t, fi, { active = false, liked = false, likedSet, query = '', isAlbumDetail: _isAlbumDetail, albumDetailSort: _albumDetailSort, hlRe, isTabStop = false, setSize = 0 } = {}) {
   // Artwork — img avec fade-in (.art-img → .art-loaded au onload) OU placeholder
   const artInner = t.art
     ? `<img class="art-img" src="${esc(t.art)}" alt="" aria-hidden="true">`
@@ -221,8 +221,11 @@ export function thtml(t, fi, { active = false, liked = false, likedSet, query = 
   // A11Y : aria-current="true" sur la piste courante (info non couleur-only) + title sur titres/artistes longs (tooltip troncation)
   const ariaCur  = active ? ' aria-current="true"' : '';
 
+  // A11Y-16 : aria-setsize/aria-posinset annoncent la position réelle ("X sur Y")
+  // dans la liste virtualisée — équivalent role=list correct (les lignes restent
+  // role="listitem", pas de grille incomplète sans gridcell).
   return `<div class="${classes}" id="tr-${esc(t.id)}" data-track-id="${esc(t.id)}" data-fi="${fi}"
-  data-action="track-click" role="listitem" tabindex="${tabIdx}" aria-label="${esc(ariaLbl)}"${ariaCur}
+  data-action="track-click" role="listitem" tabindex="${tabIdx}" aria-setsize="${setSize}" aria-posinset="${fi + 1}" aria-label="${esc(ariaLbl)}"${ariaCur}
   draggable="true" data-drag-action="track-drag">
   ${trackNum}<div class="tart">
     ${artInner}
@@ -352,7 +355,7 @@ export function virtRenderWindow(fl) {
         isTabStop = true;
         firstTrFiFound = true;
       }
-      html += thtml(t, row.fi, { active: isActive, liked: isLiked, likedSet: liked, query, isAlbumDetail, albumDetailSort, hlRe, isTabStop });
+      html += thtml(t, row.fi, { active: isActive, liked: isLiked, likedSet: liked, query, isAlbumDetail, albumDetailSort, hlRe, isTabStop, setSize: fl.length });
     }
   }
 
