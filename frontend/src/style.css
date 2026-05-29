@@ -5494,6 +5494,19 @@ html[data-mode="light"] .eq-slider::-moz-range-track { background: var(--bg6); }
 .cinema-art-wrap.cin-swap-out {
   animation: cinema-art-swap-out var(--dur-micro) ease-in forwards;
 }
+/* ── Cinema art breathing (B4-M10) ──────────────────────────────────────── */
+@keyframes cinema-art-breathe {
+  0%, 100% { transform: scale(1);    }
+  50%      { transform: scale(1.012); }
+}
+.cinema-art-wrap:not(.cin-swap):not(.cin-swap-out):not(.beat) {
+  animation: cinema-art-breathe 6s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .cinema-art-wrap {
+    animation: none !important;
+  }
+}
 .cinema-art-wrap:hover { transform: scale(1.02); }
 
 /* Fond flou pour pochettes non carrées — évite les barres noires (letterbox).
