@@ -5572,6 +5572,8 @@ html[data-mode="light"] .eq-slider::-moz-range-track { background: var(--bg6); }
   font-size: var(--fs-vw-cin-title); font-weight: 700; color: var(--text-on-accent);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   letter-spacing: var(--ls-hero); line-height: var(--lh-relaxed);
+  text-shadow: 0 2px 16px rgba(0, 0, 0, 0.55),
+               0 1px 3px  rgba(0, 0, 0, 0.40);
 }
 .cinema-artist {
   font-size: var(--fs-vw-cin-art);
@@ -5579,6 +5581,7 @@ html[data-mode="light"] .eq-slider::-moz-range-track { background: var(--bg6); }
   color: rgba(255,255,255,.72);
   margin-top: var(--sp-1d); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   font-weight: 400; letter-spacing: var(--ls-tight);
+  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.40);
 }
 .cinema-album {
   font-size: var(--fs-vw-cin-alb);
