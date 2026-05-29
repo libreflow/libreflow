@@ -39,6 +39,14 @@ async function run() {
     const r = contrastRatio(flat, '#030303');
     assert.ok(r >= 3.0, `border-default alpha ${a} -> ${r.toFixed(2)}:1 (need 3.0)`);
   });
+  // Regression guard (token-unification §17 / A11Y-03): the AA border values in
+  // §2ter must NOT be re-aliased back to the sub-AA var(--border-1/2/3). This
+  // override previously lived in style.css and silently defeated A11Y-03 at runtime.
+  await t('--border-* not re-aliased to sub-AA var(--border-1/2/3)', () => {
+    const reOverride = /--border-(subtle|default|strong)\s*:\s*var\(\s*--border-[123]\s*\)/;
+    assert.ok(!reOverride.test(DS) && !reOverride.test(SS),
+      're-alias of --border-* to sub-AA --border-1/2/3 detected — remove it (design-system.css §2ter owns these)');
+  });
 
   // --- SC 1.4.11 Action buttons at rest >= 3:1 ---------------------------
   await t('.tlk rest uses var(--t3) (not --t4)', () => {

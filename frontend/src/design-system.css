@@ -398,6 +398,7 @@ html[data-mode="light"] {
   /* Bordures light — alpha noir au lieu d'alpha blanc */
   --border-subtle  : rgba(0, 0, 0, 0.06);
   --border-default : rgba(0, 0, 0, 0.12);
+  --border-strong  : rgba(0,0,0,.11);   /* préserve la valeur light (ex var(--border-3)) — sinon le .65 BLANC de §2ter fuirait en clair */
 
   /* Voiles & teintes light */
   --scrim-1 : rgba(0, 0, 0, 0.15);
@@ -740,10 +741,10 @@ html[data-mode="light"] {
   --btn-r:    var(--r);
   --btn-pad:  0 var(--sp-3);
 
-  /* Bordures — alias sémantiques */
-  --border-subtle:  var(--border-1);
-  --border-default: var(--border-2);
-  --border-strong:  var(--border-3);
+  /* Bordures — --border-subtle/default/strong NE sont volontairement PAS
+     ré-aliasés ici : les valeurs AA (>=3:1 sur Vantablack, §2ter) font foi.
+     Ce ré-alias vers var(--border-1/2/3) (.06/.08/.10) neutralisait
+     silencieusement le correctif A11Y-03 au runtime — retiré. */
 
   /* Typography — recâblé sur --text-* (harmonisation, audit §2.3). 20 tailles fixes → 7.
      3xs/2xs restent littéraux (micro-badges, sous-échelle volontaire).
