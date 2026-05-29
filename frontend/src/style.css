@@ -7512,3 +7512,15 @@ html[data-mode="light"] .rv-start-btn  { background: var(--g); }
 @media (prefers-reduced-motion: reduce) {
   #main.view-fade { animation: none; }
 }
+
+/* ── EQ slider thumb focus glow (B4-M3) ─────────────────────────────────── */
+.cf-slider:focus-visible::-webkit-slider-thumb,
+.eq-slider:focus-visible::-webkit-slider-thumb {
+  box-shadow: 0 0 0 3px rgba(var(--g-rgb), 0.35),
+              0 0 12px rgba(var(--g-rgb), 0.45);
+}
+.cf-slider:focus-visible::-moz-range-thumb,
+.eq-slider:focus-visible::-moz-range-thumb {
+  box-shadow: 0 0 0 3px rgba(var(--g-rgb), 0.35),
+              0 0 12px rgba(var(--g-rgb), 0.45);
+}
