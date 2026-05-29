@@ -30,6 +30,9 @@ function _waitTauriReady() {
     // F8 : rejeter explicitement si Tauri n'est pas disponible après 5 s
     _fallbackTimer = setTimeout(() => {
       window.removeEventListener('tauri://init', handler);
+      // F8b : ne pas figer un rejet en cache à vie — réinitialiser pour qu'un
+      // appel ultérieur puisse retenter (WebView lent / init tardive).
+      _tauriReady = null;
       rej(new Error('[ipc] Tauri non initialisé après 5 s — contexte WebView invalide'));
     }, 5000);
   }));
