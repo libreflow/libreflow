@@ -858,7 +858,9 @@ export function clearCrossfadeTimers() {
   // DSP-6: reset audioOutGain (fade-out source primaire)
   if (audioOutGain && eqCtx) {
     audioOutGain.gain.cancelScheduledValues(eqCtx.currentTime);
-    audioOutGain.gain.value = 1.0;
+    // §9 : ramp court plutôt que .value= direct — le nœud reste connecté et peut
+    // porter de l'audio si l'on interrompt un fondu en cours (évite un click).
+    audioOutGain.gain.setTargetAtTime(1.0, eqCtx.currentTime, 0.01);
   }
   if (!sleepFading) {
     // DSP-5 : restaurer audio.volume depuis le slider DOM (JAMAIS hardcoder 1.0)
