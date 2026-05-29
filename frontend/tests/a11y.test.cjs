@@ -196,6 +196,12 @@ async function run() {
       '#sb ne doit pas être role="navigation" (le <nav class="sb-nav"> est le landmark) — évite un double nav imbriqué');
   });
 
+  // --- WCAG SC 2.2.2 Pause/Stop/Hide — le titre défilant peut être stoppé -----
+  await t('scrolling marquee title can be paused (SC 2.2.2)', () => {
+    assert.ok(/\.mq\.mq-on\s*\{\s*animation-play-state:\s*paused/.test(SS),
+      'le titre défilant (.mq.mq-on) doit passer en animation-play-state: paused au survol/focus');
+  });
+
   if (fail) { console.log(`\nA11Y FAIL: ${fail}/${pass + fail}`); process.exit(1); }
   console.log(`\nA11Y OK: ${pass}/${pass}`);
 }

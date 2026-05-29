@@ -2817,6 +2817,12 @@ html[data-mode="light"] .empty-cta {
   0%,  18% { transform: translateX(0); }
   82%, 100% { transform: translateX(var(--mq-shift, 0px)); }
 }
+/* WCAG SC 2.2.2 Pause/Stop/Hide : le titre défilant (>5s, auto) doit pouvoir être
+   arrêté. Survol direct OU survol/focus clavier de .pl-info (role=button tabindex=0)
+   met le défilement en pause. prefers-reduced-motion le neutralise déjà globalement. */
+.mq.mq-on:hover,
+.pl-info:hover .mq.mq-on,
+.pl-info:focus-within .mq.mq-on { animation-play-state: paused; }
 
 .pl-lk       { background: none; border: none; color: var(--t4); padding: var(--sp-1h); flex-shrink: 0; cursor: pointer; transition: color var(--dur-fast) ease, transform var(--dur-interact) var(--spring); }
 .pl-lk:hover { color: var(--g); transform: scale(1.18); }
