@@ -101,6 +101,10 @@ export function installAutoFocusTrap() {
     'confirm-modal-bg', 'organize-modal-bg', 'usb-modal-bg', 'cd-modal-bg',
     'pl-modal-bg',      'batch-tag-modal-bg', 'smart-pl-modal-bg',
     'shortcuts-panel',
+    // A11Y-14 : sleep-menu se déclare role=dialog aria-modal — il porte le rôle
+    // lui-même (comme shortcuts-panel) et bascule `.on`. La fermeture clavier
+    // (Escape) est gérée dans shortcuts.js pour éviter un piège au clavier.
+    'sleep-menu',
   ];
   for (const id of autoIds) {
     const bg = document.getElementById(id);

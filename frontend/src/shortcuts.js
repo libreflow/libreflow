@@ -165,6 +165,10 @@ export function initShortcuts({ updateVolSlider, closeModal, cycleSpeed }) {
     if (e.key.toLowerCase() === 'i' && !e.ctrlKey && !e.altKey) toggleMiniOverlay();
 
     if (e.code === 'Escape') {
+      // A11Y-14 : sleep-menu est un role=dialog aria-modal trappé (modal.js) ;
+      // Escape doit pouvoir le fermer, sinon le focus trap devient un piège clavier.
+      const _sleepMenu = document.getElementById('sleep-menu');
+      if (_sleepMenu?.classList.contains('on')) { _sleepMenu.classList.remove('on'); return; }
       if (cinemaOpen)                        { closeCinema(); return; }
       if (isShortcutsOpen())                 { closeShortcuts(); return; }
       if (document.getElementById('pl-modal-bg')?.classList.contains('on'))      { closePlModal(); return; }
