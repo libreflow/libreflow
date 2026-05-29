@@ -2047,7 +2047,7 @@ html[data-mode="light"] mark.srch-hl { background: rgba(var(--g-rgb), .22); }
   background: none; border: none; color: var(--t4); padding: var(--sp-1p);
   border-radius: 50%; display: flex; align-items: center;
   transition: color var(--dur-fast) ease, transform var(--dur-fast) ease, opacity var(--dur-fast) ease;
-  opacity: 0;
+  opacity: 0.45;
 }
 .tr:hover .tlk    { opacity: 1; color: var(--t3); }
 .tlk:hover        { color: var(--g) !important; opacity: 1 !important; }
@@ -2062,7 +2062,7 @@ html[data-mode="light"] mark.srch-hl { background: rgba(var(--g-rgb), .22); }
   background: none; border: none; color: transparent; padding: var(--sp-1p);
   border-radius: 50%; display: flex; align-items: center;
   transition: color var(--dur-fast) ease, background var(--dur-fast) ease, opacity var(--dur-fast) ease;
-  opacity: 0;
+  opacity: 0.45;
 }
 .tr:hover .tr-add-btn    { color: var(--t3); opacity: 1; }
 .tr-add-btn:hover        { color: var(--g) !important; background: var(--bg4); opacity: 1 !important; }
@@ -2075,12 +2075,12 @@ html[data-mode="light"] mark.srch-hl { background: rgba(var(--g-rgb), .22); }
   background: none; border: none; color: transparent; padding: var(--sp-1p);
   border-radius: 50%; display: flex; align-items: center; flex-shrink: 0;
   transition: color var(--dur-fast) ease, background var(--dur-fast) ease, opacity var(--dur-fast) ease;
-  opacity: 0;
+  opacity: 0.45;
 }
-.tr:hover .tr-edit-btn   { color: var(--t3); opacity: 0.7; }
+.tr:hover .tr-edit-btn   { color: var(--t3); opacity: 1; }
 .tr-edit-btn:hover       { color: var(--g) !important; background: var(--bg4); opacity: 1 !important; }
 /* A11Y — visible au focus clavier */
-.tr-edit-btn:focus-visible { opacity: 0.7; color: var(--t3); background: var(--bg4); }
+.tr-edit-btn:focus-visible { opacity: 1; color: var(--t3); background: var(--bg4); }
 .tr-edit-btn svg         { width: var(--icon-xs); height: var(--icon-xs); stroke: currentColor; }
 
 /* Drag & drop */
