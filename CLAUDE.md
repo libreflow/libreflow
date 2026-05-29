@@ -230,11 +230,12 @@ If a module grows beyond 800 lines, extract a focused sub-module. Do not create 
 ### Styling
 
 - **Single source of truth for tokens:** `frontend/src/design-system.css` declares all colors, typography, spacing, radius, shadows, motion, z-index, breakpoints, layout. **No `:root { --... }` block elsewhere.**
+  - **Enforced:** `frontend/tests/token-source.test.cjs` fails the build if a `:root { --… }` token-definition layer reappears in `style.css` (small responsive `:root{}` overrides inside `@media` are tolerated). All tokens — canonical scales, operational aliases, literal dimensions, shadows, and the `[data-theme]` accent map — live in `design-system.css` only.
 - Component styles live in `frontend/src/style.css` (vanilla selectors) and inside Lit `static styles = css\`...\`` (Shadow DOM, `lf-*` components).
 - CSS custom properties (`--g`, `--bg*`, `--t*`, `--space-*`, `--radius-*`, `--text-*`, `--motion-*`, `--elev-*`) for theming, defined on `:root`.
 - Shadow DOM encapsulation for Lit components (§18). Lit components inherit `:root` tokens by CSS inheritance.
 - No CSS-in-JS, no utility frameworks (Tailwind, etc.).
-- Legacy alias tokens (`--sp-*`, `--r-*`, `--fs-*`, `--dur-*`) remain in `style.css` for one release cycle, then get removed. New code MUST use canonical names.
+- Legacy alias tokens (`--sp-*`, `--r-*`, `--fs-*`, `--dur-*`) now live in `design-system.css` alongside the canonical scales (relocated for single-source enforcement). They remain for one release cycle, then get removed. New code MUST use canonical names.
 
 ### State management
 

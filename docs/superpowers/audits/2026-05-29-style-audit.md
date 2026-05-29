@@ -201,3 +201,23 @@ clean tokens, leave the perf-critical imperative core alone.
 Choose the remediation scope (suggest **P0 first**). Each chosen batch becomes its
 own brainstorm → spec → implementation-plan cycle. Repro for the screenshots:
 `scripts/_style-audit-shots.mjs` (temporary; delete when no longer needed).
+
+### 8bis. Status & deferred follow-ups (updated 2026-05-29)
+- **DONE (P0 — token unification):** S3 (dead duplicate scales) + the S1 "single
+  source" goal shipped on `theme-overhaul` per
+  `docs/superpowers/plans/2026-05-29-token-unification.md`. The `style.css` `:root`
+  token layer + `[data-theme]` map now live in `design-system.css`; the runtime
+  A11Y-03 border regression (silently defeated by a relocated alias) is fixed and
+  guarded by `frontend/tests/token-source.test.cjs` + an `a11y.test.cjs` regression check.
+- **Deferred to separate plans:**
+  - **S2** — split the ~7.6k-line `style.css` monolith into focused modules.
+  - **Full canonical-name migration** (audit S1 full form) — rewrite the ~1,133
+    `--sp-*/--r-*/--fs-*/--dur-*` consumers onto canonical names, then drop the aliases.
+  - **Token rationalization now visible in one file** — `--text-display: 32px` vs the
+    §3 `clamp()` peer, and the `--accent`/`--g` near-circular alias.
+- **Visual-gate caveat:** the screenshot driver is **non-deterministic** run-to-run
+  (animated canvases + `Date.now()` seed), so the zero-diff PNG gate the
+  token-unification plan assumed was **not usable**. The token work was instead
+  verified with a `getComputedStyle` token-value diff (dark+light, all ~559 tokens).
+  Any future visual-regression gating must make the driver deterministic first
+  (freeze canvas rAF, fixed seed timestamp, robust settle).
