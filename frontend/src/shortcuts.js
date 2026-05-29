@@ -118,10 +118,16 @@ export function initShortcuts({ updateVolSlider, closeModal, cycleSpeed }) {
       return;
     }
 
+    // A11Y SC 2.1.4 : ignorer les frappes de composition IME (japonais/chinois/
+    // coréen) — sinon une séquence de composition peut déclencher un raccourci.
+    if (e.isComposing) return;
+
+    // A11Y : tout backdrop de modale visible (id se terminant par "modal-bg")
+    // capture les raccourcis globaux — couvre modal/pl/confirm/organize/usb/cd/
+    // batch-tag sans énumération fragile. NB : suffixe sans tiret pour aussi
+    // matcher le backdrop générique #modal-bg (pas seulement #*-modal-bg).
     const _anyModalOpen =
-      document.getElementById('pl-modal-bg')?.classList.contains('on') ||
-      document.getElementById('modal-bg')?.classList.contains('on') ||
-      document.getElementById('confirm-modal-bg')?.classList.contains('on') ||
+      document.querySelector('[id$="modal-bg"].on') !== null ||
       document.getElementById('settings-panel')?.classList.contains('on') ||
       document.querySelector('.orphan-modal-bg.on') !== null ||
       document.querySelector('.ctx-menu.on') !== null;
