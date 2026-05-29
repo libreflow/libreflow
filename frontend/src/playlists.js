@@ -779,6 +779,23 @@ export function movePlaylistTrack(trackId, dir) {
   return true;
 }
 
+/**
+ * WCAG 2.2 SC 2.5.7 — alternative non-drag à la réorganisation des playlists dans
+ * la sidebar : déplace la playlist `plId` d'un cran (dir -1 = haut, +1 = bas)
+ * dans le tableau `playlists`. Persiste (savePlaylists, débouncé) puis re-render nav.
+ * @param {string} plId
+ * @param {-1|1}   dir
+ * @returns {boolean} true si l'ordre a changé
+ */
+export function movePlaylist(plId, dir) {
+  const playlists = get('playlists');
+  const idx = playlists.findIndex(p => p.id === plId);
+  if (moveByOne(playlists, idx, dir) < 0) return false;
+  savePlaylists();
+  renderPlNav();
+  return true;
+}
+
 // ── Réorganisation playlist par drag-and-drop ──────────────
 export function _attachPlaylistReorder(tlist) {
   if (tlist._plReorderAttached) return;
@@ -1138,6 +1155,15 @@ export function showPlCtxMenu(event, plId) {
     <div class="ctx-item" data-action="toggle-pin-pl" data-pl-id="${plId}">
       <svg viewBox="0 0 24 24" width="13" height="13" fill="${_isPinned?'currentColor':'none'}" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l1.4 4.3h4.5l-3.6 2.6 1.4 4.3L12 10.6 8.3 13.2l1.4-4.3L6.1 6.3h4.5z"/></svg>
       ${_isPinned ? i18n('pl_unpin') : i18n('pl_pin')}
+    </div>
+    <div class="ctx-sep"></div>
+    <div class="ctx-item" data-action="pl-move-up" data-pl-id="${plId}">
+      <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>
+      ${i18n('ctx_move_up')}
+    </div>
+    <div class="ctx-item" data-action="pl-move-down" data-pl-id="${plId}">
+      <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><polyline points="19 12 12 19 5 12"/></svg>
+      ${i18n('ctx_move_down')}
     </div>
     ${_moveOpts.length ? `
     <div class="ctx-item ctx-item--sub">
