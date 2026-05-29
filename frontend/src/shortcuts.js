@@ -56,6 +56,18 @@ import { invalidateGenreGridSig }                      from './genres.js';
 import { SPEEDS }                                      from './cfg.js';
 import { tlistZoomIn, tlistZoomOut, tlistZoomReset }  from './tlistZoom.js';
 
+// ── A11Y-10 : guard typage ────────────────────────────────────────────────
+// Vérifie si l'élément focalisé est un champ de saisie texte.
+// Utilisé pour bloquer les raccourcis single-key pendant la frappe.
+function _isTypingTarget(target) {
+  if (!target) return false;
+  const tag = target.tagName;
+  if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return true;
+  if (target.isContentEditable) return true;
+  if (target.getAttribute && target.getAttribute('role') === 'textbox') return true;
+  return false;
+}
+
 /**
  * Attache le listener global `keydown` de l'application.
  *
@@ -85,8 +97,7 @@ export function initShortcuts({ updateVolSlider, closeModal, cycleSpeed }) {
     // Zoom liste de pistes — Ctrl+= / Ctrl++ / Ctrl+- / Ctrl+_ / Ctrl+0
     // Guard : ignorer si le focus est dans un champ de saisie
     if (e.ctrlKey && !e.altKey) {
-      const _inField = ['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target.tagName)
-        || e.target.isContentEditable;
+      const _inField = _isTypingTarget(e.target);
       if ((e.key === '=' || e.key === '+') && !_inField) {
         e.preventDefault(); tlistZoomIn(); return;
       }
@@ -98,7 +109,14 @@ export function initShortcuts({ updateVolSlider, closeModal, cycleSpeed }) {
       }
     }
 
-    if (['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target.tagName)) return;
+    // A11Y-10 : bloquer les raccourcis single-key quand le focus est dans un
+    // champ de saisie (SC 2.1.4). Ctrl/Meta combos passent (Ctrl+F, Ctrl+S…).
+    // Escape blure le champ et sort — n'exécute pas d'action globale.
+    if (_isTypingTarget(e.target)) {
+      if (e.ctrlKey || e.metaKey) return; // laisser les combos modificateurs passer
+      if (e.key === 'Escape') { e.target.blur(); return; }
+      return;
+    }
 
     const _anyModalOpen =
       document.getElementById('pl-modal-bg')?.classList.contains('on') ||
