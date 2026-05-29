@@ -49,7 +49,9 @@ export class LfToastStack extends LitElement {
     .t-item {
       pointer-events: auto;
       position: relative;
-      background: var(--lf-toast-bg, #2d2e30);
+      background: var(--lf-toast-bg, rgba(45, 46, 48, 0.92));
+      backdrop-filter: blur(12px) saturate(1.2);
+      -webkit-backdrop-filter: blur(12px) saturate(1.2);
       color: var(--lf-toast-fg, rgba(255, 255, 255, .92));
       padding: 14px 16px;
       border-radius: 4px;
@@ -129,6 +131,25 @@ export class LfToastStack extends LitElement {
 
     @keyframes t-in  { from { transform: translateY(20px); opacity: 0; } }
     @keyframes t-out { to   { transform: translateY(20px); opacity: 0; } }
+
+    :host-context(html[data-mode="light"]) .t-item {
+      background: var(--lf-toast-bg, rgba(255, 255, 255, 0.92));
+      color: var(--lf-toast-fg, rgba(15, 17, 23, 0.92));
+      box-shadow:
+        0 6px 10px rgba(0, 0, 0, .10),
+        0 1px 18px rgba(0, 0, 0, .08),
+        0 3px 5px rgba(0, 0, 0, .14);
+    }
+    :host-context(html[data-mode="light"]) .t-action {
+      color: var(--lf-toast-action, var(--lf-toast-accent, #2563eb));
+    }
+    :host-context(html[data-mode="light"]) .t-close {
+      color: rgba(15, 17, 23, 0.6);
+    }
+    :host-context(html[data-mode="light"]) .t-close:hover {
+      color: rgba(15, 17, 23, 0.92);
+      background: rgba(0, 0, 0, 0.06);
+    }
   `;
 
   constructor() {
