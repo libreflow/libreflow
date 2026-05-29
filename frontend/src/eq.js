@@ -564,6 +564,7 @@ export function renderEQBands() {
     <input type="range" class="eq-slider" orient="vertical"
       data-band="${i}" data-input-action="eq-band-input"
       min="-12" max="12" step="0.5" value="${v}"
+      aria-orientation="vertical"
       aria-label="${LABELS[i]} Hz" aria-valuetext="${lbl}">
   </div>
   <span class="eq-freq">${LABELS[i]}</span>
