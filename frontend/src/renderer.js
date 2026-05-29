@@ -1220,8 +1220,12 @@ export function patchTrackEl(id) {
   const curIdx = get('curIdx');
   const isActive = curIdx === idx;
 
+  // A11Y-16 : préserver aria-setsize (taille de la liste filtrée) et le roving
+  // tabstop du nœud remplacé — sinon la ligne re-rendue annonce aria-setsize="0"
+  // et perd son tabindex="0".
+  const isTabStop = el.getAttribute('tabindex') === '0';
   el.insertAdjacentHTML('beforebegin',
-    thtml(t, fi, { active: isActive, liked: liked?.has(t.id) ?? false, query }));
+    thtml(t, fi, { active: isActive, liked: liked?.has(t.id) ?? false, query, setSize: getFiltered().length, isTabStop }));
   el.remove();
 }
 
