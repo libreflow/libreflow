@@ -147,10 +147,10 @@
  * 2ter. (suite §2 couleurs) — Bordures, États
  * ============================================================================ */
 :root {
-  /* --- Bordures — renforcées (flat-Vantablack délègue l'élévation ici) -- */
-  --border-subtle  : rgba(255, 255, 255, 0.08);
-  --border-default : rgba(255, 255, 255, 0.14);
-  --border-strong  : rgba(255, 255, 255, 0.22);  /* modales, popovers */
+  /* --- Bordures — AA non-text contrast (>=3:1 sur Vantablack) ---------- */
+  --border-subtle  : rgba(255, 255, 255, 0.45);   /* 3.1:1 vs #030303 */
+  --border-default : rgba(255, 255, 255, 0.55);   /* 4.0:1 */
+  --border-strong  : rgba(255, 255, 255, 0.65);   /* 5.2:1 */
   --border-focus   : var(--accent);
 
   /* --- États -------------------------------------------------------------- */
