@@ -1,6 +1,6 @@
 {
   "env": {
-    "ECC_DISABLED_HOOKS": "pre:edit-write:gateguard-fact-force,pre:bash:gateguard-fact-force"
+    "ECC_DISABLED_HOOKS": "pre:edit-write:gateguard-fact-force,pre:bash:gateguard-fact-force,post:ecc-context-monitor"
   },
   "hooks": {
     "PreToolUse": [
