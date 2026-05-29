@@ -10,6 +10,7 @@
 //   fmtDuration(s)   Format seconds as "Xh Ym", "Xm", or "Xs"
 //   normTag(s)       Normalize a metadata tag string (trim, NFC, collapse spaces)
 //   mainArtist(raw)  Extract primary artist, stripping feat./collab suffixes
+//   moveByOne(a,i,d) Move array item one step (single-pointer reorder, WCAG 2.2 SC 2.5.7)
 
 /** Escape a string for safe insertion into HTML. */
 export function esc(s = '') {
@@ -86,4 +87,22 @@ export function mainArtist(raw) {
     .replace(/\s*,\s*.+$/, '')
     .trim();
   return s || normTag(raw);
+}
+
+/**
+ * Déplace l'élément à `index` d'un cran dans la direction `dir`
+ * (-1 = vers le haut/avant, +1 = vers le bas/arrière). Mute `arr` en place.
+ * Alternative non-drag à la réorganisation par glisser-déposer (WCAG 2.2 SC 2.5.7).
+ * @param {Array}  arr   tableau à réordonner (muté in place)
+ * @param {number} index position courante de l'élément
+ * @param {-1|1}   dir   sens du déplacement
+ * @returns {number} le nouvel index, ou -1 si déplacement impossible (hors bornes / butée)
+ */
+export function moveByOne(arr, index, dir) {
+  if (!Array.isArray(arr)) return -1;
+  const to = index + dir;
+  if (index < 0 || index >= arr.length || to < 0 || to >= arr.length) return -1;
+  const [item] = arr.splice(index, 1);
+  arr.splice(to, 0, item);
+  return to;
 }

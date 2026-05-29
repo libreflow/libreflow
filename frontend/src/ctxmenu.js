@@ -26,7 +26,7 @@ import { saveCfg }                  from './cfgsave.js';
 import { setCurIdx, setCtxTrackId, removeTrackAt, replaceTracks } from './state.js';
 import { adjustShuffleQAfterDelete, resetShuffleQ } from './player.js';
 import { updateStats, drillDown } from './renderer.js';
-import { openNewPlaylistModal, removeTrackFromPlaylist, savePlaylists } from './playlists.js';
+import { openNewPlaylistModal, removeTrackFromPlaylist, savePlaylists, movePlaylistTrack } from './playlists.js';
 import { openSmartPlaylistModal } from './smartplaylist.js';
 import { openTagEditor } from './tagedit.js';
 import { invoke }        from './ipc.js';
@@ -118,6 +118,15 @@ export function showCtxMenu(e, trackId) {
   if (sepRemove) sepRemove.style.display = inPl ? '' : 'none';
   if (removeBtn) removeBtn.style.display = inPl ? '' : 'none';
 
+  // WCAG 2.2 SC 2.5.7 : alternative non-drag à la réorganisation — visible
+  // uniquement dans une playlist manuelle (non-smart) affichée sans filtre.
+  const plCur = inPl ? get('playlists').find(p => p.id === get('curPlId')) : null;
+  const canReorder = !!(inPl && plCur && !plCur.smart && !get('query'));
+  for (const mid of ['ctx-sep-move', 'ctx-move-up', 'ctx-move-down']) {
+    const el = document.getElementById(mid);
+    if (el) el.style.display = canReorder ? '' : 'none';
+  }
+
   // F-7 — Écrire les tags RG : visible seulement si RG analysé et fichier local
   const rgBtn = document.getElementById('ctx-write-rg');
   if (rgBtn) rgBtn.style.display = (t && t.rgGain !== undefined && t.path) ? '' : 'none';
@@ -189,6 +198,8 @@ export function initCtxMenu() {
 
 // ── Actions ───────────────────────────────────────────────────
 
+export function ctxMoveTrackUp()        { movePlaylistTrack(get('ctxTrackId'), -1); closeCtxMenu(); }
+export function ctxMoveTrackDown()      { movePlaylistTrack(get('ctxTrackId'),  1); closeCtxMenu(); }
 export function ctxNewPlaylist()        { openNewPlaylistModal(get('ctxTrackId')); closeCtxMenu(); }
 export function ctxRemoveFromPlaylist() { if (get('ctxTrackId') && get('curPlId')) removeTrackFromPlaylist(get('ctxTrackId'), get('curPlId')); closeCtxMenu(); }
 export function ctxSmartPlaylist()      { closeCtxMenu(); openSmartPlaylistModal(get('ctxTrackId')); }

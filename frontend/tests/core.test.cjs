@@ -1850,6 +1850,23 @@ section('components/lf-toast-stack.logic.js -- import-smoke');
     _ko++;
   }
 
+  // WCAG 2.2 SC 2.5.7 — pure reorder helper moveByOne (alternative non-drag)
+  try {
+    const { moveByOne } = await import('../src/utils.js');
+    let a = ['a', 'b', 'c', 'd'];
+    assert(moveByOne(a, 2, -1) === 1 && a.join('') === 'acbd', 'moveByOne: up swaps with previous');
+    a = ['a', 'b', 'c', 'd'];
+    assert(moveByOne(a, 1, 1) === 2 && a.join('') === 'acbd',  'moveByOne: down swaps with next');
+    a = ['a', 'b', 'c'];
+    assert(moveByOne(a, 0, -1) === -1 && a.join('') === 'abc', 'moveByOne: up at top is no-op (-1)');
+    assert(moveByOne(a, 2, 1)  === -1 && a.join('') === 'abc', 'moveByOne: down at bottom is no-op (-1)');
+    assert(moveByOne(a, -1, 1) === -1,                          'moveByOne: out-of-range index → -1');
+    assert(moveByOne(null, 0, 1) === -1,                        'moveByOne: non-array → -1');
+  } catch (e) {
+    console.error('  KO  moveByOne crashed:', e.message);
+    _ko++;
+  }
+
   // Token integrity (B1)
   await require('./theme-tokens.test.cjs').run();
 

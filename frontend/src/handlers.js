@@ -53,7 +53,8 @@ import { showCtxMenu, closeCtxMenu,
          ctxToggleLike, ctxDeleteTrack, ctxEditTags,
          ctxGoToArtist, ctxGoToAlbum,
          ctxNewPlaylist, ctxRemoveFromPlaylist, ctxSmartPlaylist,
-         ctxPlayNext, ctxAddToQueueEnd, ctxCopyInfo, ctxWriteRG } from './ctxmenu.js';
+         ctxPlayNext, ctxAddToQueueEnd, ctxCopyInfo, ctxWriteRG,
+         ctxMoveTrackUp, ctxMoveTrackDown } from './ctxmenu.js';
 import { toggleCinema, closeCinema, cycleCinemaBg,
          toggleCinemaFullscreen }                              from './cinema.js';
 import { openRadioView, ctxStartRadio,
@@ -192,6 +193,8 @@ const _ACTIONS = {
   'ctx-go-album':          ()    => ctxGoToAlbum(),
   'ctx-new-playlist':      ()    => ctxNewPlaylist(),
   'ctx-remove-pl':         ()    => ctxRemoveFromPlaylist(),
+  'ctx-move-up':           ()    => ctxMoveTrackUp(),
+  'ctx-move-down':         ()    => ctxMoveTrackDown(),
   'ctx-smart-playlist':    ()    => ctxSmartPlaylist(),
   'ctx-play-next':         ()    => ctxPlayNext(),
   'ctx-add-queue-end':     ()    => ctxAddToQueueEnd(),

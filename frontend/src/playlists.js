@@ -31,7 +31,7 @@
 //   onPlCoverSelected, clearPlCover
 //   trapFocus
 
-import { esc }                  from './utils.js';
+import { esc, moveByOne }       from './utils.js';
 import { i18n }                  from './i18n.js';
 import { get, set, notify }      from './store.js';
 import { emit, EVENTS }          from './bus.js';
@@ -756,6 +756,27 @@ export function onTrackDragStart(e, trackId) {
   e.dataTransfer.effectAllowed = (view === 'playlist' && curPlId && !query) ? 'move' : 'copy';
   e.dataTransfer.setData('text/plain', trackId);
   setTimeout(() => { const el = document.getElementById('tr-' + trackId); if (el) el.classList.add('dragging'); }, 0);
+}
+
+/**
+ * WCAG 2.2 SC 2.5.7 — alternative non-drag à la réorganisation des pistes d'une
+ * playlist : déplace `trackId` d'un cran (dir -1 = haut, +1 = bas) dans la playlist
+ * courante. No-op (false) hors vue playlist, sur une smart playlist, avec un filtre
+ * actif, ou en butée. Persiste via savePlaylists (débouncé) puis re-render.
+ * @param {string} trackId
+ * @param {-1|1}   dir
+ * @returns {boolean} true si l'ordre a changé
+ */
+export function movePlaylistTrack(trackId, dir) {
+  const curPlId = get('curPlId');
+  if (get('view') !== 'playlist' || !curPlId || get('query')) return false;
+  const pl = get('playlists').find(p => p.id === curPlId);
+  if (!pl || pl.smart || !Array.isArray(pl.trackIds)) return false;
+  const idx = pl.trackIds.indexOf(trackId);
+  if (moveByOne(pl.trackIds, idx, dir) < 0) return false;
+  savePlaylists();
+  invalidateFilterCache(); emit(EVENTS.FILTER_CHANGED, {}); emit(EVENTS.RENDER_LIB, {});
+  return true;
 }
 
 // ── Réorganisation playlist par drag-and-drop ──────────────

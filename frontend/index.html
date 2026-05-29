@@ -664,6 +664,16 @@
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"/><line x1="15" y1="5" x2="19" y2="9"/></svg>
     <span data-i18n="ctx_write_rg">Écrire le gain RG dans les tags</span>
   </div>
+  <!-- WCAG 2.2 SC 2.5.7 : alternative non-drag à la réorganisation (visible en playlist manuelle) -->
+  <div class="ctx-sep" id="ctx-sep-move" role="separator" style="display:none"></div>
+  <div class="ctx-item" id="ctx-move-up" role="menuitem" tabindex="-1" style="display:none" data-action="ctx-move-up">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>
+    <span data-i18n="ctx_move_up">Déplacer vers le haut</span>
+  </div>
+  <div class="ctx-item" id="ctx-move-down" role="menuitem" tabindex="-1" style="display:none" data-action="ctx-move-down">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"/><polyline points="19 12 12 19 5 12"/></svg>
+    <span data-i18n="ctx_move_down">Déplacer vers le bas</span>
+  </div>
   <div class="ctx-sep" id="ctx-sep-remove" role="separator" style="display:none"></div>
   <div class="ctx-item danger" id="ctx-remove-from-pl" role="menuitem" tabindex="-1" style="display:none" data-action="ctx-remove-pl">
     <svg viewBox="0 0 24 24" aria-hidden="true"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>
