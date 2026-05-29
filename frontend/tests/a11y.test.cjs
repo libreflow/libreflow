@@ -156,6 +156,16 @@ async function run() {
     }
   });
 
+  // --- SC 1.4.3/1.4.6 : le texte de contenu n'utilise pas --t4 (~1.5:1) ------
+  // --t4 est réservé aux icônes/placeholders/séparateurs (exemptés de contraste).
+  await t('content text selectors avoid --t4 (use --t3)', () => {
+    for (const sel of ['\\.grp-artist', '\\.eq-val--flat', '\\.vh-count', '\\.tr-grp', '\\.pl-folder-empty']) {
+      const m = new RegExp(`${sel}\\s*\\{[^}]*\\}`).exec(SS);
+      assert.ok(m, `règle ${sel} introuvable`);
+      assert.ok(!/var\(--t4\)/.test(m[0]), `${sel} ne doit pas utiliser --t4 (~1.5:1) pour du texte`);
+    }
+  });
+
   if (fail) { console.log(`\nA11Y FAIL: ${fail}/${pass + fail}`); process.exit(1); }
   console.log(`\nA11Y OK: ${pass}/${pass}`);
 }

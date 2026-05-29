@@ -1756,7 +1756,7 @@ button { cursor: pointer; }
   letter-spacing: var(--ls-heading);
 }
 .vh-count {
-  font-size: var(--fs-caption); color: var(--t4); flex-shrink: 0;
+  font-size: var(--fs-caption); color: var(--t3); flex-shrink: 0; /* A11Y: --t4 (1.5:1) → --t3 (7:1) */
   letter-spacing: var(--ls-micro);
 }
 
@@ -2263,7 +2263,7 @@ html[data-mode="light"] mark.srch-hl { background: rgba(var(--g-rgb), .22); }
   display: flex; align-items: center; gap: var(--sp-2);
   padding: 0 var(--sp-2h) 0 var(--sp-2);
   font-size: var(--fs-xs); font-weight: 600;
-  color: var(--t4);
+  color: var(--t3); /* A11Y: en-tête de groupe lisible — --t4 (1.5:1) → --t3 (7:1) */
   letter-spacing: var(--ls-caps); text-transform: uppercase;
   position: sticky; top: 0; z-index: 2;
   background: var(--bg1);
@@ -2276,7 +2276,7 @@ html[data-mode="light"] mark.srch-hl { background: rgba(var(--g-rgb), .22); }
   font-weight: 700;
   text-align: center;
 }
-.grp-artist { font-weight: 400; color: var(--t4); text-transform: none; letter-spacing: 0; }
+.grp-artist { font-weight: 400; color: var(--t3); text-transform: none; letter-spacing: 0; } /* A11Y: --t4→--t3 */
 
 /* ── Grid empty state (albums / artistes) ────────────────── */
 .grid-empty {
@@ -4045,7 +4045,7 @@ html[data-mode="light"] .bte-cover-clear    { background: var(--bg3); border-col
 
 .pl-folder-empty {
   padding: var(--sp-1p) var(--sp-2h) var(--sp-1h);
-  font-size: var(--fs-sm); color: var(--t4); font-style: italic;
+  font-size: var(--fs-sm); color: var(--t3); font-style: italic; /* A11Y: --t4→--t3 */
   pointer-events: none;
 }
 
@@ -5023,7 +5023,7 @@ html[data-mode="light"] .eq-bands {
   font-size: var(--fs-xs); min-width: var(--eq-note-min); text-align: center;
   font-variant-numeric: tabular-nums; letter-spacing: var(--ls-reset);
   transition: color var(--dur-fast) ease, font-weight var(--dur-fast) ease;
-  color: var(--t4);
+  color: var(--t3); /* A11Y: valeur dB lisible au repos — --t4 (1.5:1) → --t3 (7:1) */
   flex-shrink: 0;
 }
 /* Boost (+dB) → couleur accent */
@@ -5031,7 +5031,7 @@ html[data-mode="light"] .eq-bands {
 /* Cut  (−dB) → orange chaud */
 .eq-val--cut   { color: var(--eq-cut) !important; font-weight: 600; }
 /* Flat (0dB) → très atténué */
-.eq-val--flat  { color: var(--t4) !important; font-weight: 400; }
+.eq-val--flat  { color: var(--t3) !important; font-weight: 400; } /* A11Y: --t4→--t3 */
 
 /* ── Wrap slider : zone interactive avec ligne 0 dB ─────────────────────── */
 .eq-slider-wrap {
@@ -5183,7 +5183,7 @@ html[data-mode="light"] .eq-footer-reset { border-color: var(--bg5); color: var(
 .eq-scale {
   display: flex; flex-direction: column; justify-content: space-between;
   width: 26px; padding: var(--sp-3h) 4px var(--sp-3) 0;
-  font-size: 9px; line-height: 1; color: var(--t4);
+  font-size: 9px; line-height: 1; color: var(--t3); /* A11Y: échelle dB — --t4→--t3 */
   text-align: right; user-select: none; flex-shrink: 0;
 }
 html[data-mode="light"] .eq-scale { color: var(--t3); }
@@ -6942,7 +6942,7 @@ html[data-mode="light"] #mp-ov {
 
 /* Light mode overrides radio */
 html[data-mode="light"] .rv-seed-card { background: rgba(0,0,0,.04); border: var(--border-w-sm) solid var(--sep); }
-html[data-mode="light"] .rv-seed-label { color: var(--t4); }
+html[data-mode="light"] .rv-seed-label { color: var(--t3); } /* A11Y: --t4→--t3 (light override échouait l'AA) */
 html[data-mode="light"] .rv-start-btn  { background: var(--g); }
 
 /* ═══════════════════════════════════════════════════════════════════
