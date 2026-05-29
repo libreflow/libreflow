@@ -1670,17 +1670,28 @@ button { cursor: pointer; }
 
 /* ERG-P2 : badge compteur sur items sidebar fixes (#ni-all, #ni-liked, etc.) */
 .ni .ni-count {
-  margin-left: auto;
-  font-size: var(--fs-xs);
-  font-variant-numeric: tabular-nums;
-  color: var(--t4);
-  font-weight: 500;
-  padding: 0 var(--sp-1);
-  border-radius: var(--r-xs);
-  flex-shrink: 0;
-  transition: color var(--dur-fast) ease;
+  display      : inline-flex;
+  align-items  : center;
+  justify-content: center;
+  min-width    : 20px;
+  height       : 18px;
+  padding      : 0 6px;
+  border-radius: var(--radius-pill);
+  background   : var(--accent-subtle, rgba(var(--g-rgb), 0.18));
+  color        : var(--g);
+  font-size    : 11px;
+  font-weight  : var(--fw-semibold, 600);
+  line-height  : 1;
+  margin-left  : auto;
+  flex-shrink  : 0;
 }
-.ni.on .ni-count { color: var(--g); }
+.ni:hover .ni-count {
+  background: rgba(var(--g-rgb), 0.28);
+}
+.ni.on .ni-count {
+  background: var(--g);
+  color     : var(--text-on-accent);
+}
 
 /* Séparateur */
 .ns { height: var(--sep-h); background: var(--sep); margin: var(--sp-1h) var(--sp-1); }
