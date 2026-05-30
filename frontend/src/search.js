@@ -261,9 +261,11 @@ function _posRank(s, q, wb) {
  * @returns {number}
  */
 export function relevanceScore(t, q) {
+  const qq = q.trim().toLowerCase(); // robust to callers that pass raw/mixed-case queries
+  if (!qq) return 0;
   let best = 0;
   for (const [field, w] of _FIELD_W) {
-    const r = _posRank(t[field], q);
+    const r = _posRank(t[field], qq);
     if (r) best = Math.max(best, w * 4 + r); // field dominates; position breaks within-field ties
   }
   return best;
