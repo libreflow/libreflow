@@ -189,6 +189,7 @@ function _updateSrchBadge(count) {
   const hasQuery = !!_q();
   if (!hasQuery)        badge.textContent = '';
   else if (count === 0) badge.textContent = 'aucun résultat';
+  else if (count === 1) badge.textContent = '1 résultat';
   else                  badge.textContent = `${count} résultats`;
   updateClearFiltersBtn();
 }
