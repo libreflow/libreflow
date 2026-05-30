@@ -1850,6 +1850,36 @@ section('components/lf-toast-stack.logic.js -- import-smoke');
     _ko++;
   }
 
+  // search.js — relevanceScore (scorer de pertinence)
+  section('search.js -- relevanceScore (import réel)');
+  try {
+    const { relevanceScore } = await import('../src/search.js');
+    assert(typeof relevanceScore === 'function', 'relevanceScore est une fonction exportée');
+    assert(
+      relevanceScore({ name: 'Discovery' }, 'dis') > relevanceScore({ name: 'The Distance' }, 'dis'),
+      'relevanceScore: title prefix beats title substring'
+    );
+    assert(
+      relevanceScore({ name: 'Endless Discovery' }, 'dis') > relevanceScore({ name: 'Misdiagnosed' }, 'dis'),
+      'relevanceScore: title word-start beats title substring'
+    );
+    assert(
+      relevanceScore({ name: 'Dance', artist: 'X' }, 'dan') > relevanceScore({ name: 'X', artist: 'Dance' }, 'dan'),
+      'relevanceScore: title match beats artist match'
+    );
+    assert(
+      relevanceScore({ artist: 'Daft Punk', album: 'X' }, 'daf') > relevanceScore({ artist: 'X', album: 'Daft Album' }, 'daf'),
+      'relevanceScore: artist match beats album match'
+    );
+    assert(
+      relevanceScore({ name: 'Zzz', artist: 'Yyy' }, 'dis') === 0,
+      'relevanceScore: no match scores 0'
+    );
+  } catch (e) {
+    _ko++;
+    console.error('  ✗  relevanceScore import/test crashed:', e.message);
+  }
+
   // WCAG 2.2 SC 2.5.7 — pure reorder helper moveByOne (alternative non-drag)
   try {
     const { moveByOne } = await import('../src/utils.js');

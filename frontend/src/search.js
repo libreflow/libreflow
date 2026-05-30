@@ -229,6 +229,57 @@ function _filterByQuery(tracks, query) {
   });
 }
 
+// ── Relevance scorer ──────────────────────────────────────────────────────────
+
+// Field weights (title > artist > album > genre). Higher = more important.
+const _FIELD_W = [['name', 4], ['artist', 3], ['artistFull', 3], ['album', 2], ['genre', 1]];
+
+/**
+ * Position rank within a field: prefix(3) > word-start(2) > substring(1) > none(0).
+ * @param {string | null | undefined} s
+ * @param {string} q
+ * @returns {number}
+ */
+function _posRank(s, q) {
+  if (!s) return 0;
+  const l = s.toLowerCase();
+  if (l.startsWith(q)) return 3;
+  if (new RegExp('\\b' + q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).test(l)) return 2;
+  if (l.includes(q)) return 1;
+  return 0;
+}
+
+/**
+ * Relevance of track t for query q (caller passes trimmed+lowercased q).
+ * Higher = better; 0 = no match.
+ * @param {Track} t
+ * @param {string} q  — already trimmed and lowercased
+ * @returns {number}
+ */
+export function relevanceScore(t, q) {
+  let best = 0;
+  for (const [field, w] of _FIELD_W) {
+    const r = _posRank(t[field], q);
+    if (r) best = Math.max(best, w * 4 + r); // field dominates; position breaks within-field ties
+  }
+  return best;
+}
+
+/**
+ * Sorts a list of tracks by relevance score descending, then title alphabetically.
+ * Returns a new array — does not mutate `list`.
+ * @param {Track[]} list
+ * @param {string} q  — raw query (will be trimmed+lowercased)
+ * @returns {Track[]}
+ */
+function _relevanceSort(list, q) {
+  const qq = q.trim().toLowerCase();
+  return [...list].sort((a, b) => {
+    const d = relevanceScore(b, qq) - relevanceScore(a, qq);
+    return d !== 0 ? d : _compare(a.name, b.name);
+  });
+}
+
 // ── Tri ───────────────────────────────────────────────────────────────────────
 
 /**
