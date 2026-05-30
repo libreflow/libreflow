@@ -24,7 +24,7 @@ import { radioActive, stopRadio, startRadio, getRadioQueue } from './radio.js';
 import { toast }                                        from './ui.js';
 import { saveCfg }                   from './cfgsave.js';
 import { updateVolSlider }            from './playerbar.js';
-import { rgbToHsl, hslToRgb, boostSat, regionAvg, sampleArtColors } from './artcolor.js';
+import { rgbToHsl, hslToRgb, boostSat, regionAvg, sampleArtColors, sampleArtColors5 } from './artcolor.js';
 import { renderAmbientFrame }                from './ambientRenderer.js';
 import { timeline, set as motionSet, kill as motionKill, eases } from './motion.js';
 
@@ -170,16 +170,26 @@ let _ambientGen     = 0;      // génération courante — incrémentée à chaq
 function _buildAmbientColors() {
   const img = document.getElementById('cinema-art-img');
   if (img && img.naturalWidth && img.style.display !== 'none') {
-    const colors = sampleArtColors(img, 64);
-    if (colors) return colors;
+    const colors = sampleArtColors5(img, 64);
+    if (colors && colors.length >= 3) {
+      return {
+        cT:  colors[0],
+        cL:  colors[1],
+        cR:  colors[2],
+        cB1: colors[3] || null,
+        cB2: colors[4] || null,
+      };
+    }
   }
   const [rF, gF, bF] = _cinArtRGB.split(',').map(Number);
   const cT = boostSat(rF, gF, bF);
   const [hF, sF, lF] = rgbToHsl(...cT);
   return {
     cT,
-    cL: hslToRgb((hF + 38) % 360, Math.min(1, sF), lF),
-    cR: hslToRgb((hF - 32 + 360) % 360, Math.min(1, sF), lF),
+    cL:  hslToRgb((hF + 38) % 360, Math.min(1, sF), lF),
+    cR:  hslToRgb((hF - 32 + 360) % 360, Math.min(1, sF), lF),
+    cB1: null,
+    cB2: null,
   };
 }
 
