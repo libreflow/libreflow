@@ -365,8 +365,9 @@ html[data-mode="light"] #main         { background:var(--bg); }
 html[data-mode="light"] .vh           { background:var(--bg2); border-bottom:var(--border-w-sm) solid var(--bg5); }
 html[data-mode="light"] .sb-foot      { border-top:var(--border-w-sm) solid var(--bg5); background:var(--bg2); }
 html[data-mode="light"] .sb-search    { border-bottom-color:var(--bg5); }
-html[data-mode="light"] .sb-search .srch { background:var(--bg4); border-color:var(--bg5); }
-html[data-mode="light"] .sb-search .srch:focus-within { background:var(--bg2); }
+html[data-mode="light"] .sb-search .srch { background:transparent; border-color:transparent; border-bottom-color:var(--bg5); }
+html[data-mode="light"] .sb-search .srch:hover { background:var(--bg4); border-bottom-color:var(--bg5); }
+html[data-mode="light"] .sb-search .srch:focus-within { background:var(--bg2); border-color:var(--g); }
 
 /* ── Player bar + Sidebar — désactiver glassmorphism ── */
 html[data-mode="light"] #pl {
@@ -887,11 +888,30 @@ button { cursor: pointer; }
 }
 .sb-search .srch {
   width: 100%;
-  background: var(--border-1);
-  border-color: var(--border-2);
+  background: transparent;
+  border-color: transparent;
+  border-bottom-color: var(--border-2);
 }
+.sb-search .srch:hover {
+  background: var(--border-1);
+  border-bottom-color: var(--bg5);
+}
+/* Focus souris : le halo accent (box-shadow --shadow-srch-dk / -lt) est HÉRITÉ de
+   `.srch:focus-within` (base, thème-scopé l.~1135 / l.~441) — NE PAS le redéclarer
+   ici, sinon on casse la parité de glow entre thèmes. */
 .sb-search .srch:focus-within {
   background: var(--border-3);
+  border-color: var(--g);
+  border-radius: var(--r-art);
+}
+/* Focus clavier : anneau dual-tone calqué sur le :focus-visible global (l.~749) —
+   outline accent + anneau neutre opaque (--focus-ring-contrast), lisible ≥3:1 quel
+   que soit l'accent choisi (SC 2.4.13 / CLAUDE.md §2 inv.9). Ce box-shadow neutre
+   remplace volontairement le halo accent au clavier ; le focus souris garde le halo. */
+.sb-search .srch:has(input:focus-visible) {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-offset);
+  box-shadow: 0 0 0 var(--border-w-lg) var(--focus-ring-contrast);
 }
 .sb-search .srch input {
   width: auto;
@@ -1127,14 +1147,14 @@ button { cursor: pointer; }
 /* Recherche */
 .srch {
   display: flex; align-items: center; gap: var(--sp-1d);
-  background: var(--bg2); border-radius: var(--r-art);
+  background: var(--bg2); border-radius: var(--r-sm);
   padding: var(--sp-1d) var(--sp-3);
   border: var(--border-w-sm) solid var(--bg4);
-  transition: border-color var(--dur-fast) ease, background var(--dur-fast) ease;
+  transition: border-color var(--dur-fast) ease, background var(--dur-fast) ease, border-radius var(--dur-fast) var(--smooth), box-shadow var(--dur-fast) ease;
 }
 .srch:focus-within { border-color: var(--g); background: var(--bg3); box-shadow: var(--shadow-srch-dk); }
 .srch svg          { width: var(--icon-xs); height: var(--icon-xs); fill: var(--t3); flex-shrink: 0; transition: fill var(--dur-fast) ease; }
-.srch:focus-within svg { fill: var(--t2); }
+.srch:focus-within svg { fill: var(--g); }
 .srch input        { border: none; outline: none; background: transparent; color: var(--t); font-size: var(--fs-md); width: var(--search-input-w); }
 .srch input::placeholder { color: var(--t3); }
 .srch-clear { background: none; border: none; padding: var(--sp-micro); color: var(--t3); flex-shrink: 0; cursor: pointer; display: flex; align-items: center; justify-content: center; min-width: var(--target-min); min-height: var(--target-min); border-radius: var(--r-sm); transition: color var(--ease), background var(--ease); }
