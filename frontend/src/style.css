@@ -1134,7 +1134,7 @@ button { cursor: pointer; }
 }
 .srch:focus-within { border-color: var(--g); background: var(--bg3); box-shadow: var(--shadow-srch-dk); }
 .srch svg          { width: var(--icon-xs); height: var(--icon-xs); fill: var(--t3); flex-shrink: 0; transition: fill var(--dur-fast) ease; }
-.srch:focus-within svg { fill: var(--t2); }
+.srch:focus-within svg { fill: var(--g); }
 .srch input        { border: none; outline: none; background: transparent; color: var(--t); font-size: var(--fs-md); width: var(--search-input-w); }
 .srch input::placeholder { color: var(--t3); }
 .srch-clear { background: none; border: none; padding: var(--sp-micro); color: var(--t3); flex-shrink: 0; cursor: pointer; display: flex; align-items: center; justify-content: center; min-width: var(--target-min); min-height: var(--target-min); border-radius: var(--r-sm); transition: color var(--ease), background var(--ease); }
