@@ -1875,6 +1875,10 @@ section('components/lf-toast-stack.logic.js -- import-smoke');
       relevanceScore({ name: 'Zzz', artist: 'Yyy' }, 'dis') === 0,
       'relevanceScore: no match scores 0'
     );
+    assert(
+      relevanceScore({ name: 'Paradise' }, 'dis') > relevanceScore({ name: 'X', artist: 'Disco' }, 'dis'),
+      'relevanceScore: title substring beats artist prefix (field dominates position)'
+    );
   } catch (e) {
     _ko++;
     console.error('  ✗  relevanceScore import/test crashed:', e.message);

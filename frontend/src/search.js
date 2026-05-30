@@ -236,15 +236,19 @@ const _FIELD_W = [['name', 4], ['artist', 3], ['artistFull', 3], ['album', 2], [
 
 /**
  * Position rank within a field: prefix(3) > word-start(2) > substring(1) > none(0).
+ * `wb` (optional) is a precompiled \b-anchored regex for q — pass it on the hot path
+ * to avoid rebuilding the regex per field per track.
  * @param {string | null | undefined} s
  * @param {string} q
+ * @param {RegExp} [wb]
  * @returns {number}
  */
-function _posRank(s, q) {
+function _posRank(s, q, wb) {
   if (!s) return 0;
   const l = s.toLowerCase();
   if (l.startsWith(q)) return 3;
-  if (new RegExp('\\b' + q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).test(l)) return 2;
+  const re = wb || new RegExp('\\b' + q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+  if (re.test(l)) return 2;
   if (l.includes(q)) return 1;
   return 0;
 }
@@ -265,17 +269,32 @@ export function relevanceScore(t, q) {
   return best;
 }
 
+/** Like relevanceScore but reuses a precompiled word-boundary regex (hot path). */
+function _relevanceScoreCached(t, q, wb) {
+  let best = 0;
+  for (const [field, w] of _FIELD_W) {
+    const r = _posRank(t[field], q, wb);
+    if (r) best = Math.max(best, w * 4 + r);
+  }
+  return best;
+}
+
 /**
  * Sorts a list of tracks by relevance score descending, then title alphabetically.
  * Returns a new array — does not mutate `list`.
+ * Precomputes scores O(n) and builds the word-boundary regex once per search
+ * to avoid millions of RegExp allocations in the sort comparator.
  * @param {Track[]} list
  * @param {string} q  — raw query (will be trimmed+lowercased)
  * @returns {Track[]}
  */
 function _relevanceSort(list, q) {
   const qq = q.trim().toLowerCase();
+  const wb = new RegExp('\\b' + qq.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+  const score = new Map();
+  for (const t of list) score.set(t, _relevanceScoreCached(t, qq, wb));
   return [...list].sort((a, b) => {
-    const d = relevanceScore(b, qq) - relevanceScore(a, qq);
+    const d = score.get(b) - score.get(a);
     return d !== 0 ? d : _compare(a.name, b.name);
   });
 }
@@ -465,6 +484,10 @@ export function getFiltered() {
         return ta !== tb ? ta - tb : _compare(a.name || '', b.name || '');
       });
     }
+  } else if (query) {
+    // Query active → order by relevance (prefix/word/substring × field weight),
+    // alpha tie-break. Non-query path keeps the user-chosen sort.
+    result = _relevanceSort(filtered, query);
   } else {
     result = _sortTracks(filtered, sort, recentPlays);
   }
