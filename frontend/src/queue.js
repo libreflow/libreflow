@@ -94,13 +94,13 @@ function _buildNaturalUpcoming() {
 /** Source textuelle pour le header "À suivre : [source]". */
 function _getQueueSource() {
   const view = get('view');
-  if (view === 'liked')    return 'Titres aimés';
-  if (view === 'radio')    return 'Radio';
+  if (view === 'liked')    return i18n('queue_src_liked') || 'Titres aimés';
+  if (view === 'radio')    return i18n('queue_src_radio') || 'Radio';
   if (view === 'playlist') {
     const pl = (get('playlists') || []).find(p => p.id === get('curPlId'));
     if (pl?.name) return pl.name;
   }
-  return 'Bibliothèque';
+  return i18n('sb_group_lib') || 'Bibliothèque';
 }
 
 /** Retourne l'état courant de la queue pour la persistance en cfg. */
@@ -316,7 +316,7 @@ export function renderQueue() {
   // ── Section "Prochainement" (queue explicite) ─────────────
   if (explicit.length) {
     html += `<div class="queue-section-header" role="presentation">
-      <span class="queue-section-label">Prochainement (${explicit.length})</span>
+      <span class="queue-section-label">${esc(i18n('queue_upcoming', explicit.length))}</span>
       <button class="queue-clear-btn" data-action="clear-queue" aria-label="${esc(i18n('queue_clear_all'))}" title="${esc(i18n('queue_clear_all'))}">✕ tout</button>
     </div>`;
     // A11Y-03: role=listitem + aria-label pour chaque item (remove button labeled)
@@ -345,7 +345,7 @@ export function renderQueue() {
 
   // ── Section "À suivre" (naturelle) ──────────────────────
   if (natural.length) {
-    html += `<div class="queue-section-divider" role="presentation">À suivre : ${esc(_getQueueSource())}</div>`;
+    html += `<div class="queue-section-divider" role="presentation">${esc(i18n('queue_next_from', _getQueueSource()))}</div>`;
     // A11Y-03: role=listitem + aria-label pour chaque item naturel
     html += natural.slice(0, 50).map((t, i) => {
       const artHTML = t.art ? `<img src="${esc(t.art)}" alt="">` : extEmoji(t.ext);

@@ -175,7 +175,7 @@
   width: min(520px, 90vw);
   max-height: calc(100vh - var(--sp-8)); /* R-C1 : pattern modal unifié */
   overflow-y: auto;
-  box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+  box-shadow: var(--shadow-xl); /* aligné sur #usb-modal / #cd-modal */
   display: flex;
   flex-direction: column;
   gap: 14px;
@@ -195,7 +195,7 @@
   gap: 6px;
   font-size: 11px;
   padding: 3px 0;
-  border-bottom: 1px solid rgba(255,255,255,0.04);
+  border-bottom: 1px solid var(--sep);
 }
 .organize-move-from,
 .organize-move-to {

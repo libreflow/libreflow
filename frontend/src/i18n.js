@@ -476,6 +476,10 @@ export const LANGS = {
     t_deleting:           'Suppression…',
     t_queue_cleared:      'File d\'attente vidée',
     queue_clear_all:      'Vider la file d\'attente',
+    queue_upcoming:       (n) => `Prochainement (${n})`,
+    queue_next_from:      (s) => `À suivre : ${s}`,
+    queue_src_liked:      'Titres aimés',
+    queue_src_radio:      'Radio',
     t_artwork_retry:      (n) => `Pochettes manquantes : récupération de ${n}…`,
     t_artwork_retry_done: (n) => `🖼 ${n} pochette${n!==1?'s':''} récupérée${n!==1?'s':''}`,
     // Batch tag edit
@@ -1156,6 +1160,10 @@ export const LANGS = {
     t_deleting:           'Deleting…',
     t_queue_cleared:      'Queue cleared',
     queue_clear_all:      'Clear queue',
+    queue_upcoming:       (n) => `Up next (${n})`,
+    queue_next_from:      (s) => `Up next: ${s}`,
+    queue_src_liked:      'Liked tracks',
+    queue_src_radio:      'Radio',
     t_artwork_retry:      (n) => `Missing artwork: fetching ${n}…`,
     t_artwork_retry_done: (n) => `🖼 ${n} cover${n!==1?'s':''} loaded`,
     // Batch tag edit
