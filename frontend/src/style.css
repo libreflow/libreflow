@@ -1127,10 +1127,10 @@ button { cursor: pointer; }
 /* Recherche */
 .srch {
   display: flex; align-items: center; gap: var(--sp-1d);
-  background: var(--bg2); border-radius: var(--r-art);
+  background: var(--bg2); border-radius: var(--r-sm);
   padding: var(--sp-1d) var(--sp-3);
   border: var(--border-w-sm) solid var(--bg4);
-  transition: border-color var(--dur-fast) ease, background var(--dur-fast) ease;
+  transition: border-color var(--dur-fast) ease, background var(--dur-fast) ease, border-radius var(--dur-fast) var(--smooth), box-shadow var(--dur-fast) ease;
 }
 .srch:focus-within { border-color: var(--g); background: var(--bg3); box-shadow: var(--shadow-srch-dk); }
 .srch svg          { width: var(--icon-xs); height: var(--icon-xs); fill: var(--t3); flex-shrink: 0; transition: fill var(--dur-fast) ease; }
