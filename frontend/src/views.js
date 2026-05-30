@@ -16,8 +16,7 @@ import { emit, EVENTS }                                              from './bus
 import { eqOpen, closeEQ }                                           from './eq.js';
 import { queueOpen, closeQueue }                                     from './queue.js';
 import { VIRT }                                                       from './virt.js';
-import { getFiltered, _trackIdxMap, invalidateFilterCache,
-         wasFuzzySearch }                                            from './search.js';
+import { getFiltered, _trackIdxMap, invalidateFilterCache }         from './search.js';
 import { buildQ, clearRvProgFill }                                   from './player.js';
 import { _withVT, renderLib, renderAlbumsGrid, renderArtistsGrid,
          renderPlaylistsGrid, drillDown, updatePlActionBar }         from './renderer.js';
@@ -182,22 +181,15 @@ function _updateSrchBadge(count) {
   if (!badge) {
     badge = document.createElement('span');
     badge.id = 'srch-badge';
-    badge.className = 'srch-ct';
+    badge.className = 'sr-only';
+    badge.setAttribute('aria-live', 'polite');
+    badge.setAttribute('aria-atomic', 'true');
     document.querySelector('.srch')?.appendChild(badge);
   }
   const hasQuery = !!_q();
-  const show = count > 0 && hasQuery;
-  // A11Y : annoncer le résultat (y compris "0") via aria-live. Le visuel reste piloté
-  // par `.on` qui contrôle opacity — quand count=0, .on retiré donc badge invisible,
-  // mais aria-live="polite" annonce le textContent quand-même.
-  if (hasQuery && count === 0) {
-    badge.textContent = '0 résultats';
-  } else if (show) {
-    badge.textContent = wasFuzzySearch() ? '≈ ' + String(count) : String(count);
-  } else {
-    badge.textContent = '';
-  }
-  badge.classList.toggle('on', show);
+  if (!hasQuery)        badge.textContent = '';
+  else if (count === 0) badge.textContent = 'aucun résultat';
+  else                  badge.textContent = `${count} résultats`;
   updateClearFiltersBtn();
 }
 
