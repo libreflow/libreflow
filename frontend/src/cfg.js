@@ -7,7 +7,7 @@ export const CFG = Object.freeze({
   IDB_TIMEOUT_DALL:      30000,   // ms — timeout pour dall() (lecture lib complète)
   TRACK_SAVE_DEBOUNCE:     250,   // ms — debounce sur saveTrack()
   CFG_SAVE_DEBOUNCE:       800,   // ms — debounce sur saveCfg()
-  SEARCH_DEBOUNCE:         150,   // ms — debounce sur la barre de recherche
+  SEARCH_DEBOUNCE:          90,   // ms — debounce sur la barre de recherche
   PLAYLOG_FLUSH_DELAY:    3000,   // ms — délai avant flush du play log vers IDB
   STATS_UPDATE_DELAY:     1500,   // ms — délai debounce pour updateStats()
   RADIO_QUEUE_SIZE:         30,   // pistes précalculées dans la file radio
