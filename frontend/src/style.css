@@ -896,14 +896,22 @@ button { cursor: pointer; }
   background: var(--border-1);
   border-bottom-color: var(--bg5);
 }
+/* Focus souris : le halo accent (box-shadow --shadow-srch-dk / -lt) est HÉRITÉ de
+   `.srch:focus-within` (base, thème-scopé l.~1135 / l.~441) — NE PAS le redéclarer
+   ici, sinon on casse la parité de glow entre thèmes. */
 .sb-search .srch:focus-within {
   background: var(--border-3);
   border-color: var(--g);
   border-radius: var(--r-art);
 }
+/* Focus clavier : anneau dual-tone calqué sur le :focus-visible global (l.~749) —
+   outline accent + anneau neutre opaque (--focus-ring-contrast), lisible ≥3:1 quel
+   que soit l'accent choisi (SC 2.4.13 / CLAUDE.md §2 inv.9). Ce box-shadow neutre
+   remplace volontairement le halo accent au clavier ; le focus souris garde le halo. */
 .sb-search .srch:has(input:focus-visible) {
   outline: var(--focus-ring);
   outline-offset: var(--focus-offset);
+  box-shadow: 0 0 0 var(--border-w-lg) var(--focus-ring-contrast);
 }
 .sb-search .srch input {
   width: auto;
