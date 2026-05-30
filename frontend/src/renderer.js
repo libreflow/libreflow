@@ -109,10 +109,6 @@ document.addEventListener('load', (e) => {
 
 // ── Helpers inline ────────────────────────────────────────────────────────────
 
-/** Escapes special regex characters in a string. */
-function escapeRegex(s) {
-  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
 
 /** Cheap change-tracking signature for tracks[].
  *  Detects adds, removes, and full clears without iterating the whole array.
@@ -123,29 +119,9 @@ function _computeTracksSig(tracks) {
   return `${tracks.length}:${tracks[0].id}:${tracks[tracks.length - 1].id}`;
 }
 
-/** Wraps matching parts of `text` with <mark> for search highlighting.
- *  Regex is applied on the raw text first, then each segment is HTML-escaped
- *  individually so that marks are never inserted inside HTML entities.
- *  Words are highlighted individually to match the multi-term filter logic.
- *  @param {string}  text  - Raw text to highlight
- *  @param {string}  query - Search query string
- *  @param {RegExp}  [re]  - M-2: optional pre-compiled regex (avoids re-creation per call) */
-export function hlText(text, query, re) {
-  if (!text) return '';
-  if (!query) return esc(text);
-  // Build per-word alternation regex when no pre-compiled re provided.
-  // Matches "dark side" as /dark|side/ so both words are highlighted even when
-  // they appear in different fields (consistent with multi-term filter logic).
-  const r = re || new RegExp(
-    `(${query.trim().split(/\s+/).filter(Boolean).map(escapeRegex).join('|')})`,
-    'gi'
-  );
-  // Split the raw text around matches using sentinel bytes, then escape each part.
-  return text.replace(r, '\x00$1\x01').split('\x00').map((seg, i) => {
-    if (i === 0) return esc(seg);
-    const parts = seg.split('\x01');
-    return `<mark>${esc(parts[0])}</mark>${esc(parts[1] || '')}`;
-  }).join('');
+/** Returns HTML-escaped text. (Search highlighting removed — premium/Spotify-like plain results.) */
+export function hlText(text) {
+  return text ? esc(text) : '';
 }
 
 function _djb2(str) {
@@ -195,12 +171,11 @@ export function makeEqHTML(_t) { return ''; }
  * Génère le HTML d'une ligne piste pour le virtual scroll.
  * @param {Track}  t       - Piste
  * @param {number} fi      - Index dans la liste filtrée courante
- * @param {object} [opts]  - { active, liked, query, isAlbumDetail, hlRe, isTabStop }
+ * @param {object} [opts]  - { active, liked, query, isAlbumDetail, isTabStop }
  *   isAlbumDetail — M-1: pré-calculé par l'appelant pour éviter get() dans la boucle
- *   hlRe          — M-2: regex pré-compilée pour la recherche (évite new RegExp par appel)
  *   isTabStop     — A11Y-ROVING: true → tabindex="0", false/undefined → tabindex="-1"
  */
-export function thtml(t, fi, { active = false, liked = false, likedSet, query = '', isAlbumDetail: _isAlbumDetail, albumDetailSort: _albumDetailSort, hlRe, isTabStop = false, setSize = 0 } = {}) {
+export function thtml(t, fi, { active = false, liked = false, likedSet, query = '', isAlbumDetail: _isAlbumDetail, albumDetailSort: _albumDetailSort, isTabStop = false, setSize = 0 } = {}) {
   // Artwork — img avec fade-in (.art-img → .art-loaded au onload) OU placeholder
   const artInner = t.art
     ? `<img class="art-img" src="${esc(t.art)}" alt="" aria-hidden="true">`
@@ -235,8 +210,8 @@ export function thtml(t, fi, { active = false, liked = false, likedSet, query = 
     </button>
   </div>
   <div class="ti">
-    <div class="tn" title="${esc(t.name || '')}">${hlText(t.name || '', query, hlRe)}</div>
-    <div class="ts" title="${esc(t.artistFull || t.artist || '')}">${hlText(t.artistFull || t.artist || '', query, hlRe)}</div>
+    <div class="tn" title="${esc(t.name || '')}">${hlText(t.name || '')}</div>
+    <div class="ts" title="${esc(t.artistFull || t.artist || '')}">${hlText(t.artistFull || t.artist || '')}</div>
   </div>
   <div class="ta" title="${esc(t.album || '')}">${esc(t.album || '')}</div>
   <div class="tr-r">
@@ -308,11 +283,6 @@ export function virtRenderWindow(fl) {
   // M-1: hoist isAlbumDetail + albumDetailSort — évite un get() par ligne dans la boucle
   const isAlbumDetail   = view === 'album-detail';
   const albumDetailSort = isAlbumDetail ? (get('albumDetailSort') || 'track') : null;
-  // M-2: pré-compiler la regex de recherche une seule fois avant la boucle (per-word alternation)
-  const hlRe = query
-    ? new RegExp(`(${query.trim().split(/\s+/).filter(Boolean).map(escapeRegex).join('|')})`, 'gi')
-    : null;
-
   // A11Y-ROVING: déterminer quel fi reçoit tabindex="0"
   // La piste courante (curTrack) est le tab stop si elle est dans la liste filtrée.
   // Sinon, la première ligne de piste visible reçoit tabindex="0".
@@ -355,7 +325,7 @@ export function virtRenderWindow(fl) {
         isTabStop = true;
         firstTrFiFound = true;
       }
-      html += thtml(t, row.fi, { active: isActive, liked: isLiked, likedSet: liked, query, isAlbumDetail, albumDetailSort, hlRe, isTabStop, setSize: fl.length });
+      html += thtml(t, row.fi, { active: isActive, liked: isLiked, likedSet: liked, query, isAlbumDetail, albumDetailSort, isTabStop, setSize: fl.length });
     }
   }
 
@@ -800,8 +770,8 @@ export function renderAlbumsGrid() {
         <button class="card-play-btn" data-action="play-card" tabindex="-1" aria-hidden="true"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><polygon points="5,3 19,12 5,21"/></svg></button>
       </div>
       <div class="card-info">
-        <span class="card-name">${hlText(a.name || i18n('unknown_album') || '?', query)}</span>
-        <span class="card-sub">${hlText(a.artist, query)}${meta}</span>
+        <span class="card-name">${hlText(a.name || i18n('unknown_album') || '?')}</span>
+        <span class="card-sub">${hlText(a.artist)}${meta}</span>
         <span class="card-ct">${a.count} ${i18n('n_tracks') || 'titres'}</span>
       </div>
     </div>`;
@@ -879,7 +849,7 @@ export function renderArtistsGrid() {
         <button class="card-play-btn" data-action="play-card" tabindex="-1" aria-hidden="true"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><polygon points="5,3 19,12 5,21"/></svg></button>
       </div>
       <div class="card-info">
-        <span class="card-name">${hlText(a.name || '?', query)}</span>
+        <span class="card-name">${hlText(a.name || '?')}</span>
         <span class="card-sub">${a.count} ${i18n('n_tracks') || 'titres'}${nbAlbums > 1 ? ` · ${nbAlbums} albums` : ''}</span>
       </div>
     </div>`;
@@ -958,7 +928,7 @@ export function renderPlaylistsGrid() {
         <button class="card-play-btn" data-action="play-pl-direct" data-pl-id="${esc(pl.id)}" tabindex="-1" aria-hidden="true"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><polygon points="5,3 19,12 5,21"/></svg></button>
       </div>
       <div class="card-info">
-        <span class="card-name">${hlText(pl.name || '?', query)}</span>
+        <span class="card-name">${hlText(pl.name || '?')}</span>
         <span class="card-sub">${count} ${i18n('n_tracks') || 'titres'}</span>
       </div>
     </div>`;
