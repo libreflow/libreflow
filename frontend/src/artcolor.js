@@ -106,6 +106,11 @@ export function _kmeansColors(pixels, k = 5, iters = 8) {
       }
       dists[i] = minD2; total += minD2;
     }
+    if (total === 0) {
+      const cp2 = Math.floor(Math.random() * n) * 4;
+      centers.push([pixels[cp2], pixels[cp2+1], pixels[cp2+2]]);
+      continue;
+    }
     let r2 = Math.random() * total, chosen = n - 1;
     for (let i = 0; i < n; i++) { r2 -= dists[i]; if (r2 <= 0) { chosen = i; break; } }
     const cp = chosen * 4; centers.push([pixels[cp], pixels[cp+1], pixels[cp+2]]);
@@ -127,8 +132,22 @@ export function _kmeansColors(pixels, k = 5, iters = 8) {
     }
     for (let c = 0; c < k; c++) {
       const a = acc[c];
-      if (a[3] > 0) centers[c] = [a[0]/a[3]|0, a[1]/a[3]|0, a[2]/a[3]|0];
+      if (a[3] > 0) { centers[c] = [a[0]/a[3]|0, a[1]/a[3]|0, a[2]/a[3]|0]; continue; }
+      // empty cluster — reinitialize to a pixel from the largest cluster
+      let bigC = 0;
+      for (let j = 1; j < k; j++) { if (acc[j][3] > acc[bigC][3]) bigC = j; }
+      for (let i = 0; i < n; i++) {
+        if (assign[i] === bigC) { const pi=i*4; centers[c]=[pixels[pi],pixels[pi+1],pixels[pi+2]]; break; }
+      }
     }
+  }
+  for (let i = 0; i < n; i++) {
+    const pi = i * 4; let best = 0, bestD = Infinity;
+    for (let c = 0; c < k; c++) {
+      const d=(pixels[pi]-centers[c][0])**2+(pixels[pi+1]-centers[c][1])**2+(pixels[pi+2]-centers[c][2])**2;
+      if (d < bestD) { bestD = d; best = c; }
+    }
+    assign[i] = best;
   }
   const sizes = new Int32Array(k);
   for (let i = 0; i < n; i++) sizes[assign[i]]++;
