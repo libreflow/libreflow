@@ -107,9 +107,9 @@
   align-items: center;
   justify-content: space-between;
   padding: 6px 10px;
-  border-radius: 6px;
-  background: rgba(255,255,255,0.04);
-  gap: 8px;
+  border-radius: var(--radius-sm);
+  background: var(--sep);
+  gap: var(--space-2);
 }
 .eq-device-entry.active {
   background: rgba(var(--g-rgb), 0.12);
@@ -2665,7 +2665,7 @@ html[data-mode="light"] .modal-h {
 .modal-btns { display: flex; gap: var(--sp-2); justify-content: flex-end; }
 
 .mbtn {
-  padding: var(--sp-2) var(--sp-4);
+  padding: var(--space-2) var(--space-4);
   border-radius: var(--r); border: none; font-size: var(--fs-md); font-weight: 600;
   transition: filter var(--ease), transform var(--dur-fast) ease;
   position: relative; overflow: hidden; /* requis pour ripple */
@@ -4051,9 +4051,12 @@ html[data-mode="light"] .pl-folder-h:hover .pl-folder-count { background: var(--
   border: none; background: none;
   color: var(--t3); font-size: var(--fs-sm); font-weight: 500;
   cursor: pointer; position: relative;
-  transition: color var(--dur-fast) ease, background var(--dur-fast) ease;
+  transition: color var(--dur-fast) ease, background var(--dur-fast) ease,
+              transform var(--dur-fast) var(--smooth);
 }
 .eq-cat:hover  { color: var(--t); background: var(--bg3); }
+/* Press tactile — parité avec .eq-mode-btn / .eq-tool-btn / .eq-footer-reset */
+.eq-cat:active { transform: scale(.97); }
 .eq-cat.active {
   color: var(--t);
   background: var(--bg3);
@@ -4071,8 +4074,9 @@ html[data-mode="light"] .pl-folder-h:hover .pl-folder-count { background: var(--
   max-height: var(--eq-presets-max-h); overflow-y: auto; scrollbar-width: none;
 }
 .eq-presets::-webkit-scrollbar { display: none; }
-.eq-preset   { padding: var(--sp-1) var(--sp-2h); border-radius: var(--r-pill); border: var(--border-w-sm) solid var(--bg5); background: none; color: var(--t2); font-size: var(--fs-sm); cursor: pointer; transition: border-color var(--ease), color var(--ease), background var(--ease); }
+.eq-preset   { padding: var(--sp-1) var(--sp-2h); border-radius: var(--r-pill); border: var(--border-w-sm) solid var(--bg5); background: none; color: var(--t2); font-size: var(--fs-sm); cursor: pointer; transition: border-color var(--ease), color var(--ease), background var(--ease), transform var(--dur-fast) var(--smooth); }
 .eq-preset:hover  { border-color: var(--g); color: var(--t); }
+.eq-preset:active { transform: scale(.97); } /* press tactile — parité avec les autres boutons EQ */
 .eq-preset.active { background: var(--g); border-color: var(--g); color: var(--text-on-accent); font-weight: 600; }
 /* Nouveaux presets : petit point indicateur */
 .eq-preset--new { position: relative; }
