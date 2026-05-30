@@ -365,8 +365,9 @@ html[data-mode="light"] #main         { background:var(--bg); }
 html[data-mode="light"] .vh           { background:var(--bg2); border-bottom:var(--border-w-sm) solid var(--bg5); }
 html[data-mode="light"] .sb-foot      { border-top:var(--border-w-sm) solid var(--bg5); background:var(--bg2); }
 html[data-mode="light"] .sb-search    { border-bottom-color:var(--bg5); }
-html[data-mode="light"] .sb-search .srch { background:var(--bg4); border-color:var(--bg5); }
-html[data-mode="light"] .sb-search .srch:focus-within { background:var(--bg2); }
+html[data-mode="light"] .sb-search .srch { background:transparent; border-color:transparent; border-bottom-color:var(--bg5); }
+html[data-mode="light"] .sb-search .srch:hover { background:var(--bg4); border-bottom-color:var(--bg5); }
+html[data-mode="light"] .sb-search .srch:focus-within { background:var(--bg2); border-color:var(--g); }
 
 /* ── Player bar + Sidebar — désactiver glassmorphism ── */
 html[data-mode="light"] #pl {
