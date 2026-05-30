@@ -319,6 +319,7 @@ export function renderStats(tracks, trackIdxMap) {
       // Agréger les écoutes de ce jour
       const dayPlayCounts = {};
       for (const entry of playLog) {
+        if (!entry.ts) continue; // guard : entrée corrompue sans timestamp (cohérent avec les autres boucles)
         const ts = Math.floor(entry.ts / 1000); // µs → ms
         if (ts >= dayStart && ts < dayEnd) {
           dayPlayCounts[entry.id] = (dayPlayCounts[entry.id] || 0) + 1;

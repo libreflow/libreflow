@@ -23,7 +23,7 @@ import { playAt, togglePlay, isCurrentTrack, audio } from './player.js';
 import { patchPlayState } from './renderer.js';
 import { closeSettings } from './settings.js';
 import { emit, EVENTS } from './bus.js';
-import { toast } from './ui.js';
+import { toast, toastWithAction } from './ui.js';
 import { setView } from './views.js';
 
 // ── Focus trap ──────────────────────────────────────────────
@@ -162,10 +162,21 @@ export function removeFromQueue(id) {
 
 /** Vide entièrement la queue explicite. */
 export function clearExplicitQueue() {
+  const _prev       = _queueOverride;
+  const _prevAnchor = _queueOverrideTrackId;
   _queueOverride        = null;
   _queueOverrideTrackId = null;
   refreshQueueBadge();
   if (queueOpen) renderQueue();
+  // Annulation : restaurer la file explicite manuelle (restauration en mémoire, non destructive).
+  if (_prev) {
+    toastWithAction(i18n('t_queue_cleared') || 'File d\'attente vidée', 'info', i18n('t_undo') || 'Annuler', () => {
+      _queueOverride        = _prev;
+      _queueOverrideTrackId = _prevAnchor;
+      refreshQueueBadge();
+      if (queueOpen) renderQueue();
+    }, 5000);
+  }
 }
 
 /** Recalcule et affiche le badge sans ouvrir le panneau. Appelé par app.js après chaque playAt. */
@@ -306,14 +317,14 @@ export function renderQueue() {
   if (explicit.length) {
     html += `<div class="queue-section-header" role="presentation">
       <span class="queue-section-label">Prochainement (${explicit.length})</span>
-      <button class="queue-clear-btn" data-action="clear-queue" aria-label="Vider la file d'attente">✕ tout</button>
+      <button class="queue-clear-btn" data-action="clear-queue" aria-label="${esc(i18n('queue_clear_all'))}" title="${esc(i18n('queue_clear_all'))}">✕ tout</button>
     </div>`;
     // A11Y-03: role=listitem + aria-label pour chaque item (remove button labeled)
     html += explicit.map((t, i) => {
       const artHTML  = t.art ? `<img src="${esc(t.art)}" alt="">` : extEmoji(t.ext);
       const itemLbl  = `${t.name}${t.artistFull || t.artist ? ' — ' + (t.artistFull || t.artist) : ''}`;
       const rmvLbl   = `Retirer ${t.name} de la file d'attente`;
-      return `<div class="queue-item queue-item--explicit" role="listitem" tabindex="0" aria-label="${esc(itemLbl)}" data-id="${t.id}" data-qi="${i}">
+      return `<div class="queue-item queue-item--explicit" role="listitem" tabindex="0" aria-label="${esc(itemLbl)}" data-id="${t.id}" data-qi="${i}" data-action="play-queue-item" data-track-id="${t.id}">
         <div class="q-drag-handle" aria-hidden="true"><svg viewBox="0 0 6 14" aria-hidden="true" width="10" height="14"><circle cx="2" cy="2" r="1.2"/><circle cx="5" cy="2" r="1.2"/><circle cx="2" cy="7" r="1.2"/><circle cx="5" cy="7" r="1.2"/><circle cx="2" cy="12" r="1.2"/><circle cx="5" cy="12" r="1.2"/></svg></div>
         <div class="q-art" aria-hidden="true">${artHTML}
           <button class="q-art-hover-play" data-action="play-queue-item" data-track-id="${t.id}" tabindex="-1" aria-hidden="true">

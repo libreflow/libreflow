@@ -211,7 +211,7 @@ export function renderPlHero(pl, fl) {
   const hrs = (totalSec / 3600) | 0;
   const min = ((totalSec % 3600) / 60) | 0;
   const durStr = hrs > 0 ? `${hrs} h ${min} min` : min > 0 ? `${min} min` : '';
-  const stats = [count + ' titre' + (count !== 1 ? 's' : ''), durStr].filter(Boolean).join(' · ');
+  const stats = [i18n('sb_chip_tracks', count), durStr].filter(Boolean).join(' · ');
   const isSmart = !!pl.smart;
   const label = (isSmart ? i18n('pl_smart_lbl') + ' · ' : '') + i18n('pl_hero_playlist');
 

@@ -44,21 +44,18 @@ export class LfToastStack extends LitElement {
       gap: 8px;
       z-index: 9999;
       pointer-events: none;
-      font-family: var(--lf-font-ui, 'Roboto', system-ui, -apple-system, 'Segoe UI', sans-serif);
+      font-family: var(--lf-font-ui, var(--font-body));
     }
     .t-item {
       pointer-events: auto;
       position: relative;
-      background: var(--lf-toast-bg, rgba(45, 46, 48, 0.92));
-      backdrop-filter: blur(12px) saturate(1.2);
-      -webkit-backdrop-filter: blur(12px) saturate(1.2);
-      color: var(--lf-toast-fg, rgba(255, 255, 255, .92));
+      background: var(--lf-toast-bg, var(--glass-toast));
+      backdrop-filter: blur(var(--blur-lg)) saturate(1.2);
+      -webkit-backdrop-filter: blur(var(--blur-lg)) saturate(1.2);
+      color: var(--lf-toast-fg, var(--text-primary));
       padding: 14px 16px;
-      border-radius: 4px;
-      box-shadow:
-        0 6px 10px rgba(0, 0, 0, .14),
-        0 1px 18px rgba(0, 0, 0, .12),
-        0 3px 5px rgba(0, 0, 0, .20);
+      border-radius: var(--radius-md);
+      box-shadow: var(--shadow-lg);
       display: flex;
       align-items: center;
       gap: 12px;
@@ -68,17 +65,20 @@ export class LfToastStack extends LitElement {
       line-height: 20px;
       letter-spacing: .01786em;
       overflow: hidden;
-      animation: t-in 200ms cubic-bezier(.4, 0, .2, 1);
+      animation: t-in var(--motion-base) var(--ease-standard);
       cursor: pointer;
+      transition: transform var(--motion-fast) var(--ease-standard), box-shadow var(--motion-base) var(--ease-standard);
     }
-    .t-item.t-out { animation: t-out 150ms cubic-bezier(.4, 0, 1, 1) forwards; }
+    .t-item.t-out { animation: t-out var(--motion-fast) cubic-bezier(.4, 0, 1, 1) forwards; }
+    .t-item:hover  { transform: translateY(-1px); box-shadow: var(--shadow-xl, var(--shadow-lg)); }
+    .t-item:active { transform: scale(.985); transition-duration: var(--motion-fast); }
 
     /* Per-type accent — applied to the icon glyph and the thin bottom bar only. */
-    .t-info    { --lf-toast-accent: var(--lf-toast-bg-info,    #8ab4f8); }
-    .t-success { --lf-toast-accent: var(--lf-toast-bg-success, #81c995); }
-    .t-error   { --lf-toast-accent: var(--lf-toast-bg-error,   #f28b82); }
-    .t-warning { --lf-toast-accent: var(--lf-toast-bg-warning, #fdd663); }
-    .t-loading { --lf-toast-accent: var(--lf-toast-bg-loading, #8ab4f8); }
+    .t-info    { --lf-toast-accent: var(--lf-toast-bg-info,    var(--accent)); }
+    .t-success { --lf-toast-accent: var(--lf-toast-bg-success, var(--state-success)); }
+    .t-error   { --lf-toast-accent: var(--lf-toast-bg-error,   var(--state-error)); }
+    .t-warning { --lf-toast-accent: var(--lf-toast-bg-warning, var(--amber)); }
+    .t-loading { --lf-toast-accent: var(--lf-toast-bg-loading, var(--accent)); }
 
     .t-icon {
       flex: 0 0 auto;

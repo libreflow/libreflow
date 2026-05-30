@@ -119,7 +119,7 @@
   --motion-base : 200ms;
   --motion-slow : 320ms;
   --ease-standard : cubic-bezier(.4, 0, .2, 1);
-  --ease-spring   : cubic-bezier(.34, 1.4, .64, 1);
+  --ease-spring   : cubic-bezier(.34, 1.56, .64, 1); /* aligné sur la valeur active (§8) + motion.js lf-overshoot */
 }
 
 
@@ -281,16 +281,9 @@
 /* ============================================================================
  * 8. TRANSITIONS & ANIMATIONS
  * ============================================================================ */
-:root {
-  --duration-fast  : 100ms;
-  --duration-base  : 150ms;
-  --duration-slow  : 250ms;
-  --duration-enter : 300ms;
-
-  --ease-default : cubic-bezier(0.4, 0, 0.2, 1);
-  --ease-spring  : cubic-bezier(0.34, 1.56, 0.64, 1);
-  --ease-out     : cubic-bezier(0, 0, 0.2, 1);
-}
+/* Échelle motion canonique : voir §2bis (--motion-fast/base/slow, --ease-standard,
+   --ease-spring). L'ancien bloc --duration-* / --ease-default / --ease-out (sans
+   consommateur) a été retiré. */
 
 
 /* ============================================================================
@@ -886,7 +879,7 @@ html[data-mode="light"] {
   --shadow-tart:   var(--elev-2);               /* track art hover */
   --shadow-sb-tip: var(--elev-2);               /* sidebar tooltip */
   --shadow-radio:  0 8px 32px rgba(0,0,0,.14), 0 2px 6px rgba(0,0,0,.08); /* composite — gardée littérale */
-  --shadow-cin-art:var(--shadow-cin-art);  /* cinema artwork */
+  --shadow-cin-art:var(--elev-4);  /* cinema artwork — était cyclique (var(--shadow-cin-art)) → none */
   --shadow-ring:   var(--glow-accent);          /* pbar thumb ring → lueur accent */
   --shadow-thumb:  var(--elev-1);               /* pbar thumb shadow */
   --shadow-big-modal: var(--elev-3);            /* big modal */
@@ -1066,12 +1059,6 @@ html[data-mode="light"] {
 
 /* Respect des préférences utilisateur — anti-motion */
 @media (prefers-reduced-motion: reduce) {
-  :root {
-    --duration-fast  : 0ms;
-    --duration-base  : 0ms;
-    --duration-slow  : 0ms;
-    --duration-enter : 0ms;
-  }
   *, *::before, *::after {
     animation-duration  : 0ms !important;
     transition-duration : 0ms !important;

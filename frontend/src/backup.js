@@ -14,7 +14,7 @@
 //   exportBackup(includeFiles?)
 //   importBackup()
 
-import { dall, dget, dput }                          from './db.js';
+import { dall, dget, DB }                            from './db.js';
 import { invoke }                                     from './ipc.js';
 import { toast }                                      from './ui.js';
 import { get, set, notify }                          from './store.js';
@@ -24,6 +24,23 @@ import { updateStats }                               from './renderer.js';
 
 // Version du format .libreflow (incrémentée si schéma incompatible)
 const BACKUP_FORMAT_VERSION = 1;
+
+/**
+ * Écrit tout un lot dans un store via UNE seule transaction IDB (vs N dput).
+ * Non bloquant en cas d'échec : log + continue, conservant la tolérance
+ * fire-and-forget de l'ancien restore.
+ */
+async function _batchPut(storeName, records) {
+  if (!DB || !records || !records.length) return;
+  try {
+    const tx = DB.transaction(storeName, 'readwrite');
+    const store = tx.objectStore(storeName);
+    for (const rec of records) store.put(rec);
+    await new Promise((ok, fail) => { tx.oncomplete = ok; tx.onerror = () => fail(tx.error); });
+  } catch (e) {
+    console.warn(`[backup] batch IDB write (${storeName}) failed:`, e);
+  }
+}
 
 // ── Export ────────────────────────────────────────────────────────────────────
 
@@ -121,12 +138,12 @@ export async function importBackup() {
       if (!existingIds.has(t.id)) {
         addedTracks.push(t);
         existingIds.add(t.id); // évite les doublons si le backup contient des ids dupliqués
-        // Fire-and-forget IDB (cohérent avec le pattern importPaths)
-        dput('tracks', t).catch(e => console.warn('[backup] track IDB write:', t.id, e));
       }
     }
 
     if (addedTracks.length) {
+      // Une seule transaction IDB pour tout le lot (vs un dput par piste).
+      await _batchPut('tracks', addedTracks);
       // Mutation in-place du tableau du store : pas de set() (qui notifierait
       // AVANT rebuildTrackIdxMap, exposant un _trackIdxMap stale aux subscribers).
       get('tracks').push(...addedTracks);
@@ -141,14 +158,16 @@ export async function importBackup() {
     const currentPlaylists = get('playlists') ?? [];
     const existingPlIds    = new Set(currentPlaylists.map(p => p.id));
     const newPlaylists     = [...currentPlaylists];
+    const addedPlaylists   = [];
     for (const p of backupPlaylists) {
       if (!existingPlIds.has(p.id)) {
         newPlaylists.push(p);
+        addedPlaylists.push(p);
         existingPlIds.add(p.id); // évite les doublons si le backup contient des ids dupliqués
-        dput('playlists', p).catch(e => console.warn('[backup] playlist IDB write:', p.id, e));
       }
     }
-    if (newPlaylists.length > currentPlaylists.length) {
+    if (addedPlaylists.length) {
+      await _batchPut('playlists', addedPlaylists);
       set('playlists', newPlaylists);
       notify('playlists');
     }
@@ -157,16 +176,10 @@ export async function importBackup() {
     const existingPlaylog = await dall('playlog').catch(() => []);
     const existingTs = new Set();
     for (const l of existingPlaylog) existingTs.add(l.ts);
-    for (const l of backupPlaylog) {
-      if (!existingTs.has(l.ts)) {
-        dput('playlog', l).catch(e => console.warn('[backup] playlog IDB write:', e));
-      }
-    }
+    await _batchPut('playlog', backupPlaylog.filter(l => !existingTs.has(l.ts)));
 
-    // ── Imports history : merge par id ────────────────────────────────────────
-    for (const i of backupImports) {
-      dput('imports', i).catch(e => console.warn('[backup] imports IDB write:', e));
-    }
+    // ── Imports history : merge par id (put = upsert sur keyPath 'id') ─────────
+    await _batchPut('imports', backupImports);
 
     const added = addedTracks.length;
     toast(

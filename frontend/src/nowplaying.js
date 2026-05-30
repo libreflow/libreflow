@@ -202,7 +202,7 @@ function _renderNowPlaying(t, info) {
     <div class="vnp-art-wrap">${artH}</div>
     <div class="vnp-bottom">
       <div class="vnp-info">
-        <div class="vnp-title">${esc(t.name || '–')}</div>
+        <div class="vnp-title">${esc(t.name || (t.path ? t.path.split(/[/\\]/).pop().replace(/\.[^.]+$/, '') : '') || '—')}</div>
         <div class="vnp-artist">${esc(t.artist || '–')}</div>
         ${t.album ? `<div class="vnp-album">${esc(t.album)}</div>` : ''}
         <button class="vnp-lk${isLiked ? ' active' : ''}" data-action="toggle-like"

@@ -119,6 +119,9 @@ export async function removeDupeTrack(id, gi, ti) {
 }
 
 export async function deleteAllDupes() {
+  const _btn = document.getElementById('dupes-del-all-btn');
+  if (_btn) { _btn.disabled = true; _btn.dataset.lbl = _btn.textContent; _btn.textContent = i18n('t_deleting') || 'Suppression…'; }
+  try {
   const tracks = get('tracks'); // Phase 4 — store alimenté depuis Jalon 3
   // Garder le premier de chaque groupe, supprimer les autres.
   // liked migré Set<id> : pas besoin de snapshot, suppression directe par ID.
@@ -164,6 +167,9 @@ export async function deleteAllDupes() {
   updateDupesBadge();
   invalidateFilterCache(); emit(EVENTS.FILTER_CHANGED, {}); emit(EVENTS.RENDER_LIB, {}); updateStats();
   toast(i18n('t_dupes_deleted', removed), 'success');
+  } finally {
+    if (_btn) { _btn.disabled = false; if (_btn.dataset.lbl != null) { _btn.textContent = _btn.dataset.lbl; delete _btn.dataset.lbl; } }
+  }
 }
 
 export function closeDupes() {

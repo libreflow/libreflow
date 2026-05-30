@@ -120,8 +120,16 @@ async function _onDrop(e) {
   showView('scan');
   const tracks    = get('tracks');
   const newTracks = [];
+  const _total    = audioFiles.length;
+  const _sf       = document.getElementById('sf');
+  const _bar      = document.getElementById('scan-bar');
+  if (_bar) _bar.style.width = '0%';
+  let _scanned    = 0;
 
   for (const file of audioFiles) {
+    _scanned++;
+    if (_bar) _bar.style.width = Math.round(_scanned / _total * 100) + '%';
+    if (_sf)  _sf.textContent  = `${_scanned} / ${_total}`;
     // Dédup : comparer les basenames (file.webkitRelativePath est toujours vide en drag-drop Tauri).
     // Fonctionne pour t.path = nom seul (drag-drop) ou chemin complet (scan dossier).
     const _dnL = file.name.toLowerCase();

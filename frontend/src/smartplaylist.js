@@ -246,7 +246,7 @@ function _evalRule(t, rule, playCountMap, likedSet) {
       const n = parseFloat(val) || 0;
       if (op === 'gt') return durMin > n;
       if (op === 'lt') return durMin < n;
-      if (op === 'eq') return Math.round(durMin) === n;
+      if (op === 'eq') return Math.round(durMin) === Math.round(n);
       break;
     }
     case 'addedSince': {
@@ -412,8 +412,7 @@ export function smartSeedSearch(q) {
   res.style.display = 'block';
   res.innerHTML = hits.map(t => `
     <div data-action="set-smart-seed" data-track-id="${t.id}"
-      style="display:flex;align-items:center;gap:8px;padding:7px 10px;cursor:pointer;font-size:12px;border-bottom:1px solid var(--bg4)"
-      onmouseenter="this.style.background='var(--bg4)'" onmouseleave="this.style.background=''">
+      style="display:flex;align-items:center;gap:8px;padding:7px 10px;cursor:pointer;font-size:12px;border-bottom:1px solid var(--bg4)">
       <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" opacity=".4"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
       <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--t)">${esc(t.name)}</span>
       <span style="color:var(--t3);font-size:11px;white-space:nowrap;max-width:90px;overflow:hidden;text-overflow:ellipsis">${esc(t.artist||'')}</span>

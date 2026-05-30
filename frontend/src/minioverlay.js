@@ -30,7 +30,9 @@ export function toggleMiniOverlay() {
     // P3-5 : animation de sortie avant display:none
     el.classList.add('closing');
     el.addEventListener('animationend', () => {
-      el.classList.remove('on', 'closing');
+      // Si l'overlay a été ré-ouvert pendant l'animation mpOvOut (toggle rapide),
+      // ne pas le masquer : le listener {once} reste sinon armé et masque le ré-ouvert.
+      if (!miniOvOpen) el.classList.remove('on', 'closing');
     }, { once: true });
   }
 }

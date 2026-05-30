@@ -57,7 +57,9 @@ export async function openUsbImportModal() {
 
   const bg = document.getElementById('usb-modal-bg');
   if (!bg) return;
-  _usbModalPrevFocus = document.activeElement;
+  // Ne capturer le focus déclencheur que si le modal n'est pas déjà ouvert :
+  // un 'usb-refresh' ré-appelle cette fonction, sinon on perd le vrai déclencheur.
+  if (!bg.classList.contains('on')) _usbModalPrevFocus = document.activeElement;
   bg.classList.add('on');
   // A11Y : focus sur le premier bouton actif (drive ou close).
   requestAnimationFrame(() => {
