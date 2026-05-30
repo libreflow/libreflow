@@ -3810,10 +3810,11 @@ html[data-mode="light"] .pl-folder-h:hover .pl-folder-count { background: var(--
 
 /* ── EQ header — titre à gauche, ✕ à droite ────────────────────────────── */
 .eq-head {
-  padding: var(--sp-4) var(--sp-4) var(--sp-3h); flex-shrink: 0;
+  padding: var(--sp-2h) var(--sp-3h); flex-shrink: 0;
   display: flex; align-items: center; justify-content: space-between;
   border-bottom: var(--border-w-sm) solid var(--sep);
   gap: var(--sp-2);
+  min-height: 44px;
 }
 /* Valeurs finales consolidées (font-weight 600 + Syne + letter-spacing -.02em) */
 .eq-head h3 { font-size: var(--fs-md); font-weight: 600; font-family: var(--font-display); color: var(--t); letter-spacing: var(--ls-display); }
@@ -3824,12 +3825,13 @@ html[data-mode="light"] .pl-folder-h:hover .pl-folder-count { background: var(--
 /* Bouton fermer panneau — style commun */
 .queue-close, .eq-close {
   background: none; border: none; color: var(--t3);
-  width: var(--icon-4xl); height: var(--icon-4xl); border-radius: var(--sp-1);
+  width: var(--icon-40); height: var(--icon-40); border-radius: var(--sp-1);
   display: flex; align-items: center; justify-content: center;
   cursor: pointer;
-  transition: background var(--ease), color var(--ease);
+  transition: background var(--ease), color var(--ease), transform var(--dur-fast) var(--smooth);
 }
 .queue-close:hover, .eq-close:hover { background: var(--bg4); color: var(--t); }
+.queue-close:active, .eq-close:active { transform: scale(.93); }
 .queue-close svg, .eq-close svg     { width: var(--icon-xs); height: var(--icon-xs); stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; }
 
 .queue-list  { flex: 1; overflow-y: auto; padding: var(--sp-1h) 0; }
@@ -4035,46 +4037,50 @@ html[data-mode="light"] .pl-folder-h:hover .pl-folder-count { background: var(--
 
 /* ═══ ÉGALISEUR ══════════════════════════════════════════════ */
 
-/* Onglets de catégorie de presets */
+/* Onglets de catégorie — ligne unique horizontale, pas de wrapping */
 .eq-cats {
-  display: flex; flex-wrap: wrap; gap: var(--sp-micro);
-  padding: var(--sp-3) var(--sp-4) 0;
+  display: flex; flex-wrap: nowrap;
+  padding: 0 var(--sp-3h);
   flex-shrink: 0;
+  min-height: 38px;
+  align-items: stretch;
   border-bottom: var(--border-w-sm) solid var(--sep);
-  /* #6 : passe à la ligne au lieu de scroller — « World » n'est plus coupé sur
-     les panneaux étroits (scroll horizontal sans affordance retiré). */
+  overflow-x: auto; scrollbar-width: none;
+  gap: var(--sp-micro);
 }
+.eq-cats::-webkit-scrollbar { display: none; }
 .eq-cat {
   flex-shrink: 0;
-  padding: var(--sp-1p) var(--sp-2d) var(--sp-2);
-  border-radius: var(--r) var(--r) 0 0;
+  display: flex; align-items: center;
+  padding: 0 var(--sp-2h);
+  border-radius: 0;
   border: none; background: none;
-  color: var(--t3); font-size: var(--fs-sm); font-weight: 500;
+  color: var(--t3); font-size: var(--fs-xs); font-weight: 500;
   cursor: pointer; position: relative;
   transition: color var(--dur-fast) ease, background var(--dur-fast) ease,
               transform var(--dur-fast) var(--smooth);
 }
-.eq-cat:hover  { color: var(--t); background: var(--bg3); }
-/* Press tactile — parité avec .eq-mode-btn / .eq-tool-btn / .eq-footer-reset */
+.eq-cat:hover  { color: var(--t); }
 .eq-cat:active { transform: scale(.97); }
-.eq-cat.active {
-  color: var(--t);
-  background: var(--bg3);
-}
+.eq-cat.active { color: var(--t); }
 .eq-cat.active::after {
   content: ''; position: absolute; bottom: 0; left: var(--sp-2); right: var(--sp-2);
   height: var(--track-h-xs); border-radius: var(--r-xs) var(--r-xs) 0 0;
   background: var(--g);
 }
-/* Grille de presets — flex-wrap avec densité adaptée */
+/* Strip de presets — ligne unique horizontale avec scroll */
 .eq-presets  {
-  display: flex; flex-wrap: wrap; gap: var(--sp-1h);
-  padding: var(--sp-3) var(--sp-4) var(--sp-4);
+  display: flex; flex-wrap: nowrap; gap: var(--sp-1h);
+  padding: var(--sp-2) var(--sp-3h);
   border-bottom: var(--border-w-sm) solid var(--sep); flex-shrink: 0;
-  max-height: var(--eq-presets-max-h); overflow-y: auto; scrollbar-width: none;
+  overflow-x: auto; overflow-y: hidden; scrollbar-width: none;
+  align-items: center;
+  min-height: 44px;
+  -webkit-mask-image: linear-gradient(to right, black 80%, transparent 100%);
+  mask-image: linear-gradient(to right, black 80%, transparent 100%);
 }
 .eq-presets::-webkit-scrollbar { display: none; }
-.eq-preset   { padding: var(--sp-1) var(--sp-2h); border-radius: var(--r-pill); border: var(--border-w-sm) solid var(--bg5); background: none; color: var(--t2); font-size: var(--fs-sm); cursor: pointer; transition: border-color var(--ease), color var(--ease), background var(--ease), transform var(--dur-fast) var(--smooth); }
+.eq-preset   { display: inline-flex; align-items: center; flex-shrink: 0; min-height: 28px; padding: var(--sp-nano) var(--sp-2h); border-radius: var(--r-pill); border: var(--border-w-sm) solid var(--bg5); background: none; color: var(--t2); font-size: var(--fs-xs); cursor: pointer; transition: border-color var(--ease), color var(--ease), background var(--ease), transform var(--dur-fast) var(--smooth); white-space: nowrap; }
 .eq-preset:hover  { border-color: var(--g); color: var(--t); }
 .eq-preset:active { transform: scale(.97); } /* press tactile — parité avec les autres boutons EQ */
 .eq-preset.active { background: var(--g); border-color: var(--g); color: var(--text-on-accent); font-weight: 600; }
@@ -4173,7 +4179,7 @@ html[data-mode="light"] .eq-bands {
 .eq-val {
   font-size: var(--fs-xs); min-width: var(--eq-note-min); text-align: center;
   font-variant-numeric: tabular-nums; letter-spacing: var(--ls-reset);
-  transition: color var(--dur-fast) ease, font-weight var(--dur-fast) ease;
+  transition: color var(--dur-fast) ease;
   color: var(--t3); /* A11Y: valeur dB lisible au repos — --t4 (1.5:1) → --t3 (7:1) */
   flex-shrink: 0;
 }
@@ -4257,10 +4263,10 @@ html[data-mode="light"] .eq-band:nth-child(9) .eq-freq,
 /* ── Footer EQ — barre d'actions basse, toujours en bas du panel ────────── */
 .eq-footer {
   display: flex; align-items: center; gap: var(--sp-2);
-  padding: var(--sp-3) var(--sp-4) var(--sp-3d);
+  padding: var(--sp-2) var(--sp-3h);
   border-top: var(--border-w-sm) solid var(--sep);
   flex-shrink: 0;
-  margin-top: auto; /* ancre le footer au bas du panel flex */
+  min-height: 44px;
 }
 
 /* Bouton "Remise à plat" — secondaire, à gauche */
@@ -4299,17 +4305,13 @@ html[data-mode="light"] .eq-footer-reset { border-color: var(--bg5); color: var(
 #eq-panel.eq-expert            #eq-curve-wrap { height: 80px; }
 #eq-panel.eq-expert.eq-curve-active #eq-curve-wrap { height: 160px; }
 
-/* Mode Simple : les spacers de centrage sont .eq-expert-only (masqués) et les
-   bandes sont cachées → la courbe est le seul contenu du bas. On la laisse
-   GRANDIR pour remplir l'espace entre presets et footer (au lieu d'une mini
-   courbe 60px perdue dans un grand vide, cf. #10). flex-grow prime sur le
-   margin-top:auto du footer → la courbe occupe l'espace, le footer reste en bas.
-   Scopé :not(.eq-expert) → le mode Expert (qui utilise ses spacers) est intact. */
+/* Mode Simple : la courbe remplit tout l'espace entre le strip presets et le footer.
+   flex: 1 1 0 garantit qu'elle prend exactement le reste — pas de vide, pas de
+   débordement. min-height évite un canvas écrasé sur fenêtres très petites. */
 #eq-panel:not(.eq-expert) #eq-curve-wrap {
-  flex: 1 1 auto;
+  flex: 1 1 0;
   height: auto;
-  min-height: 96px; /* hauteur mini de la courbe EQ (mode compact) */
-  max-height: 300px;
+  min-height: 120px;
 }
 
 /* Toggle Simple / Expert */
@@ -4333,8 +4335,9 @@ html[data-mode="light"] .eq-footer-reset { border-color: var(--bg5); color: var(
 /* ── Barre de contrôles EQ : power (bypass) / AUTO / A-B / profil appareil ──── */
 .eq-toolbar {
   display: flex; align-items: center; gap: var(--sp-1h);
-  padding: var(--sp-2h) var(--sp-4);
+  padding: var(--sp-1h) var(--sp-3h);
   flex-shrink: 0;
+  min-height: 40px;
   border-bottom: var(--border-w-sm) solid var(--sep);
 }
 .eq-tool-spacer { flex: 1; }
@@ -4412,6 +4415,7 @@ html[data-mode="light"] .eq-ab-btn.active    { background: var(--g); border-colo
   width: 26px;
   padding: calc(var(--sp-3h) + 22px) 4px calc(var(--sp-3) + 18px) 0;
   font-size: 9px; line-height: 1; color: var(--t3); /* A11Y: échelle dB — --t4→--t3 */
+  font-variant-numeric: tabular-nums;
   text-align: right; user-select: none; flex-shrink: 0;
 }
 html[data-mode="light"] .eq-scale { color: var(--t3); }
