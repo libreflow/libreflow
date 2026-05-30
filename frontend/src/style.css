@@ -887,11 +887,22 @@ button { cursor: pointer; }
 }
 .sb-search .srch {
   width: 100%;
+  background: transparent;
+  border-color: transparent;
+  border-bottom-color: var(--border-2);
+}
+.sb-search .srch:hover {
   background: var(--border-1);
-  border-color: var(--border-2);
+  border-bottom-color: var(--bg5);
 }
 .sb-search .srch:focus-within {
   background: var(--border-3);
+  border-color: var(--g);
+  border-radius: var(--r-art);
+}
+.sb-search .srch:has(input:focus-visible) {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-offset);
 }
 .sb-search .srch input {
   width: auto;
