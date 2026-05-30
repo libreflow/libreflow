@@ -1159,16 +1159,6 @@ button { cursor: pointer; }
 .srch input::placeholder { color: var(--t3); }
 .srch-clear { background: none; border: none; padding: var(--sp-micro); color: var(--t3); flex-shrink: 0; cursor: pointer; display: flex; align-items: center; justify-content: center; min-width: var(--target-min); min-height: var(--target-min); border-radius: var(--r-sm); transition: color var(--ease), background var(--ease); }
 .srch-clear:hover { color: var(--t); background: var(--bg5); }
-/* UX — badge nombre de résultats de recherche */
-.srch-ct {
-  font-size: var(--fs-xs); font-weight: 700; letter-spacing: var(--ls-micro);
-  background: var(--g); color: var(--text-on-accent); border-radius: var(--r-art);
-  padding: var(--sp-nano) var(--sp-1p); opacity: 0; pointer-events: none; flex-shrink: 0;
-  transform: scale(.7);
-  transition: opacity var(--dur-fast) var(--smooth),
-              transform var(--dur-fast) var(--spring);
-}
-.srch-ct.on { opacity: 1; transform: scale(1); }
 
 .sort-btn {
   display: flex; align-items: center; gap: var(--sp-1p);
@@ -1369,13 +1359,6 @@ button { cursor: pointer; }
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   font-weight: 400;
 }
-
-/* Highlight termes de recherche */
-mark.srch-hl {
-  background: rgba(var(--g-rgb), .30); color: inherit;
-  border-radius: var(--r-xs); padding: 0 var(--sp-nano); font-style: normal;
-}
-html[data-mode="light"] mark.srch-hl { background: rgba(var(--g-rgb), .22); }
 
 /* Partie droite du track row */
 /* CLS FIX : min-width réserve la place de l'état le plus large (tdur + edit + like + add ≈ 124px).
