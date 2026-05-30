@@ -24,7 +24,7 @@ import { radioActive, stopRadio, startRadio, getRadioQueue } from './radio.js';
 import { toast }                                        from './ui.js';
 import { saveCfg }                   from './cfgsave.js';
 import { updateVolSlider }            from './playerbar.js';
-import { rgbToHsl, hslToRgb, boostSat, regionAvg, sampleArtColors, sampleArtColors5 } from './artcolor.js';
+import { rgbToHsl, hslToRgb, boostSat, sampleArtColors5 } from './artcolor.js';
 import { renderAmbientFrame }                from './ambientRenderer.js';
 import { timeline, set as motionSet, kill as motionKill, eases } from './motion.js';
 
