@@ -7,6 +7,7 @@
  * ARCH-1 : saveCfg depuis cfgsave.js, _allPlayerUI depuis allplayerui.js (deps circulaires brisées).
  */
 
+import { panelOpen, panelClose }                          from './motion.js';
 import { get, set }                                      from './store.js';
 import { getMiniOpen }                                   from './miniplayer.js';
 import { eqOpen, closeEQ }                               from './eq.js';
@@ -192,7 +193,7 @@ export function openSettings() {
   syncMiniSettingsBtn();
   // A11Y-05: mettre en place le piège de focus
   const box = $id('settings-box');
-  if (box) _setupSettingsFocusTrap(box);
+  if (box) { _setupSettingsFocusTrap(box); panelOpen(box); }
   // Ergonomie UX : focus initial sur le tab actif (WAI-ARIA dialog+tabs pattern)
   // plutôt que sur la croix de fermeture — l'utilisateur peut Arrow-naviguer ou Tab vers le contenu.
   setTimeout(() => {
@@ -212,25 +213,14 @@ export function closeSettings() {
     box.removeEventListener('keydown', _settingsFocusTrap);
     _settingsFocusTrap = null;
   }
-  panel.classList.add('closing');
-  // BUG-M3 FIX : animationend peut ne jamais se déclencher si l'animation est désactivée
-  // (prefers-reduced-motion, GPU désactivé, transition CSS absente) → fallback 400ms
-  let _closeHandled = false;
-  const _onClose = () => {
-    if (_closeHandled) return;
-    _closeHandled = true;
-    panel.classList.remove('on', 'closing');
-    // A11Y-05: restaurer le focus à l'élément déclencheur après la fermeture de l'animation
-    if (_settingsTrigger) {
-      _settingsTrigger.focus();
-      _settingsTrigger = null;
-    }
-  };
-  panel.addEventListener('animationend', _onClose, { once: true });
-  setTimeout(_onClose, 400); // fallback si animationend ne se déclenche jamais
   const trigger = $id('tbt-settings');
   trigger?.classList.remove('active');
   trigger?.setAttribute('aria-expanded', 'false');
+  panelClose(box).then(() => {
+    panel.classList.remove('on');
+    // A11Y-05: restaurer le focus à l'élément déclencheur après la fermeture de l'animation
+    if (_settingsTrigger) { _settingsTrigger.focus(); _settingsTrigger = null; }
+  });
 }
 
 // BUG-AUDIT HIGH : listeners document/window encapsulés dans initSettingsListeners()
