@@ -108,14 +108,15 @@ export function _showViewRaw(v) {
 
   const prev = document.querySelector('.view.on');
   if (prev && prev !== next) {
+    // Keep prev visible during exit: override display:none (set by removing .on),
+    // pin it absolutely so it doesn't push next down, then fade it out.
     prev.classList.remove('on');
-    // CLS fix: position:absolute removes exiting view from block flow so the
-    // entering view does not shift down during the exit animation.
-    prev.style.position = 'absolute';
-    viewExit(prev).then(() => {
-      prev.style.position = '';
-      prev.style.opacity  = '';
-    });
+    prev.style.display       = 'flex';
+    prev.style.position      = 'absolute';
+    prev.style.inset         = '0';
+    prev.style.pointerEvents = 'none';
+    prev.style.zIndex        = '1';
+    viewExit(prev).then(() => { prev.style.cssText = ''; });
   }
 
   next.classList.add('on');

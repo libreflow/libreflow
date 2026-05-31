@@ -162,7 +162,7 @@ export const _meta = Object.freeze({
 export function viewEnter(el) {
   kill(el);
   if (prefersReducedMotion()) return gsap.from(el, { opacity: 0, duration: 0 });
-  return gsap.from(el, { opacity: 0, scale: 0.97, duration: 0.30, ease: eases.PREMIUM, clearProps: 'transform' });
+  return gsap.from(el, { opacity: 0, duration: 0.22, ease: 'power2.out' });
 }
 
 /**
@@ -173,7 +173,7 @@ export function viewEnter(el) {
 export function viewExit(el) {
   kill(el);
   if (prefersReducedMotion()) return gsap.to(el, { opacity: 0, duration: 0 });
-  return gsap.to(el, { opacity: 0, scale: 1.02, duration: 0.16, ease: 'power2.in', clearProps: 'transform' });
+  return gsap.to(el, { opacity: 0, duration: 0.14, ease: 'power2.in' });
 }
 
 // ── Panel presets ─────────────────────────────────────────────────────────────
