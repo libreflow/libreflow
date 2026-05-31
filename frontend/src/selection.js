@@ -23,7 +23,7 @@ import { emit, EVENTS }                                 from './bus.js';
 import { getFiltered, _trackIdxMap, invalidateFilterCache } from './search.js';
 import { audio, resetShuffleQ, clearCrossfadeTimers }   from './player.js';
 import { saveTrackNow }                                 from './library.js';
-import { toast, toastWithAction }                                        from './ui.js';
+import { toast, toastWithAction, openModalEl, closeModalEl }             from './ui.js';
 import { saveCfg }                        from './cfgsave.js';
 import { setCurIdx, setTracks, setLiked, replaceTracks } from './state.js';
 import { updateBar }                       from './playerbar.js';
@@ -378,14 +378,14 @@ export function selBatchTagEdit() {
   const btn = document.getElementById('bte-confirm-btn');
   if (btn) btn.disabled = false;
 
-  modal.classList.add('on'); // FIX : .on déclenche fade-in (visibility+opacity, pas display)
+  openModalEl(modal); // show backdrop + animate inner [role="dialog"]
   // Focus sur l'artiste (plus logique que l'année)
   artistEl.focus();
   artistEl.select();
 }
 
 export function closeBatchTagModal() {
-  document.getElementById('batch-tag-modal-bg').classList.remove('on');
+  closeModalEl(document.getElementById('batch-tag-modal-bg'));
   bteCoverClear(); // reset cover state
   _bteSnapshotIds = null; // B5 : libérer le snapshot batch-tag
 }

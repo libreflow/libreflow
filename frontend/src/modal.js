@@ -13,6 +13,7 @@
 //   trapFocus(dialogEl, opts)   — installe un trap Tab+Shift+Tab dans dialogEl
 //   releaseFocus(dialogEl)      — retire le trap et restaure le focus
 
+import { modalOpen, modalClose } from './motion.js';
 import { get } from './store.js';
 
 // ── État interne ──────────────────────────────────────────────────────────────
@@ -140,6 +141,7 @@ export function confirmClear() {
   }
   _modalFocusTrap = _buildModalFocusTrap(modal);
   modal.addEventListener('keydown', _modalFocusTrap);
+  modalOpen(modal);
   setTimeout(() => modal.querySelector('.mbtn.cancel')?.focus(), 50);
 }
 
@@ -150,22 +152,16 @@ export function confirmClear() {
 export function closeModal() {
   const bg = document.getElementById('modal-bg');
   if (!bg) return; // W9 FIX : guard contre l'absence du DOM element
-  bg.classList.add('modal-closing');
-  // L-07 : flag _closeHandled — animationend + setTimeout sont tous deux idempotents
-  // (aligné sur le pattern de settings.js closeSettings) : la première exécution gagne.
-  let _closeHandled = false;
-  const _onClose = () => {
-    if (_closeHandled) return;
-    _closeHandled = true;
-    bg.classList.remove('on', 'modal-closing');
-  };
-  bg.addEventListener('animationend', _onClose, { once: true });
-  setTimeout(_onClose, 250); // fallback si animationend ne se déclenche jamais
   const modal = document.getElementById('modal');
   if (modal && _modalFocusTrap) {
     modal.removeEventListener('keydown', _modalFocusTrap);
     _modalFocusTrap = null;
   }
-  _modalPrevFocus?.focus();
-  _modalPrevFocus = null;
+  const _doClose = () => {
+    bg.classList.remove('on');
+    _modalPrevFocus?.focus();
+    _modalPrevFocus = null;
+  };
+  if (modal) modalClose(modal).then(_doClose);
+  else _doClose();
 }

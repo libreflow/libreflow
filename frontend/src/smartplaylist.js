@@ -13,6 +13,7 @@
 //   switchPlTab, openSmartPlaylistModal, _setSmartSeed, smartSeedSearch
 //   smartPreview, confirmSmartPlaylist, regenerateSmartPlaylist
 
+import { modalOpen } from './motion.js';
 import { esc } from './utils.js';
 import { i18n } from './i18n.js';
 import { get, notify }  from './store.js'; // Phase 4
@@ -357,6 +358,8 @@ export function openSmartPlaylistModal(seedTrackId) {
   if (tabs) tabs.style.display = '';
   switchPlTab('smart');
   document.getElementById('pl-modal-bg').classList.add('on');
+  const _spmDialog = document.getElementById('pl-modal');
+  if (_spmDialog) modalOpen(_spmDialog);
   document.getElementById('pl-modal-bg').dataset.pendingTrack = '';
   document.getElementById('pl-modal-bg').dataset.renamePlId   = '';
   document.getElementById('smart-seed-search').value = '';

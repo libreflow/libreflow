@@ -31,6 +31,7 @@
 //   onPlCoverSelected, clearPlCover
 //   trapFocus
 
+import { modalOpen, modalClose } from './motion.js';
 import { esc, moveByOne }       from './utils.js';
 import { i18n }                  from './i18n.js';
 import { get, set, notify }      from './store.js';
@@ -1119,6 +1120,7 @@ export function openNewPlaylistModal(preTrackId) {
     _plModalFocusTrap = _buildPlFocusTrap(plModal);
     plModal.addEventListener('keydown', _plModalFocusTrap);
   }
+  if (plModal) modalOpen(plModal);
   setTimeout(() => document.getElementById('pl-modal-inp').focus(), 50);
 }
 
@@ -1250,6 +1252,7 @@ export function openRenamePlaylistModal(plId) {
     _plModalFocusTrap = _buildPlFocusTrap(plModalR);
     plModalR.addEventListener('keydown', _plModalFocusTrap);
   }
+  if (plModalR) modalOpen(plModalR);
   setTimeout(() => {
     const inp = document.getElementById('pl-modal-inp');
     inp.focus(); inp.select();
@@ -1258,11 +1261,10 @@ export function openRenamePlaylistModal(plId) {
 
 export function closePlModal() {
   const _plBg = document.getElementById('pl-modal-bg');
-  _plBg.classList.add('modal-closing');
-  _plBg.addEventListener('animationend', () => {
-    _plBg.classList.remove('on', 'modal-closing');
-  }, { once: true });
-  setTimeout(() => _plBg.classList.remove('on', 'modal-closing'), 250);
+  const _plModal = document.getElementById('pl-modal');
+  const _doClose = () => _plBg.classList.remove('on');
+  if (_plModal) modalClose(_plModal).then(_doClose);
+  else _doClose();
   closeCtxMenu();
   // S88 FIX : reset complet de l'état modal pour éviter les fuites d'état
   // Avant le fix, plModalMode/datasets pouvaient persister entre deux ouvertures
