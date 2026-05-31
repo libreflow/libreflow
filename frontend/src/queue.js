@@ -12,6 +12,7 @@
 //   addToQueueNext, addToQueueEnd, playQueueItem
 //   initQueueDrag (Task 4)
 
+import { panelOpen, panelClose }           from './motion.js';
 import { esc, extEmoji, fmtd, moveByOne }  from './utils.js';
 import { CFG }                            from './cfg.js';
 import { eqOpen, closeEQ }                from './eq.js';
@@ -219,7 +220,7 @@ export function toggleQueue() {
   if (queueOpen) {
     renderQueue(); initQueueDrag();
     const panel = document.getElementById('queue-panel');
-    if (panel) _setupQueueFocusTrap(panel);
+    if (panel) { _setupQueueFocusTrap(panel); panelOpen(panel); }
   }
 }
 
@@ -240,11 +241,13 @@ export function closeQueue() {
     window.removeEventListener('pointercancel', _onPromotionUp);
   }
   queueOpen = false;
-  document.getElementById('queue-panel').classList.remove('open');
   const btn = document.getElementById('btn-queue');
   btn?.classList.remove('active');
   btn?.setAttribute('aria-expanded', 'false'); // A11Y
   document.getElementById('app')?.classList.remove('panel-queue-open');
+  const qp = document.getElementById('queue-panel');
+  if (qp) panelClose(qp).then(() => qp.classList.remove('open'));
+  else document.getElementById('queue-panel')?.classList.remove('open');
 }
 
 // ── Rendu ────────────────────────────────────────────────────
