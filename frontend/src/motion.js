@@ -162,7 +162,7 @@ export const _meta = Object.freeze({
 export function viewEnter(el) {
   kill(el);
   if (prefersReducedMotion()) return gsap.from(el, { opacity: 0, duration: 0 });
-  return gsap.from(el, { opacity: 0, y: 18, duration: 0.38, ease: eases.PREMIUM, clearProps: 'transform' });
+  return gsap.from(el, { opacity: 0, y: 6, duration: 0.32, ease: eases.PREMIUM, clearProps: 'transform' });
 }
 
 /**
