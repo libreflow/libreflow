@@ -29,6 +29,7 @@ import { openSmartPlaylistModal }                                    from './sma
 import { saveCfg }                                                   from './cfgsave.js';
 import { clearSelection }                                            from './selection.js';
 import { runViewTransition }                                         from './view-transition.js';
+import { viewEnter, viewExit }                                        from './motion.js';
 
 // Inline helper — équivalent de app.js:invalidateFilter() (ARCH-1, no circular dep)
 function invalidateFilter() {
@@ -103,25 +104,20 @@ export function _showViewRaw(v) {
   const next = document.getElementById(map[v] || 'vlib');
   if (!next) return;
 
-  // BUGFIX : retirer .on AVANT .view-leave → .view.on a spécificité > .view-leave
-  // → animationend ne fire jamais si .on reste présent (vue précédente figée).
   const prev = document.querySelector('.view.on');
   if (prev && prev !== next) {
     prev.classList.remove('on');
-    prev.style.display = 'flex';
-    prev.classList.add('view-leave');
-    prev.addEventListener('animationend', () => {
-      prev.style.display = '';
-      prev.classList.remove('view-leave');
-    }, { once: true });
+    // CLS fix: position:absolute removes exiting view from block flow so the
+    // entering view does not shift down during the exit animation.
+    prev.style.position = 'absolute';
+    viewExit(prev).then(() => {
+      prev.style.position = '';
+      prev.style.opacity  = '';
+    });
   }
 
   next.classList.add('on');
-  // Animation d'entrée en fallback non-VT (VT API gère le cross-fade quand disponible)
-  if (prev && prev !== next && typeof document.startViewTransition !== 'function') {
-    next.classList.add('view-enter');
-    next.addEventListener('animationend', () => next.classList.remove('view-enter'), { once: true });
-  }
+  viewEnter(next);
 }
 
 export function showView(v) {
