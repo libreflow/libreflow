@@ -120,7 +120,10 @@ export function _showViewRaw(v) {
   }
 
   next.classList.add('on');
-  viewEnter(next);
+  // Only animate if actually switching to a different view element.
+  // Albums/artists/genres/playlists all map to #vlib — no animation needed
+  // when the element is already visible (would flash opacity on live content).
+  if (!prev || prev !== next) viewEnter(next);
 }
 
 export function showView(v) {

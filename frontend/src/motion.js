@@ -266,7 +266,7 @@ export function staggerIn(items) {
   kill(els);
   if (rest.length) gsap.set(rest, { opacity: 1 });
   if (prefersReducedMotion()) { gsap.set(els, { opacity: 1 }); return; }
-  gsap.from(els, { opacity: 0, x: -8, duration: 0.24, ease: eases.PREMIUM, stagger: 0.018, clearProps: 'transform' });
+  gsap.from(els, { opacity: 0, duration: 0.20, ease: eases.PREMIUM, stagger: 0.018 });
 }
 
 /**
@@ -278,5 +278,5 @@ export function staggerOut(items) {
   const els = Array.from(items).slice(0, STAGGER_CAP);
   kill(els);
   if (prefersReducedMotion()) { gsap.set(els, { opacity: 0 }); return gsap.set(els, {}); }
-  return gsap.to(els, { opacity: 0, x: -4, duration: 0.14, ease: 'power2.in', stagger: 0.010 });
+  return gsap.to(els, { opacity: 0, duration: 0.12, ease: 'power2.in', stagger: 0.010 });
 }
