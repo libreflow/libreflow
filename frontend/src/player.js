@@ -46,6 +46,7 @@ import { toast }                                        from './ui.js';
 import { saveCfg, saveCfgNow } from './cfgsave.js';
 import { scrollToCurrentTrack }  from './renderer.js';
 import { _allPlayerUI }           from './allplayerui.js';
+import { playPausePress }         from './motion.js';
 
 // Boot viz state (remplace window._pendingVizMode/_pendingVizDisabled)
 /** @type {string | null} */
@@ -263,12 +264,18 @@ export async function ensureUrl(t) {
  * @param {boolean} playing
  * @returns {void}
  */
+let _pressListenerAttached = false;
+
+function _attachPressListener() {
+  if (_pressListenerAttached) return;
+  const btn = document.querySelector('.pcplay');
+  if (!btn) return;
+  btn.addEventListener('pointerdown', () => playPausePress(btn));
+  _pressListenerAttached = true;
+}
+
 export function setIcon(playing) {
   invoke('taskbar_set_playing', { playing }).catch((e) => console.warn('[taskbar_set_playing]', e));
-  // @ts-ignore — audio element guaranteed present in LibreFlow DOM (index.html)
-  document.getElementById('ico-play').style.display  = playing ? 'none' : '';
-  // @ts-ignore — audio element guaranteed present in LibreFlow DOM (index.html)
-  document.getElementById('ico-pause').style.display = playing ? ''     : 'none';
   const ci = document.getElementById('cinema-ico-play');
   const cp = document.getElementById('cinema-ico-pause');
   if (ci) ci.style.display = playing ? 'none'  : 'block';
@@ -276,6 +283,7 @@ export function setIcon(playing) {
   document.querySelector('.pcplay')?.classList.toggle('playing', playing);
   document.querySelector('.pcplay')?.setAttribute('aria-pressed', String(playing));
   document.querySelector('.sb-dot')?.classList.toggle('playing', playing);
+  _attachPressListener();
 }
 
 // ── Playback helpers (private) ───────────────────────────────────────────────

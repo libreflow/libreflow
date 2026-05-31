@@ -27,8 +27,9 @@ import { audio, setIcon, updateMediaSession,
          peekNext }                                 from './player.js';
 import { refreshQueueBadge, queueOpen, renderQueue } from './queue.js';
 import { cinemaOpen, updateCinema }                  from './cinema.js';
-import { animateArtChange, applyArtColor, clearArtColor,
+import { applyArtColor, clearArtColor,
          _updateArtBlur }                            from './settings.js';
+import { trackSwap }                                 from './motion.js';
 import { extEmoji }                                  from './utils.js';
 import { extractColor }                              from './tags.js';
 // ── Volume slider ─────────────────────────────────────────────────────────────
@@ -130,8 +131,14 @@ export function updateBar() {
   setupMarquee(document.getElementById('pl-a'), t.artistFull || t.artist || i18n('unknown_artist'));
 
   const img = document.getElementById('pl-img'), em = document.getElementById('pl-em');
-  if (t.art) { img.src = t.art; img.alt = t.album || t.name || ''; img.style.display = 'block'; em.style.display = 'none'; animateArtChange(); }
+  if (t.art) { img.src = t.art; img.alt = t.album || t.name || ''; img.style.display = 'block'; em.style.display = 'none'; }
   else       { img.alt = ''; img.style.display = 'none'; em.style.display = ''; em.innerHTML = extEmoji(t.ext); }
+
+  // GSAP track swap — animate art container + title + artist after content update
+  const artEl    = document.getElementById('pl-art');
+  const titleEl  = document.getElementById('pl-n');
+  const artistEl = document.getElementById('pl-a');
+  if (artEl && titleEl && artistEl) trackSwap(artEl, titleEl, artistEl);
 
   const liked = get('liked');
   const _isLikedNow = liked instanceof Set ? liked.has(t.id) : false;
