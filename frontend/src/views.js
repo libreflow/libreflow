@@ -29,7 +29,7 @@ import { openSmartPlaylistModal }                                    from './sma
 import { saveCfg }                                                   from './cfgsave.js';
 import { clearSelection }                                            from './selection.js';
 import { runViewTransition }                                         from './view-transition.js';
-import { viewEnter, viewExit }                                        from './motion.js';
+import { viewEnter, viewExit, staggerIn }                             from './motion.js';
 
 // Inline helper — équivalent de app.js:invalidateFilter() (ARCH-1, no circular dep)
 function invalidateFilter() {
@@ -93,6 +93,8 @@ function _deferGridRender(renderFn) {
   setTimeout(() => {
     if (token !== _gridRenderToken) return; // render périmé — ignorer
     renderFn();
+    const cards = document.querySelectorAll('.card');
+    if (cards.length) staggerIn(cards);
   }, 0);
 }
 
