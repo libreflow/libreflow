@@ -453,9 +453,10 @@ html[data-mode="light"] .sort-btn     { background:var(--bg2); border-color:var(
 html[data-mode="light"] .sort-btn:hover { background:var(--bg4); border-color:var(--bg6); color:var(--t); }
 
 /* ── Filtre format (chips) ── */
-html[data-mode="light"] .fmt-chip       { background: var(--bg2); border-color: var(--bg5); color: var(--t2); }
-html[data-mode="light"] .fmt-chip:hover { background: var(--bg4); border-color: var(--bg6); color: var(--t); }
-html[data-mode="light"] .fmt-chip.active { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
+html[data-mode="light"] .fmt-chip        { background: transparent; border-color: var(--border-default); color: var(--t2); }
+html[data-mode="light"] .fmt-chip:hover  { background: var(--bg4); border-color: var(--bg6); color: var(--t); }
+html[data-mode="light"] .fmt-chip.active { background: rgba(var(--g-rgb), .12); color: var(--g); border-color: rgba(var(--g-rgb), .35); }
+html[data-mode="light"] .fmt-chip.active:hover { background: rgba(var(--g-rgb), .20); border-color: rgba(var(--g-rgb), .50); }
 html[data-mode="light"] .import-entry:nth-child(odd) { background: var(--bg3); }
 
 /* ── Liste de titres ── */
@@ -1246,16 +1247,17 @@ body.lib-empty .sb-nav .ni {
 .fmt-chip {
   display: inline-flex; align-items: center;
   padding: var(--sp-1q) var(--sp-2); border-radius: var(--r-pill);
-  border: var(--border-w-sm) solid var(--bg4);
-  background: var(--bg2); color: var(--t2);
+  border: var(--border-w-sm) solid var(--border-1);
+  background: transparent; color: var(--t2);
   font-size: var(--fs-caption); font-weight: 500; white-space: nowrap;
   cursor: pointer;
-  transition: background var(--dur-fast) ease, color var(--dur-fast) ease, border-color var(--dur-fast) ease, transform var(--dur-fast) ease;
+  transition: background var(--motion-fast) var(--ease-standard), color var(--motion-fast) var(--ease-standard), border-color var(--motion-fast) var(--ease-standard), transform var(--motion-fast) var(--ease-standard);
 }
-.fmt-chip:hover { background: var(--bg3); color: var(--t); border-color: var(--bg5); }
+.fmt-chip:hover { background: var(--bg3); color: var(--t); border-color: var(--border-2); }
 .fmt-chip:active { transform: scale(.97); }
 .fmt-chip:focus-visible { outline: var(--focus-ring); outline-offset: var(--focus-offset); }
-.fmt-chip.active { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
+.fmt-chip.active { background: rgba(var(--g-rgb), .15); color: var(--g); border-color: rgba(var(--g-rgb), .40); }
+.fmt-chip.active:hover { background: rgba(var(--g-rgb), .22); border-color: rgba(var(--g-rgb), .55); }
 
 /* ── Historique imports (settings) ── */
 .import-history-list { display: flex; flex-direction: column; gap: var(--sp-1); }
