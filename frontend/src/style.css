@@ -1419,14 +1419,14 @@ body.lib-empty .sb-nav .ni {
 /* Hiérarchie texte — primary / secondary / tertiary */
 .ti   { min-width: 0; }
 .tn   {
-  font-size: var(--fs-md); font-weight: 600; color: var(--t);
+  font-size: var(--fs-md); font-weight: 400; color: var(--t);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   line-height: var(--lh-snug); letter-spacing: var(--ls-tight);
 }
 .ts   {
-  font-size: var(--fs-sm); color: var(--t2); margin-top: var(--sp-micro);
+  font-size: var(--fs-caption); color: var(--t2); margin-top: var(--sp-micro);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-  font-weight: 500;
+  font-weight: 400;
 }
 
 /* Partie droite du track row */
@@ -1437,7 +1437,7 @@ body.lib-empty .sb-nav .ni {
 
 /* ── Colonne album dans track list ───────────────────────── */
 .ta {
-  font-size: var(--fs-sm);
+  font-size: var(--fs-caption);
   color: var(--t3);
   min-width: 0;
   overflow: hidden;
