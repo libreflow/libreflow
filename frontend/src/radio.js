@@ -13,7 +13,7 @@
 // Exports publics :
 //   radioActive   (live binding lu par app.js / sleep.js)
 //   startRadio, stopRadio, resetRadio, radioRefillQueue, toggleRadio
-//   ctxStartRadio, updateRadioBanner (stub compat), showRadioBanner (stub), hideRadioBanner (stub)
+//   ctxStartRadio
 //   radioRegenerateFromCurrent, renderRadioView, openRadioView
 
 import { esc, fmt }                           from './utils.js';
@@ -46,14 +46,6 @@ let radioQueue            = [];
 let _radioPlayedIds       = new Set();
 let _radioStopInProgress  = false; // guard anti-concurrence pour stopRadio (async)
 let _radioRefillInProgress = false; // B34 : guard anti-concurrence pour le refill async de radioRefillQueue
-
-// ── Progress bar live (rv-prog-fill) ─────────────────────────
-// NOTE : la mise à jour de rv-prog-fill est gérée directement par le handler
-// timeupdate de app.js (avec guard isConnected pour supporter les re-renders
-// sans passer par setView). Ces helpers locaux sont supprimés pour éviter un
-// double handler sur l'événement 'timeupdate'.
-function _cleanRvProg()       { /* no-op — géré par app.js */ }
-function _installRvProgUpdate() { /* no-op — géré par app.js */ }
 
 // ── Scoring ──────────────────────────────────────────────────
 
@@ -263,7 +255,6 @@ export async function startRadio(trackId) {
 
 /** Teardown synchrone de l'état radio + UI. Partagé par stopRadio() et stopRadioSilent(). */
 function _radioTeardown() {
-  _cleanRvProg();
   radioActive     = false;
   radioSeedId     = null;
   radioQueue      = [];
@@ -310,7 +301,6 @@ export function stopRadioSilent() {
 
 /** Réinitialise tout l'état radio sans side-effects UI (appelé depuis clearLibrary). */
 export function resetRadio() {
-  _cleanRvProg();
   radioActive     = false;
   radioSeedId     = null;
   radioQueue      = [];
@@ -507,14 +497,6 @@ export async function toggleRadio() {
  *  entrée dans la vue bibliothèque, pour garantir l'affichage immédiat. */
 export function syncRadioLibBar() { _syncRadioLibBar(radioActive); }
 
-// ── Stubs bannière (conservé pour compat. imports) ─────────────
-/** @deprecated — la bannière flottante a été supprimée. Utilisez renderRadioView(). */
-export function showRadioBanner()  { /* supprimée */ }
-export function hideRadioBanner()  { /* supprimée */ }
-export function updateRadioBanner() {
-  if (get('view') === 'radio') renderRadioView();
-}
-
 export async function radioSaveAsPlaylist() {
   if (!radioActive) return;
   const seed = _trackIdxMap.has(radioSeedId)
@@ -530,7 +512,7 @@ export async function radioSaveAsPlaylist() {
   if (!ids.length) { toast(i18n('radio_pl_empty'), 'warning'); return; }
 
   const name = i18n('radio_pl_name', seed ? seed.name : 'Mix');
-  const pl = { id: 'pl_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8), name, trackIds: ids }; // BUG-m2 FIX : suffixe aléatoire pour éviter collision si sauvegardé 2× dans la même ms
+  const pl = { id: 'pl_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7), name, trackIds: ids }; // BUG-m2 FIX : suffixe aléatoire pour éviter collision si sauvegardé 2× dans la même ms
   get('playlists').push(pl);
   notify('playlists'); // CM-5 FIX: push() in-place → notify() so subscribers see the change
   try {
@@ -540,6 +522,7 @@ export async function radioSaveAsPlaylist() {
     const playlists = get('playlists');
     const idx = playlists.indexOf(pl);
     if (idx >= 0) playlists.splice(idx, 1);
+    notify('playlists');
     toast(i18n('radio_save_error') || 'Erreur lors de la sauvegarde', 'error');
     return;
   }
@@ -617,9 +600,6 @@ export function removeRadioTrack(idx) {
 export function renderRadioView() {
   const el = document.getElementById('vradio');
   if (!el) return;
-
-  // Nettoyer l'écouteur timeupdate précédent avant tout remplacement du DOM
-  _cleanRvProg();
 
   if (!radioActive) {
     el.innerHTML = `
@@ -738,8 +718,6 @@ export function renderRadioView() {
 
   el.innerHTML = seedHtml + queueHtml;
 
-  // Installer la mise à jour live de la progress bar APRÈS le rendu du DOM
-  _installRvProgUpdate();
 }
 
 /** Ouvre la vue radio (démarre si nécessaire). Appelé depuis la sidebar ou la bannière. */

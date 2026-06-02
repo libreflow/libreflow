@@ -4,7 +4,7 @@
 // Responsabilités :
 //   - Virtual scroll : virtRenderWindow, virtAttachScroll
 //   - Rendu liste/grilles : renderLib, renderAlbumsGrid, renderArtistsGrid, renderPlaylistsGrid
-//   - Helpers HTML : thtml, hlText, artPlaceholder, makeLikeBtn, makeAddBtn, makeEqHTML
+//   - Helpers HTML : thtml, hlText, artPlaceholder, makeLikeBtn, makeAddBtn
 //   - Mises à jour DOM partielles : patchActiveTrack, patchPlayState, patchTrackEl
 //   - Navigation drill-down : drillDown
 //   - Stats : updateStats, scheduleStatsUpdate
@@ -160,9 +160,6 @@ export function makeAddBtn(t) {
   return `<button class="tr-add-btn" data-action="show-pl-qpop" data-track-id="${esc(t.id)}" title="${esc(lbl)}" aria-label="${esc(lbl)}" tabindex="-1"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></button>`;
 }
 
-/** Génère le badge qualité audio — masqué dans la liste, visible uniquement dans Now Playing. */
-export function makeEqHTML(_t) { return ''; }
-
 // ── thtml — génère le HTML d'une ligne piste ─────────────────────────────────
 // A11Y-3 : role="listitem" tabindex="0" aria-label
 // P6     : classes dynamiques
@@ -215,7 +212,6 @@ export function thtml(t, fi, { active = false, liked = false, likedSet, query = 
   </div>
   <div class="ta" title="${esc(t.album || '')}">${esc(t.album || '')}</div>
   <div class="tr-r">
-    ${makeEqHTML(t)}
     <span class="tdur">${fmtd(t.duration)}</span>
     ${makeLikeBtn(t, likedSet)}
     ${makeAddBtn(t)}
@@ -448,10 +444,11 @@ function _getArtistMap() {
   for (const t of tracks) {
     const key = t.artist || '';
     if (!map.has(key)) {
-      map.set(key, { key, displayName: key, art: null, artTrack: null, count: 0 });
+      map.set(key, { key, displayName: key, art: null, artTrack: null, count: 0, albumCount: new Set() });
     }
     const a = map.get(key);
     a.count++;
+    a.albumCount.add(t.album);
     if (t.art && !a.art) a.art = t.art;
     // C1 — piste représentative pour l'hydratation paresseuse du drill header.
     if (!a.artTrack && t._hasArt && !t.noArt) { a.artTrack = t; _artTrackById.set(t.id, t); }
@@ -805,25 +802,28 @@ export function renderArtistsGrid() {
   if (pg) pg.style.display = 'none';
 
   const queryLc = query ? query.toLowerCase() : '';
-  const artistMap = new Map();
-  for (const t of tracks) {
-    const key = t.artist || '';
-    if (queryLc && !key.toLowerCase().includes(queryLc) &&
-        !(t.name || '').toLowerCase().includes(queryLc)) continue;
-    if (!artistMap.has(key)) {
-      artistMap.set(key, { name: key, artUrl: null, artTrack: null, count: 0, albumCount: new Set() });
+  let artists;
+  if (!queryLc) {
+    artists = _getArtistMap().slice();
+  } else {
+    const artistMap = new Map();
+    for (const t of tracks) {
+      const key = t.artist || '';
+      if (!key.toLowerCase().includes(queryLc) &&
+          !(t.name || '').toLowerCase().includes(queryLc)) continue;
+      if (!artistMap.has(key)) {
+        artistMap.set(key, { key, displayName: key, art: null, artTrack: null, count: 0, albumCount: new Set() });
+      }
+      const a = artistMap.get(key);
+      a.count++;
+      a.albumCount.add(t.album);
+      if (!a.art && t.art) a.art = t.art;
+      if (!a.artTrack && t._hasArt && !t.noArt) { a.artTrack = t; _artTrackById.set(t.id, t); }
     }
-    const a = artistMap.get(key);
-    a.count++;
-    a.albumCount.add(t.album);
-    // C1 — voir renderAlbumsGrid : artUrl direct, artTrack chargé paresseusement.
-    if (!a.artUrl && t.art) a.artUrl = t.art;
-    if (!a.artTrack && t._hasArt && !t.noArt) { a.artTrack = t; _artTrackById.set(t.id, t); }
+    artists = [...artistMap.values()];
   }
-
-  let artists = [...artistMap.values()];
   if (artistSort === 'count') artists.sort((a, b) => b.count - a.count);
-  else artists.sort((a, b) => _coll.compare(a.name || '', b.name || ''));
+  else artists.sort((a, b) => _coll.compare(a.displayName || '', b.displayName || ''));
 
   if (!artists.length) {
     const isLibEmpty = !tracks.length && !query;
@@ -835,21 +835,21 @@ export function renderArtistsGrid() {
   }
 
   grid.innerHTML = artists.map(a => {
-    const artHtml = a.artUrl
-      ? `<img src="${esc(a.artUrl)}" alt="" aria-hidden="true">`
+    const artHtml = a.art
+      ? `<img src="${esc(a.art)}" alt="" aria-hidden="true">`
       : a.artTrack
-        ? `<div class="card-art-ph card-art-circle" aria-hidden="true" data-art-tid="${esc(a.artTrack.id)}">${esc(a.name?.[0]?.toUpperCase() || '?')}</div>`
-        : `<div class="card-art-ph card-art-circle" aria-hidden="true">${esc(a.name?.[0]?.toUpperCase() || '?')}</div>`;
+        ? `<div class="card-art-ph card-art-circle" aria-hidden="true" data-art-tid="${esc(a.artTrack.id)}">${esc(a.displayName?.[0]?.toUpperCase() || '?')}</div>`
+        : `<div class="card-art-ph card-art-circle" aria-hidden="true">${esc(a.displayName?.[0]?.toUpperCase() || '?')}</div>`;
     const nbAlbums = a.albumCount.size;
     return `<div class="card card-artist" role="button" tabindex="0"
-      data-action="drill-artist" data-key="${esc(a.name)}" data-name="${esc(a.name)}"
-      data-from="artists" data-display="${esc(a.name)}"
-      aria-label="${esc(a.name)}">
+      data-action="drill-artist" data-key="${esc(a.displayName)}" data-name="${esc(a.displayName)}"
+      data-from="artists" data-display="${esc(a.displayName)}"
+      aria-label="${esc(a.displayName)}">
       <div class="card-art card-art-round">${artHtml}
         <button class="card-play-btn" data-action="play-card" tabindex="-1" aria-hidden="true"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><polygon points="5,3 19,12 5,21"/></svg></button>
       </div>
       <div class="card-info">
-        <span class="card-name">${hlText(a.name || '?')}</span>
+        <span class="card-name">${hlText(a.displayName || '?')}</span>
         <span class="card-sub">${a.count} ${i18n('n_tracks') || 'titres'}${nbAlbums > 1 ? ` · ${nbAlbums} albums` : ''}</span>
       </div>
     </div>`;
@@ -1207,7 +1207,7 @@ export function updateStats() {
   const sbEl = document.getElementById('sb-stats');
   if (!sbEl) return;
   if (tracks.length === 0) {
-    sbEl.innerHTML = i18n('sb_empty');
+    sbEl.innerHTML = `<span class="sb-empty-msg"><svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>${i18n('sb_empty')}</span>`;
     return;
   }
   const artistCount = _getArtistMap().length;
@@ -1244,6 +1244,7 @@ export function scheduleStatsUpdate() {
  */
 export function updateSidebarCounts() {
   const tracks    = get('tracks')      || [];
+  document.body.classList.toggle('lib-empty', tracks.length === 0);
   const liked     = get('liked');
   const recent    = get('recentPlays') || [];
   const playlists = get('playlists')   || [];
