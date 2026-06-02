@@ -18,7 +18,7 @@ import { openDB, tx, dget, dall, dput, ddel, DB, getStorageEstimate } from './db
 import { extractColor, GENRE_ARTISTS, GENRE_KEYWORDS, guessGenre } from './tags.js';
 import { LANGS, i18n, initLang, getLang, applyLang, setLang } from './i18n.js';
 import { cinemaOpen, cinemaBg, initCinemaBg, toggleCinema, openCinema, closeCinema, updateCinema, updateCinemaProgress, setCinemaBg, cycleCinemaBg, applyCinemaBg, syncCinemaBgSettings, updateCinemaBgBtn, toggleCinemaFullscreen, CINEMA_BG_MODES, CINEMA_BG_LABELS, updateCinArtColor } from './cinema.js';
-import { queueOpen, toggleQueue, closeQueue, renderQueue, playQueueItem, clearQueueOverride, addToQueueNext, addToQueueEnd, refreshQueueBadge, getQueueState, restoreQueueState } from './queue.js';
+import { queueOpen, toggleQueue, closeQueue, renderQueue, playQueueItem, clearQueueOverride, addToQueueNext, addToQueueEnd, refreshQueueBadge, getQueueState, restoreQueueState, toggleQueuePin, clearQueuePin } from './queue.js';
 import { exportM3U, importM3U } from './m3u.js';
 import { VIRT } from './virt.js';
 import { playLog, setPlayLog, logPlay, flushPlayLog, cancelPlayLogFlush } from './playlog.js';
@@ -398,6 +398,7 @@ async function boot() {
     const safeViews = ['all','liked','albums','artists','genres','recent','playlist','stats','album-detail','artist-detail','genre-detail'];
     view = safeViews.includes(cfg.view) ? cfg.view : 'all'; set('view', view);
     set('formatFilter', cfg.formatFilter || '');
+    set('queuePinned', cfg.queuePinned === true);
     if (cfg.curPlId)   { curPlId  = cfg.curPlId;  set('curPlId', curPlId); }
     if (cfg.drillKey)  { drillKey = cfg.drillKey; set('drillKey', drillKey); drillFrom = cfg.drillFrom || ''; drillDisplayName = cfg.drillDisplayName || ''; set('drillFrom', drillFrom); set('drillDisplayName', drillDisplayName); }
     recentPlays = cfg.recentPlays||[];  set('recentPlays', recentPlays);
@@ -571,6 +572,13 @@ async function boot() {
     showView('lib');
     // Queue persist — restaurer après rebuildTrackIdxMap (IDs validés contre _trackIdxMap)
     if (cfg?.queueState?.ids?.length) restoreQueueState(cfg.queueState);
+    if (cfg?.queuePinned === true && window.innerWidth >= 720) {
+      if (!queueOpen) toggleQueue();
+      document.getElementById('app').classList.add('panel-queue-pinned');
+      const _pinBtn = document.querySelector('.queue-pin-btn');
+      _pinBtn?.setAttribute('aria-pressed', 'true');
+      _pinBtn?.setAttribute('aria-label', "Désépingler la file d'attente");
+    }
     const cb=document.getElementById('btn-clear'); if(cb) cb.disabled=false;
     toast(i18n('t_loaded', tracks.length), 'success');
     // Restaurer la position de scroll après que renderLib() ait réinitialisé scrollTop à 0
@@ -952,7 +960,7 @@ export async function clearLibrary() {
   closeModal();
   // Fermer tous les panneaux ouverts avant de vider l'état (évite l'affichage de données périmées)
   closeNowPlaying();
-  closeQueue();
+  clearQueuePin(); closeQueue();
   clearQueueOverride();
   closeEQ();
   if (cinemaOpen) closeCinema();

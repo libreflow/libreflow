@@ -25,7 +25,8 @@ import { togglePlay, prev, next, toggleShuffle, toggleRepeat, toggleLike,
          likeat, playAt, isCurrentTrack, audio }              from './player.js';
 import { toggleQueue, closeQueue, playQueueItem,
          addToQueueNext, addToQueueEnd,
-         removeFromQueue, clearExplicitQueue, moveQueueItem }  from './queue.js';
+         removeFromQueue, clearExplicitQueue, moveQueueItem,
+         toggleQueuePin, clearQueuePin }                        from './queue.js';
 import { toggleEQ, closeEQ, applyEQPreset,
          filterEQPresets, setMasterGain,
          setEQExpert, eqOpen,
@@ -57,7 +58,7 @@ import { showCtxMenu, closeCtxMenu,
          ctxPlayNext, ctxAddToQueueEnd, ctxCopyInfo, ctxWriteRG,
          ctxMoveTrackUp, ctxMoveTrackDown } from './ctxmenu.js';
 import { toggleCinema, closeCinema, cycleCinemaBg,
-         toggleCinemaFullscreen }                              from './cinema.js';
+         toggleCinemaFullscreen, getCinArtRGB }               from './cinema.js';
 import { openRadioView, ctxStartRadio,
          radioSaveAsPlaylist, radioRegenerateFromCurrent,
          stopRadio, playRadioTrackAt, removeRadioTrack }       from './radio.js';
@@ -150,7 +151,8 @@ const _ACTIONS = {
 
   // ── Queue ─────────────────────────────────────────────────
   'toggle-queue':          ()    => { closeNowPlaying(); toggleQueue(); },
-  'close-queue':           ()    => closeQueue(),
+  'close-queue':           ()    => { clearQueuePin(); closeQueue(); saveCfg(); },
+  'toggle-queue-pin':      ()    => { toggleQueuePin(); saveCfg(); },
   'clear-queue':           ()    => clearExplicitQueue(),
   'remove-from-queue':     btn  => { removeFromQueue(btn.dataset.trackId); },
   'queue-move-up':         btn  => moveQueueItem(btn.dataset.id, -1),
@@ -162,7 +164,7 @@ const _ACTIONS = {
     // Exclusivité de panneau, symétrique à toggleQueue() (qui ferme l'EQ) :
     // à l'ouverture, fermer la file d'attente et les réglages s'ils sont ouverts.
     if (!eqOpen) {
-      closeQueue();
+      clearQueuePin(); closeQueue();
       if (document.getElementById('settings-panel')?.classList.contains('on')) closeSettings();
     }
     toggleEQ();
@@ -555,6 +557,7 @@ function _handleInput(e) {
       const v = +el.value;
       setMasterGain(v);
       if (main) { main.value = el.value; updateVolSlider(main); }
+      updateVolSlider(el, `rgb(${getCinArtRGB()})`); // teinte art-color sur le slider cinéma
       setAriaValueText(el,   _v => `${Math.round(_v * 100)} pour cent`, v);
       if (main) setAriaValueText(main, _v => `${Math.round(_v * 100)} pour cent`, v);
       break;

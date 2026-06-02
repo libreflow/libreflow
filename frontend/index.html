@@ -938,9 +938,11 @@
             <div class="set-row-sub" data-i18n="set_cinema_bg_sub">Fond derrière la pochette</div>
           </div>
           <div class="set-btn-group">
-            <button id="set-cinema-ambient"  class="mbtn mbtn-sm" data-action="set-cinema-bg" data-bg="ambient"  data-i18n-title="set_cinema_ambient" aria-pressed="false" data-i18n="set_cinema_ambient_label">Ambient</button>
+            <button id="set-cinema-ambient"  class="mbtn mbtn-sm" data-action="set-cinema-bg" data-bg="ambient"  data-i18n-title="set_cinema_ambient"  aria-pressed="false" data-i18n="set_cinema_ambient_label">Ambient</button>
             <button id="set-cinema-spectrum" class="mbtn mbtn-sm" data-action="set-cinema-bg" data-bg="spectrum" data-i18n-title="set_cinema_spectrum" aria-pressed="false" data-i18n="set_cinema_spectrum_label">Spectre</button>
-            <button id="set-cinema-amoled"   class="mbtn mbtn-sm" data-action="set-cinema-bg" data-bg="amoled"   data-i18n-title="set_cinema_amoled" aria-pressed="false">AMOLED</button>
+            <button id="set-cinema-liquid"   class="mbtn mbtn-sm" data-action="set-cinema-bg" data-bg="liquid"   data-i18n-title="set_cinema_liquid"   aria-pressed="false" data-i18n="set_cinema_liquid_label">Liquide</button>
+            <button id="set-cinema-aurora"   class="mbtn mbtn-sm" data-action="set-cinema-bg" data-bg="aurora"   data-i18n-title="set_cinema_aurora"   aria-pressed="false" data-i18n="set_cinema_aurora_label">Aurore</button>
+            <button id="set-cinema-amoled"   class="mbtn mbtn-sm" data-action="set-cinema-bg" data-bg="amoled"   data-i18n-title="set_cinema_amoled"   aria-pressed="false">AMOLED</button>
           </div>
         </div>
       </div>
@@ -1135,6 +1137,12 @@
       <!-- A11Y-17: aria-label on queue utility buttons -->
       <button class="queue-close queue-util-btn" data-action="scroll-to-current" title="Aller à la piste en cours" data-i18n-aria="aria_scroll_to_current" aria-label="Aller à la piste en cours">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg>
+      </button>
+      <button class="queue-pin-btn queue-util-btn" data-action="toggle-queue-pin" aria-label="Épingler la file d'attente" aria-pressed="false" title="Épingler">
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+          <line x1="12" y1="17" x2="12" y2="22"/>
+          <path d="M5 17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V6h1a2 2 0 0 0 0-4H8a2 2 0 0 0 0 4h1v4.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24Z"/>
+        </svg>
       </button>
       <button class="queue-close" data-action="close-queue" data-i18n-aria="aria_close_queue" aria-label="Fermer la file d'attente">
         <svg viewBox="0 0 24 24" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>

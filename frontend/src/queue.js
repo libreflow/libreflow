@@ -256,6 +256,27 @@ export function closeQueue() {
   else document.getElementById('queue-panel')?.classList.remove('open');
 }
 
+// ── Pin ─────────────────────────────────────────────────────
+
+export function toggleQueuePin() {
+  const pinned = !get('queuePinned');
+  set('queuePinned', pinned);
+  document.getElementById('app').classList.toggle('panel-queue-pinned', pinned);
+  const btn = document.querySelector('.queue-pin-btn');
+  btn?.setAttribute('aria-pressed', String(pinned));
+  btn?.setAttribute('aria-label',
+    pinned ? "Désépingler la file d'attente" : "Épingler la file d'attente");
+}
+
+export function clearQueuePin() {
+  if (!get('queuePinned')) return;
+  set('queuePinned', false);
+  document.getElementById('app').classList.remove('panel-queue-pinned');
+  const btn = document.querySelector('.queue-pin-btn');
+  btn?.setAttribute('aria-pressed', 'false');
+  btn?.setAttribute('aria-label', "Épingler la file d'attente");
+}
+
 // ── Rendu ────────────────────────────────────────────────────
 
 export function renderQueue() {
