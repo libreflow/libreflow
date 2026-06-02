@@ -522,6 +522,27 @@ export function openCinema() {
 // (qui gère le scale + fade de la pochette). Cette timeline anime title / artist /
 // progress / contrôles / horloge avec un séquencement type Apple Music.
 // L'animation collapse en gsap.set instantané si prefers-reduced-motion = reduce.
+/** Re-mesure l'overflow du titre après que #cinema-info est pleinement visible.
+ *  Appelée depuis onComplete de _openTl — le rAF initial dans updateCinema() tire
+ *  quand autoAlpha:0 est encore actif sur #cinema-info → scrollWidth = 0. */
+function _recheckTitleScroll() {
+  const elT = document.getElementById('cinema-title');
+  if (!elT) return;
+  const overflow = elT.scrollWidth - elT.clientWidth;
+  if (overflow > 4) {
+    // Durée proportionnelle à l'overflow → vitesse constante ~45 px/s (Spotify-like).
+    // 17.1 = 45 px/s × 0.38 (fraction de l'animation dédiée au défilement aller).
+    const dur = Math.max(8, overflow / 17.1).toFixed(2);
+    elT.style.setProperty('--cinema-title-scroll', `-${overflow}px`);
+    elT.style.setProperty('--cinema-title-dur', `${dur}s`);
+    elT.classList.add('is-scrolling');
+  } else {
+    elT.style.removeProperty('--cinema-title-scroll');
+    elT.style.removeProperty('--cinema-title-dur');
+    elT.classList.remove('is-scrolling');
+  }
+}
+
 function _runOpenChoreography() {
   // Killer d'éventuelle timeline en vol (re-open rapide) + reset des inline styles
   // qu'elle aurait laissés pour éviter le drift visuel à la prochaine séquence.
@@ -551,6 +572,9 @@ function _runOpenChoreography() {
       // tout repaint déclenché par updateCinema repose sur la CSS d'origine.
       motionSet('#cinema-info, #cinema-pbar, #cinema-controls > *', { clearProps: 'transform' });
       _openTl = null;
+      // Re-mesure le titre maintenant que #cinema-info est pleinement visible
+      // (autoAlpha: 0 pendant l'animation rendait scrollWidth incorrect dans le rAF initial).
+      _recheckTitleScroll();
     },
   });
 
@@ -729,8 +753,9 @@ export function updateCinema() {
   _updateCinArtRGB(t);
   // Après _updateCinArtRGB, si la piste a changé, synchroniser aussi _cinArtRGBCur avec la nouvelle valeur
   if (_trackChanged) {
-    const parts = _cinArtRGB.split(',').map(Number);
-    _cinArtRGBCur[0] = parts[0]; _cinArtRGBCur[1] = parts[1]; _cinArtRGBCur[2] = parts[2];
+    _cinArtRGBCur[0] = _cinArtRGBTarget[0];
+    _cinArtRGBCur[1] = _cinArtRGBTarget[1];
+    _cinArtRGBCur[2] = _cinArtRGBTarget[2];
   }
   // Propager --cin-rgb → teinte CSS du sous-titre artiste et album
   document.getElementById('cinema-overlay')?.style.setProperty('--cin-rgb', _cinArtRGB);
@@ -741,7 +766,24 @@ export function updateCinema() {
   const em   = document.getElementById('cinema-art-em');
   const bg   = document.getElementById('cinema-bg');
 
-  if (elT) elT.textContent = title;
+  if (elT) {
+    if (_trackChanged) {
+      elT.classList.remove('is-scrolling');
+      elT.style.removeProperty('--cinema-title-scroll');
+      elT.style.removeProperty('--cinema-title-dur');
+    }
+    // Span interne réutilisé — le parent garde overflow:hidden fixe,
+    // c'est le span qui se translate (sinon la zone de clip bouge avec l'élément).
+    let inner = elT.querySelector('.cin-title-inner');
+    if (!inner) {
+      inner = document.createElement('span');
+      inner.className = 'cin-title-inner';
+      elT.replaceChildren(inner);
+    }
+    inner.textContent = title;
+    // Mesure après reflow — _recheckTitleScroll() calcule aussi la durée proportionnelle.
+    requestAnimationFrame(() => { if (elT.isConnected) _recheckTitleScroll(); });
+  }
   if (elA) elA.textContent = artist;
   // Ligne album + année — absente si données manquantes (masquée via display:none)
   const elAlb = document.getElementById('cinema-album');
@@ -1018,7 +1060,6 @@ function _startViz() {
     }
     analyser.getByteFrequencyData(_vizBuf);
     const data = _vizBuf;
-    const usedBins = Math.floor(data.length * 0.6);
 
     // LERP couleur vers la cible (évite le snap brutal sur changement de piste).
     // Calculé AVANT _detectBeat pour que le flash beat et les barres utilisent

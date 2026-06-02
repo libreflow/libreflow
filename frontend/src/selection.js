@@ -36,6 +36,7 @@ export let selectionMode = false;     // actif = affiche les checkboxes
 let _selAnchorId         = null;      // anchor pour Shift+click
 let _bteCoverPath        = null;      // chemin absolu de l'image choisie pour le batch cover
 let _bteSnapshotIds      = null;      // B5 : snapshot des ids sélectionnés à l'ouverture du modal batch-tag
+let _bteOpenedFrom       = null;      // élément qui avait le focus avant l'ouverture du modal batch-tag
 
 // ── Invalidation automatique de la sélection ─────────────────
 // Quand tracks[] change (scan, suppression, import…), les IDs sélectionnés
@@ -378,6 +379,7 @@ export function selBatchTagEdit() {
   const btn = document.getElementById('bte-confirm-btn');
   if (btn) btn.disabled = false;
 
+  _bteOpenedFrom = document.activeElement;
   openModalEl(modal); // show backdrop + animate inner [role="dialog"]
   // Focus sur l'artiste (plus logique que l'année)
   artistEl.focus();
@@ -385,7 +387,10 @@ export function selBatchTagEdit() {
 }
 
 export function closeBatchTagModal() {
-  closeModalEl(document.getElementById('batch-tag-modal-bg'));
+  const prevFocus = _bteOpenedFrom;
+  _bteOpenedFrom = null;
+  closeModalEl(document.getElementById('batch-tag-modal-bg'))
+    .then(() => prevFocus?.focus());
   bteCoverClear(); // reset cover state
   _bteSnapshotIds = null; // B5 : libérer le snapshot batch-tag
 }

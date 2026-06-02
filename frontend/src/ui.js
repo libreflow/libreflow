@@ -13,19 +13,16 @@
 //   resolveConfirm(result)                              — résout la modal depuis handlers.js
 //   promptAction(title, defaultVal, okLabel, cancelLabel) — saisie texte → Promise<string|null>
 
-// ── Utilitaire sécurité ───────────────────────────────────────────────────
-
-/** Escape HTML special characters including quotes. Use for any user-provided content in HTML attributes or text nodes. */
-export function esc(str) {
-  return (str || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
-}
-
 // ── Lit Web Component delegation ─────────────────────────────────────────
 // Phase 0 Lit : les constantes _TOAST_ICONS et _TOAST_DUR vivent désormais
 // dans frontend/src/components/lf-toast-stack.{js,logic.js}. ui.js délègue.
 
 import './components/lf-toast-stack.js';
 import { modalOpen, modalClose } from './motion.js';
+import { esc } from './utils.js';
+import { liveAnnounce } from './a11y.js';
+
+export { esc };
 
 let _stack = null;
 
@@ -50,6 +47,7 @@ function _getStack() {
  *          La fonction expose aussi remove.update(newMsg) pour modifier le message.
  */
 export function toast(m, type = 'info') {
+  liveAnnounce(m, type === 'error' || type === 'warning' ? 'assertive' : 'polite');
   const stack = _getStack();
   const handle = stack.push({ message: m, type });
   const remove = () => handle.remove();
@@ -67,6 +65,7 @@ export function toast(m, type = 'info') {
  * @returns {Function & { update: Function }}
  */
 export function toastWithAction(m, type = 'info', label, onAction, dur) {
+  liveAnnounce(m, type === 'error' || type === 'warning' ? 'assertive' : 'polite');
   const stack = _getStack();
   const handle = stack.push({
     message: m,
@@ -78,6 +77,8 @@ export function toastWithAction(m, type = 'info', label, onAction, dur) {
   remove.update = (newMsg) => handle.update(newMsg);
   return remove;
 }
+
+export function setToastCloseLabel(label) { _getStack().closeLabel = label; }
 
 // ── Modal helpers ─────────────────────────────────────────────────────────
 
