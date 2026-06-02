@@ -449,7 +449,7 @@ function _onCinemaTrapKey(e) {
 // ── Scroll molette → volume ──────────────────────────────────
 function _syncCinVol(v) {
   const cvol = document.getElementById('cinema-vol');
-  if (cvol) { cvol.value = v; updateVolSlider(cvol); }
+  if (cvol) { cvol.value = v; updateVolSlider(cvol, `rgb(${_cinArtRGB})`); }
   const vel = document.getElementById('vol');
   if (vel) { vel.value = v; updateVolSlider(vel); }
   saveCfg();
@@ -759,6 +759,9 @@ export function updateCinema() {
   }
   // Propager --cin-rgb → teinte CSS du sous-titre artiste et album
   document.getElementById('cinema-overlay')?.style.setProperty('--cin-rgb', _cinArtRGB);
+  // Mettre à jour le gradient de la barre de volume cinéma avec la couleur de la pochette
+  const _cvol = document.getElementById('cinema-vol');
+  if (_cvol) updateVolSlider(_cvol, `rgb(${_cinArtRGB})`);
 
   const elT = document.getElementById('cinema-title');
   const elA = document.getElementById('cinema-artist');

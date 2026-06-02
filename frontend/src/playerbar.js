@@ -37,13 +37,16 @@ let _volHideTimer = 0;
 
 /**
  * Met à jour le fond dégradé du slider volume et affiche un tooltip temporaire.
- * @param {Element|null} [el] — élément #vol ; résolu via getElementById si omis.
+ * @param {Element|null} [el]        — élément #vol ; résolu via getElementById si omis.
+ * @param {string|null}  [fillColor] — couleur de remplissage CSS (défaut : var(--g)).
+ *                                     Cinéma passe rgb(_cinArtRGB) pour teinte pochette.
  */
-export function updateVolSlider(el) {
+export function updateVolSlider(el, fillColor) {
   const vel = (el instanceof Element) ? el : document.getElementById('vol');
   if (!vel) return;
-  const pct = Math.round(+vel.value * 100);
-  vel.style.background = `linear-gradient(to right, var(--g) ${pct}%, var(--bg5) ${pct}%)`;
+  const pct  = Math.round(+vel.value * 100);
+  const fill = fillColor ?? 'var(--g)';
+  vel.style.background = `linear-gradient(to right, ${fill} ${pct}%, var(--bg5) ${pct}%)`;
   const tip = document.getElementById('vol-tip');
   if (tip) {
     tip.textContent = pct + '%';
