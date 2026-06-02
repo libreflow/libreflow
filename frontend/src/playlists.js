@@ -44,6 +44,7 @@ import { clearSelection }        from './selection.js';
 import { invalidateFilterCache, getFiltered } from './search.js';
 import { invalidateGenreGridSig }              from './genres.js';
 import { saveCfg }                             from './cfgsave.js';
+import { FOCUSABLE_SEL }                       from './modal.js';
 import { setView }                             from './views.js';
 import { renderPlaylistsGrid }                 from './renderer.js';
 import { playAt, buildQ }                      from './player.js';
@@ -1082,12 +1083,11 @@ export function clearPlCover() {
   if (inp) inp.value = '';
 }
 
-const _PL_FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
 function _buildPlFocusTrap(dialogEl) {
   return function(e) {
     if (e.key !== 'Tab') return;
-    const els = [...dialogEl.querySelectorAll(_PL_FOCUSABLE)]
+    const els = [...dialogEl.querySelectorAll(FOCUSABLE_SEL)]
       .filter(el => el.offsetWidth > 0 || el.offsetHeight > 0);
     if (!els.length) return;
     const first = els[0], last = els[els.length - 1];

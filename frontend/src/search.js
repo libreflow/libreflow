@@ -21,6 +21,7 @@
 /** @import { Track } from './types.js' */
 
 import { get, subscribe } from './store.js';
+import { CFG } from './cfg.js';
 
 // ── Trigram helpers ───────────────────────────────────────────────────────────
 
@@ -236,10 +237,11 @@ const _FIELD_W = [['name', 4], ['artist', 3], ['artistFull', 3], ['album', 2], [
 
 /**
  * Position rank within a field: prefix(3) > word-start(2) > substring(1) > none(0).
- * `wb` (optional) is a precompiled \b-anchored regex for q — pass it on the hot path
- * to avoid rebuilding the regex per field per track.
+ * `wb` (optional) is a precompiled \b-anchored regex for the single-term query q.
+ * For multi-word queries the word-boundary test (rank 2) won't fire for the full phrase;
+ * those degrade gracefully to substring rank (1) via `l.includes(q)`.
  * @param {string | null | undefined} s
- * @param {string} q
+ * @param {string} q  — single lowercased term (or full lowercased query)
  * @param {RegExp} [wb]
  * @returns {number}
  */
@@ -254,14 +256,14 @@ function _posRank(s, q, wb) {
 }
 
 /**
- * Relevance of track t for query q (caller passes trimmed+lowercased q).
+ * Relevance of track t for query q. Normalises q defensively.
  * Higher = better; 0 = no match.
  * @param {Track} t
- * @param {string} q  — already trimmed and lowercased
+ * @param {string} q
  * @returns {number}
  */
 export function relevanceScore(t, q) {
-  const qq = q.trim().toLowerCase(); // robust to callers that pass raw/mixed-case queries
+  const qq = q.trim().toLowerCase();
   if (!qq) return 0;
   let best = 0;
   for (const [field, w] of _FIELD_W) {
@@ -436,7 +438,6 @@ export function getFiltered() {
     } else if (query.trim().length >= 3) {
       // Fuzzy fallback — trigram Jaccard similarity.
       // PM-2 : c'est UNIQUEMENT ici qu'on construit les trigrammes (lazy par track).
-      const FUZZY_THRESHOLD = 0.4;
       const qTrigrams = _trigrams(query.toLowerCase().replace(/\s+/g, ' ').trim());
       // PM-1: pre-compute scores once (O(n)) so both filter and sort use O(1) Map lookups
       // instead of recomputing _trigramScore ~2×n×log(n) times inside the sort comparator.
@@ -447,7 +448,7 @@ export function getFiltered() {
         _scores.set(t.id, _trigramScore(qTrigrams, t._trigrams));
       }
       const fuzzy = src
-        .filter(t => (_scores.get(t.id) ?? 0) >= FUZZY_THRESHOLD)
+        .filter(t => (_scores.get(t.id) ?? 0) >= CFG.FUZZY_THRESHOLD)
         .sort((a, b) => (_scores.get(b.id) ?? 0) - (_scores.get(a.id) ?? 0));
       _lastWasFuzzy = fuzzy.length > 0;
       // Cache result directly and return — skip normal sort since results are ordered by score

@@ -296,3 +296,55 @@ When in doubt, keep it simple. libreflow does not use:
 New dependencies require a strong justification: the problem cannot be solved inline, the library is actively maintained, and it does not make network calls at runtime (§15).
 
 Prefer a maintained crate/package over hand-rolled code — provided it stays offline.
+
+---
+
+## 21. Agentic OS — kernel routing
+
+libreflow runs as a persistent Agentic OS. Claude acts as the COO / orchestrator. Tasks are routed to specialist agents defined in `agents/`.
+
+### Agent Registry
+
+| Agent | Domain | Trigger keywords |
+|---|---|---|
+| `@js-dev` | Vanilla JS, Lit, CSS, IDB, virtual scroll | "add", "fix", "build", "refactor" (frontend) |
+| `@rust-dev` | Rust, Tauri commands, lofty, notify | "command", "IPC", "Rust", "backend", "crate" |
+| `@audio-eng` | Web Audio graph, EQ, crossfade, ReplayGain | "audio", "EQ", "crossfade", "zipper", "gain" |
+| `@perf-eng` | Benchmarks, virtual scroll perf, IDB throughput | "slow", "bench", "regression", "virt" |
+| `@reviewer` | Code review, invariant checklist | "review", "PR", "checklist" |
+| `@writer` | Specs, plans, ADRs, CLAUDE.md updates | "spec", "plan", "document", "decide" |
+| `@design-eng` | Premium UI design, token coherence, visual polish | "design", "style", "UI", "look", "feel", "premium", "visuel", "améliore" |
+
+### Routing Rules
+
+1. Parse the request for intent keywords
+2. Match to the Agent Registry trigger column
+3. Load `agents/<name>.md` for the full agent identity
+4. Execute; persist notes to `data/logs/<date>-<agent>.md`
+5. Synthesise and present results
+
+### Slash Commands
+
+| Command | Purpose |
+|---|---|
+| `/daily-sync` | Morning briefing: branch status, blockers, next actions |
+| `/pre-commit` | Walk CLAUDE.md §19 checklist before committing |
+| `/new-feature <name>` | Plan + TDD setup for a new feature |
+| `/bench` | Run benchmarks and compare to baseline |
+| `/review` | Full code review of current branch diff |
+| `/save-session` | Persist session context to `data/sessions/latest.md` |
+| `/decide <topic>` | Log an ADR in `data/decisions/` |
+
+### Memory Layout
+
+```
+data/
+├── sessions/latest.md         ← Current session context (overwritten each /save-session)
+├── sessions/<date>.md         ← Dated snapshots
+├── decisions/                 ← ADRs
+├── inbox/                     ← Pending tasks awaiting triage
+├── perf/baselines.json        ← Bench baselines
+├── perf/<date>-bench.md       ← Bench run history
+├── reviews/<date>-<branch>.md ← Code review findings
+└── logs/<date>-<agent>.md     ← Per-agent session logs
+```

@@ -30,6 +30,10 @@ export const CFG = Object.freeze({
   RG_GAIN_CAP:           3.162,   // gain linéaire max ReplayGain ≈ +10 dB (B1 fix)
   MAX_ART_CACHE:           200,   // ARCH-2 — cache LRU blob: URL artwork (liste + grilles albums/artistes)
   QUEUE_ROW_H:              50,   // px — hauteur d'un .queue-item (padding 7px*2 + art 36px)
+  FUZZY_THRESHOLD:         0.4,   // seuil minimal Jaccard similarity pour la recherche floue
+  BOOT_CHUNK:             5000,   // pistes traitées par tranche au boot (yield entre tranches)
+  STAGGER_CAP:              12,   // nb maximum d'éléments animés en stagger (perf)
+  VIEW_FADE_MS:            200,   // durée ms du cross-fade de vue — doit correspondre à --motion-base
 });
 
 export const SORTS = ['az', 'za', 'artist', 'album', 'recent'];

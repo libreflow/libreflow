@@ -26,12 +26,12 @@ let _modalFocusTrap = null;
 /** @type {WeakMap<HTMLElement, { handler: (e: KeyboardEvent) => void, prevFocus: HTMLElement|null }>} */
 const _trapRegistry = new WeakMap();
 
-const _MODAL_FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+export const FOCUSABLE_SEL = 'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
 function _buildModalFocusTrap(dialogEl) {
   return function (e) {
     if (e.key !== 'Tab') return;
-    const els = [...dialogEl.querySelectorAll(_MODAL_FOCUSABLE)]
+    const els = [...dialogEl.querySelectorAll(FOCUSABLE_SEL)]
       .filter(el => el.offsetWidth > 0 || el.offsetHeight > 0);
     if (!els.length) return;
     const first = els[0], last = els[els.length - 1];
@@ -62,7 +62,7 @@ export function trapFocus(dialogEl, opts = {}) {
   setTimeout(() => {
     const target = opts.initialFocus
       ? dialogEl.querySelector(opts.initialFocus)
-      : dialogEl.querySelector(_MODAL_FOCUSABLE);
+      : dialogEl.querySelector(FOCUSABLE_SEL);
     /** @type {HTMLElement|null} */ (target)?.focus();
   }, 0);
 }

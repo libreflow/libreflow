@@ -1,0 +1,7 @@
+{
+  "_note": "Populated on first /bench run. Keys match bench.cjs output labels.",
+  "tracks_50k_index_build_ms": null,
+  "virt_scroll_render_ms": null,
+  "idb_write_throughput_ops_per_sec": null,
+  "last_updated": null
+}

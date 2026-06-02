@@ -33,6 +33,7 @@
 import { gsap }       from 'gsap';
 import { Flip }       from 'gsap/Flip';
 import { CustomEase } from 'gsap/CustomEase';
+import { CFG }        from './cfg.js';
 
 // Register once at module load — registerPlugin is idempotent and tree-shake safe.
 gsap.registerPlugin(Flip, CustomEase);
@@ -161,8 +162,10 @@ export const _meta = Object.freeze({
  */
 export function viewEnter(el) {
   kill(el);
-  if (prefersReducedMotion()) return gsap.from(el, { opacity: 0, duration: 0 });
-  return gsap.from(el, { opacity: 0, duration: 0.22, ease: 'power2.out' });
+  // fromTo avec "to" explicite opacity:1 — évite que gsap.from lise l'opacity stale
+  // laissée par un viewExit tué à mi-course (ex. double-clic open→close).
+  if (prefersReducedMotion()) return gsap.set(el, { opacity: 1 });
+  return gsap.fromTo(el, { opacity: 0 }, { opacity: 1, duration: 0.22, ease: 'power2.out' });
 }
 
 /**
@@ -184,8 +187,12 @@ export function viewExit(el) {
  */
 export function panelOpen(el) {
   kill(el);
-  if (prefersReducedMotion()) return gsap.from(el, { opacity: 0, duration: 0 });
-  return gsap.from(el, { opacity: 0, y: 12, scale: 0.97, duration: 0.26, ease: eases.PREMIUM, clearProps: 'transform' });
+  // fromTo avec "to" explicite opacity:1 — evite que gsap.from lise l'opacity:0 inline
+  // laisse par panelClose (stale) et anime de 0→0, rendant le panneau invisible.
+  if (prefersReducedMotion()) return gsap.set(el, { opacity: 1, clearProps: 'transform' });
+  return gsap.fromTo(el,
+    { opacity: 0, y: 12, scale: 0.97 },
+    { opacity: 1, y: 0, scale: 1, duration: 0.26, ease: eases.PREMIUM, clearProps: 'transform' });
 }
 
 /**
@@ -254,7 +261,7 @@ export function playPausePress(btn) {
 
 // ── List presets ──────────────────────────────────────────────────────────────
 
-const STAGGER_CAP = 12;
+const STAGGER_CAP = CFG.STAGGER_CAP;
 
 /**
  * Stagger-in a NodeList/Array of elements (first render of a view list).
@@ -277,6 +284,6 @@ export function staggerIn(items) {
 export function staggerOut(items) {
   const els = Array.from(items).slice(0, STAGGER_CAP);
   kill(els);
-  if (prefersReducedMotion()) { gsap.set(els, { opacity: 0 }); return gsap.set(els, {}); }
+  if (prefersReducedMotion()) return gsap.set(els, { opacity: 0 });
   return gsap.to(els, { opacity: 0, duration: 0.12, ease: 'power2.in', stagger: 0.010 });
 }

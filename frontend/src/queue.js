@@ -12,7 +12,7 @@
 //   addToQueueNext, addToQueueEnd, playQueueItem
 //   initQueueDrag (Task 4)
 
-import { panelOpen, panelClose }           from './motion.js';
+import { panelOpen, panelClose, set as motionSet } from './motion.js';
 import { esc, extEmoji, fmtd, moveByOne }  from './utils.js';
 import { CFG }                            from './cfg.js';
 import { eqOpen, closeEQ }                from './eq.js';
@@ -26,17 +26,17 @@ import { closeSettings } from './settings.js';
 import { emit, EVENTS } from './bus.js';
 import { toast, toastWithAction } from './ui.js';
 import { setView } from './views.js';
+import { FOCUSABLE_SEL } from './modal.js';
 
 // ── Focus trap ──────────────────────────────────────────────
 // FOCUS-1 FIX : trap Tab/Shift+Tab dans #queue-panel quand ouvert.
-const _FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
 let _queueFocusTrap = null;
 
 function _setupQueueFocusTrap(panel) {
   if (_queueFocusTrap) panel.removeEventListener('keydown', _queueFocusTrap);
   _queueFocusTrap = (e) => {
     if (e.code !== 'Tab') return;
-    const focusable = [...panel.querySelectorAll(_FOCUSABLE)].filter(el => {
+    const focusable = [...panel.querySelectorAll(FOCUSABLE_SEL)].filter(el => {
       const r = el.getBoundingClientRect();
       return r.width > 0 && r.height > 0;
     });
@@ -246,7 +246,13 @@ export function closeQueue() {
   btn?.setAttribute('aria-expanded', 'false'); // A11Y
   document.getElementById('app')?.classList.remove('panel-queue-open');
   const qp = document.getElementById('queue-panel');
-  if (qp) panelClose(qp).then(() => qp.classList.remove('open'));
+  if (qp) panelClose(qp).then(() => {
+    qp.classList.remove('open');
+    // Nettoyer les styles inline GSAP après retrait de .open : le CSS de base
+    // reprend (opacity:0, transform:translateX(100%)) — panneau hors écran et sans
+    // interception de pointeur. Sans ça, le panneau reste à x:0 invisible mais cliquable.
+    motionSet(qp, { clearProps: 'opacity,transform' });
+  });
   else document.getElementById('queue-panel')?.classList.remove('open');
 }
 

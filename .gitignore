@@ -36,6 +36,9 @@ PATHFINDER-*/
 !.claude/hooks/
 !.claude/settings.json
 
+# Generated CJS shim for tests — rebuilt automatically by pretest (npm run gen:cdaudio-cjs)
+frontend/src/cdaudio_pure.cjs
+
 # Playwright visual-regression run artifacts (baselines under __snapshots__/ are kept)
 test-results/
 playwright-report/
