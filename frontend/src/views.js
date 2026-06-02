@@ -123,6 +123,8 @@ export function _showViewRaw(v) {
     prev.style.pointerEvents = 'none';
     prev.style.zIndex        = '1';
     viewExit(prev).then(() => {
+      // Guard: view was re-entered (A→B→A < 140ms) — cleanup already ran via next-stale clear.
+      if (prev.style.position !== 'absolute') return;
       prev.style.display = '';
       prev.style.position = '';
       prev.style.inset = '';

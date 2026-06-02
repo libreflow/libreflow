@@ -361,7 +361,7 @@ export function wasFuzzySearch() { return _lastWasFuzzy; }
 export function getFiltered() {
   const tracks      = get('tracks')      || [];
   const sort        = get('sort')        || 'az';
-  const query       = get('query')       || '';
+  const query       = (get('query') || '').trim();
   const view        = get('view')        || 'all';
   const drillKey    = get('drillKey')    || '';
   const drillFrom   = get('drillFrom')   || '';

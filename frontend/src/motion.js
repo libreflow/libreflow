@@ -127,6 +127,13 @@ export function kill(target) {
   gsap.killTweensOf(target);
 }
 
+/**
+ * Crée une fonction de tween rapide pour animation frame-par-frame.
+ * Intentionnellement sans vérification reduced-motion — réservé aux visualiseurs temps-réel.
+ * @returns {Function} setter(value) → tweene target[prop] vers value
+ */
+export const quickTo = (target, prop, vars) => gsap.quickTo(target, prop, vars);
+
 // ── Flip plugin (layout animations) ──────────────────────────────────────────
 // Flip = First/Last/Invert/Play. Capture state, mutate DOM, animate from prior
 // position. Perfect for list reordering, view switches, expand/collapse.
@@ -211,8 +218,8 @@ export function panelClose(el) {
  */
 export function modalOpen(el) {
   kill(el);
-  if (prefersReducedMotion()) return gsap.from(el, { opacity: 0, duration: 0 });
-  return gsap.from(el, { opacity: 0, scale: 0.94, duration: 0.28, ease: eases.PREMIUM, clearProps: 'transform' });
+  if (prefersReducedMotion()) return gsap.set(el, { opacity: 1, clearProps: 'transform' });
+  return gsap.from(el, { opacity: 0, scale: 0.94, duration: 0.28, ease: eases.PREMIUM, clearProps: 'transform,opacity' });
 }
 
 /**
@@ -244,9 +251,9 @@ export function trackSwap(artEl, titleEl, artistEl) {
     return;
   }
   _trackSwapTl = gsap.timeline({ onComplete() { _trackSwapTl = null; } })
-    .from(artEl,    { opacity: 0, scale: 1.08, filter: 'blur(4px)', duration: 0.26, ease: eases.PREMIUM, clearProps: 'filter,transform' }, 0)
-    .from(titleEl,  { opacity: 0, y: 6, duration: 0.20, ease: eases.PREMIUM, clearProps: 'transform' }, 0)
-    .from(artistEl, { opacity: 0, y: 6, duration: 0.20, ease: eases.PREMIUM, clearProps: 'transform' }, 0.04);
+    .from(artEl,    { opacity: 0, scale: 1.08, filter: 'blur(4px)', duration: 0.26, ease: eases.PREMIUM, clearProps: 'filter,transform,opacity' }, 0)
+    .from(titleEl,  { opacity: 0, y: 6, duration: 0.20, ease: eases.PREMIUM, clearProps: 'transform,opacity' }, 0)
+    .from(artistEl, { opacity: 0, y: 6, duration: 0.20, ease: eases.PREMIUM, clearProps: 'transform,opacity' }, 0.04);
 }
 
 /**
@@ -273,7 +280,7 @@ export function staggerIn(items) {
   kill(els);
   if (rest.length) gsap.set(rest, { opacity: 1 });
   if (prefersReducedMotion()) { gsap.set(els, { opacity: 1 }); return; }
-  gsap.from(els, { opacity: 0, duration: 0.20, ease: eases.PREMIUM, stagger: 0.018 });
+  gsap.from(els, { opacity: 0, duration: 0.20, ease: eases.PREMIUM, stagger: 0.018, clearProps: 'opacity' });
 }
 
 /**

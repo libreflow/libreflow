@@ -217,6 +217,8 @@ export function closeSettings() {
   trigger?.classList.remove('active');
   trigger?.setAttribute('aria-expanded', 'false');
   const _doClose = () => {
+    // Guard: settings was re-opened before panelClose.then fired — don't hide it.
+    if (panel.classList.contains('on')) return;
     panel.classList.remove('on');
     // A11Y-05: restaurer le focus à l'élément déclencheur après la fermeture de l'animation
     if (_settingsTrigger) { _settingsTrigger.focus(); _settingsTrigger = null; }

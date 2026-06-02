@@ -775,7 +775,7 @@ html[data-mode="light"] {
   /* --fs-vw-hero-sm retiré (R-H1) — son seul consommateur, le @media 520px mort, a été supprimé */
   --fs-vw-clock:     clamp(44px, 7.5vw, 90px);  /* cinéma horloge idle responsive */
   --fs-vw-date:      clamp(11px, 1.4vw, 15px);  /* cinéma date idle responsive */
-  --fs-vw-cin-title: clamp(18px, 3.8vw, 56px);  /* cinéma titre piste responsive */
+  --fs-vw-cin-title: clamp(18px, 3.5vw, 44px);  /* cinéma titre piste responsive */
   --fs-vw-cin-art:   clamp(13px, 2vw,   22px);  /* cinéma artiste responsive */
   --fs-vw-cin-alb:   clamp(9px,  1.4vw, 14px);  /* cinéma album responsive */
 

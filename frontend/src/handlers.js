@@ -90,6 +90,8 @@ function _burgerOutside(e) {
   if (!panel.contains(e.target) && !btn?.contains(e.target)) {
     panel.classList.remove('on');
     btn?.setAttribute('aria-expanded', 'false');
+    panel.querySelectorAll('[role="menuitem"]').forEach(el => el.setAttribute('tabindex', '-1'));
+    btn?.focus();
   }
 }
 import { closePlModal, clearPlCover,
@@ -132,7 +134,7 @@ const _ACTIONS = {
   'cycle-speed':           ()    => cycleSpeed(),
 
   // ── Mini-player / overlay ─────────────────────────────────
-  'toggle-mini-player':    async () => { await toggleMiniPlayer(); syncMiniSettingsBtn(); },
+  'toggle-mini-player':    async () => { clearQueuePin(); await toggleMiniPlayer(); syncMiniSettingsBtn(); },
   'toggle-mini-overlay':   ()    => toggleMiniOverlay(),
 
   // ── Now Playing ───────────────────────────────────────────
@@ -183,7 +185,7 @@ const _ACTIONS = {
   'cancel-sleep':          ()    => cancelSleepTimer(),
 
   // ── Cinema ────────────────────────────────────────────────
-  'toggle-cinema':         ()    => toggleCinema(),
+  'toggle-cinema':         ()    => { clearQueuePin(); toggleCinema(); },
   'close-cinema':          ()    => closeCinema(),
   'cinema-fullscreen':     ()    => toggleCinemaFullscreen(),
   'cycle-cinema-bg':       ()    => cycleCinemaBg(),
@@ -363,6 +365,14 @@ const _ACTIONS = {
     const open  = panel?.classList.contains('on');
     panel?.classList.toggle('on', !open);
     btn?.setAttribute('aria-expanded', String(!open));
+    if (!open && panel) {
+      // WAI-ARIA menu pattern: focus first item, set roving tabindex
+      const items = [...panel.querySelectorAll('[role="menuitem"]')];
+      items.forEach((el, i) => el.setAttribute('tabindex', i === 0 ? '0' : '-1'));
+      items[0]?.focus();
+    } else if (open && panel) {
+      panel.querySelectorAll('[role="menuitem"]').forEach(el => el.setAttribute('tabindex', '-1'));
+    }
   },
   // UX-Ergo : 'open-settings' devient un toggle — re-presser le bouton ferme le panneau.
   // Le nom data-action est conservé pour la compatibilité HTML existante.

@@ -961,6 +961,18 @@ button { cursor: pointer; }
   box-shadow: none;
   outline: none;
 }
+/* Keyboard focus: restore dual-tone ring (SC 2.4.13) — mouse focus keeps subtle background only */
+.sb-search .srch:has(input:focus-visible) {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-offset);
+  box-shadow: 0 0 0 var(--border-w-lg) var(--focus-ring-contrast);
+}
+/* Keyboard focus: restore dual-tone ring (SC 2.4.13) — mouse focus keeps subtle background only */
+.sb-search .srch:has(input:focus-visible) {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-offset);
+  box-shadow: 0 0 0 var(--border-w-lg) var(--focus-ring-contrast);
+}
 .sb-search .srch input {
   width: auto;
   flex: 1;
@@ -2803,7 +2815,7 @@ html[data-mode="light"] .modal-h {
    auraient animé le inner .modal de l'orphan dialog ET le animationend
    aurait pu déclencher prématurément le close() de l'orphan modal. */
 .prompt-bg {
-  position: fixed; inset: 0; z-index: calc(var(--z-modal) + 100);
+  position: fixed; inset: 0; z-index: calc(var(--z-modal) + 120);
   background: var(--scrim);
   backdrop-filter: blur(var(--blur-6)) saturate(.8);
   -webkit-backdrop-filter: blur(var(--blur-6)) saturate(.8);
@@ -3802,7 +3814,7 @@ html[data-mode="light"] .pl-folder-h:hover .pl-folder-count { background: var(--
   position: fixed; top: var(--tb); right: 0;
   height: calc(100% - var(--tb) - var(--pb));
   background: var(--bg2); border-left: var(--border-w-sm) solid var(--border-1);
-  display: flex; flex-direction: column; z-index: 50;
+  display: flex; flex-direction: column; z-index: var(--z-dropdown);
   transform: translateX(100%);
   transition: transform var(--dur-mid) var(--snappy),
               box-shadow var(--dur-mid) ease,
@@ -5278,7 +5290,7 @@ html[data-mode="light"] .cn-artist {
 
 /* ═══ PANNEAUX OVERLAY (raccourcis + doublons) ═══════════════ */
 #shortcuts-panel, #dupes-panel {
-  position: fixed; inset: 0; z-index: calc(var(--z-dropdown) + 100);
+  position: fixed; inset: 0; z-index: var(--z-modal);
   background: transparent; backdrop-filter: blur(0);
   display: none; align-items: center; justify-content: center;
   transition: background var(--dur-mid) ease, backdrop-filter var(--dur-mid) ease;

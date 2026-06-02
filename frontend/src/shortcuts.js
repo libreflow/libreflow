@@ -139,6 +139,38 @@ export function initShortcuts({ updateVolSlider, closeModal, cycleSpeed }) {
     // Laisser cinema.js gérer les raccourcis quand le mode cinéma est ouvert
     if (cinemaOpen) return;
 
+    // ── Burger menu keyboard navigation (WAI-ARIA 1.2 §5.7 menu pattern) ──
+    if (e.target.closest?.('#tb-burger-panel')) {
+      const _bp = document.getElementById('tb-burger-panel');
+      if (_bp?.classList.contains('on')) {
+        const _bItems = [..._bp.querySelectorAll('[role="menuitem"]')];
+        const _bIdx   = _bItems.indexOf(document.activeElement);
+        const _bRoveTo = (item) => {
+          _bItems.forEach(el => el.setAttribute('tabindex', '-1'));
+          item?.setAttribute('tabindex', '0');
+          item?.focus();
+        };
+        if (e.key === 'ArrowDown' || e.key === 'ArrowRight') {
+          e.preventDefault();
+          _bRoveTo(_bItems[(_bIdx + 1) % _bItems.length]);
+          return;
+        }
+        if (e.key === 'ArrowUp' || e.key === 'ArrowLeft') {
+          e.preventDefault();
+          _bRoveTo(_bItems[(_bIdx - 1 + _bItems.length) % _bItems.length]);
+          return;
+        }
+        if (e.key === 'Home') { e.preventDefault(); _bRoveTo(_bItems[0]); return; }
+        if (e.key === 'End')  { e.preventDefault(); _bRoveTo(_bItems[_bItems.length - 1]); return; }
+        if (e.key === 'Tab') {
+          _bp.classList.remove('on');
+          document.getElementById('tbt-burger')?.setAttribute('aria-expanded', 'false');
+          _bItems.forEach(el => el.setAttribute('tabindex', '-1'));
+          // Don't preventDefault — let Tab navigate the document normally
+        }
+      }
+    }
+
     if (e.code === 'Space')      { e.preventDefault(); togglePlay(); }
     if (e.code === 'ArrowRight') { e.preventDefault(); next(true); }
     if (e.code === 'ArrowLeft')  { e.preventDefault(); prev(); }
@@ -175,6 +207,8 @@ export function initShortcuts({ updateVolSlider, closeModal, cycleSpeed }) {
       if (_burgerPanel?.classList.contains('on')) {
         _burgerPanel.classList.remove('on');
         document.getElementById('tbt-burger')?.setAttribute('aria-expanded', 'false');
+        _burgerPanel.querySelectorAll('[role="menuitem"]').forEach(el => el.setAttribute('tabindex', '-1'));
+        document.getElementById('tbt-burger')?.focus();
         return;
       }
       // A11Y-14 : sleep-menu est un role=dialog aria-modal trappé (modal.js) ;

@@ -21,7 +21,7 @@ import { esc }                                              from './utils.js';
 import { i18n }                                            from './i18n.js';
 import { get, set }                                        from './store.js';
 import { emit, on, EVENTS }                                from './bus.js';
-import { _normalizeGenre, _coll, invalidateFilterCache }   from './search.js';
+import { _normalizeGenre, _coll, invalidateFilterCache, getFiltered } from './search.js';
 import { guessGenre }                                      from './tags.js';
 import { saveTracks }                                      from './library.js';
 import { toast }                                           from './ui.js';
@@ -197,8 +197,11 @@ export function renderGenresGrid() {
 
   // Construire la map des genres (enrichie : arts, durée totale, top artiste, variantes)
   // _normalizeGenre() fusionne les variantes : "Rap Français" + "Rap" → même clé "rap"
+  // BUG-6 FIX: quand une recherche est active, compter depuis getFiltered() pour que
+  // le badge sur chaque carte corresponde aux pistes visibles après drill-in.
   const genreMap = new Map();
-  for (const t of tracks) {
+  const trackSource = query ? getFiltered() : tracks;
+  for (const t of trackSource) {
     const g = (t.genre || '').trim();
     if (!g) continue;
     const parts = g.split(/[\/,;|]/).map(p => p.trim()).filter(Boolean);
@@ -261,7 +264,9 @@ export function renderGenresGrid() {
 
     const variantCount = g.variants.size;
     const variantTip   = variantCount > 0
+      // BUG-8 FIX: indiquer le nombre de variantes non affichées dans le tooltip
       ? Array.from(g.variants).slice(0, 4).map(esc).join(', ')
+          + (variantCount > 4 ? ` +${variantCount - 4}` : '')
       : '';
     const variantBadge = variantCount > 0
       ? `<div class="genre-variants-badge" title="${variantTip}">+${variantCount}</div>`

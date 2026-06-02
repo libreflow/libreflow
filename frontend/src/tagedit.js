@@ -21,6 +21,7 @@ import { get, subscribe }               from './store.js'; // Phase 4
 import { emit, EVENTS }               from './bus.js';
 import { toast }                                        from './ui.js';
 import { _trackIdxMap, trackIdx, invalidateFilterCache } from './search.js';
+import { invalidateGridMaps } from './renderer.js';
 import { updateBar } from './playerbar.js';
 import { saveTrackNow } from './library.js';
 import { queueOpen, renderQueue } from './queue.js';
@@ -224,7 +225,10 @@ export async function saveTagEdit(trackId) {
     },
   }, { timeout: 15000 }).then(() => null).catch(err => String(err));
 
-  // Invalider le cache et re-render complet (plus fiable que outerHTML sur un élément virtualisé)
+  // BUG-4 FIX: invalider les maps album/artiste — tagedit peut changer artist/album
+  // sans changer tracks.length, donc _computeTracksSig ne les détecte pas.
+  invalidateGridMaps();
+  // Invalider le cache de filtre et re-render complet
   invalidateFilterCache(); emit(EVENTS.FILTER_CHANGED, {});
   VIRT._lastListSig = '';
   emit(EVENTS.RENDER_LIB, {});
@@ -254,6 +258,7 @@ export function cancelTagEdit() {
   // fantôme — ça provoquait un re-render inutile avec un _trackIdxMap stale.
   if (!_trackIdxMap.has(trackId)) return;
   // Re-render proprement via le moteur virtuel (cohérent avec saveTagEdit)
+  invalidateGridMaps();
   invalidateFilterCache(); emit(EVENTS.FILTER_CHANGED, {});
   VIRT._lastListSig = '';
   emit(EVENTS.RENDER_LIB, {});

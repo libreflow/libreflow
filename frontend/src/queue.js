@@ -247,10 +247,12 @@ export function closeQueue() {
   document.getElementById('app')?.classList.remove('panel-queue-open');
   const qp = document.getElementById('queue-panel');
   if (qp) panelClose(qp).then(() => {
-    qp.classList.remove('open');
+    // Guard: queue was re-opened before panelClose.then fired — don't hide it.
+    if (qp.classList.contains('open')) return;
     // Nettoyer les styles inline GSAP après retrait de .open : le CSS de base
     // reprend (opacity:0, transform:translateX(100%)) — panneau hors écran et sans
     // interception de pointeur. Sans ça, le panneau reste à x:0 invisible mais cliquable.
+    qp.classList.remove('open');
     motionSet(qp, { clearProps: 'opacity,transform' });
   });
   else document.getElementById('queue-panel')?.classList.remove('open');

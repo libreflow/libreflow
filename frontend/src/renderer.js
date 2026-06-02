@@ -448,7 +448,9 @@ function _getArtistMap() {
     }
     const a = map.get(key);
     a.count++;
-    a.albumCount.add(t.album);
+    // BUG-5 FIX: n'ajouter que les noms d'album non-vides — undefined/''/null gonflaient
+    // le Set d'un bucket fantôme et faisaient afficher "2 albums" au lieu de "1".
+    if (t.album) a.albumCount.add(t.album);
     if (t.art && !a.art) a.art = t.art;
     // C1 — piste représentative pour l'hydratation paresseuse du drill header.
     if (!a.artTrack && t._hasArt && !t.noArt) { a.artTrack = t; _artTrackById.set(t.id, t); }
@@ -520,10 +522,12 @@ function renderDrillHeader(view, key) {
     if (!entry) { _removeDrillHeader(); return; }
 
     const keyLc = key.toLowerCase();
-    const albums = _getAlbumMap()
+    // BUG-1 FIX: calcul du total AVANT slice(0,20) — les artistes avec >20 albums
+    // affichaient "20 albums" au lieu du vrai total.
+    const allArtistAlbums = _getAlbumMap()
       .filter(a => (a.artist || '').toLowerCase() === keyLc)
-      .sort((a, b) => (b.year || 0) - (a.year || 0))
-      .slice(0, 20);
+      .sort((a, b) => (b.year || 0) - (a.year || 0));
+    const albums = allArtistAlbums.slice(0, 20);
 
     const el   = _getOrCreateDrillHeader();
     const artH = entry.art
@@ -552,7 +556,7 @@ function renderDrillHeader(view, key) {
       <div class="dh-meta">
         <div class="dh-name">${esc(entry.displayName)}</div>
         <div class="dh-sub">
-          <span>${albums.length} album${albums.length > 1 ? 's' : ''}</span>
+          <span>${allArtistAlbums.length} album${allArtistAlbums.length > 1 ? 's' : ''}</span>
           <span>${entry.count} titre${entry.count > 1 ? 's' : ''}</span>
         </div>
         <div class="dh-actions">
@@ -769,7 +773,7 @@ export function renderAlbumsGrid() {
       <div class="card-info">
         <span class="card-name">${hlText(a.name || i18n('unknown_album') || '?')}</span>
         <span class="card-sub">${hlText(a.artist)}${meta}</span>
-        <span class="card-ct">${a.count} ${i18n('n_tracks') || 'titres'}</span>
+        <span class="card-ct">${a.count} ${i18n('n_tracks', a.count)}</span>
       </div>
     </div>`;
   }).join('');
@@ -816,7 +820,7 @@ export function renderArtistsGrid() {
       }
       const a = artistMap.get(key);
       a.count++;
-      a.albumCount.add(t.album);
+      if (t.album) a.albumCount.add(t.album);
       if (!a.art && t.art) a.art = t.art;
       if (!a.artTrack && t._hasArt && !t.noArt) { a.artTrack = t; _artTrackById.set(t.id, t); }
     }
@@ -850,7 +854,7 @@ export function renderArtistsGrid() {
       </div>
       <div class="card-info">
         <span class="card-name">${hlText(a.displayName || '?')}</span>
-        <span class="card-sub">${a.count} ${i18n('n_tracks') || 'titres'}${nbAlbums > 1 ? ` · ${nbAlbums} albums` : ''}</span>
+        <span class="card-sub">${a.count} ${i18n('n_tracks', a.count)}${nbAlbums > 1 ? ` · ${nbAlbums} albums` : ''}</span>
       </div>
     </div>`;
   }).join('');
@@ -916,7 +920,9 @@ export function renderPlaylistsGrid() {
 
     const smartBadge = pl.smart ? `<span class="smart-badge" title="${esc(i18n('smart_playlist') || 'Smart')}">✦</span>` : '';
     const pinBadge   = pl.pinned ? `<span class="pin-badge" aria-hidden="true">📌</span>` : '';
-    const count = (pl.trackIds || []).length;
+    // BUG-2 FIX: ne compter que les IDs qui existent dans la bibliothèque actuelle —
+    // les IDs orphelins (pistes supprimées) gonflaient le count affiché.
+    const count = (pl.trackIds || []).filter(id => _trackIdxMap.has(id)).length;
 
     // FIX-A1 : role=button + tabindex=0 + aria-label
     return `<div class="card" role="button" tabindex="0"
@@ -929,7 +935,7 @@ export function renderPlaylistsGrid() {
       </div>
       <div class="card-info">
         <span class="card-name">${hlText(pl.name || '?')}</span>
-        <span class="card-sub">${count} ${i18n('n_tracks') || 'titres'}</span>
+        <span class="card-sub">${count} ${i18n('n_tracks', count)}</span>
       </div>
     </div>`;
   }).join('');
@@ -1012,11 +1018,12 @@ export function updatePlActionBar() {
     return;
   }
 
-  const count   = (pl.trackIds || []).length;
   const plTracks = pl.trackIds.map(id => {
     const idx = _trackIdxMap.get(id);
     return idx !== undefined ? tracks[idx] : null;
   }).filter(Boolean);
+  // BUG-2 FIX: count = pistes résolues uniquement (sans les IDs orphelins)
+  const count    = plTracks.length;
   const totalDur = plTracks.reduce((s, t) => s + (t.duration || 0), 0);
 
   const plSort = get('plSort') || 'manual';
@@ -1033,7 +1040,7 @@ export function updatePlActionBar() {
   ).join('');
 
   const html = `<div id="pl-action-bar" class="pl-action-bar">
-    <span class="pl-bar-count">${count} ${i18n('n_tracks') || 'titres'}${totalDur > 0 ? ' · ' + fmtd(totalDur) : ''}</span>
+    <span class="pl-bar-count">${count} ${i18n('n_tracks', count)}${totalDur > 0 ? ' · ' + fmtd(totalDur) : ''}</span>
     <span class="pl-bar-spacer"></span>
     <button class="pl-act-btn" data-action="play-pl-from" data-idx="0">▶ ${i18n('pl_play_all') || 'Tout lire'}</button>
     <button class="pl-act-btn" data-action="shuffle-cur-pl">⇀ ${i18n('pl_shuffle') || 'Aléatoire'}</button>
@@ -1201,6 +1208,20 @@ export function patchTrackEl(id) {
 
 // ── Stats ─────────────────────────────────────────────────────────────────────
 
+/**
+ * Invalide les caches mémoïsés album/artiste sans toucher à _tracksSig.
+ * À appeler après une édition de tags utilisateur (tagedit.js) pour que les
+ * grilles albums/artistes et le drill header reflètent immédiatement les nouveaux
+ * noms — même si tracks[] n'a pas changé de longueur.
+ * Distinct du reset de _tracksSig (qui lui déclencherait un rebuild complet du
+ * virtual scroll, non nécessaire ici).
+ */
+export function invalidateGridMaps() {
+  _albumMapCache  = null;
+  _artistMapCache = null;
+  _artTrackById.clear();
+}
+
 /** Met à jour les compteurs de la bibliothèque (#lib-stats). */
 export function updateStats() {
   const tracks = get('tracks') || [];
@@ -1210,7 +1231,9 @@ export function updateStats() {
     sbEl.innerHTML = `<span class="sb-empty-msg"><svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>${i18n('sb_empty')}</span>`;
     return;
   }
-  const artistCount = _getArtistMap().length;
+  // BUG-7 FIX: exclure l'entrée clé-vide (pistes sans tag artiste) du compte sidebar
+  // pour être cohérent avec renderStats() dans stats.js qui fait `if (t.artist)`.
+  const artistCount = _getArtistMap().filter(a => a.key).length;
   const playCount   = playLog.length;
   const tracksLbl   = esc(i18n('sb_chip_tracks',  tracks.length));
   const artistsLbl  = esc(i18n('sb_chip_artists', artistCount));
