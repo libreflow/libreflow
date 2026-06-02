@@ -21,6 +21,7 @@ const NOISE_OVERLAY_OPACITY  = 0.055;
 
 // ── Module-level caches ─────────────────────────────────────────────────────
 let _noiseCanvas  = null;
+let _noiseData    = null; // pre-allocated ImageData — reused each cycle to avoid per-frame GC
 let _noiseFrame   = 0;
 let _vignetteGrad = null;
 let _vignetteW    = 0;
@@ -38,15 +39,15 @@ function _regenerateNoise() {
     _noiseCanvas.height = NS;
   }
   const nc = _noiseCanvas.getContext('2d');
-  if (!nc) { _noiseCanvas = null; return; }
-  const id = nc.createImageData(NS, NS);
-  const px = id.data;
+  if (!nc) { _noiseCanvas = null; _noiseData = null; return; }
+  if (!_noiseData) _noiseData = nc.createImageData(NS, NS); // allocated once, reused
+  const px = _noiseData.data;
   for (let i = 0; i < px.length; i += 4) {
     const v = (Math.random() * 2 - 1) * NOISE_DITHER_AMPLITUDE;
     px[i] = px[i+1] = px[i+2] = 128 + v;
     px[i+3] = 255;
   }
-  nc.putImageData(id, 0, 0);
+  nc.putImageData(_noiseData, 0, 0);
 }
 
 /**
@@ -69,7 +70,7 @@ export function renderAmbientFrame(t, canvas, ctx, mode, colorStr, ambientColors
   // M-03 : invalider les caches dépendants du contexte quand celui-ci change
   // (cinema ↔ nowplaying partagent ces singletons). _vignetteGrad est un
   // CanvasGradient lié à son ctx d'origine ; _noiseCanvas est régénéré par cohérence.
-  if (ctx !== _lastCtx) { _vignetteGrad = null; _noiseCanvas = null; _lastCtx = ctx; }
+  if (ctx !== _lastCtx) { _vignetteGrad = null; _noiseCanvas = null; _noiseData = null; _lastCtx = ctx; }
 
   // ── AMOLED : minimal halo, reuses ambient loop ──────────────────────────
   if (mode === 'amoled') {
@@ -164,8 +165,8 @@ export function renderAmbientFrame(t, canvas, ctx, mode, colorStr, ambientColors
   }
 
   // ── Noise dithering — film grain ───────────────────────────────────────
-  _noiseFrame++;
-  if (_noiseFrame % 3 === 0 || !_noiseCanvas) _regenerateNoise();
+  _noiseFrame = (_noiseFrame + 1) % 3; // bounded to avoid integer overflow
+  if (_noiseFrame === 0 || !_noiseCanvas) _regenerateNoise();
   if (!_noiseCanvas) return; // _regenerateNoise failed (context unavailable)
   ctx.globalCompositeOperation = 'overlay';
   ctx.globalAlpha = NOISE_OVERLAY_OPACITY;

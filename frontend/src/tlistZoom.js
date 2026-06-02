@@ -14,6 +14,7 @@
 //   TLIST_ZOOM_ROW_H      — {compact:36, normal:48, comfortable:60}
 
 import { VIRT }            from './virt.js';
+import { CFG }             from './cfg.js';
 import { set, get }        from './store.js';
 import { emit, EVENTS }    from './bus.js';
 import { saveCfg }         from './cfgsave.js';
@@ -22,7 +23,7 @@ export const TLIST_ZOOM_LEVELS = ['compact', 'normal', 'comfortable'];
 
 export const TLIST_ZOOM_ROW_H = {
   compact:     36,
-  normal:      48,
+  normal:      CFG.VIRT_ROW_H, // source de vérité : CFG.VIRT_ROW_H (CLAUDE.md §2, §10)
   comfortable: 60,
 };
 

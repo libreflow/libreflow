@@ -28,21 +28,35 @@
 
 <!-- TITLEBAR -->
 <div id="tb">
-  <!-- Left group : modes actifs → préférences → config (ordre par fréquence d'usage) -->
+  <!-- Left group : burger menu + items inline -->
   <div class="tb-btns tb-left">
-    <!-- Gestion de la fenêtre -->
-    <button class="tb-icon-btn" id="tbt-mini" data-action="toggle-mini-player" title="" data-i18n-title="tb_mini" data-aria-i18n="tb_mini" aria-label="Mini-player" aria-pressed="false">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="12" width="20" height="10" rx="2"/><path d="M7 16l2.5 2L12 16l2.5 2L17 16"/><path d="M8 8h8M10 4h4"/></svg>
+    <button class="tb-icon-btn" id="tbt-burger" data-action="toggle-burger-menu"
+      title="Menu" aria-label="Menu" aria-expanded="false" aria-haspopup="true" aria-controls="tb-burger-panel">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true">
+        <line x1="4" y1="7"  x2="20" y2="7"/>
+        <line x1="4" y1="12" x2="20" y2="12"/>
+        <line x1="4" y1="17" x2="20" y2="17"/>
+      </svg>
     </button>
-    <div class="tb-divider"></div>
-    <!-- Préférences d'affichage + configuration -->
-    <button class="tb-icon-btn" id="mode-toggle-btn" data-action="toggle-mode" title="" data-i18n-title="tb_mode" data-aria-i18n="tb_mode" aria-label="Thème clair / sombre">
-      <svg id="ico-mode-dark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
-      <svg id="ico-mode-light" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" style="display:none"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
-    </button>
-    <button class="tb-icon-btn" id="tbt-settings" data-action="open-settings" title="" data-i18n-title="tb_settings" data-aria-i18n="tb_settings" aria-label="Paramètres" aria-expanded="false" aria-controls="settings-panel" aria-haspopup="dialog" aria-keyshortcuts="Control+Comma">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
-    </button>
+    <div id="tb-burger-panel" class="tb-burger-panel" role="menu" aria-label="Menu principal">
+      <div class="tb-divider" role="none" aria-hidden="true"></div>
+      <button class="tb-menu-item" id="tbt-mini" role="menuitem" tabindex="-1"
+        data-action="toggle-mini-player" title="" data-i18n-title="tb_mini" data-aria-i18n="tb_mini" aria-label="Mini-player" aria-pressed="false">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="12" width="20" height="10" rx="2"/><path d="M7 16l2.5 2L12 16l2.5 2L17 16"/><path d="M8 8h8M10 4h4"/></svg>
+        <span data-i18n="tb_mini">Mini-player</span>
+      </button>
+      <button class="tb-menu-item" id="mode-toggle-btn" role="menuitem" tabindex="-1"
+        data-action="toggle-mode" title="" data-i18n-title="tb_mode" data-aria-i18n="tb_mode" aria-label="Thème clair / sombre">
+        <svg id="ico-mode-dark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+        <svg id="ico-mode-light" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" style="display:none" aria-hidden="true"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+        <span data-i18n="tb_mode">Thème</span>
+      </button>
+      <button class="tb-menu-item" id="tbt-settings" role="menuitem" tabindex="-1"
+        data-action="open-settings" title="" data-i18n-title="tb_settings" data-aria-i18n="tb_settings" aria-label="Paramètres" aria-expanded="false" aria-controls="settings-panel" aria-haspopup="dialog" aria-keyshortcuts="Control+Comma">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+        <span data-i18n="tb_settings">Paramètres</span>
+      </button>
+    </div>
   </div>
 
   <!-- Spacer (draggable) -->
@@ -276,7 +290,7 @@
       </button>
       <button class="pcplay" id="pcplay" data-action="toggle-play" title="" data-i18n-title="pc_play" data-aria-i18n="aria_play" aria-label="Lecture / Pause" aria-pressed="false" aria-keyshortcuts="Space">
         <svg id="ico-play"  viewBox="0 0 24 24"><polygon points="6 3 20 12 6 21" fill="currentColor"/></svg>
-        <svg id="ico-pause" viewBox="0 0 24 24" style="display:none"><rect x="5.5" y="4" width="4" height="16" rx="1.5" fill="currentColor"/><rect x="14.5" y="4" width="4" height="16" rx="1.5" fill="currentColor"/></svg>
+        <svg id="ico-pause" viewBox="0 0 24 24"><rect x="5.5" y="4" width="4" height="16" rx="1.5" fill="currentColor"/><rect x="14.5" y="4" width="4" height="16" rx="1.5" fill="currentColor"/></svg>
       </button>
       <button class="pc" id="btn-next" data-action="next" data-i18n-title="pc_next" data-aria-i18n="pc_next" aria-label="Titre suivant" aria-keyshortcuts="ArrowRight">
         <div id="next-preview" aria-hidden="true">
@@ -1283,21 +1297,23 @@
     <svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
   </button>
 
-  <div class="cinema-art-wrap" id="cinema-art-wrap">
-    <img id="cinema-art-img" alt="" style="display:none">
-    <div id="cinema-art-em"><svg viewBox="0 0 24 24" width="48" height="48" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" opacity=".3"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg></div>
-  </div>
-  <div class="cinema-info" id="cinema-info">
-    <div class="cinema-title"  id="cinema-title">–</div>
-    <div class="cinema-artist" id="cinema-artist">–</div>
-    <div class="cinema-album"  id="cinema-album" style="display:none"></div>
-  </div>
-  <div class="cinema-prog">
-    <span class="cinema-time" id="cinema-tc">0:00</span>
-    <div class="cinema-pbar" id="cinema-pbar"><div class="cinema-fill" id="cinema-fill"></div></div>
-    <span class="cinema-time" id="cinema-td">–:––</span>
-  </div>
-  <div class="cinema-controls" id="cinema-controls">
+  <div class="cinema-stage">
+    <div class="cinema-art-wrap" id="cinema-art-wrap">
+      <img id="cinema-art-img" alt="" style="display:none">
+      <div id="cinema-art-em"><svg viewBox="0 0 24 24" width="48" height="48" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" opacity=".3"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg></div>
+    </div>
+    <div class="cinema-stage-right">
+      <div class="cinema-info" id="cinema-info">
+        <div class="cinema-title"  id="cinema-title">–</div>
+        <div class="cinema-artist" id="cinema-artist">–</div>
+        <div class="cinema-album"  id="cinema-album" style="display:none"></div>
+      </div>
+      <div class="cinema-prog">
+        <span class="cinema-time" id="cinema-tc">0:00</span>
+        <div class="cinema-pbar" id="cinema-pbar"><div class="cinema-fill" id="cinema-fill"></div></div>
+        <span class="cinema-time" id="cinema-td">–:––</span>
+      </div>
+      <div class="cinema-controls" id="cinema-controls">
     <button class="cbtn" data-action="toggle-shuffle" id="cinema-shuf" title="" data-i18n-title="pc_shuffle" data-i18n-aria="aria_shuffle" aria-label="Lecture aléatoire">
       <svg viewBox="0 0 24 24">
         <path d="M4 5h3a6 6 0 0 1 5.5 3.6"/>
@@ -1341,9 +1357,11 @@
              data-i18n-aria="aria_vol"
              aria-label="Volume"
              data-input-action="cinema-vol">
-    </div>
-  </div>
-</div>
+        </div><!-- /cinema-vol-wrap -->
+      </div><!-- /cinema-controls -->
+    </div><!-- /cinema-stage-right -->
+  </div><!-- /cinema-stage -->
+</div><!-- /cinema-overlay -->
 
 <!-- SHORTCUTS PANEL — a11y: dialog complet (BLOCKER fix audit 2026-05-19) -->
 <div id="shortcuts-panel" data-backdrop-action="toggle-shortcuts" role="dialog" aria-modal="true" aria-labelledby="shortcuts-panel-title">

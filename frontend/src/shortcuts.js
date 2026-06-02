@@ -171,6 +171,12 @@ export function initShortcuts({ updateVolSlider, closeModal, cycleSpeed }) {
     if (e.key.toLowerCase() === 'i' && !e.ctrlKey && !e.altKey) toggleMiniOverlay();
 
     if (e.code === 'Escape') {
+      const _burgerPanel = document.getElementById('tb-burger-panel');
+      if (_burgerPanel?.classList.contains('on')) {
+        _burgerPanel.classList.remove('on');
+        document.getElementById('tbt-burger')?.setAttribute('aria-expanded', 'false');
+        return;
+      }
       // A11Y-14 : sleep-menu est un role=dialog aria-modal trappé (modal.js) ;
       // Escape doit pouvoir le fermer, sinon le focus trap devient un piège clavier.
       const _sleepMenu = document.getElementById('sleep-menu');

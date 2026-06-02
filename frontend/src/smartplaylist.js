@@ -286,7 +286,10 @@ function _buildPlayCountMap() {
 function _buildRulesTracks() {
   const tracks  = get('tracks');
   const combinator = document.getElementById('spl-combinator')?.value || 'all';
-  const maxSize = Math.min(parseInt(document.getElementById('spl-rules-size')?.value || '20') || 20, tracks.length);
+  const maxSize = Math.min(
+    Math.max(1, parseInt(document.getElementById('spl-rules-size')?.value || '20') || 20),
+    tracks.length
+  );
   const rules   = _smartRules.filter(r => r.value !== '' || r.field === 'liked' || r.field === 'format');
   if (!rules.length) return [];
 
@@ -514,7 +517,7 @@ export async function confirmSmartPlaylist() {
     if (!result.length) { toast(i18n('t_smart_no_match'), 'warning'); return; }
     const name = document.getElementById('spl-rules-name')?.value.trim() || 'Smart Rules';
     const combinator = document.getElementById('spl-combinator')?.value || 'all';
-    const maxSize = parseInt(document.getElementById('spl-rules-size')?.value || '20') || 20;
+    const maxSize = Math.max(1, parseInt(document.getElementById('spl-rules-size')?.value || '20') || 20);
     const criteria = { mode: 'rules', rules: JSON.parse(JSON.stringify(_smartRules)), combinator, size: maxSize };
     // B31 FIX : suffixe aléatoire — 2 smart playlists créées dans la même ms
     // (double-clic « Créer ») produiraient le même id 'pl_<ts>' → collision IDB.

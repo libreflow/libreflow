@@ -24,8 +24,9 @@ function _isModalOpen() {
   if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return true;
   // Any open modal/dialog overlay
   if (ae.closest('[role="dialog"]')) return true;
-  if (ae.closest('#ctx-menu'))       return true;
-  if (ae.closest('#sleep-menu'))     return true;
+  if (ae.closest('#ctx-menu'))         return true;
+  if (ae.closest('#sleep-menu'))       return true;
+  if (ae.closest('#tb-burger-panel'))  return true;
   if (ae.closest('#eq-panel'))       return true;
   if (ae.closest('#queue-panel'))    return true;
   if (ae.closest('#settings-panel')) return true;

@@ -1818,99 +1818,7 @@ section('organize.js -- B-2 saveTracks batches, rebuildTrackIdxMap before notify
 // =============================================================================
 section('artcolor.js -- _kmeansColors');
 
-// Inline rgbToHsl (same logic as artcolor.js — test is self-contained per project convention)
-function _artRgbToHsl(r, g, b) {
-  r /= 255; g /= 255; b /= 255;
-  const max = Math.max(r,g,b), min = Math.min(r,g,b);
-  let h = 0, s = 0;
-  const l = (max + min) / 2;
-  if (max !== min) {
-    const d = max - min;
-    s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
-    if (max === r) h = ((g-b)/d + (g<b?6:0)) / 6;
-    else if (max === g) h = ((b-r)/d + 2) / 6;
-    else h = ((r-g)/d + 4) / 6;
-  }
-  return [h * 360, s, l];
-}
-
-// Inline _kmeansColors (same logic as artcolor.js)
-function _kmeansColorsTest(pixels, k, iters) {
-  const n = pixels.length >> 2;
-  if (n === 0 || k <= 0) return [];
-  const centers = [];
-  const fp = Math.floor(Math.random() * n) * 4;
-  centers.push([pixels[fp], pixels[fp+1], pixels[fp+2]]);
-  for (let c = 1; c < k; c++) {
-    const dists = new Float32Array(n); let total = 0;
-    for (let i = 0; i < n; i++) {
-      const pi = i*4; let minD2 = Infinity;
-      for (const ct of centers) {
-        const d=(pixels[pi]-ct[0])**2+(pixels[pi+1]-ct[1])**2+(pixels[pi+2]-ct[2])**2;
-        if (d < minD2) minD2 = d;
-      }
-      dists[i] = minD2; total += minD2;
-    }
-    let r2 = Math.random()*total, chosen = n-1;
-    for (let i = 0; i < n; i++) { r2 -= dists[i]; if (r2 <= 0) { chosen=i; break; } }
-    const cp = chosen*4; centers.push([pixels[cp], pixels[cp+1], pixels[cp+2]]);
-  }
-  const assign = new Int32Array(n);
-  for (let iter = 0; iter < iters; iter++) {
-    for (let i = 0; i < n; i++) {
-      const pi = i*4; let best=0, bestD=Infinity;
-      for (let c = 0; c < k; c++) {
-        const d=(pixels[pi]-centers[c][0])**2+(pixels[pi+1]-centers[c][1])**2+(pixels[pi+2]-centers[c][2])**2;
-        if (d < bestD) { bestD=d; best=c; }
-      }
-      assign[i] = best;
-    }
-    const acc = Array.from({length:k}, ()=>[0,0,0,0]);
-    for (let i = 0; i < n; i++) {
-      const pi=i*4, a=acc[assign[i]];
-      a[0]+=pixels[pi]; a[1]+=pixels[pi+1]; a[2]+=pixels[pi+2]; a[3]++;
-    }
-    for (let c = 0; c < k; c++) {
-      const a = acc[c];
-      if (a[3]>0) centers[c] = [a[0]/a[3]|0, a[1]/a[3]|0, a[2]/a[3]|0];
-    }
-  }
-  const sizes = new Int32Array(k);
-  for (let i = 0; i < n; i++) sizes[assign[i]]++;
-  return centers.map((ct,i) => {
-    const [,s] = _artRgbToHsl(ct[0],ct[1],ct[2]);
-    return { center:ct, size:sizes[i], score:(sizes[i]/n)*s };
-  }).sort((a,b) => b.score - a.score);
-}
-
-(function() {
-  // 2048 pure-red pixels + 2048 pure-blue pixels in flat RGBA
-  const px = new Uint8ClampedArray(4096 * 4);
-  for (let i = 0; i < 2048; i++) { px[i*4]=255; px[i*4+1]=0;   px[i*4+2]=0;   px[i*4+3]=255; }
-  for (let i = 2048; i < 4096; i++) { px[i*4]=0; px[i*4+1]=0; px[i*4+2]=255; px[i*4+3]=255; }
-
-  const res = _kmeansColorsTest(px, 2, 8);
-
-  assert(res.length === 2, '_kmeansColors: retourne k=2 clusters');
-  assert(res[0].score >= res[1].score, '_kmeansColors: trié score desc');
-  assert(res[0].size > 0 && res[1].size > 0, '_kmeansColors: clusters non vides');
-  assert(res[0].size + res[1].size === 4096, '_kmeansColors: tous pixels assignés');
-
-  // Les deux centres doivent être clairement rouge ou clairement bleu (tolérance ±40)
-  const ctrs = res.map(r => r.center);
-  const hasRed  = ctrs.some(c => c[0] > 200 && c[2] < 60);
-  const hasBlue = ctrs.some(c => c[2] > 200 && c[0] < 60);
-  assert(hasRed,  '_kmeansColors: identifie le cluster rouge');
-  assert(hasBlue, '_kmeansColors: identifie le cluster bleu');
-
-  // Edge case : pixels tous identiques → k clusters valides (centres ≈ égaux)
-  const mono = new Uint8ClampedArray(100 * 4);
-  for (let i = 0; i < 100; i++) { mono[i*4]=128; mono[i*4+1]=64; mono[i*4+2]=32; mono[i*4+3]=255; }
-  const monoRes = _kmeansColorsTest(mono, 5, 8);
-  assert(monoRes.length === 5, '_kmeansColors: edge case mono → k=5 clusters');
-  assert(monoRes.every(r => r.center.every(v => v >= 0 && v <= 255)),
-    '_kmeansColors: centres valides RGB 0-255 sur mono');
-}());
+// Tests run in the async IIFE below via real import from artcolor.js
 
 // =============================================================================
 // N+2. lf-toast-stack.logic — import-smoke (real ESM module surface verification)
@@ -1981,6 +1889,34 @@ section('components/lf-toast-stack.logic.js -- import-smoke');
   } catch (e) {
     _ko++;
     console.error('  ✗  relevanceScore import/test crashed:', e.message);
+  }
+
+  // artcolor.js — _kmeansColors (real import — avoids drift from inline duplicate)
+  section('artcolor.js -- _kmeansColors (import réel)');
+  try {
+    const { _kmeansColors } = await import('../src/artcolor.js');
+    // 2048 pure-red + 2048 pure-blue pixels
+    const px = new Uint8ClampedArray(4096 * 4);
+    for (let i = 0; i < 2048; i++) { px[i*4]=255; px[i*4+1]=0;   px[i*4+2]=0;   px[i*4+3]=255; }
+    for (let i = 2048; i < 4096; i++) { px[i*4]=0;   px[i*4+1]=0; px[i*4+2]=255; px[i*4+3]=255; }
+    const res = _kmeansColors(px, 2, 8);
+    assert(res.length === 2,                         '_kmeansColors: retourne k=2 clusters');
+    assert(res[0].score >= res[1].score,             '_kmeansColors: trié score desc');
+    assert(res[0].size > 0 && res[1].size > 0,       '_kmeansColors: clusters non vides');
+    assert(res[0].size + res[1].size === 4096,        '_kmeansColors: tous pixels assignés');
+    const ctrs = res.map(r => r.center);
+    assert(ctrs.some(c => c[0] > 200 && c[2] < 60), '_kmeansColors: identifie le cluster rouge');
+    assert(ctrs.some(c => c[2] > 200 && c[0] < 60), '_kmeansColors: identifie le cluster bleu');
+    // Edge case: all identical pixels
+    const mono = new Uint8ClampedArray(100 * 4);
+    for (let i = 0; i < 100; i++) { mono[i*4]=128; mono[i*4+1]=64; mono[i*4+2]=32; mono[i*4+3]=255; }
+    const monoRes = _kmeansColors(mono, 5, 8);
+    assert(monoRes.length === 5, '_kmeansColors: edge case mono → k=5 clusters');
+    assert(monoRes.every(r => r.center.every(v => v >= 0 && v <= 255)),
+      '_kmeansColors: centres valides RGB 0-255 sur mono');
+  } catch (e) {
+    _ko++;
+    console.error('  ✗  _kmeansColors import/test crashed:', e.message);
   }
 
   // WCAG 2.2 SC 2.5.7 — pure reorder helper moveByOne (alternative non-drag)

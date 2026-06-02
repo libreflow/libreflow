@@ -105,6 +105,12 @@ export function _showViewRaw(v) {
   const map = { welcome: 'vw', wlc: 'vw', scan: 'vscan', lib: 'vlib', stats: 'vstats', radio: 'vradio', 'now-playing': 'vnp' };
   const next = document.getElementById(map[v] || 'vlib');
   if (!next) return;
+  if (v === 'welcome' || v === 'wlc') {
+    document.querySelectorAll('.sb-nav .ni').forEach(b => {
+      b.classList.remove('on');
+      b.removeAttribute('aria-current');
+    });
+  }
 
   const prev = document.querySelector('.view.on');
   if (prev && prev !== next) {
@@ -116,14 +122,30 @@ export function _showViewRaw(v) {
     prev.style.inset         = '0';
     prev.style.pointerEvents = 'none';
     prev.style.zIndex        = '1';
-    viewExit(prev).then(() => { prev.style.cssText = ''; });
+    viewExit(prev).then(() => {
+      prev.style.display = '';
+      prev.style.position = '';
+      prev.style.inset = '';
+      prev.style.pointerEvents = '';
+      prev.style.zIndex = '';
+    });
+  }
+
+  // Clear stale exit-animation inline styles in case a prior viewExit on `next`
+  // was killed (e.g. double-click open→close) before its .then() cleanup fired.
+  if (prev && prev !== next) {
+    next.style.display       = '';
+    next.style.position      = '';
+    next.style.inset         = '';
+    next.style.pointerEvents = '';
+    next.style.zIndex        = '';
   }
 
   next.classList.add('on');
   // Only animate if actually switching to a different view element.
   // Albums/artists/genres/playlists all map to #vlib — no animation needed
   // when the element is already visible (would flash opacity on live content).
-  if (!prev || prev !== next) viewEnter(next);
+  if (prev && prev !== next) viewEnter(next); // skip on boot (prev=null) to avoid opacity flash
 }
 
 export function showView(v) {

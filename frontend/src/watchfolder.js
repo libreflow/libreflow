@@ -183,7 +183,7 @@ export async function toggleWatchFolder() {
     return;
   }
   if (!result?.folder) { updateWatchUI(); return; }
-  if (!_isValidFolderPath(result.folder)) {
+  if (!isSafePath(result.folder)) {
     console.warn('[watchfolder] Chemin de dossier invalide rejeté :', result.folder);
     return;
   }

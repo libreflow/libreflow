@@ -81,6 +81,16 @@ import { getFiltered, invalidateFilterCache }                  from './search.js
 // ── Module state ──────────────────────────────────────────────────────────
 let _registered = false;  // Guard against double-registration during HMR
 
+// ── Burger menu ─────────────────────────────────────────────────────────────
+function _burgerOutside(e) {
+  const panel = document.getElementById('tb-burger-panel');
+  if (!panel?.classList.contains('on')) return;
+  const btn = document.getElementById('tbt-burger');
+  if (!panel.contains(e.target) && !btn?.contains(e.target)) {
+    panel.classList.remove('on');
+    btn?.setAttribute('aria-expanded', 'false');
+  }
+}
 import { closePlModal, clearPlCover,
          confirmPlaylistModal, onPlCoverSelected,
          openNewPlaylistModal, openRenamePlaylistModal,
@@ -345,6 +355,13 @@ const _ACTIONS = {
   'clear-filters':         ()   => clearAllFilters(),
 
   // ── Misc (app.js) ─────────────────────────────────────────
+  'toggle-burger-menu': () => {
+    const panel = document.getElementById('tb-burger-panel');
+    const btn   = document.getElementById('tbt-burger');
+    const open  = panel?.classList.contains('on');
+    panel?.classList.toggle('on', !open);
+    btn?.setAttribute('aria-expanded', String(!open));
+  },
   // UX-Ergo : 'open-settings' devient un toggle — re-presser le bouton ferme le panneau.
   // Le nom data-action est conservé pour la compatibilité HTML existante.
   'open-settings':         ()    => toggleSettings(),
@@ -690,6 +707,7 @@ export function registerHandlers() {
   _registered = true;
   const ac = new AbortController();
   const { signal } = ac;
+  document.addEventListener('click',       _burgerOutside,       { capture: true, signal });
   document.addEventListener('click',       _handleClick,        { signal });
   document.addEventListener('click',       _handleBackdropClick, { signal });
   document.addEventListener('input',       _handleInput,        { signal });

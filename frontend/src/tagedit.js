@@ -222,7 +222,7 @@ export async function saveTagEdit(trackId) {
       year:        year   || null,
       track_number: track || null,
     },
-  }).then(() => null).catch(err => String(err));
+  }, { timeout: 15000 }).then(() => null).catch(err => String(err));
 
   // Invalider le cache et re-render complet (plus fiable que outerHTML sur un élément virtualisé)
   invalidateFilterCache(); emit(EVENTS.FILTER_CHANGED, {});

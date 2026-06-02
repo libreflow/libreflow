@@ -230,7 +230,7 @@ export function ctxCopyInfo() {
     ? `${t.artist} — ${t.name}` : t.name;
   navigator.clipboard.writeText(text)
     .then(()  => toast(i18n('t_ctx_copied'), 'success'))
-    .catch(()  => {});
+    .catch(e  => console.warn('[ctxmenu] clipboard write failed:', e));
 }
 
 export function ctxEditTags() {

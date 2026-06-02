@@ -209,7 +209,7 @@ export async function importM3U() {
 
       if (!matchedIds.length) { toast(i18n('t_m3u_no_tracks'), 'warning'); return; }
 
-      const plName = file.name.replace(/\.m3u8?$/i, '').replace(/[-_]+/g, ' ').trim() || 'Playlist importée';
+      const plName = file.name.replace(/\.m3u8?$/i, '').replace(/[-_]+/g, ' ').trim().slice(0, 100) || 'Playlist importée';
       // B17 FIX : suffixe aléatoire — 2 imports M3U dans la même milliseconde
       // produiraient le même id 'pl_<ts>' → le 2e put écraserait le 1er en IDB.
       const newPl  = { id: 'pl_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7), name: plName, trackIds: matchedIds };

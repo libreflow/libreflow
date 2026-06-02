@@ -216,11 +216,13 @@ export function closeSettings() {
   const trigger = $id('tbt-settings');
   trigger?.classList.remove('active');
   trigger?.setAttribute('aria-expanded', 'false');
-  panelClose(box).then(() => {
+  const _doClose = () => {
     panel.classList.remove('on');
     // A11Y-05: restaurer le focus à l'élément déclencheur après la fermeture de l'animation
     if (_settingsTrigger) { _settingsTrigger.focus(); _settingsTrigger = null; }
-  });
+  };
+  if (!box) { _doClose(); return; }
+  panelClose(box).then(_doClose);
 }
 
 // BUG-AUDIT HIGH : listeners document/window encapsulés dans initSettingsListeners()

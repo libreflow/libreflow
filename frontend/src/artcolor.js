@@ -82,17 +82,8 @@ export function sampleArtColors(img, size) {
   } catch(e) { console.warn('[artcolor] sampleArtColors failed:', e); return null; }
 }
 
-/**
- * K-means++ colour clustering on a flat RGBA pixel buffer.
- * Pure function — no DOM. Exported for testability.
- * @param {Uint8ClampedArray} pixels - flat RGBA buffer
- * @param {number} k     - clusters (default 5)
- * @param {number} iters - EM iterations (default 8)
- * @returns {{ center:[r,g,b], size:number, score:number }[]} sorted by score desc
- */
-export function _kmeansColors(pixels, k = 5, iters = 8) {
-  const n = pixels.length >> 2;
-  if (n === 0 || k <= 0) return [];
+/** k-means++ initialisation: selects k diverse seed centers from the pixel buffer. */
+function _kmeansInitCenters(pixels, n, k) {
   const centers = [];
   const fp = Math.floor(Math.random() * n) * 4;
   centers.push([pixels[fp], pixels[fp+1], pixels[fp+2]]);
@@ -115,6 +106,21 @@ export function _kmeansColors(pixels, k = 5, iters = 8) {
     for (let i = 0; i < n; i++) { r2 -= dists[i]; if (r2 <= 0) { chosen = i; break; } }
     const cp = chosen * 4; centers.push([pixels[cp], pixels[cp+1], pixels[cp+2]]);
   }
+  return centers;
+}
+
+/**
+ * K-means++ colour clustering on a flat RGBA pixel buffer.
+ * Pure function — no DOM. Exported for testability.
+ * @param {Uint8ClampedArray} pixels - flat RGBA buffer
+ * @param {number} k     - clusters (default 5)
+ * @param {number} iters - EM iterations (default 8)
+ * @returns {{ center:[r,g,b], size:number, score:number }[]} sorted by score desc
+ */
+export function _kmeansColors(pixels, k = 5, iters = 8) {
+  const n = pixels.length >> 2;
+  if (n === 0 || k <= 0) return [];
+  const centers = _kmeansInitCenters(pixels, n, k);
   const assign = new Int32Array(n);
   for (let iter = 0; iter < iters; iter++) {
     for (let i = 0; i < n; i++) {
@@ -133,9 +139,10 @@ export function _kmeansColors(pixels, k = 5, iters = 8) {
     for (let c = 0; c < k; c++) {
       const a = acc[c];
       if (a[3] > 0) { centers[c] = [a[0]/a[3]|0, a[1]/a[3]|0, a[2]/a[3]|0]; continue; }
-      // empty cluster — reinitialize to a pixel from the largest cluster
+      // empty cluster — reinitialize to a pixel from the largest non-empty cluster
       let bigC = 0;
       for (let j = 1; j < k; j++) { if (acc[j][3] > acc[bigC][3]) bigC = j; }
+      if (acc[bigC][3] === 0) continue; // all clusters empty (degenerate case)
       for (let i = 0; i < n; i++) {
         if (assign[i] === bigC) { const pi=i*4; centers[c]=[pixels[pi],pixels[pi+1],pixels[pi+2]]; break; }
       }

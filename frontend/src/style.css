@@ -28,7 +28,7 @@
   position: fixed;
   top: -100%;
   left: 6px;
-  z-index: 9999;
+  z-index: var(--z-tooltip);
   padding: 8px 16px;
   background: var(--g);
   color: var(--text-on-accent);
@@ -64,7 +64,7 @@
   gap: 16px;
   background: var(--bg);
   color: var(--t2);
-  z-index: 99999;
+  z-index: calc(var(--z-tooltip) + 1);
   font-size: 13px;
   letter-spacing: .04em;
 }
