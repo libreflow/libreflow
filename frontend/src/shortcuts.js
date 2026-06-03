@@ -122,15 +122,24 @@ export function initShortcuts({ updateVolSlider, closeModal, cycleSpeed }) {
     // coréen) — sinon une séquence de composition peut déclencher un raccourci.
     if (e.isComposing) return;
 
+    // BUG H-02 : Escape doit fermer le panneau Paramètres même quand il est ouvert.
+    // On traite ce cas AVANT le guard _anyModalOpen pour éviter que la vérification
+    // `settings-panel.on` ne court-circuite la branche Escape ci-dessous.
+    if (e.code === 'Escape' && document.getElementById('settings-panel')?.classList.contains('on')) {
+      closeSettings();
+      return;
+    }
+
     // A11Y : tout backdrop de modale visible (id se terminant par "modal-bg")
     // capture les raccourcis globaux — couvre modal/pl/confirm/organize/usb/cd/
     // batch-tag sans énumération fragile. NB : suffixe sans tiret pour aussi
     // matcher le backdrop générique #modal-bg (pas seulement #*-modal-bg).
+    // BUG X-10 fix : #ctx-menu n'a pas de classe CSS "ctx-menu" — utiliser
+    // getElementById + classList.contains pour la détection correcte.
     const _anyModalOpen =
       document.querySelector('[id$="modal-bg"].on') !== null ||
-      document.getElementById('settings-panel')?.classList.contains('on') ||
       document.querySelector('.orphan-modal-bg.on') !== null ||
-      document.querySelector('.ctx-menu.on') !== null;
+      document.getElementById('ctx-menu')?.classList.contains('on') === true;
     if (_anyModalOpen) return;
 
     // Bloquer tous les raccourcis pendant l'édition inline de métadonnées
@@ -223,7 +232,6 @@ export function initShortcuts({ updateVolSlider, closeModal, cycleSpeed }) {
       if (document.getElementById('ctx-menu')?.classList.contains('on'))         { closeCtxMenu(); return; }
       if (eqOpen)     { closeEQ(); return; }
       if (queueOpen)  { closeQueue(); return; }
-      if (document.getElementById('settings-panel')?.classList.contains('on'))   { closeSettings(); return; }
 
       const srch = document.getElementById('srch');
       if (srch?.value) {
