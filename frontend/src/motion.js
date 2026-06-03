@@ -198,8 +198,8 @@ export function panelOpen(el) {
   // laisse par panelClose (stale) et anime de 0→0, rendant le panneau invisible.
   if (prefersReducedMotion()) return gsap.set(el, { opacity: 1, clearProps: 'transform' });
   return gsap.fromTo(el,
-    { opacity: 0, y: 12, scale: 0.97 },
-    { opacity: 1, y: 0, scale: 1, duration: 0.26, ease: eases.PREMIUM, clearProps: 'transform' });
+    { opacity: 0, y: 6 },
+    { opacity: 1, y: 0, duration: 0.24, ease: eases.PREMIUM, clearProps: 'transform' });
 }
 
 /**
@@ -209,7 +209,7 @@ export function panelOpen(el) {
 export function panelClose(el) {
   kill(el);
   if (prefersReducedMotion()) return gsap.to(el, { opacity: 0, duration: 0 });
-  return gsap.to(el, { opacity: 0, y: 8, scale: 0.97, duration: 0.16, ease: 'power2.in' });
+  return gsap.to(el, { opacity: 0, y: 4, duration: 0.16, ease: 'power2.in' });
 }
 
 /**
@@ -218,8 +218,8 @@ export function panelClose(el) {
  */
 export function modalOpen(el) {
   kill(el);
-  if (prefersReducedMotion()) return gsap.set(el, { opacity: 1, clearProps: 'transform' });
-  return gsap.from(el, { opacity: 0, scale: 0.94, duration: 0.28, ease: eases.PREMIUM, clearProps: 'transform,opacity' });
+  if (prefersReducedMotion()) return gsap.set(el, { opacity: 1 });
+  return gsap.from(el, { opacity: 0, duration: 0.22, ease: eases.PREMIUM, clearProps: 'opacity' });
 }
 
 /**
@@ -229,7 +229,7 @@ export function modalOpen(el) {
 export function modalClose(el) {
   kill(el);
   if (prefersReducedMotion()) return gsap.to(el, { opacity: 0, duration: 0 });
-  return gsap.to(el, { opacity: 0, scale: 0.96, duration: 0.16, ease: 'power2.in' });
+  return gsap.to(el, { opacity: 0, duration: 0.16, ease: 'power2.in' });
 }
 
 // ── Player presets ────────────────────────────────────────────────────────────
