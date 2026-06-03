@@ -824,9 +824,9 @@ export function initCrossfadeAudio() {
     try {
       audioNextSource = eqCtx.createMediaElementSource(audioNext);
       audioNextRgGain = eqCtx.createGain();
-      audioNextRgGain.gain.value = 1.0; // neutre par défaut
+      audioNextRgGain.gain.setValueAtTime(1.0, 0); // neutre par défaut — §9: no direct .value=
       audioNextGain   = eqCtx.createGain();
-      audioNextGain.gain.value = 0;     // muet au départ — sera 0→1 pendant le fondu
+      audioNextGain.gain.setValueAtTime(0, 0);     // muet au départ — sera 0→1 pendant le fondu — §9: no direct .value=
       // @ts-ignore — audioNextSource just assigned above, guaranteed non-null here
       audioNextSource.connect(audioNextRgGain);
       audioNextRgGain.connect(audioNextGain);
@@ -875,7 +875,6 @@ export function clearCrossfadeTimers() {
     // @ts-ignore — vol is an input[type=range] with .value property
     setMasterGain(vel ? parseFloat(vel.value) : (masterGainNode ? masterGainNode.gain.value : 1));
   }
-  if (audioNextGain && !eqCtx) audioNextGain.gain.value = 0;
   if (audioNext) { audioNext.pause(); audioNext.src = ''; }
   try { audioNextSource?.disconnect(); } catch {}
   try { audioNextGain?.disconnect(); } catch {}
