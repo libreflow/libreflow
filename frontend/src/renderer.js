@@ -1228,7 +1228,7 @@ export function updateStats() {
   const sbEl = document.getElementById('sb-stats');
   if (!sbEl) return;
   if (tracks.length === 0) {
-    sbEl.innerHTML = `<span class="sb-empty-msg"><svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>${i18n('sb_empty')}</span>`;
+    sbEl.innerHTML = `<span class="sb-empty-msg"><svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>${esc(i18n('sb_empty'))}</span>`;
     return;
   }
   // BUG-7 FIX: exclure l'entrée clé-vide (pistes sans tag artiste) du compte sidebar
@@ -1276,7 +1276,7 @@ export function updateSidebarCounts() {
     'ni-liked':     liked ? liked.size : 0,
     'ni-recent':    recent.length,
     'ni-playlists': playlists.length,
-    'ni-artists':   tracks.length ? _getArtistMap().length : 0,
+    'ni-artists':   tracks.length ? _getArtistMap().filter(a => a.key).length : 0,
     'ni-albums':    tracks.length ? _getAlbumMap().length  : 0,
   };
   for (const [id, n] of Object.entries(counts)) {
