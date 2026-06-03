@@ -1,5 +1,5 @@
 // LibreFlow — modal.js
-// Gestion de la modale générique (#modal-bg) : ouverture, focus trap, fermeture.
+// Gestion des focus traps pour les modales : ouverture, focus trap, fermeture.
 // Extrait de app.js (CQ-2 — réduction du module god).
 //
 // A11Y-SERIOUS (audit 2026-05-19) : exposition de trapFocus()/releaseFocus()
@@ -8,17 +8,12 @@
 // playlist, et settings.
 //
 // Exports publics :
-//   confirmClear()              — ouvre la modale "vider la bibliothèque"
-//   closeModal()                — ferme la modale avec animation + restaure focus
+//   confirmClear()              — ouvre la modale "vider la bibliothèque" (<lf-modal>)
+//   closeModal()                — ferme la modale (<lf-modal>)
 //   trapFocus(dialogEl, opts)   — installe un trap Tab+Shift+Tab dans dialogEl
 //   releaseFocus(dialogEl)      — retire le trap et restaure le focus
 
-import { modalOpen, modalClose } from './motion.js';
 import { get } from './store.js';
-
-// ── État interne ──────────────────────────────────────────────────────────────
-let _modalPrevFocus = null;
-let _modalFocusTrap = null;
 
 // Map dialog element → { handler, prevFocus } — un trap par dialogue ouvert.
 // Permet d'avoir plusieurs `[role="dialog"]` simultanés sans collision
@@ -27,21 +22,6 @@ let _modalFocusTrap = null;
 const _trapRegistry = new WeakMap();
 
 export const FOCUSABLE_SEL = 'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
-
-function _buildModalFocusTrap(dialogEl) {
-  return function (e) {
-    if (e.key !== 'Tab') return;
-    const els = [...dialogEl.querySelectorAll(FOCUSABLE_SEL)]
-      .filter(el => el.offsetWidth > 0 || el.offsetHeight > 0);
-    if (!els.length) return;
-    const first = els[0], last = els[els.length - 1];
-    if (e.shiftKey && document.activeElement === first) {
-      e.preventDefault(); last.focus();
-    } else if (!e.shiftKey && document.activeElement === last) {
-      e.preventDefault(); first.focus();
-    }
-  };
-}
 
 /**
  * Installe un focus trap sur n'importe quel `[role="dialog"]` ouvert.
@@ -55,7 +35,18 @@ function _buildModalFocusTrap(dialogEl) {
 export function trapFocus(dialogEl, opts = {}) {
   if (!dialogEl || _trapRegistry.has(dialogEl)) return;
   const prevFocus = /** @type {HTMLElement|null} */ (document.activeElement);
-  const handler   = _buildModalFocusTrap(dialogEl);
+  const handler = function (e) {
+    if (e.key !== 'Tab') return;
+    const els = [...dialogEl.querySelectorAll(FOCUSABLE_SEL)]
+      .filter(el => el.offsetWidth > 0 || el.offsetHeight > 0);
+    if (!els.length) return;
+    const first = els[0], last = els[els.length - 1];
+    if (e.shiftKey && document.activeElement === first) {
+      e.preventDefault(); last.focus();
+    } else if (!e.shiftKey && document.activeElement === last) {
+      e.preventDefault(); first.focus();
+    }
+  };
   dialogEl.addEventListener('keydown', handler);
   _trapRegistry.set(dialogEl, { handler, prevFocus });
   // Focus initial — un microtask delay évite que l'ouverture par clic vole le focus immédiatement.
@@ -88,8 +79,8 @@ export function releaseFocus(dialogEl) {
 // automatiquement le focus trap sur le `[role="dialog"]` enfant quand la classe
 // `.on` est ajoutée — le retire quand elle disparaît. Couvre confirm, organize,
 // USB, CD, batch-tag, smart-pl, playlist, settings sans toucher à chaque module.
-// La modale principale #modal continue d'utiliser confirmClear()/closeModal()
-// pour préserver le comportement existant (sauvegarde locale du prev focus).
+// La modale "vider la bibliothèque" utilise désormais <lf-modal id="clear-modal">
+// qui gère le focus trap en interne.
 let _autoTrapInstalled = false;
 
 /** Initialise l'observateur global. Idempotent — appelé une fois au boot. */
@@ -130,38 +121,12 @@ export function installAutoFocusTrap() {
  */
 export function confirmClear() {
   if (!get('tracks').length) return;
-  _modalPrevFocus = document.activeElement;
-  document.getElementById('modal-bg').classList.add('on');
-  const modal = document.getElementById('modal');
-  if (!modal) return;
-  // Toujours nettoyer un trap résiduel avant d'en installer un nouveau (anti-leak).
-  if (_modalFocusTrap) {
-    modal.removeEventListener('keydown', _modalFocusTrap);
-    _modalFocusTrap = null;
-  }
-  _modalFocusTrap = _buildModalFocusTrap(modal);
-  modal.addEventListener('keydown', _modalFocusTrap);
-  modalOpen(modal);
-  setTimeout(() => modal.querySelector('.mbtn.cancel')?.focus(), 50);
+  /** @type {any} */ (document.getElementById('clear-modal'))?.open();
 }
 
 /**
- * Ferme la modale générique (#modal-bg) avec animation CSS,
- * supprime le focus trap et restaure le focus au déclencheur.
+ * Ferme la modale <lf-modal id="clear-modal">.
  */
 export function closeModal() {
-  const bg = document.getElementById('modal-bg');
-  if (!bg) return; // W9 FIX : guard contre l'absence du DOM element
-  const modal = document.getElementById('modal');
-  if (modal && _modalFocusTrap) {
-    modal.removeEventListener('keydown', _modalFocusTrap);
-    _modalFocusTrap = null;
-  }
-  const _doClose = () => {
-    bg.classList.remove('on');
-    _modalPrevFocus?.focus();
-    _modalPrevFocus = null;
-  };
-  if (modal) modalClose(modal).then(_doClose);
-  else _doClose();
+  /** @type {any} */ (document.getElementById('clear-modal'))?.close();
 }

@@ -367,17 +367,14 @@
 <audio id="audio" crossorigin="anonymous"></audio>
 
 <!-- CLEAR CONFIRM MODAL -->
-<div id="modal-bg" data-backdrop-action="close-modal">
-  <div id="modal" role="dialog" aria-modal="true" aria-labelledby="modal-heading">
-    <div class="modal-ico" aria-hidden="true">🗑️</div>
-    <div class="modal-h" id="modal-heading">Vider la bibliothèque ?</div>
-    <div class="modal-s">Tous les titres importés, les pochettes et les favoris seront supprimés.<br>Tes fichiers audio sur le disque ne seront <strong>pas</strong> affectés.</div>
-    <div class="modal-btns">
-      <button class="mbtn cancel" data-action="close-modal">Annuler</button>
-      <button class="mbtn danger" data-action="clear-library">Vider quand même</button>
-    </div>
+<lf-modal id="clear-modal" label="Vider la bibliothèque">
+  <div class="modal-h" data-i18n="clear_h"></div>
+  <div class="modal-s" data-i18n-html="clear_body"></div>
+  <div class="modal-btns">
+    <button class="mbtn cancel" data-action="close-modal" data-i18n="pl_cancel"></button>
+    <button class="mbtn confirm" data-action="confirm-clear" data-i18n="clear_confirm"></button>
   </div>
-</div>
+</lf-modal>
 
 <!-- CONFIRM ACTION MODAL — générique, piloté par confirmAction() -->
 <div id="confirm-modal-bg" data-backdrop-action="confirm-resolve-no">

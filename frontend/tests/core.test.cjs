@@ -1951,6 +1951,29 @@ section('components/lf-toast-stack.logic.js -- import-smoke');
   // Token single-source guard (§17)
   await require('./token-source.test.cjs').run();
 
+  // lf-modal reducer (Phase 1)
+  section('components/lf-modal.logic.js -- modalReducer');
+  try {
+    const mod = await import('../src/components/lf-modal.logic.js');
+    assert(typeof mod.modalReducer === 'function', 'real module: modalReducer exported');
+
+    const s0 = { isOpen: false };
+    let s = mod.modalReducer(s0, { type: 'open' });
+    assert(s.isOpen === true, 'open sets isOpen true');
+
+    s = mod.modalReducer(s, { type: 'close' });
+    assert(s.isOpen === false, 'close sets isOpen false');
+
+    s = mod.modalReducer(s0, { type: 'unknown' });
+    assert(s.isOpen === false, 'unknown action is no-op');
+
+    s = mod.modalReducer({ isOpen: true }, { type: 'open' });
+    assert(s.isOpen === true, 'open on already-open preserves state');
+  } catch (e) {
+    console.error('  KO  lf-modal import/test crashed:', e.message);
+    _ko++;
+  }
+
   // -- Résultat -----------------------------------------------------------
   console.log('\n═══════════════════════════════════════════════════════════');
   console.log(`  Total : ${_ok + _ko}   OK: ${_ok}   KO: ${_ko}`);

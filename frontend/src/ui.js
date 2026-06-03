@@ -18,6 +18,7 @@
 // dans frontend/src/components/lf-toast-stack.{js,logic.js}. ui.js délègue.
 
 import './components/lf-toast-stack.js';
+import './components/lf-modal.js';
 import { modalOpen, modalClose } from './motion.js';
 import { esc } from './utils.js';
 import { liveAnnounce } from './a11y.js';
