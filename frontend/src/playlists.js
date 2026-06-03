@@ -1,11 +1,11 @@
 // LibreFlow — playlists.js
 // CRUD playlists, navigation hero, drag-drop, dossiers, covers, modals.
 // Extrait de app.js (Jalon 5 — Session 143).
+// Refactorisé : CRUD → playlist-crud.js, nav sidebar → playlist-nav.js.
 //
 // Dépendances :
 //   store.js  : get, set
 //   bus.js    : emit, EVENTS
-//   db.js     : DB
 //   i18n.js   : i18n
 //   utils.js  : esc
 //   ui.js     : toast, toastWithAction, confirmAction
@@ -13,12 +13,11 @@
 //   smartplaylist.js: openSmartPlaylistModal, switchPlTab
 //   selection.js    : clearSelection
 //   search.js       : invalidateFilterCache
-//
-//   ARCH-1: saveCfg (cfgsave.js), playPlaylistFrom/shufflePlaylist/playPlaylistDirect
-//           moved INTO playlists.js — no more app.js circular dep.
+//   playlist-crud.js: play helpers, CRUD, persistance
+//   playlist-nav.js : rendu sidebar nav + drag sidebar
 //
 // Exports publics :
-//   savePlaylists, renderPlNav, setupPlNavDrop
+//   savePlaylists, renderPlNav, setupPlNavDrop (re-exported)
 //   renderPlHero, setPlSort, setPlModalMode
 //   openNewPlaylistModal, openRenamePlaylistModal, closePlModal, confirmPlaylistModal
 //   deletePlaylist, addTrackToPlaylist, removeTrackFromPlaylist
@@ -27,87 +26,42 @@
 //   onTrackDragStart, onPlNavDragStart
 //   togglePinPlaylist, movePlToFolder, removePlFromFolder
 //   togglePlFolder, showPlFolderCtxMenu, renamePlFolder, deletePlFolder
-//   onPlFolderDragOver, onPlFolderDragLeave, onPlFolderDrop
 //   onPlCoverSelected, clearPlCover
 //   trapFocus
 
 import { modalOpen, modalClose } from './motion.js';
-import { esc, moveByOne }       from './utils.js';
+import { esc }                   from './utils.js';
 import { i18n }                  from './i18n.js';
 import { get, set, notify }      from './store.js';
 import { emit, EVENTS }          from './bus.js';
-import { DB }                    from './db.js';
-import { toast, toastWithAction, confirmAction, promptAction } from './ui.js';
+import { toast }                 from './ui.js';
 import { closeCtxMenu }          from './ctxmenu.js';
 import { openSmartPlaylistModal, switchPlTab } from './smartplaylist.js';
 import { clearSelection }        from './selection.js';
-import { invalidateFilterCache, getFiltered } from './search.js';
-import { invalidateGenreGridSig }              from './genres.js';
-import { saveCfg }                             from './cfgsave.js';
-import { FOCUSABLE_SEL }                       from './modal.js';
-import { setView }                             from './views.js';
-import { renderPlaylistsGrid }                 from './renderer.js';
-import { playAt, buildQ }                      from './player.js';
-import { _allPlayerUI }                        from './allplayerui.js';
+import { invalidateFilterCache } from './search.js';
+import { FOCUSABLE_SEL }         from './modal.js';
+import { setView }               from './views.js';
 
-// ── Inline helper (mirrors app.js:invalidateFilter — ARCH-1) ──────────────────
-function invalidateFilter() {
-  invalidateFilterCache();
-  invalidateGenreGridSig();
-  emit(EVENTS.FILTER_CHANGED, {});
-}
-
-// ── Play helpers (moved from app.js — ARCH-1) ─────────────────────────────────
-
-export function playPlaylistFrom(fi) {
-  if (get('query')) {
-    set('query', '');
-    invalidateFilter();
-    const el = document.getElementById('srch');
-    if (el) el.value = '';
-    const clr = document.getElementById('srch-clear');
-    if (clr) clr.style.display = 'none';
-  }
-  const fl = getFiltered();
-  if (!fl.length) return;
-  playAt(Math.min(fi, fl.length - 1));
-}
-
-export function playPlaylistDirect(plId, event) {
-  if (event) event.stopPropagation();
-  const navBtn = document.getElementById('ni-pl-' + plId);
-  setView('playlist', navBtn, plId);
-  requestAnimationFrame(() => playPlaylistFrom(0));
-}
-
-export async function shufflePlaylist() {
-  const fl = getFiltered();
-  if (!fl.length) return;
-  const ri = Math.floor(Math.random() * fl.length);
-  await playAt(ri);
-  set('shuffle', true); // app.js subscribe keeps its local var in sync
-  const _shufBtn = document.getElementById('pc-shuf');
-  _shufBtn?.classList.add('on');
-  _shufBtn?.setAttribute('aria-pressed', 'true');
-  const _cinShufBtn = document.getElementById('cinema-shuf');
-  _cinShufBtn?.classList.add('on');
-  _cinShufBtn?.setAttribute('aria-pressed', 'true');
-  buildQ();
-  _allPlayerUI();
-}
+import { savePlaylists, deletePlaylist, addTrackToPlaylist,
+         removeTrackFromPlaylist, togglePinPlaylist, movePlToFolder,
+         removePlFromFolder, movePlaylist, movePlaylistTrack,
+         playPlaylistFrom, playPlaylistDirect,
+         shufflePlaylist }                    from './playlist-crud.js';
+import { renderPlNav, setupPlNavDrop, onPlNavDragStart,
+         renamePlFolder, deletePlFolder, togglePlFolder,
+         showPlFolderCtxMenu, _plNavInlineRename,
+         setNavDragTrackId }                  from './playlist-nav.js';
 
 // ── État local du module ──────────────────────────────────────────────────────
 let plModalMode       = 'new';  // 'new' | 'rename'
 let _pqpTrackId       = null;   // track en cours dans le quick-pop ajout playlist
 let _dragTrackId      = null;   // track en cours de drag (sidebar + reorder)
-let _dragPlId         = null;   // playlist en cours de drag (sidebar réorganisation)
 let _plCtxClose       = null;   // listener mousedown pour fermer le ctx-menu playlist
 let _plCtxEscClose    = null;   // listener keydown Escape pour fermer le ctx-menu playlist
 let _plModalPrevFocus = null;   // focus à restaurer après fermeture du modal
 let _plModalFocusTrap = null;   // keydown handler Tab-trap dans #pl-modal
 let _plModalCoverB64  = null;   // cover en cours d'édition dans le modal
 let _plModalBusy      = false;  // guard anti double-submit confirmPlaylistModal
-let _plNavDropInit    = false;  // setupPlNavDrop one-shot (flag module vs DOM node)
 let _heroMosaicGen    = 0;      // B19 : token anti-race pour les img.onload du hero-mosaic
 
 /** Setter pour smartplaylist.js (window.setPlModalMode). */
@@ -136,25 +90,6 @@ function _attachPlCtxClose(menu) {
     document.addEventListener('mousedown', mdHandler,  true);
     document.addEventListener('keydown',   escHandler, true);
   }, 0);
-}
-
-// ══ Persistance ══════════════════════════════════════════════════════════════
-
-export async function savePlaylists() {
-  const playlists = get('playlists');
-  notify('playlists'); emit(EVENTS.PLAYLIST_CHANGED, { playlists }); // BUG-M4 FIX : mutation in-place → notify() (set() ignore same-ref)
-  try {
-    // Transaction atomique : clear + écriture en un seul commit
-    // Évite la perte de données si l'app crashe entre clear() et les dput() individuels
-    const transaction = DB.transaction('playlists', 'readwrite');
-    const store = transaction.objectStore('playlists');
-    store.clear();
-    for (const pl of playlists) store.put(pl);
-    await new Promise((ok, fail) => {
-      transaction.oncomplete = ok;
-      transaction.onerror   = () => fail(transaction.error);
-    });
-  } catch(e) { console.warn('[savePlaylists]', e); }
 }
 
 // ══ Focus trap (WCAG 2.1.2) ══════════════════════════════════════════════════
@@ -303,10 +238,10 @@ function _drawHeroMosaic(fl) {
       if (_heroMosaicGen !== _myGen) return; // B19 FIX : playlist changée entre-temps
       const cv = document.getElementById('pl-hero-mosaic');
       if (!cv) return;
-      const c = cv.getContext('2d');
-      if (!c) return;
-      c.fillStyle = '#1a1a2a';
-      c.fillRect(px, py, 100, 100);
+      const c2 = cv.getContext('2d');
+      if (!c2) return;
+      c2.fillStyle = '#1a1a2a';
+      c2.fillRect(px, py, 100, 100);
     };
     img.src = toLoad[i];
   }
@@ -370,304 +305,6 @@ export function _plHeroInlineRename(plId) {
   el.addEventListener('keydown', onKey);
   el.addEventListener('blur', finish, { once: true });
 }
-
-/**
- * S92 — Renommage inline dans la sidebar (double-clic sur .pl-name).
- */
-export function _plNavInlineRename(plId, spanEl) {
-  const pl = get('playlists').find(p => p.id === plId);
-  if (!pl || spanEl.contentEditable === 'true') return;
-  const orig = pl.name;
-  spanEl.contentEditable = 'true';
-  spanEl.setAttribute('spellcheck', 'false');
-  spanEl.focus();
-  const range = document.createRange();
-  range.selectNodeContents(spanEl);
-  const sel = window.getSelection();
-  sel.removeAllRanges(); sel.addRange(range);
-
-  // FIX 1 — bloquer la propagation des clics vers le <button> parent pendant l'édition
-  // (sinon chaque clic de positionnement du curseur déclenche setView → rerender → perte de l'édition)
-  const blockClick = e => e.stopPropagation();
-  spanEl.addEventListener('click', blockClick);
-
-  const _cleanup = () => {
-    spanEl.removeEventListener('click', blockClick);
-    spanEl.removeEventListener('keydown', onKey);
-  };
-
-  const finish = async () => {
-    if (spanEl.contentEditable !== 'true') return;
-    _cleanup();
-    spanEl.contentEditable = 'false';
-    const newName = spanEl.textContent.trim();
-    if (newName && newName !== orig) {
-      pl.name = newName;
-      await savePlaylists();
-      renderPlNav();
-      const curPlId = get('curPlId');
-      if (get('view') === 'playlist' && curPlId === plId) {
-        const heroName = document.getElementById('pl-hero-name');
-        if (heroName) heroName.textContent = newName;
-        const vht = document.getElementById('vhtitle');
-        if (vht) vht.textContent = newName;
-      }
-      toast(i18n('t_pl_renamed', newName), 'success');
-    } else {
-      spanEl.textContent = orig;
-    }
-  };
-  const onKey = (e) => {
-    if (e.key === 'Enter') { e.preventDefault(); spanEl.blur(); }
-    if (e.key === 'Escape') {
-      _cleanup();
-      spanEl.removeEventListener('blur', finish);
-      spanEl.contentEditable = 'false'; spanEl.textContent = orig;
-      spanEl.blur(); // FIX 3 — libérer le focus explicitement
-    }
-  };
-  spanEl.addEventListener('keydown', onKey);
-  spanEl.addEventListener('blur', finish, { once: true });
-}
-
-// ── S91 — Vague A : rendu sectionné (Pinned / Récentes / Dossiers / Autres) ──
-function _plNavItemHTML(pl) {
-  const count    = pl.trackIds ? pl.trackIds.length : 0;
-  const isSmart  = !!pl.smart;
-  const view     = get('view');
-  const curPlId  = get('curPlId');
-  const isActive = view === 'playlist' && curPlId === pl.id;
-  const isPinned = !!pl.pinned;
-  return `
-  <button class="ni ni-pl${isActive?' on':''}${isSmart?' smart':''}${pl.coverB64?' has-cover':''}${isPinned?' pinned':''}"
-    id="ni-pl-${pl.id}" data-action="set-view" data-view="playlist" data-pl-id="${pl.id}"
-    draggable="true" data-pl-drag-id="${pl.id}"
-    data-pl-ctx-id="${pl.id}">
-    <span class="pl-icon">
-      ${pl.coverB64
-        ? `<img src="${esc(pl.coverB64)}" alt="" class="pl-cover-img">`
-        : (isSmart
-          ? `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>`
-          : `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>`)
-      }
-    </span>
-    <span class="pl-name" data-pl-rename-id="${pl.id}" title="${i18n('pl_rename_title')} (double-clic)">${esc(pl.name)}</span>
-    ${isPinned ? `<svg class="pl-pin-badge" viewBox="0 0 24 24" width="10" height="10" fill="currentColor" aria-hidden="true"><path d="M12 2l1.4 4.3h4.5l-3.6 2.6 1.4 4.3L12 10.6 8.3 13.2l1.4-4.3L6.1 6.3h4.5z"/></svg>` : ''}
-    ${count > 0 ? `<span class="pl-count">${count}</span>` : ''}
-    <span class="pl-play" title="${i18n('pl_play_all')}" data-action="play-pl-direct" data-pl-id="${pl.id}">
-      <svg viewBox="0 0 24 24" width="11" height="11"><polygon points="6 3 20 12 6 21" fill="currentColor"/></svg>
-    </span>
-    <span class="pl-more" title="${i18n('pl_more')}" data-action="show-pl-ctx" data-pl-id="${pl.id}">
-      <svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.5" fill="currentColor"/><circle cx="12" cy="12" r="1.5" fill="currentColor"/><circle cx="19" cy="12" r="1.5" fill="currentColor"/></svg>
-    </span>
-  </button>`;
-}
-
-
-export function renderPlNav() {
-  const el = document.getElementById('pl-list-nav');
-  if (!el) return;
-  const playlists = get('playlists');
-  const plFolders = get('plFolders');
-  const recentPls = get('recentPls');
-
-  if (!playlists.length && !plFolders.length) {
-    el.innerHTML = `<div style="padding:6px 14px;font-size:11px;color:var(--t3);">${i18n('pl_empty')}</div>`;
-    return;
-  }
-
-  const visible = playlists;
-
-  // Index rapide id → playlist
-  const byId = new Map(visible.map(p => [p.id, p]));
-
-  // Section 1 : Épinglées (respecte l'ordre dans `playlists`)
-  const pinned = visible.filter(p => p.pinned);
-
-  // Section 2 : Récentes (plus de 2 items, hors épinglées)
-  const recents = recentPls
-    .map(id => byId.get(id))
-    .filter(p => p && !p.pinned)
-    .slice(0, 5);
-
-  // Section 3 : Dossiers + playlists hors dossier
-  // AUDIT-2026-05-22 : alimenter shownRecentIds avec les ids deja affiches en
-  // section "Recentes" — sans ca la deduplication echoue et les playlists
-  // recentes reapparaissent en double dans la section 3.
-  const shownRecentIds = new Set(recents.map(p => p.id));
-  const folderIds = new Set(plFolders.map(f => f.id));
-  const ungroupedOrNoFolder = visible.filter(p =>
-    !p.pinned &&
-    !shownRecentIds.has(p.id) &&
-    (!p.folderId || !folderIds.has(p.folderId))
-  );
-
-  // Ordre d'affichage des sections
-  const parts = [];
-
-  if (pinned.length) {
-    parts.push(`<div class="pl-nav-section-h">${i18n('pl_section_pinned')}</div>`);
-    parts.push(pinned.map(_plNavItemHTML).join(''));
-  }
-
-  // Dossiers — regroupement O(N+F) au lieu de O(N×F)
-  const byFolder = new Map();
-  for (const p of visible) {
-    if (p.folderId && !p.pinned) {
-      if (!byFolder.has(p.folderId)) byFolder.set(p.folderId, []);
-      byFolder.get(p.folderId).push(p);
-    }
-  }
-  for (const folder of plFolders) {
-    const inside = byFolder.get(folder.id) || [];
-    const collapsed = !!folder.collapsed;
-    parts.push(`
-      <div class="pl-folder${collapsed?' collapsed':''}" data-folder-id="${folder.id}">
-        <div class="pl-folder-h"
-             data-action="toggle-pl-folder" data-folder-id="${folder.id}"
-             data-pl-folder-ctx-id="${folder.id}"
-             data-folder-drop-id="${folder.id}"
-             title="${esc(folder.name)}">
-          <svg class="pl-folder-chev" viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
-          <svg class="pl-folder-ico" viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
-          <span class="pl-folder-name">${esc(folder.name)}</span>
-          <span class="pl-folder-count">${inside.length}</span>
-        </div>
-        <div class="pl-folder-body">
-          ${inside.map(_plNavItemHTML).join('') || `<div class="pl-folder-empty">${i18n('pl_folder_empty')}</div>`}
-        </div>
-      </div>
-    `);
-  }
-
-  if (ungroupedOrNoFolder.length) {
-    parts.push(ungroupedOrNoFolder.map(_plNavItemHTML).join(''));
-  }
-
-  el.innerHTML = parts.join('');
-  // Sync la grille playlists si elle est actuellement affichée
-  if (get('view') === 'playlists') renderPlaylistsGrid();
-}
-
-// ── Dossiers : helpers ────────────────────────────────────────
-
-export async function renamePlFolder(folderId) {
-  const plFolders = get('plFolders');
-  const f = plFolders.find(x => x.id === folderId);
-  if (!f) return;
-  // S157 FIX-3 : modal cohérent (window.prompt natif est bloquant en Tauri v2)
-  const name = await promptAction(i18n('pl_folder_rename_prompt'), f.name, i18n('pl_rename_btn'), i18n('btn_cancel'));
-  if (!name) return;
-  f.name = name;
-  saveCfg();
-  renderPlNav();
-  setupPlNavDrop();
-}
-
-export async function deletePlFolder(folderId) {
-  const plFolders = get('plFolders');
-  const f = plFolders.find(x => x.id === folderId);
-  if (!f) return;
-  const ok = await confirmAction(
-    `${i18n('pl_folder_del_h')} « ${f.name} » ?`,
-    i18n('pl_folder_del_body'),
-    i18n('pl_delete'), 'danger'
-  );
-  if (!ok) return;
-  const newFolders = plFolders.filter(x => x.id !== folderId);
-  set('plFolders', newFolders);
-  // Libérer les playlists du dossier
-  get('playlists').forEach(p => { if (p.folderId === folderId) delete p.folderId; });
-  saveCfg();
-  await savePlaylists();
-  renderPlNav();
-  setupPlNavDrop();
-  toast(i18n('t_pl_folder_deleted'), 'success');
-}
-
-export function togglePlFolder(folderId) {
-  const plFolders = get('plFolders');
-  const f = plFolders.find(x => x.id === folderId);
-  if (!f) return;
-  f.collapsed = !f.collapsed;
-  saveCfg();
-  const el = document.querySelector(`.pl-folder[data-folder-id="${folderId}"]`);
-  if (el) el.classList.toggle('collapsed', f.collapsed);
-}
-
-export function showPlFolderCtxMenu(event, folderId) {
-  event.preventDefault();
-  event.stopPropagation();
-  closeCtxMenu();
-  let menu = document.getElementById('pl-ctx-menu');
-  if (!menu) {
-    menu = document.createElement('div');
-    menu.id = 'pl-ctx-menu';
-    menu.className = 'ctx-menu';
-    document.body.appendChild(menu);
-  }
-  menu.innerHTML = `
-    <div class="ctx-item" data-action="rename-pl-folder" data-folder-id="${folderId}">
-      <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41L13.42 20.58a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><circle cx="7" cy="7" r="1.2" fill="currentColor" stroke="none"/></svg>
-      ${i18n('pl_folder_rename')}
-    </div>
-    <div class="ctx-item ctx-item--danger" data-action="delete-pl-folder" data-folder-id="${folderId}">
-      <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M9 6V4h6v2"/></svg>
-      ${i18n('pl_folder_delete')}
-    </div>`;
-  // S157 FIX-5 : positionnement basé sur la hauteur réelle du menu (pas sur -100 fixe)
-  // Affichage temporaire hors écran pour mesurer, puis clamp dans le viewport
-  menu.style.visibility = 'hidden';
-  menu.style.left = '0px';
-  menu.style.top  = '0px';
-  menu.classList.add('on');
-  const mw = menu.offsetWidth  || 180;
-  const mh = menu.offsetHeight || 100;
-  const pad = 8;
-  const x = Math.max(pad, Math.min(event.clientX, window.innerWidth  - mw - pad));
-  const y = Math.max(pad, Math.min(event.clientY, window.innerHeight - mh - pad));
-  menu.style.left = x + 'px';
-  menu.style.top  = y + 'px';
-  menu.style.visibility = '';
-  // FIX-B9 : fermeture mousedown extérieur + Escape (LEAK-1 FIX étendu)
-  _attachPlCtxClose(menu);
-}
-
-// ── Pinned ────────────────────────────────────────────────────
-export async function togglePinPlaylist(plId) {
-  const pl = get('playlists').find(p => p.id === plId);
-  if (!pl) return;
-  pl.pinned = !pl.pinned;
-  await savePlaylists();
-  renderPlNav();
-  setupPlNavDrop();
-  toast(pl.pinned ? i18n('t_pl_pinned') : i18n('t_pl_unpinned'), 'success');
-}
-
-// ── Déplacer une playlist dans un dossier (clic droit → "Déplacer vers…") ──
-export async function movePlToFolder(plId, folderId) {
-  const pl = get('playlists').find(p => p.id === plId);
-  if (!pl) return;
-  const folder = get('plFolders').find(f => f.id === folderId);
-  if (!folder) return;
-  pl.folderId = folderId;
-  await savePlaylists();
-  renderPlNav();
-  setupPlNavDrop();
-  toast(i18n('t_pl_moved_to_folder', folder.name) || `Déplacée dans « ${folder.name} »`, 'success');
-}
-
-// ── Sortir une playlist de son dossier (clic droit) ──────────
-export async function removePlFromFolder(plId) {
-  const pl = get('playlists').find(p => p.id === plId);
-  if (!pl || !pl.folderId) return;
-  delete pl.folderId;
-  await savePlaylists();
-  renderPlNav();
-  setupPlNavDrop();
-  toast(i18n('t_pl_removed_from_folder') || 'Retirée du dossier', 'success');
-}
-
 
 // ── Popup ajout rapide à playlist ────────────────────────────
 export function showPlQuickPop(e, trackId, triggerEl) {
@@ -751,6 +388,7 @@ document.addEventListener('click', e => {
 // ── Drag & drop titre → playlist sidebar ─────────────────────
 export function onTrackDragStart(e, trackId) {
   _dragTrackId = trackId;
+  setNavDragTrackId(trackId); // Sync drag-track state into playlist-nav.js
   // En vue playlist sans filtre → move (réorganisation), sinon copy (ajout)
   const view    = get('view');
   const curPlId = get('curPlId');
@@ -758,44 +396,6 @@ export function onTrackDragStart(e, trackId) {
   e.dataTransfer.effectAllowed = (view === 'playlist' && curPlId && !query) ? 'move' : 'copy';
   e.dataTransfer.setData('text/plain', trackId);
   setTimeout(() => { const el = document.getElementById('tr-' + trackId); if (el) el.classList.add('dragging'); }, 0);
-}
-
-/**
- * WCAG 2.2 SC 2.5.7 — alternative non-drag à la réorganisation des pistes d'une
- * playlist : déplace `trackId` d'un cran (dir -1 = haut, +1 = bas) dans la playlist
- * courante. No-op (false) hors vue playlist, sur une smart playlist, avec un filtre
- * actif, ou en butée. Persiste via savePlaylists (débouncé) puis re-render.
- * @param {string} trackId
- * @param {-1|1}   dir
- * @returns {boolean} true si l'ordre a changé
- */
-export function movePlaylistTrack(trackId, dir) {
-  const curPlId = get('curPlId');
-  if (get('view') !== 'playlist' || !curPlId || get('query')) return false;
-  const pl = get('playlists').find(p => p.id === curPlId);
-  if (!pl || pl.smart || !Array.isArray(pl.trackIds)) return false;
-  const idx = pl.trackIds.indexOf(trackId);
-  if (moveByOne(pl.trackIds, idx, dir) < 0) return false;
-  savePlaylists();
-  invalidateFilterCache(); emit(EVENTS.FILTER_CHANGED, {}); emit(EVENTS.RENDER_LIB, {});
-  return true;
-}
-
-/**
- * WCAG 2.2 SC 2.5.7 — alternative non-drag à la réorganisation des playlists dans
- * la sidebar : déplace la playlist `plId` d'un cran (dir -1 = haut, +1 = bas)
- * dans le tableau `playlists`. Persiste (savePlaylists, débouncé) puis re-render nav.
- * @param {string} plId
- * @param {-1|1}   dir
- * @returns {boolean} true si l'ordre a changé
- */
-export function movePlaylist(plId, dir) {
-  const playlists = get('playlists');
-  const idx = playlists.findIndex(p => p.id === plId);
-  if (moveByOne(playlists, idx, dir) < 0) return false;
-  savePlaylists();
-  renderPlNav();
-  return true;
 }
 
 // ── Réorganisation playlist par drag-and-drop ──────────────
@@ -878,138 +478,6 @@ export function _detachPlaylistReorder(tlist) {
   tlist.removeEventListener('dragleave', tlist._plDragLeave);
   tlist.removeEventListener('drop',      tlist._plDrop);
   tlist._plReorderAttached = false;
-}
-
-// S89 : drag & drop pour réorganiser les playlists dans la sidebar
-export function onPlNavDragStart(e, plId) {
-  _dragPlId = plId;
-  e.dataTransfer.effectAllowed = 'move';
-  e.dataTransfer.setData('text/plain', 'pl:' + plId);
-  e.stopPropagation();
-  const btn = document.getElementById('ni-pl-' + plId);
-  if (btn) setTimeout(() => btn.classList.add('pl-dragging'), 0);
-}
-
-// setupPlNavDrop : utilise la délégation d'événements sur le conteneur nav.
-// Appelé une seule fois à l'init — idempotent grâce au flag _initialized.
-export function setupPlNavDrop() {
-  const nav = document.getElementById('pl-list-nav');
-  if (!nav || _plNavDropInit) return;
-  _plNavDropInit = true;
-
-  nav.addEventListener('dragover', e => {
-    // Priorité 1 : drag d'une playlist vers un dossier
-    if (_dragPlId) {
-      const folderEl = e.target.closest('[data-folder-drop-id]');
-      if (folderEl) {
-        e.preventDefault();
-        e.dataTransfer.dropEffect = 'move';
-        nav.querySelectorAll('.pl-folder-drop').forEach(f => f.classList.remove('pl-folder-drop'));
-        folderEl.classList.add('pl-folder-drop');
-        return;
-      }
-    }
-    const btn = e.target.closest('.ni-pl');
-    if (!btn) return;
-    e.preventDefault();
-    // S89 : si on réorganise une playlist (mode move), afficher les indicateurs above/below
-    if (_dragPlId) {
-      e.dataTransfer.dropEffect = 'move';
-      nav.querySelectorAll('.ni-pl.pl-drop-above, .ni-pl.pl-drop-below, .ni-pl.drag-over')
-         .forEach(b => b.classList.remove('pl-drop-above', 'pl-drop-below', 'drag-over'));
-      // Ne pas afficher d'indicateur sur la playlist en cours de drag
-      if (btn.id === 'ni-pl-' + _dragPlId) return;
-      const rect = btn.getBoundingClientRect();
-      const mid  = rect.top + rect.height / 2;
-      btn.classList.add(e.clientY < mid ? 'pl-drop-above' : 'pl-drop-below');
-      return;
-    }
-    // Sinon : drop d'une piste → ajout à la playlist (comportement existant)
-    if (_dragTrackId) {
-      e.dataTransfer.dropEffect = 'copy';
-      nav.querySelectorAll('.ni-pl.drag-over').forEach(b => b.classList.remove('drag-over'));
-      btn.classList.add('drag-over');
-    }
-  });
-  nav.addEventListener('dragleave', e => {
-    // Retrait du highlight dossier dès qu'on quitte son en-tête
-    const folderEl = e.target.closest('[data-folder-drop-id]');
-    if (folderEl && !folderEl.contains(e.relatedTarget)) {
-      folderEl.classList.remove('pl-folder-drop');
-    }
-    if (!nav.contains(e.relatedTarget)) {
-      nav.querySelectorAll('.pl-folder-drop').forEach(f => f.classList.remove('pl-folder-drop'));
-      nav.querySelectorAll('.ni-pl.drag-over, .ni-pl.pl-drop-above, .ni-pl.pl-drop-below')
-         .forEach(b => b.classList.remove('drag-over', 'pl-drop-above', 'pl-drop-below'));
-    }
-  });
-  nav.addEventListener('drop', async e => {
-    e.preventDefault();
-    // Nettoyage global des highlights
-    nav.querySelectorAll('.pl-folder-drop').forEach(f => f.classList.remove('pl-folder-drop'));
-    nav.querySelectorAll('.ni-pl.drag-over, .ni-pl.pl-drop-above, .ni-pl.pl-drop-below')
-       .forEach(b => b.classList.remove('drag-over', 'pl-drop-above', 'pl-drop-below'));
-
-    // Priorité 1 : drop d'une playlist dans un dossier
-    const folderEl = e.target.closest('[data-folder-drop-id]');
-    if (folderEl && _dragPlId) {
-      e.stopPropagation();
-      const folderId = folderEl.dataset.folderDropId;
-      const pl = get('playlists').find(p => p.id === _dragPlId);
-      _dragPlId = null;
-      if (!pl || pl.folderId === folderId) return;
-      pl.folderId = folderId;
-      await savePlaylists();
-      renderPlNav();
-      // B29 FIX : passer le nom du dossier à i18n — sinon toast « … « undefined » ».
-      const folder = get('plFolders').find(f => f.id === folderId);
-      toast(i18n('t_pl_moved_to_folder', folder?.name) || 'Déplacée dans le dossier', 'success');
-      return;
-    }
-
-    const btn = e.target.closest('.ni-pl');
-
-    // S89 : réorganisation de playlists
-    if (_dragPlId) {
-      const fromId = _dragPlId;
-      _dragPlId = null;
-      if (!btn || btn.id === 'ni-pl-' + fromId) return;
-      const toId = btn.id.replace('ni-pl-', '');
-      const rect = btn.getBoundingClientRect();
-      const insertBefore = e.clientY < rect.top + rect.height / 2;
-      const playlists = get('playlists');
-      const fromIdx = playlists.findIndex(p => p.id === fromId);
-      let   toIdx   = playlists.findIndex(p => p.id === toId);
-      if (fromIdx < 0 || toIdx < 0) return;
-      if (!insertBefore) toIdx++;
-      if (fromIdx < toIdx) toIdx--;
-      if (fromIdx === toIdx) return;
-      const [moved] = playlists.splice(fromIdx, 1);
-      playlists.splice(toIdx, 0, moved);
-      // BUG-M4 FIX : ne pas appeler set() ici — savePlaylists() appelle notify() qui force-notifie
-      await savePlaylists();
-      renderPlNav();
-      return;
-    }
-
-    // Drop d'une piste sur une playlist (comportement existant)
-    if (!btn || !_dragTrackId) return;
-    const plId = btn.id.replace('ni-pl-', '');
-    addTrackToPlaylist(_dragTrackId, plId);
-    _dragTrackId = null;
-  });
-  // dragend global — une seule fois
-  if (!setupPlNavDrop._dragEndAttached) {
-    setupPlNavDrop._dragEndAttached = true;
-    document.addEventListener('dragend', () => {
-      document.querySelectorAll('.tr.dragging').forEach(el => el.classList.remove('dragging'));
-      document.querySelectorAll('.ni-pl.drag-over, .ni-pl.pl-drop-above, .ni-pl.pl-drop-below, .ni-pl.pl-dragging')
-        .forEach(el => el.classList.remove('drag-over', 'pl-drop-above', 'pl-drop-below', 'pl-dragging'));
-      document.querySelectorAll('.pl-folder-drop').forEach(el => el.classList.remove('pl-folder-drop'));
-      _dragTrackId = null;
-      _dragPlId = null;
-    });
-  }
 }
 
 // ── S90 : Cover custom de playlist (upload image, stocké base64 dans IDB) ──
@@ -1365,118 +833,6 @@ export async function confirmPlaylistModal() {
   }
 }
 
-export async function deletePlaylist(e, plId) {
-  e.stopPropagation();
-  const pl = get('playlists').find(p => p.id === plId);
-  if (!pl) return;
-
-  if (pl.trackIds && pl.trackIds.length > 0) {
-    // Playlist non vide → confirmation obligatoire (risque de perte de données)
-    const confirmed = await confirmAction(
-      i18n('pl_delete_confirm_h', pl.name) || `Supprimer « ${pl.name} » ?`,
-      i18n('pl_delete_confirm_body', pl.trackIds.length) || `${pl.trackIds.length} titre${pl.trackIds.length > 1 ? 's' : ''} seront retirés de la playlist (les fichiers restent sur le disque).`,
-      i18n('pl_delete_confirm_btn') || 'Supprimer', 'danger'
-    );
-    if (!confirmed) return;
-    // Suppression définitive (playlist avec contenu)
-    set('playlists', get('playlists').filter(p => p.id !== plId));
-    await savePlaylists();
-    const curPlId = get('curPlId');
-    if (curPlId === plId) { setView('all', document.getElementById('ni-all')); set('curPlId', null); }
-    renderPlNav();
-    toast(i18n('t_pl_deleted'), 'success');
-  } else {
-    // FIX-B10 : playlist vide → suppression immédiate avec undo 5s (pas de dialogue bloquant)
-    const plSnapshot = { ...pl, trackIds: [...(pl.trackIds || [])] };
-    set('playlists', get('playlists').filter(p => p.id !== plId));
-    const curPlId = get('curPlId');
-    if (curPlId === plId) { setView('all', document.getElementById('ni-all')); set('curPlId', null); }
-    renderPlNav();
-
-    let undone = false;
-    const UNDO_MS = 5000;
-    const saveTimer = setTimeout(() => {
-      if (!undone) savePlaylists().catch(e => console.warn('[playlists:savePlaylists delete]', e));
-    }, UNDO_MS);
-
-    toastWithAction(i18n('t_pl_deleted'), 'success', i18n('t_undo') || 'Annuler', () => {
-      undone = true;
-      clearTimeout(saveTimer);
-      get('playlists').push(plSnapshot);
-      notify('playlists'); // BUG-M4 FIX : push() in-place → notify() (set() ignore same-ref)
-      savePlaylists().catch(e => console.warn('[playlists:savePlaylists undo-delete]', e));
-      renderPlNav();
-      toast(i18n('t_undo_done') || 'Annulé', 'info');
-    }, UNDO_MS);
-  }
-}
-
-export async function addTrackToPlaylist(trackId, plId) {
-  const pl = get('playlists').find(p => p.id === plId);
-  if (!pl) return;
-  if (pl?.smart) {
-    toast(i18n('t_smart_readonly') || 'Les playlists intelligentes ne peuvent pas être modifiées manuellement.', 'warning');
-    return;
-  }
-  const sid = String(trackId);
-  if (pl.trackIds.some(id => String(id) === sid)) { toast(i18n('t_already_in'), 'warning'); return; }
-  pl.trackIds.push(sid);
-  await savePlaylists();
-  renderPlNav();
-  if (get('view') === 'playlist' && get('curPlId') === plId) emit(EVENTS.RENDER_LIB, {});
-  toast(i18n('t_added_to', pl.name), 'success');
-}
-
-export function removeTrackFromPlaylist(trackId, plId) {
-  const pl = get('playlists').find(p=>p.id===plId);
-  if (!pl || !pl.trackIds) return;
-  if (pl?.smart) {
-    toast(i18n('t_smart_readonly') || 'Les playlists intelligentes ne peuvent pas être modifiées manuellement.', 'warning');
-    return;
-  }
-  // UNDO-PL FIX : mémoriser la position avant suppression pour permettre l'annulation
-  const removedIdx = pl.trackIds.indexOf(trackId);
-  if (removedIdx === -1) return; // trackId absent — rien à faire
-  // B4 FIX : ancrer sur l'id des voisins, pas sur un index numérique — une 2e
-  // suppression dans la même playlist décale pl.trackIds et rend removedIdx périmé.
-  const _prevAnchorId = removedIdx > 0 ? pl.trackIds[removedIdx - 1] : null;
-  const _nextAnchorId = removedIdx < pl.trackIds.length - 1 ? pl.trackIds[removedIdx + 1] : null;
-
-  // Retrait immédiat en mémoire + mise à jour UI
-  pl.trackIds = pl.trackIds.filter(id => id !== trackId);
-  renderPlNav();
-  if (get('view') === 'playlist' && get('curPlId') === plId) emit(EVENTS.RENDER_LIB, {});
-
-  // Différer la persistance pour permettre l'annulation dans la fenêtre de 5 s
-  const UNDO_MS = 5000;
-  let undone = false;
-  const saveTimer = setTimeout(() => {
-    if (!undone) savePlaylists().catch(e => console.warn('[playlists:savePlaylists remove-track]', e));
-  }, UNDO_MS);
-
-  toastWithAction(i18n('t_removed'), 'success', i18n('t_undo') || 'Annuler', () => {
-    undone = true;
-    clearTimeout(saveTimer);
-    // B4 FIX : ré-insérer après l'ancre précédente si elle existe encore, sinon
-    // avant la suivante, sinon en tête — robuste face à une 2e suppression.
-    if (!pl.trackIds.includes(trackId)) {
-      const _prevPos = _prevAnchorId != null ? pl.trackIds.indexOf(_prevAnchorId) : -1;
-      let _insertAt;
-      if (_prevPos >= 0) {
-        _insertAt = _prevPos + 1;
-      } else {
-        const _nextPos = _nextAnchorId != null ? pl.trackIds.indexOf(_nextAnchorId) : -1;
-        _insertAt = _nextPos >= 0 ? _nextPos : 0;
-      }
-      pl.trackIds.splice(_insertAt, 0, trackId);
-    }
-    savePlaylists().catch(e => console.warn('[playlists:savePlaylists undo-remove-track]', e));
-    renderPlNav();
-    if (get('view') === 'playlist' && get('curPlId') === plId) emit(EVENTS.RENDER_LIB, {});
-    toast(i18n('t_undo_done') || 'Annulé', 'info');
-  }, UNDO_MS);
-}
-
 // FIX-B5 : Enter/Escape câblés sur tous les champs texte du modal (manuel + smart)
 // Avant : seul pl-modal-inp avait le listener → Enter ignoré dans les champs Smart
 ['pl-modal-inp', 'smart-pl-name', 'spl-rules-name'].forEach(id => {
@@ -1487,3 +843,13 @@ export function removeTrackFromPlaylist(trackId, plId) {
     if (e.code === 'Escape') { e.preventDefault(); closePlModal(); }
   });
 });
+
+// ── Barrel re-exports — call sites externes inchangés ────────────────────────
+export { savePlaylists, addTrackToPlaylist, removeTrackFromPlaylist,
+         deletePlaylist, togglePinPlaylist, movePlToFolder,
+         removePlFromFolder, movePlaylist, movePlaylistTrack,
+         playPlaylistFrom, playPlaylistDirect,
+         shufflePlaylist }                    from './playlist-crud.js';
+export { renderPlNav, setupPlNavDrop, onPlNavDragStart,
+         renamePlFolder, deletePlFolder, togglePlFolder,
+         showPlFolderCtxMenu, _plNavInlineRename }                from './playlist-nav.js';

@@ -273,6 +273,11 @@ on(EVENTS.LIBRARY_UPDATED, ({ tracks }) => {
 });
 // ERG-P2 : RENDER_LIB couvre toggle like / playlog update / suppressions → re-calcul léger
 on(EVENTS.RENDER_LIB, () => updateSidebarCounts());
+// PLAYLIST_CHANGED : CRUD mutations (create, delete, pin, move, …) → re-render nav + drop wiring
+on(EVENTS.PLAYLIST_CHANGED, () => {
+  renderPlNav();
+  setupPlNavDrop();
+});
 
 // ══ Boot ═══════════════════════════════════════
 
