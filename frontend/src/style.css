@@ -875,7 +875,7 @@ button { cursor: pointer; }
   height: var(--tb);
   -webkit-app-region: no-drag;
 }
-#tb-burger-panel.on {
+[id="tb-burger-panel"].on {
   display: flex;
   animation: burgerPanelIn var(--dur-fast) var(--smooth) both;
 }
@@ -884,7 +884,7 @@ button { cursor: pointer; }
   to   { opacity: 1; transform: translateX(0); }
 }
 @media (prefers-reduced-motion: reduce) {
-  #tb-burger-panel.on { animation: none; }
+  [id="tb-burger-panel"].on { animation: none; }
 }
 .tb-menu-item {
   display: flex;
@@ -960,12 +960,6 @@ button { cursor: pointer; }
   border-radius: var(--r-art);
   box-shadow: none;
   outline: none;
-}
-/* Keyboard focus: restore dual-tone ring (SC 2.4.13) — mouse focus keeps subtle background only */
-.sb-search .srch:has(input:focus-visible) {
-  outline: var(--focus-ring);
-  outline-offset: var(--focus-offset);
-  box-shadow: 0 0 0 var(--border-w-lg) var(--focus-ring-contrast);
 }
 /* Keyboard focus: restore dual-tone ring (SC 2.4.13) — mouse focus keeps subtle background only */
 .sb-search .srch:has(input:focus-visible) {
