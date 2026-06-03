@@ -78,22 +78,6 @@ import { setLang }                                             from './i18n.js';
 import { playById, scrollToCurrentTrack, drillDown,
          renderImportHistory }                                 from './renderer.js';
 import { getFiltered, invalidateFilterCache }                  from './search.js';
-
-// ── Module state ──────────────────────────────────────────────────────────
-let _registered = false;  // Guard against double-registration during HMR
-
-// ── Burger menu ─────────────────────────────────────────────────────────────
-function _burgerOutside(e) {
-  const panel = document.getElementById('tb-burger-panel');
-  if (!panel?.classList.contains('on')) return;
-  const btn = document.getElementById('tbt-burger');
-  if (!panel.contains(e.target) && !btn?.contains(e.target)) {
-    panel.classList.remove('on');
-    btn?.setAttribute('aria-expanded', 'false');
-    panel.querySelectorAll('[role="menuitem"]').forEach(el => el.setAttribute('tabindex', '-1'));
-    btn?.focus();
-  }
-}
 import { closePlModal, clearPlCover,
          confirmPlaylistModal, onPlCoverSelected,
          openNewPlaylistModal, openRenamePlaylistModal,
@@ -120,6 +104,22 @@ import { get, set }                                            from './store.js'
 import { toggleNowPlaying, closeNowPlaying,
          toggleNowPlayingFullscreen, cycleNpBg }              from './nowplaying.js';
 import { emit, EVENTS }                                        from './bus.js';
+
+// ── Module state ──────────────────────────────────────────────────────────
+let _registered = false;  // Guard against double-registration during HMR
+
+// ── Burger menu ─────────────────────────────────────────────────────────────
+function _burgerOutside(e) {
+  const panel = document.getElementById('tb-burger-panel');
+  if (!panel?.classList.contains('on')) return;
+  const btn = document.getElementById('tbt-burger');
+  if (!panel.contains(e.target) && !btn?.contains(e.target)) {
+    panel.classList.remove('on');
+    btn?.setAttribute('aria-expanded', 'false');
+    panel.querySelectorAll('[role="menuitem"]').forEach(el => el.setAttribute('tabindex', '-1'));
+    btn?.focus();
+  }
+}
 
 // ── Registre d'actions ────────────────────────────────────────────────────
 
