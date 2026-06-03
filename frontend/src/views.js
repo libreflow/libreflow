@@ -122,9 +122,12 @@ export function _showViewRaw(v) {
     prev.style.inset         = '0';
     prev.style.pointerEvents = 'none';
     prev.style.zIndex        = '1';
+    // Generation counter: if a new navigation targets `prev` before this exit
+    // animation finishes (A→B→A < 140ms), _exitGen will have been bumped and
+    // the stale callback aborts without touching the now-active DOM element.
+    const exitGen = (prev._exitGen = (prev._exitGen || 0) + 1);
     viewExit(prev).then(() => {
-      // Guard: view was re-entered (A→B→A < 140ms) — cleanup already ran via next-stale clear.
-      if (prev.style.position !== 'absolute') return;
+      if (prev._exitGen !== exitGen) return; // stale exit — abort
       prev.style.display = '';
       prev.style.position = '';
       prev.style.inset = '';
