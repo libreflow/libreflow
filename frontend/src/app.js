@@ -574,10 +574,10 @@ async function boot() {
     if (cfg?.queueState?.ids?.length) restoreQueueState(cfg.queueState);
     if (cfg?.queuePinned === true && window.innerWidth >= 720) {
       if (!queueOpen) toggleQueue();
-      document.getElementById('app').classList.add('panel-queue-pinned');
-      const _pinBtn = document.querySelector('.queue-pin-btn');
-      _pinBtn?.setAttribute('aria-pressed', 'true');
-      _pinBtn?.setAttribute('aria-label', "Désépingler la file d'attente");
+      // Delegate pin DOM + aria to toggleQueuePin() — avoids hardcoded labels and DOM divergence.
+      // Store was set to true at line ~401; reset to false so toggleQueuePin() flips it to true.
+      set('queuePinned', false);
+      toggleQueuePin();
     }
     const cb=document.getElementById('btn-clear'); if(cb) cb.disabled=false;
     toast(i18n('t_loaded', tracks.length), 'success');
@@ -649,7 +649,7 @@ async function boot() {
           if (cfg.curPos && cfg.curPos > 0 && cfg.curPos < (audio.duration - 2)) {
             audio.currentTime = cfg.curPos;
           }
-          if (radioActive) radioRefillQueue().catch(e => console.warn('[boot] radioRefillQueue', e));
+          if (radioActive) await radioRefillQueue().catch(e => console.warn('[boot] radioRefillQueue', e));
           updateBar();
           patchActiveTrack();
           // UX-5: toast de session restaurée
