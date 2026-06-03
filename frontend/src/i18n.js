@@ -1484,9 +1484,12 @@ export function applyLang() {
   // Stats
   updateStats();
 
-  // Sort label
+  // Sort label + sort button aria-label (boot-time; nextSort() keeps it in sync on cycle)
   const SLBLS_I18N = { az: 'sort_az', za: 'sort_za', artist: 'sort_artist', album: 'sort_album', recent: 'sort_recent' };
-  setText('sort-lbl', SLBLS_I18N[get('sort')] || 'sort_az', true);
+  const _sortKey = SLBLS_I18N[get('sort')] || 'sort_az';
+  setText('sort-lbl', _sortKey, true);
+  const _sortBtn = document.getElementById('main-sort-btn');
+  if (_sortBtn) _sortBtn.setAttribute('aria-label', `${i18n('pl_sort_label')}: ${i18n(_sortKey)}`);
 
   // Placeholders & titles
   setAttrEl('srch',     'placeholder', i18n('srch_ph'));

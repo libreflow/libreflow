@@ -310,9 +310,9 @@ export function nextSort() {
   const _lbl = document.getElementById('sort-lbl');
   const _key = SLBLS[next] || 'sort_az';
   if (_lbl) _lbl.textContent = i18n(_key);
-  // A11Y : le bouton parent reçoit un aria-label complet ("Tri : A à Z, cycle suivant") — la couleur seule ne porte pas l'info.
+  // A11Y : le bouton parent reçoit un aria-label complet (ex. "Sort: A–Z") — la couleur seule ne porte pas l'info.
   const _btn = document.getElementById('main-sort-btn');
-  if (_btn) _btn.setAttribute('aria-label', `Tri : ${i18n(_key)} — cliquer pour cycler`);
+  if (_btn) _btn.setAttribute('aria-label', `${i18n('pl_sort_label')}: ${i18n(_key)}`);
   invalidateFilter(); renderLib(); saveCfg();
 }
 

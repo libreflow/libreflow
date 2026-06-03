@@ -2562,6 +2562,7 @@ html[data-mode="light"] .empty-cta {
   background: var(--bg3); border: var(--border-w-sm) solid var(--bg5);
   font-size: var(--fs-sm); color: var(--t2); cursor: pointer;
   transition: background var(--ease), color var(--ease);
+  min-height: var(--target-min); /* WCAG 2.2 SC 2.5.8 — 24px target floor */
 }
 #sleep-indicator:hover { background: var(--bg4); color: var(--t); }
 #sleep-indicator svg   { width: var(--icon-xs); height: var(--icon-xs); flex-shrink: 0; }
