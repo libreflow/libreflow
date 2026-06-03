@@ -1297,7 +1297,7 @@ function _startViz() {
 
   function draw(timestamp) {
     if (!cinemaOpen) return;
-    if (document.hidden) { _cinVizRaf = requestAnimationFrame(draw); return; }
+    if (document.hidden) { _cinVizRaf = null; return; }
     const T = timestamp !== undefined ? timestamp : performance.now();
     const w = canvas.clientWidth, h = canvas.clientHeight;
     if (w === 0 || h === 0) { _cinVizRaf = requestAnimationFrame(draw); return; }
@@ -1507,8 +1507,12 @@ function _updateNextTrack() {
 
 // ── Visibilité onglet — relancer le loop ambient si l'onglet redevient visible ──
 document.addEventListener('visibilitychange', () => {
-  if (!document.hidden && cinemaOpen && (cinemaBg === 'ambient' || cinemaBg === 'amoled')) {
-    _startAmbientAnim();
+  if (!document.hidden && cinemaOpen) {
+    if (cinemaBg === 'ambient' || cinemaBg === 'amoled') {
+      _startAmbientAnim();
+    } else if ((cinemaBg === 'liquid' || cinemaBg === 'aurora') && !_cinVizRaf) {
+      _startViz();
+    }
   }
 });
 
