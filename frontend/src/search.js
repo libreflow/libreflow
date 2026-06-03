@@ -403,7 +403,10 @@ export function getFiltered() {
         (t.artistFull || '').toLowerCase() === key
       );
     } else if (drillFrom === 'genres') {
-      src = src.filter(t => _normalizeGenre(t.genre) === drillKey);
+      src = src.filter(t => {
+        if (!t.genre) return false;
+        return t.genre.split(/[\/,;|]/).some(part => _normalizeGenre(part.trim()) === drillKey);
+      });
     }
   } else if (view === 'liked') {
     src = src.filter(t => liked?.has(t.id));
