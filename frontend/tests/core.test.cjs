@@ -1951,6 +1951,44 @@ section('components/lf-toast-stack.logic.js -- import-smoke');
   // Token single-source guard (§17)
   await require('./token-source.test.cjs').run();
 
+  // =============================================================================
+  // cinema split — vérification statique (lignes + exports publics)
+  // =============================================================================
+  {
+    const fs = require('fs'), path = require('path');
+    const root = path.join(__dirname, '../..');
+    const read = f => fs.readFileSync(path.join(root, f), 'utf8');
+
+    section('cinema split — line count + public surface');
+
+    const cinLines = read('frontend/src/cinema.js').split('\n').length;
+    const vizLines = read('frontend/src/cinema-viz.js').split('\n').length;
+    const bgLines  = read('frontend/src/cinema-bg.js').split('\n').length;
+
+    assert(cinLines < 800, `cinema.js < 800 lignes (actual: ${cinLines})`);
+    assert(vizLines < 500, `cinema-viz.js < 500 lignes (actual: ${vizLines})`);
+    assert(bgLines  < 400, `cinema-bg.js < 400 lignes (actual: ${bgLines})`);
+
+    const vizSrc = read('frontend/src/cinema-viz.js');
+    const bgSrc  = read('frontend/src/cinema-bg.js');
+    const cinSrc = read('frontend/src/cinema.js');
+
+    assert(/export function startCinemaViz/.test(vizSrc),      'cinema-viz.js exports startCinemaViz');
+    assert(/export function stopCinemaViz/.test(vizSrc),       'cinema-viz.js exports stopCinemaViz');
+    assert(/export function initCinemaVizModule/.test(vizSrc), 'cinema-viz.js exports initCinemaVizModule');
+
+    assert(/export let cinemaBg/.test(bgSrc),                'cinema-bg.js exports cinemaBg');
+    assert(/export const CINEMA_BG_MODES/.test(bgSrc),       'cinema-bg.js exports CINEMA_BG_MODES');
+    assert(/export function applyCinemaBg/.test(bgSrc),      'cinema-bg.js exports applyCinemaBg');
+    assert(/export function initCinemaBgModule/.test(bgSrc), 'cinema-bg.js exports initCinemaBgModule');
+
+    assert(/from '.\/cinema-viz.js'/.test(cinSrc),         "cinema.js importe depuis cinema-viz.js");
+    assert(/from '.\/cinema-bg.js'/.test(cinSrc),          "cinema.js importe depuis cinema-bg.js");
+    assert(/export \{[\s\S]*?cinemaBg/.test(cinSrc),       "cinema.js re-exporte cinemaBg");
+    assert(/export let cinemaOpen/.test(cinSrc),            "cinema.js exporte toujours cinemaOpen");
+    assert(/export function updateCinema/.test(cinSrc),     "cinema.js exporte toujours updateCinema");
+  }
+
   // lf-modal reducer (Phase 1)
   section('components/lf-modal.logic.js -- modalReducer');
   try {
