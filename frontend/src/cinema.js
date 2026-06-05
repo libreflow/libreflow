@@ -1,36 +1,41 @@
 // LibreFlow — cinema.js
 // Mode Cinéma : overlay plein-écran, fond flou, contrôles masquables.
-// Extrait de app.js.
 //
-// Dépendances :
-//   import  : fmt, extEmoji  (utils.js)
-//   import  : saveCfg (cfgsave.js), updateVolSlider (playerbar.js)
-//   window  : audio, curIdx, tracks, liked, shuffle, repeat, getFiltered (getters), toast
-//
-// Exports publics (utilisés par app.js) :
-//   cinemaOpen, cinemaBg
+// Exports publics (tous les consommateurs importent depuis ce fichier) :
+//   cinemaOpen, cinemaBg + toutes les fonctions BG (re-exports de cinema-bg.js)
 //   toggleCinema, openCinema, closeCinema, updateCinema, updateCinemaProgress
-//   setCinemaBg, cycleCinemaBg, applyCinemaBg, syncCinemaBgSettings, updateCinemaBgBtn
-//   toggleCinemaFullscreen
-//   CINEMA_BG_MODES, CINEMA_BG_LABELS
+//   toggleCinemaFullscreen, getCinArtRGB, updateCinArtColor
 
-import { fmt, extEmoji }                     from './utils.js';
-import { eqCtx, eqAnalyser, masterGainNode, setMasterGain } from './eq.js'; // réutiliser le graphe EQ existant
-import { i18n }                               from './i18n.js';
-import { get, set }                           from './store.js';
+import { fmt, extEmoji }                      from './utils.js';
+import { eqCtx, masterGainNode, setMasterGain } from './eq.js';
+import { i18n }                                from './i18n.js';
+import { get }                                 from './store.js';
 import { getFiltered, filteredIdx }            from './search.js';
-import { audio, toggleLike, next, prev }      from './player.js';
+import { audio, toggleLike, next, prev }       from './player.js';
 import { radioActive, stopRadio, startRadio, getRadioQueue } from './radio.js';
-import { toast }                                        from './ui.js';
-import { saveCfg }                   from './cfgsave.js';
-import { updateVolSlider }            from './playerbar.js';
-import { rgbToHsl, hslToRgb, boostSat, sampleArtColors5 } from './artcolor.js';
-import { renderAmbientFrame }                from './ambientRenderer.js';
-import { timeline, set as motionSet, kill as motionKill, eases, tween, kill, quickTo } from './motion.js';
+import { toast }                               from './ui.js';
+import { saveCfg }                             from './cfgsave.js';
+import { updateVolSlider }                     from './playerbar.js';
+import { timeline, set as motionSet, kill as motionKill, eases } from './motion.js';
+
+import { startCinemaViz, stopCinemaViz, initCinemaVizModule } from './cinema-viz.js';
+import {
+  cinemaBg, CINEMA_BG_MODES, CINEMA_BG_LABELS,
+  initCinemaBg, setCinemaBg, cycleCinemaBg, applyCinemaBg,
+  syncCinemaBgSettings, updateCinemaBgBtn,
+  stopAmbientAnim, updateAmbientGradient, restartAmbientIfNeeded,
+  initCinemaBgModule,
+} from './cinema-bg.js';
+
+// Re-exports pour rétrocompatibilité — tous les consommateurs importent depuis cinema.js
+export {
+  cinemaBg, CINEMA_BG_MODES, CINEMA_BG_LABELS,
+  initCinemaBg, setCinemaBg, cycleCinemaBg, applyCinemaBg,
+  syncCinemaBgSettings, updateCinemaBgBtn,
+};
 
 // ── State ───────────────────────────────────────────────────
 export let cinemaOpen     = false;
-export let cinemaBg       = 'ambient'; // default mode
 let cinemaHideTimer       = null;
 
 // ── A11Y: focus management (A.8) ────────────────────────────
@@ -44,11 +49,7 @@ let _cinFill    = null;
 let _cinTc      = null;
 let _cinTd      = null;
 let _lastCinArt  = null; // dernière URL d'art — évite le bug de normalisation url("…")
-let _cinBgCtx    = null; // cache du contexte 2D de #cinema-bg (évite getContext() par frame)
 
-// Visualiseur (animation RAF uniquement — pas de création d'AudioContext ni de source)
-let _cinVizRaf  = null;
-let _beatTimer  = null; // timer classe .beat — module scope pour pouvoir le nettoyer dans _stopViz()
 // Couleur dominante de la pochette courante — mise à jour dans updateCinema()
 // (même principe que _vizRGB dans viz.js — évite la lecture async artColor dans le loop rAF)
 let _cinArtRGB       = '255,255,255'; // couleur courante (interpolée)
@@ -69,263 +70,17 @@ let _cinSwapInTimer  = null;
 // (évite que deux séquences se superposent si l'utilisateur toggle vite).
 let _openTl = null;
 
-// ── Constantes ──────────────────────────────────────────────
-// ── Modes d'arrière-plan disponibles ────────────────────────
-// ambient  : gradient radial depuis la couleur dominante de la pochette (Apple Music style)
-// liquid   : vagues liquides réactives à la musique
-// aurora   : rideaux de lumière polaire verticaux
-// amoled   : noir pur, optimal pour écrans OLED
-export const CINEMA_BG_MODES  = ['ambient', 'liquid', 'aurora', 'amoled'];
-export const CINEMA_BG_LABELS = {
-  ambient:  'Ambient',
-  liquid:   'Liquide',
-  aurora:   'Aurore',
-  amoled:   'AMOLED',
-};
-const CINEMA_BG_ICONS = {
-  ambient:  `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4" opacity=".5"/><line x1="12" y1="3" x2="12" y2="1"/><line x1="12" y1="23" x2="12" y2="21"/><line x1="3" y1="12" x2="1" y2="12"/><line x1="23" y1="12" x2="21" y2="12"/></svg>`,
-  liquid:   `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M2 17c2-2.5 4-2.5 6 0s4 2.5 6 0 4-2.5 6 0"/><path d="M2 12c2-2.5 4-2.5 6 0s4 2.5 6 0 4-2.5 6 0" opacity=".55"/><path d="M2 7c2-2.5 4-2.5 6 0s4 2.5 6 0 4-2.5 6 0" opacity=".25"/></svg>`,
-  aurora:   `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M5 22 Q4 16 5 11 Q6 6 5 2"/><path d="M10 22 Q9 15 10 9 Q11 5 10 2" opacity=".65"/><path d="M15 22 Q16 14 15 9 Q14 4 15 2" opacity=".45"/><path d="M20 22 Q21 16 20 11 Q19 6 20 2" opacity=".28"/></svg>`,
-  amoled:   `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="12" cy="12" r="2" fill="currentColor" opacity=".4"/></svg>`,
-};
+// ── Init inter-modules ───────────────────────────────────────
+initCinemaBgModule(
+  () => ({ cinemaOpen, cinArtRGB: _cinArtRGB }),
+  () => updateCinema(),
+);
+initCinemaVizModule(
+  () => ({ cinemaOpen, cinemaBg, cinArtRGBTarget: _cinArtRGBTarget }),
+);
 
 // ── Constantes d'animation ──────────────────────────────────
 const CINEMA_CONTROLS_HIDE_MS  = 3000;  // délai avant masquage des contrôles
-const AMBIENT_CROSSFADE_MS     = 1400;  // durée du cross-fade ambient
-
-// ── Arrière-plan ────────────────────────────────────────────
-
-/** Initialise cinemaBg depuis la config au démarrage (pas de side-effects DOM/saveCfg). */
-export function initCinemaBg(mode) {
-  if (CINEMA_BG_MODES.includes(mode)) { cinemaBg = mode; set('cinemaBg', mode); }
-}
-
-export function setCinemaBg(mode) {
-  if (!CINEMA_BG_MODES.includes(mode)) return;
-  cinemaBg = mode; set('cinemaBg', mode);
-  applyCinemaBg();
-  syncCinemaBgSettings();
-  saveCfg();
-}
-
-export function syncCinemaBgSettings() {
-  CINEMA_BG_MODES.forEach(m => {
-    const btn = document.getElementById('set-cinema-' + m);
-    if (!btn) return;
-    const active = m === cinemaBg;
-    btn.classList.toggle('on', active);
-    btn.setAttribute('aria-pressed', String(active));
-  });
-}
-
-export function cycleCinemaBg() {
-  const cur = CINEMA_BG_MODES.indexOf(cinemaBg);
-  cinemaBg  = CINEMA_BG_MODES[(cur + 1) % CINEMA_BG_MODES.length];
-  set('cinemaBg', cinemaBg);
-  applyCinemaBg();
-  syncCinemaBgSettings();
-  saveCfg();
-  toast(i18n('t_cinema_bg', CINEMA_BG_LABELS[cinemaBg]));
-}
-
-export function applyCinemaBg() {
-  const overlay = document.getElementById('cinema-overlay');
-  if (!overlay) return;
-  CINEMA_BG_MODES.forEach(m => overlay.classList.remove('bg-' + m));
-  overlay.classList.add('bg-' + cinemaBg);
-  updateCinemaBgBtn();
-  // Synchroniser la pochette dans cinema-bg si disponible
-  // Bug 6 fix : plImg.src est TOUJOURS truthy (retourne l'URL absolue de la page si vide)
-  //             → utiliser getAttribute('src') qui retourne null si l'attribut est absent
-  const cinBg = document.getElementById('cinema-bg');
-  // Arrêter l'animation breathing avant tout switch de mode
-  _stopAmbientAnim();
-  _ambientColors = null;
-  // Vider le canvas immédiatement à chaque switch (évite interférence entre modes)
-  if (cinBg?.getContext) {
-    const c = _cinBgCtx || cinBg.getContext('2d');
-    if (c) c.clearRect(0, 0, cinBg.width || 1, cinBg.height || 1);
-  }
-  // ambient : gradient multi-radial complet. amoled : halo minimaliste (même boucle RAF).
-  if (cinemaBg === 'ambient' || cinemaBg === 'amoled') _updateAmbientGradient();
-  // Bug #9 fix : rafraîchir l'UI cinéma (pochette, infos piste, contrôles) après chaque
-  // switch de mode — sans ça la pochette flou reste stale après cycleCinemaBg().
-  if (cinemaOpen) updateCinema();
-}
-
-/**
- * Mode ambient : gradient radial depuis la couleur dominante de la pochette.
- * Inspiré du mode "ambient" d'Apple Music — la couleur rayonne depuis le haut de l'écran.
- */
-/**
- * Ambient : rendu canvas avec dithering noise pour éliminer le banding CSS.
- * Technique : gradient canvas multi-radial + calque noise grain (Perlin simplifié).
- */
-let _ambientAnimRaf = null;   // RAF handle for continuous breathing loop
-let _ambientT       = 0;      // animation time in ms — persists across tracks
-let _ambientColors  = null;   // { cT, cL, cR } — rebuilt each track change
-let _ambientCross   = null;   // { snapshot, start, dur } — active cross-fade
-let _frameCount     = 0;      // frame counter for ambient 30fps cap
-let _ambientGen     = 0;      // génération courante — incrémentée à chaque _stopAmbientAnim() pour invalider les loops orphelins
-
-/** Extract and boost 3 ambient colours from artwork (or fallback to _cinArtRGB). */
-function _buildAmbientColors() {
-  const img = document.getElementById('cinema-art-img');
-  if (img && img.naturalWidth && img.style.display !== 'none') {
-    const colors = sampleArtColors5(img, 64);
-    if (colors && colors.length >= 3) {
-      return {
-        cT:  colors[0],
-        cL:  colors[1],
-        cR:  colors[2],
-        cB1: colors[3] || null,
-        cB2: colors[4] || null,
-      };
-    }
-  }
-  const [rF, gF, bF] = _cinArtRGB.split(',').map(Number);
-  const cT = boostSat(rF, gF, bF);
-  const [hF, sF, lF] = rgbToHsl(...cT);
-  return {
-    cT,
-    cL:  hslToRgb((hF + 38) % 360, Math.min(1, sF), lF),
-    cR:  hslToRgb((hF - 32 + 360) % 360, Math.min(1, sF), lF),
-    cB1: null,
-    cB2: null,
-  };
-}
-
-/** Stop the breathing animation loop and clear any pending cross-fade. */
-function _stopAmbientAnim() {
-  _ambientGen++; // invalider tous les loops RAF orphelins
-  if (_ambientAnimRaf) { cancelAnimationFrame(_ambientAnimRaf); _ambientAnimRaf = null; }
-  _ambientCross = null;
-}
-
-/** Start the continuous breathing animation RAF loop. No-op if already running. */
-function _startAmbientAnim() {
-  if (_ambientAnimRaf) return;
-  const myGen = _ambientGen; // capturer le token de génération courante
-  let last = performance.now();
-  function loop(now) {
-    // Guard génération : si _stopAmbientAnim() a été appelé depuis, ce loop est orphelin
-    if (myGen !== _ambientGen) return;
-    // Boucle active en mode 'ambient' ET 'amoled' (halo minimaliste dans renderAmbientFrame)
-    if ((cinemaBg !== 'ambient' && cinemaBg !== 'amoled') || !cinemaOpen || document.hidden) {
-      last = now;  // prevent time-jump on resume (BUG-D3A-7)
-      _ambientAnimRaf = null;
-      return;
-    }
-    // Ambient 30fps cap — skip odd frames to halve GPU load
-    if (cinemaBg === 'ambient' && _frameCount++ % 2 !== 0) {
-      _ambientAnimRaf = requestAnimationFrame(loop);
-      return;
-    }
-    _ambientT += now - last;
-    last = now;
-    const canvas = document.getElementById('cinema-bg');
-    if (!canvas) { _ambientAnimRaf = null; return; }
-    // Cache le contexte 2D — getContext() une seule fois tant que le canvas est le même.
-    // FIX HiDPI : si le cache est invalide, ré-appliquer setTransform après getContext().
-    if (!_cinBgCtx || _cinBgCtx.canvas !== canvas) {
-      _cinBgCtx = canvas.getContext('2d');
-      if (!_cinBgCtx) { _ambientAnimRaf = requestAnimationFrame(loop); return; }
-      const _dpr = window.devicePixelRatio || 1;
-      _cinBgCtx.setTransform(_dpr, 0, 0, _dpr, 0, 0);
-    }
-    renderAmbientFrame(_ambientT, canvas, _cinBgCtx, cinemaBg, _cinArtRGB, _ambientColors);
-    // ── Cross-fade overlay — draw old snapshot fading out ────────
-    if (_ambientCross) {
-      const { snapshot, start, dur } = _ambientCross;
-      const p    = Math.min(1, (now - start) / dur);
-      // easeInOutQuad : transition symétrique qui passe vite au milieu (50/50 blend)
-      // et ralentit aux extrêmes → moins de "boue" chromatique lors du cross-fade.
-      // easeOutCubic parcourait 58% en 30% du temps → instabilité visible sur couleurs contrastées.
-      const ease = p < 0.5 ? 2 * p * p : 1 - Math.pow(-2 * p + 2, 2) / 2;
-      // FIX HiDPI : ctx est transformé en CSS px → dessiner le snapshot aux dimensions CSS.
-      const _cW = window.innerWidth || 1280, _cH = window.innerHeight || 800;
-      _cinBgCtx.globalAlpha = 1 - ease;
-      _cinBgCtx.drawImage(snapshot, 0, 0, _cW, _cH);
-      _cinBgCtx.globalAlpha = 1;
-      if (p >= 1) _ambientCross = null;
-    }
-    _ambientAnimRaf = requestAnimationFrame(loop);
-  }
-  _ambientAnimRaf = requestAnimationFrame(loop);
-}
-
-function _updateAmbientGradient() {
-  const canvas = document.getElementById('cinema-bg');
-  if (!canvas || !canvas.getContext) return;
-
-  const dpr = window.devicePixelRatio || 1;
-  const W   = window.innerWidth  || 1280;
-  const H   = window.innerHeight || 800;
-  // FIX HiDPI : le backing store doit être en pixels physiques.
-  // Sans ça, le canvas est rendu en pixels CSS 1:1 → flou sur écrans 2×.
-  const PW  = Math.round(W * dpr);
-  const PH  = Math.round(H * dpr);
-
-  // Mode AMOLED : halo coloré simple, animé via le même loop RAF qu'ambient.
-  // Il n'a pas besoin de _ambientColors (utilise _cinArtRGB directement).
-  // FIX : la garde `if (cinemaBg !== 'ambient') return` empêchait _startAmbientAnim()
-  // d'être appelée → canvas vide en mode AMOLED. On isole le cas AMOLED ici.
-  if (cinemaBg === 'amoled') {
-    _stopAmbientAnim();
-    canvas.width  = PW;
-    canvas.height = PH;
-    _cinBgCtx = canvas.getContext('2d');
-    if (!_cinBgCtx) return;
-    _cinBgCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    // Pas de _buildAmbientColors ni de cross-fade pour AMOLED
-    _startAmbientAnim();
-    return;
-  }
-
-  if (cinemaBg !== 'ambient') return;
-
-  // Snapshot current canvas for cross-fade (only if colors already exist)
-  let snapshot = null;
-  if (_ambientColors && canvas.width > 0 && canvas.height > 0) {
-    snapshot = document.createElement('canvas');
-    snapshot.width = PW; snapshot.height = PH;
-    const snapCtx = snapshot.getContext('2d');
-    if (snapCtx) snapCtx.drawImage(canvas, 0, 0, PW, PH);
-  }
-
-  _stopAmbientAnim();
-  canvas.width  = PW;
-  canvas.height = PH;
-  _cinBgCtx = canvas.getContext('2d');
-  if (!_cinBgCtx) return;
-  _cinBgCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
-  _ambientColors = _buildAmbientColors();
-
-  if (snapshot) {
-    _ambientCross = { snapshot, start: performance.now(), dur: AMBIENT_CROSSFADE_MS };
-  }
-
-  _startAmbientAnim();
-}
-
-export function updateCinemaBgBtn() {
-  const btn = document.getElementById('cinema-bg-btn');
-  if (!btn) return;
-  // Fallback sur 'ambient' si mode inconnu (CINEMA_BG_ICONS n'a pas de clé 'blur')
-  btn.innerHTML = CINEMA_BG_ICONS[cinemaBg] || CINEMA_BG_ICONS.ambient;
-  const label = CINEMA_BG_LABELS[cinemaBg] || cinemaBg;
-  btn.title = i18n('t_cinema_bg', label) + ' [B]';
-}
-
-// ── Resize handler — redessine blur/ambient si dimensions changent ──
-let _resizeTimer = null;
-window.addEventListener('resize', () => {
-  if (!cinemaOpen) return;
-  clearTimeout(_resizeTimer);
-  _resizeTimer = setTimeout(() => {
-    if (cinemaBg === 'ambient' || cinemaBg === 'amoled') applyCinemaBg();
-  }, 200);
-});
 
 // ── Ouverture / fermeture ────────────────────────────────────
 
@@ -492,7 +247,7 @@ export function openCinema() {
   applyCinemaBg();
   updateCinema();
   _startClock();
-  _startViz();
+  startCinemaViz();
   // Animation d'entrée : scale 0.88 → 1 + fade-in
   const artWrap = document.querySelector('.cinema-art-wrap');
   if (artWrap) {
@@ -611,7 +366,6 @@ export function closeCinema() {
   if (cinemaHideTimer) { clearTimeout(cinemaHideTimer); cinemaHideTimer = null; } // Bug 5 fix
   clearTimeout(_cinSwapOutTimer); _cinSwapOutTimer = null;
   clearTimeout(_cinSwapInTimer);  _cinSwapInTimer  = null;
-  clearTimeout(_resizeTimer);     _resizeTimer     = null; // évite applyCinemaBg() orphelin après fermeture
   // Killer la timeline d'ouverture si elle est encore en vol + reset des inline
   // styles laissés par gsap (autoAlpha posé display:none / opacity:0 sur l'élément).
   if (_openTl) { _openTl.kill(); _openTl = null; }
@@ -627,10 +381,9 @@ export function closeCinema() {
   }
   _cinemaLastFocus = null;
   _stopKenBurns();
-  _stopAmbientAnim();
-  _ambientColors = null;
+  stopAmbientAnim();
   _stopClock();
-  _stopViz();
+  stopCinemaViz();
   // Quitter le plein écran si actif
   if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
 }
@@ -824,7 +577,7 @@ export function updateCinema() {
           _cinSwapInTimer = setTimeout(() => artWrap.classList.remove('cin-swap'), 440);
         }
         _startKenBurns(); // nouvelle piste → nouvelle direction Ken Burns
-        if (cinemaBg === 'ambient' || cinemaBg === 'amoled') _updateAmbientGradient();
+        if (cinemaBg === 'ambient' || cinemaBg === 'amoled') updateAmbientGradient();
       };
 
       if (hadArt && artWrap) {
@@ -960,418 +713,6 @@ function _stopClock() {
 }
 
 // ═══════════════════════════════════════════════════════════
-// ── Visualiseur audio ───────────────────────────────────────
-// ═══════════════════════════════════════════════════════════
-
-function _startViz() {
-  const canvas = document.getElementById('cinema-viz');
-  if (!canvas) return;
-
-  // Réutiliser le graphe audio de l'EQ — on ne peut pas créer un second source.
-  const analyser = eqAnalyser; // live binding depuis eq.js
-  const ac       = eqCtx;
-
-  if (!analyser || !ac) {
-    // L'EQ n'est pas encore initialisé (rare) — on essaiera à la prochaine ouverture
-    return;
-  }
-  if (ac.state === 'suspended') ac.resume();
-
-  const ctx = canvas.getContext('2d');
-  if (!ctx) return;
-  const dpr = window.devicePixelRatio || 1;
-  let cw = 0, ch = 0;
-
-  // ── GSAP color (tween entre pistes) ─────────────────────────────────────────
-  const _col = { r: _cinArtRGBTarget[0], g: _cinArtRGBTarget[1], b: _cinArtRGBTarget[2] };
-  let _colKey = '', _colTween = null;
-
-  // ── GSAP amplitude : suivi RMS + multiplicateur beat séparés ────────────────
-  const _envRms = { v: 0.0 };   // suit l'énergie RMS via quickTo
-  const _envMul = { v: 1.0 };   // multiplicateur beat — tween indépendant
-  const _qRms   = quickTo(_envRms, 'v', { duration: 0.22, ease: 'power2.out' });
-
-  // ── Constantes barres ──────────────────────────────────────────────────────
-  const BAR_STD  = 56;
-
-  // ── Barres GSAP quickTo (zéro GC dans draw) ────────────────────────────────
-  const _bars = Array.from({ length: BAR_STD }, () => ({ h: 0 }));
-  const _qs   = _bars.map(b => quickTo(b, 'h', { duration: 0.12, ease: 'power2.out' }));
-
-  // ── Beat detector ─────────────────────────────────────────────────────────────
-  const BEAT_HISTORY = 43, BEAT_THRESH = 1.35, BEAT_COOLDOWN = 650;
-  const _bh = new Float32Array(BEAT_HISTORY);
-  let _bi = 0, _bsum = 0, _blast = 0, _artWrap = null;
-
-  function _detectBeat(freq) {
-    const end = Math.floor(freq.length * 0.10);
-    let e = 0;
-    for (let i = 0; i < end; i++) e += freq[i] * freq[i];
-    e /= end;
-    const slot = _bi % BEAT_HISTORY;
-    _bsum -= _bh[slot]; _bh[slot] = e; _bsum += e; _bi++;
-    if (_bi < BEAT_HISTORY) return;
-    if (_bi % BEAT_HISTORY === 0) { _bsum = 0; for (let i = 0; i < BEAT_HISTORY; i++) _bsum += _bh[i]; }
-    const avg = _bsum / BEAT_HISTORY, now = performance.now();
-    if (e > avg * BEAT_THRESH && now - _blast > BEAT_COOLDOWN) {
-      _blast = now;
-      if (!_artWrap) _artWrap = document.querySelector('.cinema-art-wrap');
-      if (_artWrap) {
-        const rgb = `${Math.round(_col.r)},${Math.round(_col.g)},${Math.round(_col.b)}`;
-        _artWrap.style.setProperty('--beat-color', `rgba(${rgb},.32)`);
-        _artWrap.classList.remove('beat');
-        requestAnimationFrame(() => _artWrap.classList.add('beat'));
-        if (_beatTimer) clearTimeout(_beatTimer);
-        _beatTimer = setTimeout(() => { _artWrap.classList.remove('beat'); _beatTimer = null; }, 620);
-      }
-      // Pulse du multiplicateur d'amplitude — indépendant du quickTo RMS
-      kill(_envMul);
-      const tl = timeline();
-      tl.to(_envMul, { v: 1.55, duration: 0.06, ease: eases.SNAP });
-      tl.to(_envMul, { v: 1.00, duration: 0.70, ease: 'power3.out' });
-    }
-  }
-
-  // ── Points de courbe pré-alloués (zéro GC dans draw) ────────────────────────
-  const NPTS = 280;
-  const _px  = new Float32Array(NPTS); // x coordonnées (constantes après resize)
-  const _py  = new Float32Array(NPTS); // y waveform principal
-  const _mpy = new Float32Array(NPTS); // y miroir
-
-  // ── Buffers audio ─────────────────────────────────────────────────────────────
-  let _vizBuf  = new Uint8Array(analyser.frequencyBinCount);
-
-  // ── Tracé bezier lissé via midpoints ─────────────────────────────────────────
-  // Algorithme : quadraticCurveTo vers le milieu de chaque segment → courbe douce sans GC.
-  function _tracePath(py) {
-    ctx.moveTo(_px[0], py[0]);
-    for (let i = 0; i < NPTS - 1; i++) {
-      ctx.quadraticCurveTo(_px[i], py[i], (_px[i] + _px[i + 1]) * 0.5, (py[i] + py[i + 1]) * 0.5);
-    }
-    ctx.lineTo(_px[NPTS - 1], py[NPTS - 1]);
-  }
-
-  // ── Liquid wave buffers (pré-alloués — zéro GC dans draw) ─────────────────
-  // 7 layers : L0=sub-basse (avant-plan, screen), L6=aigu (arrière-plan).
-  const NLIQ = 7;    // couches de vagues
-  const LPTS = 200;  // points par chemin — courbes plus douces
-  const _lPx  = new Float32Array(LPTS);
-  const _lPy  = Array.from({ length: NLIQ }, () => new Float32Array(LPTS));
-  const _lSmt = new Float32Array(NLIQ);
-  const _lBnd = new Float32Array(NLIQ);
-  // 7 plages FFT — layout plat [s0,e0,s1,e1,...] en fraction de frequencyBinCount
-  const _lBR  = [
-    0.000, 0.015,  // L0 sub-basse
-    0.015, 0.045,  // L1 basse
-    0.045, 0.10,   // L2 bas-médium
-    0.10,  0.22,   // L3 médium
-    0.22,  0.42,   // L4 haut-médium
-    0.42,  0.68,   // L5 haut
-    0.68,  1.00,   // L6 aigu
-  ];
-  // [yFrac, ampFrac, cycles/largeur, vitesse de phase ms⁻¹, alphaBase]
-  const _lPrm = [
-    [0.60, 0.30, 0.8, 4.5e-4, 0.28],  // L0 sub-basse — ample, lente, screen
-    [0.52, 0.24, 1.2, 6.5e-4, 0.24],  // L1 basse — screen
-    [0.45, 0.18, 1.7, 9.0e-4, 0.19],  // L2 bas-médium
-    [0.39, 0.13, 2.2, 1.2e-3, 0.15],  // L3 médium
-    [0.34, 0.09, 2.8, 1.5e-3, 0.12],  // L4 haut-médium
-    [0.29, 0.06, 3.5, 1.8e-3, 0.09],  // L5 haut
-    [0.25, 0.04, 4.2, 2.2e-3, 0.06],  // L6 aigu — fins frémissements
-  ];
-  let _lGrads    = null, _lGradRGB = '', _lGradH = 0, _lPxW = -1;
-  let _lColors   = new Array(NLIQ).fill('255,255,255'); // couleur par couche (teinte décalée)
-  let _lColorsRGB = '';
-
-  function _liqRebuildColors(rgb) {
-    _lColorsRGB = rgb;
-    const parts = rgb.split(',');
-    const r = +parts[0], g = +parts[1], b = +parts[2];
-    const [h, s, l] = rgbToHsl(r, g, b);
-    const shifts    = [0, -28, 28, -16, 20, -42, 36];
-    const satBoosts = [1.25, 1.20, 1.30, 1.15, 1.20, 1.25, 1.15];
-    for (let L = 0; L < NLIQ; L++) {
-      const nh = ((h + shifts[L]) % 360 + 360) % 360;
-      const ns = Math.min(1, s * satBoosts[L]);
-      const nl = Math.min(0.75, Math.max(0.22, l));
-      const [nr, ng, nb] = hslToRgb(nh, ns, nl);
-      _lColors[L] = `${nr|0},${ng|0},${nb|0}`;
-    }
-  }
-
-  function _liqRebuildGrads(rgb, h) {
-    if (_lColorsRGB !== rgb) _liqRebuildColors(rgb);
-    _lGrads = []; _lGradRGB = rgb; _lGradH = h;
-    for (let L = 0; L < NLIQ; L++) {
-      const c = _lColors[L], a = _lPrm[L][4];
-      const g = ctx.createLinearGradient(0, 0, 0, h);
-      g.addColorStop(0,    `rgba(${c},${a.toFixed(3)})`);
-      g.addColorStop(0.50, `rgba(${c},${(a * 0.55).toFixed(3)})`);
-      g.addColorStop(1,    `rgba(${c},0.008)`);
-      _lGrads[L] = g;
-    }
-  }
-
-  function _liqBloom(w, h, bassE, midE) {
-    if (bassE <= 0.04) return;
-    const bA = Math.min(0.24, bassE * 0.32);
-    const bg = ctx.createRadialGradient(w * 0.5, h * 1.05, 0, w * 0.5, h * 1.05, h);
-    bg.addColorStop(0,    `rgba(${_lColors[0]},${bA.toFixed(3)})`);
-    bg.addColorStop(0.45, `rgba(${_lColors[1]},${(bA * 0.35).toFixed(3)})`);
-    bg.addColorStop(1,    'rgba(0,0,0,0)');
-    ctx.globalAlpha = 1; ctx.fillStyle = bg; ctx.fillRect(0, 0, w, h);
-    if (midE > 0.10) {
-      const mA = Math.min(0.10, midE * 0.14);
-      const mg = ctx.createRadialGradient(w * 0.5, h * 0.5, 0, w * 0.5, h * 0.5, w * 0.5);
-      mg.addColorStop(0, `rgba(${_lColors[2]},${mA.toFixed(3)})`);
-      mg.addColorStop(1, 'rgba(0,0,0,0)');
-      ctx.fillStyle = mg; ctx.fillRect(0, 0, w, h);
-    }
-  }
-
-  function _drawLiquidWaves(T, w, h, rgb) {
-    if (_lPxW !== w) { for (let i = 0; i < LPTS; i++) _lPx[i] = (i / (LPTS - 1)) * w; _lPxW = w; }
-    const nBins = analyser.frequencyBinCount;
-    for (let L = 0; L < NLIQ; L++) {
-      const s = Math.floor(_lBR[L * 2] * nBins), e = Math.floor(_lBR[L * 2 + 1] * nBins);
-      let sum = 0; for (let i = s; i < e; i++) sum += _vizBuf[i];
-      _lSmt[L] = _lSmt[L] * 0.80 + (e > s ? sum / ((e - s) * 255) : 0) * 0.20;
-      _lBnd[L] = _lSmt[L];
-    }
-    if (_lGradRGB !== rgb || _lGradH !== h) _liqRebuildGrads(rgb, h);
-    _liqBloom(w, h, _lBnd[0] * _envMul.v, _lBnd[2] * _envMul.v);
-    const _PHI = 1.618033988;
-    for (let L = NLIQ - 1; L >= 0; L--) {
-      const prm = _lPrm[L], energy = Math.min(1, _lBnd[L] * 1.5);
-      const amp = h * prm[1] * (0.18 + energy * 0.82) * _envMul.v, cy = h * prm[0];
-      const phase = T * prm[3];
-      for (let i = 0; i < LPTS; i++) {
-        const a = (i / (LPTS - 1)) * Math.PI * 2 * prm[2] + phase;
-        _lPy[L][i] = cy - amp * (Math.sin(a) * 0.62 + Math.sin(a * _PHI + phase * 0.35) * 0.38);
-      }
-      const alpha = prm[4] * (0.35 + energy * 0.65);
-      ctx.globalCompositeOperation = L <= 1 ? 'screen' : 'source-over';
-      ctx.beginPath(); ctx.moveTo(_lPx[0], _lPy[L][0]);
-      for (let i = 0; i < LPTS - 1; i++) {
-        ctx.quadraticCurveTo(_lPx[i], _lPy[L][i],
-          (_lPx[i] + _lPx[i + 1]) * 0.5, (_lPy[L][i] + _lPy[L][i + 1]) * 0.5);
-      }
-      ctx.lineTo(_lPx[LPTS - 1], _lPy[L][LPTS - 1]);
-      ctx.lineTo(w, h); ctx.lineTo(0, h); ctx.closePath();
-      ctx.globalAlpha = alpha; ctx.fillStyle = _lGrads[L]; ctx.fill();
-      if (energy > 0.04) {
-        ctx.beginPath(); ctx.moveTo(_lPx[0], _lPy[L][0]);
-        for (let i = 0; i < LPTS - 1; i++) {
-          ctx.quadraticCurveTo(_lPx[i], _lPy[L][i],
-            (_lPx[i] + _lPx[i + 1]) * 0.5, (_lPy[L][i] + _lPy[L][i + 1]) * 0.5);
-        }
-        ctx.lineTo(_lPx[LPTS - 1], _lPy[L][LPTS - 1]);
-        ctx.strokeStyle = `rgb(${_lColors[L]})`; ctx.lineWidth = Math.max(1.0, 3.0 - L * 0.3);
-        ctx.globalAlpha = Math.min(0.72, energy) * alpha; ctx.stroke();
-      }
-      ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
-    }
-  }
-
-  // ── Aurora (aurore boréale) buffers ───────────────────────────────────────
-  // 7 rideaux verticaux : chacun oscille horizontalement et ondule.
-  const NAUR = 7;   // rideaux
-  const APTS = 90;  // points par bord de rideau
-  const _aLx = Array.from({ length: NAUR }, () => new Float32Array(APTS)); // bord gauche x
-  const _aRx = Array.from({ length: NAUR }, () => new Float32Array(APTS)); // bord droit x
-  const _aPy = new Float32Array(APTS);
-  const _aBnd = new Float32Array(NAUR);
-  const _aBR  = [0.00,0.03, 0.03,0.08, 0.08,0.18, 0.18,0.35, 0.35,0.55, 0.55,0.78, 0.78,1.00];
-  // [xFrac, xAmp, ω ms⁻¹, φ, rippleFreq, widthFrac, alphaBase]
-  const _aPrm = [
-    [0.10, 0.04, 3.0e-4, 0.0,  1.5, 0.12, 0.30],
-    [0.27, 0.05, 2.5e-4, 1.4,  2.0, 0.10, 0.26],
-    [0.43, 0.06, 3.5e-4, 2.8,  1.8, 0.15, 0.32],
-    [0.58, 0.05, 2.8e-4, 0.6,  2.2, 0.12, 0.28],
-    [0.70, 0.07, 4.0e-4, 3.2,  1.6, 0.13, 0.28],
-    [0.82, 0.04, 3.2e-4, 1.8,  2.4, 0.09, 0.24],
-    [0.92, 0.03, 2.8e-4, 4.0,  2.8, 0.08, 0.22],
-  ];
-  let _aGrads = null, _aGradRGB = '', _aGradH = 0, _aPyH = -1;
-  let _aColors = new Array(NAUR).fill('255,255,255'), _aColorsRGB = '';
-  // Étoiles : positions déterministes (pas de Math.random dans la boucle rAF)
-  const NSTAR = 100;
-  const _aSX = new Float32Array(NSTAR);
-  const _aSY = new Float32Array(NSTAR);
-  const _aSP = new Float32Array(NSTAR);
-  for (let i = 0; i < NSTAR; i++) {
-    _aSX[i] = ((i * 7919 + 13) % 997) / 997;
-    _aSY[i] = ((i * 6271 +  7) % 997) / 997 * 0.55;
-    _aSP[i] = (i * 2.3999) % (Math.PI * 2);
-  }
-
-  function _aurRebuildColors(rgb) {
-    _aColorsRGB = rgb;
-    const parts = rgb.split(',');
-    const r = +parts[0], g = +parts[1], b = +parts[2];
-    const [h, s, l] = rgbToHsl(r, g, b);
-    const shifts = [-60, -40, -18, 0, 22, 46, 70];
-    for (let C = 0; C < NAUR; C++) {
-      const nh = ((h + shifts[C]) % 360 + 360) % 360;
-      const ns = Math.min(1, s * 1.35), nl = Math.min(0.78, Math.max(0.28, l * 1.08));
-      const [nr, ng, nb] = hslToRgb(nh, ns, nl);
-      _aColors[C] = `${nr|0},${ng|0},${nb|0}`;
-    }
-  }
-
-  function _aurRebuildGrads(rgb, h) {
-    if (_aColorsRGB !== rgb) _aurRebuildColors(rgb);
-    _aGrads = []; _aGradRGB = rgb; _aGradH = h;
-    for (let C = 0; C < NAUR; C++) {
-      const c = _aColors[C], a = _aPrm[C][6];
-      const g = ctx.createLinearGradient(0, 0, 0, h);
-      g.addColorStop(0,    `rgba(${c},0)`);
-      g.addColorStop(0.12, `rgba(${c},${a.toFixed(3)})`);
-      g.addColorStop(0.42, `rgba(${c},${(a * 0.68).toFixed(3)})`);
-      g.addColorStop(0.72, `rgba(${c},${(a * 0.22).toFixed(3)})`);
-      g.addColorStop(1,    `rgba(${c},0)`);
-      _aGrads[C] = g;
-    }
-  }
-
-  function _aurBloom(w, h, energy) {
-    if (energy <= 0.04) return;
-    const bA = Math.min(0.20, energy * 0.28);
-    const bg = ctx.createRadialGradient(w * 0.5, h * 0.28, 0, w * 0.5, h * 0.28, w * 0.68);
-    bg.addColorStop(0,    `rgba(${_aColors[3]},${bA.toFixed(3)})`);
-    bg.addColorStop(0.45, `rgba(${_aColors[1]},${(bA * 0.38).toFixed(3)})`);
-    bg.addColorStop(1,    'rgba(0,0,0,0)');
-    ctx.globalCompositeOperation = 'screen';
-    ctx.fillStyle = bg; ctx.fillRect(0, 0, w, h);
-    ctx.globalCompositeOperation = 'source-over';
-  }
-
-  function _drawAurora(T, w, h, rgb) {
-    if (_aPyH !== h) { for (let i = 0; i < APTS; i++) _aPy[i] = (i / (APTS - 1)) * h; _aPyH = h; }
-    const nBins = analyser.frequencyBinCount;
-    for (let C = 0; C < NAUR; C++) {
-      const s = Math.floor(_aBR[C*2]*nBins), e = Math.floor(_aBR[C*2+1]*nBins);
-      let sum = 0; for (let i = s; i < e; i++) sum += _vizBuf[i];
-      _aBnd[C] = _aBnd[C] * 0.86 + (e > s ? sum / ((e - s) * 255) : 0) * 0.14;
-    }
-    if (_aGradRGB !== rgb || _aGradH !== h) _aurRebuildGrads(rgb, h);
-    ctx.fillStyle = '#fff';
-    for (let pass = 0; pass < 3; pass++) {
-      ctx.globalAlpha = 0.06 + pass * 0.05 * (0.5 + 0.5 * Math.sin(T * 8e-4 + pass * 2.1));
-      for (let i = pass; i < NSTAR; i += 3) ctx.fillRect(_aSX[i] * w | 0, _aSY[i] * h | 0, 1, 1);
-    }
-    ctx.globalAlpha = 1;
-    _aurBloom(w, h, _aBnd[0] * _envMul.v);
-    const _PHI = 1.618033988;
-    for (let C = NAUR - 1; C >= 0; C--) {
-      const prm = _aPrm[C], energy = Math.min(1, _aBnd[C] * 1.6);
-      const cx  = prm[0] * w + prm[1] * w * Math.sin(T * prm[2] + prm[3]);
-      const cw  = prm[5] * w * (0.35 + energy * 0.65) * _envMul.v;
-      const rA  = w * 0.016 * (0.25 + energy * 0.75);
-      for (let i = 0; i < APTS; i++) {
-        const yf  = i / (APTS - 1);
-        const rip = Math.sin(yf * Math.PI * 2 * prm[4] + T * 7e-4 + prm[3]) * rA
-                  + Math.sin(yf * Math.PI * 2 * prm[4] * _PHI + T * 5e-4) * rA * 0.3;
-        _aLx[C][i] = cx - cw * 0.5 + rip;
-        _aRx[C][i] = cx + cw * 0.5 + rip;
-      }
-      ctx.globalCompositeOperation = 'screen';
-      ctx.globalAlpha = prm[6] * (0.30 + energy * 0.70);
-      ctx.beginPath();
-      ctx.moveTo(_aLx[C][0], _aPy[0]);
-      for (let i = 1; i < APTS; i++) ctx.lineTo(_aLx[C][i], _aPy[i]);
-      ctx.lineTo(_aRx[C][APTS - 1], _aPy[APTS - 1]);
-      for (let i = APTS - 2; i >= 0; i--) ctx.lineTo(_aRx[C][i], _aPy[i]);
-      ctx.closePath(); ctx.fillStyle = _aGrads[C]; ctx.fill();
-      ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
-    }
-  }
-
-  function draw(timestamp) {
-    if (!cinemaOpen) return;
-    if (document.hidden) { _cinVizRaf = null; return; }
-    const T = timestamp !== undefined ? timestamp : performance.now();
-    const w = canvas.clientWidth, h = canvas.clientHeight;
-    if (w === 0 || h === 0) { _cinVizRaf = requestAnimationFrame(draw); return; }
-    if (w !== cw || h !== ch) {
-      canvas.width  = Math.round(w * dpr);
-      canvas.height = Math.round(h * dpr);
-      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      cw = w; ch = h;
-    }
-    ctx.clearRect(0, 0, w, h);
-
-    // Sync buffers
-    if (_vizBuf.length !== analyser.frequencyBinCount) _vizBuf = new Uint8Array(analyser.frequencyBinCount);
-    analyser.getByteFrequencyData(_vizBuf);
-
-    // GSAP color sync : démarre un tween quand la cible de couleur change
-    const ck = `${_cinArtRGBTarget[0]},${_cinArtRGBTarget[1]},${_cinArtRGBTarget[2]}`;
-    if (ck !== _colKey) {
-      _colKey = ck;
-      if (_colTween) { _colTween.kill(); _colTween = null; }
-      _colTween = tween(_col, { r: _cinArtRGBTarget[0], g: _cinArtRGBTarget[1], b: _cinArtRGBTarget[2], duration: 0.75, ease: 'power2.inOut' });
-    }
-    const rgb = `${Math.round(_col.r)},${Math.round(_col.g)},${Math.round(_col.b)}`;
-
-    _detectBeat(_vizBuf);
-
-    // Mise à jour GSAP quickTo
-    const barCount  = BAR_STD;
-    const totalBins = analyser.frequencyBinCount;
-    const lMax      = Math.log2(totalBins * 0.65);
-    const lMin      = Math.log2(1);
-    let   avgH      = 0;
-    for (let i = 0; i < barCount; i++) {
-      const bin = Math.round(Math.pow(2, lMin + (i / barCount) * (lMax - lMin)));
-      _qs[i](_vizBuf[Math.min(bin, totalBins - 1)] / 255);
-      avgH += _bars[i].h;
-    }
-    avgH /= barCount;
-
-    if (cinemaBg === 'liquid') {
-      _drawLiquidWaves(T, w, h, rgb);
-
-    } else if (cinemaBg === 'aurora') {
-      _drawAurora(T, w, h, rgb);
-
-    } else {
-      // Mode standard — barres du bas
-      const bw = w / barCount;
-
-      ctx.fillStyle = `rgb(${rgb})`;
-      for (let i = 0; i < barCount; i++) {
-        const v = _bars[i].h, bh = Math.max(2, v * h * 0.42);
-        ctx.globalAlpha = 0.05 + v * 0.35;
-        if (ctx.roundRect) { ctx.beginPath(); ctx.roundRect(i * bw + 1, h - bh, bw - 2, bh, [3,3,0,0]); ctx.fill(); }
-        else { ctx.fillRect(i * bw + 1, h - bh, bw - 2, bh); }
-        if (v > 0.18) { ctx.globalAlpha = v * 0.07; ctx.fillRect(i * bw + 1, h, bw - 2, bh * 0.28); }
-      }
-      ctx.globalAlpha = 1;
-    }
-    _cinVizRaf = requestAnimationFrame(draw);
-  }
-
-  if (_cinVizRaf) cancelAnimationFrame(_cinVizRaf);
-  draw();
-  canvas.style.opacity = '1';
-}
-
-
-function _stopViz() {
-  if (_cinVizRaf) { cancelAnimationFrame(_cinVizRaf); _cinVizRaf = null; }
-  // Nettoyer le beat timer orphelin (sinon la classe .beat reste si cinema fermé pendant un beat)
-  if (_beatTimer) {
-    clearTimeout(_beatTimer);
-    _beatTimer = null;
-    document.querySelector('.cinema-art-wrap')?.classList.remove('beat');
-  }
-  const canvas = document.getElementById('cinema-viz');
-  if (canvas) canvas.style.opacity = '0';
-  // Ne pas fermer l'AudioContext — il appartient au module EQ
-}
-
-// ═══════════════════════════════════════════════════════════
 // ── Piste suivante ───────────────────────────────────────────
 // ═══════════════════════════════════════════════════════════
 
@@ -1431,10 +772,10 @@ function _updateNextTrack() {
 // ── Visibilité onglet — relancer le loop ambient si l'onglet redevient visible ──
 document.addEventListener('visibilitychange', () => {
   if (!document.hidden && cinemaOpen) {
-    if (cinemaBg === 'ambient' || cinemaBg === 'amoled') {
-      _startAmbientAnim();
-    } else if ((cinemaBg === 'liquid' || cinemaBg === 'aurora') && !_cinVizRaf) {
-      _startViz();
+    restartAmbientIfNeeded();
+    const cinVizCanvas = document.getElementById('cinema-viz');
+    if ((cinemaBg === 'liquid' || cinemaBg === 'aurora') && cinVizCanvas?.style.opacity === '0') {
+      startCinemaViz();
     }
   }
 });

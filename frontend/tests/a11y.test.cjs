@@ -180,9 +180,10 @@ async function run() {
   // 3 flashs/s : BEAT_COOLDOWN >= 334 ms. (Audit : le visualizer lisse + clear
   // chaque frame, prefers-reduced-motion coupe toutes les boucles — pas de flash.)
   await t('cinema beat cooldown keeps flashes <=3/sec (SC 2.3.1)', () => {
-    const cj = readRepoFile('frontend/src/cinema.js');
+    // Le beat detector vit désormais dans cinema-viz.js (split de cinema.js).
+    const cj = readRepoFile('frontend/src/cinema-viz.js');
     const m = /BEAT_COOLDOWN\s*=\s*(\d+)/.exec(cj);
-    assert.ok(m, 'BEAT_COOLDOWN introuvable dans cinema.js');
+    assert.ok(m, 'BEAT_COOLDOWN introuvable dans cinema-viz.js');
     assert.ok(parseInt(m[1], 10) >= 334,
       `BEAT_COOLDOWN ${m[1]}ms < 334ms → risque de >3 flashs/s (SC 2.3.1)`);
   });

@@ -33,7 +33,8 @@ export function startCinemaViz() {
   const dpr = window.devicePixelRatio || 1;
   let cw = 0, ch = 0;
 
-  const _col = { r: 255, g: 255, b: 255 };
+  const _initRGB = _getCinVizState?.()?.cinArtRGBTarget ?? [255, 255, 255];
+  const _col = { r: _initRGB[0], g: _initRGB[1], b: _initRGB[2] };
   let _colKey = '', _colTween = null;
 
   const _envRms = { v: 0.0 };
