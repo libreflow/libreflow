@@ -144,6 +144,7 @@ async function _doSaveCfg() {
       drillKey, drillFrom, drillDisplayName,
       plFolders, recentPls,
       heatPeriod:  getHeatPeriod(),
+      queuePinned: get('queuePinned') === true,
       queueState:  getQueueState(),
       radioSeedId: radioActive ? getRadioSeedId() : null,
       autoUpdate,

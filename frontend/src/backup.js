@@ -80,7 +80,7 @@ export async function exportBackup(includeFiles = false) {
         imports:   JSON.stringify(imports ?? []),
         config:    JSON.stringify(cfg     ?? {}),
       },
-    });
+    }, { timeout: 0 });
 
     if (result) {
       toast(`Bibliothèque exportée — ${(tracks ?? []).length} piste(s)`, 'success');
@@ -106,7 +106,7 @@ export async function importBackup() {
   if (btn) { btn.disabled = true; btn.textContent = 'Restauration…'; }
 
   try {
-    const payload = await invoke('import_backup', {});
+    const payload = await invoke('import_backup', {}, { timeout: 0 });
     if (!payload) {
       toast('Import annulé', 'info');
       return;
@@ -135,6 +135,7 @@ export async function importBackup() {
     const addedTracks   = [];
 
     for (const t of backupTracks) {
+      if (!t?.id || typeof t.id !== 'string' || !t.path || typeof t.path !== 'string') continue;
       if (!existingIds.has(t.id)) {
         addedTracks.push(t);
         existingIds.add(t.id); // évite les doublons si le backup contient des ids dupliqués

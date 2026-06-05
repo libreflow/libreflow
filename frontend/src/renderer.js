@@ -3,10 +3,7 @@
 //
 // Responsabilités :
 //   - Virtual scroll : virtRenderWindow, virtAttachScroll
-//   - Rendu liste/grilles : renderLib, renderAlbumsGrid, renderArtistsGrid, renderPlaylistsGrid
-//   - Helpers HTML : thtml, hlText, artPlaceholder, makeLikeBtn, makeAddBtn, makeEqHTML
-//   - Mises à jour DOM partielles : patchActiveTrack, patchPlayState, patchTrackEl
-//   - Navigation drill-down : drillDown
+//   - Rendu liste : renderLib
 //   - Stats : updateStats, scheduleStatsUpdate
 //   - Animations : _withVT, animateViewChange, scrollToCurrentTrack
 //
@@ -36,217 +33,26 @@ import { cancelSearchDebounce }                              from './views.js';
 import { playLog }                                           from './playlog.js';
 import { getImports }                                        from './imports.js';
 
+import { thtml, artPlaceholder, patchActiveTrack,
+         patchPlayState, patchTrackEl }                      from './renderer-track.js';
+import { renderAlbumsGrid, renderArtistsGrid,
+         renderPlaylistsGrid, drillDown,
+         updatePlActionBar, updateBreadcrumb,
+         renderFormatChips, invalidateGridMaps,
+         invalidateGridMapsIfChanged,
+         renderDrillHeader, _getArtistMap,
+         _getAlbumMap }                                      from './renderer-grids.js';
+
 // ── État interne ──────────────────────────────────────────────────────────────
 let _statsTimer   = null;    // debounce updateStats
-let _plHero       = null;    // référence au #pl-hero courant (FIX-B1)
-let _activeRowEl  = null;    // I-1: cache du dernier élément .tr.act
 // R-H9 : true tant que #tlist affiche des lignes squelette — le ResizeObserver
 // de virtAttachScroll recalcule alors le nombre de lignes au lieu de re-rendre la liste.
 let _skeletonActive = false;
-const ART_COLOR_RE = /^rgb\(\s*\d{1,3}\s*,\s*\d{1,3}\s*,\s*\d{1,3}\s*\)$/;
-
-// C-1: caches memoïsés pour _getAlbumMap / _getArtistMap
-let _albumMapCache  = null;
-let _artistMapCache = null;
-let _tracksSig = ''; // content hash for selective map invalidation
-
-// ── Hydratation paresseuse de l'artwork (grilles albums/artistes + drill header) ──
-// Les cartes de grille ne sont PAS virtualisées : on rend un placeholder portant
-// data-art-tid, puis on charge l'artwork à la demande (IntersectionObserver) pour
-// ne pas instancier des centaines de blob: URLs d'un coup. Corrige le bug
-// "certaines pochettes n'apparaissent pas en vue Albums/Artistes".
-const _artTrackById    = new Map();   // trackId → piste représentative (carte grille/drill)
-// R5-B FIX : un IntersectionObserver par grille (Albums / Artistes) au lieu d'un unique
-// partagé. L'ancien code déconnectait l'observer Albums quand la grille Artistes en créait
-// un nouveau, laissant des placeholders non-hydratés dans la grille Albums si les deux
-// grilles étaient rendues dans la même session.
-const _gridArtObservers = new Map(); // gridEl → IntersectionObserver
-
-/**
- * Hydrate les placeholders [data-art-tid] d'un conteneur : résout l'artwork via
- * getArtUrl() et remplace le placeholder par un <img>.
- * @param {Element|null} rootEl
- * @param {{observe?: boolean}} [opts] - observe:true → ne charge que les cartes proches du viewport
- */
-function _hydrateArtPlaceholders(rootEl, { observe = false } = {}) {
-  if (!rootEl) return;
-  const hydrate = (ph) => {
-    const t = _artTrackById.get(ph.getAttribute('data-art-tid'));
-    if (!t) return;
-    getArtUrl(t).then(url => {
-      if (!url || !ph.isConnected) return;
-      const img = document.createElement('img');
-      img.alt = '';
-      img.setAttribute('aria-hidden', 'true');
-      if (ph.dataset.artImgClass) img.className = ph.dataset.artImgClass;
-      img.src = url;
-      ph.replaceWith(img);
-    }).catch((e) => console.warn('[getArtUrl]', t?.id, e));
-  };
-  const phs = rootEl.querySelectorAll('[data-art-tid]');
-  if (observe && 'IntersectionObserver' in window) {
-    // R5-B FIX : déconnecter l'observer existant POUR CE rootEl uniquement
-    const prev = _gridArtObservers.get(rootEl);
-    if (prev) prev.disconnect();
-    const obs = new IntersectionObserver((entries, observer) => {
-      for (const e of entries) {
-        if (!e.isIntersecting) continue;
-        observer.unobserve(e.target);
-        hydrate(e.target);
-      }
-    }, { rootMargin: '300px' });
-    _gridArtObservers.set(rootEl, obs);
-    for (const ph of phs) obs.observe(ph);
-  } else {
-    for (const ph of phs) hydrate(ph);
-  }
-}
 
 // Restore art-loaded fade-in without inline onload (load events don't bubble → capture phase)
 document.addEventListener('load', (e) => {
   if (e.target?.classList?.contains('art-img')) e.target.classList.add('art-loaded');
 }, true);
-
-// ── Helpers inline ────────────────────────────────────────────────────────────
-
-/** Escapes special regex characters in a string. */
-function escapeRegex(s) {
-  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
-
-/** Cheap change-tracking signature for tracks[].
- *  Detects adds, removes, and full clears without iterating the whole array.
- *  Returns 'empty' when the array is empty (distinct from the initial '' value
- *  so the very first renderLib() always triggers a rebuild). */
-function _computeTracksSig(tracks) {
-  if (!tracks.length) return 'empty';
-  return `${tracks.length}:${tracks[0].id}:${tracks[tracks.length - 1].id}`;
-}
-
-/** Wraps matching parts of `text` with <mark> for search highlighting.
- *  Regex is applied on the raw text first, then each segment is HTML-escaped
- *  individually so that marks are never inserted inside HTML entities.
- *  Words are highlighted individually to match the multi-term filter logic.
- *  @param {string}  text  - Raw text to highlight
- *  @param {string}  query - Search query string
- *  @param {RegExp}  [re]  - M-2: optional pre-compiled regex (avoids re-creation per call) */
-export function hlText(text, query, re) {
-  if (!text) return '';
-  if (!query) return esc(text);
-  // Build per-word alternation regex when no pre-compiled re provided.
-  // Matches "dark side" as /dark|side/ so both words are highlighted even when
-  // they appear in different fields (consistent with multi-term filter logic).
-  const r = re || new RegExp(
-    `(${query.trim().split(/\s+/).filter(Boolean).map(escapeRegex).join('|')})`,
-    'gi'
-  );
-  // Split the raw text around matches using sentinel bytes, then escape each part.
-  return text.replace(r, '\x00$1\x01').split('\x00').map((seg, i) => {
-    if (i === 0) return esc(seg);
-    const parts = seg.split('\x01');
-    return `<mark>${esc(parts[0])}</mark>${esc(parts[1] || '')}`;
-  }).join('');
-}
-
-function _djb2(str) {
-  let h = 5381;
-  for (let i = 0; i < str.length; i++) h = ((h << 5) + h) ^ str.charCodeAt(i);
-  return Math.abs(h);
-}
-
-/** Génère le HTML d'un placeholder d'artwork (lettre initiale). */
-export function artPlaceholder(t) {
-  const letter = t.name?.[0]?.toUpperCase() || '♪';
-  if (t.artColor && ART_COLOR_RE.test(t.artColor)) {
-    return `<div class="tart-ph" aria-hidden="true" style="background:${esc(t.artColor)}"><span class="tart-init">${extEmoji(t.ext) || letter}</span></div>`;
-  }
-  const seed = t.artist || t.album || t.name || '';
-  const hue  = _djb2(seed) % 360;
-  const bg   = `hsl(${hue},32%,26%)`;
-  const fg   = `hsl(${hue},55%,72%)`;
-  return `<div class="tart-ph" aria-hidden="true" style="background:${bg};color:${fg}"><span class="tart-init">${extEmoji(t.ext) || letter}</span></div>`;
-}
-
-/** Génère le bouton ♥ Like pour une piste. */
-export function makeLikeBtn(t, liked) {
-  liked = liked ?? get('liked');
-  const on  = liked?.has(t.id);
-  // A11Y-06: label dynamique selon l'état (like_label / unlike_label) — annonce correctement l'état au screen reader
-  const lbl = on
-    ? (i18n('unlike_label') || 'Retirer des favoris')
-    : (i18n('like_label')   || 'Ajouter aux favoris');
-  return `<button class="tlk${on ? ' on' : ''}" data-action="likeat" data-track-id="${esc(t.id)}" aria-pressed="${!!on}" aria-label="${esc(lbl)}" tabindex="-1"><svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg></button>`;
-}
-
-/** Génère le bouton + Ajouter à une playlist pour une piste. */
-export function makeAddBtn(t) {
-  const lbl = i18n('add_to_playlist') || 'Ajouter à une playlist';
-  return `<button class="tr-add-btn" data-action="show-pl-qpop" data-track-id="${esc(t.id)}" title="${esc(lbl)}" aria-label="${esc(lbl)}" tabindex="-1"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></button>`;
-}
-
-/** Génère le badge qualité audio — masqué dans la liste, visible uniquement dans Now Playing. */
-export function makeEqHTML(_t) { return ''; }
-
-// ── thtml — génère le HTML d'une ligne piste ─────────────────────────────────
-// A11Y-3 : role="listitem" tabindex="0" aria-label
-// P6     : classes dynamiques
-
-/**
- * Génère le HTML d'une ligne piste pour le virtual scroll.
- * @param {Track}  t       - Piste
- * @param {number} fi      - Index dans la liste filtrée courante
- * @param {object} [opts]  - { active, liked, query, isAlbumDetail, hlRe, isTabStop }
- *   isAlbumDetail — M-1: pré-calculé par l'appelant pour éviter get() dans la boucle
- *   hlRe          — M-2: regex pré-compilée pour la recherche (évite new RegExp par appel)
- *   isTabStop     — A11Y-ROVING: true → tabindex="0", false/undefined → tabindex="-1"
- */
-export function thtml(t, fi, { active = false, liked = false, likedSet, query = '', isAlbumDetail: _isAlbumDetail, albumDetailSort: _albumDetailSort, hlRe, isTabStop = false, setSize = 0 } = {}) {
-  // Artwork — img avec fade-in (.art-img → .art-loaded au onload) OU placeholder
-  const artInner = t.art
-    ? `<img class="art-img" src="${esc(t.art)}" alt="" aria-hidden="true">`
-    : artPlaceholder(t);
-
-  // M-1: utiliser la valeur pré-calculée si fournie, sinon fallback sur get() (compatibilité standalone)
-  const isAlbumDetail   = _isAlbumDetail   ?? (get('view') === 'album-detail');
-  const albumDetailSort = _albumDetailSort  ?? (isAlbumDetail ? (get('albumDetailSort') || 'track') : null);
-  const trackNum = isAlbumDetail
-    // tri A-Z → numéro séquentiel (position 1-N) ; tri 'track' → numéro de tag (ou position si absent)
-    ? `<div class="tr-num">${albumDetailSort === 'az' ? (fi + 1) : (t.track ?? fi + 1)}</div>`
-    : '';
-
-  const classes  = ['tr', active ? 'act' : '', isAlbumDetail ? 'tr--album-detail' : ''].filter(Boolean).join(' ');
-  const ariaLbl  = [t.name, t.artistFull || t.artist].filter(Boolean).join(' — ');
-  // A11Y-ROVING: roving tabindex — seul le tab stop courant reçoit tabindex="0"
-  const tabIdx   = isTabStop ? '0' : '-1';
-  // A11Y : aria-current="true" sur la piste courante (info non couleur-only) + title sur titres/artistes longs (tooltip troncation)
-  const ariaCur  = active ? ' aria-current="true"' : '';
-
-  // A11Y-16 : aria-setsize/aria-posinset annoncent la position réelle ("X sur Y")
-  // dans la liste virtualisée — équivalent role=list correct (les lignes restent
-  // role="listitem", pas de grille incomplète sans gridcell).
-  return `<div class="${classes}" id="tr-${esc(t.id)}" data-track-id="${esc(t.id)}" data-fi="${fi}"
-  data-action="track-click" role="listitem" tabindex="${tabIdx}" aria-setsize="${setSize}" aria-posinset="${fi + 1}" aria-label="${esc(ariaLbl)}"${ariaCur}
-  draggable="true" data-drag-action="track-drag">
-  ${trackNum}<div class="tart">
-    ${artInner}
-    <button class="tart-hover-play" data-action="play-track" data-track-id="${esc(t.id)}" tabindex="-1" aria-label="${i18n('play') || 'Lire'}">
-      <svg class="icon-play" viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true"><polygon points="5,3 19,12 5,21"/></svg>
-      <svg class="icon-pause" viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true"><rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/></svg>
-    </button>
-  </div>
-  <div class="ti">
-    <div class="tn" title="${esc(t.name || '')}">${hlText(t.name || '', query, hlRe)}</div>
-    <div class="ts" title="${esc(t.artistFull || t.artist || '')}">${hlText(t.artistFull || t.artist || '', query, hlRe)}</div>
-  </div>
-  <div class="ta" title="${esc(t.album || '')}">${esc(t.album || '')}</div>
-  <div class="tr-r">
-    ${makeEqHTML(t)}
-    <span class="tdur">${fmtd(t.duration)}</span>
-    ${makeLikeBtn(t, likedSet)}
-    ${makeAddBtn(t)}
-  </div>
-</div>`;
-}
 
 // ── Virtual scroll ────────────────────────────────────────────────────────────
 
@@ -308,11 +114,6 @@ export function virtRenderWindow(fl) {
   // M-1: hoist isAlbumDetail + albumDetailSort — évite un get() par ligne dans la boucle
   const isAlbumDetail   = view === 'album-detail';
   const albumDetailSort = isAlbumDetail ? (get('albumDetailSort') || 'track') : null;
-  // M-2: pré-compiler la regex de recherche une seule fois avant la boucle (per-word alternation)
-  const hlRe = query
-    ? new RegExp(`(${query.trim().split(/\s+/).filter(Boolean).map(escapeRegex).join('|')})`, 'gi')
-    : null;
-
   // A11Y-ROVING: déterminer quel fi reçoit tabindex="0"
   // La piste courante (curTrack) est le tab stop si elle est dans la liste filtrée.
   // Sinon, la première ligne de piste visible reçoit tabindex="0".
@@ -355,7 +156,7 @@ export function virtRenderWindow(fl) {
         isTabStop = true;
         firstTrFiFound = true;
       }
-      html += thtml(t, row.fi, { active: isActive, liked: isLiked, likedSet: liked, query, isAlbumDetail, albumDetailSort, hlRe, isTabStop, setSize: fl.length });
+      html += thtml(t, row.fi, { active: isActive, liked: isLiked, likedSet: liked, query, isAlbumDetail, albumDetailSort, isTabStop, setSize: fl.length });
     }
   }
 
@@ -373,7 +174,7 @@ export function virtRenderWindow(fl) {
   const _savedScrollTop = listEl.scrollTop;
   listEl.innerHTML = html;
   // I-1: le DOM a été entièrement reconstruit — invalider la référence de ligne active cachée
-  _activeRowEl = null;
+  // (managed by renderer-track.js patchActiveTrack)
   if (_savedScrollTop > 0) {
     requestAnimationFrame(() => { listEl.scrollTop = _savedScrollTop; });
   }
@@ -433,180 +234,6 @@ export function virtAttachScroll(listEl) {
   }
 }
 
-// ── Private album / artist helpers ───────────────────────────────────────────
-
-/** Construit la liste des entrées album depuis tracks[]. */
-function _getAlbumMap() {
-  // C-1: retourner le cache si disponible
-  if (_albumMapCache) return _albumMapCache;
-
-  const tracks = get('tracks') || [];
-  const map = new Map();
-  for (const t of tracks) {
-    const key = t.album || '';
-    if (!map.has(key)) {
-      map.set(key, {
-        key,
-        displayName:   key,
-        artist:        t.artist || '',
-        art:           null,
-        artTrack:      null,
-        count:         0,
-        totalDuration: 0,
-        year:          (t.year && t.year !== 1970) ? t.year : null,
-      });
-    }
-    const a = map.get(key);
-    a.count++;
-    a.totalDuration += t.duration || 0;
-    if (t.art && !a.art) a.art = t.art;
-    // C1 — piste représentative pour l'hydratation paresseuse du drill header.
-    if (!a.artTrack && t._hasArt && !t.noArt) { a.artTrack = t; _artTrackById.set(t.id, t); }
-    if (t.year && t.year !== 1970 && !a.year) a.year = t.year;
-  }
-  _albumMapCache = [...map.values()];
-  return _albumMapCache;
-}
-
-/** Construit la liste des entrées artiste depuis tracks[]. */
-function _getArtistMap() {
-  // C-1: retourner le cache si disponible
-  if (_artistMapCache) return _artistMapCache;
-
-  const tracks = get('tracks') || [];
-  const map = new Map();
-  for (const t of tracks) {
-    const key = t.artist || '';
-    if (!map.has(key)) {
-      map.set(key, { key, displayName: key, art: null, artTrack: null, count: 0 });
-    }
-    const a = map.get(key);
-    a.count++;
-    if (t.art && !a.art) a.art = t.art;
-    // C1 — piste représentative pour l'hydratation paresseuse du drill header.
-    if (!a.artTrack && t._hasArt && !t.noArt) { a.artTrack = t; _artTrackById.set(t.id, t); }
-  }
-  _artistMapCache = [...map.values()];
-  return _artistMapCache;
-}
-
-// ── Drill header ──────────────────────────────────────────────────────────────
-
-function _getOrCreateDrillHeader() {
-  let el = document.getElementById('drill-header');
-  if (!el) {
-    el = document.createElement('div');
-    el.id = 'drill-header';
-    const tlist = document.getElementById('tlist');
-    tlist?.parentNode?.insertBefore(el, tlist);
-  }
-  return el;
-}
-
-function _removeDrillHeader() {
-  document.getElementById('drill-header')?.remove();
-}
-
-function renderDrillHeader(view, key) {
-  if (view === 'album-detail') {
-    const albums = _getAlbumMap();
-    const entry  = albums.find(a => a.key === key);
-    if (!entry) { _removeDrillHeader(); return; }
-
-    const el   = _getOrCreateDrillHeader();
-    const artH = entry.art
-      ? `<img src="${esc(entry.art)}" class="dh-art" alt="">`
-      : entry.artTrack
-        ? `<div class="dh-art dh-art-ph" data-art-tid="${esc(entry.artTrack.id)}" data-art-img-class="dh-art"></div>`
-        : `<div class="dh-art dh-art-ph"></div>`;
-    const mins      = Math.floor((entry.totalDuration || 0) / 60);
-    const artistKey = entry.artist || '';
-
-    el.className = 'drill-header';
-    el.innerHTML = `
-      <div class="dh-left">${artH}</div>
-      <div class="dh-meta">
-        <div class="dh-name">${esc(entry.displayName)}</div>
-        <div class="dh-sub">
-          ${entry.artist
-            ? `<button class="dh-artist-link" data-action="dh-drill-artist"
-                 data-artist-key="${esc(artistKey)}"
-                 data-artist-name="${esc(entry.artist)}">${esc(entry.artist)}</button>`
-            : ''}
-          ${entry.year ? `<span>${entry.year}</span>` : ''}
-          <span>${entry.count} titre${entry.count > 1 ? 's' : ''}</span>
-          ${mins > 0 ? `<span>${mins} min</span>` : ''}
-        </div>
-        <div class="dh-actions">
-          <!-- A11Y-13: aria-label sur les boutons icône-texte du drill header -->
-          <button class="dh-btn dh-play" data-action="dh-play-all" aria-label="Lire tout"><span aria-hidden="true">▶</span> Lire tout</button>
-          <button class="dh-btn dh-shuf" data-action="dh-shuffle-all" aria-label="Mélanger"><span aria-hidden="true">⤮</span> Mélanger</button>
-        </div>
-      </div>`;
-    _hydrateArtPlaceholders(el);   // C1 — artwork paresseux du drill header
-    return;
-  }
-
-  if (view === 'artist-detail') {
-    const artists = _getArtistMap();
-    const entry   = artists.find(a => a.key === key);
-    if (!entry) { _removeDrillHeader(); return; }
-
-    const keyLc = key.toLowerCase();
-    const albums = _getAlbumMap()
-      .filter(a => (a.artist || '').toLowerCase() === keyLc)
-      .sort((a, b) => (b.year || 0) - (a.year || 0))
-      .slice(0, 20);
-
-    const el   = _getOrCreateDrillHeader();
-    const artH = entry.art
-      ? `<img src="${esc(entry.art)}" class="dh-art dh-art-circle" alt="">`
-      : entry.artTrack
-        ? `<div class="dh-art dh-art-ph dh-art-circle" data-art-tid="${esc(entry.artTrack.id)}" data-art-img-class="dh-art dh-art-circle"></div>`
-        : `<div class="dh-art dh-art-ph dh-art-circle"></div>`;
-
-    const albumCards = albums.map(a => {
-      const cardArt = a.art
-        ? `<img src="${esc(a.art)}" class="dh-mini-art" alt="">`
-        : a.artTrack
-          ? `<div class="dh-mini-art dh-mini-art-ph" data-art-tid="${esc(a.artTrack.id)}" data-art-img-class="dh-mini-art"></div>`
-          : `<div class="dh-mini-art dh-mini-art-ph"></div>`;
-      return `<button class="dh-mini-card" data-action="dh-drill-album"
-                data-album-key="${esc(a.key)}" data-album-name="${esc(a.displayName)}">
-        ${cardArt}
-        <div class="dh-mini-name">${esc(a.displayName)}</div>
-        ${a.year ? `<div class="dh-mini-year">${a.year}</div>` : ''}
-      </button>`;
-    }).join('');
-
-    el.className = 'drill-header drill-header--artist';
-    el.innerHTML = `
-      <div class="dh-left">${artH}</div>
-      <div class="dh-meta">
-        <div class="dh-name">${esc(entry.displayName)}</div>
-        <div class="dh-sub">
-          <span>${albums.length} album${albums.length > 1 ? 's' : ''}</span>
-          <span>${entry.count} titre${entry.count > 1 ? 's' : ''}</span>
-        </div>
-        <div class="dh-actions">
-          <!-- A11Y-13: aria-label sur les boutons icône-texte du drill header -->
-          <button class="dh-btn dh-play" data-action="dh-play-all" aria-label="Lire tout"><span aria-hidden="true">▶</span> Lire tout</button>
-          <button class="dh-btn dh-shuf" data-action="dh-shuffle-all" aria-label="Mélanger"><span aria-hidden="true">⤮</span> Mélanger</button>
-        </div>
-      </div>
-      ${albums.length > 0 ? `
-        <div class="dh-albums-section">
-          <div class="dh-albums-title">Albums</div>
-          <div class="dh-albums-mini">${albumCards}</div>
-        </div>` : ''}`;
-    _hydrateArtPlaceholders(el);   // C1 — artwork paresseux du drill header
-    return;
-  }
-
-  // Toutes les autres vues : supprimer le header si présent
-  _removeDrillHeader();
-}
-
 // ── renderLib ─────────────────────────────────────────────────────────────────
 
 /** Reconstruit la vue liste de la bibliothèque (virtual scroll).
@@ -620,18 +247,10 @@ export function renderLib() {
   // sont invalidées explicitement par leurs callsites (backup, cdaudio,
   // library, player, orphans, selection, tagedit). Un reset systématique
   // forçait un rebuild complet même sur simple changement de tri.
-  // C-1: invalider les caches memoïsés album/artist uniquement si tracks[] a changé
-  // Évite un rebuild coûteux à chaque navigation (tri, filtre, drill) sur la même lib.
-  const _tracks   = get('tracks') || [];
-  const _newSig   = _computeTracksSig(_tracks);
-  if (_newSig !== _tracksSig) {
-    _tracksSig      = _newSig;
-    _albumMapCache  = null;
-    _artistMapCache = null;
-    // R5-A FIX : vider la Map trackId→piste des grilles — évite les références
-    // à des pistes supprimées et la fuite mémoire associée.
-    _artTrackById.clear();
-  }
+  // C-1: invalider les caches memoïsés album/artist uniquement si tracks[] a changé.
+  // Délégué à invalidateGridMapsIfChanged() dans renderer-grids.js.
+  const _tracks = get('tracks') || [];
+  invalidateGridMapsIfChanged(_tracks);
 
   virtRenderWindow(fl);
 
@@ -703,7 +322,7 @@ export function renderLib() {
 // ── Skeleton loading ──────────────────────────────────────────────────────────
 
 /** Affiche des lignes squelette pendant le chargement des données. */
-export function _showSkeletonRows(savedView) {
+export function _showSkeletonRows() {
   const listEl = document.getElementById('tlist');
   if (!listEl) return;
   // R-H9 : marquer l'état skeleton — le ResizeObserver de virtAttachScroll
@@ -721,422 +340,6 @@ export function _showSkeletonRows(savedView) {
   listEl.innerHTML = html;
 }
 
-// ── renderAlbumsGrid ──────────────────────────────────────────────────────────
-
-/** Rendu de la grille Albums. */
-export function renderAlbumsGrid() {
-  const tracks    = get('tracks') || [];
-  const albumSort = get('albumSort') || 'name';
-  const query     = get('query') || '';
-
-  // Rendre le conteneur visible
-  let grid = document.getElementById('album-grid');
-  if (!grid) {
-    grid = document.createElement('div');
-    grid.id = 'album-grid';
-    grid.className = 'grid-view';
-    const ca = document.getElementById('content-area');
-    if (ca) ca.appendChild(grid);
-  }
-  grid.style.display = '';
-
-  // Masquer les autres grilles
-  const rg = document.getElementById('artist-grid');
-  const pg = document.getElementById('playlist-grid');
-  if (rg) rg.style.display = 'none';
-  if (pg) pg.style.display = 'none';
-
-  // PERF-H1 FIX : réutiliser _getAlbumMap() (memoïsée) plutôt que de reconstruire
-  // la map depuis tracks[] à chaque navigation dans la grille Albums.
-  // _getAlbumMap() invalide son cache quand tracks[] change (via _computeTracksSig).
-  const queryLc = query ? query.toLowerCase() : '';
-  let albums = _getAlbumMap();
-  // Filtrage par requête : appliquer en post-filtre sur le résultat caché
-  if (queryLc) {
-    albums = albums.filter(a =>
-      (a.key || '').toLowerCase().includes(queryLc) ||
-      (a.artist || '').toLowerCase().includes(queryLc)
-    );
-  }
-  // Adapter les noms de champs pour la couche de rendu (displayName→name, art→artUrl, totalDuration→totalDur)
-  // On crée une vue légère (pas de copie profonde — les valeurs sont scalaires ou refs partagées).
-  albums = albums.map(a => ({
-    name:    a.key,
-    artist:  a.artist,
-    artUrl:  a.art,
-    artTrack: a.artTrack,
-    count:   a.count,
-    totalDur: a.totalDuration,
-    year:    a.year,
-  }));
-
-  // Tri
-  if (albumSort === 'count')    albums.sort((a, b) => b.count - a.count);
-  else if (albumSort === 'duration') albums.sort((a, b) => b.totalDur - a.totalDur);
-  else if (albumSort === 'year') albums.sort((a, b) => (b.year || 0) - (a.year || 0));
-  else albums.sort((a, b) => _coll.compare(a.name || '', b.name || ''));
-
-  if (!albums.length) {
-    const isLibEmpty = !tracks.length && !query;
-    const _alb = `<svg viewBox="0 0 24 24" fill="none" style="fill:none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="2.5" width="19" height="19" rx="3"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.5"/></svg>`;
-    grid.innerHTML = isLibEmpty
-      ? `<div class="grid-empty"><div class="empty-ico">${_alb}</div><div class="empty-h">${esc(i18n('empty_lib_h'))}</div><div class="empty-s">${esc(i18n('empty_lib_s'))}</div></div>`
-      : `<div class="grid-empty"><div class="empty-ico">${_alb}</div><div class="empty-h">${esc(i18n('empty_search_h'))}</div><div class="empty-s">${esc(i18n('empty_search_s'))}</div></div>`;
-    return;
-  }
-
-  grid.innerHTML = albums.map(a => {
-    const artHtml = a.artUrl
-      ? `<img src="${esc(a.artUrl)}" alt="" aria-hidden="true">`
-      : a.artTrack
-        ? `<div class="card-art-ph" aria-hidden="true" data-art-tid="${esc(a.artTrack.id)}">💿</div>`
-        : `<div class="card-art-ph" aria-hidden="true">💿</div>`;
-    const meta = a.year ? `<span class="card-year">${a.year}</span>` : '';
-    return `<div class="card" role="button" tabindex="0"
-      data-action="drill-album" data-key="${esc(a.name)}" data-name="${esc(a.name)}"
-      data-from="albums" data-display="${esc(a.name)}"
-      aria-label="${esc(a.name)}${a.artist ? ' — ' + a.artist : ''}">
-      <div class="card-art">${artHtml}
-        <button class="card-play-btn" data-action="play-card" tabindex="-1" aria-hidden="true"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><polygon points="5,3 19,12 5,21"/></svg></button>
-      </div>
-      <div class="card-info">
-        <span class="card-name">${hlText(a.name || i18n('unknown_album') || '?', query)}</span>
-        <span class="card-sub">${hlText(a.artist, query)}${meta}</span>
-        <span class="card-ct">${a.count} ${i18n('n_tracks') || 'titres'}</span>
-      </div>
-    </div>`;
-  }).join('');
-
-  _hydrateArtPlaceholders(grid, { observe: true });   // C1 — artwork paresseux des cartes
-  updateBreadcrumb();
-}
-
-// ── renderArtistsGrid ─────────────────────────────────────────────────────────
-
-/** Rendu de la grille Artistes. */
-export function renderArtistsGrid() {
-  const tracks     = get('tracks') || [];
-  const artistSort = get('artistSort') || 'name';
-  const query      = get('query') || '';
-
-  let grid = document.getElementById('artist-grid');
-  if (!grid) {
-    grid = document.createElement('div');
-    grid.id = 'artist-grid';
-    grid.className = 'grid-view';
-    const ca = document.getElementById('content-area');
-    if (ca) ca.appendChild(grid);
-  }
-  grid.style.display = '';
-
-  const ag = document.getElementById('album-grid');
-  const pg = document.getElementById('playlist-grid');
-  if (ag) ag.style.display = 'none';
-  if (pg) pg.style.display = 'none';
-
-  const queryLc = query ? query.toLowerCase() : '';
-  const artistMap = new Map();
-  for (const t of tracks) {
-    const key = t.artist || '';
-    if (queryLc && !key.toLowerCase().includes(queryLc) &&
-        !(t.name || '').toLowerCase().includes(queryLc)) continue;
-    if (!artistMap.has(key)) {
-      artistMap.set(key, { name: key, artUrl: null, artTrack: null, count: 0, albumCount: new Set() });
-    }
-    const a = artistMap.get(key);
-    a.count++;
-    a.albumCount.add(t.album);
-    // C1 — voir renderAlbumsGrid : artUrl direct, artTrack chargé paresseusement.
-    if (!a.artUrl && t.art) a.artUrl = t.art;
-    if (!a.artTrack && t._hasArt && !t.noArt) { a.artTrack = t; _artTrackById.set(t.id, t); }
-  }
-
-  let artists = [...artistMap.values()];
-  if (artistSort === 'count') artists.sort((a, b) => b.count - a.count);
-  else artists.sort((a, b) => _coll.compare(a.name || '', b.name || ''));
-
-  if (!artists.length) {
-    const isLibEmpty = !tracks.length && !query;
-    const _art = `<svg viewBox="0 0 24 24" fill="none" style="fill:none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>`;
-    grid.innerHTML = isLibEmpty
-      ? `<div class="grid-empty"><div class="empty-ico">${_art}</div><div class="empty-h">${esc(i18n('empty_lib_h'))}</div><div class="empty-s">${esc(i18n('empty_lib_s'))}</div></div>`
-      : `<div class="grid-empty"><div class="empty-ico">${_art}</div><div class="empty-h">${esc(i18n('empty_search_h'))}</div><div class="empty-s">${esc(i18n('empty_search_s'))}</div></div>`;
-    return;
-  }
-
-  grid.innerHTML = artists.map(a => {
-    const artHtml = a.artUrl
-      ? `<img src="${esc(a.artUrl)}" alt="" aria-hidden="true">`
-      : a.artTrack
-        ? `<div class="card-art-ph card-art-circle" aria-hidden="true" data-art-tid="${esc(a.artTrack.id)}">${esc(a.name?.[0]?.toUpperCase() || '?')}</div>`
-        : `<div class="card-art-ph card-art-circle" aria-hidden="true">${esc(a.name?.[0]?.toUpperCase() || '?')}</div>`;
-    const nbAlbums = a.albumCount.size;
-    return `<div class="card card-artist" role="button" tabindex="0"
-      data-action="drill-artist" data-key="${esc(a.name)}" data-name="${esc(a.name)}"
-      data-from="artists" data-display="${esc(a.name)}"
-      aria-label="${esc(a.name)}">
-      <div class="card-art card-art-round">${artHtml}
-        <button class="card-play-btn" data-action="play-card" tabindex="-1" aria-hidden="true"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><polygon points="5,3 19,12 5,21"/></svg></button>
-      </div>
-      <div class="card-info">
-        <span class="card-name">${hlText(a.name || '?', query)}</span>
-        <span class="card-sub">${a.count} ${i18n('n_tracks') || 'titres'}${nbAlbums > 1 ? ` · ${nbAlbums} albums` : ''}</span>
-      </div>
-    </div>`;
-  }).join('');
-
-  _hydrateArtPlaceholders(grid, { observe: true });   // C1 — artwork paresseux des cartes
-  updateBreadcrumb();
-}
-
-// ── renderPlaylistsGrid ───────────────────────────────────────────────────────
-
-/** Rendu de la grille Playlists (vue "playlists"). */
-export function renderPlaylistsGrid() {
-  const playlists = get('playlists') || [];
-  const tracks    = get('tracks')    || [];
-  const query     = get('query')     || '';
-
-  let grid = document.getElementById('playlist-grid');
-  if (!grid) {
-    grid = document.createElement('div');
-    grid.id = 'playlist-grid';
-    grid.className = 'grid-view';
-    const ca = document.getElementById('content-area');
-    if (ca) ca.appendChild(grid);
-  }
-  grid.style.display = '';
-
-  const ag = document.getElementById('album-grid');
-  const rg = document.getElementById('artist-grid');
-  if (ag) ag.style.display = 'none';
-  if (rg) rg.style.display = 'none';
-
-  const queryLc = query ? query.toLowerCase() : '';
-  const filtered = queryLc
-    ? playlists.filter(p => (p.name || '').toLowerCase().includes(queryLc))
-    : playlists;
-
-  if (!filtered.length) {
-    const _pl = `<svg viewBox="0 0 24 24" fill="none" style="fill:none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="6" x2="14" y2="6"/><line x1="3" y1="12" x2="14" y2="12"/><line x1="3" y1="18" x2="10" y2="18"/><polygon points="17 10 23 14 17 18"/></svg>`;
-    grid.innerHTML = `<div class="pl-grid-empty"><div class="empty-ico">${_pl}</div>`
-      + `<div class="empty-h">${esc(i18n('pl_empty'))}</div>`
-      + `<div class="empty-s">${esc(i18n('pl_empty_s'))}</div></div>`;
-    return;
-  }
-
-  // I-4: utilise _trackIdxMap (déjà disponible en module) au lieu d'allouer une nouvelle Map
-  // FIX-B6 : data-pl-id n'est placé QU'UNE FOIS (sur le div.card root, pas sur le bouton interne)
-  grid.innerHTML = filtered.map(pl => {
-    // Mosaïque 4 arts
-    const plTracks = (pl.trackIds || []).slice(0, 4)
-      .map(id => tracks[_trackIdxMap.get(id)])
-      .filter(Boolean);
-    const arts = plTracks.map(t => t.art).filter(Boolean).slice(0, 4);
-    let artHtml;
-    if (pl.coverB64) {
-      artHtml = `<img src="${esc(pl.coverB64)}" alt="" aria-hidden="true">`;
-    } else if (arts.length >= 4) {
-      artHtml = `<div class="card-mosaic" aria-hidden="true">${arts.map(a => `<img src="${esc(a)}" alt="">`).join('')}</div>`;
-    } else if (arts.length > 0) {
-      artHtml = `<img src="${esc(arts[0])}" alt="" aria-hidden="true">`;
-    } else {
-      artHtml = `<div class="card-art-ph" aria-hidden="true">🎵</div>`;
-    }
-
-    const smartBadge = pl.smart ? `<span class="smart-badge" title="${esc(i18n('smart_playlist') || 'Smart')}">✦</span>` : '';
-    const pinBadge   = pl.pinned ? `<span class="pin-badge" aria-hidden="true">📌</span>` : '';
-    const count = (pl.trackIds || []).length;
-
-    // FIX-A1 : role=button + tabindex=0 + aria-label
-    return `<div class="card" role="button" tabindex="0"
-      data-action="set-view" data-view="playlist" data-pl-id="${esc(pl.id)}"
-      aria-label="${esc(pl.name || i18n('pl_untitled') || 'Playlist')}">
-      <div class="card-art">
-        ${artHtml}
-        ${smartBadge}${pinBadge}
-        <button class="card-play-btn" data-action="play-pl-direct" data-pl-id="${esc(pl.id)}" tabindex="-1" aria-hidden="true"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><polygon points="5,3 19,12 5,21"/></svg></button>
-      </div>
-      <div class="card-info">
-        <span class="card-name">${hlText(pl.name || '?', query)}</span>
-        <span class="card-sub">${count} ${i18n('n_tracks') || 'titres'}</span>
-      </div>
-    </div>`;
-  }).join('');
-
-  updateBreadcrumb();
-}
-
-// ── drillDown ─────────────────────────────────────────────────────────────────
-
-/** Navigue vers la vue détail d'un album ou artiste.
- *  @param {string} key         - Clé de filtre (nom album/artiste exact)
- *  @param {string} from        - 'albums' | 'artists'
- *  @param {string} displayName - Nom d'affichage (propre, avec casse d'origine) */
-export function drillDown(from, key, displayName) {
-  cancelSearchDebounce(); // annule tout debounce de recherche en cours avant de drill
-  set('drillKey',         key);
-  set('drillFrom',        from);
-  set('drillDisplayName', displayName || key);
-  const viewName = from === 'albums' ? 'album-detail'
-                 : from === 'genres' ? 'genre-detail'
-                 : 'artist-detail';
-  set('view', viewName);
-  invalidateFilterCache();
-  // AUDIT-2026-05-22 (M-06) : les maps album/artist derivent de tracks[], pas du
-  // contexte de filtre. Un drill-down ne modifie pas tracks[] → n'invalider les
-  // caches que si la signature de tracks[] a reellement change (evite un rebuild
-  // couteux des maps a chaque navigation sur une bibliotheque de 50k pistes).
-  const _drillSig = _computeTracksSig(get('tracks') || []);
-  if (_drillSig !== _tracksSig) {
-    _tracksSig      = _drillSig;
-    _albumMapCache  = null;
-    _artistMapCache = null;
-    // R5-A FIX : cohérence avec renderLib — vider les références grille obsolètes.
-    _artTrackById.clear();
-  }
-  emit(EVENTS.FILTER_CHANGED, {});
-
-  // Masquer les grilles, basculer en vue liste
-  const ag = document.getElementById('album-grid');
-  const rg = document.getElementById('artist-grid');
-  const pg = document.getElementById('playlist-grid');
-  const gg = document.getElementById('genre-grid');
-  if (ag) ag.style.display = 'none';
-  if (rg) rg.style.display = 'none';
-  if (pg) pg.style.display = 'none';
-  if (gg) gg.style.display = 'none';
-
-  // Définir data-view='list' sur content-area
-  const ca = document.getElementById('content-area');
-  if (ca) ca.dataset.view = 'list';
-
-  // Titre de la vue
-  const vhtitle = document.getElementById('vhtitle');
-  if (vhtitle) vhtitle.textContent = displayName || key;
-
-  // Breadcrumb
-  const bc = document.getElementById('breadcrumb');
-  if (bc) bc.style.display = '';
-  updateBreadcrumb();
-
-  const _tl = document.getElementById('tlist');
-  if (_tl) _tl.scrollTop = 0;
-  VIRT._lastScrollTop = null;
-  emit(EVENTS.RENDER_LIB, {});
-}
-
-// ── updatePlActionBar ─────────────────────────────────────────────────────────
-
-/** Génère ou met à jour la barre d'action pour la playlist courante.
- *  FIX-B2 : ancrée après #pl-hero dans le DOM. */
-export function updatePlActionBar() {
-  const curPlId   = get('curPlId');
-  const playlists = get('playlists') || [];
-  const tracks    = get('tracks')    || [];
-
-  const pl = curPlId ? playlists.find(p => p.id === curPlId) : null;
-  if (!pl) {
-    const existing = document.getElementById('pl-action-bar');
-    if (existing) existing.remove();
-    return;
-  }
-
-  const count   = (pl.trackIds || []).length;
-  const plTracks = pl.trackIds.map(id => {
-    const idx = _trackIdxMap.get(id);
-    return idx !== undefined ? tracks[idx] : null;
-  }).filter(Boolean);
-  const totalDur = plTracks.reduce((s, t) => s + (t.duration || 0), 0);
-
-  const plSort = get('plSort') || 'manual';
-  const sorts = [
-    { v: 'manual',   l: i18n('pl_sort_manual')   || 'Manuel' },
-    { v: 'az',       l: i18n('sort_az')           || 'A–Z' },
-    { v: 'za',       l: i18n('sort_za')           || 'Z–A' },
-    { v: 'artist',   l: i18n('sort_artist')       || 'Artiste' },
-    { v: 'album',    l: i18n('sort_album')         || 'Album' },
-    { v: 'duration', l: i18n('pl_sort_duration')  || 'Durée' },
-  ];
-  const sortOptions = sorts.map(s =>
-    `<option value="${s.v}"${plSort === s.v ? ' selected' : ''}>${esc(s.l)}</option>`
-  ).join('');
-
-  const html = `<div id="pl-action-bar" class="pl-action-bar">
-    <span class="pl-bar-count">${count} ${i18n('n_tracks') || 'titres'}${totalDur > 0 ? ' · ' + fmtd(totalDur) : ''}</span>
-    <span class="pl-bar-spacer"></span>
-    <button class="pl-act-btn" data-action="play-pl-from" data-idx="0">▶ ${i18n('pl_play_all') || 'Tout lire'}</button>
-    <button class="pl-act-btn" data-action="shuffle-cur-pl">⇀ ${i18n('pl_shuffle') || 'Aléatoire'}</button>
-    <select class="pl-sort-sel" data-input-action="pl-sort" aria-label="${i18n('sort') || 'Tri'}">${sortOptions}</select>
-    <button class="pl-act-btn icon-btn" data-action="show-cur-pl-menu" aria-label="${i18n('pl_more') || 'Plus'}">•••</button>
-  </div>`;
-
-  // FIX-B2 : insérer après #pl-hero, pas dans un slot pré-existant
-  const hero = document.getElementById('pl-hero');
-  const existing = document.getElementById('pl-action-bar');
-  if (existing) existing.remove();
-  if (hero) {
-    _plHero = hero; // FIX-B1 : mémoriser la référence
-    hero.insertAdjacentHTML('afterend', html);
-  } else {
-    // Fallback : insérer dans content-area
-    const ca = document.getElementById('content-area');
-    if (ca) ca.insertAdjacentHTML('afterbegin', html);
-  }
-}
-
-// ── updateBreadcrumb ──────────────────────────────────────────────────────────
-
-/** Met à jour le fil d'Ariane selon l'état de drill-down courant. */
-export function updateBreadcrumb() {
-  const bc = document.getElementById('breadcrumb');
-  if (!bc) return;
-
-  const view         = get('view')         || 'all';
-  const drillKey     = get('drillKey')     || '';
-  const drillFrom    = get('drillFrom')    || '';
-  const drillDisplay = get('drillDisplayName') || drillKey;
-  const curPlId      = get('curPlId');
-  const playlists    = get('playlists') || [];
-
-  // Afficher uniquement en drill-down
-  const isDrill = drillKey || (view === 'playlist' && curPlId) ||
-    ['album-detail', 'artist-detail', 'genre-detail'].includes(view);
-
-  if (!isDrill) {
-    bc.style.display = 'none';
-    bc.innerHTML = '';
-    return;
-  }
-
-  bc.style.display = '';
-
-  const fromLabels = {
-    albums:  i18n('lib_albums')  || 'Albums',
-    artists: i18n('lib_artists') || 'Artistes',
-    genres:  'Genres',
-    playlists: i18n('nav_playlists') || 'Playlists',
-  };
-
-  let items = [];
-  if (drillFrom) {
-    items.push({ label: fromLabels[drillFrom] || drillFrom, action: `setView('${drillFrom}')` });
-    items.push({ label: drillDisplay, current: true });
-  } else if (view === 'playlist' && curPlId) {
-    const pl = playlists.find(p => p.id === curPlId);
-    items.push({ label: fromLabels.playlists, action: "setView('playlists')" });
-    items.push({ label: pl?.name || '?', current: true });
-  }
-
-  bc.innerHTML = items.map((item, i) => {
-    if (item.current) {
-      return `<span class="bc-cur" aria-current="page">${esc(item.label)}</span>`;
-    }
-    return `<button class="bc-link" data-action="bc-navigate" data-bc-idx="${i}">${esc(item.label)}</button>
-            <span class="bc-sep" aria-hidden="true">›</span>`;
-  }).join('');
-}
-
 // ── Mises à jour DOM partielles ───────────────────────────────────────────────
 
 /** Joue une piste par son ID. */
@@ -1151,84 +354,6 @@ export function playById(id) {
   if (fi >= 0) playAt(fi);
 }
 
-/** Met à jour la classe .act sur la piste courante dans le DOM (sans re-rendu complet). */
-export function patchActiveTrack() {
-  const curIdx   = get('curIdx');
-  const tracks   = get('tracks') || [];
-  const curTrack = curIdx >= 0 ? tracks[curIdx] : null;
-
-  // I-1: retirer .act de la ligne précédente via la référence cachée si elle est encore dans le DOM
-  // A11Y-15 : aria-current="true" doit suivre .act exactement (set au render dans renderTrackRow,
-  // donc on le retire ici lors du déplacement incrémental sinon il reste sur l'ancienne ligne).
-  if (_activeRowEl?.isConnected) {
-    _activeRowEl.classList.remove('act', 'playing-row');
-    _activeRowEl.removeAttribute('aria-current');
-  } else {
-    // Fallback : le DOM a changé depuis la dernière fois — balayage complet
-    document.querySelectorAll('.tr.act, .tr[aria-current="true"]').forEach(el => {
-      el.classList.remove('act', 'playing-row');
-      el.removeAttribute('aria-current');
-    });
-  }
-  _activeRowEl = null;
-
-  if (curTrack) {
-    const el = document.querySelector(`.tr[data-track-id="${CSS.escape(curTrack.id)}"]`);
-    if (el) {
-      el.classList.add('act');
-      el.setAttribute('aria-current', 'true');
-      // I-1: mémoriser la référence pour le prochain appel
-      _activeRowEl = el;
-    }
-  }
-}
-
-/** Met à jour la classe .playing-row sur la piste active (play vs pause). */
-export function patchPlayState(playing) {
-  const tlist = document.getElementById('tlist');
-  const qlist = document.getElementById('queue-list');
-  if (tlist) tlist.querySelectorAll('.tr.act').forEach(el => el.classList.toggle('playing-row', playing));
-  if (qlist) qlist.querySelectorAll('.queue-item--loop').forEach(el => el.classList.toggle('playing-row', playing));
-}
-
-/** Remplace le DOM d'une seule ligne piste (ex: après un tag edit). */
-export function patchTrackEl(id) {
-  const el = document.querySelector(`.tr[data-track-id="${CSS.escape(id)}"]`);
-  if (!el) return; // hors viewport — ignoré (prochain virtRenderWindow le prendra)
-
-  // B7 FIX : invalider les caches album/artiste APRÈS l'early-return. Avant, un
-  // gros batch loadTagsBg (pistes hors-viewport) vidait les caches à chaque piste
-  // → reconstruction O(n) répétée (comportement O(n²) sur un gros import).
-  // Reste correct : un import change tracks.length → _computeTracksSig change →
-  // renderLib() reconstruit les maps album/artiste de toute façon.
-  _tracksSig      = '';
-  _albumMapCache  = null;
-  _artistMapCache = null;
-  // R5-A FIX : idem — invalidation complète de la Map grille pour éviter fuite.
-  _artTrackById.clear();
-
-  const idx = trackIdx(id);
-  if (idx < 0) return;
-
-  const tracks = get('tracks');
-  const t      = tracks[idx];
-  if (!t) return;
-
-  const fi    = filteredIdx(t); // recalcul frais — évite un dataset stale
-  const liked = get('liked');
-  const query = get('query') || '';
-  const curIdx = get('curIdx');
-  const isActive = curIdx === idx;
-
-  // A11Y-16 : préserver aria-setsize (taille de la liste filtrée) et le roving
-  // tabstop du nœud remplacé — sinon la ligne re-rendue annonce aria-setsize="0"
-  // et perd son tabindex="0".
-  const isTabStop = el.getAttribute('tabindex') === '0';
-  el.insertAdjacentHTML('beforebegin',
-    thtml(t, fi, { active: isActive, liked: liked?.has(t.id) ?? false, query, setSize: getFiltered().length, isTabStop }));
-  el.remove();
-}
-
 // ── Stats ─────────────────────────────────────────────────────────────────────
 
 /** Met à jour les compteurs de la bibliothèque (#lib-stats). */
@@ -1237,10 +362,12 @@ export function updateStats() {
   const sbEl = document.getElementById('sb-stats');
   if (!sbEl) return;
   if (tracks.length === 0) {
-    sbEl.innerHTML = i18n('sb_empty');
+    sbEl.innerHTML = `<span class="sb-empty-msg"><svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>${esc(i18n('sb_empty'))}</span>`;
     return;
   }
-  const artistCount = _getArtistMap().length;
+  // BUG-7 FIX: exclure l'entrée clé-vide (pistes sans tag artiste) du compte sidebar
+  // pour être cohérent avec renderStats() dans stats.js qui fait `if (t.artist)`.
+  const artistCount = _getArtistMap().filter(a => a.key).length;
   const playCount   = playLog.length;
   const tracksLbl   = esc(i18n('sb_chip_tracks',  tracks.length));
   const artistsLbl  = esc(i18n('sb_chip_artists', artistCount));
@@ -1274,6 +401,7 @@ export function scheduleStatsUpdate() {
  */
 export function updateSidebarCounts() {
   const tracks    = get('tracks')      || [];
+  document.body.classList.toggle('lib-empty', tracks.length === 0);
   const liked     = get('liked');
   const recent    = get('recentPlays') || [];
   const playlists = get('playlists')   || [];
@@ -1282,7 +410,7 @@ export function updateSidebarCounts() {
     'ni-liked':     liked ? liked.size : 0,
     'ni-recent':    recent.length,
     'ni-playlists': playlists.length,
-    'ni-artists':   tracks.length ? _getArtistMap().length : 0,
+    'ni-artists':   tracks.length ? _getArtistMap().filter(a => a.key).length : 0,
     'ni-albums':    tracks.length ? _getAlbumMap().length  : 0,
   };
   for (const [id, n] of Object.entries(counts)) {
@@ -1380,28 +508,6 @@ export function scrollToCurrentTrack() {
   });
 }
 
-// ── Format filter chips ───────────────────────────────────────────────────────
-
-/**
- * Render format filter chips in #format-bar.
- * Shows bar only when 2+ distinct formats exist in the library.
- * Called from renderLib() and after FILTER_CHANGED events.
- */
-export function renderFormatChips() {
-  const bar = document.getElementById('format-bar');
-  if (!bar) return;
-  const tracks = get('tracks');
-  const formats = [...new Set(tracks.map(t => t.ext).filter(Boolean))].sort();
-  if (formats.length < 2) { bar.innerHTML = ''; return; }
-  const active = get('formatFilter') || '';
-  bar.innerHTML = [
-    `<button class="fmt-chip${!active ? ' active' : ''}" data-action="filter-format" data-fmt="" aria-pressed="${String(!active)}">Tous</button>`,
-    ...formats.map(f =>
-      `<button class="fmt-chip${active === f ? ' active' : ''}" data-action="filter-format" data-fmt="${esc(f)}" aria-pressed="${String(active === f)}">${esc(f)}</button>`
-    ),
-  ].join('');
-}
-
 // ── Import history ────────────────────────────────────────────────────────────
 
 const _SRC_LABELS = {
@@ -1430,9 +536,19 @@ export async function renderImportHistory() {
       + ' ' + d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
     const src = _SRC_LABELS[e.source] ?? e.source;
     return `<div class="import-entry">
-      <span class="import-date">${dateStr}</span>
+      <span class="import-date">${esc(dateStr)}</span>
       <span class="import-src">${esc(src)}</span>
       <span class="import-count">${e.count} titre${e.count > 1 ? 's' : ''}</span>
     </div>`;
   }).join('');
 }
+
+// ── Barrel re-exports — call sites externes inchangés ────────────────────────
+// (see also renderLib, updateStats, virtRenderWindow etc. exported natively above)
+export { hlText, artPlaceholder, makeLikeBtn, makeAddBtn,
+         thtml, patchActiveTrack, patchPlayState,
+         patchTrackEl }                                      from './renderer-track.js'
+export { renderAlbumsGrid, renderArtistsGrid,
+         renderPlaylistsGrid, drillDown,
+         updatePlActionBar, updateBreadcrumb,
+         renderFormatChips, invalidateGridMaps }             from './renderer-grids.js'

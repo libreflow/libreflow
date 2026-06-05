@@ -12,6 +12,7 @@
 //   addToQueueNext, addToQueueEnd, playQueueItem
 //   initQueueDrag (Task 4)
 
+import { panelOpen, panelClose, set as motionSet } from './motion.js';
 import { esc, extEmoji, fmtd, moveByOne }  from './utils.js';
 import { CFG }                            from './cfg.js';
 import { eqOpen, closeEQ }                from './eq.js';
@@ -25,17 +26,17 @@ import { closeSettings } from './settings.js';
 import { emit, EVENTS } from './bus.js';
 import { toast, toastWithAction } from './ui.js';
 import { setView } from './views.js';
+import { FOCUSABLE_SEL } from './modal.js';
 
 // ── Focus trap ──────────────────────────────────────────────
 // FOCUS-1 FIX : trap Tab/Shift+Tab dans #queue-panel quand ouvert.
-const _FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
 let _queueFocusTrap = null;
 
 function _setupQueueFocusTrap(panel) {
   if (_queueFocusTrap) panel.removeEventListener('keydown', _queueFocusTrap);
   _queueFocusTrap = (e) => {
     if (e.code !== 'Tab') return;
-    const focusable = [...panel.querySelectorAll(_FOCUSABLE)].filter(el => {
+    const focusable = [...panel.querySelectorAll(FOCUSABLE_SEL)].filter(el => {
       const r = el.getBoundingClientRect();
       return r.width > 0 && r.height > 0;
     });
@@ -219,7 +220,7 @@ export function toggleQueue() {
   if (queueOpen) {
     renderQueue(); initQueueDrag();
     const panel = document.getElementById('queue-panel');
-    if (panel) _setupQueueFocusTrap(panel);
+    if (panel) { _setupQueueFocusTrap(panel); panelOpen(panel); }
   }
 }
 
@@ -240,11 +241,42 @@ export function closeQueue() {
     window.removeEventListener('pointercancel', _onPromotionUp);
   }
   queueOpen = false;
-  document.getElementById('queue-panel').classList.remove('open');
   const btn = document.getElementById('btn-queue');
   btn?.classList.remove('active');
   btn?.setAttribute('aria-expanded', 'false'); // A11Y
   document.getElementById('app')?.classList.remove('panel-queue-open');
+  const qp = document.getElementById('queue-panel');
+  if (qp) panelClose(qp).then(() => {
+    // Guard: queue was re-opened before panelClose.then fired — don't hide it.
+    if (qp.classList.contains('open')) return;
+    // Nettoyer les styles inline GSAP après retrait de .open : le CSS de base
+    // reprend (opacity:0, transform:translateX(100%)) — panneau hors écran et sans
+    // interception de pointeur. Sans ça, le panneau reste à x:0 invisible mais cliquable.
+    qp.classList.remove('open');
+    motionSet(qp, { clearProps: 'opacity,transform' });
+  });
+  else document.getElementById('queue-panel')?.classList.remove('open');
+}
+
+// ── Pin ─────────────────────────────────────────────────────
+
+export function toggleQueuePin() {
+  const pinned = !get('queuePinned');
+  set('queuePinned', pinned);
+  document.getElementById('app').classList.toggle('panel-queue-pinned', pinned);
+  const btn = document.querySelector('.queue-pin-btn');
+  btn?.setAttribute('aria-pressed', String(pinned));
+  btn?.setAttribute('aria-label',
+    pinned ? "Désépingler la file d'attente" : "Épingler la file d'attente");
+}
+
+export function clearQueuePin() {
+  if (!get('queuePinned')) return;
+  set('queuePinned', false);
+  document.getElementById('app').classList.remove('panel-queue-pinned');
+  const btn = document.querySelector('.queue-pin-btn');
+  btn?.setAttribute('aria-pressed', 'false');
+  btn?.setAttribute('aria-label', "Épingler la file d'attente");
 }
 
 // ── Rendu ────────────────────────────────────────────────────

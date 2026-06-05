@@ -156,7 +156,7 @@ export async function organizeConfirm() {
 
   let result;
   try {
-    result = await invoke('organize_files', { moves: _pendingMoves, dryRun: false });
+    result = await invoke('organize_files', { moves: _pendingMoves, dryRun: false }, { timeout: 0 });
   } catch (e) {
     toast(`Erreur lors de l'organisation : ${e}`, 'error');
     organizeCancel();

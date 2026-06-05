@@ -46,6 +46,7 @@ import { toast }                                        from './ui.js';
 import { saveCfg, saveCfgNow } from './cfgsave.js';
 import { scrollToCurrentTrack }  from './renderer.js';
 import { _allPlayerUI }           from './allplayerui.js';
+import { playPausePress }         from './motion.js';
 
 // Boot viz state (remplace window._pendingVizMode/_pendingVizDisabled)
 /** @type {string | null} */
@@ -252,7 +253,7 @@ export async function ensureUrl(t) {
     t.url = convertFileSrc(t.path);
     return true;
   } catch(e) {
-    console.error('[ensureUrl]', e);
+    console.warn('[ensureUrl]', e);
     return false;
   }
 }
@@ -263,12 +264,17 @@ export async function ensureUrl(t) {
  * @param {boolean} playing
  * @returns {void}
  */
+let _pressListenerEl = null; // element reference so replacement survives DOM updates
+
+function _attachPressListener() {
+  const btn = document.querySelector('.pcplay');
+  if (!btn || btn === _pressListenerEl) return;
+  btn.addEventListener('pointerdown', () => playPausePress(btn));
+  _pressListenerEl = btn;
+}
+
 export function setIcon(playing) {
   invoke('taskbar_set_playing', { playing }).catch((e) => console.warn('[taskbar_set_playing]', e));
-  // @ts-ignore — audio element guaranteed present in LibreFlow DOM (index.html)
-  document.getElementById('ico-play').style.display  = playing ? 'none' : '';
-  // @ts-ignore — audio element guaranteed present in LibreFlow DOM (index.html)
-  document.getElementById('ico-pause').style.display = playing ? ''     : 'none';
   const ci = document.getElementById('cinema-ico-play');
   const cp = document.getElementById('cinema-ico-pause');
   if (ci) ci.style.display = playing ? 'none'  : 'block';
@@ -276,6 +282,7 @@ export function setIcon(playing) {
   document.querySelector('.pcplay')?.classList.toggle('playing', playing);
   document.querySelector('.pcplay')?.setAttribute('aria-pressed', String(playing));
   document.querySelector('.sb-dot')?.classList.toggle('playing', playing);
+  _attachPressListener();
 }
 
 // ── Playback helpers (private) ───────────────────────────────────────────────
@@ -817,9 +824,9 @@ export function initCrossfadeAudio() {
     try {
       audioNextSource = eqCtx.createMediaElementSource(audioNext);
       audioNextRgGain = eqCtx.createGain();
-      audioNextRgGain.gain.value = 1.0; // neutre par défaut
+      audioNextRgGain.gain.setValueAtTime(1.0, 0); // neutre par défaut — §9: no direct .value=
       audioNextGain   = eqCtx.createGain();
-      audioNextGain.gain.value = 0;     // muet au départ — sera 0→1 pendant le fondu
+      audioNextGain.gain.setValueAtTime(0, 0);     // muet au départ — sera 0→1 pendant le fondu — §9: no direct .value=
       // @ts-ignore — audioNextSource just assigned above, guaranteed non-null here
       audioNextSource.connect(audioNextRgGain);
       audioNextRgGain.connect(audioNextGain);
@@ -848,12 +855,12 @@ export function clearCrossfadeTimers() {
   cancelRgAnalysis();
   if (audioNextGain && eqCtx) {
     audioNextGain.gain.cancelScheduledValues(eqCtx.currentTime);
-    audioNextGain.gain.value = 0;
+    audioNextGain.gain.setTargetAtTime(0, eqCtx.currentTime, 0.01);
   }
   // DSP-7: reset du nœud RG dédié
   if (audioNextRgGain && eqCtx) {
     audioNextRgGain.gain.cancelScheduledValues(eqCtx.currentTime);
-    audioNextRgGain.gain.value = 1.0;
+    audioNextRgGain.gain.setTargetAtTime(1.0, eqCtx.currentTime, 0.01);
   }
   // DSP-6: reset audioOutGain (fade-out source primaire)
   if (audioOutGain && eqCtx) {
@@ -868,7 +875,6 @@ export function clearCrossfadeTimers() {
     // @ts-ignore — vol is an input[type=range] with .value property
     setMasterGain(vel ? parseFloat(vel.value) : (masterGainNode ? masterGainNode.gain.value : 1));
   }
-  if (audioNextGain && !eqCtx) audioNextGain.gain.value = 0;
   if (audioNext) { audioNext.pause(); audioNext.src = ''; }
   try { audioNextSource?.disconnect(); } catch {}
   try { audioNextGain?.disconnect(); } catch {}
@@ -954,7 +960,15 @@ export function checkCrossfade() {
 
     // @ts-ignore — audioNext guaranteed by initCrossfadeAudio(); url guaranteed by ensureUrl(ok)
     audioNext.src = nextTrack.url;
-    if (audioNextGain) audioNextGain.gain.value = 0;
+    // §9 — setValueAtTime au lieu de .value= direct (invariant AudioParam CLAUDE.md §9).
+    // eqCtx est garanti présent ici (initCrossfadeAudio() en a besoin). La valeur
+    // est réinitialisée via setValueAtTime dans le setTimeout (l. 988-990), mais
+    // on l'établit immédiatement pour éviter tout signal parasite pendant les 80 ms
+    // de startDelay dans le cas rare où eqCtx serait actif avant play().
+    if (audioNextGain && eqCtx) {
+      audioNextGain.gain.cancelScheduledValues(eqCtx.currentTime);
+      audioNextGain.gain.setValueAtTime(0, eqCtx.currentTime);
+    }
 
     const startDelay = 80;
     const _genAtStart = _cfGen;
@@ -1006,10 +1020,10 @@ export function checkCrossfade() {
 
       // Helper local : reset des nœuds de gain après transition
       function _resetGains() {
-        if (audioNextGain && eqCtx) { audioNextGain.gain.cancelScheduledValues(eqCtx.currentTime); audioNextGain.gain.value = 0; }
-        if (audioNextRgGain && eqCtx) { audioNextRgGain.gain.cancelScheduledValues(eqCtx.currentTime); audioNextRgGain.gain.value = 1.0; }
+        if (audioNextGain && eqCtx) { audioNextGain.gain.cancelScheduledValues(eqCtx.currentTime); audioNextGain.gain.setTargetAtTime(0, eqCtx.currentTime, 0.01); }
+        if (audioNextRgGain && eqCtx) { audioNextRgGain.gain.cancelScheduledValues(eqCtx.currentTime); audioNextRgGain.gain.setTargetAtTime(1.0, eqCtx.currentTime, 0.01); }
         // DSP-6 : restaurer audioOutGain à 1.0 pour la nouvelle piste principale
-        if (audioOutGain && eqCtx) { audioOutGain.gain.cancelScheduledValues(eqCtx.currentTime); audioOutGain.gain.value = 1.0; }
+        if (audioOutGain && eqCtx) { audioOutGain.gain.cancelScheduledValues(eqCtx.currentTime); audioOutGain.gain.setTargetAtTime(1.0, eqCtx.currentTime, 0.01); }
         // DSP-5 : restaurer audio.volume depuis le slider DOM (JAMAIS hardcoder 1.0)
         // @ts-ignore — vol is an input[type=range] with .value property
         if (!sleepFading) { const _vel = document.getElementById('vol'); setMasterGain(_vel ? parseFloat(_vel.value) : (masterGainNode ? masterGainNode.gain.value : 1)); }

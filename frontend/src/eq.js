@@ -22,6 +22,7 @@
 //   renderEQBands, filterEQPresets, toggleEQAB
 //   setMasterGain
 
+import { panelOpen, panelClose, set as motionSet } from './motion.js';
 import { get, set } from './store.js';
 import { emit, EVENTS } from './bus.js';
 import { i18n } from './i18n.js';
@@ -310,18 +311,27 @@ export function toggleEQ() {
     _syncEQUI();
     // FOCUS-1 FIX : activer le trap quand le panneau est ouvert
     _setupEQFocusTrap(panel);
+    panelOpen(panel);
   }
 }
 
 export function closeEQ() {
   if (!eqOpen) return;
   eqOpen = false;
-  const panel = document.getElementById('eq-panel');
-  if (panel) panel.classList.remove('open');
   const _eqBtn = document.getElementById('btn-eq');
   _eqBtn?.setAttribute('aria-expanded', 'false'); // A11Y
   _eqBtn?.classList.remove('active');              // repère d'ouverture
   document.getElementById('app')?.classList.remove('panel-eq-open'); // libère le push de #main
+  // panelOpen/panelClose both call kill(el) — rapid re-open during exit cancels
+  // the in-flight tween cleanly without manual sequencing.
+  const ep = document.getElementById('eq-panel');
+  if (!ep) return;
+  panelClose(ep).then(() => {
+    ep.classList.remove('open');
+    // Clear GSAP inline styles after .open is removed so CSS base rules
+    // (opacity:0, transform:translateX(100%)) take over, keeping panel off-screen.
+    motionSet(ep, { clearProps: 'opacity,transform' });
+  });
 }
 
 // ── setEQBand ─────────────────────────────────────────────────────────────────

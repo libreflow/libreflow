@@ -13,18 +13,17 @@
 //   resolveConfirm(result)                              — résout la modal depuis handlers.js
 //   promptAction(title, defaultVal, okLabel, cancelLabel) — saisie texte → Promise<string|null>
 
-// ── Utilitaire sécurité ───────────────────────────────────────────────────
-
-/** Escape HTML special characters including quotes. Use for any user-provided content in HTML attributes or text nodes. */
-export function esc(str) {
-  return (str || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
-}
-
 // ── Lit Web Component delegation ─────────────────────────────────────────
 // Phase 0 Lit : les constantes _TOAST_ICONS et _TOAST_DUR vivent désormais
 // dans frontend/src/components/lf-toast-stack.{js,logic.js}. ui.js délègue.
 
 import './components/lf-toast-stack.js';
+import './components/lf-modal.js';
+import { modalOpen, modalClose } from './motion.js';
+import { esc } from './utils.js';
+import { liveAnnounce } from './a11y.js';
+
+export { esc };
 
 let _stack = null;
 
@@ -49,6 +48,7 @@ function _getStack() {
  *          La fonction expose aussi remove.update(newMsg) pour modifier le message.
  */
 export function toast(m, type = 'info') {
+  liveAnnounce(m, type === 'error' || type === 'warning' ? 'assertive' : 'polite');
   const stack = _getStack();
   const handle = stack.push({ message: m, type });
   const remove = () => handle.remove();
@@ -66,6 +66,7 @@ export function toast(m, type = 'info') {
  * @returns {Function & { update: Function }}
  */
 export function toastWithAction(m, type = 'info', label, onAction, dur) {
+  liveAnnounce(m, type === 'error' || type === 'warning' ? 'assertive' : 'polite');
   const stack = _getStack();
   const handle = stack.push({
     message: m,
@@ -76,6 +77,31 @@ export function toastWithAction(m, type = 'info', label, onAction, dur) {
   const remove = () => handle.remove();
   remove.update = (newMsg) => handle.update(newMsg);
   return remove;
+}
+
+export function setToastCloseLabel(label) { _getStack().closeLabel = label; }
+
+// ── Modal helpers ─────────────────────────────────────────────────────────
+
+/**
+ * Show a modal backdrop and animate the inner dialog in.
+ * @param {HTMLElement} bgEl — backdrop element (e.g. #modal-bg)
+ */
+export function openModalEl(bgEl) {
+  bgEl.classList.add('on');
+  const dialog = bgEl.querySelector('[role="dialog"]');
+  if (dialog) modalOpen(dialog);
+}
+
+/**
+ * Animate the inner dialog out, then hide the backdrop.
+ * @param {HTMLElement} bgEl
+ * @returns {Promise<void>}
+ */
+export function closeModalEl(bgEl) {
+  const dialog = bgEl.querySelector('[role="dialog"]');
+  if (!dialog) { bgEl.classList.remove('on'); return Promise.resolve(); }
+  return modalClose(dialog).then(() => bgEl.classList.remove('on'));
 }
 
 // ── Focus trap ────────────────────────────────────────────────────────────
@@ -130,15 +156,17 @@ export function confirmAction(title, body, okLabel = 'Confirmer', okStyle = 'dan
     okBtn.textContent = okLabel;
     okBtn.className   = `mbtn ${okStyle}`;
     const _prevFocus  = document.activeElement;
+    const _dialog     = bg.querySelector('[role="dialog"]');
     _confirmResolve = (result) => {
-      bg.classList.remove('on');
       _confirmResolve = () => {};
       _confirmTrapCleanup();
       _confirmTrapCleanup = () => {};
-      _prevFocus?.focus();
-      resolve(result);
+      const _doFinish = () => { bg.classList.remove('on'); _prevFocus?.focus(); resolve(result); };
+      if (_dialog) modalClose(_dialog).then(_doFinish);
+      else _doFinish();
     };
     bg.classList.add('on');
+    if (_dialog) modalOpen(_dialog);
     _confirmTrapCleanup = _trapFocus(document.getElementById('confirm-modal'));
     setTimeout(() => okBtn.focus(), 50);
   });
@@ -190,9 +218,10 @@ export function promptAction(title, defaultVal = '', okLabel = 'OK', cancelLabel
     const removeTrap = _trapFocus(bg);
     const finish = (val) => {
       removeTrap();
-      bg.remove();
-      _prevFocus?.focus();
-      resolve(val);
+      const _pm = bg.querySelector('.modal');
+      const _doRemove = () => { bg.remove(); _prevFocus?.focus(); resolve(val); };
+      if (_pm) modalClose(_pm).then(_doRemove);
+      else _doRemove();
     };
 
     okBtn.addEventListener('click', () => finish(input.value.trim() || null));
@@ -206,6 +235,8 @@ export function promptAction(title, defaultVal = '', okLabel = 'OK', cancelLabel
     // Afficher + focus
     requestAnimationFrame(() => {
       bg.classList.add('on');
+      const _pm = bg.querySelector('.modal');
+      if (_pm) modalOpen(_pm);
       input.select();
       input.focus();
     });

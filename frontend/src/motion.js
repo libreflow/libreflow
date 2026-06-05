@@ -33,6 +33,7 @@
 import { gsap }       from 'gsap';
 import { Flip }       from 'gsap/Flip';
 import { CustomEase } from 'gsap/CustomEase';
+import { CFG }        from './cfg.js';
 
 // Register once at module load — registerPlugin is idempotent and tree-shake safe.
 gsap.registerPlugin(Flip, CustomEase);
@@ -126,6 +127,13 @@ export function kill(target) {
   gsap.killTweensOf(target);
 }
 
+/**
+ * Crée une fonction de tween rapide pour animation frame-par-frame.
+ * Intentionnellement sans vérification reduced-motion — réservé aux visualiseurs temps-réel.
+ * @returns {Function} setter(value) → tweene target[prop] vers value
+ */
+export const quickTo = (target, prop, vars) => gsap.quickTo(target, prop, vars);
+
 // ── Flip plugin (layout animations) ──────────────────────────────────────────
 // Flip = First/Last/Invert/Play. Capture state, mutate DOM, animate from prior
 // position. Perfect for list reordering, view switches, expand/collapse.
@@ -151,3 +159,138 @@ export const _meta = Object.freeze({
   gsapVersion: gsap.version,
   plugins: ['Flip', 'CustomEase'],
 });
+
+// ── View presets ─────────────────────────────────────────────────────────────
+
+/**
+ * Animate a view element entering the screen.
+ * @param {Element} el
+ * @returns {gsap.core.Tween}
+ */
+export function viewEnter(el) {
+  kill(el);
+  // fromTo avec "to" explicite opacity:1 — évite que gsap.from lise l'opacity stale
+  // laissée par un viewExit tué à mi-course (ex. double-clic open→close).
+  if (prefersReducedMotion()) return gsap.set(el, { opacity: 1 });
+  return gsap.fromTo(el, { opacity: 0 }, { opacity: 1, duration: 0.22, ease: 'power2.out' });
+}
+
+/**
+ * Animate a view element leaving the screen. Returns a thenable tween.
+ * @param {Element} el
+ * @returns {gsap.core.Tween}
+ */
+export function viewExit(el) {
+  kill(el);
+  if (prefersReducedMotion()) return gsap.to(el, { opacity: 0, duration: 0 });
+  return gsap.to(el, { opacity: 0, duration: 0.14, ease: 'power2.in' });
+}
+
+// ── Panel presets ─────────────────────────────────────────────────────────────
+
+/**
+ * @param {Element} el — panel inner element (not the backdrop)
+ * @returns {gsap.core.Tween}
+ */
+export function panelOpen(el) {
+  kill(el);
+  // fromTo avec "to" explicite opacity:1 — evite que gsap.from lise l'opacity:0 inline
+  // laisse par panelClose (stale) et anime de 0→0, rendant le panneau invisible.
+  if (prefersReducedMotion()) return gsap.set(el, { opacity: 1, clearProps: 'transform' });
+  return gsap.fromTo(el,
+    { opacity: 0, y: 6 },
+    { opacity: 1, y: 0, duration: 0.24, ease: eases.PREMIUM, clearProps: 'transform' });
+}
+
+/**
+ * @param {Element} el
+ * @returns {gsap.core.Tween}
+ */
+export function panelClose(el) {
+  kill(el);
+  if (prefersReducedMotion()) return gsap.to(el, { opacity: 0, duration: 0 });
+  return gsap.to(el, { opacity: 0, y: 4, duration: 0.16, ease: 'power2.in' });
+}
+
+/**
+ * @param {Element} el — dialog element inside the backdrop
+ * @returns {gsap.core.Tween}
+ */
+export function modalOpen(el) {
+  kill(el);
+  if (prefersReducedMotion()) return gsap.set(el, { opacity: 1 });
+  return gsap.from(el, { opacity: 0, duration: 0.22, ease: eases.PREMIUM, clearProps: 'opacity' });
+}
+
+/**
+ * @param {Element} el
+ * @returns {gsap.core.Tween}
+ */
+export function modalClose(el) {
+  kill(el);
+  if (prefersReducedMotion()) return gsap.to(el, { opacity: 0, duration: 0 });
+  return gsap.to(el, { opacity: 0, duration: 0.16, ease: 'power2.in' });
+}
+
+// ── Player presets ────────────────────────────────────────────────────────────
+
+/** Active timeline ref — allows rapid track changes to kill the previous sequence. */
+let _trackSwapTl = null;
+
+/**
+ * Animate art + title + artist on track change.
+ * Call AFTER DOM content (src, text) has already been updated.
+ * @param {Element} artEl    — `.pl-art` container
+ * @param {Element} titleEl  — `#pl-n`
+ * @param {Element} artistEl — `#pl-a`
+ */
+export function trackSwap(artEl, titleEl, artistEl) {
+  if (_trackSwapTl) { _trackSwapTl.kill(); _trackSwapTl = null; }
+  if (prefersReducedMotion()) {
+    gsap.from([artEl, titleEl, artistEl], { opacity: 0, duration: 0 });
+    return;
+  }
+  _trackSwapTl = gsap.timeline({ onComplete() { _trackSwapTl = null; } })
+    .from(artEl,    { opacity: 0, scale: 1.08, filter: 'blur(4px)', duration: 0.26, ease: eases.PREMIUM, clearProps: 'filter,transform,opacity' }, 0)
+    .from(titleEl,  { opacity: 0, y: 6, duration: 0.20, ease: eases.PREMIUM, clearProps: 'transform,opacity' }, 0)
+    .from(artistEl, { opacity: 0, y: 6, duration: 0.20, ease: eases.PREMIUM, clearProps: 'transform,opacity' }, 0.04);
+}
+
+/**
+ * Tactile spring bounce for the play/pause button on press.
+ * @param {Element} btn — `.pcplay`
+ */
+export function playPausePress(btn) {
+  if (prefersReducedMotion()) return;
+  kill(btn);
+  gsap.fromTo(btn, { scale: 0.91 }, { scale: 1, duration: 0.20, ease: eases.OVERSHOOT });
+}
+
+// ── List presets ──────────────────────────────────────────────────────────────
+
+const STAGGER_CAP = CFG.STAGGER_CAP;
+
+/**
+ * Stagger-in a NodeList/Array of elements (first render of a view list).
+ * @param {NodeList|Element[]} items
+ */
+export function staggerIn(items) {
+  const els  = Array.from(items).slice(0, STAGGER_CAP);
+  const rest = Array.from(items).slice(STAGGER_CAP);
+  kill(els);
+  if (rest.length) gsap.set(rest, { opacity: 1 });
+  if (prefersReducedMotion()) { gsap.set(els, { opacity: 1 }); return; }
+  gsap.from(els, { opacity: 0, duration: 0.20, ease: eases.PREMIUM, stagger: 0.018, clearProps: 'opacity' });
+}
+
+/**
+ * Stagger-out before a list is replaced.
+ * @param {NodeList|Element[]} items
+ * @returns {gsap.core.Tween}
+ */
+export function staggerOut(items) {
+  const els = Array.from(items).slice(0, STAGGER_CAP);
+  kill(els);
+  if (prefersReducedMotion()) return gsap.set(els, { opacity: 0 });
+  return gsap.to(els, { opacity: 0, duration: 0.12, ease: 'power2.in', stagger: 0.010 });
+}

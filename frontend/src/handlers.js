@@ -25,7 +25,8 @@ import { togglePlay, prev, next, toggleShuffle, toggleRepeat, toggleLike,
          likeat, playAt, isCurrentTrack, audio }              from './player.js';
 import { toggleQueue, closeQueue, playQueueItem,
          addToQueueNext, addToQueueEnd,
-         removeFromQueue, clearExplicitQueue, moveQueueItem }  from './queue.js';
+         removeFromQueue, clearExplicitQueue, moveQueueItem,
+         toggleQueuePin, clearQueuePin }                        from './queue.js';
 import { toggleEQ, closeEQ, applyEQPreset,
          filterEQPresets, setMasterGain,
          setEQExpert, eqOpen,
@@ -57,7 +58,7 @@ import { showCtxMenu, closeCtxMenu,
          ctxPlayNext, ctxAddToQueueEnd, ctxCopyInfo, ctxWriteRG,
          ctxMoveTrackUp, ctxMoveTrackDown } from './ctxmenu.js';
 import { toggleCinema, closeCinema, cycleCinemaBg,
-         toggleCinemaFullscreen }                              from './cinema.js';
+         toggleCinemaFullscreen, getCinArtRGB }               from './cinema.js';
 import { openRadioView, ctxStartRadio,
          radioSaveAsPlaylist, radioRegenerateFromCurrent,
          stopRadio, playRadioTrackAt, removeRadioTrack }       from './radio.js';
@@ -77,10 +78,6 @@ import { setLang }                                             from './i18n.js';
 import { playById, scrollToCurrentTrack, drillDown,
          renderImportHistory }                                 from './renderer.js';
 import { getFiltered, invalidateFilterCache }                  from './search.js';
-
-// ── Module state ──────────────────────────────────────────────────────────
-let _registered = false;  // Guard against double-registration during HMR
-
 import { closePlModal, clearPlCover,
          confirmPlaylistModal, onPlCoverSelected,
          openNewPlaylistModal, openRenamePlaylistModal,
@@ -108,6 +105,22 @@ import { toggleNowPlaying, closeNowPlaying,
          toggleNowPlayingFullscreen, cycleNpBg }              from './nowplaying.js';
 import { emit, EVENTS }                                        from './bus.js';
 
+// ── Module state ──────────────────────────────────────────────────────────
+let _registered = false;  // Guard against double-registration during HMR
+
+// ── Burger menu ─────────────────────────────────────────────────────────────
+function _burgerOutside(e) {
+  const panel = document.getElementById('tb-burger-panel');
+  if (!panel?.classList.contains('on')) return;
+  const btn = document.getElementById('tbt-burger');
+  if (!panel.contains(e.target) && !btn?.contains(e.target)) {
+    panel.classList.remove('on');
+    btn?.setAttribute('aria-expanded', 'false');
+    panel.querySelectorAll('[role="menuitem"]').forEach(el => el.setAttribute('tabindex', '-1'));
+    btn?.focus();
+  }
+}
+
 // ── Registre d'actions ────────────────────────────────────────────────────
 
 const _ACTIONS = {
@@ -121,7 +134,7 @@ const _ACTIONS = {
   'cycle-speed':           ()    => cycleSpeed(),
 
   // ── Mini-player / overlay ─────────────────────────────────
-  'toggle-mini-player':    async () => { await toggleMiniPlayer(); syncMiniSettingsBtn(); },
+  'toggle-mini-player':    async () => { clearQueuePin(); await toggleMiniPlayer(); syncMiniSettingsBtn(); },
   'toggle-mini-overlay':   ()    => toggleMiniOverlay(),
 
   // ── Now Playing ───────────────────────────────────────────
@@ -140,7 +153,8 @@ const _ACTIONS = {
 
   // ── Queue ─────────────────────────────────────────────────
   'toggle-queue':          ()    => { closeNowPlaying(); toggleQueue(); },
-  'close-queue':           ()    => closeQueue(),
+  'close-queue':           ()    => { clearQueuePin(); closeQueue(); saveCfg(); },
+  'toggle-queue-pin':      ()    => { toggleQueuePin(); saveCfg(); },
   'clear-queue':           ()    => clearExplicitQueue(),
   'remove-from-queue':     btn  => { removeFromQueue(btn.dataset.trackId); },
   'queue-move-up':         btn  => moveQueueItem(btn.dataset.id, -1),
@@ -152,7 +166,7 @@ const _ACTIONS = {
     // Exclusivité de panneau, symétrique à toggleQueue() (qui ferme l'EQ) :
     // à l'ouverture, fermer la file d'attente et les réglages s'ils sont ouverts.
     if (!eqOpen) {
-      closeQueue();
+      clearQueuePin(); closeQueue();
       if (document.getElementById('settings-panel')?.classList.contains('on')) closeSettings();
     }
     toggleEQ();
@@ -171,7 +185,7 @@ const _ACTIONS = {
   'cancel-sleep':          ()    => cancelSleepTimer(),
 
   // ── Cinema ────────────────────────────────────────────────
-  'toggle-cinema':         ()    => toggleCinema(),
+  'toggle-cinema':         ()    => { clearQueuePin(); toggleCinema(); },
   'close-cinema':          ()    => closeCinema(),
   'cinema-fullscreen':     ()    => toggleCinemaFullscreen(),
   'cycle-cinema-bg':       ()    => cycleCinemaBg(),
@@ -345,6 +359,21 @@ const _ACTIONS = {
   'clear-filters':         ()   => clearAllFilters(),
 
   // ── Misc (app.js) ─────────────────────────────────────────
+  'toggle-burger-menu': () => {
+    const panel = document.getElementById('tb-burger-panel');
+    const btn   = document.getElementById('tbt-burger');
+    const open  = panel?.classList.contains('on');
+    panel?.classList.toggle('on', !open);
+    btn?.setAttribute('aria-expanded', String(!open));
+    if (!open && panel) {
+      // WAI-ARIA menu pattern: focus first item, set roving tabindex
+      const items = [...panel.querySelectorAll('[role="menuitem"]')];
+      items.forEach((el, i) => el.setAttribute('tabindex', i === 0 ? '0' : '-1'));
+      items[0]?.focus();
+    } else if (open && panel) {
+      panel.querySelectorAll('[role="menuitem"]').forEach(el => el.setAttribute('tabindex', '-1'));
+    }
+  },
   // UX-Ergo : 'open-settings' devient un toggle — re-presser le bouton ferme le panneau.
   // Le nom data-action est conservé pour la compatibilité HTML existante.
   'open-settings':         ()    => toggleSettings(),
@@ -538,6 +567,7 @@ function _handleInput(e) {
       const v = +el.value;
       setMasterGain(v);
       if (main) { main.value = el.value; updateVolSlider(main); }
+      updateVolSlider(el, `rgb(${getCinArtRGB()})`); // teinte art-color sur le slider cinéma
       setAriaValueText(el,   _v => `${Math.round(_v * 100)} pour cent`, v);
       if (main) setAriaValueText(main, _v => `${Math.round(_v * 100)} pour cent`, v);
       break;
@@ -690,6 +720,7 @@ export function registerHandlers() {
   _registered = true;
   const ac = new AbortController();
   const { signal } = ac;
+  document.addEventListener('click',       _burgerOutside,       { capture: true, signal });
   document.addEventListener('click',       _handleClick,        { signal });
   document.addEventListener('click',       _handleBackdropClick, { signal });
   document.addEventListener('input',       _handleInput,        { signal });

@@ -4,9 +4,10 @@
 //
 // API : runViewTransition() — appelle juste avant un changement de vue.
 
+import { CFG } from './cfg.js';
+
 const MAIN_SELECTOR = '#main';
 const CLASS = 'view-fade';
-const DUR_MS = 200;
 
 /**
  * Trigger a cross-fade on the main view container.
@@ -20,5 +21,5 @@ export function runViewTransition() {
   void el.offsetWidth;
   el.classList.add(CLASS);
   // Auto-clean ; if a new call lands sooner it preempts.
-  setTimeout(() => el.classList.remove(CLASS), DUR_MS + 50);
+  setTimeout(() => el.classList.remove(CLASS), CFG.VIEW_FADE_MS + 50);
 }

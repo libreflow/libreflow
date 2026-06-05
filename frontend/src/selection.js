@@ -23,7 +23,7 @@ import { emit, EVENTS }                                 from './bus.js';
 import { getFiltered, _trackIdxMap, invalidateFilterCache } from './search.js';
 import { audio, resetShuffleQ, clearCrossfadeTimers }   from './player.js';
 import { saveTrackNow }                                 from './library.js';
-import { toast, toastWithAction }                                        from './ui.js';
+import { toast, toastWithAction, openModalEl, closeModalEl }             from './ui.js';
 import { saveCfg }                        from './cfgsave.js';
 import { setCurIdx, setTracks, setLiked, replaceTracks } from './state.js';
 import { updateBar }                       from './playerbar.js';
@@ -36,6 +36,7 @@ export let selectionMode = false;     // actif = affiche les checkboxes
 let _selAnchorId         = null;      // anchor pour Shift+click
 let _bteCoverPath        = null;      // chemin absolu de l'image choisie pour le batch cover
 let _bteSnapshotIds      = null;      // B5 : snapshot des ids sélectionnés à l'ouverture du modal batch-tag
+let _bteOpenedFrom       = null;      // élément qui avait le focus avant l'ouverture du modal batch-tag
 
 // ── Invalidation automatique de la sélection ─────────────────
 // Quand tracks[] change (scan, suppression, import…), les IDs sélectionnés
@@ -378,14 +379,18 @@ export function selBatchTagEdit() {
   const btn = document.getElementById('bte-confirm-btn');
   if (btn) btn.disabled = false;
 
-  modal.classList.add('on'); // FIX : .on déclenche fade-in (visibility+opacity, pas display)
+  _bteOpenedFrom = document.activeElement;
+  openModalEl(modal); // show backdrop + animate inner [role="dialog"]
   // Focus sur l'artiste (plus logique que l'année)
   artistEl.focus();
   artistEl.select();
 }
 
 export function closeBatchTagModal() {
-  document.getElementById('batch-tag-modal-bg').classList.remove('on');
+  const prevFocus = _bteOpenedFrom;
+  _bteOpenedFrom = null;
+  closeModalEl(document.getElementById('batch-tag-modal-bg'))
+    .then(() => prevFocus?.focus());
   bteCoverClear(); // reset cover state
   _bteSnapshotIds = null; // B5 : libérer le snapshot batch-tag
 }

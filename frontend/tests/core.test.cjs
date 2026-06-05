@@ -1814,6 +1814,13 @@ section('organize.js -- B-2 saveTracks batches, rebuildTrackIdxMap before notify
 }());
 
 // =============================================================================
+// N. artcolor.js — _kmeansColors (k-means++ clustering, pure function)
+// =============================================================================
+section('artcolor.js -- _kmeansColors');
+
+// Tests run in the async IIFE below via real import from artcolor.js
+
+// =============================================================================
 // N+2. lf-toast-stack.logic — import-smoke (real ESM module surface verification)
 // =============================================================================
 // Moved to async IIFE that owns the final result printing, so the 9 import-smoke
@@ -1850,6 +1857,68 @@ section('components/lf-toast-stack.logic.js -- import-smoke');
     _ko++;
   }
 
+  // search.js — relevanceScore (scorer de pertinence)
+  section('search.js -- relevanceScore (import réel)');
+  try {
+    const { relevanceScore } = await import('../src/search.js');
+    assert(typeof relevanceScore === 'function', 'relevanceScore est une fonction exportée');
+    assert(
+      relevanceScore({ name: 'Discovery' }, 'dis') > relevanceScore({ name: 'The Distance' }, 'dis'),
+      'relevanceScore: title prefix beats title substring'
+    );
+    assert(
+      relevanceScore({ name: 'Endless Discovery' }, 'dis') > relevanceScore({ name: 'Misdiagnosed' }, 'dis'),
+      'relevanceScore: title word-start beats title substring'
+    );
+    assert(
+      relevanceScore({ name: 'Dance', artist: 'X' }, 'dan') > relevanceScore({ name: 'X', artist: 'Dance' }, 'dan'),
+      'relevanceScore: title match beats artist match'
+    );
+    assert(
+      relevanceScore({ artist: 'Daft Punk', album: 'X' }, 'daf') > relevanceScore({ artist: 'X', album: 'Daft Album' }, 'daf'),
+      'relevanceScore: artist match beats album match'
+    );
+    assert(
+      relevanceScore({ name: 'Zzz', artist: 'Yyy' }, 'dis') === 0,
+      'relevanceScore: no match scores 0'
+    );
+    assert(
+      relevanceScore({ name: 'Paradise' }, 'dis') > relevanceScore({ name: 'X', artist: 'Disco' }, 'dis'),
+      'relevanceScore: title substring beats artist prefix (field dominates position)'
+    );
+  } catch (e) {
+    _ko++;
+    console.error('  ✗  relevanceScore import/test crashed:', e.message);
+  }
+
+  // artcolor.js — _kmeansColors (real import — avoids drift from inline duplicate)
+  section('artcolor.js -- _kmeansColors (import réel)');
+  try {
+    const { _kmeansColors } = await import('../src/artcolor.js');
+    // 2048 pure-red + 2048 pure-blue pixels
+    const px = new Uint8ClampedArray(4096 * 4);
+    for (let i = 0; i < 2048; i++) { px[i*4]=255; px[i*4+1]=0;   px[i*4+2]=0;   px[i*4+3]=255; }
+    for (let i = 2048; i < 4096; i++) { px[i*4]=0;   px[i*4+1]=0; px[i*4+2]=255; px[i*4+3]=255; }
+    const res = _kmeansColors(px, 2, 8);
+    assert(res.length === 2,                         '_kmeansColors: retourne k=2 clusters');
+    assert(res[0].score >= res[1].score,             '_kmeansColors: trié score desc');
+    assert(res[0].size > 0 && res[1].size > 0,       '_kmeansColors: clusters non vides');
+    assert(res[0].size + res[1].size === 4096,        '_kmeansColors: tous pixels assignés');
+    const ctrs = res.map(r => r.center);
+    assert(ctrs.some(c => c[0] > 200 && c[2] < 60), '_kmeansColors: identifie le cluster rouge');
+    assert(ctrs.some(c => c[2] > 200 && c[0] < 60), '_kmeansColors: identifie le cluster bleu');
+    // Edge case: all identical pixels
+    const mono = new Uint8ClampedArray(100 * 4);
+    for (let i = 0; i < 100; i++) { mono[i*4]=128; mono[i*4+1]=64; mono[i*4+2]=32; mono[i*4+3]=255; }
+    const monoRes = _kmeansColors(mono, 5, 8);
+    assert(monoRes.length === 5, '_kmeansColors: edge case mono → k=5 clusters');
+    assert(monoRes.every(r => r.center.every(v => v >= 0 && v <= 255)),
+      '_kmeansColors: centres valides RGB 0-255 sur mono');
+  } catch (e) {
+    _ko++;
+    console.error('  ✗  _kmeansColors import/test crashed:', e.message);
+  }
+
   // WCAG 2.2 SC 2.5.7 — pure reorder helper moveByOne (alternative non-drag)
   try {
     const { moveByOne } = await import('../src/utils.js');
@@ -1881,6 +1950,29 @@ section('components/lf-toast-stack.logic.js -- import-smoke');
 
   // Token single-source guard (§17)
   await require('./token-source.test.cjs').run();
+
+  // lf-modal reducer (Phase 1)
+  section('components/lf-modal.logic.js -- modalReducer');
+  try {
+    const mod = await import('../src/components/lf-modal.logic.js');
+    assert(typeof mod.modalReducer === 'function', 'real module: modalReducer exported');
+
+    const s0 = { isOpen: false };
+    let s = mod.modalReducer(s0, { type: 'open' });
+    assert(s.isOpen === true, 'open sets isOpen true');
+
+    s = mod.modalReducer(s, { type: 'close' });
+    assert(s.isOpen === false, 'close sets isOpen false');
+
+    s = mod.modalReducer(s0, { type: 'unknown' });
+    assert(s.isOpen === false, 'unknown action is no-op');
+
+    s = mod.modalReducer({ isOpen: true }, { type: 'open' });
+    assert(s.isOpen === true, 'open on already-open preserves state');
+  } catch (e) {
+    console.error('  KO  lf-modal import/test crashed:', e.message);
+    _ko++;
+  }
 
   // -- Résultat -----------------------------------------------------------
   console.log('\n═══════════════════════════════════════════════════════════');

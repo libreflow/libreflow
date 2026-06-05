@@ -25,6 +25,7 @@ let _deviceProfiles = {};
 let _activeId       = '';   // deviceId courant — '' = sortie par défaut OS
 let _activeLabel    = '';   // label lisible du device actuel
 let _knownIds       = [];   // snapshot des audiooutput deviceIds pour détection ajout/retrait
+let _defaultLabel   = 'Sortie par défaut'; // fallback i18n — mis à jour par app.js via setDefaultDeviceLabel()
 
 // ── Initialisation ────────────────────────────────────────────────────────────
 
@@ -55,11 +56,14 @@ export function getActiveDeviceId() {
   return _activeId;
 }
 
+/** Met à jour le libellé fallback depuis app.js après boot i18n. */
+export function setDefaultDeviceLabel(label) { _defaultLabel = label; }
+
 /** @returns {string} Label lisible ou fallback */
 export function getActiveDeviceLabel() {
   if (_activeLabel) return _activeLabel;
   if (_activeId && _activeId !== 'default') return `ID:${_activeId.slice(0, 8)}`;
-  return 'Sortie par défaut';
+  return _defaultLabel;
 }
 
 // ── Mutations (sans saveCfg — appelé par handlers.js après) ──────────────────

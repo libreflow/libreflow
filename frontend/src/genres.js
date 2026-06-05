@@ -21,7 +21,7 @@ import { esc }                                              from './utils.js';
 import { i18n }                                            from './i18n.js';
 import { get, set }                                        from './store.js';
 import { emit, on, EVENTS }                                from './bus.js';
-import { _normalizeGenre, _coll, invalidateFilterCache }   from './search.js';
+import { _normalizeGenre, _coll, invalidateFilterCache, getFiltered } from './search.js';
 import { guessGenre }                                      from './tags.js';
 import { saveTracks }                                      from './library.js';
 import { toast }                                           from './ui.js';
@@ -42,8 +42,9 @@ export function invalidateGenreGridSig() { _genreGridSig = null; }
 
 // ── Emojis par genre (clé = clé canonique LibreFlow) ─────────────────────────
 const GENRE_EMOJIS = {
-  rap:        '🎤', hip:        '🎤', trap:      '🔮',
+  rap:        '🎤', hip:        '🎤', 'hip-hop':  '🎤', trap:      '🔮',
   phonk:      '💀', drill:      '🔩', afro:      '🥁',
+  'r&b/soul': '🎶',
   electro:    '⚡', electronic: '⚡', dance:     '💃',
   pop:        '🌸', rock:       '🎸', metal:     '🤘',
   punk:       '🔥', jazz:       '🎷', blues:     '🎵',
@@ -59,6 +60,7 @@ const GENRE_EMOJIS = {
 const GENRE_COLORS = {
   rap:        'linear-gradient(135deg, #1a0533 0%, #6b21a8 100%)',
   hip:        'linear-gradient(135deg, #0f172a 0%, #7c3aed 100%)',
+  'hip-hop':  'linear-gradient(135deg, #0f172a 0%, #7c3aed 100%)',
   trap:       'linear-gradient(135deg, #0a000f 0%, #4a044e 100%)',
   phonk:      'linear-gradient(135deg, #0d0010 0%, #7f1d1d 100%)',
   drill:      'linear-gradient(135deg, #080808 0%, #374151 100%)',
@@ -75,6 +77,7 @@ const GENRE_COLORS = {
   soul:       'linear-gradient(135deg, #1a0500 0%, #dc2626 100%)',
   funk:       'linear-gradient(135deg, #1a0a00 0%, #d97706 100%)',
   rnb:        'linear-gradient(135deg, #1a0029 0%, #9333ea 100%)',
+  'r&b/soul': 'linear-gradient(135deg, #1a0029 0%, #9333ea 100%)',
   classical:  'linear-gradient(135deg, #0a1a0a 0%, #16a34a 100%)',
   country:    'linear-gradient(135deg, #1a1000 0%, #ca8a04 100%)',
   folk:       'linear-gradient(135deg, #0f1a0a 0%, #65a30d 100%)',
@@ -92,12 +95,12 @@ const GENRE_COLORS = {
 
 // ── Noms d'affichage canoniques (clé → label affiché sur la card) ─────────────
 const GENRE_DISPLAY_NAMES = {
-  rap:        'Rap',        hip:        'Hip-Hop',    trap:      'Trap',
+  rap:        'Rap',        hip:        'Hip-Hop',    'hip-hop':  'Hip-Hop',   trap:      'Trap',
   phonk:      'Phonk',     drill:      'Drill',       afro:      'Afrobeats',
   electro:    'Electro',   electronic: 'Electronic',  dance:     'Dance',
   pop:        'Pop',        rock:       'Rock',        metal:     'Metal',
   punk:       'Punk',       jazz:       'Jazz',        blues:     'Blues',
-  soul:       'Soul',       funk:       'Funk',        rnb:       'R&B',
+  soul:       'Soul',       funk:       'Funk',        rnb:       'R&B',        'r&b/soul': 'R&B / Soul',
   classical:  'Classical',  country:    'Country',     folk:      'Folk',
   reggae:     'Reggae',     latin:      'Latin',       world:     'World',
   indie:      'Indie',      ambient:    'Ambient',     lofi:      'Lo-Fi',
@@ -197,8 +200,11 @@ export function renderGenresGrid() {
 
   // Construire la map des genres (enrichie : arts, durée totale, top artiste, variantes)
   // _normalizeGenre() fusionne les variantes : "Rap Français" + "Rap" → même clé "rap"
+  // BUG-6 FIX: quand une recherche est active, compter depuis getFiltered() pour que
+  // le badge sur chaque carte corresponde aux pistes visibles après drill-in.
   const genreMap = new Map();
-  for (const t of tracks) {
+  const trackSource = query ? getFiltered() : tracks;
+  for (const t of trackSource) {
     const g = (t.genre || '').trim();
     if (!g) continue;
     const parts = g.split(/[\/,;|]/).map(p => p.trim()).filter(Boolean);
@@ -261,7 +267,9 @@ export function renderGenresGrid() {
 
     const variantCount = g.variants.size;
     const variantTip   = variantCount > 0
+      // BUG-8 FIX: indiquer le nombre de variantes non affichées dans le tooltip
       ? Array.from(g.variants).slice(0, 4).map(esc).join(', ')
+          + (variantCount > 4 ? ` +${variantCount - 4}` : '')
       : '';
     const variantBadge = variantCount > 0
       ? `<div class="genre-variants-badge" title="${variantTip}">+${variantCount}</div>`

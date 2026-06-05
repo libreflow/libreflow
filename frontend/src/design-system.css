@@ -120,6 +120,10 @@
   --motion-slow : 320ms;
   --ease-standard : cubic-bezier(.4, 0, .2, 1);
   --ease-spring   : cubic-bezier(.34, 1.56, .64, 1); /* aligné sur la valeur active (§8) + motion.js lf-overshoot */
+
+  /* lf-toast-stack component tokens */
+  --lf-toast-action : #8ab4f8;   /* Material Blue 300 — bouton action (dark) */
+  --lf-toast-min-w  : 288px;     /* largeur minimale d'un toast */
 }
 
 
@@ -287,20 +291,8 @@
 
 
 /* ============================================================================
- * 9. Z-INDEX SYSTEM
- * Pas de magic numbers : tout passe par ces tokens.
- * --z-player toujours au-dessus de tout (le player ne disparaît jamais).
+ * 9. Z-INDEX SYSTEM — tokens définis en §13 (bloc canonique).
  * ============================================================================ */
-:root {
-  --z-base     : 0;
-  --z-raised   : 10;
-  --z-dropdown : 100;
-  --z-sticky   : 200;
-  --z-overlay  : 300;
-  --z-modal    : 400;
-  --z-toast    : 500;
-  --z-player   : 600;
-}
 
 
 /* ============================================================================
@@ -405,6 +397,9 @@ html[data-mode="light"] {
   --focus-halo : rgba(255, 255, 255, 0.55);
   /* AAA SC 2.4.13 : anneau de contraste neutre — sombre sur fond clair. */
   --focus-ring-contrast : rgba(0, 0, 0, 0.85);
+
+  /* lf-toast-stack — override light */
+  --lf-toast-action : #2563eb;   /* Tailwind Blue 600 — bouton action (light) */
 }
 
 
@@ -431,8 +426,8 @@ html[data-mode="light"] {
      ════════════════════════════════════════════════════════════════ */
 
   /* Typographie — tailles display (hors échelle canonique migrée vers design-system.css) */
-  --text-display: 32px;
-  --text-hero:    clamp(40px, 6vw, 80px);
+  --fs-disp-32: 32px;
+  --text-hero:  clamp(40px, 6vw, 80px);
 
   /* Graisses */
   --fw-regular:  400;
@@ -780,9 +775,9 @@ html[data-mode="light"] {
   /* --fs-vw-hero-sm retiré (R-H1) — son seul consommateur, le @media 520px mort, a été supprimé */
   --fs-vw-clock:     clamp(44px, 7.5vw, 90px);  /* cinéma horloge idle responsive */
   --fs-vw-date:      clamp(11px, 1.4vw, 15px);  /* cinéma date idle responsive */
-  --fs-vw-cin-title: clamp(16px, 3.2vw, 34px);  /* cinéma titre piste responsive */
-  --fs-vw-cin-art:   clamp(11px, 1.8vw, 17px);  /* cinéma artiste responsive */
-  --fs-vw-cin-alb:   clamp(9px, 1.3vw, 13px);   /* cinéma album responsive */
+  --fs-vw-cin-title: clamp(18px, 3.5vw, 44px);  /* cinéma titre piste responsive */
+  --fs-vw-cin-art:   clamp(13px, 2vw,   22px);  /* cinéma artiste responsive */
+  --fs-vw-cin-alb:   clamp(9px,  1.4vw, 14px);  /* cinéma album responsive */
 
   /* Rayons — recâblés sur l'échelle canonique --radius-* (harmonisation, audit §2.2).
      17 rayons → 5. --r-micro reste littéral (hairline 1px). */
@@ -985,6 +980,7 @@ html[data-mode="light"] {
 
   /* Dimensions cinéma & artwork */
   --art-cinema-max:     420px;  /* taille max pochette cinéma (min(46vh,46vw,N)) */
+  --art-cinema-radius:  clamp(12px, 1.8vw, 24px);  /* rayon fluide pochette cinéma */
 
   /* Grilles stats & heatmap */
   --artist-month-col-min: 90px; /* min colonne nom artiste (stats month) */
@@ -1003,10 +999,12 @@ html[data-mode="light"] {
    *  toast    notifications (au-dessus de toute modale)
    *  tooltip  ctxmenu, tooltips (top absolu) */
   --z-base:     1;
+  --z-raised:   10;
   --z-sticky:   100;
   --z-dropdown: 200;
   --z-overlay:  500;
   --z-modal:    800;
+  --z-player:   900;
   --z-toast:    9000;
   --z-tooltip:  9999;
 

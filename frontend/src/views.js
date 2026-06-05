@@ -16,8 +16,7 @@ import { emit, EVENTS }                                              from './bus
 import { eqOpen, closeEQ }                                           from './eq.js';
 import { queueOpen, closeQueue }                                     from './queue.js';
 import { VIRT }                                                       from './virt.js';
-import { getFiltered, _trackIdxMap, invalidateFilterCache,
-         wasFuzzySearch }                                            from './search.js';
+import { getFiltered, _trackIdxMap, invalidateFilterCache }         from './search.js';
 import { buildQ, clearRvProgFill }                                   from './player.js';
 import { _withVT, renderLib, renderAlbumsGrid, renderArtistsGrid,
          renderPlaylistsGrid, drillDown, updatePlActionBar }         from './renderer.js';
@@ -30,6 +29,7 @@ import { openSmartPlaylistModal }                                    from './sma
 import { saveCfg }                                                   from './cfgsave.js';
 import { clearSelection }                                            from './selection.js';
 import { runViewTransition }                                         from './view-transition.js';
+import { viewEnter, viewExit, staggerIn }                             from './motion.js';
 
 // Inline helper — équivalent de app.js:invalidateFilter() (ARCH-1, no circular dep)
 function invalidateFilter() {
@@ -93,6 +93,8 @@ function _deferGridRender(renderFn) {
   setTimeout(() => {
     if (token !== _gridRenderToken) return; // render périmé — ignorer
     renderFn();
+    const cards = document.querySelectorAll('.card');
+    if (cards.length) staggerIn(cards);
   }, 0);
 }
 
@@ -103,26 +105,52 @@ export function _showViewRaw(v) {
   const map = { welcome: 'vw', wlc: 'vw', scan: 'vscan', lib: 'vlib', stats: 'vstats', radio: 'vradio', 'now-playing': 'vnp' };
   const next = document.getElementById(map[v] || 'vlib');
   if (!next) return;
+  if (v === 'welcome' || v === 'wlc') {
+    document.querySelectorAll('.sb-nav .ni').forEach(b => {
+      b.classList.remove('on');
+      b.removeAttribute('aria-current');
+    });
+  }
 
-  // BUGFIX : retirer .on AVANT .view-leave → .view.on a spécificité > .view-leave
-  // → animationend ne fire jamais si .on reste présent (vue précédente figée).
   const prev = document.querySelector('.view.on');
   if (prev && prev !== next) {
+    // Keep prev visible during exit: override display:none (set by removing .on),
+    // pin it absolutely so it doesn't push next down, then fade it out.
     prev.classList.remove('on');
-    prev.style.display = 'flex';
-    prev.classList.add('view-leave');
-    prev.addEventListener('animationend', () => {
+    prev.style.display       = 'flex';
+    prev.style.position      = 'absolute';
+    prev.style.inset         = '0';
+    prev.style.pointerEvents = 'none';
+    prev.style.zIndex        = '1';
+    // Generation counter: if a new navigation targets `prev` before this exit
+    // animation finishes (A→B→A < 140ms), _exitGen will have been bumped and
+    // the stale callback aborts without touching the now-active DOM element.
+    const exitGen = (prev._exitGen = (prev._exitGen || 0) + 1);
+    viewExit(prev).then(() => {
+      if (prev._exitGen !== exitGen) return; // stale exit — abort
       prev.style.display = '';
-      prev.classList.remove('view-leave');
-    }, { once: true });
+      prev.style.position = '';
+      prev.style.inset = '';
+      prev.style.pointerEvents = '';
+      prev.style.zIndex = '';
+    });
+  }
+
+  // Clear stale exit-animation inline styles in case a prior viewExit on `next`
+  // was killed (e.g. double-click open→close) before its .then() cleanup fired.
+  if (prev && prev !== next) {
+    next.style.display       = '';
+    next.style.position      = '';
+    next.style.inset         = '';
+    next.style.pointerEvents = '';
+    next.style.zIndex        = '';
   }
 
   next.classList.add('on');
-  // Animation d'entrée en fallback non-VT (VT API gère le cross-fade quand disponible)
-  if (prev && prev !== next && typeof document.startViewTransition !== 'function') {
-    next.classList.add('view-enter');
-    next.addEventListener('animationend', () => next.classList.remove('view-enter'), { once: true });
-  }
+  // Only animate if actually switching to a different view element.
+  // Albums/artists/genres/playlists all map to #vlib — no animation needed
+  // when the element is already visible (would flash opacity on live content).
+  if (prev && prev !== next) viewEnter(next); // skip on boot (prev=null) to avoid opacity flash
 }
 
 export function showView(v) {
@@ -182,22 +210,16 @@ function _updateSrchBadge(count) {
   if (!badge) {
     badge = document.createElement('span');
     badge.id = 'srch-badge';
-    badge.className = 'srch-ct';
+    badge.className = 'sr-only';
+    badge.setAttribute('aria-live', 'polite');
+    badge.setAttribute('aria-atomic', 'true');
     document.querySelector('.srch')?.appendChild(badge);
   }
   const hasQuery = !!_q();
-  const show = count > 0 && hasQuery;
-  // A11Y : annoncer le résultat (y compris "0") via aria-live. Le visuel reste piloté
-  // par `.on` qui contrôle opacity — quand count=0, .on retiré donc badge invisible,
-  // mais aria-live="polite" annonce le textContent quand-même.
-  if (hasQuery && count === 0) {
-    badge.textContent = '0 résultats';
-  } else if (show) {
-    badge.textContent = wasFuzzySearch() ? '≈ ' + String(count) : String(count);
-  } else {
-    badge.textContent = '';
-  }
-  badge.classList.toggle('on', show);
+  if (!hasQuery)        badge.textContent = '';
+  else if (count === 0) badge.textContent = 'aucun résultat';
+  else if (count === 1) badge.textContent = '1 résultat';
+  else                  badge.textContent = `${count} résultats`;
   updateClearFiltersBtn();
 }
 
@@ -288,9 +310,9 @@ export function nextSort() {
   const _lbl = document.getElementById('sort-lbl');
   const _key = SLBLS[next] || 'sort_az';
   if (_lbl) _lbl.textContent = i18n(_key);
-  // A11Y : le bouton parent reçoit un aria-label complet ("Tri : A à Z, cycle suivant") — la couleur seule ne porte pas l'info.
+  // A11Y : le bouton parent reçoit un aria-label complet (ex. "Sort: A–Z") — la couleur seule ne porte pas l'info.
   const _btn = document.getElementById('main-sort-btn');
-  if (_btn) _btn.setAttribute('aria-label', `Tri : ${i18n(_key)} — cliquer pour cycler`);
+  if (_btn) _btn.setAttribute('aria-label', `${i18n('pl_sort_label')}: ${i18n(_key)}`);
   invalidateFilter(); renderLib(); saveCfg();
 }
 

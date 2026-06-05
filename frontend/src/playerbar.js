@@ -27,8 +27,9 @@ import { audio, setIcon, updateMediaSession,
          peekNext }                                 from './player.js';
 import { refreshQueueBadge, queueOpen, renderQueue } from './queue.js';
 import { cinemaOpen, updateCinema }                  from './cinema.js';
-import { animateArtChange, applyArtColor, clearArtColor,
+import { applyArtColor, clearArtColor,
          _updateArtBlur }                            from './settings.js';
+import { trackSwap }                                 from './motion.js';
 import { extEmoji }                                  from './utils.js';
 import { extractColor }                              from './tags.js';
 // ── Volume slider ─────────────────────────────────────────────────────────────
@@ -36,13 +37,16 @@ let _volHideTimer = 0;
 
 /**
  * Met à jour le fond dégradé du slider volume et affiche un tooltip temporaire.
- * @param {Element|null} [el] — élément #vol ; résolu via getElementById si omis.
+ * @param {Element|null} [el]        — élément #vol ; résolu via getElementById si omis.
+ * @param {string|null}  [fillColor] — couleur de remplissage CSS (défaut : var(--g)).
+ *                                     Cinéma passe rgb(_cinArtRGB) pour teinte pochette.
  */
-export function updateVolSlider(el) {
+export function updateVolSlider(el, fillColor) {
   const vel = (el instanceof Element) ? el : document.getElementById('vol');
   if (!vel) return;
-  const pct = Math.round(+vel.value * 100);
-  vel.style.background = `linear-gradient(to right, var(--g) ${pct}%, var(--bg5) ${pct}%)`;
+  const pct  = Math.round(+vel.value * 100);
+  const fill = fillColor ?? 'var(--g)';
+  vel.style.background = `linear-gradient(to right, ${fill} ${pct}%, var(--bg5) ${pct}%)`;
   const tip = document.getElementById('vol-tip');
   if (tip) {
     tip.textContent = pct + '%';
@@ -130,8 +134,14 @@ export function updateBar() {
   setupMarquee(document.getElementById('pl-a'), t.artistFull || t.artist || i18n('unknown_artist'));
 
   const img = document.getElementById('pl-img'), em = document.getElementById('pl-em');
-  if (t.art) { img.src = t.art; img.alt = t.album || t.name || ''; img.style.display = 'block'; em.style.display = 'none'; animateArtChange(); }
+  if (t.art) { img.src = t.art; img.alt = t.album || t.name || ''; img.style.display = 'block'; em.style.display = 'none'; }
   else       { img.alt = ''; img.style.display = 'none'; em.style.display = ''; em.innerHTML = extEmoji(t.ext); }
+
+  // GSAP track swap — animate art container + title + artist after content update
+  const artEl    = document.getElementById('pl-art');
+  const titleEl  = document.getElementById('pl-n');
+  const artistEl = document.getElementById('pl-a');
+  if (artEl && titleEl && artistEl) trackSwap(artEl, titleEl, artistEl);
 
   const liked = get('liked');
   const _isLikedNow = liked instanceof Set ? liked.has(t.id) : false;

@@ -28,21 +28,22 @@ export class LfToastStack extends LitElement {
   static _seq = 0;
 
   static properties = {
-    _items: { state: true },
+    _items:     { state: true },
+    closeLabel: { type: String },
   };
 
   static styles = css`
     /* Google Material Snackbar look — single dark slab, accent via icon + thin progress bar. */
     :host {
       position: fixed;
-      bottom: calc(var(--pb, 96px) + 16px);
+      bottom: calc(var(--pb, 96px) + var(--space-4));
       left: 50%;
       transform: translateX(-50%);
       display: flex;
       flex-direction: column-reverse;
       align-items: center;
-      gap: 8px;
-      z-index: 9999;
+      gap: var(--space-2);
+      z-index: var(--z-toast, 9000);
       pointer-events: none;
       font-family: var(--lf-font-ui, var(--font-body));
     }
@@ -59,9 +60,9 @@ export class LfToastStack extends LitElement {
       display: flex;
       align-items: center;
       gap: 12px;
-      min-width: 288px;
+      min-width: var(--lf-toast-min-w);
       max-width: 568px;
-      font-size: 14px;
+      font-size: var(--text-sm);
       line-height: 20px;
       letter-spacing: .01786em;
       overflow: hidden;
@@ -93,7 +94,7 @@ export class LfToastStack extends LitElement {
       flex: 0 0 auto;
       background: transparent;
       border: none;
-      color: var(--lf-toast-action, var(--lf-toast-accent, #8ab4f8));
+      color: var(--lf-toast-action);
       padding: 6px 8px;
       margin: -4px -4px -4px 8px;
       border-radius: 4px;
@@ -115,6 +116,12 @@ export class LfToastStack extends LitElement {
       cursor: pointer;
       padding: 2px 4px;
       border-radius: 4px;
+      /* SC 2.5.8 — cible tactile minimum 24×24 px (CLAUDE.md §2 WCAG 2.2) */
+      min-width: 24px;
+      min-height: 24px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
     }
     .t-close:hover { color: rgba(255, 255, 255, .92); background: rgba(255, 255, 255, .08); }
 
@@ -141,7 +148,7 @@ export class LfToastStack extends LitElement {
         0 3px 5px rgba(0, 0, 0, .14);
     }
     :host-context(html[data-mode="light"]) .t-action {
-      color: var(--lf-toast-action, var(--lf-toast-accent, #2563eb));
+      color: var(--lf-toast-action);
     }
     :host-context(html[data-mode="light"]) .t-close {
       color: rgba(15, 17, 23, 0.6);
@@ -159,6 +166,7 @@ export class LfToastStack extends LitElement {
      *                 closable: boolean, dismissing: boolean }>} */
     this._items = [];
     this._timers = new Map();  // id → setTimeout handle (jamais sérialisé)
+    this.closeLabel = 'Fermer';
   }
 
   /**
@@ -294,7 +302,7 @@ export class LfToastStack extends LitElement {
             </button>
           ` : null}
           ${t.closable ? html`
-            <button class="t-close" aria-label="Fermer"
+            <button class="t-close" aria-label=${this.closeLabel}
                     @click=${(ev) => this._onCloseClick(ev, t.id)}>×</button>
           ` : null}
           <span class="t-bar" aria-hidden="true"

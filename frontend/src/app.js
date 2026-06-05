@@ -15,15 +15,15 @@ import { get, set, notify, subscribe, setBatch }           from './store.js';
 import './motion.js';
 import { CFG, SORTS, SLBLS, SPEEDS, SPEED_LBLS } from './cfg.js';
 import { openDB, tx, dget, dall, dput, ddel, DB, getStorageEstimate } from './db.js';
-import { readTags, extractColor, GENRE_ARTISTS, GENRE_KEYWORDS, guessGenre } from './tags.js';
+import { extractColor, GENRE_ARTISTS, GENRE_KEYWORDS, guessGenre } from './tags.js';
 import { LANGS, i18n, initLang, getLang, applyLang, setLang } from './i18n.js';
 import { cinemaOpen, cinemaBg, initCinemaBg, toggleCinema, openCinema, closeCinema, updateCinema, updateCinemaProgress, setCinemaBg, cycleCinemaBg, applyCinemaBg, syncCinemaBgSettings, updateCinemaBgBtn, toggleCinemaFullscreen, CINEMA_BG_MODES, CINEMA_BG_LABELS, updateCinArtColor } from './cinema.js';
-import { queueOpen, toggleQueue, closeQueue, renderQueue, playQueueItem, clearQueueOverride, addToQueueNext, addToQueueEnd, refreshQueueBadge, getQueueState, restoreQueueState } from './queue.js';
+import { queueOpen, toggleQueue, closeQueue, renderQueue, playQueueItem, clearQueueOverride, addToQueueNext, addToQueueEnd, refreshQueueBadge, getQueueState, restoreQueueState, toggleQueuePin, clearQueuePin } from './queue.js';
 import { exportM3U, importM3U } from './m3u.js';
 import { VIRT } from './virt.js';
 import { playLog, setPlayLog, logPlay, flushPlayLog, cancelPlayLogFlush } from './playlog.js';
 import { eqCtx, eqSource, eqNodes, eqEnabled, eqOpen, initEQ, ensureEQResumed, toggleEQ, closeEQ, renderEQBands, setEQBand, applyEQPreset, eqAutoMode, setEQAutoMode, toggleEQAutoMode, loadEQProfiles, getEQProfiles, applyGenreEQ, startSmartEQ, stopSmartEQ, updateSmartEQLoudness, updateSmartEQGenre, filterEQPresets, initBootEQ, getActiveEqPreset, masterGainNode, setMasterGain, setEQExpert } from './eq.js';
-import { initDeviceEQ }                                from './eqdevice.js';
+import { initDeviceEQ, setDefaultDeviceLabel }         from './eqdevice.js';
 import { initDevices }                                 from './devices.js';
 import { cleanupCdCache }                              from './cdaudio.js';
 import { initViz, startViz, stopViz, updateVizColor, setVizMode, getVizMode, setVizEnabled, getVizEnabled } from './viz.js';
@@ -40,7 +40,7 @@ import { toggleMiniPlayer, updateMiniPlayer, updateMiniProgress, resetMiniProgre
 import { toggleMiniOverlay, syncMiniOverlay, updateMiniOverlayProgress, initMiniOverlayDrag, reclampMiniOverlay } from './minioverlay.js';
 import { rgEnabled, rgTargetLUFS, initRgState, initRG, setReplayGain, setRGTarget, analyzeAndApplyRG, applyRGGain, cancelRgAnalysis } from './replaygain.js';
 import { openTagEditor, saveTagEdit, cancelTagEdit } from './tagedit.js';
-import { toast, toastWithAction, confirmAction, resolveConfirm, initRipple } from './ui.js';
+import { toast, toastWithAction, confirmAction, resolveConfirm, initRipple, setToastCloseLabel } from './ui.js';
 import { checkForUpdate, checkForUpdateManual, initAppVersion } from './updater.js';
 import { getFiltered, filteredIdx, rebuildTrackIdxMap, trackIdx, invalidateFilterCache,
          _trackIdxMap }    from './search.js';
@@ -88,7 +88,7 @@ import { _showSkeletonRows,
          virtRenderWindow, virtAttachScroll,
          renderLib, renderAlbumsGrid, renderArtistsGrid, renderPlaylistsGrid,
          drillDown, updatePlActionBar, updateBreadcrumb,
-         makeLikeBtn, makeAddBtn, makeEqHTML, artPlaceholder, hlText, thtml,
+         makeLikeBtn, makeAddBtn, artPlaceholder, hlText, thtml,
          playById, patchActiveTrack, patchPlayState, patchTrackEl,
          scheduleStatsUpdate, updateStats, updateSidebarCounts,
          _withVT, animateViewChange, scrollToCurrentTrack } from './renderer.js';
@@ -273,6 +273,11 @@ on(EVENTS.LIBRARY_UPDATED, ({ tracks }) => {
 });
 // ERG-P2 : RENDER_LIB couvre toggle like / playlog update / suppressions → re-calcul léger
 on(EVENTS.RENDER_LIB, () => updateSidebarCounts());
+// PLAYLIST_CHANGED : CRUD mutations (create, delete, pin, move, …) → re-render nav + drop wiring
+on(EVENTS.PLAYLIST_CHANGED, () => {
+  renderPlNav();
+  setupPlNavDrop();
+});
 
 // ══ Boot ═══════════════════════════════════════
 
@@ -398,6 +403,7 @@ async function boot() {
     const safeViews = ['all','liked','albums','artists','genres','recent','playlist','stats','album-detail','artist-detail','genre-detail'];
     view = safeViews.includes(cfg.view) ? cfg.view : 'all'; set('view', view);
     set('formatFilter', cfg.formatFilter || '');
+    set('queuePinned', cfg.queuePinned === true);
     if (cfg.curPlId)   { curPlId  = cfg.curPlId;  set('curPlId', curPlId); }
     if (cfg.drillKey)  { drillKey = cfg.drillKey; set('drillKey', drillKey); drillFrom = cfg.drillFrom || ''; drillDisplayName = cfg.drillDisplayName || ''; set('drillFrom', drillFrom); set('drillDisplayName', drillDisplayName); }
     recentPlays = cfg.recentPlays||[];  set('recentPlays', recentPlays);
@@ -408,6 +414,8 @@ async function boot() {
     if (cfg.heatPeriod)  initHeatPeriod(cfg.heatPeriod);
     if (cfg.radioSeedId) initRadioSeedId(cfg.radioSeedId);
     initLang(cfg.lang||'fr');
+    setDefaultDeviceLabel(i18n('device_default_label'));
+    setToastCloseLabel(i18n('toast_close'));
     initSettingsVars({
       theme:       cfg.theme || 'blue',
       dynColor:    cfg.dynColor !== false,
@@ -508,10 +516,9 @@ async function boot() {
     // We store them but flag them as needing file load
     // PERF-BOOT : traitement par tranches — évite le blocage main-thread sur grandes bibliothèques.
     // BOOT-2 FIX : cadence réduite à 10-20 yields pour 50k pistes (était 100 yields × setTimeout(0) ≈ +400ms).
-    const _BOOT_CHUNK = 5000;
     const _tracksArr = [];
-    for (let _bi = 0; _bi < saved.length; _bi += _BOOT_CHUNK) {
-      const _slice = saved.slice(_bi, _bi + _BOOT_CHUNK);
+    for (let _bi = 0; _bi < saved.length; _bi += CFG.BOOT_CHUNK) {
+      const _slice = saved.slice(_bi, _bi + CFG.BOOT_CHUNK);
       for (const r of _slice) {
         // Re-apply mainArtist on load to fix any old bad data in DB
         const artistFull = r.artistFull || r.artist || i18n('unknown_artist');
@@ -545,7 +552,7 @@ async function boot() {
           bitDepth:   r.bitDepth   != null ? r.bitDepth   : null,
         });
       }
-      if (_bi + _BOOT_CHUNK < saved.length) await new Promise(res => setTimeout(res, 0));
+      if (_bi + CFG.BOOT_CHUNK < saved.length) await new Promise(res => setTimeout(res, 0));
     }
     tracks = _tracksArr;
     // RACE-1 FIX : replaceTracks() atomically does set('tracks') + rebuildTrackIdxMap()
@@ -570,6 +577,13 @@ async function boot() {
     showView('lib');
     // Queue persist — restaurer après rebuildTrackIdxMap (IDs validés contre _trackIdxMap)
     if (cfg?.queueState?.ids?.length) restoreQueueState(cfg.queueState);
+    if (cfg?.queuePinned === true && window.innerWidth >= 720) {
+      if (!queueOpen) toggleQueue();
+      // Delegate pin DOM + aria to toggleQueuePin() — avoids hardcoded labels and DOM divergence.
+      // Store was set to true at line ~401; reset to false so toggleQueuePin() flips it to true.
+      set('queuePinned', false);
+      toggleQueuePin();
+    }
     const cb=document.getElementById('btn-clear'); if(cb) cb.disabled=false;
     toast(i18n('t_loaded', tracks.length), 'success');
     // Restaurer la position de scroll après que renderLib() ait réinitialisé scrollTop à 0
@@ -640,6 +654,7 @@ async function boot() {
           if (cfg.curPos && cfg.curPos > 0 && cfg.curPos < (audio.duration - 2)) {
             audio.currentTime = cfg.curPos;
           }
+          if (radioActive) await radioRefillQueue().catch(e => console.warn('[boot] radioRefillQueue', e));
           updateBar();
           patchActiveTrack();
           // UX-5: toast de session restaurée
@@ -950,7 +965,7 @@ export async function clearLibrary() {
   closeModal();
   // Fermer tous les panneaux ouverts avant de vider l'état (évite l'affichage de données périmées)
   closeNowPlaying();
-  closeQueue();
+  clearQueuePin(); closeQueue();
   clearQueueOverride();
   closeEQ();
   if (cinemaOpen) closeCinema();
@@ -1017,7 +1032,8 @@ export async function clearLibrary() {
   if (_srchClr) _srchClr.style.display = 'none';
   document.getElementById('srch-badge')?.remove();
   // Stats sidebar
-  document.getElementById('sb-stats').innerHTML  = i18n('sb_empty');
+  document.getElementById('sb-stats').innerHTML = `<span class="sb-empty-msg"><svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>${i18n('sb_empty')}</span>`;
+  updateSidebarCounts();
   const _btnClear = document.getElementById('btn-clear');
   if (_btnClear) _btnClear.disabled = true;
   // Vider IndexedDB

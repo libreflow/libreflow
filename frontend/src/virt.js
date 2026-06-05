@@ -59,7 +59,7 @@ const VIRT = {
     }
     if (rowIdx == null) return;
 
-    const offset  = (this._offsets && this._offsets[rowIdx]) ? this._offsets[rowIdx] : rowIdx * this.ROW_H;
+    const offset  = this._offsets?.[rowIdx] ?? rowIdx * this.ROW_H;
     const rowH    = this.ROW_H;
     const viewH   = listEl.clientHeight;
     const scrollT = listEl.scrollTop;

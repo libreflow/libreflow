@@ -117,7 +117,7 @@ const dput = (s,v,k) => {
     const r = k !== undefined ? tx(s,'readwrite').put(v,k) : tx(s,'readwrite').put(v);
     r.onsuccess = () => ok();
     r.onerror   = () => fail(r.error);
-  }), 8000);
+  }), CFG.IDB_TIMEOUT_DEFAULT);
 };
 
 /**
@@ -131,7 +131,7 @@ const ddel = (s,k) => _raceWithTimeout(new Promise((ok,fail) => {
   const r = tx(s,'readwrite').delete(k);
   r.onsuccess = () => ok();
   r.onerror   = () => fail(r.error);
-}), 8000);
+}), CFG.IDB_TIMEOUT_DEFAULT);
 
 // ── Storage quota ─────────────────────────────────────────────
 

@@ -7,7 +7,7 @@ export const CFG = Object.freeze({
   IDB_TIMEOUT_DALL:      30000,   // ms — timeout pour dall() (lecture lib complète)
   TRACK_SAVE_DEBOUNCE:     250,   // ms — debounce sur saveTrack()
   CFG_SAVE_DEBOUNCE:       800,   // ms — debounce sur saveCfg()
-  SEARCH_DEBOUNCE:         150,   // ms — debounce sur la barre de recherche
+  SEARCH_DEBOUNCE:          90,   // ms — debounce sur la barre de recherche
   PLAYLOG_FLUSH_DELAY:    3000,   // ms — délai avant flush du play log vers IDB
   STATS_UPDATE_DELAY:     1500,   // ms — délai debounce pour updateStats()
   RADIO_QUEUE_SIZE:         30,   // pistes précalculées dans la file radio
@@ -30,6 +30,10 @@ export const CFG = Object.freeze({
   RG_GAIN_CAP:           3.162,   // gain linéaire max ReplayGain ≈ +10 dB (B1 fix)
   MAX_ART_CACHE:           200,   // ARCH-2 — cache LRU blob: URL artwork (liste + grilles albums/artistes)
   QUEUE_ROW_H:              50,   // px — hauteur d'un .queue-item (padding 7px*2 + art 36px)
+  FUZZY_THRESHOLD:         0.4,   // seuil minimal Jaccard similarity pour la recherche floue
+  BOOT_CHUNK:             5000,   // pistes traitées par tranche au boot (yield entre tranches)
+  STAGGER_CAP:              12,   // nb maximum d'éléments animés en stagger (perf)
+  VIEW_FADE_MS:            200,   // durée ms du cross-fade de vue — doit correspondre à --motion-base
 });
 
 export const SORTS = ['az', 'za', 'artist', 'album', 'recent'];

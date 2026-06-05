@@ -67,7 +67,6 @@ export function setReplayGain(enabled) {
     analyzeAndApplyRG();
   } else {
     if (rgGainNode && eqCtx) rgGainNode.gain.setTargetAtTime(1.0, eqCtx.currentTime, 0.1);
-    else if (rgGainNode)     rgGainNode.gain.value = 1.0;
   }
   saveCfg();
 }
