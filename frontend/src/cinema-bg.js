@@ -2,7 +2,7 @@
 // Extrait de cinema.js. Pas d'import depuis cinema.js (dépendance via initCinemaBgModule).
 
 import { i18n }                                from './i18n.js';
-import { get, set }                            from './store.js';
+import { set }                                 from './store.js';
 import { saveCfg }                             from './cfgsave.js';
 import { toast }                               from './ui.js';
 import { rgbToHsl, hslToRgb, boostSat, sampleArtColors5 } from './artcolor.js';
