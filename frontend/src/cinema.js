@@ -39,8 +39,7 @@ export let cinemaOpen     = false;
 let cinemaHideTimer       = null;
 
 // ── A11Y: focus management (A.8) ────────────────────────────
-// Stores the element that had focus before cinema opened so it
-// can be restored when the overlay closes.
+// Stores the element that had focus before cinema opened, restored on close.
 let _cinemaLastFocus = null;
 
 // DOM cache (peuplé dans openCinema, vidé dans closeCinema)
@@ -594,7 +593,12 @@ export function updateCinema() {
     }
   } else {
     if (img) img.style.display = 'none';
-    if (em)  { em.style.display = 'flex'; em.innerHTML = t ? extEmoji(t.ext) : '<svg viewBox="0 0 24 24" width="48" height="48" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" opacity=".3"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>'; }
+    if (em)  {
+      em.style.display = 'flex';
+      // t.ext = donnée lofty → textContent ; SVG de fallback = HTML statique trusted (§13)
+      if (t) em.textContent = extEmoji(t.ext);
+      else   em.innerHTML = '<svg viewBox="0 0 24 24" width="48" height="48" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" opacity=".3"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>';
+    }
     document.querySelector('.cinema-art-wrap')?.style.removeProperty('--cin-bg-url');
     _lastCinArt = null;
   }

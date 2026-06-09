@@ -45,12 +45,13 @@ function _waitTauriReady() {
 /** @overload @param {'write_tags'} cmd @param {{ data: { path: string, title: string, artist: string, album: string, genre: string, year: number|null, track_number: number|null } }} args @returns {Promise<void>} */
 /** @overload @param {'write_cover'} cmd @param {{ data: { audio_path: string, image_path: string } }} args @returns {Promise<void>} */
 /** @overload @param {'write_replaygain_tags'} cmd @param {{ data: { path: string, gain_db: number, peak: number } }} args @returns {Promise<void>} */
-/** @overload @param {'notify_track'} cmd @param {{ data: { title: string, artist: string, art?: string|null } }} args @returns {Promise<void>} */
+/** @overload @param {'notify_track'} cmd @param {{ data: { title: string, artist: string } }} args @returns {Promise<void>} */
 /** @overload @param {'win_set_title'} cmd @param {{ title: string }} args @returns {Promise<void>} */
 /** @overload @param {'taskbar_set_playing'} cmd @param {{ playing: boolean }} args @returns {Promise<void>} */
 /** @overload @param {'taskbar_set_has_tracks'} cmd @param {{ hasTracks: boolean }} args @returns {Promise<void>} */
 /** @overload @param {'mini_update'} cmd @param {{ data: Record<string, unknown> }} args @returns {Promise<void>} */
 /** @overload @param {'mini_progress'} cmd @param {{ data: Record<string, unknown> }} args @returns {Promise<void>} */
+/** @overload @param {'read_audio_bytes'} cmd @param {{ path: string }} args @returns {Promise<number[]>} */
 /** @overload @param {'allow_asset_dir'} cmd @param {{ path: string }} args @returns {Promise<void>} */
 /** @overload @param {'watch_folder_start'} cmd @param {{ path: string }} args @returns {Promise<void>} */
 /** @overload @param {'pick_audio_file'} cmd @returns {Promise<string | null>} */
@@ -68,7 +69,7 @@ async function invoke(cmd, args, opts) {
   const timeout = opts?.timeout ?? CFG.IPC_TIMEOUT_MS;
   // @ts-ignore — __TAURI__ injected at runtime by Tauri, not in Window type
   if (!timeout) return window.__TAURI__.core.invoke(cmd, args);
-  let _timerId;
+  let _timerId = 0;
   // @ts-ignore — __TAURI__ injected at runtime by Tauri, not in Window type
   return Promise.race([
     window.__TAURI__.core.invoke(cmd, args).finally(() => clearTimeout(_timerId)),
@@ -123,14 +124,15 @@ function convertFileSrc(filePath) {
  * @param {string} cmd
  * @param {Record<string, unknown>} [args]
  * @param {number} [maxRetries]
+ * @param {{ timeout?: number }} [opts]
  * @returns {Promise<unknown>}
  */
-async function invokeRetry(cmd, args, maxRetries = 3) {
+async function invokeRetry(cmd, args, maxRetries = 3, opts) {
   let delay = 200;
   for (let attempt = 0; attempt < maxRetries; attempt++) {
     try {
       // @ts-ignore — invokeRetry passes generic string cmd, overloads handle specific commands
-      return await invoke(cmd, args);
+      return await invoke(cmd, args, opts);
     } catch (err) {
       if (attempt === maxRetries - 1) {
         const argsSnippet = args ? JSON.stringify(args).slice(0, 120) : '(none)';

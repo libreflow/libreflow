@@ -295,29 +295,56 @@ export async function ctxDeleteTrack() {
   if (!t) return;
   // P4-5 : body enrichi avec pochette + artiste pour les actions destructives
   const _unknownArtist = i18n('unknown_artist') || 'Artiste inconnu';
-  const _artist = esc(t.artistFull || t.artist || ''); // L-01 : esc() cohérent (était un .replace ad-hoc)
-  const _artHtml = t.art
-    ? `<img src="${esc(t.art)}" alt="" style="width:40px;height:40px;border-radius:6px;object-fit:cover;flex-shrink:0;vertical-align:middle">`
-    : `<span style="width:40px;height:40px;border-radius:6px;background:var(--bg4);display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;font-size:18px">🎵</span>`;
-  const _trackPreview = `<div style="display:flex;align-items:center;gap:10px;padding:8px 10px;background:var(--bg3);border-radius:8px;margin-bottom:10px">${_artHtml}<div style="min-width:0"><div style="font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(t.name)}</div>${_artist && _artist !== _unknownArtist ? `<div style="font-size:.82em;opacity:.7;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${_artist}</div>` : ''}</div></div>`;
-  const ok = await confirmAction(
-    i18n('ctx_delete_h', t.name) || `Supprimer « ${t.name} » ?`,
-    _trackPreview + (i18n('ctx_delete_body') || `Le titre sera retiré de la bibliothèque. Le fichier sur le disque ne sera <strong>pas</strong> supprimé.`),
-    i18n('ctx_delete_btn') || 'Supprimer'
-  );
-  if (!ok) return;
+  const _artist = t.artistFull || t.artist || '';
+  const _frag = document.createDocumentFragment();
+  const _preview = document.createElement('div');
+  Object.assign(_preview.style, { display:'flex', alignItems:'center', gap:'10px', padding:'8px 10px', background:'var(--bg3)', borderRadius:'8px', marginBottom:'10px' });
+  if (t.art) {
+    const _img = document.createElement('img');
+    _img.src = t.art; _img.alt = '';
+    Object.assign(_img.style, { width:'40px', height:'40px', borderRadius:'6px', objectFit:'cover', flexShrink:'0', verticalAlign:'middle' });
+    _preview.appendChild(_img);
+  } else {
+    const _ic = document.createElement('span');
+    Object.assign(_ic.style, { width:'40px', height:'40px', borderRadius:'6px', background:'var(--bg4)', display:'inline-flex', alignItems:'center', justifyContent:'center', flexShrink:'0', fontSize:'18px' });
+    _ic.textContent = '🎵';
+    _preview.appendChild(_ic);
+  }
+  const _meta = document.createElement('div');
+  _meta.style.minWidth = '0';
+  const _nameEl = document.createElement('div');
+  Object.assign(_nameEl.style, { fontWeight:'600', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' });
+  _nameEl.textContent = t.name;
+  _meta.appendChild(_nameEl);
+  if (_artist && _artist !== _unknownArtist) {
+    const _artEl = document.createElement('div');
+    Object.assign(_artEl.style, { fontSize:'.82em', opacity:'.7', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' });
+    _artEl.textContent = _artist;
+    _meta.appendChild(_artEl);
+  }
+  _preview.appendChild(_meta);
+  _frag.appendChild(_preview);
+  const _bodyText = document.createElement('span');
+  _bodyText.textContent = i18n('ctx_delete_body') || 'Le titre sera retiré de la bibliothèque. Le fichier sur le disque ne sera pas supprimé.';
+  _frag.appendChild(_bodyText);
+  // Capturer AVANT l'await : la piste peut être supprimée par un autre flux pendant la modale (TOCTOU)
   const ti = trackIdx(t.id);
-
-  // ── Snapshot pour undo ──────────────────────────────────────────────────────
-  const oldTracks  = [...get('tracks')]; // spread — nouvelle ref, différente de l'array muté in-place
+  const oldTracks  = [...get('tracks')];
   const wasLiked   = get('liked').has(t.id);
   const oldCurIdx  = get('curIdx');
-  // Snapshot des playlists affectées pour restaurer l'ordre exact en cas d'undo
   const affectedPlSnapshots = [];
   get('playlists').forEach(pl => {
     if (pl.trackIds?.includes(t.id)) affectedPlSnapshots.push({ pl, ids: [...pl.trackIds] });
   });
   const playlistsChanged = affectedPlSnapshots.length > 0;
+  const ok = await confirmAction(
+    i18n('ctx_delete_h', t.name) || `Supprimer « ${t.name} » ?`,
+    _frag,
+    i18n('ctx_delete_btn') || 'Supprimer'
+  );
+  if (!ok) return;
+  // Valider que la piste n'a pas disparu pendant la modale
+  if (ti < 0 || get('tracks')[ti]?.id !== t.id) return;
 
   // ── Suppression immédiate (UI) ──────────────────────────────────────────────
   // liked est maintenant Set<string> d'IDs — pas de décalage d'indices nécessaire
@@ -395,12 +422,12 @@ export async function ctxWriteRG() {
 
   const dismiss = toast(i18n('t_rg_writing') || 'Écriture des tags RG…', 'loading');
   try {
-    await invoke('write_replaygain_tags', { data: { path: t.path, gain_db: gainDB, peak } });
+    await invoke('write_replaygain_tags', { data: { path: t.path, gain_db: gainDB, peak } }, { timeout: 15000 });
     dismiss?.();
     toast(i18n('t_rg_written', t.name) || `Tags RG écrits : « ${t.name} »`, 'success');
   } catch (e) {
     dismiss?.();
     console.warn('[ctxWriteRG]', e);
-    toast(i18n('t_rg_write_err') || `Erreur écriture RG : ${e}`, 'error');
+    toast(i18n('t_rg_write_err') || 'Erreur écriture RG', 'error');
   }
 }

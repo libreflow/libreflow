@@ -1,4 +1,4 @@
-// LibreFlow — ui.js
+﻿// LibreFlow — ui.js
 // Utilitaires UI purs : toasts, modal de confirmation.
 // Extrait de app.js (Phase 6).
 //
@@ -137,10 +137,11 @@ let _confirmTrapCleanup = () => {};
 
 /**
  * Affiche la modal de confirmation et retourne une Promise<boolean>.
- * @param {string} title    Titre de la modal
- * @param {string} body     Corps HTML
- * @param {string} okLabel  Label du bouton de confirmation
- * @param {string} okStyle  Classe CSS du bouton ('danger' | 'primary' | ...)
+ * @param {string}      title    Titre de la modal
+ * @param {string|Node} body     Corps : chaîne de texte simple, ou Node/DocumentFragment
+ *                               pré-construit par l'appelant (jamais d'HTML brut).
+ * @param {string}      okLabel  Label du bouton de confirmation
+ * @param {string}      okStyle  Classe CSS du bouton ('danger' | 'primary' | ...)
  * @returns {Promise<boolean>}
  */
 export function confirmAction(title, body, okLabel = 'Confirmer', okStyle = 'danger') {
@@ -151,8 +152,11 @@ export function confirmAction(title, body, okLabel = 'Confirmer', okStyle = 'dan
     const okBtn = document.getElementById('confirm-modal-ok');
     if (!bg || !elT || !elB || !okBtn) { resolve(false); return; }
     elT.textContent   = title;
-    // body is trusted HTML — callers must use esc() for user-provided content
-    elB.innerHTML     = body;
+    if (body instanceof Node) {
+      elB.replaceChildren(body);
+    } else {
+      elB.textContent = body;
+    }
     okBtn.textContent = okLabel;
     okBtn.className   = `mbtn ${okStyle}`;
     const _prevFocus  = document.activeElement;
@@ -194,10 +198,8 @@ export function promptAction(title, defaultVal = '', okLabel = 'OK', cancelLabel
     const _prevFocus = document.activeElement;
     const bg = document.createElement('div');
     bg.className = 'prompt-bg prompt-modal-bg';
-    bg.setAttribute('role', 'dialog');
-    bg.setAttribute('aria-modal', 'true');
     bg.innerHTML = `
-      <div class="modal prompt-modal">
+      <div class="modal prompt-modal" role="dialog" aria-modal="true">
         <div class="modal-title"></div>
         <input class="prompt-input" type="text" />
         <div class="modal-actions">
@@ -215,7 +217,7 @@ export function promptAction(title, defaultVal = '', okLabel = 'OK', cancelLabel
     cancelBtn.textContent = cancelLabel;
     input.value = defaultVal;
 
-    const removeTrap = _trapFocus(bg);
+    const removeTrap = _trapFocus(bg.querySelector('.modal') || bg);
     const finish = (val) => {
       removeTrap();
       const _pm = bg.querySelector('.modal');

@@ -134,8 +134,10 @@ export function updateBar() {
   setupMarquee(document.getElementById('pl-a'), t.artistFull || t.artist || i18n('unknown_artist'));
 
   const img = document.getElementById('pl-img'), em = document.getElementById('pl-em');
-  if (t.art) { img.src = t.art; img.alt = t.album || t.name || ''; img.style.display = 'block'; em.style.display = 'none'; }
-  else       { img.alt = ''; img.style.display = 'none'; em.style.display = ''; em.innerHTML = extEmoji(t.ext); }
+  if (img && em) {
+    if (t.art) { img.src = t.art; img.alt = t.album || t.name || ''; img.style.display = 'block'; em.style.display = 'none'; }
+    else       { img.alt = ''; img.style.display = 'none'; em.style.display = ''; em.textContent = extEmoji(t.ext); }
+  }
 
   // GSAP track swap — animate art container + title + artist after content update
   const artEl    = document.getElementById('pl-art');
@@ -145,8 +147,8 @@ export function updateBar() {
 
   const liked = get('liked');
   const _isLikedNow = liked instanceof Set ? liked.has(t.id) : false;
-  document.getElementById('pl-lk').classList.toggle('on', _isLikedNow);
-  document.getElementById('pl-lk').setAttribute('aria-pressed', String(_isLikedNow));
+  const _plLk = document.getElementById('pl-lk');
+  if (_plLk) { _plLk.classList.toggle('on', _isLikedNow); _plLk.setAttribute('aria-pressed', String(_isLikedNow)); }
   document.getElementById('cinema-lk')?.classList.toggle('on', _isLikedNow);
   document.getElementById('cinema-lk')?.setAttribute('aria-pressed', String(_isLikedNow));
 
@@ -182,23 +184,18 @@ export function updateBar() {
     _updateArtBlur(t.art || null);
     if (cinemaOpen) updateCinema();
     if (_shouldNotify) {
-      // ART-IDB : base64 généré lazily depuis _artBuf (fire-and-forget, pas bloquant)
-      (async () => {
-        let artUrl = null;
-        if (t._b64) {
-          artUrl = t._b64;
-        } else if (t.art && t.art.startsWith('data:')) {
-          artUrl = t.art;
-        } else if (t._artBuf) {
-          artUrl = await new Promise(res => {
-            const fr = new FileReader();
-            fr.onload = () => res(fr.result);
-            fr.readAsDataURL(new Blob([t._artBuf], { type: t._artMime || 'image/jpeg' }));
-          });
-          t._b64 = artUrl; // cache pour le prochain changement de piste
-        }
-        invoke('notify_track', { data: { title: t.name, artist: t.artistFull || t.artist || '', art: artUrl } }).catch(e => console.warn('[playerbar:notify_track]', e));
-      })();
+      // Notifier immédiatement (art retiré de notify_track — payloads 2-10 MB interdits §IPC).
+      invoke('notify_track', { data: { title: t.name, artist: t.artistFull || t.artist || '' } }).catch(e => console.warn('[playerbar:notify_track]', e));
+      // Pré-cacher t._b64 lazily pour miniplayer.js (transfer cross-window blob: → data:).
+      if (!t._b64 && t._artBuf) {
+        new Promise(res => {
+          const fr = new FileReader();
+          fr.onload = () => res(fr.result);
+          fr.readAsDataURL(new Blob([t._artBuf], { type: t._artMime || 'image/jpeg' }));
+        }).then(b64 => { t._b64 = b64; }).catch(() => {});
+      } else if (!t._b64 && t.art && t.art.startsWith('data:')) {
+        t._b64 = t.art;
+      }
       updateMediaSession(t);
     }
     if (queueOpen) renderQueue();

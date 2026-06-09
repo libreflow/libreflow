@@ -50,7 +50,7 @@ subscribe('tracks', () => {
 
 export function enterSelectionMode() {
   selectionMode = true;
-  document.getElementById('sel-bar').classList.add('on');
+  document.getElementById('sel-bar')?.classList.add('on');
   updateSelBar();
 }
 
@@ -58,7 +58,7 @@ export function clearSelection() {
   selection.clear();
   selectionMode = false;
   _selAnchorId  = null;
-  document.getElementById('sel-bar').classList.remove('on');
+  document.getElementById('sel-bar')?.classList.remove('on');
   // Retirer .selected uniquement sur les éléments visibles (pas besoin de renderLib complet)
   document.querySelectorAll('.tr.selected').forEach(el => el.classList.remove('selected'));
   // Invalider le cache filtre (selection peut affecter certaines vues) sans re-render coûteux
@@ -67,7 +67,8 @@ export function clearSelection() {
 
 export function updateSelBar() {
   const n = selection.size;
-  document.getElementById('sel-count').textContent = `${n} titre${n!==1?'s':''} sélectionné${n!==1?'s':''}`;
+  const _selCount = document.getElementById('sel-count');
+  if (_selCount) _selCount.textContent = `${n} titre${n!==1?'s':''} sélectionné${n!==1?'s':''}`;
 }
 
 export function toggleTrackSelection(trackId, e) {
@@ -108,11 +109,13 @@ export function selAddToPlaylist() {
     // Aucune playlist → proposer d'en créer une et ajouter les titres après
     const batchIds = ids.join(',');
     openNewPlaylistModal(null); // remet selBatch à ''
-    document.getElementById('pl-modal-bg').dataset.selBatch = batchIds; // stocker après
+    const _plModalBg = document.getElementById('pl-modal-bg');
+    if (_plModalBg) _plModalBg.dataset.selBatch = batchIds; // stocker après
     return;
   }
   // Afficher un mini-picker en dessous du sel-bar
   const bar = document.getElementById('sel-bar');
+  if (!bar) return;
   // Créer un menu temporaire
   let picker = document.getElementById('sel-pl-picker');
   if (!picker) {
@@ -124,7 +127,7 @@ export function selAddToPlaylist() {
     document.body.appendChild(picker);
   }
   picker.innerHTML = get('playlists').map(pl =>
-    `<button class="sleep-opt" data-action="sel-add-batch" data-pl-id="${pl.id}">${esc(pl.name)} <span style="color:var(--t3);font-size:10px">${pl.trackIds.length}</span></button>`
+    `<button class="sleep-opt" data-action="sel-add-batch" data-pl-id="${esc(pl.id)}">${esc(pl.name)} <span style="color:var(--t3);font-size:10px">${pl.trackIds.length}</span></button>`
   ).join('') +
   `<div style="height:1px;background:var(--bg4);margin:3px 0"></div>
    <button class="sleep-opt" data-action="sel-add-batch" data-pl-id="__new__">+ Nouvelle playlist</button>`;
@@ -351,7 +354,7 @@ export function selBatchTagEdit() {
   const countEl  = document.getElementById('bte-count');
   const n = ids.length;
 
-  countEl.textContent = `${n} titre${n > 1 ? 's' : ''} sélectionné${n > 1 ? 's' : ''}`;
+  if (countEl) countEl.textContent = `${n} titre${n > 1 ? 's' : ''} sélectionné${n > 1 ? 's' : ''}`;
 
   function applyCommon(el, field) {
     const v = commonVal(field);
@@ -482,6 +485,7 @@ export async function confirmBatchTagEdit() {
         // Mettre à jour l'art en mémoire (blob URL via convertFileSrc)
         if (t.art && t.art.startsWith('blob:')) try { URL.revokeObjectURL(t.art); } catch {}
         t.art = convertFileSrc(coverPath);
+        t._hasArt = true;
         t.noArt = false;
         t.artColor = null; // sera recalculé au prochain affichage
       }

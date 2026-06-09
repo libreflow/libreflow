@@ -1,4 +1,4 @@
-// LibreFlow — tagedit.js
+﻿// LibreFlow — tagedit.js
 // Éditeur de tags inline (double-clic sur une piste).
 // Extrait de app.js.
 //
@@ -60,15 +60,15 @@ export function openTagEditor(trackId) {
   _stopClickHandler = (e) => e.stopPropagation();
   el.addEventListener('click', _stopClickHandler);
 
-  const _lTitle  = i18n('te_title');
-  const _lArtist = i18n('te_artist');
-  const _lAlbum  = i18n('te_album');
-  const _lGenre  = i18n('te_genre');
-  const _lYear   = i18n('te_year');
-  const _lTrack  = i18n('te_track_num');
-  const _lHint   = i18n('te_hint');
-  const _lSave   = i18n('te_save');
-  const _lCancel = i18n('te_cancel');
+  const _lTitle  = esc(i18n('te_title'));
+  const _lArtist = esc(i18n('te_artist'));
+  const _lAlbum  = esc(i18n('te_album'));
+  const _lGenre  = esc(i18n('te_genre'));
+  const _lYear   = esc(i18n('te_year'));
+  const _lTrack  = esc(i18n('te_track_num'));
+  const _lHint   = esc(i18n('te_hint'));
+  const _lSave   = esc(i18n('te_save'));
+  const _lCancel = esc(i18n('te_cancel'));
 
   // UX-TAG-1 : datalist suggestions depuis la bibliothèque courante (lazy cache — invalidé par subscribe)
   if (!_dlArtistsCache) _dlArtistsCache = [...new Set(get('tracks').map(x => x.artistFull || x.artist).filter(Boolean))].sort().slice(0, 200);
@@ -113,17 +113,54 @@ export function openTagEditor(trackId) {
         <button class="tag-edit-cancel" data-action="cancel-tag-edit">${_lCancel}</button>
         <button class="tag-edit-save"   data-action="save-tag-edit" data-track-id="${trackId}">${_lSave}</button>
       </div>
-      ${(() => {
-        // C-3 : panneau info audio (read-only) — affiché uniquement si données disponibles
-        const parts = [];
-        if (t.ext)        parts.push(`<span class="tei-codec">${t.ext.toUpperCase()}</span>`);
-        if (t.bitDepth)   parts.push(`${t.bitDepth}-bit`);
-        if (t.sampleRate) parts.push(`${(t.sampleRate / 1000).toFixed(t.sampleRate % 1000 === 0 ? 0 : 1)} kHz`);
-        if (t.bitrate)    parts.push(`${t.bitrate} kbps`);
-        if (t.channels)   parts.push(t.channels === 1 ? 'Mono' : t.channels === 2 ? 'Stéréo' : `${t.channels} ch`);
-        return parts.length ? `<div class="tag-edit-audio-info">${parts.join('<span class="tei-sep">·</span>')}</div>` : '';
-      })()}
     </div>`;
+
+  // C-3 : panneau info audio (read-only) — construit programmatiquement (données lofty,
+  //        jamais injectées via innerHTML — CLAUDE.md §13)
+  {
+    const tagForm = el.querySelector('.tag-edit-form');
+    const audioParts = [];
+    if (t.ext) {
+      const codec = document.createElement('span');
+      codec.className = 'tei-codec';
+      codec.textContent = t.ext.toUpperCase();
+      audioParts.push(codec);
+    }
+    if (t.bitDepth) {
+      const s = document.createElement('span');
+      s.textContent = `${t.bitDepth}-bit`;
+      audioParts.push(s);
+    }
+    if (t.sampleRate) {
+      const s = document.createElement('span');
+      s.textContent = `${(t.sampleRate / 1000).toFixed(t.sampleRate % 1000 === 0 ? 0 : 1)} kHz`;
+      audioParts.push(s);
+    }
+    if (t.bitrate) {
+      const s = document.createElement('span');
+      s.textContent = `${t.bitrate} kbps`;
+      audioParts.push(s);
+    }
+    if (t.channels) {
+      const s = document.createElement('span');
+      s.textContent = t.channels === 1 ? 'Mono' : t.channels === 2 ? 'Stéréo' : `${t.channels} ch`;
+      audioParts.push(s);
+    }
+    if (audioParts.length && tagForm) {
+      const infoDiv = document.createElement('div');
+      infoDiv.className = 'tag-edit-audio-info';
+      audioParts.forEach((part, i) => {
+        infoDiv.appendChild(part);
+        if (i < audioParts.length - 1) {
+          const sep = document.createElement('span');
+          sep.className = 'tei-sep';
+          sep.textContent = '·';
+          infoDiv.appendChild(sep);
+        }
+      });
+      tagForm.appendChild(infoDiv);
+    }
+  }
 
   // Masquer l'artwork si l'image échoue à charger (sans inline onerror)
   const _artImg = el.querySelector('.tart img');

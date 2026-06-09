@@ -1,4 +1,4 @@
-// LibreFlow — backup.js
+﻿// LibreFlow — backup.js
 // Export et import de la bibliothèque au format .libreflow (ZIP).
 //
 // Flux export :
@@ -147,7 +147,8 @@ export async function importBackup() {
       await _batchPut('tracks', addedTracks);
       // Mutation in-place du tableau du store : pas de set() (qui notifierait
       // AVANT rebuildTrackIdxMap, exposant un _trackIdxMap stale aux subscribers).
-      get('tracks').push(...addedTracks);
+      const _arr = get('tracks');
+      for (let _i = 0; _i < addedTracks.length; _i++) _arr.push(addedTracks[_i]);
       rebuildTrackIdxMap();
       invalidateFilterCache();
       if (VIRT) VIRT._lastListSig = '';

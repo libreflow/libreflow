@@ -1,4 +1,4 @@
-// LibreFlow — Synthetic performance benchmark
+﻿// LibreFlow — Synthetic performance benchmark
 //
 // Mesure les hot paths sur une bibliothèque synthétique de N tracks (default 50000).
 // Reproduit la logique critique de search.js + virt.js inline (zéro dep, comme core.test.cjs).
@@ -117,7 +117,9 @@ function filterFuzzy(tracks, query) {
 
 // ── Reproduction inline de virt.js virtBuildRows ──────────────────────────────
 
-const ROW_H = 36, GRP_H = 28;
+// H-17 : valeurs synchronisées avec CFG.VIRT_ROW_H / CFG.VIRT_GRP_H (cfg.js).
+// Si ces constantes changent dans cfg.js, mettre à jour ici en même commit.
+const ROW_H = 48 /* CFG.VIRT_ROW_H */, GRP_H = 28 /* CFG.VIRT_GRP_H */;
 
 function _normFirst(c) {
   return c ? (c.normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase().replace(/[^A-Z]/, '#') || '#') : '#';
@@ -154,7 +156,8 @@ function virtBuildRows(fl, sort) {
 
 function median(arr) {
   const sorted = [...arr].sort((a, b) => a - b);
-  return sorted[Math.floor(sorted.length / 2)];
+  const mid = Math.floor(sorted.length / 2);
+  return sorted.length % 2 !== 0 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
 }
 
 function mbDelta() {

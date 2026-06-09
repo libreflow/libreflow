@@ -1,6 +1,6 @@
-// @ts-nocheck
+﻿// @ts-nocheck
 // LibreFlow — Main application
-import { invoke, invokeRetry, listen, convertFileSrc } from './ipc.js';
+import { invoke, listen, convertFileSrc } from './ipc.js';
 import { audio, playAt, prev, next, togglePlay, buildQ,
          toggleShuffle, toggleRepeat, toggleLike, likeat,
          setIcon, setSpeed, setCrossfade, initCrossfadeAudio,
@@ -933,7 +933,7 @@ export function playCardByKey(from, key, displayName) {
 export async function clearAppCache() {
   const ok = await confirmAction(
     'Vider les caches ?',
-    'Toutes les données seront supprimées : bibliothèque, configuration, playlists et historique d\'écoute.<br><br>L\'application redémarrera automatiquement.',
+    'Toutes les données seront supprimées : bibliothèque, configuration, playlists et historique d\'écoute.\n\nL\'application redémarrera automatiquement.',
     'Vider et redémarrer', 'danger'
   );
   if (!ok) return;
@@ -981,7 +981,7 @@ export async function clearLibrary() {
     if (t.url && t.url.startsWith('blob:'))  try { URL.revokeObjectURL(t.url);  } catch(e) { console.warn('[app:revokeObjectURL url]', e); }
     if (t.art && t.art.startsWith('blob:'))  try { URL.revokeObjectURL(t.art);  } catch(e) { console.warn('[app:revokeObjectURL art]', e); }
   }
-  tracks  = []; set('tracks', tracks); rebuildTrackIdxMap(); notify('tracks'); invalidateFilter(); // INVARIANT : map must stay in sync; store gets same ref as local var so openFolder mutations stay visible to updateBar()
+  invalidateFilter(); replaceTracks([]); tracks = get('tracks');
   liked   = new Set(); set('liked', liked);
   playlists = []; set('playlists', playlists); recentPlays = []; set('recentPlays', recentPlays);
   curPlId = null; set('curPlId', null);
@@ -1032,7 +1032,10 @@ export async function clearLibrary() {
   if (_srchClr) _srchClr.style.display = 'none';
   document.getElementById('srch-badge')?.remove();
   // Stats sidebar
-  document.getElementById('sb-stats').innerHTML = `<span class="sb-empty-msg"><svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>${i18n('sb_empty')}</span>`;
+  { const _sbSpan = document.createElement('span'); _sbSpan.className = 'sb-empty-msg';
+    _sbSpan.innerHTML = '<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>';
+    _sbSpan.append(document.createTextNode(i18n('sb_empty')));
+    document.getElementById('sb-stats').replaceChildren(_sbSpan); }
   updateSidebarCounts();
   const _btnClear = document.getElementById('btn-clear');
   if (_btnClear) _btnClear.disabled = true;

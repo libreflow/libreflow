@@ -53,6 +53,7 @@ fn main() {
             commands::allow_asset_dir,
             commands::check_paths,
             commands::read_audio_props,
+            commands::read_audio_bytes,
             commands::read_tags,
             commands::organize_files,
             commands::export_backup,

@@ -23,7 +23,7 @@ import { updateBar }   from './playerbar.js';
 
 // ── Constantes ────────────────────────────────────────────────
 const MAX_CACHE = CFG.MAX_ART_CACHE;   // 60 entrées ≈ 6 MB max
-export const ART_MIME_ALLOWLIST = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/bmp', 'image/tiff'];
+export const ART_MIME_ALLOWLIST = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/bmp'];
 
 // ── Cache LRU ─────────────────────────────────────────────────
 // Map insertion-ordered : le premier élément est le plus ancien (LRU).
@@ -265,31 +265,23 @@ export async function resolveArtBuf(t) {
     t._artMime = mime;
     return { buf: t._artBuf, mime };
   }
-  // Fallback : blob: URL (ne devrait plus arriver post-migration)
+  // Fallback : blob: URL (ne devrait plus arriver post-migration — fetch() banni §15)
+  // PM-6 : le blob: URL peut être révoqué par le LRU avant flushTrackBatch.
+  // Aller directement en IDB sans passer par fetch().
   if (t.art.startsWith('blob:')) {
-    try {
-      const resp = await fetch(t.art);
-      const blob = await resp.blob();
-      t._artBuf  = await blob.arrayBuffer();
-      t._artMime = ART_MIME_ALLOWLIST.includes(blob.type) ? blob.type : 'image/jpeg';
-      return { buf: t._artBuf, mime: t._artMime };
-    } catch(e) {
-      // PM-6 : le blob: URL a été révoqué par le LRU avant flushTrackBatch.
-      // Tenter une récupération depuis IDB.
-      console.warn('[resolveArtBuf] blob fetch failed (URL révoquée?), tentative IDB:', e);
-      if (t._hasArt && !t.noArt) {
-        try {
-          const rec = await dget('tracks', t.id);
-          if (rec?.artBuf) {
-            t._artBuf  = rec.artBuf;
-            t._artMime = ART_MIME_ALLOWLIST.includes(rec.artMime) ? rec.artMime : 'image/jpeg';
-            t.art      = null; // invalider l'URL révoquée pour éviter de retomber ici
-            return { buf: t._artBuf, mime: t._artMime };
-          }
-        } catch(e2) { console.warn('[resolveArtBuf] IDB fallback after blob failure failed for', t.id, e2); }
-      }
-      return null;
+    console.warn('[resolveArtBuf] blob: URL résiduelle détectée (post-migration), tentative IDB:', t.id);
+    if (t._hasArt && !t.noArt) {
+      try {
+        const rec = await dget('tracks', t.id);
+        if (rec?.artBuf) {
+          t._artBuf  = rec.artBuf;
+          t._artMime = ART_MIME_ALLOWLIST.includes(rec.artMime) ? rec.artMime : 'image/jpeg';
+          t.art      = null; // invalider l'URL résiduelle pour éviter de retomber ici
+          return { buf: t._artBuf, mime: t._artMime };
+        }
+      } catch(e) { console.warn('[resolveArtBuf] IDB fallback for blob: URL failed for', t.id, e); }
     }
+    return null;
   }
   return null;
 }

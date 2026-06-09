@@ -1,4 +1,4 @@
-// commands.rs — Commandes IPC Tauri pour LibreFlow
+﻿// commands.rs — Commandes IPC Tauri pour LibreFlow
 //
 // Toutes les commandes exposées au frontend via invoke().
 // Chaque commande correspond à une action native : dialogue fichier, tags audio,
@@ -51,8 +51,6 @@ pub struct WriteTagsData {
 pub struct NotifyTrackData {
     pub title: String,
     pub artist: String,
-    #[allow(dead_code)] // reçu depuis le frontend mais non utilisé côté Rust (pas d'icône notif)
-    pub art: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -195,14 +193,16 @@ pub(crate) fn is_safe_dir(path: &Path) -> bool {
         // fs::canonicalize() sur Windows ajoute le préfixe \\?\ (extended-length path local).
         // Normaliser avant comparaison pour que les chemins système soient correctement bloqués.
         let check_str: &str = path_str.strip_prefix("\\\\?\\").unwrap_or(&path_str);
-        let win_blocked = [
-            "c:\\windows",
-            "c:\\program files",
-            "c:\\program files (x86)",
-        ];
+        // Strip drive letter (e.g. "C:") before matching — system dirs exist on any drive.
+        let after_drive = if check_str.len() >= 2 && check_str.as_bytes()[1] == b':' {
+            &check_str[2..]
+        } else {
+            check_str
+        };
+        let win_blocked = ["\\windows", "\\program files", "\\program files (x86)"];
         if win_blocked
             .iter()
-            .any(|b| check_str == *b || check_str.starts_with(&format!("{}\\", b)))
+            .any(|b| after_drive == *b || after_drive.starts_with(&format!("{}\\", b)))
         {
             return false;
         }
@@ -341,6 +341,9 @@ pub fn check_paths(paths: Vec<String>) -> Vec<String> {
     paths
         .into_par_iter()
         .filter(|p| {
+            if p.contains('\0') || p.chars().any(|c| c.is_control()) {
+                return true; // treat as orphan — malformed path
+            }
             let path = Path::new(p);
             let parent_safe = path
                 .parent()
@@ -424,6 +427,41 @@ pub fn allow_asset_dir(app: AppHandle, path: String) -> Result<(), String> {
         .map_err(|e| e.to_string())
 }
 
+/// Lit un fichier audio et retourne ses octets bruts.
+/// Limité à RG_MAX_FILE_BYTES (30 Mo) pour l'analyse ReplayGain.
+/// Remplace fetch(asset:) dans replaygain.js (CLAUDE.md §15).
+#[tauri::command]
+pub async fn read_audio_bytes(path: String) -> Result<Vec<u8>, String> {
+    const RG_MAX_FILE_BYTES: u64 = 30 * 1024 * 1024;
+    tokio::task::spawn_blocking(move || {
+        let p = Path::new(&path);
+        if !is_audio(p) {
+            return Err(format!("read_audio_bytes: extension non autorisée — {}", path));
+        }
+        let canon = fs::canonicalize(p)
+            .map_err(|e| format!("read_audio_bytes: chemin invalide — {e}"))?;
+        if !is_audio(&canon) {
+            return Err(format!("read_audio_bytes: extension non autorisée après résolution — {}", path));
+        }
+        if let Some(parent) = canon.parent() {
+            if !is_safe_dir(parent) {
+                return Err(format!("read_audio_bytes: dossier système refusé — {}", path));
+            }
+        }
+        let meta = fs::metadata(&canon)
+            .map_err(|e| format!("read_audio_bytes: metadata échoué — {e}"))?;
+        if meta.len() > RG_MAX_FILE_BYTES {
+            return Err(format!(
+                "read_audio_bytes: fichier trop volumineux ({} octets, max {})",
+                meta.len(), RG_MAX_FILE_BYTES
+            ));
+        }
+        fs::read(&canon).map_err(|e| format!("read_audio_bytes: lecture échouée — {e}"))
+    })
+    .await
+    .map_err(|e| format!("read_audio_bytes: spawn_blocking paniqué — {e}"))?
+}
+
 // ── Commandes : sélecteurs de fichiers ───────────────────────────────────────
 
 /// Ouvre un sélecteur d'image et retourne le chemin sélectionné (ou null si annulé).
@@ -454,7 +492,6 @@ pub fn pick_audio_file(app: AppHandle) -> Option<String> {
 /// Un timeout de 8 s protège contre les fichiers corrompus qui bloquent Probe::open().
 #[tauri::command]
 pub async fn read_tags(path: String) -> Result<Option<TrackTags>, String> {
-    let path_clone = path.clone();
     let result = timeout(
         Duration::from_secs(8),
         tokio::task::spawn_blocking(move || {
@@ -554,7 +591,7 @@ pub async fn read_tags(path: String) -> Result<Option<TrackTags>, String> {
     .await;
 
     match result {
-        Err(_elapsed) => Err(format!("read_tags timeout: {:?}", path_clone)),
+        Err(_elapsed) => Err("read_tags: timeout — le fichier est peut-être corrompu ou trop volumineux".to_string()),
         Ok(Err(join_err)) => Err(format!("read_tags join error: {join_err}")),
         Ok(Ok(inner)) => Ok(inner),
     }
@@ -579,6 +616,9 @@ pub async fn write_tags(data: WriteTagsData) -> Result<(), String> {
                 "write_tags: extension non autorisée après résolution — {}",
                 data.path
             ));
+        }
+        if !canon.parent().map(|p| is_safe_dir(p)).unwrap_or(false) {
+            return Err("permission denied: path outside safe directories".to_string());
         }
         let mut tagged_file = Probe::open(&canon)
             .map_err(|e| format!("Probe::open: {e}"))?
@@ -660,6 +700,12 @@ pub async fn write_cover(data: WriteCoverData) -> Result<(), String> {
             ));
         }
 
+        if !canon_audio.parent().map(|p| is_safe_dir(p)).unwrap_or(false) {
+            return Err("write_cover: audio path outside safe directories".to_string());
+        }
+        if !canon_image.parent().map(|p| is_safe_dir(p)).unwrap_or(false) {
+            return Err("write_cover: image path outside safe directories".to_string());
+        }
         // Cap taille image à 10 MB pour éviter qu'un fichier hostile ou un symlink
         // pointant sur un fichier massif n'alloue plusieurs Go en RAM.
         const MAX_COVER_BYTES: u64 = 10 * 1024 * 1024;
@@ -748,6 +794,9 @@ pub async fn write_replaygain_tags(data: WriteReplaygainData) -> Result<(), Stri
                 "write_replaygain_tags: extension non autorisée après résolution — {}",
                 data.path
             ));
+        }
+        if !canon.parent().map(|p| is_safe_dir(p)).unwrap_or(false) {
+            return Err("permission denied: path outside safe directories".to_string());
         }
         let mut tagged_file = Probe::open(&canon)
             .map_err(|e| format!("Probe::open: {e}"))?
@@ -947,6 +996,10 @@ pub async fn organize_files(
     dry_run: bool,
 ) -> Result<OrganizeResult, String> {
     // Validation préalable : aucun move ne doit pointer hors d'un dossier autorisé.
+    const MAX_ORGANIZE_MOVES: usize = 10_000;
+    if moves.len() > MAX_ORGANIZE_MOVES {
+        return Err(format!("organize_files: trop de déplacements ({}/{})", moves.len(), MAX_ORGANIZE_MOVES));
+    }
     for m in &moves {
         validate_organize_path(&m.from).map_err(|e| format!("from: {}", e))?;
         validate_organize_path(&m.to).map_err(|e| format!("to: {}", e))?;
@@ -1257,7 +1310,7 @@ fn _list_drives_impl() -> Vec<DriveInfo> {
     }
 
     let mut drives = vec![];
-    let raw = &buf[..len];
+    let raw = &buf[..len.min(buf.len())];
 
     for segment in raw.split(|&c| c == 0) {
         if segment.is_empty() {

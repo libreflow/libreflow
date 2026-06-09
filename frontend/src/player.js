@@ -1,4 +1,4 @@
-// @ts-check
+﻿// @ts-check
 /**
  * player.js — Moteur de lecture (Phase 2 refactoring)
  *
@@ -367,7 +367,9 @@ export async function playAt(filteredIdx, { skipScroll = false, keepQueue = fals
     ensureEQResumed();
     try { await audio.play(); } catch(e) {
       // @ts-ignore — e is unknown, access .name/.message safely via type assertion
-      if (e.name !== 'AbortError') toast(i18n('t_play_start_err', e.message), 'error');
+      if (e.name === 'AbortError') return; // piste remplacée mid-play — le nouveau playAt émettra TRACK_CHANGE
+      toast(i18n('t_play_start_err', e.message), 'error');
+      return; // ne pas émettre TRACK_CHANGE pour une lecture qui n'a pas démarré
     }
 
     // RACE-4 FIX : émettre TRACK_CHANGE APRÈS audio.play() pour que les handlers
@@ -824,9 +826,9 @@ export function initCrossfadeAudio() {
     try {
       audioNextSource = eqCtx.createMediaElementSource(audioNext);
       audioNextRgGain = eqCtx.createGain();
-      audioNextRgGain.gain.setValueAtTime(1.0, 0); // neutre par défaut — §9: no direct .value=
+      audioNextRgGain.gain.setValueAtTime(1.0, eqCtx.currentTime); // neutre par défaut — §9: no direct .value=
       audioNextGain   = eqCtx.createGain();
-      audioNextGain.gain.setValueAtTime(0, 0);     // muet au départ — sera 0→1 pendant le fondu — §9: no direct .value=
+      audioNextGain.gain.setValueAtTime(0, eqCtx.currentTime);     // muet au départ — sera 0→1 pendant le fondu — §9: no direct .value=
       // @ts-ignore — audioNextSource just assigned above, guaranteed non-null here
       audioNextSource.connect(audioNextRgGain);
       audioNextRgGain.connect(audioNextGain);
@@ -887,29 +889,36 @@ export function clearCrossfadeTimers() {
 
 // Swap gapless instantané : la piste suivante est déjà bufferisée
 function _commitGapless() {
-  const ni  = _gaplessNextIdx;
-  _gaplessNextIdx = -1;
-  const tracks = get('tracks'); // Phase 4
-  const nt  = tracks[ni];
-  if (!nt || !_trackIdxMap?.has(nt.id)) { clearCrossfadeTimers(); next(); return; }
-  const validIdx = trackIdx(nt);
-  if (validIdx < 0) { clearCrossfadeTimers(); next(); return; }
+  // Guard: concurrent skip (media key / crossfade) can set _playLock while gapless swap fires.
+  if (_playLock) { _gaplessNextIdx = -1; next(); return; }
+  _playLock = true;
+  try {
+    const ni  = _gaplessNextIdx;
+    _gaplessNextIdx = -1;
+    const tracks = get('tracks'); // Phase 4
+    const nt  = tracks[ni];
+    if (!nt || !_trackIdxMap?.has(nt.id)) { clearCrossfadeTimers(); _playLock = false; next(); return; }
+    const validIdx = trackIdx(nt);
+    if (validIdx < 0) { clearCrossfadeTimers(); _playLock = false; next(); return; }
 
-  curIdx = validIdx;
-  set('curIdx', curIdx);
-  // @ts-ignore — audioNext guaranteed by initCrossfadeAudio() in checkCrossfade gapless path
-  const gSrc = audioNext.src; // même URL déjà en cache browser
-  clearCrossfadeTimers();     // restaure audio.volume + audioNextGain=0
-  audio.src = gSrc;
-  if (playbackSpeed !== 1) audio.playbackRate = playbackSpeed;
-  ensureEQResumed();
-  audio.play().catch(e => { if (e?.name !== 'AbortError') console.warn('[gapless] play() failed:', e); });
+    curIdx = validIdx;
+    set('curIdx', curIdx);
+    // @ts-ignore — audioNext guaranteed by initCrossfadeAudio() in checkCrossfade gapless path
+    const gSrc = audioNext.src; // même URL déjà en cache browser
+    clearCrossfadeTimers();     // restaure audio.volume + audioNextGain=0
+    audio.src = gSrc;
+    if (playbackSpeed !== 1) audio.playbackRate = playbackSpeed;
+    ensureEQResumed();
+    audio.play().catch(e => { if (e?.name !== 'AbortError') console.warn('[gapless] play() failed:', e); });
 
-  if (radioActive) radioRefillQueue().catch(e => console.warn('[radio] refill failed:', e));
-  _postPlaySideEffects(nt);
-  emit(EVENTS.TRACK_CHANGE, { track: nt, idx: curIdx });
-  setTimeout(() => scrollToCurrentTrack(), 50);
-  if (rgEnabled) analyzeAndApplyRG();
+    if (radioActive) radioRefillQueue().catch(e => console.warn('[radio] refill failed:', e));
+    _postPlaySideEffects(nt);
+    emit(EVENTS.TRACK_CHANGE, { track: nt, idx: curIdx });
+    setTimeout(() => scrollToCurrentTrack(), 50);
+    if (rgEnabled) analyzeAndApplyRG();
+  } finally {
+    _playLock = false;
+  }
 }
 
 // Appelé depuis timeupdate — gère le pré-buffer gapless ET le lancement du crossfade

@@ -251,8 +251,9 @@ export function initShortcuts({ updateVolSlider, closeModal, cycleSpeed }) {
       }
     }
 
-    if (e.code === 'F11') { e.preventDefault(); if (window.__TAURI__) invoke('win_maximize'); }
-    if (e.code === 'F12' && import.meta.env.DEV) { e.preventDefault(); if (window.__TAURI__) invoke('open_devtools'); }
+    if (e.code === 'F11') { e.preventDefault(); if (window.__TAURI__) invoke('win_maximize', undefined, { timeout: 5000 }).catch(e => console.warn('[shortcuts] win_maximize:', e)); }
+    // H-22 : timeout explicite via le 3e param de ipc.invoke (CFG.IPC_TIMEOUT_MS par défaut — rendu explicite ici).
+    if (e.code === 'F12' && import.meta.env.DEV) { e.preventDefault(); if (window.__TAURI__) invoke('open_devtools', undefined, { timeout: 5000 }).catch(e => console.warn('[shortcuts] open_devtools:', e)); }
 
     if (e.key.toLowerCase() === 'c' && !e.ctrlKey && !e.altKey) toggleCinema();
     // Note : 'b' (cycleCinemaBg) et 'f' (toggleCinemaFullscreen) en mode cinéma sont gérés

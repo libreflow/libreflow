@@ -113,6 +113,8 @@ let _activePreset  = 'flat';
 let _abMode        = false;      // true = affiche preset A (flat), false = preset courant
 let _abSavedGains  = null;       // gains sauvegardés avant mode A/B
 let _preBypassGains = null;      // gains sauvegardés avant bypass (power off) — restaurés au ré-enable
+let _currentGains   = null;      // gains intentionnels courants — synchronisés dans _applyGains() avant setTargetAtTime
+let _pendingVol     = null;      // volume mémorisé avant initEQ() (setMasterGain appelé avant l'init)
 
 // ── Profiles utilisateur ──────────────────────────────────────────────────────
 let _eqProfiles = {};
@@ -167,7 +169,7 @@ export function initEQ() {
 
   // ── audioOutGain : point d'injection pour ReplayGain ──────────────────────
   audioOutGain = eqCtx.createGain();
-  audioOutGain.gain.value = 1.0;
+  audioOutGain.gain.setTargetAtTime(1.0, eqCtx.currentTime, 0.02);
 
   // ── 10 biquad filters ─────────────────────────────────────────────────────
   eqNodes = EQ_FREQS.map((freq, i) => {
@@ -175,9 +177,9 @@ export function initEQ() {
     if (i === 0)               f.type = 'lowshelf';
     else if (i === EQ_BAND_COUNT - 1) f.type = 'highshelf';
     else                       f.type = 'peaking';
-    f.frequency.value = freq;
-    f.Q.value         = 1.4;
-    f.gain.value      = 0;
+    f.frequency.setValueAtTime(freq, eqCtx.currentTime);
+    f.Q.setValueAtTime(1.4, eqCtx.currentTime);
+    f.gain.setTargetAtTime(0, eqCtx.currentTime, 0.02);
     return f;
   });
 
@@ -188,17 +190,20 @@ export function initEQ() {
 
   // ── Limiter (DynamicsCompressor) ──────────────────────────────────────────
   eqLimiter = eqCtx.createDynamicsCompressor();
-  eqLimiter.threshold.value = -1;
-  eqLimiter.knee.value      =  0;
-  eqLimiter.ratio.value     = 20;
-  eqLimiter.attack.value    =  0.003;
-  eqLimiter.release.value   =  0.25;
+  eqLimiter.threshold.setValueAtTime(-1,    eqCtx.currentTime);
+  eqLimiter.knee.setValueAtTime(0,          eqCtx.currentTime);
+  eqLimiter.ratio.setValueAtTime(20,        eqCtx.currentTime);
+  eqLimiter.attack.setValueAtTime(0.003,    eqCtx.currentTime);
+  eqLimiter.release.setValueAtTime(0.25,    eqCtx.currentTime);
 
   // ── masterGainNode ────────────────────────────────────────────────────────
   masterGainNode = eqCtx.createGain();
-  // Lire le volume depuis le slider DOM (JAMAIS hardcoder 1.0)
+  // Lire le volume depuis le slider DOM (JAMAIS hardcoder 1.0) ; _pendingVol prioritaire (setMasterGain avant init)
   const _volEl = document.getElementById('vol');
-  masterGainNode.gain.value = _volEl ? parseFloat(_volEl.value) : 1;
+  const _raw = _pendingVol !== null ? _pendingVol : (_volEl ? parseFloat(_volEl.value) : 1);
+  const _initVol = (isFinite(_raw) && _raw >= 0) ? Math.min(_raw, 1) : 1;
+  masterGainNode.gain.setTargetAtTime(_initVol, eqCtx.currentTime, 0.02);
+  _pendingVol = null;
 
   // ── Câblage du graphe ─────────────────────────────────────────────────────
   // eqSource → audioOutGain → eqNodes[0..9] → eqAnalyser → eqLimiter → masterGainNode → destination
@@ -225,7 +230,14 @@ export function initEQ() {
 
   eqEnabled = _bootEnabled;
   if (!eqEnabled) {
-    // Bypass : remettre toutes les bandes à 0
+    // Mémoriser les gains du boot avant neutralisation (restore on enable, comme _setEQEnabled)
+    if (_bootPreset && EQ_PRESETS[_bootPreset]) {
+      _preBypassGains = [...EQ_PRESETS[_bootPreset]];
+    } else if (_bootGains && _bootGains.length === EQ_BAND_COUNT) {
+      _preBypassGains = Array.from(_bootGains);
+    } else {
+      _preBypassGains = new Array(EQ_BAND_COUNT).fill(0);
+    }
     _applyGains(new Array(EQ_BAND_COUNT).fill(0), true);
   }
 
@@ -245,20 +257,15 @@ export function ensureEQResumed() {
 
 // ── setMasterGain ─────────────────────────────────────────────────────────────
 /** Met à jour le gain principal.
- *  Si EQ non encore initialisé, met audio.volume comme fallback. */
+ *  Si EQ non encore initialisé, mémorise dans _pendingVol pour l'appliquer à l'init. */
 export function setMasterGain(v, immediate = false) {
   const val = Math.max(0, Math.min(1, v));
   if (masterGainNode && eqCtx) {
-    if (immediate) {
-      masterGainNode.gain.value = val;
-    } else {
-      masterGainNode.gain.setTargetAtTime(val, eqCtx.currentTime, 0.01);
-    }
+    const tc = immediate ? 0.002 : 0.01;
+    masterGainNode.gain.setTargetAtTime(val, eqCtx.currentTime, tc);
   } else {
-    // Fallback avant initEQ() — lire depuis le slider DOM (R1 : jamais hardcoder audio.volume)
-    const _audio = document.getElementById('audio');
-    const _volEl = document.getElementById('vol');
-    if (_audio && _volEl) _audio.volume = parseFloat(_volEl.value);
+    // Fallback avant initEQ() : mémoriser pour appliquer au masterGainNode à l'init
+    _pendingVol = val;
   }
 }
 
@@ -367,16 +374,19 @@ export function setEQBand(idx, db) {
 }
 
 // ── _applyGains ───────────────────────────────────────────────────────────────
-/** Applique un tableau de 10 gains aux noeuds EQ (sans interpolation si immediate). */
+/** Applique un tableau de 10 gains aux noeuds EQ.
+ *  immediate=true : time constant très court (2 ms) — transition smooth mais quasi-instantanée.
+ *  immediate=false : time constant 20 ms — transition perceptible mais sans zipper-noise. */
 function _applyGains(gains, immediate = false) {
   if (!eqCtx || !eqNodes.length) return;
+  const tc = immediate ? 0.002 : 0.02;
+  if (!_currentGains || _currentGains.length !== EQ_BAND_COUNT) {
+    _currentGains = new Array(EQ_BAND_COUNT).fill(0);
+  }
   for (let i = 0; i < EQ_BAND_COUNT; i++) {
-    const val = gains[i] ?? 0;
-    if (immediate) {
-      eqNodes[i].gain.value = val;
-    } else {
-      eqNodes[i].gain.setTargetAtTime(val, eqCtx.currentTime, 0.02);
-    }
+    const val = Number.isFinite(gains[i]) ? gains[i] : 0;
+    _currentGains[i] = val;
+    eqNodes[i].gain.setTargetAtTime(val, eqCtx.currentTime, tc);
   }
 }
 
@@ -471,7 +481,7 @@ function _setEQEnabled(val) {
   const zeros = new Array(EQ_BAND_COUNT).fill(0);
   if (!eqEnabled) {
     // Bypass : mémoriser les gains courants (custom inclus) puis aplatir (audio + visuel).
-    _preBypassGains = eqNodes.length ? eqNodes.map(n => n.gain.value) : null;
+    _preBypassGains = (_currentGains?.length === EQ_BAND_COUNT) ? [..._currentGains] : (eqNodes.length ? eqNodes.map(n => n.gain.value) : null);
     _applyGains(zeros);
     _animateSlidersTo(zeros);
   } else if (_preBypassGains) {
@@ -531,7 +541,7 @@ export function updateSmartEQLoudness(lufs) {
     const compGain = Math.pow(10, delta / 20);
     const _volEl   = document.getElementById('vol');
     const volGain  = _volEl ? Math.max(0, Math.min(1, parseFloat(_volEl.value))) : 1;
-    masterGainNode.gain.setTargetAtTime(volGain * compGain, eqCtx.currentTime, 0.3);
+    masterGainNode.gain.setTargetAtTime(Math.min(1, volGain * compGain), eqCtx.currentTime, 0.3);
   }
 }
 
@@ -552,6 +562,11 @@ export function setEQAutoMode(val) {
     if (t?.genre) applyGenreEQ(t.genre); // applique tout de suite le preset du genre courant
   } else {
     stopSmartEQ();
+    // Restaurer le gain master à la valeur brute du slider (Smart EQ l'avait modifié).
+    const _vel = document.getElementById('vol');
+    if (masterGainNode && eqCtx && _vel) {
+      masterGainNode.gain.setTargetAtTime(Math.max(0, Math.min(1, parseFloat(_vel.value))), eqCtx.currentTime, 0.05);
+    }
   }
 }
 
@@ -565,7 +580,7 @@ export function toggleEQAB() {
   _abMode = !_abMode;
   if (_abMode) {
     // Mode A : sauvegarde gains courants, applique flat
-    _abSavedGains = eqNodes.map(n => n.gain.value);
+    _abSavedGains = (_currentGains?.length === EQ_BAND_COUNT) ? [..._currentGains] : eqNodes.map(n => n.gain.value);
     _applyGains(EQ_PRESETS.flat);
   } else {
     // Mode B : restaure gains sauvegardés
