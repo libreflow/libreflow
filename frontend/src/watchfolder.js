@@ -144,9 +144,12 @@ async function _doInitialScan(files) {
 // watchSnapshot avec les chemins actuellement connus dans le store.
 on(EVENTS.FILTER_CHANGED, () => {
   if (!watchPath || !watchSnapshot.size) return;
-  const currentPaths = new Set(get('tracks').map(t => t.path).filter(Boolean));
+  // Windows : FS insensible à la casse — comparer en lowercase, sinon un chemin
+  // dont la casse diffère entre l'événement watcher et t.path serait évincé du
+  // snapshot et la piste réimportée en doublon au prochain événement.
+  const currentPaths = new Set(get('tracks').map(t => t.path?.toLowerCase()).filter(Boolean));
   for (const p of watchSnapshot) {
-    if (!currentPaths.has(p)) watchSnapshot.delete(p);
+    if (!currentPaths.has(p.toLowerCase())) watchSnapshot.delete(p);
   }
 });
 
@@ -275,6 +278,10 @@ export async function startWatchNative() {
     });
     _watchActive = true; // both listeners confirmed up before marking watcher active
   } catch (e) {
+    // Nettoyer un enregistrement partiel (ex. : 1er listen OK, 2e en échec),
+    // sinon le listener Tauri orphelin ne serait jamais désinscrit.
+    if (_watchUnlisten) { _watchUnlisten(); _watchUnlisten = null; }
+    if (_modUnlisten)   { _modUnlisten();   _modUnlisten   = null; }
     // Fallback : pas de surveillance native — log silencieux
     console.warn('[watchfolder] surveillance native indisponible :', e);
   } finally {

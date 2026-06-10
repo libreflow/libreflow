@@ -22,7 +22,12 @@ const _pendingTs = new Set();
 let _lastTs = 0;
 
 /** Replace the playLog array (used by boot() after loading from IDB). */
-export function setPlayLog(arr) { playLog = arr; }
+export function setPlayLog(arr) {
+  playLog = arr;
+  // Le bookkeeping de flush référence l'ancien tableau — purger, sinon les ts
+  // fantômes s'accumulent à chaque clear/ré-import sur la durée de la session.
+  _pendingTs.clear();
+}
 
 /** Cancel any pending flush timer — must be called before DB.close(). */
 export function cancelPlayLogFlush() {

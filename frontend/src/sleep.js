@@ -99,9 +99,11 @@ export function cancelSleepTimer(silent) {
   if (sleepTickTimer) { clearInterval(sleepTickTimer); sleepTickTimer = null; }
   sleepTimerEnd = 0; sleepFading = false; sleepEndOfTrack = false;
   _sleepWarnedMin = false; _sleepWarned5Min = false;
-  // Restore volume to the user's set level (read slider — never hardcode = 1)
+  // Restore volume to the user's set level (read slider)
   const _vel = document.getElementById('vol');
-  const _targetVol = _vel ? parseFloat(_vel.value) : audio.volume;
+  // Fallback 1 (comme _maxVol dans _sleepTick) : audio.volume peut déjà être
+  // au niveau fadé — l'utiliser comme cible verrouillerait le volume en bas.
+  const _targetVol = _vel ? parseFloat(_vel.value) : 1;
   // DSP-5 : restaurer via masterGainNode (graph) ; sinon fallback HTML
   if (masterGainNode && eqCtx) {
     masterGainNode.gain.setTargetAtTime(_targetVol, eqCtx.currentTime, 0.05);

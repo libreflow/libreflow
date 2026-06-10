@@ -63,6 +63,14 @@ export function clearSelection() {
   document.querySelectorAll('.tr.selected').forEach(el => el.classList.remove('selected'));
   // Invalider le cache filtre (selection peut affecter certaines vues) sans re-render coûteux
   VIRT._lastListSig = '';
+  // Fermer le picker playlist s'il est resté ouvert (clearSelection peut être
+  // déclenché par subscribe('tracks') pendant un scan watch-folder) et retirer
+  // son listener document — sinon picker visible orphelin + listener qui traîne.
+  const _picker = document.getElementById('sel-pl-picker');
+  if (_picker) {
+    _picker.style.display = 'none';
+    if (_picker._closePicker) { document.removeEventListener('click', _picker._closePicker); _picker._closePicker = null; }
+  }
 }
 
 export function updateSelBar() {

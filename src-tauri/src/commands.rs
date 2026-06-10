@@ -345,6 +345,12 @@ pub fn check_paths(paths: Vec<String>) -> Vec<String> {
                 return true; // treat as orphan — malformed path
             }
             let path = Path::new(p);
+            // Composants `..` non canonicalisés : is_safe_dir verrait un parent
+            // textuel inoffensif alors que path.exists() résoudrait hors périmètre.
+            use std::path::Component;
+            if path.components().any(|c| matches!(c, Component::ParentDir)) {
+                return true; // treat as orphan — traversal attempt
+            }
             let parent_safe = path
                 .parent()
                 .map(|parent| parent.as_os_str().is_empty() || is_safe_dir(parent))
@@ -617,7 +623,7 @@ pub async fn write_tags(data: WriteTagsData) -> Result<(), String> {
                 data.path
             ));
         }
-        if !canon.parent().map(|p| is_safe_dir(p)).unwrap_or(false) {
+        if !canon.parent().map(is_safe_dir).unwrap_or(false) {
             return Err("permission denied: path outside safe directories".to_string());
         }
         let mut tagged_file = Probe::open(&canon)
@@ -700,10 +706,10 @@ pub async fn write_cover(data: WriteCoverData) -> Result<(), String> {
             ));
         }
 
-        if !canon_audio.parent().map(|p| is_safe_dir(p)).unwrap_or(false) {
+        if !canon_audio.parent().map(is_safe_dir).unwrap_or(false) {
             return Err("write_cover: audio path outside safe directories".to_string());
         }
-        if !canon_image.parent().map(|p| is_safe_dir(p)).unwrap_or(false) {
+        if !canon_image.parent().map(is_safe_dir).unwrap_or(false) {
             return Err("write_cover: image path outside safe directories".to_string());
         }
         // Cap taille image à 10 MB pour éviter qu'un fichier hostile ou un symlink
@@ -795,7 +801,7 @@ pub async fn write_replaygain_tags(data: WriteReplaygainData) -> Result<(), Stri
                 data.path
             ));
         }
-        if !canon.parent().map(|p| is_safe_dir(p)).unwrap_or(false) {
+        if !canon.parent().map(is_safe_dir).unwrap_or(false) {
             return Err("permission denied: path outside safe directories".to_string());
         }
         let mut tagged_file = Probe::open(&canon)

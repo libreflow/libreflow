@@ -192,6 +192,14 @@ export function renderPlNav() {
     parts.push(pinned.map(_plNavItemHTML).join(''));
   }
 
+  // Section 2 : Récentes — bloc de rendu perdu lors d'un refactor alors que la
+  // déduplication shownRecentIds (section 3) le suppose présent ; sans lui les
+  // playlists récentes hors dossier disparaissent totalement de la sidebar.
+  if (recents.length >= 1) {
+    parts.push(`<div class="pl-nav-section-h">${i18n('pl_section_recent')}</div>`);
+    parts.push(recents.map(_plNavItemHTML).join(''));
+  }
+
   // Dossiers — regroupement O(N+F) au lieu de O(N×F)
   const byFolder = new Map();
   for (const p of visible) {

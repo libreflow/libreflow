@@ -31,9 +31,13 @@ function _computeDupeGroups() {
   // l'extension — un meme titre en MP3 et en FLAC est traite comme un doublon,
   // ce qui est le comportement attendu (l'utilisateur veut choisir un format).
   for (const t of tracks) {
-    const key = normTag(t.name).toLowerCase().replace(/[^\w\s]/g,'').replace(/\s+/g,' ').trim()
+    const namePart = normTag(t.name).toLowerCase().replace(/[^\w\s]/g,'').replace(/\s+/g,' ').trim();
+    // Titre vide (tags pas encore hydratés, nom 100 % symboles) : impossible de
+    // juger un doublon — sinon toutes ces pistes partagent la clé "|artiste"
+    // et forment de faux groupes de doublons.
+    if (!namePart) continue;
+    const key = namePart
               + '|' + (t.artist || '').toLowerCase().replace(/[^\w\s]/g,'').replace(/\s+/g,' ').trim();
-    if (!key.replace('|','')) continue;
     if (!map.has(key)) map.set(key, []);
     map.get(key).push(t);
   }

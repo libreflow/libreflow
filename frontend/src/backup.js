@@ -28,17 +28,20 @@ const BACKUP_FORMAT_VERSION = 1;
 /**
  * Écrit tout un lot dans un store via UNE seule transaction IDB (vs N dput).
  * Non bloquant en cas d'échec : log + continue, conservant la tolérance
- * fire-and-forget de l'ancien restore.
+ * fire-and-forget de l'ancien restore. Retourne false si l'écriture a échoué
+ * (quota plein, DB corrompue) pour que l'appelant puisse avertir l'utilisateur.
  */
 async function _batchPut(storeName, records) {
-  if (!DB || !records || !records.length) return;
+  if (!DB || !records || !records.length) return true;
   try {
     const tx = DB.transaction(storeName, 'readwrite');
     const store = tx.objectStore(storeName);
     for (const rec of records) store.put(rec);
     await new Promise((ok, fail) => { tx.oncomplete = ok; tx.onerror = () => fail(tx.error); });
+    return true;
   } catch (e) {
     console.warn(`[backup] batch IDB write (${storeName}) failed:`, e);
+    return false;
   }
 }
 
@@ -144,7 +147,10 @@ export async function importBackup() {
 
     if (addedTracks.length) {
       // Une seule transaction IDB pour tout le lot (vs un dput par piste).
-      await _batchPut('tracks', addedTracks);
+      const _persisted = await _batchPut('tracks', addedTracks);
+      // Divergence mémoire/IDB : les pistes restent jouables cette session mais
+      // disparaîtront au prochain démarrage — l'utilisateur doit le savoir.
+      if (!_persisted) toast('Sauvegarde IDB échouée — les pistes importées seront perdues au redémarrage', 'error');
       // Mutation in-place du tableau du store : pas de set() (qui notifierait
       // AVANT rebuildTrackIdxMap, exposant un _trackIdxMap stale aux subscribers).
       const _arr = get('tracks');

@@ -126,10 +126,9 @@ export function virtRenderWindow(fl) {
         break;
       }
     }
-    // PM-2: Si la piste courante n'est pas dans la fenêtre, utiliser filteredIdx O(1)
-    if (tabStopFi < 0) {
-      tabStopFi = filteredIdx(curTrack);
-    }
+    // A11Y-ROVING: si la piste courante est hors de la fenêtre rendue, aucune ligne DOM
+    // ne peut porter son fi — laisser tabStopFi à -1 pour que le premier tr visible
+    // reste focusable (sinon toute la liste devient inaccessible au clavier).
   }
   // Si aucune piste courante ou piste courante absente de la liste filtrée :
   // le premier tr rendu reçoit tabindex="0"

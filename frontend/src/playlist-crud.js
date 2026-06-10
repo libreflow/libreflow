@@ -190,6 +190,9 @@ export async function deletePlaylist(e, plId) {
     await savePlaylists();
     const curPlId = get('curPlId');
     if (curPlId === plId) { setView('all', document.getElementById('ni-all')); set('curPlId', null); }
+    // Comme la branche "playlist vide" : notifier app.js pour re-render la nav,
+    // sinon la playlist supprimée reste affichée dans la sidebar.
+    emit(EVENTS.PLAYLIST_CHANGED, { playlists: get('playlists') });
     toast(i18n('t_pl_deleted'), 'success');
   } else {
     // Playlist vide → suppression immédiate avec undo 5s (pas de dialogue bloquant)

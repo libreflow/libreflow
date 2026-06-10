@@ -86,7 +86,7 @@ pub fn watch_folder_start(app: AppHandle, path: String) -> Result<(), String> {
                     }
                     // Dossier parent sûr — bloque chemins système / UNC / racines
                     p.parent()
-                        .map(|parent| crate::commands::is_safe_dir(parent))
+                        .map(crate::commands::is_safe_dir)
                         .unwrap_or(false)
                 })
                 .filter_map(|p| p.to_str().map(String::from))

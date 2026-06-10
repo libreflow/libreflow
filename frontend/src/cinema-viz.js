@@ -305,7 +305,12 @@ export function startCinemaViz() {
   function draw(timestamp) {
     const st = _getCinVizState?.();
     if (!st?.cinemaOpen) return;
-    if (document.hidden) { _cinVizRaf = null; return; }
+    // Onglet caché : sauter le rendu mais REPLANIFIER — le navigateur gèle les
+    // rAF des onglets cachés (coût nul) et la boucle reprend seule au retour.
+    // (Avant : `_cinVizRaf = null; return` tuait la boucle définitivement, le
+    // handler visibilitychange de cinema.js ne la relançant que pour
+    // liquid/aurora avec opacity '0' — jamais vrai dans ce chemin.)
+    if (document.hidden) { _cinVizRaf = requestAnimationFrame(draw); return; }
     const T = timestamp !== undefined ? timestamp : performance.now();
     const w = canvas.clientWidth, h = canvas.clientHeight;
     if (w === 0 || h === 0) { _cinVizRaf = requestAnimationFrame(draw); return; }

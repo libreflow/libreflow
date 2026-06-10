@@ -22,9 +22,9 @@ import { saveCfg }         from './cfgsave.js';
 export const TLIST_ZOOM_LEVELS = ['compact', 'normal', 'comfortable'];
 
 export const TLIST_ZOOM_ROW_H = {
-  compact:     36,
-  normal:      CFG.VIRT_ROW_H, // source de vérité : CFG.VIRT_ROW_H (CLAUDE.md §2, §10)
-  comfortable: 60,
+  compact:     CFG.VIRT_ROW_H_COMPACT,     // source de vérité : CFG (CLAUDE.md §2, §10)
+  normal:      CFG.VIRT_ROW_H,
+  comfortable: CFG.VIRT_ROW_H_COMFORTABLE,
 };
 
 /**

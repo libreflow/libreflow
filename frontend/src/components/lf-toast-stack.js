@@ -252,11 +252,15 @@ export class LfToastStack extends LitElement {
   // CustomEvent is dispatched last so listeners can tell apart action vs plain dismiss.
   _onActionClick(ev, id, onClick) {
     ev.stopPropagation();
+    // dismiss + dispatch dans le finally : si le callback action throw, le toast
+    // est quand même retiré ET l'événement émis (sinon dispatch jamais atteint).
     try { typeof onClick === 'function' && onClick(); }
-    finally { this._dismiss(id); }
-    this.dispatchEvent(new CustomEvent('lf-toast-action', {
-      detail: { id }, bubbles: true, composed: true,
-    }));
+    finally {
+      this._dismiss(id);
+      this.dispatchEvent(new CustomEvent('lf-toast-action', {
+        detail: { id }, bubbles: true, composed: true,
+      }));
+    }
   }
 
   /**

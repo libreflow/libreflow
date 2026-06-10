@@ -249,6 +249,13 @@ export async function cancelCurrentRip() {
 }
 
 export async function cleanupCdCache(drivePath) {
+  // Annuler le listener de prefetch en attente — sinon il déclencherait un
+  // cd_rip_track sur le lecteur éjecté à la fin de la prochaine piste.
+  if (_prefetchAudioListener) {
+    const { audio, fn } = _prefetchAudioListener;
+    audio.removeEventListener('timeupdate', fn);
+    _prefetchAudioListener = null;
+  }
   // B22 : les rips anticipés vivent dans cd-cache/ — invalidés par le purge disque ci-dessous.
   _prefetchedRips.clear();
   _prefetchDrive = null;

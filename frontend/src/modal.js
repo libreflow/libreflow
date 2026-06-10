@@ -108,8 +108,10 @@ export function installAutoFocusTrap() {
     );
     if (!dialog) continue;
     const obs = new MutationObserver(() => {
-      if (bg.classList.contains('on')) trapFocus(dialog);
-      else                              releaseFocus(dialog);
+      // `.on` pour les backdrops modaux et sleep-menu ; `.open` pour
+      // shortcuts-panel (settings.js bascule `.open`, le CSS en dépend).
+      if (bg.classList.contains('on') || bg.classList.contains('open')) trapFocus(dialog);
+      else                                                              releaseFocus(dialog);
     });
     obs.observe(bg, { attributes: true, attributeFilter: ['class'] });
   }

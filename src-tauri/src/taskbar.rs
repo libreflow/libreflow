@@ -178,8 +178,8 @@ fn rebuild_image_lists(old_play: isize, old_pause: isize) -> (isize, isize) {
             let _ = ImageList_Destroy(HIMAGELIST(old_pause));
         }
     }
-    let il_play_raw = build_image_list(false).0 as isize;
-    let il_pause_raw = build_image_list(true).0 as isize;
+    let il_play_raw = build_image_list(false).0;
+    let il_pause_raw = build_image_list(true).0;
     (il_play_raw, il_pause_raw)
 }
 

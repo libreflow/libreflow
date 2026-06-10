@@ -142,6 +142,12 @@ export function initShortcuts({ updateVolSlider, closeModal, cycleSpeed }) {
       document.getElementById('ctx-menu')?.classList.contains('on') === true;
     if (_anyModalOpen) return;
 
+    // Le panneau raccourcis est un dialog qui bascule `.open` (pas `.on`) — il
+    // échappe au guard _anyModalOpen ci-dessus. Bloquer les single-key (Space,
+    // S, R, flèches…) tant qu'il est ouvert, sauf Escape (fermé plus bas) et
+    // '?' (toggle du panneau lui-même).
+    if (isShortcutsOpen() && e.code !== 'Escape' && e.key !== '?') return;
+
     // Bloquer tous les raccourcis pendant l'édition inline de métadonnées
     if (document.querySelector('.tr.editing')) return;
 
