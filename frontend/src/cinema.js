@@ -54,7 +54,6 @@ let _lastCinArt  = null; // dernière URL d'art — évite le bug de normalisati
 let _cinArtRGB       = '255,255,255'; // couleur courante (interpolée)
 let _cinArtRGBTarget = [255,255,255]; // couleur cible
 let _cinArtRGBCur    = [255,255,255]; // couleur affichée (LERP)
-const _LERP_K        = 0.06;          // vitesse de transition (~16 frames → 50% done)
 let _kbVariant  = 0;                  // variante Ken Burns courante (0-3)
 let _lastCinIdx = -1;                 // dernier curIdx vu dans updateCinema — détecte le changement de piste
 
