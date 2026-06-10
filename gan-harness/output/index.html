@@ -1,0 +1,891 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>LibreFlow</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@600;700;800&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --base: #030303;
+    --sidebar: #060606;
+    --elev: #0A0A0A;
+
+    --accent: #8B6BFF;
+    --accent-hi: #A084FF;
+    --accent-lo: #6F4DEB;
+    --accent-glow: rgba(139,107,255,0.45);
+    --accent-subtle: rgba(139,107,255,0.12);
+
+    --t1: #F5F6F8;
+    --t2: #B4B7C2;
+    --t3: #979CAC;
+    --t4: #5B5F6E;
+
+    --hair: rgba(255,255,255,0.055);
+    --hair-2: rgba(255,255,255,0.09);
+
+    --sb-w: 240px;
+    --bar-h: 92px;
+
+    --ease: cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  html, body {
+    height: 100%;
+    background: var(--base);
+    color: var(--t1);
+    font-family: 'DM Sans', system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+    overflow: hidden;
+  }
+
+  ::selection { background: var(--accent-lo); color: #fff; }
+
+  .app {
+    display: grid;
+    grid-template-columns: var(--sb-w) 1fr;
+    grid-template-rows: 1fr var(--bar-h);
+    height: 100vh;
+    position: relative;
+  }
+
+  /* ambient indigo light sources across the canvas */
+  .app::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    z-index: 0;
+    background:
+      radial-gradient(620px 420px at 18% 8%, rgba(139,107,255,0.10), transparent 60%),
+      radial-gradient(700px 500px at 92% 96%, rgba(139,107,255,0.07), transparent 62%);
+  }
+
+  /* ───────────────────────── SIDEBAR ───────────────────────── */
+  .sidebar {
+    grid-row: 1 / 3;
+    background: var(--sidebar);
+    border-right: 1px solid var(--hair);
+    display: flex;
+    flex-direction: column;
+    padding: 22px 14px 16px;
+    position: relative;
+    z-index: 3;
+    overflow: hidden;
+  }
+  /* faint tactile grid + noise texture */
+  .sidebar::before {
+    content: "";
+    position: absolute; inset: 0;
+    pointer-events: none;
+    background-image:
+      linear-gradient(rgba(255,255,255,0.018) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,255,255,0.018) 1px, transparent 1px);
+    background-size: 26px 26px;
+    -webkit-mask-image: radial-gradient(120% 80% at 30% 10%, #000 30%, transparent 100%);
+            mask-image: radial-gradient(120% 80% at 30% 10%, #000 30%, transparent 100%);
+  }
+  .sidebar > * { position: relative; z-index: 1; }
+
+  .brand {
+    display: flex;
+    align-items: center;
+    gap: 11px;
+    padding: 4px 10px 22px;
+  }
+  .brand .mark {
+    width: 30px; height: 30px;
+    border-radius: 9px;
+    position: relative;
+    background:
+      radial-gradient(circle at 32% 28%, var(--accent-hi), var(--accent-lo) 70%);
+    box-shadow:
+      0 0 0 1px rgba(255,255,255,0.07) inset,
+      0 6px 18px -4px var(--accent-glow);
+    display: grid; place-items: center;
+    flex-shrink: 0;
+  }
+  /* the "flow" wave glyph */
+  .brand .mark svg { width: 17px; height: 17px; display:block; }
+  .brand .wordmark {
+    font-family: 'Syne', sans-serif;
+    font-weight: 800;
+    font-size: 19px;
+    letter-spacing: -0.02em;
+    line-height: 1;
+  }
+  .brand .wordmark b { color: var(--accent-hi); }
+  .brand .pulse {
+    width: 6px; height: 6px; border-radius: 50%;
+    background: var(--accent-hi);
+    margin-left: 3px;
+    box-shadow: 0 0 10px var(--accent-glow);
+    animation: pulse 2.4s var(--ease) infinite;
+  }
+  @keyframes pulse {
+    0%,100% { opacity: 1; transform: scale(1); }
+    50% { opacity: .35; transform: scale(.7); }
+  }
+
+  /* search */
+  .search {
+    position: relative;
+    margin: 0 4px 20px;
+  }
+  .search svg {
+    position: absolute; left: 12px; top: 50%;
+    transform: translateY(-50%);
+    width: 15px; height: 15px;
+    color: var(--t3);
+    pointer-events: none;
+  }
+  .search input {
+    width: 100%;
+    height: 38px;
+    background: rgba(255,255,255,0.025);
+    border: 1px solid var(--hair);
+    border-radius: 9px;
+    color: var(--t1);
+    font: inherit;
+    font-size: 13px;
+    padding: 0 12px 0 34px;
+    outline: none;
+    transition: border-color .25s var(--ease), background .25s var(--ease), box-shadow .25s var(--ease);
+  }
+  .search input::placeholder { color: var(--t3); }
+  .search input:focus {
+    border-color: rgba(139,107,255,0.55);
+    background: rgba(139,107,255,0.05);
+    box-shadow: 0 0 0 3px var(--accent-subtle);
+  }
+  .search .kbd {
+    position: absolute; right: 9px; top: 50%;
+    transform: translateY(-50%);
+    font-size: 10px; color: var(--t4);
+    border: 1px solid var(--hair);
+    border-radius: 5px;
+    padding: 2px 6px;
+    letter-spacing: .04em;
+  }
+
+  .nav-label {
+    font-size: 10.5px;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--t4);
+    padding: 0 14px 8px;
+  }
+
+  .nav { display: flex; flex-direction: column; gap: 1px; }
+  .nav-item {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    height: 38px;
+    padding: 0 12px;
+    border-radius: 9px;
+    color: var(--t2);
+    font-size: 13.5px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: color .2s var(--ease), background .2s var(--ease);
+    -webkit-user-select: none; user-select: none;
+  }
+  .nav-item svg { width: 17px; height: 17px; flex-shrink: 0; opacity: .85; transition: opacity .2s; }
+  .nav-item .count { margin-left: auto; font-size: 11px; color: var(--t4); font-variant-numeric: tabular-nums; }
+  .nav-item:hover { background: rgba(255,255,255,0.035); color: var(--t1); }
+  .nav-item:hover svg { opacity: 1; }
+
+  .nav-item.active {
+    color: var(--t1);
+    background: linear-gradient(90deg, rgba(139,107,255,0.16), rgba(139,107,255,0.04) 70%, transparent);
+  }
+  .nav-item.active svg { color: var(--accent-hi); opacity: 1; }
+  .nav-item.active .count { color: var(--accent-hi); }
+  /* left-border indigo pill */
+  .nav-item.active::before {
+    content: "";
+    position: absolute;
+    left: -14px; top: 50%;
+    transform: translateY(-50%);
+    width: 4px; height: 22px;
+    border-radius: 0 4px 4px 0;
+    background: linear-gradient(var(--accent-hi), var(--accent-lo));
+    box-shadow: 0 0 14px var(--accent-glow);
+  }
+
+  .nav-divider { height: 1px; background: var(--hair); margin: 14px 12px; }
+
+  .sidebar-foot { margin-top: auto; padding: 12px 4px 0; }
+  .scan-btn {
+    width: 100%;
+    height: 42px;
+    border: 1px dashed rgba(139,107,255,0.35);
+    border-radius: 10px;
+    background: rgba(139,107,255,0.04);
+    color: var(--accent-hi);
+    font: inherit; font-size: 13px; font-weight: 600;
+    display: flex; align-items: center; justify-content: center; gap: 9px;
+    cursor: pointer;
+    transition: all .25s var(--ease);
+  }
+  .scan-btn svg { width: 16px; height: 16px; }
+  .scan-btn:hover {
+    background: rgba(139,107,255,0.1);
+    border-color: rgba(139,107,255,0.6);
+    box-shadow: 0 0 0 3px var(--accent-subtle);
+  }
+  .lib-stat {
+    display: flex; align-items: center; gap: 7px;
+    padding: 12px 12px 2px;
+    font-size: 11px; color: var(--t4);
+  }
+  .lib-stat .dot { width: 5px; height: 5px; border-radius: 50%; background: #3ddc84; box-shadow: 0 0 8px rgba(61,220,132,.6); }
+
+  /* ───────────────────────── MAIN ───────────────────────── */
+  .main {
+    position: relative;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    z-index: 1;
+  }
+
+  .topbar {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    padding: 30px 36px 18px;
+    flex-shrink: 0;
+  }
+  .topbar h1 {
+    font-family: 'Syne', sans-serif;
+    font-weight: 700;
+    font-size: 30px;
+    letter-spacing: -0.025em;
+    line-height: 1;
+  }
+  .topbar .sub {
+    color: var(--t3);
+    font-size: 13px;
+    margin-top: 8px;
+  }
+  .topbar .sub b { color: var(--t2); font-weight: 600; }
+  .topbar-actions { display: flex; gap: 8px; }
+  .pill {
+    height: 34px; padding: 0 14px;
+    display: flex; align-items: center; gap: 7px;
+    border-radius: 8px;
+    border: 1px solid var(--hair);
+    background: rgba(255,255,255,0.02);
+    color: var(--t2);
+    font-size: 12.5px; font-weight: 500;
+    cursor: pointer;
+    transition: all .2s var(--ease);
+  }
+  .pill svg { width: 14px; height: 14px; }
+  .pill:hover { color: var(--t1); border-color: var(--hair-2); background: rgba(255,255,255,0.05); }
+  .pill.primary {
+    background: linear-gradient(var(--accent), var(--accent-lo));
+    border: none; color: #fff;
+    box-shadow: 0 6px 18px -6px var(--accent-glow);
+  }
+  .pill.primary:hover { box-shadow: 0 8px 22px -5px var(--accent-glow); transform: translateY(-1px); }
+
+  /* column header */
+  .list-head {
+    display: grid;
+    grid-template-columns: 40px 1.7fr 1.2fr 1fr 64px 44px;
+    align-items: center;
+    gap: 16px;
+    padding: 0 36px 9px;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--t4);
+    border-bottom: 1px solid var(--hair);
+    margin: 6px 0 4px;
+    flex-shrink: 0;
+  }
+  .list-head .r { text-align: right; }
+
+  .tlist {
+    flex: 1;
+    overflow-y: auto;
+    padding: 4px 16px 26px;
+    position: relative;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255,255,255,0.12) transparent;
+  }
+  .tlist::-webkit-scrollbar { width: 9px; }
+  .tlist::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 5px; border: 2px solid transparent; background-clip: content-box; }
+
+  .row {
+    display: grid;
+    grid-template-columns: 40px 1.7fr 1.2fr 1fr 64px 44px;
+    align-items: center;
+    gap: 16px;
+    height: 56px;
+    padding: 0 20px;
+    border-radius: 11px;
+    cursor: default;
+    position: relative;
+    transition: background .18s var(--ease);
+  }
+  .row:hover { background: rgba(255,255,255,0.035); }
+  .row:hover .idx .num { opacity: 0; }
+  .row:hover .idx .play { opacity: 1; }
+
+  .idx {
+    position: relative;
+    width: 100%; height: 100%;
+    display: grid; place-items: center;
+    color: var(--t3);
+    font-size: 13px;
+    font-variant-numeric: tabular-nums;
+  }
+  .idx .num { transition: opacity .15s; }
+  .idx .play {
+    position: absolute; inset: 0;
+    display: grid; place-items: center;
+    opacity: 0; transition: opacity .15s;
+    color: var(--t1);
+  }
+  .idx .play svg { width: 13px; height: 13px; }
+
+  .cell-title { display: flex; align-items: center; gap: 13px; min-width: 0; }
+  .art {
+    width: 40px; height: 40px;
+    border-radius: 8px;
+    flex-shrink: 0;
+    position: relative;
+    overflow: hidden;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.05) inset;
+  }
+  .art .glyph { position: absolute; inset: 0; display:grid; place-items:center; }
+  .title-text { min-width: 0; }
+  .title-text .name {
+    font-size: 14px; font-weight: 600; color: var(--t1);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .title-text .meta {
+    font-size: 12px; color: var(--t3); margin-top: 2px;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .cell { font-size: 13px; color: var(--t2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .cell.dur { text-align: right; color: var(--t3); font-variant-numeric: tabular-nums; font-size: 12.5px; }
+  .cell-act { display: flex; justify-content: center; }
+  .heart {
+    width: 30px; height: 30px; border-radius: 8px;
+    display: grid; place-items: center;
+    color: var(--t4); cursor: pointer;
+    opacity: 0;
+    transition: opacity .15s, color .2s, background .2s;
+  }
+  .row:hover .heart { opacity: 1; }
+  .heart svg { width: 16px; height: 16px; }
+  .heart:hover { color: var(--accent-hi); background: rgba(255,255,255,0.05); }
+  .heart.liked { opacity: 1; color: var(--accent-hi); }
+
+  /* NOW PLAYING ROW */
+  .row.playing {
+    background: linear-gradient(90deg, rgba(139,107,255,0.12), rgba(139,107,255,0.03) 55%, transparent);
+    box-shadow: inset 0 0 0 1px rgba(139,107,255,0.14);
+  }
+  .row.playing::before {
+    content: "";
+    position: absolute; left: 0; top: 9px; bottom: 9px;
+    width: 3px; border-radius: 3px;
+    background: linear-gradient(var(--accent-hi), var(--accent-lo));
+    box-shadow: 0 0 16px var(--accent-glow);
+  }
+  .row.playing:hover { background: linear-gradient(90deg, rgba(139,107,255,0.16), rgba(139,107,255,0.04) 55%, transparent); }
+  .row.playing .name { color: var(--accent-hi); }
+  .row.playing .art { box-shadow: 0 0 0 1px rgba(139,107,255,0.4), 0 4px 18px -2px var(--accent-glow); }
+  .row.playing .heart { opacity: 1; }
+
+  /* equalizer in idx cell */
+  .eq { display: flex; align-items: flex-end; justify-content: center; gap: 2.5px; height: 15px; }
+  .eq span {
+    width: 3px; border-radius: 2px;
+    background: linear-gradient(var(--accent-hi), var(--accent-lo));
+    box-shadow: 0 0 6px var(--accent-glow);
+    transform-origin: bottom;
+  }
+  .eq span:nth-child(1) { animation: eq1 .9s ease-in-out infinite; }
+  .eq span:nth-child(2) { animation: eq2 .75s ease-in-out infinite; }
+  .eq span:nth-child(3) { animation: eq3 1.05s ease-in-out infinite; }
+  @keyframes eq1 { 0%,100%{height:5px} 50%{height:14px} }
+  @keyframes eq2 { 0%,100%{height:13px} 40%{height:4px} 80%{height:11px} }
+  @keyframes eq3 { 0%,100%{height:8px} 30%{height:15px} 65%{height:5px} }
+
+  /* fade gradient at bottom of list into the player bar */
+  .main::after {
+    content: "";
+    position: absolute;
+    left: 0; right: 0;
+    bottom: 0; height: 70px;
+    pointer-events: none;
+    z-index: 2;
+    background: linear-gradient(transparent, var(--base) 86%);
+  }
+
+  /* ───────────────────────── PLAYER BAR ───────────────────────── */
+  .player {
+    grid-column: 1 / 3;
+    height: var(--bar-h);
+    background: rgba(8,8,9,0.72);
+    -webkit-backdrop-filter: blur(28px) saturate(140%);
+            backdrop-filter: blur(28px) saturate(140%);
+    border-top: 1px solid var(--hair-2);
+    display: grid;
+    grid-template-columns: minmax(220px, 1fr) minmax(440px, 2fr) minmax(220px, 1fr);
+    align-items: center;
+    padding: 0 24px;
+    gap: 20px;
+    position: relative;
+    z-index: 5;
+  }
+  /* indigo light spill rising from the bar */
+  .player::before {
+    content: "";
+    position: absolute; left: 0; right: 0; top: -1px; height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(139,107,255,0.5), transparent);
+  }
+
+  /* left: now playing meta */
+  .np { display: flex; align-items: center; gap: 14px; min-width: 0; }
+  .np-art {
+    width: 56px; height: 56px;
+    border-radius: 11px;
+    flex-shrink: 0;
+    position: relative;
+    overflow: hidden;
+    box-shadow: 0 8px 22px -6px rgba(0,0,0,0.7), 0 0 22px -6px var(--accent-glow), 0 0 0 1px rgba(255,255,255,0.06) inset;
+  }
+  .np-art .ring {
+    position: absolute; inset: -2px; border-radius: 13px;
+    background: conic-gradient(from 0deg, var(--accent-lo), var(--accent-hi), var(--accent), var(--accent-lo));
+    opacity: .0;
+  }
+  .np-text { min-width: 0; }
+  .np-text .t {
+    font-size: 14.5px; font-weight: 600; color: var(--t1);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .np-text .a {
+    font-size: 12.5px; color: var(--t3); margin-top: 3px;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .np-text .a:hover { color: var(--t2); }
+  .np-like {
+    width: 34px; height: 34px; flex-shrink: 0;
+    display: grid; place-items: center;
+    color: var(--accent-hi); cursor: pointer; border-radius: 9px;
+    transition: background .2s;
+  }
+  .np-like:hover { background: rgba(255,255,255,0.05); }
+  .np-like svg { width: 18px; height: 18px; }
+
+  /* center: controls + seek */
+  .center { display: flex; flex-direction: column; align-items: center; gap: 9px; }
+  .controls { display: flex; align-items: center; gap: 20px; }
+  .ctrl {
+    background: none; border: none; cursor: pointer;
+    color: var(--t2);
+    display: grid; place-items: center;
+    width: 34px; height: 34px; border-radius: 50%;
+    transition: color .18s var(--ease), transform .18s var(--ease);
+    position: relative;
+  }
+  .ctrl svg { width: 19px; height: 19px; }
+  .ctrl:hover { color: var(--t1); transform: scale(1.08); }
+  .ctrl:active { transform: scale(.94); }
+  .ctrl.on { color: var(--accent-hi); }
+  .ctrl.on::after {
+    content: ""; position: absolute; bottom: 0px; left: 50%;
+    transform: translateX(-50%);
+    width: 4px; height: 4px; border-radius: 50%;
+    background: var(--accent-hi); box-shadow: 0 0 7px var(--accent-glow);
+  }
+
+  .play-btn {
+    width: 44px; height: 44px;
+    border-radius: 50%;
+    border: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: radial-gradient(circle at 35% 30%, var(--accent-hi), var(--accent-lo) 78%);
+    color: #fff;
+    box-shadow: 0 8px 22px -5px var(--accent-glow), 0 0 0 1px rgba(255,255,255,0.12) inset;
+    transition: transform .18s var(--ease), box-shadow .25s var(--ease);
+  }
+  .play-btn svg { width: 18px; height: 18px; display: block; }
+  .play-btn:hover { transform: scale(1.07); box-shadow: 0 10px 28px -4px var(--accent-glow), 0 0 0 1px rgba(255,255,255,0.18) inset; }
+  .play-btn:active { transform: scale(.95); }
+
+  /* seek */
+  .seek { display: flex; align-items: center; gap: 11px; width: 100%; max-width: 520px; }
+  .seek .time { font-size: 11px; color: var(--t3); font-variant-numeric: tabular-nums; min-width: 36px; }
+  .seek .time.r { text-align: right; }
+  .track {
+    position: relative; flex: 1; height: 14px;
+    display: flex; align-items: center; cursor: pointer;
+  }
+  .track .rail {
+    position: absolute; left: 0; right: 0; height: 4px;
+    border-radius: 4px;
+    background: rgba(255,255,255,0.1);
+    overflow: hidden;
+  }
+  .track .fill {
+    position: absolute; left: 0; height: 4px; width: 40%;
+    border-radius: 4px;
+    background: linear-gradient(90deg, var(--accent-lo), var(--accent-hi));
+    box-shadow: 0 0 10px var(--accent-glow);
+  }
+  .track .thumb {
+    position: absolute; left: 40%;
+    width: 12px; height: 12px;
+    border-radius: 50%;
+    background: #fff;
+    transform: translateX(-50%);
+    box-shadow: 0 0 0 4px rgba(139,107,255,0.25), 0 2px 6px rgba(0,0,0,0.5);
+    opacity: 0; transition: opacity .18s var(--ease);
+  }
+  .track:hover .thumb { opacity: 1; }
+  .track:hover .fill { background: linear-gradient(90deg, var(--accent-lo), var(--accent-hi)); }
+
+  /* right: volume + utility */
+  .right { display: flex; align-items: center; justify-content: flex-end; gap: 6px; }
+  .util {
+    width: 34px; height: 34px; border-radius: 9px;
+    background: none; border: none; cursor: pointer;
+    color: var(--t3); display: grid; place-items: center;
+    transition: color .18s, background .18s;
+  }
+  .util svg { width: 17px; height: 17px; }
+  .util:hover { color: var(--t1); background: rgba(255,255,255,0.05); }
+  .util.on { color: var(--accent-hi); }
+
+  .vol { display: flex; align-items: center; gap: 9px; width: 118px; margin-left: 6px; }
+  .vol > svg { width: 17px; height: 17px; color: var(--t3); flex-shrink: 0; }
+  .vol-track { position: relative; flex: 1; height: 14px; display: flex; align-items: center; cursor: pointer; }
+  .vol-track .rail { position: absolute; left:0; right:0; height: 4px; border-radius: 4px; background: rgba(255,255,255,0.1); }
+  .vol-track .fill { position: absolute; left: 0; height: 4px; width: 72%; border-radius: 4px; background: linear-gradient(90deg, var(--t3), var(--t1)); }
+  .vol-track .thumb {
+    position: absolute; left: 72%; width: 11px; height: 11px; border-radius: 50%;
+    background: #fff; transform: translateX(-50%);
+    box-shadow: 0 2px 6px rgba(0,0,0,0.5);
+    opacity: 0; transition: opacity .18s;
+  }
+  .vol-track:hover .thumb { opacity: 1; }
+  .vol-track:hover .fill { background: linear-gradient(90deg, var(--accent-lo), var(--accent-hi)); }
+
+  .divider-v { width: 1px; height: 26px; background: var(--hair); margin: 0 4px; }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- ───────── SIDEBAR ───────── -->
+  <aside class="sidebar">
+    <div class="brand">
+      <span class="mark">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round">
+          <path d="M2 13c2.5 0 2.5-6 5-6s2.5 12 5 12 2.5-12 5-12 2.5 6 5 6"/>
+        </svg>
+      </span>
+      <span class="wordmark">Libre<b>Flow</b></span>
+      <span class="pulse"></span>
+    </div>
+
+    <div class="search">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+        <circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/>
+      </svg>
+      <input type="text" placeholder="Rechercher titres, artistes…" aria-label="Rechercher" />
+      <span class="kbd">⌘K</span>
+    </div>
+
+    <div class="nav-label">Bibliothèque</div>
+    <nav class="nav">
+      <div class="nav-item active">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><circle cx="3.5" cy="6" r="1.2"/><circle cx="3.5" cy="12" r="1.2"/><circle cx="3.5" cy="18" r="1.2"/></svg>
+        Tous les titres <span class="count">4 812</span>
+      </div>
+      <div class="nav-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 14c1.5-1.5 3-3.3 3-5.5A4.5 4.5 0 0 0 12 5.5 4.5 4.5 0 0 0 2 8.5c0 2.2 1.5 4 3 5.5l7 7 7-7Z"/></svg>
+        Favoris <span class="count">238</span>
+      </div>
+      <div class="nav-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/></svg>
+        Récents
+      </div>
+    </nav>
+
+    <div class="nav-divider"></div>
+    <div class="nav-label">Collections</div>
+    <nav class="nav">
+      <div class="nav-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h12M4 11h12M4 16h8"/><circle cx="19" cy="15" r="2.4"/><path d="M21.4 14V8.5l-3 .9"/></svg>
+        Playlists <span class="count">17</span>
+      </div>
+      <div class="nav-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4.5 20a7.5 7.5 0 0 1 15 0"/></svg>
+        Artistes <span class="count">512</span>
+      </div>
+      <div class="nav-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="2.6"/></svg>
+        Albums <span class="count">389</span>
+      </div>
+      <div class="nav-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4.9 19.1a10 10 0 0 1 0-14.2M7.8 16.2a6 6 0 0 1 0-8.4M16.2 7.8a6 6 0 0 1 0 8.4M19.1 4.9a10 10 0 0 1 0 14.2"/><circle cx="12" cy="12" r="1.6"/></svg>
+        Radio
+      </div>
+      <div class="nav-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>
+        Stats
+      </div>
+    </nav>
+
+    <div class="sidebar-foot">
+      <button class="scan-btn">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7V5a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v3"/><path d="M3 11h18v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/><path d="M12 14v4M10 16h4"/></svg>
+        Analyser un dossier
+      </button>
+      <div class="lib-stat"><span class="dot"></span> Bibliothèque synchronisée · 31,4 Go</div>
+    </div>
+  </aside>
+
+  <!-- ───────── MAIN ───────── -->
+  <main class="main">
+    <div class="topbar">
+      <div>
+        <h1>Tous les titres</h1>
+        <div class="sub"><b>4 812</b> titres · <b>389</b> albums · 14 j 6 h d'écoute</div>
+      </div>
+      <div class="topbar-actions">
+        <button class="pill">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M7 12h10M10 18h4"/></svg>
+          Trier
+        </button>
+        <button class="pill primary">
+          <svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M8 5v14l11-7z"/></svg>
+          Tout lire
+        </button>
+      </div>
+    </div>
+
+    <div class="list-head">
+      <div>#</div>
+      <div>Titre</div>
+      <div>Album</div>
+      <div>Genre</div>
+      <div class="r">Durée</div>
+      <div></div>
+    </div>
+
+    <div class="tlist" id="tlist">
+      <!-- rows injected by script -->
+    </div>
+  </main>
+
+  <!-- ───────── PLAYER BAR ───────── -->
+  <footer class="player">
+    <div class="np">
+      <div class="np-art" id="npArt"></div>
+      <div class="np-text">
+        <div class="t">Midnight Rain</div>
+        <div class="a">Taylor Swift — Midnights</div>
+      </div>
+      <div class="np-like" title="Retirer des favoris">
+        <svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M12 21s-7.5-4.6-10-9.3C.6 8.9 2 5.2 5.5 5.2 7.7 5.2 9 6.6 12 9c3-2.4 4.3-3.8 6.5-3.8 3.5 0 4.9 3.7 3.5 6.5C19.5 16.4 12 21 12 21Z"/></svg>
+      </div>
+    </div>
+
+    <div class="center">
+      <div class="controls">
+        <button class="ctrl on" id="shuffle" title="Lecture aléatoire">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 3h5v5"/><path d="M21 3l-7.5 7.5"/><path d="M3 21l6-6"/><path d="M16 21h5v-5"/><path d="M3 3l6 6"/><path d="M14 14l7 7"/></svg>
+        </button>
+        <button class="ctrl" title="Précédent">
+          <svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M6 5h2v14H6zM20 5v14L9 12z"/></svg>
+        </button>
+        <button class="play-btn" id="playBtn" title="Pause">
+          <svg id="playIcon" viewBox="0 0 24 24" fill="currentColor" stroke="none"><rect x="6" y="5" width="4" height="14" rx="1.2"/><rect x="14" y="5" width="4" height="14" rx="1.2"/></svg>
+        </button>
+        <button class="ctrl" title="Suivant">
+          <svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M18 5h-2v14h2zM4 5v14l11-7z"/></svg>
+        </button>
+        <button class="ctrl" id="repeat" title="Répéter">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 2l4 4-4 4"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><path d="M7 22l-4-4 4-4"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>
+        </button>
+      </div>
+      <div class="seek">
+        <span class="time">1:38</span>
+        <div class="track" id="seek">
+          <div class="rail"></div>
+          <div class="fill"></div>
+          <div class="thumb"></div>
+        </div>
+        <span class="time r">3:54</span>
+      </div>
+    </div>
+
+    <div class="right">
+      <button class="util" title="File d'attente">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h13M3 12h13M3 18h9"/><path d="M19 9v9"/><circle cx="19" cy="6" r="0"/><path d="M16 16l3 3 3-3" opacity="0"/><path d="M19 7v7"/><path d="M16.5 14l2.5 4 2.5-4"/></svg>
+      </button>
+      <button class="util" title="Égaliseur">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="6" y1="4" x2="6" y2="20"/><line x1="12" y1="4" x2="12" y2="20"/><line x1="18" y1="4" x2="18" y2="20"/><circle cx="6" cy="9" r="2" fill="var(--base)"/><circle cx="12" cy="15" r="2" fill="var(--base)"/><circle cx="18" cy="7" r="2" fill="var(--base)"/></svg>
+      </button>
+      <button class="util" title="Mode cinéma">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="5" width="19" height="14" rx="2.5"/><path d="M10 9.5l5 2.5-5 2.5z" fill="currentColor"/></svg>
+      </button>
+      <div class="divider-v"></div>
+      <div class="vol">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5 6 9H3v6h3l5 4z"/><path d="M16 9a4 4 0 0 1 0 6"/><path d="M19 6.5a8 8 0 0 1 0 11"/></svg>
+        <div class="vol-track" id="vol">
+          <div class="rail"></div>
+          <div class="fill"></div>
+          <div class="thumb"></div>
+        </div>
+      </div>
+    </div>
+  </footer>
+</div>
+
+<script>
+  // ── Cover art generator: deterministic indigo-leaning gradient art per track ──
+  const palettes = [
+    ['#8B6BFF','#3A1E78','#0A0A0A'],
+    ['#FF7AB6','#7A2E55','#0A0A0A'],
+    ['#5BD6C7','#1E5A55','#060606'],
+    ['#FFB36B','#7A4A1E','#0A0A0A'],
+    ['#A084FF','#4A2E9E','#060606'],
+    ['#6BAEFF','#1E3F7A','#0A0A0A'],
+    ['#FF6B6B','#7A1E1E','#060606'],
+    ['#C7FF5B','#4A6E1E','#0A0A0A'],
+  ];
+  function cover(i, seed) {
+    const p = palettes[i % palettes.length];
+    const a = (seed * 47) % 360;
+    return `radial-gradient(circle at ${20 + (seed*13)%60}% ${20 + (seed*29)%60}%, ${p[0]}, transparent 55%),`
+         + `linear-gradient(${a}deg, ${p[1]}, ${p[2]})`;
+  }
+  function glyphSVG(letter, c) {
+    return `<div class="glyph"><svg viewBox="0 0 40 40" width="100%" height="100%"><text x="50%" y="56%" text-anchor="middle" dominant-baseline="middle" font-family="Syne, sans-serif" font-weight="800" font-size="20" fill="rgba(255,255,255,0.92)">${letter}</text></svg></div>`;
+  }
+
+  const tracks = [
+    { t:'Glass Animals',        a:'Aurora Bey',      al:'Liminal',          g:'Indie Pop',  d:'4:12', liked:true },
+    { t:'Neon Static',          a:'Kavinsky',        al:'OutRun II',        g:'Synthwave',  d:'3:48' },
+    { t:'Midnight Rain',        a:'Taylor Swift',    al:'Midnights',        g:'Pop',        d:'3:54', playing:true, liked:true },
+    { t:'Holocene',             a:'Bon Iver',        al:'Bon Iver, Bon Iver',g:'Folk',      d:'5:36' },
+    { t:'Innerbloom',           a:'RÜFÜS DU SOL',    al:'Bloom',            g:'Electronic', d:'9:38', liked:true },
+    { t:'Weird Fishes',         a:'Radiohead',       al:'In Rainbows',      g:'Alt Rock',   d:'5:18' },
+    { t:'Saturn',               a:'Sleeping At Last',al:'Atlas: Space',     g:'Ambient',    d:'4:50' },
+    { t:'Tek It',               a:'Cafuné',          al:'Running',          g:'Dream Pop',  d:'3:11' },
+    { t:'An Ocean In Between',   a:'Volbeat',         al:'Servant',          g:'Rock',       d:'4:02' },
+    { t:'Petrichor',            a:'Helios',          al:'Eingya',           g:'Post-Rock',  d:'6:24', liked:true },
+  ];
+
+  const playIco = '<svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M8 5v14l11-7z"/></svg>';
+  const heartIco = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s-7.5-4.6-10-9.3C.6 8.9 2 5.2 5.5 5.2 7.7 5.2 9 6.6 12 9c3-2.4 4.3-3.8 6.5-3.8 3.5 0 4.9 3.7 3.5 6.5C19.5 16.4 12 21 12 21Z"/></svg>';
+  const heartFill = '<svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M12 21s-7.5-4.6-10-9.3C.6 8.9 2 5.2 5.5 5.2 7.7 5.2 9 6.6 12 9c3-2.4 4.3-3.8 6.5-3.8 3.5 0 4.9 3.7 3.5 6.5C19.5 16.4 12 21 12 21Z"/></svg>';
+
+  const list = document.getElementById('tlist');
+  tracks.forEach((tr, i) => {
+    const row = document.createElement('div');
+    row.className = 'row' + (tr.playing ? ' playing' : '');
+    const idxInner = tr.playing
+      ? `<div class="eq"><span></span><span></span><span></span></div>`
+      : `<span class="num">${i+1}</span><span class="play">${playIco}</span>`;
+    row.innerHTML =
+      `<div class="idx">${idxInner}</div>
+       <div class="cell-title">
+         <div class="art" style="background:${cover(i, i+3)}">${glyphSVG(tr.t[0], '')}</div>
+         <div class="title-text">
+           <div class="name">${tr.t}</div>
+           <div class="meta">${tr.a}</div>
+         </div>
+       </div>
+       <div class="cell">${tr.al}</div>
+       <div class="cell">${tr.g}</div>
+       <div class="cell dur">${tr.d}</div>
+       <div class="cell-act"><span class="heart${tr.liked?' liked':''}">${tr.liked?heartFill:heartIco}</span></div>`;
+    list.appendChild(row);
+  });
+
+  // now-playing art in bar matches the playing track (index 2)
+  document.getElementById('npArt').style.background = cover(2, 5);
+  document.getElementById('npArt').innerHTML = glyphSVG('M', '');
+
+  // ── cosmetic interactions ──
+  const playBtn = document.getElementById('playBtn');
+  const pauseIco = '<rect x="6" y="5" width="4" height="14" rx="1.2"/><rect x="14" y="5" width="4" height="14" rx="1.2"/>';
+  const triIco = '<path d="M8 5v14l11-7z"/>';
+  let playing = true;
+  playBtn.addEventListener('click', () => {
+    playing = !playing;
+    document.getElementById('playIcon').innerHTML = playing ? pauseIco : triIco;
+    playBtn.title = playing ? 'Pause' : 'Lecture';
+    document.querySelectorAll('.eq span').forEach(s => s.style.animationPlayState = playing ? 'running' : 'paused');
+  });
+
+  document.querySelectorAll('.ctrl').forEach(c => {
+    if (c.id === 'shuffle' || c.id === 'repeat')
+      c.addEventListener('click', () => c.classList.toggle('on'));
+  });
+  document.querySelectorAll('.util').forEach(u => u.addEventListener('click', () => u.classList.toggle('on')));
+
+  // hearts toggle
+  list.addEventListener('click', e => {
+    const h = e.target.closest('.heart');
+    if (!h) return;
+    h.classList.toggle('liked');
+    h.innerHTML = h.classList.contains('liked') ? heartFill : heartIco;
+  });
+
+  // seek + volume scrub (cosmetic)
+  function bindScrub(id) {
+    const el = document.getElementById(id);
+    const fill = el.querySelector('.fill');
+    const thumb = el.querySelector('.thumb');
+    function set(e) {
+      const r = el.getBoundingClientRect();
+      let p = ((e.clientX - r.left) / r.width) * 100;
+      p = Math.max(0, Math.min(100, p));
+      fill.style.width = p + '%';
+      thumb.style.left = p + '%';
+    }
+    let down = false;
+    el.addEventListener('mousedown', e => { down = true; set(e); });
+    window.addEventListener('mousemove', e => { if (down) set(e); });
+    window.addEventListener('mouseup', () => down = false);
+  }
+  bindScrub('seek');
+  bindScrub('vol');
+
+  // sidebar nav active switching
+  document.querySelectorAll('.nav-item').forEach(n => {
+    n.addEventListener('click', () => {
+      document.querySelectorAll('.nav-item').forEach(x => x.classList.remove('active'));
+      n.classList.add('active');
+    });
+  });
+</script>
+</body>
+</html>
