@@ -242,6 +242,8 @@
   --cover-lg         : 100%;      /* cover full-width sur mobile */
   --control-size     : 48px;
   --tap-target       : 48px;      /* minimum tactile WCAG */
+  --target-min       : 44px;      /* MA-2 audit 2026-06-10 — boutons icône inline :
+                                     24px (AA pointeur fin) → 44px en tactile (SC 2.5.8 AAA) */
 }
 
 
@@ -997,7 +999,12 @@ html[data-mode="light"] {
    *  overlay  fullscreen overlays (cinema, drag, miniplayer flottant)
    *  modal    modals (empilables avec calc(var(--z-modal) + offset))
    *  toast    notifications (au-dessus de toute modale)
-   *  tooltip  ctxmenu, tooltips (top absolu) */
+   *  tooltip  ctxmenu, tooltips (top absolu)
+   *
+   * RÈGLE (audit 2026-06-10) : cette échelle est réservée aux couches de PAGE.
+   * Les z-index littéraux 0-10 à l'intérieur d'un stacking context de composant
+   * (couches locales : ::before/::after, img au-dessus d'un halo, etc.) sont
+   * EXEMPTS — les migrer vers --z-* écraserait l'ordre relatif local. */
   --z-base:     1;
   --z-raised:   10;
   --z-sticky:   100;
