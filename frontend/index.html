@@ -372,7 +372,8 @@
   <div class="modal-s" data-i18n-html="clear_body"></div>
   <div class="modal-btns">
     <button class="mbtn cancel" data-action="close-modal" data-i18n="pl_cancel"></button>
-    <button class="mbtn confirm" data-action="confirm-clear" data-i18n="clear_confirm"></button>
+    <!-- MA-1 audit 2026-06-10 : action destructrice → variante danger (cohérence avec #confirm-modal-ok) -->
+    <button class="mbtn danger" data-action="clear-library" data-i18n="clear_confirm"></button>
   </div>
 </lf-modal>
 

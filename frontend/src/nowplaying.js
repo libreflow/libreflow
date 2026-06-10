@@ -14,6 +14,7 @@ import { clearSelection }  from './selection.js';
 import { renderAmbientFrame }                               from './ambientRenderer.js';
 import { sampleArtColors, boostSat, rgbToHsl, hslToRgb }  from './artcolor.js';
 import { saveCfg }                                          from './cfgsave.js';
+import { prefersReducedMotion }                             from './motion.js';
 
 export let nowPlayingOpen = false;
 let _prevView    = 'all';
@@ -115,6 +116,8 @@ function _startNpAnim(canvas, ctx) {
     _npAnimT += now - last;
     last = now;
     renderAmbientFrame(_npAnimT, canvas, ctx, _npBgMode, _npArtRGB, _npColors);
+    // WCAG 2.3.3 — fond décoratif : sous prefers-reduced-motion, 1 frame statique puis stop.
+    if (prefersReducedMotion()) { _npAnimRaf = null; return; }
     _npAnimRaf = requestAnimationFrame(loop);
   }
   _npAnimRaf = requestAnimationFrame(loop);
@@ -290,12 +293,17 @@ export function onResizeNowPlaying() {
 
 export function updateNowPlaying(track) {
   if (!nowPlayingOpen || !track) return;
+  // Stopper la boucle ambient AVANT le innerHTML de _renderNowPlaying — sinon
+  // son prochain tick rAF dessine sur le canvas détaché (_applyNpBg ne stoppe
+  // qu'après coup).
+  _stopNpAnim();
   _renderNowPlaying(track, _techInfoCache.get(track.path) ?? null);
   const vnp = document.getElementById('vnp');
   if (vnp) { updateAmbient(vnp); _applyNpBg(); }
   _loadTechInfo(track.path).then(info => {
     // Revérifier que `track` est toujours la piste courante après l'await async.
     if (nowPlayingOpen && (get('tracks') || [])[get('curIdx')]?.id === track.id) {
+      _stopNpAnim();
       _renderNowPlaying(track, info);
       const vnp2 = document.getElementById('vnp');
       if (vnp2) { updateAmbient(vnp2); _applyNpBg(); }
