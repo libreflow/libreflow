@@ -34,9 +34,9 @@
   color: var(--text-on-accent);
   font-weight: 600;
   font-size: 14px;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   text-decoration: none;
-  transition: top .15s ease;
+  transition: top var(--motion-fast) var(--ease-standard);
 }
 .skip-link:focus { top: 6px; }
 
@@ -170,8 +170,8 @@
 #organize-modal-bg.on { visibility: visible; opacity: 1; pointer-events: auto; }
 #organize-modal {
   background: var(--bg2);
-  border-radius: 12px;
-  padding: 24px;
+  border-radius: var(--r-card); /* MA-3 harmonisation — radius card unifié */
+  padding: var(--space-6);
   width: min(520px, 90vw);
   max-height: calc(100vh - var(--sp-8)); /* R-C1 : pattern modal unifié */
   overflow-y: auto;
@@ -232,8 +232,8 @@
 #usb-modal-bg.on { visibility: visible; opacity: 1; pointer-events: auto; }
 #usb-modal {
   background: var(--bg2);
-  border-radius: 12px;
-  padding: 24px;
+  border-radius: var(--r-card); /* MA-3 harmonisation — radius card unifié */
+  padding: var(--space-6);
   width: min(480px, 90vw);
   max-height: calc(100vh - var(--sp-8)); /* R-C1 : pattern modal unifié */
   overflow-y: auto;
@@ -301,8 +301,8 @@
 #cd-modal-bg.on { visibility: visible; opacity: 1; pointer-events: auto; }
 #cd-modal {
   background: var(--bg2);
-  border-radius: 12px;
-  padding: 24px;
+  border-radius: var(--r-card); /* MA-3 harmonisation — radius card unifié */
+  padding: var(--space-6);
   width: min(480px, 90vw);
   max-height: calc(100vh - var(--sp-8)); /* R-C1 : pattern modal unifié */
   overflow-y: auto;
@@ -1867,7 +1867,8 @@ body.lib-empty .sb-nav .ni {
 }
 .bc-sep  { color: var(--t3); font-size: var(--fs-caption); }
 .bc-cur  { font-size: var(--fs-md); color: var(--t); font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: min(var(--text-empty-max), 45vw); }
-.bc-link { background: none; border: none; cursor: pointer; color: var(--t3); font-size: var(--fs-md); padding: 0 var(--sp-1); border-radius: var(--r-sm); transition: color var(--ease); white-space: nowrap; }
+/* MA-5 audit 2026-06-10 — SC 1.4.1 : le lien se distingue par l'underline, pas par la couleur seule */
+.bc-link { background: none; border: none; cursor: pointer; color: var(--t3); font-size: var(--fs-md); padding: 0 var(--sp-1); border-radius: var(--r-sm); transition: color var(--ease); white-space: nowrap; text-decoration: underline; text-decoration-color: color-mix(in srgb, currentColor 55%, transparent); text-underline-offset: 3px; }
 .bc-link:hover { color: var(--t); }
 .bc-link:focus-visible { outline: var(--focus-ring); outline-offset: var(--focus-offset); color: var(--t); }
 
@@ -5068,9 +5069,11 @@ html[data-mode="light"] .eq-slider::-moz-range-track { background: var(--bg6); }
 }
 .cinema-album {
   font-size: var(--fs-vw-cin-alb);
-  color: rgba(255,255,255,.42);
+  color: rgba(255,255,255,.50);
   margin-top: var(--sp-1p); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   font-weight: 500; letter-spacing: var(--ls-wide); text-transform: uppercase;
+  /* CR-2 audit 2026-06-10 — le fond ambient peut être clair : scrim texte garanti */
+  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.40);
 }
 
 /* ── Barre de progression cinéma ──────────────────────────── */
@@ -6534,17 +6537,27 @@ html[data-mode="light"] .rv-start-btn  { background: var(--g); }
   line-height: 1.2;
   color: var(--vnp-text);
   letter-spacing: -0.01em;
+  /* CR-2 audit 2026-06-10 — texte sur canvas ambient : scrim texte garanti
+     (le scrim #vnp::after .38 ne suffit pas sur les luminances intermédiaires) */
+  text-shadow: var(--tshadow-title);
 }
 
 .vnp-artist {
   font-size: var(--fs-md, 1rem);
   color: var(--vnp-text2);
+  text-shadow: var(--tshadow-title);
 }
 
 .vnp-album {
   font-size: var(--fs-sm, .875rem);
   color: var(--vnp-text2);
+  text-shadow: var(--tshadow-title);
 }
+
+/* Variante art-light : texte sombre sur scrim blanc — l'ombre sombre créerait un halo */
+#vnp.art-light .vnp-title,
+#vnp.art-light .vnp-artist,
+#vnp.art-light .vnp-album { text-shadow: none; }
 
 .vnp-lk {
   background: none;
