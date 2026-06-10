@@ -7,6 +7,7 @@ import { saveCfg }                             from './cfgsave.js';
 import { toast }                               from './ui.js';
 import { rgbToHsl, hslToRgb, boostSat, sampleArtColors5 } from './artcolor.js';
 import { renderAmbientFrame }                  from './ambientRenderer.js';
+import { prefersReducedMotion }                from './motion.js';
 
 // ── Modes disponibles ────────────────────────────────────────
 export const CINEMA_BG_MODES  = ['ambient', 'liquid', 'aurora', 'amoled'];
@@ -114,6 +115,13 @@ function _startAmbientAnim() {
     }
     const cinArtRGB = _getCinemaState?.()?.cinArtRGB ?? '255,255,255';
     renderAmbientFrame(_ambientT, canvas, _cinBgCtx, cinemaBg, cinArtRGB, _ambientColors);
+    // WCAG 2.3.3 — fond décoratif : sous prefers-reduced-motion, on rend 1 frame
+    // statique du gradient puis on arrête la boucle (pas de crossfade ni breathing).
+    if (prefersReducedMotion()) {
+      _ambientCross   = null;
+      _ambientAnimRaf = null;
+      return;
+    }
     if (_ambientCross) {
       const { snapshot, start, dur } = _ambientCross;
       const p    = Math.min(1, (now - start) / dur);
