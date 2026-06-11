@@ -34,6 +34,15 @@
         "global-shortcut:allow-unregister-all",
         "window-state:default",
         "updater:default",
-        "process:default"
+        "process:default",
+        "cli:default",
+        "log:default",
+        "autostart:allow-enable",
+        "autostart:allow-disable",
+        "autostart:allow-is-enabled",
+        {
+            "identifier": "opener:allow-reveal-item-in-dir",
+            "allow": [{ "path": "**" }]
+        }
     ]
 }

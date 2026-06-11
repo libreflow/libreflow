@@ -7,6 +7,10 @@
 <link rel="icon" href="data:,">
   <link rel="stylesheet" href="/src/design-system.css">
   <link rel="stylesheet" href="/src/style.css">
+  <!-- M2 (audit 2026-06-11) : script classique render-blocking — pose
+       data-mode/data-theme depuis les mirrors localStorage AVANT le premier
+       paint (la cfg IDB est async). CSP script-src 'self' → pas d'inline. -->
+  <script src="/boot-theme.js"></script>
   <script type="module" src="/src/main.js"></script>
 </head>
 <body>
@@ -668,6 +672,11 @@
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
     <span data-i18n="ctx_copy_info">Copier le titre</span>
   </div>
+  <!-- Plugin opener : visible uniquement si la piste a un fichier local (ctxmenu.js showCtxMenu) -->
+  <div class="ctx-item" id="ctx-reveal-file" role="menuitem" tabindex="-1" data-action="ctx-reveal-file" style="display:none">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+    <span data-i18n="ctx_reveal_file">Ouvrir l'emplacement du fichier</span>
+  </div>
   <div class="ctx-item" role="menuitem" tabindex="-1" data-action="ctx-start-radio">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 17a24.12 24.12 0 0 1 0-10"/><path d="M5.5 7a18.5 18.5 0 0 1 0 10"/><path d="M21.5 17a24.12 24.12 0 0 0 0-10"/><path d="M18.5 7a18.5 18.5 0 0 0 0 10"/><circle cx="12" cy="12" r="2"/></svg>
     <span data-i18n="ctx_start_radio">Démarrer une radio</span>
@@ -762,13 +771,15 @@
         <div class="set-section-lbl" data-i18n="set_theme_section">Thème de couleur</div>
         <div class="set-row">
           <div class="theme-swatches">
-            <button class="theme-swatch"    data-theme="green"  style="background:#1db954" data-action="set-theme"  data-i18n-aria="aria_theme_green"  aria-label="Vert"   aria-pressed="false"></button>
-            <button class="theme-swatch on" data-theme="blue"   style="background:#3b82f6" data-action="set-theme"   data-i18n-aria="aria_theme_blue"   aria-label="Bleu"   aria-pressed="true"></button>
-            <button class="theme-swatch"    data-theme="purple" style="background:#a855f7" data-action="set-theme" data-i18n-aria="aria_theme_purple" aria-label="Violet" aria-pressed="false"></button>
-            <button class="theme-swatch"    data-theme="red"    style="background:#ef4444" data-action="set-theme"    data-i18n-aria="aria_theme_red"    aria-label="Rouge"  aria-pressed="false"></button>
-            <button class="theme-swatch"    data-theme="orange" style="background:#f97316" data-action="set-theme" data-i18n-aria="aria_theme_orange" aria-label="Orange" aria-pressed="false"></button>
-            <button class="theme-swatch"    data-theme="pink"   style="background:#ec4899" data-action="set-theme"   data-i18n-aria="aria_theme_pink"   aria-label="Rose"   aria-pressed="false"></button>
-            <button class="theme-swatch"    data-theme="cyan"   style="background:#06b6d4" data-action="set-theme"   data-i18n-aria="aria_theme_cyan"   aria-label="Cyan"   aria-pressed="false"></button>
+            <!-- Couleur du swatch : background var(--g) résolu via la map [data-theme]
+                 de design-system.css (source unique — les hex inline driftaient) -->
+            <button class="theme-swatch"    data-theme="green"  data-action="set-theme"  data-i18n-aria="aria_theme_green"  aria-label="Vert"   aria-pressed="false"></button>
+            <button class="theme-swatch on" data-theme="blue"   data-action="set-theme"   data-i18n-aria="aria_theme_blue"   aria-label="Bleu"   aria-pressed="true"></button>
+            <button class="theme-swatch"    data-theme="purple" data-action="set-theme" data-i18n-aria="aria_theme_purple" aria-label="Violet" aria-pressed="false"></button>
+            <button class="theme-swatch"    data-theme="red"    data-action="set-theme"    data-i18n-aria="aria_theme_red"    aria-label="Rouge"  aria-pressed="false"></button>
+            <button class="theme-swatch"    data-theme="orange" data-action="set-theme" data-i18n-aria="aria_theme_orange" aria-label="Orange" aria-pressed="false"></button>
+            <button class="theme-swatch"    data-theme="pink"   data-action="set-theme"   data-i18n-aria="aria_theme_pink"   aria-label="Rose"   aria-pressed="false"></button>
+            <button class="theme-swatch"    data-theme="cyan"   data-action="set-theme"   data-i18n-aria="aria_theme_cyan"   aria-label="Cyan"   aria-pressed="false"></button>
           </div>
         </div>
         <div class="set-row">
@@ -1079,6 +1090,21 @@
             <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="set-btn-ico"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M9 6V4h6v2"/></svg>
             <span data-i18n="set_cache_btn">Vider les caches</span>
           </button>
+        </div>
+      </div>
+      <div class="set-section">
+        <div class="set-section-lbl" data-i18n="set_startup_section">Démarrage</div>
+        <div class="set-row">
+          <div>
+            <div class="set-row-label" data-i18n="set_autostart_label">Lancer au démarrage de Windows</div>
+            <div class="set-row-sub" data-i18n="set_autostart_sub">Ouvre LibreFlow automatiquement à la connexion</div>
+          </div>
+          <label class="toggle-wrap">
+            <input type="checkbox" id="autostart-chk"
+                   data-i18n-aria="set_autostart_label"
+                   aria-label="Lancer au démarrage de Windows">
+            <span class="toggle-slider"></span>
+          </label>
         </div>
       </div>
       <div class="set-section">

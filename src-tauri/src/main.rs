@@ -18,14 +18,55 @@ use tauri_plugin_window_state::Builder as WindowStateBuilder;
 static MINI_CLOSE_SEQ: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
 
 fn main() {
-    tauri::Builder::default()
+    let builder = tauri::Builder::default()
+        // single-instance DOIT rester le premier plugin enregistré : il court-circuite
+        // le boot des instances surnuméraires et refocalise l'instance existante en
+        // lui transmettant les arguments CLI (association de fichiers).
+        .plugin(tauri_plugin_single_instance::init(|app, argv, _cwd| {
+            if let Some(win) = app.get_webview_window("main") {
+                let _ = win.unminimize();
+                let _ = win.set_focus();
+                if let Err(e) = win.emit("single-instance", &argv) {
+                    eprintln!("[single-instance] emit argv failed: {e}");
+                }
+            }
+        }))
+        .plugin(
+            tauri_plugin_log::Builder::new()
+                .level(log::LevelFilter::Info)
+                .targets([
+                    tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::Stdout),
+                    tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::LogDir {
+                        file_name: Some("libreflow".into()),
+                    }),
+                ])
+                .max_file_size(2_000_000)
+                .rotation_strategy(tauri_plugin_log::RotationStrategy::KeepOne)
+                .build(),
+        )
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
+        // persisted-scope APRÈS fs : persiste entre les sessions le scope fs + asset
+        // accordé à l'exécution (dossiers musique choisis par l'utilisateur).
+        .plugin(tauri_plugin_persisted_scope::init())
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .plugin(WindowStateBuilder::default().build())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
+        .plugin(tauri_plugin_cli::init())
+        .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_autostart::init(
+            tauri_plugin_autostart::MacosLauncher::LaunchAgent,
+            None,
+        ));
+
+    // Bloque les comportements WebView par défaut (Ctrl+P, F5, Ctrl+F, menu contextuel
+    // natif…) en production uniquement — debug garde reload + devtools.
+    #[cfg(not(debug_assertions))]
+    let builder = builder.plugin(tauri_plugin_prevent_default::init());
+
+    builder
         .manage(mini::MiniState(Default::default()))
         .manage(mini::MiniOpenGuard(tokio::sync::Mutex::new(())))
         .manage(watch::WatchState(Default::default()))

@@ -57,6 +57,10 @@ function _waitTauriReady() {
 /** @overload @param {'pick_audio_file'} cmd @returns {Promise<string | null>} */
 /** @overload @param {'pick_image'} cmd @returns {Promise<string | null>} */
 /** @overload @param {'win_close'|'win_minimize'|'win_maximize'|'mini_toggle'|'mini_close'|'watch_folder_stop'|'open_devtools'} cmd @returns {Promise<void>} */
+/** @overload @param {'plugin:cli|cli_matches'} cmd @returns {Promise<{ args?: Record<string, { value?: unknown, occurrences?: number }> }>} */
+/** @overload @param {'plugin:opener|reveal_item_in_dir'} cmd @param {{ path: string }} args @returns {Promise<void>} */
+/** @overload @param {'plugin:autostart|enable'|'plugin:autostart|disable'} cmd @returns {Promise<void>} */
+/** @overload @param {'plugin:autostart|is_enabled'} cmd @returns {Promise<boolean>} */
 /**
  * @param {string} cmd
  * @param {Record<string, unknown>} [args]

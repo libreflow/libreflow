@@ -1639,10 +1639,16 @@ function normalizeType(t) {
  * @param {string} type
  * @param {number} [explicitDur] — only used if a strictly positive number.
  *        0 and negative values fall back to the type default duration.
+ * @param {string} [message] — A11Y-13 (SC 2.2.1): if provided the duration is
+ *        stretched based on message length (~15 chars/s + 1.5 s margin),
+ *        never below the type base. An explicitDur > 0 takes priority.
  */
-function resolveDuration(type, explicitDur) {
+function resolveDuration(type, explicitDur, message) {
   if (typeof explicitDur === 'number' && explicitDur > 0) return explicitDur;
-  return TOAST_DUR[normalizeType(type)];
+  const base = TOAST_DUR[normalizeType(type)];
+  if (!message) return base;
+  const required = Math.ceil(String(message).length / 15) * 1000 + 1500;
+  return Math.max(base, required);
 }
 
 function toastReducer(items, action) {
@@ -1700,6 +1706,18 @@ function toastReducer(items, action) {
   assert(resolveDuration('info', 0)      === 3000,   'resolveDuration: 0 → défaut');
   assert(resolveDuration('info', -1)     === 3000,   'resolveDuration: négatif → défaut');
   assert(resolveDuration('xxx', undefined) === 3000, 'resolveDuration: type inconnu → info default');
+
+  // resolveDuration: message-length scaling (A11Y SC 2.2.1)
+  // Short message (10 chars): required = ceil(10/15)*1000+1500 = 2500 → base 3000 wins
+  assert(resolveDuration('info', undefined, 'short msg') === 3000,
+    'resolveDuration: short message → base duration wins');
+  // Long message (200 chars): required = ceil(200/15)*1000+1500 = 14*1000+1500 = 15500 → 15500 > 8000 base
+  const longMsg = 'x'.repeat(200);
+  assert(resolveDuration('error', undefined, longMsg) === 15500,
+    'resolveDuration: long message → stretched duration returned');
+  // explicitDur still overrides message scaling
+  assert(resolveDuration('info', 5000, longMsg) === 5000,
+    'resolveDuration: explicitDur > 0 overrides message scaling');
 
   // reducer add
   let s = [];
@@ -1936,6 +1954,31 @@ section('components/lf-toast-stack.logic.js -- import-smoke');
     _ko++;
   }
 
+  // Plugins single-instance / cli — helpers de résolution de fichier (import réel)
+  section('utils.js -- normalizePathKey / extractAudioFileArg (import réel)');
+  try {
+    const { normalizePathKey, extractAudioFileArg } = await import('../src/utils.js');
+    assert(normalizePathKey('C:\\Music\\A.flac') === 'c:/music/a.flac',
+      'normalizePathKey: backslashes → slashes + lowercase');
+    assert(normalizePathKey('c:/music/a.flac') === normalizePathKey('C:\\MUSIC\\A.FLAC'),
+      'normalizePathKey: même fichier, casse/séparateurs différents → même clé');
+    assert(normalizePathKey(null) === '' && normalizePathKey(undefined) === '',
+      'normalizePathKey: null/undefined → chaîne vide');
+    assert(extractAudioFileArg(['C:\\Music\\song.mp3']) === 'C:\\Music\\song.mp3',
+      'extractAudioFileArg: fichier audio simple accepté');
+    assert(extractAudioFileArg(['--flag', 'C:\\a.flac']) === 'C:\\a.flac',
+      'extractAudioFileArg: les flags sont ignorés');
+    assert(extractAudioFileArg(['C:\\doc.pdf', 'C:\\b.opus']) === 'C:\\b.opus',
+      'extractAudioFileArg: extension non-audio sautée');
+    assert(extractAudioFileArg(['C:\\..\\evil.mp3']) === null,
+      'extractAudioFileArg: traversée .. rejetée (isSafePath)');
+    assert(extractAudioFileArg([]) === null && extractAudioFileArg(null) === null,
+      'extractAudioFileArg: argv vide/null → null');
+  } catch (e) {
+    console.error('  KO  normalizePathKey/extractAudioFileArg crashed:', e.message);
+    _ko++;
+  }
+
   // Token integrity (B1)
   await require('./theme-tokens.test.cjs').run();
 
@@ -1987,6 +2030,105 @@ section('components/lf-toast-stack.logic.js -- import-smoke');
     assert(/export \{[\s\S]*?cinemaBg/.test(cinSrc),       "cinema.js re-exporte cinemaBg");
     assert(/export let cinemaOpen/.test(cinSrc),            "cinema.js exporte toujours cinemaOpen");
     assert(/export function updateCinema/.test(cinSrc),     "cinema.js exporte toujours updateCinema");
+  }
+
+  // =============================================================================
+  // app.js — régression pochette : .playing-row après changement de piste
+  // PLAY_STATE (qui pose .playing-row) est émis pendant audio.play(), AVANT
+  // TRACK_CHANGE (qui déplace .act). patchActiveTrack() strippe .playing-row de
+  // l'ancienne ligne et pose .act nu sur la nouvelle → l'icône de la pochette
+  // reste ▶ pendant la lecture. Le handler TRACK_CHANGE doit donc restaurer
+  // l'état via patchPlayState(!audio.paused) APRÈS patchActiveTrack().
+  // =============================================================================
+  {
+    const fs = require('fs'), path = require('path');
+    const root = path.join(__dirname, '../..');
+    const read = f => fs.readFileSync(path.join(root, f), 'utf8');
+
+    section('app.js -- TRACK_CHANGE restaure .playing-row (icône pochette)');
+
+    const appSrc = read('frontend/src/app.js');
+    const m = /on\(EVENTS\.TRACK_CHANGE[\s\S]*?\}\);/.exec(appSrc);
+    assert(!!m, 'handler TRACK_CHANGE présent dans app.js');
+    const handler = m ? m[0] : '';
+    const iActive = handler.indexOf('patchActiveTrack()');
+    const iPlay   = handler.indexOf('patchPlayState(!audio.paused)');
+    assert(iActive >= 0, 'TRACK_CHANGE appelle patchActiveTrack()');
+    assert(iPlay > iActive,
+      'TRACK_CHANGE appelle patchPlayState(!audio.paused) après patchActiveTrack()');
+  }
+
+  // =============================================================================
+  // artLoader — pochettes qui disparaissent / n'apparaissent pas (2026-06-11)
+  // _domBlobUrls n'est alimentée que par _patchArtDOM (chemin liste/prefetch) ;
+  // les grilles (renderer-grids), la file (queue.js, <img src=t.art> inline),
+  // le drill et les rows re-rendues par thtml affichent des blob: URLs hors Set.
+  // À saturation du cache (MAX_ART_CACHE), _evict révoquait une URL pourtant
+  // affichée → <img> cassée. Idem cacheArt() qui révoquait l'entrée existante.
+  // Garde requise : confirmation DOM réelle (img[src=...]) avant TOUTE révocation.
+  // =============================================================================
+  {
+    const fs = require('fs'), path = require('path');
+    const root = path.join(__dirname, '../..');
+    const read = f => fs.readFileSync(path.join(root, f), 'utf8');
+
+    section('artLoader -- aucune révocation de blob: URL encore affichée');
+
+    const alSrc = read('frontend/src/artLoader.js');
+
+    const evictBody = /function _evict\(\)[\s\S]*?\n\}/.exec(alSrc)?.[0] || '';
+    assert(evictBody.length > 0, '_evict présent dans artLoader.js');
+    assert(/querySelector\(\s*`img\[src="/.test(evictBody),
+      '_evict confirme contre le DOM réel (img[src=...]) avant de révoquer — la Set _domBlobUrls ne voit pas les grilles/queue/thtml');
+
+    const cacheArtBody = /export function cacheArt[\s\S]*?\n\}/.exec(alSrc)?.[0] || '';
+    assert(cacheArtBody.length > 0, 'cacheArt présent dans artLoader.js');
+    assert(/querySelector\(\s*`img\[src="/.test(cacheArtBody),
+      'cacheArt ne révoque pas une URL existante encore affichée (re-scan/tag-edit)');
+  }
+
+  // =============================================================================
+  // Cards Albums — uniformité (audit 2026-06-11, AC1-AC8)
+  // =============================================================================
+  {
+    const fs = require('fs'), path = require('path');
+    const root = path.join(__dirname, '../..');
+    const read = f => fs.readFileSync(path.join(root, f), 'utf8');
+
+    section('cards Albums -- uniformité (AC1-AC8)');
+
+    const rgSrc = read('frontend/src/renderer-grids.js');
+    const ssSrc = read('frontend/src/style.css');
+    const frSrc = read('frontend/src/i18n.fr.js');
+    const enSrc = read('frontend/src/i18n.en.js');
+
+    // AC1 : .card-info en colonne flex (blockifie les spans → ellipsis effectifs)
+    assert(/\.card-info\s*\{[^}]*flex-direction:\s*column/.test(ssSrc),
+      '.card-info est une colonne flex (ellipsis/marges des spans effectifs)');
+
+    // AC2 : plus de clé fantôme — sans_album (existante) utilisée
+    assert(!/i18n\('unknown_album'/.test(rgSrc),
+      "renderer-grids n'utilise plus la clé fantôme 'unknown_album'");
+    assert(/i18n\('sans_album'\)/.test(rgSrc),
+      'card Albums : fallback nom via sans_album');
+
+    // AC3 : artiste échappé dans l aria-label
+    assert(/esc\(' — ' \+ a\.artist\)/.test(rgSrc),
+      'aria-label de la card : artiste passé par esc() (§13)');
+
+    // AC4 : réconciliation multi-artistes + fallback artiste
+    for (const k of ['multi_artists', 'n_albums', 'dur_min']) {
+      assert(new RegExp(`${k}:`).test(frSrc), `i18n.fr possède ${k}`);
+      assert(new RegExp(`${k}:`).test(enSrc), `i18n.en possède ${k}`);
+    }
+    assert(/isMulti/.test(rgSrc) && /unknown_artist/.test(rgSrc),
+      'card Albums : sub jamais vide (Multi-artistes / Artiste inconnu)');
+
+    // AC6 : drill header sans pluriels hardcodés FR
+    assert(!/titre\$\{/.test(rgSrc) && !/album\$\{/.test(rgSrc),
+      'drill header : pluriels via i18n (plus de hardcode FR)');
+    assert(!/Lire tout|Mélanger/.test(rgSrc),
+      'drill header : libellés boutons via i18n');
   }
 
   // lf-modal reducer (Phase 1)

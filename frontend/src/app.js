@@ -28,7 +28,7 @@ import { initDevices }                                 from './devices.js';
 import { cleanupCdCache }                              from './cdaudio.js';
 import { initViz, startViz, stopViz, updateVizColor, setVizMode, getVizMode, setVizEnabled, getVizEnabled } from './viz.js';
 import { sleepFading, setSleepFading, sleepEndOfTrack, toggleSleepMenu, setSleepTimer, setSleepEndOfTrack, setSleepCustom, cancelSleepTimer } from './sleep.js';
-import { esc, fmt, fmtd, extEmoji, normTag, mainArtist, validYear } from './utils.js';
+import { esc, fmt, fmtd, extEmoji, normTag, mainArtist, validYear, normalizePathKey, extractAudioFileArg } from './utils.js';
 import { radioActive, startRadio, stopRadio, resetRadio, radioRefillQueue, toggleRadio, ctxStartRadio, radioRegenerateFromCurrent, radioSaveAsPlaylist, getRadioQueue, renderRadioView, openRadioView, syncRadioLibBar, getRadioSeedId, initRadioSeedId } from './radio.js';
 import { initWatchPath, getWatchPath, stopWatchFolder, updateWatchUI, importPaths, startWatchNative } from './watchfolder.js'; // Bug #7 fix : startWatchNative ajouté
 import { renderStats, getHeatPeriod, initHeatPeriod } from './stats.js';
@@ -73,7 +73,7 @@ import {
   initSettingsVars, getTheme, getDynColor, getDisplayMode, isShortcutsOpen,
   switchSetTab, openSettings, closeSettings,
   setTheme, applyTheme, setDynColor,
-  applyArtColor, clearArtColor, animateArtChange, _updateArtBlur,
+  applyArtColor, clearArtColor, _updateArtBlur,
   closeShortcuts, toggleShortcuts,
   setMode, toggleMode,
   _syncVizBtns,
@@ -91,7 +91,7 @@ import { _showSkeletonRows,
          makeLikeBtn, makeAddBtn, artPlaceholder, hlText, thtml,
          playById, patchActiveTrack, patchPlayState, patchTrackEl,
          scheduleStatsUpdate, updateStats, updateSidebarCounts,
-         _withVT, animateViewChange, scrollToCurrentTrack } from './renderer.js';
+         _withVT, scrollToCurrentTrack } from './renderer.js';
 // ── allplayerui.js (ARCH-1) ──────────────────────────────────────────────────
 import { _allPlayerUI } from './allplayerui.js';
 import { showCtxMenu, closeCtxMenu, ctxToggleLike, ctxDeleteTrack, ctxEditTags, ctxGoToArtist, ctxGoToAlbum, ctxNewPlaylist, ctxRemoveFromPlaylist, ctxSmartPlaylist, ctxPlayNext, ctxAddToQueueEnd, ctxCopyInfo } from './ctxmenu.js';
@@ -134,6 +134,7 @@ import { setAriaValueText }                                    from './a11y.js';
  * @property {string|null}  url         - asset:// URL (set on first play, null until then)
  * @property {File|null}    file        - Temporary File object during tag loading, null afterward
  * @property {number|undefined} rgGain  - ReplayGain track gain in dB, if analysed
+ * @property {{hue:number,sat:number,light:number}|undefined} [_npHsl] - Transient: dominant hue/sat/light for now-playing lighting (not persisted to IDB)
  */
 
 /**
@@ -255,7 +256,11 @@ subscribe('albumDetailSort',  v => { albumDetailSort  = v; });
 // ── Bus event handlers ────────────────────────────────────────────────────────
 // TRACK_CHANGE : player.js a démarré une nouvelle piste → mettre à jour l'UI
 on(EVENTS.TRACK_CHANGE, ({ track, idx }) => {
-  updateBar(); patchActiveTrack(); _allPlayerUI();
+  // PLAY_STATE (play event) part pendant audio.play(), AVANT ce handler — et
+  // patchActiveTrack() strippe .playing-row en déplaçant .act. Restaurer l'état
+  // de lecture sur la nouvelle ligne active, sinon l'icône pochette reste ▶.
+  if (radioActive) radioRefillQueue(); // invariant §2 — refill BEFORE bar update
+  updateBar(); patchActiveTrack(); patchPlayState(!audio.paused); _allPlayerUI();
 });
 // PLAY_STATE : play ou pause → mettre à jour la ligne active + widgets
 on(EVENTS.PLAY_STATE, ({ playing }) => {
@@ -334,6 +339,22 @@ function _applyBootUI(cfgObj) {
       saveCfg();
     });
   }
+  // Plugin autostart — l'état vit dans l'OS (registre), pas dans cfg : lecture live
+  const autostartChk = document.getElementById('autostart-chk');
+  if (autostartChk) {
+    invoke('plugin:autostart|is_enabled', undefined, { timeout: 3000 })
+      .then((on) => { autostartChk.checked = !!on; })
+      .catch(e => console.warn('[app:autostart] is_enabled failed:', e));
+    autostartChk.addEventListener('change', async () => {
+      try {
+        await invoke(autostartChk.checked ? 'plugin:autostart|enable' : 'plugin:autostart|disable');
+      } catch (e) {
+        console.warn('[app:autostart] toggle failed:', e);
+        autostartChk.checked = !autostartChk.checked; // revert UI — l'OS n'a pas appliqué
+        toast(i18n('t_autostart_err') || 'Impossible de modifier le démarrage automatique', 'error');
+      }
+    });
+  }
   // CONFORMITÉ-CD : restaurer l'opt-in copyright CD au boot (sinon false → warning à chaque session)
   set('cdCopyrightAck', cfgObj?.cdCopyrightAck === true);
   // UX-Ergo : restaurer le dernier onglet settings ouvert
@@ -355,6 +376,25 @@ function _applyBootUI(cfgObj) {
   if (checkUpdateBtn) {
     checkUpdateBtn.addEventListener('click', () => checkForUpdateManual(checkUpdateBtn));
   }
+}
+
+/**
+ * Joue une piste de la bibliothèque à partir d'un chemin de fichier
+ * (plugin single-instance / cli — association de fichiers Windows).
+ * Scan linéaire assumé : _trackIdxMap est indexé par id, pas par chemin, et
+ * l'action est un one-shot utilisateur rare (jamais dans une boucle de rendu).
+ * @param {string|null} rawPath
+ */
+function _playFileArg(rawPath) {
+  if (!rawPath) return;
+  const key = normalizePathKey(rawPath);
+  const t = (get('tracks') || []).find(tr => tr.path && normalizePathKey(tr.path) === key);
+  if (!t) {
+    toast(i18n('t_file_not_in_lib') || 'Ce fichier n\'est pas dans la bibliothèque — importez son dossier d\'abord', 'info');
+    return;
+  }
+  // Route via la file manuelle : next() gère les pistes hors filtre (_playDirect)
+  if (addToQueueNext(t.id)) next(true);
 }
 
 async function boot() {
@@ -603,7 +643,7 @@ async function boot() {
       _retryArtTimer = setTimeout(async () => { // FIX #21 — stocker le timer
         // Afficher un toast spinner pendant le chargement des pochettes manquantes
         const dismissSpinner = toast(i18n('t_artwork_retry', _retryList.length), 'loading');
-        const BATCH = 4;
+        const BATCH = CFG.TAG_LOAD_CONCURRENCY;
         for (let i = 0; i < _retryList.length; i += BATCH) {
           const batch = _retryList.slice(i, i + BATCH).filter(t => _trackIdxMap.has(t.id));
           if (!batch.length) continue;
@@ -687,6 +727,18 @@ async function boot() {
     else if (cmd === 'prev')        prev();
     else if (cmd === 'stop')        { audio.pause(); audio.currentTime = 0; setIcon(false); patchPlayState(false); }
   }).then(u => _unlisteners.push(u));
+  // ── Plugin single-instance : 2e invocation (« Ouvrir avec » sur un fichier) ──
+  listen('single-instance', (e) => {
+    const argv = Array.isArray(e.payload) ? e.payload : [];
+    _playFileArg(extractAudioFileArg(argv.slice(1))); // argv[0] = chemin de l'exe
+  }).then(u => _unlisteners.push(u));
+  // ── Plugin cli : fichier passé au premier lancement (association de fichiers) ──
+  invoke('plugin:cli|cli_matches', undefined, { timeout: 3000 })
+    .then((m) => {
+      const v = m?.args?.file?.value;
+      if (typeof v === 'string' && v) _playFileArg(extractAudioFileArg([v]));
+    })
+    .catch(e => console.warn('[app:cli_matches]', e));
   window.addEventListener('pagehide', () => { _unlisteners.forEach(u => { try { u(); } catch(e) { console.warn('[app:unlisten]', e); } }); });
 
   // ── Sauvegarde complète avant fermeture ──────────────────────────────────

@@ -131,6 +131,10 @@ export function showCtxMenu(e, trackId) {
   const rgBtn = document.getElementById('ctx-write-rg');
   if (rgBtn) rgBtn.style.display = (t && t.rgGain !== undefined && t.path) ? '' : 'none';
 
+  // Plugin opener — visible seulement si la piste a un fichier local
+  const revealBtn = document.getElementById('ctx-reveal-file');
+  if (revealBtn) revealBtn.style.display = (t && t.path) ? '' : 'none';
+
   // Position — calculée avant d'ouvrir pour éviter le flash
   // Le menu est déjà rendu (display block) mais invisible (opacity 0)
   // offsetWidth/Height sont donc valides sans toggler display
@@ -396,6 +400,19 @@ export async function ctxDeleteTrack() {
     },
     UNDO_MS
   );
+}
+
+/** Révèle le fichier de la piste dans l'Explorateur (plugin opener, reveal only). */
+export async function ctxRevealFile() {
+  const t = (_trackIdxMap.has(get('ctxTrackId')) ? get('tracks')[_trackIdxMap.get(get('ctxTrackId'))] : undefined);
+  closeCtxMenu();
+  if (!t?.path) return;
+  try {
+    await invoke('plugin:opener|reveal_item_in_dir', { path: t.path });
+  } catch (e) {
+    console.warn('[ctxRevealFile]', e);
+    toast(i18n('t_reveal_err') || 'Impossible d\'ouvrir l\'emplacement du fichier', 'error');
+  }
 }
 
 // ── F-7 — Écriture ReplayGain dans les tags fichier ──────────────────────────

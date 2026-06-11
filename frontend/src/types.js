@@ -218,7 +218,7 @@
 /** @typedef {'clear-selection'|'sel-add-playlist'|'sel-toggle-like'|'sel-batch-tag-edit'|'sel-remove'|'sel-add-batch'|'bte-cover-click'|'bte-cover-clear'|'close-batch-tag-modal'|'confirm-batch-tag-edit'} SelectionAction */
 
 /** Actions menu contextuel */
-/** @typedef {'ctx-toggle-like'|'ctx-delete'|'ctx-edit-tags'|'ctx-go-artist'|'ctx-go-album'|'ctx-new-playlist'|'ctx-remove-pl'|'ctx-smart-playlist'|'ctx-play-next'|'ctx-add-queue-end'|'ctx-copy-info'|'add-track-to-pl'} CtxMenuAction */
+/** @typedef {'ctx-toggle-like'|'ctx-delete'|'ctx-edit-tags'|'ctx-go-artist'|'ctx-go-album'|'ctx-new-playlist'|'ctx-remove-pl'|'ctx-smart-playlist'|'ctx-play-next'|'ctx-add-queue-end'|'ctx-copy-info'|'ctx-reveal-file'|'add-track-to-pl'} CtxMenuAction */
 
 /** Actions doublons */
 /** @typedef {'close-dupes'|'detect-dupes'|'delete-all-dupes'|'remove-dupe-track'} DupesAction */

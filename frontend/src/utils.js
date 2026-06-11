@@ -75,6 +75,27 @@ export function isSafePath(p) {
   return true;
 }
 
+/** Normalise un chemin pour comparaison (séparateurs unifiés + casse Windows). */
+export function normalizePathKey(p) {
+  return String(p || '').replace(/\\/g, '/').toLowerCase();
+}
+
+/** Extensions audio acceptées — miroir de la liste du scanner Rust (commands.rs). */
+const AUDIO_EXTS = ['mp3', 'flac', 'aac', 'm4a', 'ogg', 'opus', 'wav', 'wma', 'aiff', 'ape', 'alac'];
+
+/** Premier argument d'argv ressemblant à un fichier audio sûr (ignore les flags
+ *  et les chemins rejetés par isSafePath). Pour single-instance / CLI file arg. */
+export function extractAudioFileArg(argv) {
+  if (!Array.isArray(argv)) return null;
+  for (const a of argv) {
+    if (typeof a !== 'string' || !a || a.startsWith('-')) continue;
+    if (!isSafePath(a)) continue;
+    const ext = a.slice(a.lastIndexOf('.') + 1).toLowerCase();
+    if (AUDIO_EXTS.includes(ext)) return a;
+  }
+  return null;
+}
+
 /** Extract the primary artist from a raw tag, stripping feat./collab suffixes. */
 export function mainArtist(raw) {
   if (!raw) return '';
