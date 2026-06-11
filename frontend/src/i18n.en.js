@@ -175,8 +175,10 @@ export const en = {
     ctx_play_next:     'Play next',
     ctx_queue_end:     'Add to queue',
     ctx_copy_info:     'Copy track info',
+    ctx_copy_path:     'Copy file path',
     ctx_reveal_file:   'Show in File Explorer',
     t_reveal_err:      'Could not open the file location',
+    t_copy_err:        'Could not copy to clipboard',
     t_file_not_in_lib: 'This file is not in the library — import its folder first',
     ctx_start_radio:   'Start radio',
     ctx_delete_from_lib: 'Remove from library',
@@ -425,6 +427,7 @@ export const en = {
     // Toast extras
     t_watch_active:       (path) => `👁 Watching: ${path}`,
     t_watch_off:          '👁 Watch folder disabled',
+    t_watch_error:        '⚠ Watch stopped — folder unreachable',
     t_new_files:          (n) => `✅ ${n} new file${n!==1?'s':''} detected`,
     t_rescan_empty:        '⚠ No tracks to rescan',
     t_rescan_start:        '🔄 Rescanning…',

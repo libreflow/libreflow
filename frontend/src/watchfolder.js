@@ -165,6 +165,7 @@ let _idSeq        = 0;     // compteur pour UUID fallback garanti unique
 let _watchDebTimer = null;
 let _watchRawPaths = [];
 let _modUnlisten  = null; // unlistener pour 'watch-modified-files'
+let _errUnlisten  = null; // unlistener pour 'watch-error' (watcher Rust mort)
 let _modDebTimer  = null; // debounce timer pour les modifications
 let _modRawPaths  = [];   // buffer des paths de fichiers modifiés
 let _watchActive  = false; // true si le watcher natif tourne
@@ -229,6 +230,7 @@ export async function startWatchNative() {
   // Nettoyage de l'ancien listener si existant
   if (_watchUnlisten) { _watchUnlisten(); _watchUnlisten = null; }
   if (_modUnlisten) { _modUnlisten(); _modUnlisten = null; }
+  if (_errUnlisten) { _errUnlisten(); _errUnlisten = null; }
   if (_modDebTimer) { clearTimeout(_modDebTimer); _modDebTimer = null; }
   _modRawPaths = [];
   if (_starting) return; // BUG-11 FIX : éviter les appels parallèles
@@ -276,12 +278,21 @@ export async function startWatchNative() {
         if (batch.length) _reloadTagsForPaths(batch);
       }, CFG.WATCH_DEBOUNCE_MS);
     });
-    _watchActive = true; // both listeners confirmed up before marking watcher active
+
+    // Watcher Rust mort (dossier supprimé, NAS éjecté…) : surfacer l'erreur au
+    // lieu de laisser croire que la surveillance tourne toujours.
+    _errUnlisten = await listen('watch-error', (event) => {
+      console.warn('[watchfolder] watcher interrompu :', event.payload);
+      _watchActive = false;
+      toast(i18n('t_watch_error'), 'error');
+    });
+    _watchActive = true; // all listeners confirmed up before marking watcher active
   } catch (e) {
     // Nettoyer un enregistrement partiel (ex. : 1er listen OK, 2e en échec),
     // sinon le listener Tauri orphelin ne serait jamais désinscrit.
     if (_watchUnlisten) { _watchUnlisten(); _watchUnlisten = null; }
     if (_modUnlisten)   { _modUnlisten();   _modUnlisten   = null; }
+    if (_errUnlisten)   { _errUnlisten();   _errUnlisten   = null; }
     // Fallback : pas de surveillance native — log silencieux
     console.warn('[watchfolder] surveillance native indisponible :', e);
   } finally {
@@ -300,6 +311,7 @@ export function stopWatchFolder(silent = false, keepPath = false) {
   if (_watchDebTimer) { clearTimeout(_watchDebTimer); _watchDebTimer = null; }
   _watchRawPaths = [];
   if (_modUnlisten) { _modUnlisten(); _modUnlisten = null; }
+  if (_errUnlisten) { _errUnlisten(); _errUnlisten = null; }
   if (_modDebTimer) { clearTimeout(_modDebTimer); _modDebTimer = null; }
   _modRawPaths = [];
   invoke('watch_folder_stop').catch(e => console.warn('[watchfolder:watch_folder_stop]', e));

@@ -183,7 +183,7 @@ function _handlePage(listEl, dir) {
   // M10 (audit bugs visuels 2026-06-11) : VIRT.ROW_H = hauteur runtime (suit le
   // zoom compact/normal/comfortable) — la constante statique faisait sauter
   // PageUp/Down ~25 % trop court en compact et au-delà du viewport en comfortable.
-  const rowH = VIRT.ROW_H || CFG.VIRT_ROW_H || 36;
+  const rowH = VIRT.ROW_H || CFG.VIRT_ROW_H;
   const pageSize = Math.max(1, Math.floor(listEl.clientHeight / rowH) - 1);
 
   const focused = document.activeElement?.closest('.tr:not(.tr-skel)');

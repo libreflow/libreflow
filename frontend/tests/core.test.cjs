@@ -1979,6 +1979,37 @@ section('components/lf-toast-stack.logic.js -- import-smoke');
     _ko++;
   }
 
+  // SMTC + clipboard-manager — helpers purs (import réel)
+  section('utils.js -- trackCopyText / smtcMetaFromTrack (import réel)');
+  try {
+    const { trackCopyText, smtcMetaFromTrack } = await import('../src/utils.js');
+    assert(trackCopyText({ name: 'Song', artist: 'Artist' }, 'Artiste inconnu') === 'Artist — Song',
+      'trackCopyText: artiste connu → « Artiste — Titre »');
+    assert(trackCopyText({ name: 'Song', artist: 'Artiste inconnu' }, 'Artiste inconnu') === 'Song',
+      'trackCopyText: artiste inconnu (i18n) → titre seul');
+    assert(trackCopyText({ name: 'Song', artist: 'Unknown Artist' }, 'Artiste inconnu') === 'Song',
+      'trackCopyText: Unknown Artist littéral → titre seul');
+    assert(trackCopyText(null, 'x') === '' && trackCopyText({}, 'x') === '',
+      'trackCopyText: piste null/sans nom → chaîne vide');
+    const m = smtcMetaFromTrack({ name: 'T', artist: 'A', artistFull: 'A feat. B', album: 'Al', path: 'C:\\m\\t.flac' }, 200.5);
+    assert(m.title === 'T' && m.artist === 'A feat. B' && m.album === 'Al',
+      'smtcMetaFromTrack: artistFull prioritaire, champs mappés');
+    assert(m.path === 'C:\\m\\t.flac' && m.durationSecs === 200.5,
+      'smtcMetaFromTrack: path safe conservé + durée finie');
+    assert(smtcMetaFromTrack({ name: 'T', path: 'C:\\..\\evil.flac' }, NaN).path === null,
+      'smtcMetaFromTrack: path traversée .. rejeté (isSafePath)');
+    assert(smtcMetaFromTrack({ name: 'T' }, NaN).durationSecs === null
+        && smtcMetaFromTrack({ name: 'T' }, -3).durationSecs === null,
+      'smtcMetaFromTrack: durée NaN/négative → null');
+    assert(smtcMetaFromTrack(null, 10) === null,
+      'smtcMetaFromTrack: piste null → null');
+    assert(smtcMetaFromTrack({ name: 'x'.repeat(500) }, 10).title.length === 256,
+      'smtcMetaFromTrack: titre cappé à 256 chars (tags non fiables)');
+  } catch (e) {
+    console.error('  KO  trackCopyText/smtcMetaFromTrack crashed:', e.message);
+    _ko++;
+  }
+
   // Token integrity (B1)
   await require('./theme-tokens.test.cjs').run();
 

@@ -183,8 +183,10 @@ export const fr = {
     ctx_play_next:     'Lire ensuite',
     ctx_queue_end:     'Ajouter à la file',
     ctx_copy_info:     'Copier le titre',
+    ctx_copy_path:     'Copier le chemin du fichier',
     ctx_reveal_file:   'Ouvrir l\'emplacement du fichier',
     t_reveal_err:      'Impossible d\'ouvrir l\'emplacement du fichier',
+    t_copy_err:        'Copie dans le presse-papiers impossible',
     t_file_not_in_lib: 'Ce fichier n\'est pas dans la bibliothèque — importez son dossier d\'abord',
     ctx_start_radio:   'Démarrer une radio',
     ctx_delete_from_lib: 'Supprimer de la bibliothèque',
@@ -438,6 +440,7 @@ export const fr = {
     // Toast extras
     t_watch_active:       (path) => `👁 Surveillance : ${path}`,
     t_watch_off:          '👁 Surveillance désactivée',
+    t_watch_error:        '⚠ Surveillance interrompue — dossier inaccessible',
     t_new_files:          (n) => `✅ ${n} nouveau${n!==1?'x':''} fichier${n!==1?'s':''} détecté${n!==1?'s':''}`,
     t_rescan_empty:        '⚠ Aucun titre à rescanner',
     t_rescan_start:        '🔄 Rescan en cours…',

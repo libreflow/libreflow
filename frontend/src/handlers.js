@@ -56,7 +56,8 @@ import { showCtxMenu, closeCtxMenu,
          ctxGoToArtist, ctxGoToAlbum,
          ctxNewPlaylist, ctxRemoveFromPlaylist, ctxSmartPlaylist,
          ctxPlayNext, ctxAddToQueueEnd, ctxCopyInfo, ctxWriteRG,
-         ctxMoveTrackUp, ctxMoveTrackDown, ctxRevealFile } from './ctxmenu.js';
+         ctxMoveTrackUp, ctxMoveTrackDown, ctxRevealFile,
+         ctxCopyPath } from './ctxmenu.js';
 import { toggleCinema, closeCinema, cycleCinemaBg,
          toggleCinemaFullscreen, getCinArtRGB }               from './cinema.js';
 import { openRadioView, ctxStartRadio,
@@ -229,6 +230,7 @@ const _ACTIONS = {
   'ctx-play-next':         ()    => ctxPlayNext(),
   'ctx-add-queue-end':     ()    => ctxAddToQueueEnd(),
   'ctx-copy-info':         ()    => ctxCopyInfo(),
+  'ctx-copy-path':         ()    => ctxCopyPath(),
   'ctx-reveal-file':       ()    => ctxRevealFile(),
   'add-track-to-pl':       btn  => { addTrackToPlaylist(btn.dataset.trackId, btn.dataset.plId); closeCtxMenu(); },
 

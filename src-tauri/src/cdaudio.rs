@@ -40,7 +40,7 @@ fn rip_cancel_lock() -> std::sync::MutexGuard<'static, Option<HashMap<String, Ar
     let mut guard = match RIP_CANCEL.lock() {
         Ok(g) => g,
         Err(poisoned) => {
-            eprintln!("[cdaudio] WARN: RIP_CANCEL mutex was poisoned; recovering");
+            log::warn!("[cdaudio] WARN: RIP_CANCEL mutex was poisoned; recovering");
             poisoned.into_inner()
         }
     };
@@ -80,7 +80,15 @@ fn unregister_cancel(rip_id: &str) {
 // ── Tauri commands ────────────────────────────────────────────────────────────
 
 #[tauri::command]
-pub fn cd_read_toc(drive: String) -> Result<CdToc, String> {
+pub async fn cd_read_toc(drive: String) -> Result<CdToc, String> {
+    // DeviceIoControl bloquant (spin-up disque = secondes) hors du thread
+    // principal — appelée aussi par le polling list_drives côté devices.js.
+    tokio::task::spawn_blocking(move || cd_read_toc_blocking(drive))
+        .await
+        .map_err(|e| format!("cd_read_toc: spawn_blocking: {e}"))?
+}
+
+pub(crate) fn cd_read_toc_blocking(drive: String) -> Result<CdToc, String> {
     #[cfg(target_os = "windows")]
     {
         windows_impl::read_toc(&drive)
@@ -518,14 +526,14 @@ mod windows_impl {
                             // saturer le pool spawn_blocking sur un CD irrécupérable.
                             self.consecutive_errors += 1;
                             if self.consecutive_errors >= MAX_CONSECUTIVE_ERRORS {
-                                eprintln!(
+                                log::error!(
                                     "[cdaudio] ERROR: LBA {} — {} échecs de lecture consécutifs; abandon du rip",
                                     lba, self.consecutive_errors
                                 );
                                 self.aborted.store(true, Ordering::SeqCst);
                                 return false; // EOF forcé — read_samples détectera l'abandon
                             }
-                            eprintln!(
+                            log::warn!(
                                 "[cdaudio] WARN: LBA {} — read failed after 3 retries; padding {} sectors with silence ({}/{})",
                                 lba, chunk, self.consecutive_errors, MAX_CONSECUTIVE_ERRORS
                             );
@@ -556,7 +564,7 @@ mod windows_impl {
                         "sector_total":   self.sectors_total,
                     }),
                 ) {
-                    eprintln!("[cdaudio] emit cd-rip-progress failed: {e}");
+                    log::warn!("[cdaudio] emit cd-rip-progress failed: {e}");
                 }
                 self.last_emit = std::time::Instant::now();
             }
@@ -730,7 +738,7 @@ mod windows_impl {
                 "sector_total": total_sectors,
             }),
         ) {
-            eprintln!("[cdaudio] emit cd-rip-progress 100% failed: {e}");
+            log::warn!("[cdaudio] emit cd-rip-progress 100% failed: {e}");
         }
 
         Ok(())

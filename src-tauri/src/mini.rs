@@ -30,10 +30,10 @@ pub async fn open_mini(app: &AppHandle) -> Result<(), String> {
 fn do_open(app: &AppHandle) -> Result<(), String> {
     if let Some(w) = app.get_webview_window("mini") {
         if let Err(e) = w.show() {
-            eprintln!("[mini:do_open] show failed: {e}");
+            log::warn!("[mini:do_open] show failed: {e}");
         }
         if let Err(e) = w.set_focus() {
-            eprintln!("[mini:do_open] set_focus failed: {e}");
+            log::warn!("[mini:do_open] set_focus failed: {e}");
         }
         return Ok(());
     }
@@ -69,7 +69,7 @@ fn create_mini_window(app: &AppHandle) -> Result<(), String> {
         let y = ((screen_h / scale) - mini_h - margin) * scale;
 
         if let Err(e) = mini.set_position(tauri::PhysicalPosition::new(x as i32, y as i32)) {
-            eprintln!("[mini:create] set_position failed: {e}");
+            log::warn!("[mini:create] set_position failed: {e}");
         }
     }
 
@@ -90,7 +90,7 @@ pub async fn mini_close(app: AppHandle) -> Result<(), String> {
     // Restaurer la fenêtre principale
     if let Some(main_win) = app.get_webview_window("main") {
         if let Err(e) = main_win.unminimize() {
-            eprintln!("[mini_close] unminimize failed: {e}");
+            log::warn!("[mini_close] unminimize failed: {e}");
         }
         // Remettre une taille raisonnable si la fenêtre était minimisée
         // (le plugin window-state restaure la dernière taille connue,
@@ -101,7 +101,7 @@ pub async fn mini_close(app: AppHandle) -> Result<(), String> {
             .unwrap_or(true);
         if needs_resize {
             if let Err(e) = main_win.set_size(tauri::LogicalSize::new(1100.0_f64, 700.0_f64)) {
-                eprintln!("[mini_close] set_size failed: {e}");
+                log::warn!("[mini_close] set_size failed: {e}");
             }
             // Centrer sur le moniteur courant
             if let Ok(Some(monitor)) = main_win.current_monitor() {
@@ -110,12 +110,12 @@ pub async fn mini_close(app: AppHandle) -> Result<(), String> {
                 let x = ((sw - 1100.0) / 2.0 * monitor.scale_factor()) as i32;
                 let y = ((sh - 700.0) / 2.0 * monitor.scale_factor()) as i32;
                 if let Err(e) = main_win.set_position(tauri::PhysicalPosition::new(x, y)) {
-                    eprintln!("[mini_close] set_position failed: {e}");
+                    log::warn!("[mini_close] set_position failed: {e}");
                 }
             }
         }
         if let Err(e) = main_win.set_focus() {
-            eprintln!("[mini_close] set_focus failed: {e}");
+            log::warn!("[mini_close] set_focus failed: {e}");
         }
     }
     Ok(())
@@ -126,7 +126,7 @@ pub async fn mini_update(app: AppHandle, data: Value) -> Result<(), String> {
     *app.state::<MiniState>().0.lock().await = Some(data.clone());
     if let Some(win) = app.get_webview_window("mini") {
         if let Err(e) = win.emit("mini-update", &data) {
-            eprintln!("[mini_update] emit failed: {e}");
+            log::warn!("[mini_update] emit failed: {e}");
         }
     }
     Ok(())
@@ -136,7 +136,7 @@ pub async fn mini_update(app: AppHandle, data: Value) -> Result<(), String> {
 pub async fn mini_progress(app: AppHandle, data: Value) -> Result<(), String> {
     if let Some(win) = app.get_webview_window("mini") {
         if let Err(e) = win.emit("mini-progress", &data) {
-            eprintln!("[mini_progress] emit failed: {e}");
+            log::warn!("[mini_progress] emit failed: {e}");
         }
     }
     Ok(())

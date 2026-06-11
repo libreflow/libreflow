@@ -304,7 +304,14 @@ fn get_or_create_primary_tag(
 /// Ouvre un dialog de sélection de dossier, scanne les fichiers audio et retourne
 /// `{ folder, files }`.  Retourne `null` si l'utilisateur annule.
 #[tauri::command]
-pub fn open_folder(app: AppHandle) -> Result<Option<OpenFolderResult>, String> {
+pub async fn open_folder(app: AppHandle) -> Result<Option<OpenFolderResult>, String> {
+    // Dialog bloquant + scan récursif hors du thread principal (gel UI sinon).
+    tokio::task::spawn_blocking(move || open_folder_blocking(app))
+        .await
+        .map_err(|e| format!("open_folder: spawn_blocking: {e}"))?
+}
+
+fn open_folder_blocking(app: AppHandle) -> Result<Option<OpenFolderResult>, String> {
     let Some(folder_path) = app.dialog().file().blocking_pick_folder() else {
         return Ok(None);
     };
@@ -751,7 +758,15 @@ pub async fn write_cover(data: WriteCoverData) -> Result<(), String> {
             "jpg" | "jpeg" => image_data.starts_with(&[0xFF, 0xD8, 0xFF]),
             "png" => image_data.starts_with(&[0x89, 0x50, 0x4E, 0x47]),
             "webp" => image_data.len() >= 12 && &image_data[8..12] == b"WEBP",
-            _ => true, // unknown ext — pass through
+            "gif" => image_data.starts_with(b"GIF87a") || image_data.starts_with(b"GIF89a"),
+            "bmp" => image_data.starts_with(b"BM"),
+            "tiff" | "tif" => {
+                image_data.starts_with(&[0x49, 0x49, 0x2A, 0x00])
+                    || image_data.starts_with(&[0x4D, 0x4D, 0x00, 0x2A])
+            }
+            // Toute extension acceptée plus haut doit avoir sa signature ici :
+            // un défaut passe-droit ré-ouvrirait le trou (audit L-4).
+            _ => false,
         };
         if !mime_ok {
             return Err(format!(
@@ -893,7 +908,7 @@ pub fn win_close(app: AppHandle) -> Result<(), String> {
 pub async fn win_minimize(app: AppHandle) -> Result<(), String> {
     // Ouvrir le mini-player (guard interne : idempotent si déjà ouvert)
     if let Err(e) = crate::mini::open_mini(&app).await {
-        eprintln!("[win_minimize] open_mini failed: {e}");
+        log::warn!("[win_minimize] open_mini failed: {e}");
     }
     // Réduire la fenêtre principale
     app.get_webview_window("main")
@@ -1087,6 +1102,26 @@ pub async fn organize_files(
             // completed: (new_path, original_path) for rollback
             let mut completed: Vec<(String, String)> = Vec::new();
 
+            // Rollback commun : défait les moves effectués (ordre inverse) et
+            // remonte chaque échec dans results au lieu de l'avaler (§14).
+            fn rollback(
+                completed: &[(String, String)],
+                results: &mut Vec<OrganizeMoveResult>,
+                error_count: &mut usize,
+            ) {
+                for (done_to, done_from) in completed.iter().rev() {
+                    if let Err(re) = fs::rename(done_to, done_from) {
+                        *error_count += 1;
+                        results.push(OrganizeMoveResult {
+                            from: done_to.clone(),
+                            to: done_from.clone(),
+                            ok: false,
+                            error: Some(format!("rollback failed: {re}")),
+                        });
+                    }
+                }
+            }
+
             'outer: for m in &moves {
                 let from = Path::new(&m.from);
                 let to = Path::new(&m.to);
@@ -1101,9 +1136,84 @@ pub async fn organize_files(
                     continue;
                 }
 
-                if let Some(parent) = to.parent() {
-                    if !parent.exists() {
-                        if let Err(e) = fs::create_dir_all(parent) {
+                // Le run réel refuse une destination occupée, comme le dry_run :
+                // fs::rename écrase silencieusement (Windows : REPLACE_EXISTING ;
+                // Unix : remplacement atomique) et fs::copy tronque. Cible
+                // identique à la source (rename de casse) : on laisse passer.
+                if to.exists() {
+                    let same = matches!(
+                        (from.canonicalize(), to.canonicalize()),
+                        (Ok(a), Ok(b)) if a == b
+                    );
+                    if !same {
+                        error_count += 1;
+                        results.push(OrganizeMoveResult {
+                            from: m.from.clone(),
+                            to: m.to.clone(),
+                            ok: false,
+                            error: Some(format!("Destination occupée : {}", m.to)),
+                        });
+                        rollback(&completed, &mut results, &mut error_count);
+                        break 'outer;
+                    }
+                }
+
+                // S-02 : re-vérifier juste avant fs::rename que source et parent
+                // cible vivent dans un dossier sûr. validate_organize_path a déjà
+                // rejeté `..`/null en amont, mais le chemin a pu changer (TOCTOU
+                // sur symlink). Échec de canonicalisation = refus (symlink mort,
+                // source disparue) — jamais de skip silencieux du contrôle.
+                match fs::canonicalize(from) {
+                    Ok(canon_from) if is_safe_dir(&canon_from) => {}
+                    Ok(_) | Err(_) => {
+                        error_count += 1;
+                        results.push(OrganizeMoveResult {
+                            from: m.from.clone(),
+                            to: m.to.clone(),
+                            ok: false,
+                            error: Some(format!(
+                                "source refusée (dossier système ou non canonisable) : {}",
+                                m.from
+                            )),
+                        });
+                        rollback(&completed, &mut results, &mut error_count);
+                        break 'outer;
+                    }
+                }
+
+                if let Some(to_parent) = to.parent() {
+                    // Contrôler l'ancêtre existant le plus profond AVANT
+                    // create_dir_all, sinon des dossiers naissent sous un parent
+                    // (symlinké) que le contrôle d'après rejetterait ensuite.
+                    let mut probe = to_parent;
+                    let canon_ancestor = loop {
+                        match fs::canonicalize(probe) {
+                            Ok(c) => break Some(c),
+                            Err(_) => match probe.parent() {
+                                Some(p) => probe = p,
+                                None => break None,
+                            },
+                        }
+                    };
+                    let ancestor_safe =
+                        canon_ancestor.as_deref().map(is_safe_dir).unwrap_or(false);
+                    if !ancestor_safe {
+                        error_count += 1;
+                        results.push(OrganizeMoveResult {
+                            from: m.from.clone(),
+                            to: m.to.clone(),
+                            ok: false,
+                            error: Some(format!(
+                                "destination dans un dossier système refusé : {}",
+                                m.to
+                            )),
+                        });
+                        rollback(&completed, &mut results, &mut error_count);
+                        break 'outer;
+                    }
+
+                    if !to_parent.exists() {
+                        if let Err(e) = fs::create_dir_all(to_parent) {
                             error_count += 1;
                             results.push(OrganizeMoveResult {
                                 from: m.from.clone(),
@@ -1111,50 +1221,16 @@ pub async fn organize_files(
                                 ok: false,
                                 error: Some(format!("Création dossier échouée : {e}")),
                             });
-                            for (done_to, done_from) in completed.iter().rev() {
-                                if let Err(e) = fs::rename(done_to, done_from) {
-                                    eprintln!(
-                                        "[organize] rollback rename failed: {} -> {}: {e}",
-                                        done_to, done_from
-                                    );
-                                }
-                            }
+                            rollback(&completed, &mut results, &mut error_count);
                             break 'outer;
                         }
                     }
-                }
 
-                // S-02 : re-vérifier juste avant fs::rename que source et parent
-                // cible vivent dans un dossier sûr. validate_organize_path a déjà
-                // rejeté `..`/null en amont, mais le chemin a pu changer (TOCTOU
-                // sur symlink). On canonicalise la source réelle et le parent de
-                // la cible, puis on re-confronte is_safe_dir.
-                if let Ok(canon_from) = fs::canonicalize(from) {
-                    if !is_safe_dir(&canon_from) {
-                        error_count += 1;
-                        results.push(OrganizeMoveResult {
-                            from: m.from.clone(),
-                            to: m.to.clone(),
-                            ok: false,
-                            error: Some(format!(
-                                "source dans un dossier système refusé : {}",
-                                m.from
-                            )),
-                        });
-                        for (done_to, done_from) in completed.iter().rev() {
-                            if let Err(e) = fs::rename(done_to, done_from) {
-                                eprintln!(
-                                    "[organize] rollback rename failed: {} -> {}: {e}",
-                                    done_to, done_from
-                                );
-                            }
-                        }
-                        break 'outer;
-                    }
-                }
-                if let Some(to_parent) = to.parent() {
-                    if let Ok(canon_to_parent) = fs::canonicalize(to_parent) {
-                        if !is_safe_dir(&canon_to_parent) {
+                    // Re-contrôle final post-création (TOCTOU) : le parent existe
+                    // désormais — sa canonicalisation doit réussir ET rester sûre.
+                    match fs::canonicalize(to_parent) {
+                        Ok(canon_to_parent) if is_safe_dir(&canon_to_parent) => {}
+                        Ok(_) | Err(_) => {
                             error_count += 1;
                             results.push(OrganizeMoveResult {
                                 from: m.from.clone(),
@@ -1165,14 +1241,7 @@ pub async fn organize_files(
                                     m.to
                                 )),
                             });
-                            for (done_to, done_from) in completed.iter().rev() {
-                                if let Err(e) = fs::rename(done_to, done_from) {
-                                    eprintln!(
-                                        "[organize] rollback rename failed: {} -> {}: {e}",
-                                        done_to, done_from
-                                    );
-                                }
-                            }
+                            rollback(&completed, &mut results, &mut error_count);
                             break 'outer;
                         }
                     }
@@ -1193,7 +1262,7 @@ pub async fn organize_files(
                         })?;
                         if let Err(e2) = fs::remove_file(&m.from) {
                             if let Err(e3) = fs::remove_file(&m.to) {
-                                eprintln!(
+                                log::error!(
                                     "[organize] cross-device cleanup failed for {}: {e3}",
                                     m.to
                                 );
@@ -1228,17 +1297,7 @@ pub async fn organize_files(
                         });
                         // Rollback : tracker les échecs au lieu de les avaler
                         // silencieusement, pour que le frontend voie l'état réel.
-                        for (done_to, done_from) in completed.iter().rev() {
-                            if let Err(re) = fs::rename(done_to, done_from) {
-                                error_count += 1;
-                                results.push(OrganizeMoveResult {
-                                    from: done_to.clone(),
-                                    to: done_from.clone(),
-                                    ok: false,
-                                    error: Some(format!("rollback failed: {re}")),
-                                });
-                            }
-                        }
+                        rollback(&completed, &mut results, &mut error_count);
                         break 'outer;
                     }
                 }
@@ -1259,7 +1318,17 @@ pub async fn organize_files(
 /// Ouvre un dialog de sauvegarde .libreflow, puis écrit le ZIP avec les données sérialisées.
 /// Retourne le chemin du fichier créé, ou None si l'utilisateur annule.
 #[tauri::command]
-pub fn export_backup(
+pub async fn export_backup(
+    app: AppHandle,
+    payload: crate::backup::ExportPayload,
+) -> Result<Option<String>, String> {
+    // Dialog bloquant + écriture ZIP (≤50 Mo) hors du thread principal.
+    tokio::task::spawn_blocking(move || export_backup_blocking(app, payload))
+        .await
+        .map_err(|e| format!("export_backup: spawn_blocking: {e}"))?
+}
+
+fn export_backup_blocking(
     app: AppHandle,
     payload: crate::backup::ExportPayload,
 ) -> Result<Option<String>, String> {
@@ -1295,7 +1364,14 @@ pub fn export_backup(
 /// Ouvre un file picker .libreflow, lit le ZIP et retourne les JSON internes.
 /// Retourne None si l'utilisateur annule.
 #[tauri::command]
-pub fn import_backup(app: AppHandle) -> Result<Option<crate::backup::ImportPayload>, String> {
+pub async fn import_backup(app: AppHandle) -> Result<Option<crate::backup::ImportPayload>, String> {
+    // Dialog bloquant + lecture ZIP hors du thread principal.
+    tokio::task::spawn_blocking(move || import_backup_blocking(app))
+        .await
+        .map_err(|e| format!("import_backup: spawn_blocking: {e}"))?
+}
+
+fn import_backup_blocking(app: AppHandle) -> Result<Option<crate::backup::ImportPayload>, String> {
     let Some(fp) = app
         .dialog()
         .file()
@@ -1329,8 +1405,15 @@ pub fn import_backup(app: AppHandle) -> Result<Option<crate::backup::ImportPaylo
 /// Retourne la liste des volumes montés sur le système.
 /// Utilisé par devices.js pour la détection USB (polling).
 #[tauri::command]
-pub fn list_drives() -> Vec<DriveInfo> {
-    _list_drives_impl()
+pub async fn list_drives() -> Vec<DriveInfo> {
+    // Pollée par devices.js — le sondage TOC des lecteurs CD (DeviceIoControl)
+    // doit vivre hors du thread principal : un disque qui spin-up gelait l'UI.
+    tokio::task::spawn_blocking(_list_drives_impl)
+        .await
+        .unwrap_or_else(|e| {
+            log::warn!("[list_drives] spawn_blocking: {e}");
+            Vec::new()
+        })
 }
 
 #[cfg(target_os = "windows")]
@@ -1378,7 +1461,8 @@ fn _list_drives_impl() -> Vec<DriveInfo> {
 
         // For CDROM drives, probe the TOC to determine if this is an audio CD
         let (audio_cd, track_count) = if dtype == 5 {
-            match crate::cdaudio::cd_read_toc(drive_str.clone()) {
+            // Version bloquante : _list_drives_impl tourne déjà en spawn_blocking.
+            match crate::cdaudio::cd_read_toc_blocking(drive_str.clone()) {
                 Ok(toc) => (!toc.tracks.is_empty(), toc.tracks.len().min(255) as u8),
                 Err(_) => (false, 0), // drive empty, data CD, or read error — silent
             }
@@ -1485,7 +1569,17 @@ fn _list_drives_impl() -> Vec<DriveInfo> {
 /// scanne les fichiers audio et retourne { folder, files }.
 /// Identique à open_folder mais avec un répertoire de départ (pour USB).
 #[tauri::command]
-pub fn open_folder_at(
+pub async fn open_folder_at(
+    app: AppHandle,
+    start_path: String,
+) -> Result<Option<OpenFolderResult>, String> {
+    // Dialog bloquant + scan récursif hors du thread principal (gel UI sinon).
+    tokio::task::spawn_blocking(move || open_folder_at_blocking(app, start_path))
+        .await
+        .map_err(|e| format!("open_folder_at: spawn_blocking: {e}"))?
+}
+
+fn open_folder_at_blocking(
     app: AppHandle,
     start_path: String,
 ) -> Result<Option<OpenFolderResult>, String> {

@@ -13,7 +13,7 @@
 //   ctxNewPlaylist, ctxRemoveFromPlaylist, ctxSmartPlaylist,
 //   ctxPlayNext, ctxAddToQueueEnd, ctxCopyInfo
 
-import { esc }                                          from './utils.js';
+import { esc, trackCopyText }                           from './utils.js';
 import { ddel }                                         from './db.js';
 import { i18n }                                         from './i18n.js';
 import { get }                                          from './store.js';
@@ -135,6 +135,10 @@ export function showCtxMenu(e, trackId) {
   const revealBtn = document.getElementById('ctx-reveal-file');
   if (revealBtn) revealBtn.style.display = (t && t.path) ? '' : 'none';
 
+  // Plugin clipboard-manager — copier le chemin : même condition que reveal
+  const copyPathBtn = document.getElementById('ctx-copy-path');
+  if (copyPathBtn) copyPathBtn.style.display = (t && t.path) ? '' : 'none';
+
   // Position — calculée avant d'ouvrir pour éviter le flash
   // Le menu est déjà rendu (display block) mais invisible (opacity 0)
   // offsetWidth/Height sont donc valides sans toggler display
@@ -229,12 +233,34 @@ export function ctxCopyInfo() {
     ? get('tracks')[_trackIdxMap.get(get('ctxTrackId'))] : null;
   closeCtxMenu();
   if (!t) return;
-  const unknownArtist = i18n('unknown_artist') || 'Artiste inconnu';
-  const text = (t.artist && t.artist !== unknownArtist && t.artist !== 'Unknown Artist')
-    ? `${t.artist} — ${t.name}` : t.name;
-  navigator.clipboard.writeText(text)
-    .then(()  => toast(i18n('t_ctx_copied'), 'success'))
-    .catch(e  => console.warn('[ctxmenu] clipboard write failed:', e));
+  _copyToClipboard(trackCopyText(t, i18n('unknown_artist') || 'Artiste inconnu'));
+}
+
+/** Copie le chemin du fichier de la piste (plugin clipboard-manager). */
+export function ctxCopyPath() {
+  const t = _trackIdxMap.has(get('ctxTrackId'))
+    ? get('tracks')[_trackIdxMap.get(get('ctxTrackId'))] : null;
+  closeCtxMenu();
+  if (!t?.path) return;
+  _copyToClipboard(t.path);
+}
+
+/** Écrit dans le presse-papier OS via le plugin (fiable hors focus webview) ;
+ *  fallback navigator.clipboard pour le dev hors Tauri. */
+async function _copyToClipboard(text) {
+  if (!text) return;
+  try {
+    await invoke('plugin:clipboard-manager|write_text', { text });
+    toast(i18n('t_ctx_copied'), 'success');
+  } catch (e) {
+    try {
+      await navigator.clipboard.writeText(text);
+      toast(i18n('t_ctx_copied'), 'success');
+    } catch (e2) {
+      console.warn('[ctxmenu] clipboard write failed:', e, e2);
+      toast(i18n('t_copy_err') || 'Copie impossible', 'error');
+    }
+  }
 }
 
 export function ctxEditTags() {

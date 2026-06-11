@@ -275,6 +275,9 @@ function _attachPressListener() {
 
 export function setIcon(playing) {
   invoke('taskbar_set_playing', { playing }).catch((e) => console.warn('[taskbar_set_playing]', e));
+  // Contrôles médias système : état + position. Ignoré côté Rust avant la 1re piste.
+  invoke('smtc_playback', { playing, positionSecs: audio.currentTime || 0 })
+    .catch((e) => console.warn('[smtc_playback]', e));
   const ci = document.getElementById('cinema-ico-play');
   const cp = document.getElementById('cinema-ico-pause');
   if (ci) ci.style.display = playing ? 'none'  : 'block';

@@ -28,7 +28,7 @@ import { initDevices }                                 from './devices.js';
 import { cleanupCdCache }                              from './cdaudio.js';
 import { initViz, startViz, stopViz, updateVizColor, setVizMode, getVizMode, setVizEnabled, getVizEnabled } from './viz.js';
 import { sleepFading, setSleepFading, sleepEndOfTrack, toggleSleepMenu, setSleepTimer, setSleepEndOfTrack, setSleepCustom, cancelSleepTimer } from './sleep.js';
-import { esc, fmt, fmtd, extEmoji, normTag, mainArtist, validYear, normalizePathKey, extractAudioFileArg } from './utils.js';
+import { esc, fmt, fmtd, extEmoji, normTag, mainArtist, validYear, normalizePathKey, extractAudioFileArg, smtcMetaFromTrack } from './utils.js';
 import { radioActive, startRadio, stopRadio, resetRadio, radioRefillQueue, toggleRadio, ctxStartRadio, radioRegenerateFromCurrent, radioSaveAsPlaylist, getRadioQueue, renderRadioView, openRadioView, syncRadioLibBar, getRadioSeedId, initRadioSeedId } from './radio.js';
 import { initWatchPath, getWatchPath, stopWatchFolder, updateWatchUI, importPaths, startWatchNative } from './watchfolder.js'; // Bug #7 fix : startWatchNative ajouté
 import { renderStats, getHeatPeriod, initHeatPeriod } from './stats.js';
@@ -261,6 +261,10 @@ on(EVENTS.TRACK_CHANGE, ({ track, idx }) => {
   // de lecture sur la nouvelle ligne active, sinon l'icône pochette reste ▶.
   if (radioActive) radioRefillQueue(); // invariant §2 — refill BEFORE bar update
   updateBar(); patchActiveTrack(); patchPlayState(!audio.paused); _allPlayerUI();
+  // Contrôles médias système (SMTC) : métadonnées de la nouvelle piste.
+  // audio.duration est valide ici — TRACK_CHANGE part après audio.play() (RACE-4).
+  invoke('smtc_metadata', { meta: track ? smtcMetaFromTrack(track, audio.duration) : null })
+    .catch(e => console.warn('[smtc] metadata:', e));
 });
 // PLAY_STATE : play ou pause → mettre à jour la ligne active + widgets
 on(EVENTS.PLAY_STATE, ({ playing }) => {
@@ -726,6 +730,23 @@ async function boot() {
     else if (cmd === 'next')        next(true);
     else if (cmd === 'prev')        prev();
     else if (cmd === 'stop')        { audio.pause(); audio.currentTime = 0; setIcon(false); patchPlayState(false); }
+    // SMTC envoie Play/Pause distincts (boutons overlay) — idempotents par garde.
+    else if (cmd === 'play')        { if (audio.paused)  togglePlay(); }
+    else if (cmd === 'pause')       { if (!audio.paused) togglePlay(); }
+  }).then(u => _unlisteners.push(u));
+  // Scrub depuis l'overlay média (SMTC SetPosition) — position absolue en secondes.
+  listen('smtc-seek', (e) => {
+    const s = Number(e.payload);
+    if (Number.isFinite(s) && s >= 0 && Number.isFinite(audio.duration)) {
+      audio.currentTime = Math.min(s, audio.duration);
+    }
+  }).then(u => _unlisteners.push(u));
+  // Seek relatif (Seek/SeekBy SMTC) — delta signé en secondes (positif = avant).
+  listen('smtc-seek-by', (e) => {
+    const delta = Number(e.payload);
+    if (Number.isFinite(delta) && Number.isFinite(audio.duration)) {
+      audio.currentTime = Math.max(0, Math.min(audio.currentTime + delta, audio.duration));
+    }
   }).then(u => _unlisteners.push(u));
   // ── Plugin single-instance : 2e invocation (« Ouvrir avec » sur un fichier) ──
   listen('single-instance', (e) => {

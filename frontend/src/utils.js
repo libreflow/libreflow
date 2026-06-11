@@ -96,6 +96,28 @@ export function extractAudioFileArg(argv) {
   return null;
 }
 
+/** Texte de copie d'une piste : « Artiste — Titre », ou titre seul si l'artiste
+ *  est inconnu. Pur — testable. `unknownArtist` = libellé i18n courant. */
+export function trackCopyText(t, unknownArtist) {
+  if (!t || !t.name) return '';
+  return (t.artist && t.artist !== unknownArtist && t.artist !== 'Unknown Artist')
+    ? `${t.artist} — ${t.name}` : t.name;
+}
+
+/** Payload `smtc_metadata` (contrôles médias système) depuis une piste.
+ *  Pur — testable. Champs cappés (tags non fiables), path filtré par isSafePath. */
+export function smtcMetaFromTrack(t, durationSecs) {
+  if (!t || !t.name) return null;
+  const cap = (s) => String(s).slice(0, 256);
+  return {
+    title:  cap(t.name),
+    artist: cap(t.artistFull || t.artist || ''),
+    album:  cap(t.album || ''),
+    path:   (t.path && isSafePath(t.path)) ? t.path : null,
+    durationSecs: (Number.isFinite(durationSecs) && durationSecs > 0) ? durationSecs : null,
+  };
+}
+
 /** Extract the primary artist from a raw tag, stripping feat./collab suffixes. */
 export function mainArtist(raw) {
   if (!raw) return '';

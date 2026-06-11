@@ -78,7 +78,7 @@ pub fn write_backup_zip(dest_path: &str, payload: &ExportPayload) -> Result<(), 
     std::fs::rename(&tmp_path, dest_path).map_err(|e| {
         // cleanup temp on rename failure — log (ne pas avaler) si lui aussi échoue
         if let Err(rm_err) = std::fs::remove_file(&tmp_path) {
-            eprintln!("[backup] suppression du fichier temporaire échouée: {rm_err}");
+            log::warn!("[backup] suppression du fichier temporaire échouée: {rm_err}");
         }
         format!("backup: renommage fichier échoué — {e}")
     })?;
