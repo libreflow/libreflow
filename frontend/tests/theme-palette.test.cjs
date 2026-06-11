@@ -49,6 +49,27 @@ function extractLightOverride(css) {
 }
 
 /**
+ * Extrait les tokens du bloc `html[data-mode="light"][data-theme="X"]`.
+ * Retourne un objet `{ red: { '--g': ..., ... }, orange: {...}, ... }`.
+ */
+function extractLightThemeOverrides(css) {
+  const out = {};
+  const re = /html\[data-mode="light"\]\[data-theme="([a-z]+)"\]\s*\{([^}]*)\}/g;
+  let block;
+  while ((block = re.exec(css))) {
+    const theme = block[1];
+    const tokens = {};
+    const inner = /--([a-z0-9-]+)\s*:\s*([^;]+);/gi;
+    let row;
+    while ((row = inner.exec(block[2]))) {
+      tokens['--' + row[1].trim()] = row[2].trim();
+    }
+    out[theme] = tokens;
+  }
+  return out;
+}
+
+/**
  * Résout une chaîne d'alias `--token: var(--other-token)` jusqu'à un hex.
  * Retourne undefined si la chaîne ne se termine pas sur une valeur résoluble.
  * Si le token n'existe pas dans `primary`, retombe sur `fallback`.
@@ -227,6 +248,44 @@ async function run() {
       assert.ok(fg && bg, `cannot resolve light ${tok}/--bg-surface`);
       const r = contrastRatio(fg, bg);
       assert.ok(r >= 7.0, `light ${tok} sur --bg-surface = ${r.toFixed(2)}:1 (need 7.0)`);
+    });
+  }
+
+  // ── C-2 — --state-error override en light (audit WCAG 2026-06-11) ──────────
+  // Le token dark (#FF5A5F ≈2.8:1) doit être remplacé par une valeur >=4.5:1
+  // sur --bg-base light (#F7F8FA) pour satisfaire SC 1.4.3 et SC 1.4.11.
+  await t('light --state-error declared in html[data-mode="light"] block', () => {
+    assert.ok(
+      lightRoot['--state-error'],
+      '--state-error doit être déclaré dans html[data-mode="light"]',
+    );
+  });
+  await t('light --state-error passes AA text (4.5:1) on --bg-base', () => {
+    const fg = lightRoot['--state-error'];
+    const bg = lightRoot['--bg-base'] || '#F7F8FA';
+    assert.ok(fg, '--state-error introuvable dans le bloc light');
+    const ratio = contrastRatio(fg, bg);
+    assert.ok(ratio >= 4.5, `light --state-error = ${ratio.toFixed(2)}:1 (need 4.5)`);
+  });
+
+  // ── C-3 — thèmes accent en light mode (audit WCAG 2026-06-11) ──────────────
+  // Les accents dark (red/orange/cyan/pink) échouent AA text sur #F7F8FA.
+  // Les blocs html[data-mode="light"][data-theme="X"] les remplacent par des
+  // variantes sombres passant >=4.5:1.
+  const lightThemes = extractLightThemeOverrides(DS);
+  const LIGHT_BG = lightRoot['--bg-base'] || '#F7F8FA';
+  for (const theme of ['red', 'orange', 'cyan', 'pink']) {
+    await t(`light+${theme}: html[data-mode="light"][data-theme="${theme}"] block exists`, () => {
+      assert.ok(
+        lightThemes[theme] && lightThemes[theme]['--g'],
+        `Bloc html[data-mode="light"][data-theme="${theme}"] avec --g introuvable`,
+      );
+    });
+    await t(`light+${theme}: --g passes AA text (4.5:1) on --bg-base (#F7F8FA)`, () => {
+      const g = lightThemes[theme] && lightThemes[theme]['--g'];
+      assert.ok(g, `--g introuvable dans html[data-mode="light"][data-theme="${theme}"]`);
+      const ratio = contrastRatio(g, LIGHT_BG);
+      assert.ok(ratio >= 4.5, `light+${theme} --g (${g}) = ${ratio.toFixed(2)}:1 (need 4.5)`);
     });
   }
 

@@ -259,7 +259,7 @@ on(EVENTS.TRACK_CHANGE, ({ track, idx }) => {
   // PLAY_STATE (play event) part pendant audio.play(), AVANT ce handler — et
   // patchActiveTrack() strippe .playing-row en déplaçant .act. Restaurer l'état
   // de lecture sur la nouvelle ligne active, sinon l'icône pochette reste ▶.
-  if (radioActive) radioRefillQueue(); // invariant §2 — refill BEFORE bar update
+  if (radioActive) radioRefillQueue().catch(e => console.warn('[radio refill]', e)); // invariant §2 — refill BEFORE bar update
   updateBar(); patchActiveTrack(); patchPlayState(!audio.paused); _allPlayerUI();
   // Contrôles médias système (SMTC) : métadonnées de la nouvelle piste.
   // audio.duration est valide ici — TRACK_CHANGE part après audio.play() (RACE-4).

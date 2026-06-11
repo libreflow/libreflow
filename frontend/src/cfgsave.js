@@ -14,7 +14,7 @@
 //   import  : rgEnabled, rgTargetLUFS (replaygain.js)
 //   store   : cinemaBg — synced by cinema.js via set('cinemaBg',…)
 //   import  : eqEnabled, eqNodes, eqAutoMode,
-//             getActiveEqPreset, getEQProfiles (eq.js)
+//             getActiveEqPreset, getEQProfiles, getCurrentGains (eq.js)
 //   import  : getVizMode, getVizEnabled (viz.js)
 //   import  : getWatchPath (watchfolder.js)
 //   import  : getMiniPos (miniplayer.js)
@@ -36,7 +36,8 @@ import { rgEnabled, rgTargetLUFS }                    from './replaygain.js';
 // cinemaBg is read from the store (set by cinema.js via set('cinemaBg',…))
 // to avoid a cinema.js ↔ cfgsave.js circular dependency.
 import { eqEnabled, eqNodes, eqAutoMode, eqExpert,
-         getActiveEqPreset, getEQProfiles }            from './eq.js';
+         getActiveEqPreset, getEQProfiles,
+         getCurrentGains }                             from './eq.js';
 import { getVizMode, getVizEnabled }                  from './viz.js';
 import { getWatchPath }                               from './watchfolder.js';
 import { getMiniPos }                                 from './miniplayer.js';
@@ -131,7 +132,7 @@ async function _doSaveCfg() {
       npBg: get('npBg') ?? 'blur',
       shuffle, repeat, albumSort, artistSort, genreSort, albumDetailSort,
       eqEnabled, eqExpert,
-      eqGains: eqNodes.length ? eqNodes.map(n => n.gain.value) : null,
+      eqGains: getCurrentGains() ?? null,
       eqPreset: getActiveEqPreset(),
       vizMode: getVizMode(), vizEnabled: getVizEnabled(),
       eqAutoMode, eqProfiles: getEQProfiles(),

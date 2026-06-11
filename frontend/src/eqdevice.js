@@ -16,7 +16,7 @@
 //   deleteDeviceProfile(deviceId)  — supprime un profil
 //   renderDeviceProfiles()         — met à jour la section UI dans #set-page-audio
 
-import { eqNodes, applyEQGains } from './eq.js';
+import { eqNodes, applyEQGains, getCurrentGains } from './eq.js';
 import { esc }                    from './ui.js';
 
 // ── État module ───────────────────────────────────────────────────────────────
@@ -73,9 +73,7 @@ export function getActiveDeviceLabel() {
  * N'appelle PAS saveCfg — le handler doit le faire après.
  */
 export function saveCurrentDeviceProfile() {
-  const bands = eqNodes.length
-    ? eqNodes.map(n => n.gain.value)
-    : new Array(10).fill(0);
+  const bands = getCurrentGains() ?? new Array(10).fill(0);
   _deviceProfiles[_activeId || 'default'] = {
     bands,
     label: _activeLabel || getActiveDeviceLabel(),

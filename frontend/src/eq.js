@@ -15,7 +15,7 @@
 //   eqCtx, eqSource, eqNodes, eqEnabled, eqOpen, eqAutoMode
 //   eqAnalyser, audioOutGain, masterGainNode
 //   initEQ, ensureEQResumed, initBootEQ
-//   toggleEQ, closeEQ, setEQBand, applyEQPreset, getActiveEqPreset, applyEQGains
+//   toggleEQ, closeEQ, setEQBand, applyEQPreset, getActiveEqPreset, getCurrentGains, applyEQGains
 //   setEQAutoMode, toggleEQAutoMode, applyGenreEQ
 //   startSmartEQ, stopSmartEQ, updateSmartEQLoudness, updateSmartEQGenre
 //   loadEQProfiles, getEQProfiles
@@ -458,6 +458,13 @@ export function getActiveEqPreset() {
   return _activePreset;
 }
 
+/** Retourne une copie des gains intentionnels courants (synchronisés avant chaque setTargetAtTime).
+ *  Préférer ceci à `eqNodes.map(n => n.gain.value)` qui lit des valeurs intermédiaires en cours de ramp.
+ *  Retourne null si _currentGains n'est pas encore initialisé. */
+export function getCurrentGains() {
+  return (_currentGains?.length === EQ_BAND_COUNT) ? [..._currentGains] : null;
+}
+
 /** Applique un tableau de 10 gains (en dB) depuis un profil par appareil.
  *  Active l'EQ si nécessaire et marque le preset comme 'custom'. */
 export function applyEQGains(bands) {
@@ -697,7 +704,7 @@ export function renderEQBands() {
 function _resetBand(idx, slider) {
   if (isNaN(idx) || !eqCtx || !eqNodes[idx]) return;
   eqNodes[idx].gain.setTargetAtTime(0, eqCtx.currentTime, 0.01);
-  const targetGains = eqNodes.map(n => n.gain.value);
+  const targetGains = getCurrentGains() ?? eqNodes.map(n => n.gain.value);
   targetGains[idx] = 0;
   _animateSlidersTo(targetGains);
   if (_activePreset !== 'custom') { _activePreset = 'custom'; _updatePresetBtns('custom'); }

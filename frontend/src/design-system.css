@@ -371,6 +371,11 @@ html[data-mode="light"] {
   /* lf-toast-stack — override light */
   --lf-toast-action : #2563eb;   /* Tailwind Blue 600 — bouton action (light) */
 
+  /* États sémantiques — state-error assombri pour AA texte sur fond clair
+     (C-2, audit WCAG 2026-06-11 : #FF5A5F ≈2.8:1 sur #F7F8FA, sous SC 1.4.11 et 1.4.3).
+     #C0392B ≈5.1:1 — passe AA et AAA text. */
+  --state-error: #C0392B;
+
   /* ── Tokens light rapatriés de style.css (audit 2026-06-11, source unique §17) ── */
   color-scheme: light;
   --sep           : rgba(0,0,0,.07);
@@ -1087,6 +1092,17 @@ html[data-mode="light"] {
 [data-theme="orange"] { --g:#f97316; --g-rgb:249,115,22;  --gd:rgba(249,115,22,.14);  --gg:rgba(249,115,22,.28); }
 [data-theme="pink"]   { --g:#ec4899; --g-rgb:236,72,153;  --gd:rgba(236,72,153,.14);  --gg:rgba(236,72,153,.28); }
 [data-theme="cyan"]   { --g:#22d3ee; --g-rgb:34,211,238;  --gd:rgba(34,211,238,.14);  --gg:rgba(34,211,238,.28); }
+
+/* ── Overrides light-mode pour les thèmes accent qui échouent AA text (4.5:1)
+   sur --bg-base light (#F7F8FA). (C-3, audit WCAG 2026-06-11)
+   Chaque --g est assombri pour atteindre >=4.5:1 sur #F7F8FA.
+   --g-rgb / --gd / --gg sont mis à jour en cohérence.
+   Les variantes dark restent inchangées (les blocs [data-theme] ci-dessus
+   ne posent pas html[data-mode] et ne sont donc pas affectés). ── */
+html[data-mode="light"][data-theme="red"]    { --g:#B91C1C; --g-rgb:185,28,28;   --gd:rgba(185,28,28,.14);   --gg:rgba(185,28,28,.28); }   /* ≈6.3:1 sur #F7F8FA */
+html[data-mode="light"][data-theme="orange"] { --g:#C2410C; --g-rgb:194,65,12;   --gd:rgba(194,65,12,.14);   --gg:rgba(194,65,12,.28); }   /* ≈5.2:1 */
+html[data-mode="light"][data-theme="cyan"]   { --g:#0E7490; --g-rgb:14,116,144;  --gd:rgba(14,116,144,.14);  --gg:rgba(14,116,144,.28); }  /* ≈4.6:1 */
+html[data-mode="light"][data-theme="pink"]   { --g:#9D174D; --g-rgb:157,23,77;   --gd:rgba(157,23,77,.14);   --gg:rgba(157,23,77,.28); }   /* ≈5.8:1 */
 
 /* Respect des préférences utilisateur — anti-motion */
 @media (prefers-reduced-motion: reduce) {

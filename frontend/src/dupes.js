@@ -44,10 +44,16 @@ function _computeDupeGroups() {
   dupesGroups = [...map.values()].filter(g => g.length > 1);
 }
 
+let _dupesPrevFocus = null;
+
 export function detectDupes() {
+  _dupesPrevFocus = document.activeElement;
   _computeDupeGroups();
   _renderDupes();
-  document.getElementById('dupes-panel').classList.add('open');
+  const panel = document.getElementById('dupes-panel');
+  panel.classList.add('open');
+  const firstFocusable = panel.querySelector('button, [tabindex="0"]');
+  (firstFocusable || panel).focus();
 }
 
 export function getDupesCount() { return dupesGroups.length; }
@@ -178,6 +184,8 @@ export async function deleteAllDupes() {
 
 export function closeDupes() {
   document.getElementById('dupes-panel').classList.remove('open');
+  _dupesPrevFocus?.focus();
+  _dupesPrevFocus = null;
 }
 
 // ── Auto-compute dupes after library updates ──────────────────────────────────

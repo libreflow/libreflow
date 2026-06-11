@@ -419,7 +419,10 @@ pub async fn read_audio_props(path: String) -> Option<AudioProps> {
         })
     })
     .await
-    .unwrap_or(None)
+    .unwrap_or_else(|e| {
+        log::warn!("[read_audio_props] spawn_blocking panicked: {e}");
+        None
+    })
 }
 
 /// Autorise l'accès au protocole asset:// pour un dossier donné à l'exécution.
@@ -1195,8 +1198,7 @@ pub async fn organize_files(
                             },
                         }
                     };
-                    let ancestor_safe =
-                        canon_ancestor.as_deref().map(is_safe_dir).unwrap_or(false);
+                    let ancestor_safe = canon_ancestor.as_deref().map(is_safe_dir).unwrap_or(false);
                     if !ancestor_safe {
                         error_count += 1;
                         results.push(OrganizeMoveResult {

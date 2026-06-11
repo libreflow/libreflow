@@ -55,6 +55,8 @@ export function applyLang() {
   };
   const setHtml = (sel, key, isId = false) => {
     const el = isId ? document.getElementById(sel) : document.querySelector(sel);
+    // SECURITY: keys passed to setHtml must be purely static HTML from the i18n bundle.
+    // Never use with keys that interpolate user data (t.name, artist, path, etc.).
     if (el) el.innerHTML = i18n(key);
   };
   const setAttrEl = (id, attr, key) => {
@@ -74,6 +76,8 @@ export function applyLang() {
   document.querySelectorAll('[data-i18n]').forEach(el => {
     el.textContent = i18n(el.dataset.i18n);
   });
+  // SECURITY: data-i18n-html keys must be purely static HTML from the i18n bundle.
+  // Never use this attribute with keys that interpolate user data (t.name, artist, path, etc.).
   document.querySelectorAll('[data-i18n-html]').forEach(el => {
     el.innerHTML = i18n(el.dataset.i18nHtml);
   });

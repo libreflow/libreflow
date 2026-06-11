@@ -346,7 +346,7 @@ export async function flushTrackBatch() {
  * Accumule un track dans le batch de sauvegarde IDB (debounced).
  * Préférer saveTracks() en interne ; saveTrack() reste pour les satellites.
  */
-export async function saveTrack(t) {
+export function saveTrack(t) {
   _saveTrackBatch.set(t.id, t);
   if (!_saveTrackTimer) _saveTrackTimer = setTimeout(flushTrackBatch, CFG.TRACK_SAVE_DEBOUNCE);
 }

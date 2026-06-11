@@ -74,6 +74,8 @@ const _DOM = {
   tc:         document.getElementById('tc'),
   td:         document.getElementById('td'),
   rvProgFill: null, // lazy-init à la première vue radio
+  pcplay:     document.querySelector('.pcplay'),
+  sbDot:      document.querySelector('.sb-dot'),
 };
 
 /**
@@ -282,9 +284,9 @@ export function setIcon(playing) {
   const cp = document.getElementById('cinema-ico-pause');
   if (ci) ci.style.display = playing ? 'none'  : 'block';
   if (cp) cp.style.display = playing ? 'block' : 'none';
-  document.querySelector('.pcplay')?.classList.toggle('playing', playing);
-  document.querySelector('.pcplay')?.setAttribute('aria-pressed', String(playing));
-  document.querySelector('.sb-dot')?.classList.toggle('playing', playing);
+  _DOM.pcplay?.classList.toggle('playing', playing);
+  _DOM.pcplay?.setAttribute('aria-pressed', String(playing));
+  _DOM.sbDot?.classList.toggle('playing', playing);
   _attachPressListener();
 }
 

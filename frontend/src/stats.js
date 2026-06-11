@@ -250,7 +250,7 @@ export function renderStats(tracks, trackIdxMap) {
     </div>
     <div class="stats-heatmap">
       <div class="heatmap-grid" style="grid-template-columns:repeat(${_heatPeriod},1fr);gap:${_heatPeriod > 30 ? 2 : 3}px">
-        ${heatCounts.map((n, i) => `<div class="hm-cell" data-n="${heatLevel(n)}" data-day="${i}" title="${dayLabels[i]} · ${i18n('stats_plays', n)}"></div>`).join('')}
+        ${heatCounts.map((n, i) => `<div class="hm-cell" data-n="${heatLevel(n)}" data-day="${i}" title="${esc(dayLabels[i])} · ${i18n('stats_plays', n)}"></div>`).join('')}
       </div>
       <div class="hm-legend">
         <span>${i18n('stats_hm_less')}</span>
@@ -330,11 +330,11 @@ export function renderStats(tracks, trackIdxMap) {
     dayDetailEl.style.display = '';
 
     if (dayTracks.length === 0) {
-      dayDetailEl.innerHTML = `<div class="stats-day-empty">${i18n('stats_no_history', dayLabels[dayIdx])}</div>`;
+      dayDetailEl.innerHTML = `<div class="stats-day-empty">${i18n('stats_no_history', esc(dayLabels[dayIdx]))}</div>`;
     } else {
       dayDetailEl.innerHTML = `
         <div class="stats-day-header">
-          <span class="stats-day-date">${dayLabels[dayIdx]}</span>
+          <span class="stats-day-date">${esc(dayLabels[dayIdx])}</span>
           <span class="stats-day-count">${i18n('stats_plays', totalDayPlays)}</span>
         </div>
         <div class="stats-top">

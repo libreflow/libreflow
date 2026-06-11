@@ -16,7 +16,7 @@
 // laisserait une vignette périmée).
 
 use std::path::{Path, PathBuf};
-use std::sync::mpsc::{channel, Sender};
+use std::sync::mpsc::{sync_channel, SyncSender};
 use std::sync::Mutex;
 use std::time::Duration;
 
@@ -53,7 +53,7 @@ pub enum SmtcCmd {
 }
 
 /// `None` tant que setup() n'a pas démarré le thread (ou s'il a échoué).
-pub struct SmtcState(pub Mutex<Option<Sender<SmtcCmd>>>);
+pub struct SmtcState(pub Mutex<Option<SyncSender<SmtcCmd>>>);
 
 // ── Commandes IPC ─────────────────────────────────────────────────────────────
 
@@ -72,10 +72,7 @@ fn send_cmd(state: &tauri::State<SmtcState>, cmd: SmtcCmd) -> Result<(), String>
 
 /// Métadonnées de la piste courante. `meta: null` efface l'overlay (stop).
 #[tauri::command]
-pub fn smtc_metadata(
-    state: tauri::State<SmtcState>,
-    meta: Option<SmtcMeta>,
-) -> Result<(), String> {
+pub fn smtc_metadata(state: tauri::State<SmtcState>, meta: Option<SmtcMeta>) -> Result<(), String> {
     match meta {
         Some(m) => send_cmd(&state, SmtcCmd::Meta(Box::new(m))),
         None => send_cmd(&state, SmtcCmd::Clear),
@@ -128,7 +125,7 @@ pub fn setup(app: &tauri::App) {
         return;
     }
 
-    let (tx, rx) = channel::<SmtcCmd>();
+    let (tx, rx) = sync_channel::<SmtcCmd>(8);
     let handle = app.handle().clone();
     // État enregistré AVANT le spawn : SmtcState disponible dès le retour de setup(),
     // avant tout appel de commande IPC possible (ordering documenté par Tauri).
@@ -146,7 +143,9 @@ pub fn setup(app: &tauri::App) {
         let mut controls = match MediaControls::new(config) {
             Ok(c) => c,
             Err(e) => {
-                log::error!("[smtc] MediaControls::new a échoué — contrôles médias désactivés : {e:?}");
+                log::error!(
+                    "[smtc] MediaControls::new a échoué — contrôles médias désactivés : {e:?}"
+                );
                 return; // le Sender mourra → les commandes IPC renverront Err
             }
         };
@@ -159,19 +158,24 @@ pub fn setup(app: &tauri::App) {
         let mut cover_seq: u64 = 0;
         let mut prev_cover: Option<PathBuf> = None;
         let mut has_meta = false; // pas d'overlay vide au boot : playback ignoré avant la 1re piste
-        // Boucle de service : vit aussi longtemps que le Sender côté state.
+                                  // Boucle de service : vit aussi longtemps que le Sender côté state.
         while let Ok(cmd) = rx.recv() {
             let res = match cmd {
                 SmtcCmd::Meta(m) => {
                     has_meta = true;
+                    // Cap à 256 caractères — prévient l'overflow SMTC/MPRIS sur
+                    // des tags arbitrairement longs fournis via IPC (Security H-2).
+                    let title: String = m.title.chars().take(256).collect();
+                    let artist: String = m.artist.chars().take(256).collect();
+                    let album: String = m.album.chars().take(256).collect();
                     let cover = m
                         .path
                         .as_deref()
                         .and_then(|p| extract_cover(p, &mut cover_seq));
                     let r = controls.set_metadata(MediaMetadata {
-                        title: Some(&m.title),
-                        artist: Some(&m.artist),
-                        album: Some(&m.album),
+                        title: Some(&title),
+                        artist: Some(&artist),
+                        album: Some(&album),
                         cover_url: cover.as_ref().map(|(url, _)| url.as_str()),
                         duration: m
                             .duration_secs
@@ -249,7 +253,7 @@ fn dispatch_event(app: &AppHandle, event: MediaControlEvent) {
         MediaControlEvent::Seek(dir) => {
             // Saut OS d'intervalle fixe (SMTC ~10s, MPRIS ~5s) — on émet 10s par défaut.
             let delta = match dir {
-                SeekDirection::Forward  =>  10.0_f64,
+                SeekDirection::Forward => 10.0_f64,
                 SeekDirection::Backward => -10.0_f64,
             };
             if let Some(win) = app.get_webview_window("main") {
@@ -261,7 +265,11 @@ fn dispatch_event(app: &AppHandle, event: MediaControlEvent) {
         }
         MediaControlEvent::SeekBy(dir, duration) => {
             let delta = duration.as_secs_f64()
-                * if matches!(dir, SeekDirection::Forward) { 1.0 } else { -1.0 };
+                * if matches!(dir, SeekDirection::Forward) {
+                    1.0
+                } else {
+                    -1.0
+                };
             if let Some(win) = app.get_webview_window("main") {
                 if let Err(e) = win.emit("smtc-seek-by", delta) {
                     log::warn!("[smtc] emit smtc-seek-by failed: {e}");
@@ -294,7 +302,12 @@ fn extract_cover(path: &str, seq: &mut u64) -> Option<(String, PathBuf)> {
     if !canon.is_file() || !is_safe_dir(canon.parent()?) {
         return None;
     }
-    let tagged = Probe::open(&canon).ok()?.guess_file_type().ok()?.read().ok()?;
+    let tagged = Probe::open(&canon)
+        .ok()?
+        .guess_file_type()
+        .ok()?
+        .read()
+        .ok()?;
     let tag = tagged.primary_tag()?;
     let pic = tag
         .pictures()
@@ -310,7 +323,7 @@ fn extract_cover(path: &str, seq: &mut u64) -> Option<(String, PathBuf)> {
         _ => "jpg",
     };
     *seq += 1;
-    let dest = std::env::temp_dir().join(format!("libreflow_smtc_{}.{ext}", *seq % 2));
+    let dest = std::env::temp_dir().join(format!("libreflow_smtc_{}.{ext}", *seq % 4));
     std::fs::write(&dest, pic.data()).ok()?;
     // Encodage URI complet : %TEMP% peut contenir caractères spéciaux dans le
     // nom d'utilisateur (parenthèses, +, &, =, …). '%' encodé EN PREMIER pour
@@ -319,10 +332,21 @@ fn extract_cover(path: &str, seq: &mut u64) -> Option<(String, PathBuf)> {
     let mut slug = dest.display().to_string().replace('\\', "/");
     for (raw, enc) in [
         ("%", "%25"), // en premier — évite double-encodage
-        (" ", "%20"), ("#", "%23"), ("?", "%3F"), ("+", "%2B"),
-        ("&", "%26"), ("=", "%3D"), ("(", "%28"), (")", "%29"),
-        ("[", "%5B"), ("]", "%5D"), ("@", "%40"), ("!", "%21"),
-        ("$", "%24"), (",", "%2C"), (";", "%3B"),
+        (" ", "%20"),
+        ("#", "%23"),
+        ("?", "%3F"),
+        ("+", "%2B"),
+        ("&", "%26"),
+        ("=", "%3D"),
+        ("(", "%28"),
+        (")", "%29"),
+        ("[", "%5B"),
+        ("]", "%5D"),
+        ("@", "%40"),
+        ("!", "%21"),
+        ("$", "%24"),
+        (",", "%2C"),
+        (";", "%3B"),
     ] {
         slug = slug.replace(raw, enc);
     }
