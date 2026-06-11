@@ -969,15 +969,10 @@ export function checkCrossfade() {
 
     // @ts-ignore — audioNext guaranteed by initCrossfadeAudio(); url guaranteed by ensureUrl(ok)
     audioNext.src = nextTrack.url;
-    // §9 — setValueAtTime au lieu de .value= direct (invariant AudioParam CLAUDE.md §9).
-    // eqCtx est garanti présent ici (initCrossfadeAudio() en a besoin). La valeur
-    // est réinitialisée via setValueAtTime dans le setTimeout (l. 988-990), mais
-    // on l'établit immédiatement pour éviter tout signal parasite pendant les 80 ms
-    // de startDelay dans le cas rare où eqCtx serait actif avant play().
-    if (audioNextGain && eqCtx) {
-      audioNextGain.gain.cancelScheduledValues(eqCtx.currentTime);
-      audioNextGain.gain.setValueAtTime(0, eqCtx.currentTime);
-    }
+    // M4 FIX: removed redundant cancelScheduledValues+setValueAtTime(0) block here.
+    // The definitive setup inside the setTimeout below is the single canonical site.
+    // The early block risked interrupting an in-progress fade curve from a parallel
+    // invocation if eqCtx.currentTime advanced during the 80 ms startDelay.
 
     const startDelay = 80;
     const _genAtStart = _cfGen;

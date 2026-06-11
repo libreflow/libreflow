@@ -1,4 +1,4 @@
-﻿// commands.rs — Commandes IPC Tauri pour LibreFlow
+// commands.rs — Commandes IPC Tauri pour LibreFlow
 //
 // Toutes les commandes exposées au frontend via invoke().
 // Chaque commande correspond à une action native : dialogue fichier, tags audio,
@@ -338,6 +338,10 @@ pub fn open_folder(app: AppHandle) -> Result<Option<OpenFolderResult>, String> {
 /// comme orphelin sans test d'existence, évitant de sonder le FS hors périmètre.
 #[tauri::command]
 pub fn check_paths(paths: Vec<String>) -> Vec<String> {
+    const MAX_CHECK_PATHS: usize = 50_000;
+    if paths.len() > MAX_CHECK_PATHS {
+        return vec![];
+    }
     paths
         .into_par_iter()
         .filter(|p| {
@@ -442,24 +446,34 @@ pub async fn read_audio_bytes(path: String) -> Result<Vec<u8>, String> {
     tokio::task::spawn_blocking(move || {
         let p = Path::new(&path);
         if !is_audio(p) {
-            return Err(format!("read_audio_bytes: extension non autorisée — {}", path));
+            return Err(format!(
+                "read_audio_bytes: extension non autorisée — {}",
+                path
+            ));
         }
-        let canon = fs::canonicalize(p)
-            .map_err(|e| format!("read_audio_bytes: chemin invalide — {e}"))?;
+        let canon =
+            fs::canonicalize(p).map_err(|e| format!("read_audio_bytes: chemin invalide — {e}"))?;
         if !is_audio(&canon) {
-            return Err(format!("read_audio_bytes: extension non autorisée après résolution — {}", path));
+            return Err(format!(
+                "read_audio_bytes: extension non autorisée après résolution — {}",
+                path
+            ));
         }
         if let Some(parent) = canon.parent() {
             if !is_safe_dir(parent) {
-                return Err(format!("read_audio_bytes: dossier système refusé — {}", path));
+                return Err(format!(
+                    "read_audio_bytes: dossier système refusé — {}",
+                    path
+                ));
             }
         }
-        let meta = fs::metadata(&canon)
-            .map_err(|e| format!("read_audio_bytes: metadata échoué — {e}"))?;
+        let meta =
+            fs::metadata(&canon).map_err(|e| format!("read_audio_bytes: metadata échoué — {e}"))?;
         if meta.len() > RG_MAX_FILE_BYTES {
             return Err(format!(
                 "read_audio_bytes: fichier trop volumineux ({} octets, max {})",
-                meta.len(), RG_MAX_FILE_BYTES
+                meta.len(),
+                RG_MAX_FILE_BYTES
             ));
         }
         fs::read(&canon).map_err(|e| format!("read_audio_bytes: lecture échouée — {e}"))
@@ -597,7 +611,9 @@ pub async fn read_tags(path: String) -> Result<Option<TrackTags>, String> {
     .await;
 
     match result {
-        Err(_elapsed) => Err("read_tags: timeout — le fichier est peut-être corrompu ou trop volumineux".to_string()),
+        Err(_elapsed) => Err(
+            "read_tags: timeout — le fichier est peut-être corrompu ou trop volumineux".to_string(),
+        ),
         Ok(Err(join_err)) => Err(format!("read_tags join error: {join_err}")),
         Ok(Ok(inner)) => Ok(inner),
     }
@@ -633,10 +649,11 @@ pub async fn write_tags(data: WriteTagsData) -> Result<(), String> {
 
         {
             let tag = get_or_create_primary_tag(&mut tagged_file)?;
-            tag.set_title(data.title);
-            tag.set_artist(data.artist);
-            tag.set_album(data.album);
-            tag.set_genre(data.genre);
+            const MAX_TAG_CHARS: usize = 1000;
+            tag.set_title(data.title.chars().take(MAX_TAG_CHARS).collect::<String>());
+            tag.set_artist(data.artist.chars().take(MAX_TAG_CHARS).collect::<String>());
+            tag.set_album(data.album.chars().take(MAX_TAG_CHARS).collect::<String>());
+            tag.set_genre(data.genre.chars().take(MAX_TAG_CHARS).collect::<String>());
             if let Some(year) = data.year {
                 tag.set_year(year);
             }
@@ -779,6 +796,9 @@ pub async fn write_cover(data: WriteCoverData) -> Result<(), String> {
 pub async fn write_replaygain_tags(data: WriteReplaygainData) -> Result<(), String> {
     tokio::task::spawn_blocking(move || {
         // Valider les bornes des valeurs ReplayGain avant toute écriture
+        if !data.gain_db.is_finite() || !data.peak.is_finite() {
+            return Err("gain_db and peak must be finite numbers".to_string());
+        }
         if data.gain_db < -51.0 || data.gain_db > 51.0 {
             return Err("gain_db hors limites (-51..+51 dB)".into());
         }
@@ -899,6 +919,11 @@ pub fn win_maximize(app: AppHandle) -> Result<(), String> {
 /// Modifie le titre de la fenêtre principale (ex: "Titre — Artiste | LibreFlow").
 #[tauri::command]
 pub fn win_set_title(app: AppHandle, title: String) -> Result<(), String> {
+    let title = title
+        .chars()
+        .filter(|c| !c.is_control())
+        .take(256)
+        .collect::<String>();
     app.get_webview_window("main")
         .ok_or_else(|| "Fenêtre main introuvable".to_string())?
         .set_title(&title)
@@ -1004,7 +1029,11 @@ pub async fn organize_files(
     // Validation préalable : aucun move ne doit pointer hors d'un dossier autorisé.
     const MAX_ORGANIZE_MOVES: usize = 10_000;
     if moves.len() > MAX_ORGANIZE_MOVES {
-        return Err(format!("organize_files: trop de déplacements ({}/{})", moves.len(), MAX_ORGANIZE_MOVES));
+        return Err(format!(
+            "organize_files: trop de déplacements ({}/{})",
+            moves.len(),
+            MAX_ORGANIZE_MOVES
+        ));
     }
     for m in &moves {
         validate_organize_path(&m.from).map_err(|e| format!("from: {}", e))?;
@@ -1311,6 +1340,15 @@ fn _list_drives_impl() -> Vec<DriveInfo> {
 
     let mut buf = vec![0u16; 256];
     let len = unsafe { GetLogicalDriveStringsW(Some(&mut buf)) } as usize;
+    if len == 0 {
+        return vec![];
+    }
+    let len = if len >= buf.len() {
+        buf.resize(len + 1, 0);
+        (unsafe { GetLogicalDriveStringsW(Some(&mut buf)) }) as usize
+    } else {
+        len
+    };
     if len == 0 {
         return vec![];
     }

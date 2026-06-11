@@ -6,12 +6,6 @@
  * Règle d'or : aucun composant Lit ou module CSS de LibreFlow n'écrit une
  * valeur hardcodée. Tout passe par une variable définie ici.
  *
- * Adaptation PC / Mobile :
- *   <html data-platform="pc">     → layout desktop, hover, sidebar 240px
- *   <html data-platform="mobile"> → layout mobile, tap targets 48px, bottom nav
- *
- * L'attribut `data-platform` est posé au runtime par le boot Tauri.
- * Aucune media query côté composant — les tokens font tout le travail.
  *
  * Contrainte projet (CLAUDE.md §15 / §12) :
  *   Pas d'@import url() externe. Les fonts sont déjà chargées localement
@@ -24,12 +18,12 @@
  *   2. Couleurs (surfaces, texte, accent, bordures, états)
  *   3. Typographie (familles, tailles fluides, weights)
  *   4. Spacing (échelle base 4px)
- *   5. Tailles composants audio (adaptatif PC/Mobile)
+ *   5. (retiré — système plateforme jamais branché)
  *   6. Border radius
  *   7. Ombres
  *   8. Transitions & easings
  *   9. Z-index
- *  10. Layout grid (adaptatif PC/Mobile)
+ *  10. (retiré — système plateforme jamais branché)
  *  11. Defaults sains (sélection, scrollbars, focus, reduced-motion)
  * ============================================================================ */
 
@@ -80,12 +74,19 @@
  * cohérents avec la palette --accent / --bg-* / --text-* officielle.
  * ============================================================================ */
 :root {
-  /* Accent opérationnel (alias du --accent Electric Indigo défini en §2) */
-  --g       : var(--accent);
+  /* Accent opérationnel — SOURCE du système d'accent. Littéral obligatoire :
+     §13 ré-aliase --accent: var(--g) (suivi de thème) ; un --g: var(--accent)
+     ici formerait un cycle invalide au premier paint (aucun data-theme statique
+     dans index.html). Doit rester égal à --accent (§2) et à l'initial-value
+     du @property --g (§12ter). La map [data-theme] plus bas l'écrase par thème. */
+  --g       : #8B6BFF;
   --g-rgb   : 139, 107, 255;
-  --gd      : var(--accent-subtle);
+  --gd      : rgba(139, 107, 255, .14);   /* même règle anti-cycle que --g (§13 : --accent-subtle: var(--gd)) */
   --gg      : var(--accent-glow);
   --text-on-accent : #050505;             /* noir sur indigo brillant — 5.5:1 AA */
+  --text-on-media  : #ffffff;             /* blanc sur scrim sombre posé sur image
+                                             (cartes Genre…) — invariant thème ;
+                                             V5, audit bugs visuels 2026-06-11 */
 
   /* --- Alias historiques (B1) reliés à la palette respirée (B2) --------- */
   --bg  : var(--bg-base);
@@ -132,15 +133,28 @@
  * ============================================================================ */
 :root {
   /* --- Bordures — AA non-text contrast (>=3:1 sur Vantablack) ---------- */
-  --border-subtle  : rgba(255, 255, 255, 0.45);   /* 3.1:1 vs #030303 */
-  --border-default : rgba(255, 255, 255, 0.55);   /* 4.0:1 */
-  --border-strong  : rgba(255, 255, 255, 0.65);   /* 5.2:1 */
+  --border-subtle  : rgba(255, 255, 255, 0.45);   /* 4.4:1 vs #030303 (composité) */
+  --border-default : rgba(255, 255, 255, 0.55);   /* 6.3:1 */
+  --border-strong  : rgba(255, 255, 255, 0.65);   /* 8.6:1 */
   --border-focus   : var(--accent);
 
   /* --- États -------------------------------------------------------------- */
   --state-playing  : var(--accent);
   --state-error    : #FF5A5F;
   --state-success  : #4ADE80;
+
+  /* --- Signature Now Playing (HSL ambient) --------------------------------
+     Valeurs par défaut = Electric Indigo. playerbar.js les écrase via
+     inline style quand une pochette est chargée (extractDominantHsl →
+     applyNpHsl). Remis à zéro par clearNpHsl quand aucune piste n'est active.
+     Consommés par #pl::before (hairline) et .tr.act.playing-row (rowBreath). */
+  --np-hue   : 256;
+  --np-sat   : 92%;
+  --np-light : 71%;
+  --np-color : hsl(var(--np-hue) var(--np-sat) var(--np-light));
+  --np-glow  : hsl(var(--np-hue) var(--np-sat) var(--np-light) / 0.45);
+  --np-wash  : hsl(var(--np-hue) var(--np-sat) var(--np-light) / 0.08);
+  --np-spill : hsl(var(--np-hue) var(--np-sat) var(--np-light) / 0.12);
 }
 
 
@@ -205,46 +219,13 @@
 
 
 /* ============================================================================
- * 5. TAILLES COMPOSANTS AUDIO — adaptatives PC / Mobile
- * Le boot Tauri pose data-platform="pc" ou "mobile" sur <html>.
- * Les composants Lit lisent ces variables sans media query interne.
+ * 5. TAILLES COMPOSANTS AUDIO — RETIRÉ (audit 2026-06-11, MEDIUM 4)
+ * Le système data-platform pc/mobile n'a jamais été branché (aucun JS ne pose
+ * l'attribut) et aucun token de ce bloc (--player-height, --cover-*,
+ * --tap-target…) n'avait de consommateur. Si un mode mobile/tactile arrive un
+ * jour, réintroduire le bloc AVEC son câblage boot + porter --target-min à
+ * 44px en tactile (MA-2 audit 2026-06-10, SC 2.5.8 AAA).
  * ============================================================================ */
-
-/* --- Defaults (PC desktop) — appliqués si data-platform absent ----------- */
-:root {
-  --player-height    : 90px;
-  --sidebar-width    : 240px;
-  --track-row-height : 48px;
-  --cover-sm         : 40px;
-  --cover-md         : 56px;
-  --cover-lg         : 200px;
-  --control-size     : 36px;
-  --tap-target       : 36px;
-}
-
-:root[data-platform="pc"] {
-  --player-height    : 90px;
-  --sidebar-width    : 240px;
-  --track-row-height : 48px;
-  --cover-sm         : 40px;
-  --cover-md         : 56px;
-  --cover-lg         : 200px;
-  --control-size     : 36px;
-  --tap-target       : 36px;
-}
-
-:root[data-platform="mobile"] {
-  --player-height    : 64px;
-  --sidebar-width    : 0px;       /* bottom nav remplace la sidebar */
-  --track-row-height : 64px;
-  --cover-sm         : 48px;
-  --cover-md         : 64px;
-  --cover-lg         : 100%;      /* cover full-width sur mobile */
-  --control-size     : 48px;
-  --tap-target       : 48px;      /* minimum tactile WCAG */
-  --target-min       : 44px;      /* MA-2 audit 2026-06-10 — boutons icône inline :
-                                     24px (AA pointeur fin) → 44px en tactile (SC 2.5.8 AAA) */
-}
 
 
 /* ============================================================================
@@ -264,20 +245,10 @@
 /* ============================================================================
  * 7. OMBRES — multicouches, tintées avec l'accent
  * --shadow-glow utilise --accent-glow pour le cover art en lecture.
+ * --shadow-sm/md/lg vivent en §13 (recâblées sur --elev-*) ; les doublons
+ * littéraux qui vivaient ici étaient morts (écrasés par la cascade) — retirés.
  * ============================================================================ */
 :root {
-  --shadow-sm :
-    0 1px 2px rgba(0, 0, 0, 0.30),
-    0 1px 1px rgba(0, 0, 0, 0.20);
-
-  --shadow-md :
-    0 4px 8px  rgba(0, 0, 0, 0.32),
-    0 2px 4px  rgba(0, 0, 0, 0.20);
-
-  --shadow-lg :
-    0 12px 28px rgba(0, 0, 0, 0.45),
-    0 6px  12px rgba(0, 0, 0, 0.28);
-
   --shadow-glow :
     0 8px 32px var(--accent-glow),
     0 2px 8px  rgba(0, 0, 0, 0.40);
@@ -298,25 +269,10 @@
 
 
 /* ============================================================================
- * 10. LAYOUT GRID — adaptatif PC / Mobile
- * PC     : sidebar + main, player en bas full-width.
- * Mobile : main, player, bottom nav empilés.
+ * 10. LAYOUT GRID — RETIRÉ (audit 2026-06-11, MEDIUM 4)
+ * Tokens --layout-* / --content-* du système data-platform fantôme : jamais
+ * consommés, attribut jamais posé. Cf. tombstone §5.
  * ============================================================================ */
-:root[data-platform="pc"] {
-  --layout-columns  : 240px 1fr;
-  --layout-rows     : 1fr 90px;
-  --layout-areas    : "sidebar main" "player player";
-  --content-max     : 1600px;
-  --content-padding : var(--space-8);
-}
-
-:root[data-platform="mobile"] {
-  --layout-columns  : 1fr;
-  --layout-rows     : 1fr 64px 56px;
-  --layout-areas    : "main" "player" "nav";
-  --content-max     : 100%;
-  --content-padding : var(--space-4);
-}
 
 
 /* ============================================================================
@@ -379,13 +335,19 @@ html[data-mode="light"] {
   --t4  : #95A0B4;
 
   /* Accent Electric Indigo : --accent reste constant sur dark et light.
-     Seul --accent-subtle est ajusté pour la lisibilité sur fond clair. */
-  --accent-subtle : rgba(139, 107, 255, 0.14);
+     M3 (audit bugs visuels 2026-06-11) : l'ancien littéral indigo figeait
+     --accent-subtle en light quel que soit le thème choisi (spécificité
+     0,1,1 > :root) — ~18 états actifs gardaient un fond indigo sous un
+     texte de la couleur du thème. var(--gd) suit la map [data-theme]. */
+  --accent-subtle : var(--gd);
 
-  /* Bordures light — alpha noir au lieu d'alpha blanc */
-  --border-subtle  : rgba(0, 0, 0, 0.06);
-  --border-default : rgba(0, 0, 0, 0.12);
-  --border-strong  : rgba(0,0,0,.11);   /* préserve la valeur light (ex var(--border-3)) — sinon le .65 BLANC de §2ter fuirait en clair */
+  /* Bordures light — alpha noir, miroir des alphas dark (SC 1.4.11 ≥3:1).
+     Audit 2026-06-11 : les anciennes valeurs .06/.12/.11 composaient à
+     1.14–1.31:1 sur #F7F8FA (échec AA non-text) avec un ordre strong<default
+     inversé. Les hairlines décoratives restent sur --sep/--border-1/2/3. */
+  --border-subtle  : rgba(0, 0, 0, 0.45);   /* 3.3:1 sur #F7F8FA (composité) */
+  --border-default : rgba(0, 0, 0, 0.55);   /* 4.7:1 */
+  --border-strong  : rgba(0, 0, 0, 0.65);   /* 6.8:1 */
 
   /* Voiles & teintes light */
   --scrim-1 : rgba(0, 0, 0, 0.15);
@@ -395,6 +357,12 @@ html[data-mode="light"] {
   --tint-2  : rgba(0, 0, 0, 0.08);
   --tint-3  : rgba(0, 0, 0, 0.14);
 
+  /* États sémantiques — assombris pour AA texte sur fond clair (M4, audit
+     bugs visuels 2026-06-11 : #f59e0b ≈2.1:1 et #e84040 ≈3.8:1 sur #F7F8FA). */
+  --red:     #cf222e;   /* ≈4.8:1 sur #F7F8FA */
+  --red-rgb: 207,34,46;
+  --amber:   #9a6700;   /* ≈4.9:1 */
+
   /* Halo focus — sur fond clair, blanc plutôt que noir */
   --focus-halo : rgba(255, 255, 255, 0.55);
   /* AAA SC 2.4.13 : anneau de contraste neutre — sombre sur fond clair. */
@@ -402,6 +370,24 @@ html[data-mode="light"] {
 
   /* lf-toast-stack — override light */
   --lf-toast-action : #2563eb;   /* Tailwind Blue 600 — bouton action (light) */
+
+  /* ── Tokens light rapatriés de style.css (audit 2026-06-11, source unique §17) ── */
+  color-scheme: light;
+  --sep           : rgba(0,0,0,.07);
+  --player-shadow : 0 -1px 0 rgba(0,0,0,.08), 0 -4px 20px rgba(0,0,0,.06);
+  --border-1      : rgba(0,0,0,.07);
+  --border-2      : rgba(0,0,0,.09);
+  --border-3      : rgba(0,0,0,.11);
+  --glass-surface : var(--bg2);
+  --glass-panel   : var(--bg2);
+  --glass-hi      : transparent;
+  --scrim         : rgba(0,0,0,.30);
+  --scrim-heavy   : rgba(0,0,0,.40);
+  --blend-viz     : multiply;
+  /* EQ — couleurs de bande en mode clair (remplace les tokens --eq-*-light, UIH-eq-02) */
+  --eq-warm : #c45f10;
+  --eq-cool : #1a6fcc;
+  --eq-cut  : #d9520a;
 }
 
 
@@ -415,8 +401,10 @@ html[data-mode="light"] {
  * ============================================================================ */
 /* ── Variables ───────────────────────────────────────────── */
 :root {
-  /* R1 tokens canoniques + palette dark migrés vers design-system.css (B1). */
-  transition: --g var(--anim-art) ease;
+  /* R1 tokens canoniques + palette dark migrés vers design-system.css (B1).
+     NOTE : la transition racine (--art-color) vit dans la déclaration
+     `transition` unique en fin de bloc — une seconde `transition` sur :root
+     l'écraserait silencieusement. --g n'est PAS animé (M1, audit 2026-06-11). */
 
   /* ════════════════════════════════════════════════════════════════
      R1 — ÉCHELLES CANONIQUES D'HARMONISATION (audit 2026-05-21)
@@ -503,13 +491,13 @@ html[data-mode="light"] {
   --sp-4:  var(--space-4);    /* 16 */
   --sp-5:  var(--space-5);    /* 20 → 24 */
   --sp-6:  var(--space-5);    /* 24 */
-  --sp-7:  var(--space-6);    /* 28 → 32 */
+  --sp-7:  var(--space-8);    /* 28 → 32 */
   --sp-4h: var(--space-4);    /* 18 → 16 */
   --sp-5h: var(--space-5);    /* 22 → 24 */
-  --sp-7h: var(--space-6);    /* 30 → 32 */
+  --sp-7h: var(--space-8);    /* 30 → 32 */
   --sp-2d: var(--space-3);    /* 11 → 12 */
   --sp-3d: var(--space-4);    /* 15 → 16 */
-  --sp-8:  var(--space-6);    /* 32 */
+  --sp-8:  var(--space-8);    /* 32 */
   --sp-10: var(--space-7);    /* 40 → 48 */
   --sp-12: var(--space-7);    /* 48 */
   --sp-15: var(--space-7);    /* 60 → 48 */
@@ -600,7 +588,10 @@ html[data-mode="light"] {
   --search-input-min:  120px;   /* min-width input recherche (responsive) */
   --tb-btn-min:         34px;   /* min-width boutons toolbar / track-r */
   --target-min:         24px;   /* WCAG 2.2 SC 2.5.8 — cible tactile minimale (boutons icône inline) */
-  --time-min-w:         32px;   /* min-width affichage temps (dur, pos) */
+  --time-min-w:         40px;   /* min-width affichage temps (dur, pos) — 5 car.
+                                   tabular ("10:00") ; 32px provoquait un micro-
+                                   shift de la pbar au passage 9:59→10:00 (L1,
+                                   audit bugs visuels 2026-06-11) */
   --tag-lbl-w:          46px;   /* largeur label tag-edit-lbl */
   --dropdown-min-w:    150px;   /* min-width menus contextuels */
   --ctx-pane-min:      190px;   /* min-width panneau ctx / tag dropdown */
@@ -839,7 +830,8 @@ html[data-mode="light"] {
   --accelerate:  var(--ease-standard);
 
   --font: 'DM Sans', -apple-system, 'Segoe UI', sans-serif;
-  --font-display: 'Syne', -apple-system, sans-serif;
+  /* --font-display : défini en §3 (stack canonique) — le doublon drifté qui
+     vivait ici écrasait la définition §3 (audit 2026-06-11). */
 
   /* Ombres — l'échelle de base est recâblée sur les élévations canoniques
      (harmonisation, audit §2.4 / FND-04). Les ombres spécialisées plus bas
@@ -901,7 +893,7 @@ html[data-mode="light"] {
   --shadow-act-bar:   inset 3px 0 0 var(--g); /* barre active gauche */
   --shadow-tab-top:   inset 0 2px 0 0 var(--g); /* onglet actif haut */
   --shadow-tab-bot:   inset 0 -2px 0 0 var(--g); /* onglet actif bas */
-  --shadow-tr-focus:  inset 0 0 0 2px var(--g), inset 0 0 0 4px rgba(255,255,255,0.18); /* A11Y-22: colored ring + white inner layer */
+  --shadow-tr-focus:  inset 0 0 0 2px var(--g), inset 0 0 0 4px var(--focus-ring-contrast); /* A11Y-22 + SC 2.4.13 : anneau accent + ton neutre OPAQUE (theme-aware) — un blanc 18% d'alpha était quasi invisible en light et dépendant de l'accent */
   --shadow-tr-above:  0 -2px 0 var(--g); /* drag drop above */
   --shadow-tr-below:  0 2px 0 var(--g); /* drag drop below */
 
@@ -996,7 +988,9 @@ html[data-mode="light"] {
    *  base     in-flow content (au-dessus des pseudo-éléments)
    *  sticky   toolbar, sticky bars
    *  dropdown filter menus, popovers in-content
-   *  overlay  fullscreen overlays (cinema, drag, miniplayer flottant)
+   *  overlay  fullscreen overlays (drag, miniplayer flottant)
+   *  cinema   mode cinéma immersif — au-dessus des overlays (mp-ov, drago),
+   *           sous les modales/settings (V2, audit bugs visuels 2026-06-11)
    *  modal    modals (empilables avec calc(var(--z-modal) + offset))
    *  toast    notifications (au-dessus de toute modale)
    *  tooltip  ctxmenu, tooltips (top absolu)
@@ -1010,8 +1004,11 @@ html[data-mode="light"] {
   --z-sticky:   100;
   --z-dropdown: 200;
   --z-overlay:  500;
+  --z-cinema:   600;
   --z-modal:    800;
-  --z-player:   900;
+  /* --z-player supprimé (L3, audit bugs visuels 2026-06-11) : jamais consommé —
+     #pl est à z-auto (ordre DOM + stacking context backdrop-filter), le token
+     laissait croire que la player bar flottait au-dessus des modales. */
   --z-toast:    9000;
   --z-tooltip:  9999;
 
@@ -1046,11 +1043,40 @@ html[data-mode="light"] {
   /* Mini-player brand glow — dynamique via --g-rgb */
   --mini-glow: 0 0 0 1px rgba(var(--g-rgb),.20), 0 8px 40px rgba(0,0,0,.45);
 
-  /* Ambient art color — géré par @property ci-dessus */
+  /* Ambient art color — géré par @property (§12ter ci-dessous) */
   --art-color: transparent;
-  /* Transition racine : tous les héritiers voient la valeur animée */
+  /* Transition racine UNIQUE : tous les héritiers voient les valeurs animées.
+     Une seconde déclaration `transition` sur :root écraserait celle-ci.
+     M1 (audit bugs visuels 2026-06-11) : --g retiré — ses dérivés
+     --g-rgb/--gd/--gg ne sont pas animables (triplet/alpha non typés) ; un
+     --g animé seul désynchronisait 0.8s tout gradient mixant les deux
+     (sliders volume/crossfade, --mini-glow) et faisait « glisser » l'accent
+     au boot. Le changement d'accent snappe ; --art-color reste animée. */
   transition: --art-color var(--dur-art-color) ease;
 }
+
+/* ════════════════════════════════════════════════════════════════
+   §12ter — Typed custom properties (rapatriées de style.css, source unique §17)
+   Activent la transition CSS sur --art-color et garantissent un --g valide
+   au premier paint (M1 : --g n'est plus animé).
+   initial-value de --g = --accent (§2) — couplage documenté : @property
+   n'accepte pas var() dans initial-value.
+   ════════════════════════════════════════════════════════════════ */
+@property --art-color {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: transparent;
+}
+@property --g {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #8B6BFF;
+}
+
+/* ── Zoom liste de pistes (rapatrié de style.css — pilote --tr-h/--art-list §13) ── */
+:root[data-tlist-zoom="compact"]     { --tr-h: 36px; --art-list: 42px; }
+:root[data-tlist-zoom="normal"]      { --tr-h: 48px; --art-list: 56px; }  /* Normal = pré-feature (intouché) */
+:root[data-tlist-zoom="comfortable"] { --tr-h: 60px; --art-list: 70px; }
 
 /* ── Thèmes couleur (accent par défaut = Electric Indigo via --accent) ─── */
 [data-theme="indigo"] { --g:#8B6BFF; --g-rgb:139,107,255; --gd:rgba(139,107,255,.14); --gg:rgba(139,107,255,.28); }

@@ -47,3 +47,8 @@ blob-report/
 
 # Perf benchmarks (current run artifacts, not committed)
 .perf-current.json
+.perf-run*.json
+
+# Generated knowledge-graph output (graphify) + plugin cache
+graphify-out/
+.ecc/

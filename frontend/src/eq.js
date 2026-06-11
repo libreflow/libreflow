@@ -481,7 +481,11 @@ function _setEQEnabled(val) {
   const zeros = new Array(EQ_BAND_COUNT).fill(0);
   if (!eqEnabled) {
     // Bypass : mémoriser les gains courants (custom inclus) puis aplatir (audio + visuel).
-    _preBypassGains = (_currentGains?.length === EQ_BAND_COUNT) ? [..._currentGains] : (eqNodes.length ? eqNodes.map(n => n.gain.value) : null);
+    // M5 FIX: prefer _currentGains (intentional target); fall back to active preset to avoid
+    // sampling AudioParam mid-ramp via n.gain.value which captures an intermediate value.
+    _preBypassGains = (_currentGains?.length === EQ_BAND_COUNT)
+      ? [..._currentGains]
+      : (EQ_PRESETS[_activePreset] ? [...EQ_PRESETS[_activePreset]] : null);
     _applyGains(zeros);
     _animateSlidersTo(zeros);
   } else if (_preBypassGains) {
@@ -580,7 +584,11 @@ export function toggleEQAB() {
   _abMode = !_abMode;
   if (_abMode) {
     // Mode A : sauvegarde gains courants, applique flat
-    _abSavedGains = (_currentGains?.length === EQ_BAND_COUNT) ? [..._currentGains] : eqNodes.map(n => n.gain.value);
+    // M5 FIX: prefer _currentGains (intentional target); fall back to active preset to avoid
+    // sampling AudioParam mid-ramp via n.gain.value which captures an intermediate value.
+    _abSavedGains = (_currentGains?.length === EQ_BAND_COUNT)
+      ? [..._currentGains]
+      : (EQ_PRESETS[_activePreset] ? [...EQ_PRESETS[_activePreset]] : new Array(EQ_BAND_COUNT).fill(0));
     _applyGains(EQ_PRESETS.flat);
   } else {
     // Mode B : restaure gains sauvegardés
@@ -637,9 +645,10 @@ export function renderEQBands() {
   if (!container) return;
 
   const LABELS = ['32', '64', '125', '250', '500', '1k', '2k', '4k', '8k', '16k'];
-  const gains = eqNodes.length
-    ? eqNodes.map(n => n.gain.value)
-    : new Array(EQ_BAND_COUNT).fill(0);
+  // M5 FIX (LOW): prefer _currentGains (intentional target) over n.gain.value (mid-ramp snapshot).
+  const gains = _currentGains?.length === EQ_BAND_COUNT
+    ? _currentGains
+    : (eqNodes.length ? eqNodes.map(n => n.gain.value) : new Array(EQ_BAND_COUNT).fill(0));
 
   const resetHint = i18n('eq_band_reset_hint');
   let html = '';

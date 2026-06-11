@@ -23,6 +23,11 @@
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
+/* V8 (audit bugs visuels 2026-06-11) : l'attribut hidden doit gagner sur toute
+   règle display auteur (ex. #cd-actions est un .modal-btns{display:flex} —
+   la règle UA [hidden] seule perdait la cascade pendant le rip CD). */
+[hidden] { display: none !important; }
+
 /* ── Accessibilité — skip link + sr-only ─────────────────────────────────── */
 .skip-link {
   position: fixed;
@@ -77,23 +82,8 @@
   to   { transform: rotate(360deg); }
 }
 
-/* ── Typed custom property — active les transitions CSS sur --art-color ── */
-@property --art-color {
-  syntax: '<color>';
-  inherits: true;
-  initial-value: transparent;
-}
-/* Permet d'animer --g (accent dynamique depuis pochette) */
-@property --g {
-  syntax: '<color>';
-  inherits: true;
-  initial-value: #8B6BFF;
-}
-
-/* ── Zoom liste de pistes ────────────────────────────────── */
-:root[data-tlist-zoom="compact"]     { --tr-h: 36px; --art-list: 42px; }
-:root[data-tlist-zoom="normal"]      { --tr-h: 48px; --art-list: 56px; }  /* Normal = pré-feature (intouché) */
-:root[data-tlist-zoom="comfortable"] { --tr-h: 60px; --art-list: 70px; }
+/* ── @property --art-color / --g + zoom liste de pistes : rapatriés dans
+      design-system.css §12ter (source unique des tokens, audit 2026-06-11) ── */
 
 /* ── EQ par appareil ──────────────────────────────────────────────────────── */
 .eq-device-profiles-list {
@@ -141,8 +131,10 @@
   min-height: 1px;
 }
 .eq-bar-boost { background: var(--g); }
-.eq-bar-cut   { background: rgba(255,80,80,0.7); }
-.eq-bar-flat  { background: rgba(255,255,255,0.15); }
+/* L9 (audit bugs visuels 2026-06-11) : tokens thémés — les littéraux blancs
+   étaient invisibles en light, le rouge ignorait --eq-cut. */
+.eq-bar-cut   { background: var(--eq-cut); }
+.eq-bar-flat  { background: var(--tint-3); }
 .eq-device-del-btn {
   flex-shrink: 0;
   opacity: 0.6;
@@ -333,27 +325,9 @@
 }
 
 /* ── Thème clair ─────────────────────────────────────────── */
-/* --bg, --bg1-6, --t, --t2-4, --focus-halo, --border-subtle/default,
-   --scrim-1/2/3, --tint-1/2/3, --accent-subtle now owned by design-system.css §12 */
-html[data-mode="light"] {
-  --sep: rgba(0,0,0,.07);
-  --player-shadow: 0 -1px 0 rgba(0,0,0,.08), 0 -4px 20px rgba(0,0,0,.06);
-  color-scheme: light;
-  /* ── Surcharge variables inline pour le thème clair ── */
-  --border-1:      rgba(0,0,0,.07);
-  --border-2:      rgba(0,0,0,.09);
-  --border-3:      rgba(0,0,0,.11);
-  --glass-surface: var(--bg2);
-  --glass-panel:   var(--bg2);
-  --glass-hi:      transparent;
-  --scrim:         rgba(0,0,0,.30);
-  --scrim-heavy:   rgba(0,0,0,.40);
-  --blend-viz:     multiply;
-  /* EQ — couleurs de bande en mode clair (remplace les tokens --eq-*-light, UIH-eq-02) */
-  --eq-warm: #c45f10;
-  --eq-cool: #1a6fcc;
-  --eq-cut:  #d9520a;
-}
+/* TOUS les tokens light (--bg*, --t*, --sep, --border-*, --glass-*, --scrim*,
+   --eq-*, --player-shadow, color-scheme…) vivent dans design-system.css §12
+   (source unique, audit 2026-06-11). Ce fichier ne garde que des RÈGLES light. */
 
 /* ── Base ── */
 html[data-mode="light"] body          { background:var(--bg); color:var(--t); }
@@ -480,7 +454,7 @@ html[data-mode="light"] .tart         { background:var(--bg4); }
 html[data-mode="light"] .tart img,
 html[data-mode="light"] .card-art img,
 html[data-mode="light"] .pl-art img  { outline-color: rgba(0,0,0,.06); }
-html[data-mode="light"] .grp-lbl      { color:var(--t3); background:var(--bg); letter-spacing: var(--ls-label); border-bottom:var(--border-w-sm) solid var(--sep); }
+/* .grp-lbl light supprimé (L2, audit 2026-06-11) — orphelin, cf. .tr-grp */
 html[data-mode="light"] .tlk svg      { stroke:var(--t3); }
 html[data-mode="light"] .tlk.on svg   { stroke:var(--g); fill:var(--g); }
 
@@ -499,10 +473,10 @@ html[data-mode="light"] .card:hover   { background:var(--bg3); border-color:var(
 html[data-mode="light"] .card-art     { background:var(--bg4); }
 html[data-mode="light"] .card-name    { color:var(--t); }
 html[data-mode="light"] .card-sub     { color:var(--t3); }
-/* ── Genre cards : lisibilité en mode clair ── */
-html[data-mode="light"] .genre-name  { color:var(--t); text-shadow: var(--tshadow-genre); }
-html[data-mode="light"] .genre-count { color:var(--t2); }
-html[data-mode="light"] .genre-badge { background:rgba(0,0,0,.10); border-color:rgba(0,0,0,.12); color:var(--t); }
+/* ── Genre cards : pas d'override light (V5, audit bugs visuels 2026-06-11) —
+   le scrim .genre-card::after reste noir .75 dans les deux thèmes, le texte
+   --text-on-media (blanc) est donc correct partout. Les anciens overrides
+   posaient du texte sombre (var(--t) light) sur ce scrim sombre. ── */
 
 /* ── Menu contextuel ── */
 /* background/border automatiques via --glass-panel / --border-3 */
@@ -594,13 +568,15 @@ html[data-mode="light"] input[type=range] { accent-color:var(--g); }
 /* ── EQ par appareil — overrides clair ── */
 html[data-mode="light"] .eq-device-entry          { background: rgba(0,0,0,0.04); }
 html[data-mode="light"] .eq-device-entry.active   { background: rgba(var(--g-rgb), 0.08); }
-html[data-mode="light"] .eq-bar-flat              { background: rgba(0,0,0,0.12); }
+/* .eq-bar-flat : plus d'override — var(--tint-3) est thémé (L9, audit 2026-06-11) */
 
 /* ── File d'attente ── */
 html[data-mode="light"] #queue-panel   { background:var(--bg2); border-left:var(--border-w-sm) solid var(--bg5); }
 html[data-mode="light"] .queue-item    { color:var(--t2); border-bottom:var(--border-w-sm) solid var(--sep); }
 html[data-mode="light"] .queue-item:hover { background:var(--bg3); }
-html[data-mode="light"] .queue-item.act  { color:var(--t); background:rgba(var(--g-rgb),.08); border-left:var(--border-w-lg) solid var(--g); }
+/* .queue-item.act : règle morte supprimée (L5, audit 2026-06-11) — la classe
+   n'était posée par aucun JS ; la piste courante de la file est marquée via
+   .playing-row (patchPlayState). */
 
 /* ── Barre de sélection multiple ── */
 html[data-mode="light"] #sel-bar              { background:var(--bg2); border:var(--border-w-sm) solid var(--bg5); box-shadow:var(--shadow-sel-lt); }
@@ -1284,13 +1260,8 @@ body.lib-empty .sb-nav .ni {
 /* ═══ LISTE DE TITRES ════════════════════════════════════════ */
 /* .tlist styles managed via #content-area #tlist below */
 
-.grp-lbl {
-  padding: var(--sp-3) var(--sp-3h) var(--sp-1);
-  font-size: var(--fs-xs); font-weight: 600; color: var(--t3);
-  letter-spacing: var(--ls-caps); text-transform: uppercase;
-  position: sticky; top: 0; z-index: var(--z-sticky); background: var(--bg);
-  min-height: 28px; /* doit correspondre à VIRT_GRP_H dans cfg.js */
-}
+/* .grp-lbl supprimé (L2, audit bugs visuels 2026-06-11) : orphelin — le vrai
+   en-tête de groupe généré par renderer.js est .tr-grp. */
 
 .tr {
   display: grid; grid-template-columns: var(--art-list) minmax(0,1fr) minmax(0,12em) auto;
@@ -1318,8 +1289,8 @@ body.lib-empty .sb-nav .ni {
   animation: rowBreath 3.2s ease-in-out infinite;
 }
 @keyframes rowBreath {
-  0%, 100% { background: linear-gradient(90deg, color-mix(in srgb, var(--art-color, var(--g)) 15%, transparent) 0%, transparent 62%); }
-  50%       { background: linear-gradient(90deg, color-mix(in srgb, var(--art-color, var(--g)) 24%, transparent) 0%, transparent 62%); }
+  0%, 100% { background: linear-gradient(90deg, color-mix(in srgb, var(--art-color, var(--np-color)) 15%, transparent) 0%, transparent 62%); }
+  50%       { background: linear-gradient(90deg, color-mix(in srgb, var(--art-color, var(--np-color)) 24%, transparent) 0%, transparent 62%); }
 }
 .tr.act .tn  { color: var(--t); font-weight: 600; }
 
@@ -1352,8 +1323,9 @@ body.lib-empty .sb-nav .ni {
   from { background-position: 250% center; }
   to   { background-position: -250% center; }
 }
-.tart.loading,
-.card-art.loading {
+/* L7 (audit 2026-06-11) : .card-art.loading retiré du sélecteur — jamais posé
+   par le JS (les grilles utilisent .card-art-ph statique). */
+.tart.loading {
   background: linear-gradient(
     105deg,
     var(--bg3) 0%,
@@ -1555,7 +1527,11 @@ body.lib-empty .sb-nav .ni {
 
 /* ── Densité container — panneau ouvert ou fenêtre étroite ── */
 @container content (max-width: 480px) { /* couvre album-grid, artist-grid ET genre-grid (tous enfants de #content-area container:content) */
-  .card-sub  { display: none; }
+  /* AC8 (audit cards 2026-06-11) : masquer .card-ct (année+compteur, info
+     tertiaire) plutôt que .card-sub — avant, la card Album perdait l'artiste
+     mais gardait le compteur, et la card Artiste perdait tout son sous-titre.
+     Désormais toutes les cards gardent « nom + 1 ligne secondaire ». */
+  .card-ct   { display: none; }
   .card-info { padding: var(--sp-1h) var(--sp-2); }
 }
 
@@ -1630,11 +1606,17 @@ body.lib-empty .sb-nav .ni {
   letter-spacing: var(--ls-display);
 }
 .card-sub { font-size: var(--fs-f-caption); color: var(--t2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: var(--lh-comfort); }
-.card-ct  { font-size: var(--fs-xs); color: var(--t3); margin-top: var(--sp-nano); }
-.card-year { font-size: var(--fs-xs); color: var(--t3); margin-left: var(--sp-1); }
+.card-ct  { font-size: var(--fs-xs); color: var(--t3); margin-top: var(--sp-nano); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* .card-year supprimé (AC5/AC6, audit cards 2026-06-11) : l'année vit désormais
+   dans .card-ct (« 2008 · 12 titres ») — plus éjectable par l'ellipsis du sub. */
 
 /* ── Texte sous l'artwork ────────────────────────────────── */
-.card-info { overflow: hidden; flex: 1; min-width: 0; }
+/* AC1 (audit cards 2026-06-11) : colonne flex — les spans enfants (card-name/
+   sub/ct) sont blockifiés en flex items, ce qui rend ENFIN effectifs leurs
+   ellipsis et marges verticales (ignorés sur inline). Avant : flux inline →
+   nombre de lignes variable selon la longueur du contenu, débordement clippé
+   sans « … ». L'ancien flex:1 était inerte (.card n'est pas flex). */
+.card-info { overflow: hidden; min-width: 0; display: flex; flex-direction: column; }
 /* Placeholder artwork (emoji) quand aucune pochette disponible */
 .card-art-ph { display: flex; align-items: center; justify-content: center; width: 100%; height: 100%; font-size: var(--fs-disp-sm); user-select: none; }
 
@@ -1670,7 +1652,9 @@ body.lib-empty .sb-nav .ni {
   font-size: var(--fs-xs); font-weight: 500;
   color: var(--t3); /* A11Y: en-tête de groupe lisible — --t4 (1.5:1) → --t3 (7:1) */
   letter-spacing: var(--ls-caps); text-transform: uppercase;
-  position: sticky; top: 0; z-index: 2;
+  /* M11 (audit 2026-06-11) : z 3 > .tr.editing (z 2) — à z égal l'ordre DOM
+     gagnait et la row en édition chevauchait l'en-tête collé au scroll. */
+  position: sticky; top: 0; z-index: 3;
   background: var(--bg); /* fond identique à la liste — supprime la bande bleue */
 }
 .tr-grp--alpha {
@@ -1720,8 +1704,8 @@ body.lib-empty .sb-nav .ni {
 #content-area #tlist   { flex: 1; overflow-y: auto; padding: var(--sp-1h) var(--sp-2h) var(--sp-4); min-height: 0;
                          scrollbar-gutter: stable;         /* CLS fix : réserve la place de la scrollbar dès le départ */
                          /* WCAG 2.2 SC 2.4.11 : réserver la hauteur de l'en-tête de groupe collant
-                            (.grp-lbl, sticky top:0, min-height 28px) pour qu'une ligne focusée au
-                            clavier ne se retrouve jamais masquée dessous (scrollIntoView/focus). */
+                            (.tr-grp, sticky top:0, height 28px = CFG.VIRT_GRP_H) pour qu'une ligne
+                            focusée au clavier ne soit jamais masquée dessous (scrollIntoView/focus). */
                          scroll-padding-top: 32px;
                          contain: layout paint;            /* CLS fix : les re-renders virtuels n'affectent pas le layout parent */ }
 #content-area #genre-grid { display: none; }
@@ -1804,7 +1788,10 @@ body.lib-empty .sb-nav .ni {
 .genre-name  {
   font-size: var(--fs-base); font-weight: 700;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-  color: var(--text-on-accent); text-shadow: var(--tshadow-title);
+  /* V5 : --text-on-media (blanc) — le texte repose sur le scrim noir .75 de
+     .genre-card::after, pas sur un fond accent ; --text-on-accent (#050505)
+     y était quasi illisible (<2:1) dans les deux thèmes. */
+  color: var(--text-on-media); text-shadow: var(--tshadow-title);
 }
 .genre-count {
   font-size: var(--fs-sm); color: rgba(255,255,255,.6);
@@ -1841,10 +1828,12 @@ body.lib-empty .sb-nav .ni {
 /* Badge "dominant" pour le genre le plus écouté */
 .genre-badge {
   position: absolute; top: var(--sp-2h); right: var(--sp-2h); z-index: 3;
-  background: rgba(255,255,255,.15); backdrop-filter: blur(var(--blur-6));
+  /* V5 : scrim sombre + blanc (aligné sur .genre-variants-badge) — le fond
+     blanc .15 + --text-on-accent noir était illisible sur la mosaïque. */
+  background: rgba(0,0,0,.35); backdrop-filter: blur(var(--blur-6));
   border: var(--border-w-sm) solid rgba(255,255,255,.2);
   border-radius: var(--r-pill); padding: var(--sp-micro) var(--sp-2);
-  font-size: var(--fs-xs); font-weight: 600; color: var(--text-on-accent);
+  font-size: var(--fs-xs); font-weight: 600; color: var(--text-on-media);
 }
 
 /* Badge "+N variantes" — indique que plusieurs tags bruts ont été fusionnés */
@@ -2149,6 +2138,11 @@ html[data-mode="light"] .empty-cta {
   transition: background 1.2s ease;
   view-transition-name: player-bar; contain: layout;
 }
+/* V1 (audit bugs visuels 2026-06-11) : #next-preview (bottom:calc(100%+…))
+   était clippée aux 2/3 par le overflow:hidden ci-dessus. Levé uniquement
+   pendant le survol de ⏭ — #pl-viz est inset:0 et les fonds sont clippés
+   au border-box, rien d'autre ne déborde de #pl. */
+#pl:has(#btn-next:hover) { overflow: visible; }
 
 /* Ligne d'accent au sommet du player — s'allume quand la musique joue.
    :has(.pcplay.playing) évite tout changement JS : .pcplay reçoit déjà .playing. */
@@ -2158,13 +2152,14 @@ html[data-mode="light"] .empty-cta {
   background: linear-gradient(
     90deg,
     transparent,
-    var(--accent-subtle) 25%,
-    var(--g) 50%,
-    var(--accent-subtle) 75%,
+    var(--np-wash) 25%,
+    var(--np-color) 50%,
+    var(--np-wash) 75%,
     transparent
   );
   opacity: 0;
-  transition: opacity var(--motion-slow) var(--ease-standard);
+  transition: opacity var(--motion-slow) var(--ease-standard),
+              background 1.1s ease;
   pointer-events: none;
   z-index: 2;
 }
@@ -2362,9 +2357,12 @@ html[data-mode="light"] .empty-cta {
 .pcplay svg    { width: var(--icon-md); height: var(--icon-md); fill: var(--text-on-accent);
                  position: absolute; top: 50%; left: 50%;
                  transition: opacity var(--dur-fast) ease, filter var(--dur-fast) ease, transform var(--dur-fast) var(--spring); }
-#ico-play      { transform: translate(calc(-50% + var(--sp-micro)), -50%); opacity: 1; filter: blur(0); }
+/* Centrage optique : le polygon play est déjà décalé de +1 unité dans son
+   viewBox (centre du tracé x=13/24) — pas d'offset CSS supplémentaire, sinon
+   double compensation et triangle visiblement décentré à droite. */
+#ico-play      { transform: translate(-50%, -50%); opacity: 1; filter: blur(0); }
 #ico-pause     { transform: translate(-50%, -50%) scale(0.65); opacity: 0; filter: blur(2px); }
-.pcplay.playing #ico-play  { transform: translate(calc(-50% + var(--sp-micro)), -50%) scale(0.65); opacity: 0; filter: blur(2px); }
+.pcplay.playing #ico-play  { transform: translate(-50%, -50%) scale(0.65); opacity: 0; filter: blur(2px); }
 .pcplay.playing #ico-pause { transform: translate(-50%, -50%); opacity: 1; filter: blur(0); }
 .pcplay.playing { box-shadow: var(--shadow-pcplay-glow); }
 
@@ -2544,8 +2542,10 @@ html[data-mode="light"] .empty-cta {
   text-overflow: ellipsis;
 }
 
-/* A11Y-SLIDER-1 — focus clavier : halo autour de la piste + scale du thumb */
-.vslider:focus-visible { box-shadow: 0 0 0 2px var(--g), 0 0 0 4px rgba(var(--g-rgb), .18); }
+/* A11Y-SLIDER-1 — focus clavier : halo autour de la piste + scale du thumb.
+   SC 2.4.13 : liseré neutre opaque ajouté — les deux tons accent seuls
+   échouaient si l'accent choisi contraste mal avec le fond. */
+.vslider:focus-visible { box-shadow: 0 0 0 2px var(--g), 0 0 0 4px rgba(var(--g-rgb), .18), 0 0 0 5px var(--focus-ring-contrast); }
 .vslider:focus-visible::-webkit-slider-thumb { transform: scale(1.3); }
 
 .pl-queue-btn {
@@ -2611,7 +2611,7 @@ html[data-mode="light"] .empty-cta {
 .sleep-custom-inp {
   flex: 1; min-width: 0;
   background: var(--bg4); border: var(--border-w-md) solid var(--bg5); border-radius: var(--r);
-  padding: var(--sp-1p) var(--sp-2); color: var(--t); font-size: var(--fs-caption); outline: none;
+  padding: var(--sp-1p) var(--sp-2); color: var(--t); font-size: var(--fs-caption);
   transition: border-color var(--ease);
 }
 .sleep-custom-inp:focus     { border-color: var(--g); }
@@ -2639,7 +2639,7 @@ html[data-mode="light"] .sleep-custom-inp:focus { border-color: var(--g); backgr
 .tr.editing { background: var(--bg3) !important; outline: var(--border-w-md) solid var(--g); border-radius: var(--r2); z-index: 2; position: relative; }
 .tag-edit-form { display: flex; flex-direction: column; gap: var(--sp-1); padding: var(--sp-1) var(--sp-2) var(--sp-2); flex: 1; min-width: 0; }
 .tag-edit-row  { display: flex; gap: var(--sp-1h); align-items: center; }
-.tag-edit-inp  { background: var(--bg4); border: var(--border-w-sm) solid var(--bg5); border-radius: var(--r); padding: var(--sp-1) var(--sp-2); color: var(--t); font-size: var(--fs-caption); outline: none; min-width: 0; transition: border-color var(--ease); flex: 1; }
+.tag-edit-inp  { background: var(--bg4); border: var(--border-w-sm) solid var(--bg5); border-radius: var(--r); padding: var(--sp-1) var(--sp-2); color: var(--t); font-size: var(--fs-caption); min-width: 0; transition: border-color var(--ease); flex: 1; }
 .tag-edit-inp:focus   { border-color: var(--g); box-shadow: 0 0 0 2px color-mix(in srgb, var(--g) 35%, transparent); }
 .tag-edit-inp::placeholder { color: var(--t3); }
 .tag-edit-lbl  { font-size: var(--fs-xs); color: var(--t3); font-weight: 600; white-space: nowrap; width: var(--tag-lbl-w); text-align: right; flex-shrink: 0; }
@@ -2842,7 +2842,7 @@ html[data-mode="light"] .modal-h {
 .prompt-bg.on { visibility: visible; opacity: 1; pointer-events: auto; }
 .prompt-modal { background: var(--glass-surface); border: var(--border-w-sm) solid var(--border-2); border-radius: var(--r3); padding: var(--sp-7) var(--sp-7) var(--sp-5h); max-width: var(--text-sf-max); width: 90vw; box-shadow: var(--shadow-xl); display: flex; flex-direction: column; gap: var(--sp-3); max-height: calc(100vh - var(--sp-8)); overflow-y: auto; /* R-C1 */ }
 .modal-title { font-size: var(--fs-base); font-weight: 700; font-family: var(--font-display); letter-spacing: var(--ls-display); }
-.prompt-input { background: var(--bg3); border: var(--border-w-sm) solid var(--border-2); border-radius: var(--r); padding: var(--sp-2) var(--sp-3); color: var(--t); font-size: var(--fs-md); outline: none; }
+.prompt-input { background: var(--bg3); border: var(--border-w-sm) solid var(--border-2); border-radius: var(--r); padding: var(--sp-2) var(--sp-3); color: var(--t); font-size: var(--fs-md); }
 .prompt-input:focus { border-color: var(--g); }
 .modal-actions { display: flex; gap: var(--sp-2); justify-content: flex-end; }
 
@@ -2985,7 +2985,7 @@ html[data-mode="light"] .orphan-item { border-bottom-color: var(--bg5); }
 .bte-input {
   width: 100%; background: var(--bg4); border: var(--border-w-md) solid var(--bg5);
   border-radius: var(--r); padding: var(--sp-2) var(--sp-2h);
-  color: var(--t); font-size: var(--fs-md); outline: none;
+  color: var(--t); font-size: var(--fs-md);
   transition: border-color var(--ease);
 }
 .bte-input:focus          { border-color: var(--g); box-shadow: 0 0 0 2px color-mix(in srgb, var(--g) 35%, transparent); }
@@ -3033,7 +3033,7 @@ html[data-mode="light"] .bte-cover-preview  { background: var(--bg3); border-col
 html[data-mode="light"] .bte-cover-clear    { background: var(--bg3); border-color: var(--bg5); }
 
 .pl-modal-h    { font-size: var(--fs-subhead); font-weight: 700; margin-bottom: var(--sp-3h); text-wrap: balance; }
-.pl-modal-inp  { width: 100%; background: var(--bg4); border: var(--border-w-md) solid var(--bg5); border-radius: var(--r); padding: var(--sp-2q) var(--sp-3); color: var(--t); font-size: var(--fs-md); outline: none; transition: border-color var(--ease); }
+.pl-modal-inp  { width: 100%; background: var(--bg4); border: var(--border-w-md) solid var(--bg5); border-radius: var(--r); padding: var(--sp-2q) var(--sp-3); color: var(--t); font-size: var(--fs-md); transition: border-color var(--ease); }
 .pl-modal-inp:focus   { border-color: var(--g); box-shadow: 0 0 0 2px color-mix(in srgb, var(--g) 35%, transparent); }
 .pl-modal-inp.shake   { animation: t-spin .1s linear 4; border-color: var(--red); }
 .pl-modal-btns { display: flex; gap: var(--sp-2); justify-content: flex-end; margin-top: var(--sp-3h); align-items: center; }
@@ -3172,7 +3172,7 @@ html[data-mode="light"] .bte-cover-clear    { background: var(--bg3); border-col
 .spl-rule-row select, .spl-rule-row input[type=text], .spl-rule-row input[type=number] {
   background: var(--bg2); border: var(--border-w-sm) solid var(--bg5); border-radius: var(--r);
   color: var(--t); font-size: var(--fs-caption); padding: var(--sp-1) var(--sp-1d);
-  outline: none; min-width: 0;
+  min-width: 0;
 }
 .spl-rule-row select:focus, .spl-rule-row input:focus { border-color: var(--g); box-shadow: 0 0 0 2px color-mix(in srgb, var(--g) 35%, transparent); }
 .spl-rule-row .spl-rule-field { flex: 1.2; }
@@ -3599,6 +3599,13 @@ html[data-mode="light"] .bte-cover-clear    { background: var(--bg3); border-col
   white-space: normal; overflow: visible; text-overflow: initial;
   cursor: text;
 }
+/* SC 2.4.13 — le outline:none des contenteditable (spécificité 0,2,0) écrasait
+   le ring global :focus-visible (0,1,0) : restauration explicite (audit 2026-06-11) */
+.pl-hero-name[contenteditable="true"]:focus-visible,
+.pl-name[contenteditable="true"]:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-offset);
+}
 
 .pl-hero-stats {
   font-size: var(--fs-caption); color: var(--t3); margin-top: var(--sp-1q);
@@ -3744,7 +3751,7 @@ html[data-mode="light"] .pl-folder-h:hover .pl-folder-count { background: var(--
 .set-section-lbl { font-size: var(--fs-xs); font-weight: 700; color: var(--t3); letter-spacing: var(--ls-caps); text-transform: uppercase; margin-bottom: var(--space-3); font-family: var(--font-display); padding-left: var(--space-2); border-left: var(--border-w-lg) solid rgba(var(--g-rgb), .35); }
 .set-row         { display: flex; align-items: center; justify-content: space-between; margin-bottom: var(--space-3); gap: var(--space-3); border-radius: var(--radius-xs); transition: opacity var(--dur-fast) var(--smooth), background var(--motion-fast) var(--ease-standard); }
 .set-row:last-child { margin-bottom: 0; }
-.set-row:hover   { background: rgba(255,255,255,.025); }
+.set-row:hover   { background: var(--tint-1); } /* token theme-aware — le rgba(255,255,255,.025) littéral était invisible en light (audit 2026-06-11) */
 .set-row-label   { font-size: var(--fs-md); color: var(--t2); line-height: var(--lh-comfort); }
 .set-row-sub     { font-size: var(--fs-sm); color: var(--t3); margin-top: var(--sp-micro); }
 
@@ -3790,7 +3797,10 @@ html[data-mode="light"] .pl-folder-h:hover .pl-folder-count { background: var(--
 .tlist-zoom-radio input[type="radio"]:active + span { transform: scale(.97); }
 
 .theme-swatches   { display: flex; gap: var(--sp-2); flex-wrap: wrap; }
-.theme-swatch     { width: var(--icon-28); height: var(--icon-28); border-radius: 50%; border: var(--border-w-lg) solid transparent; transition: transform var(--motion-fast) var(--ease-standard), border-color var(--motion-fast) var(--ease-standard), box-shadow var(--motion-fast) var(--ease-standard); flex-shrink: 0; padding: 0; cursor: pointer; box-shadow: var(--elev-2); }
+/* Le swatch porte data-theme="X" : la map [data-theme] de design-system.css
+   redéfinit --g DANS l'élément → background = l'accent réel du thème, source
+   unique. (Les hex inline dans index.html driftaient vs la map — audit 2026-06-11.) */
+.theme-swatch     { width: var(--icon-28); height: var(--icon-28); border-radius: 50%; border: var(--border-w-lg) solid transparent; background: var(--g); transition: transform var(--motion-fast) var(--ease-standard), border-color var(--motion-fast) var(--ease-standard), box-shadow var(--motion-fast) var(--ease-standard); flex-shrink: 0; padding: 0; cursor: pointer; box-shadow: var(--elev-2); }
 .theme-swatch:focus-visible { outline: var(--border-w-lg) solid var(--t); outline-offset: var(--sp-1q); }
 .theme-swatch:hover { transform: scale(1.15); }
 .theme-swatch.on    { border-color: transparent; transform: scale(1.15); box-shadow: 0 0 0 2px var(--bg-base), 0 0 0 4px var(--accent); }
@@ -3800,8 +3810,8 @@ html[data-mode="light"] .pl-folder-h:hover .pl-folder-count { background: var(--
 .cf-slider::-webkit-slider-thumb { -webkit-appearance: none; width: var(--icon-md); height: var(--icon-md); border-radius: 50%; background: var(--g); box-shadow: var(--shadow-cf-thumb); transition: transform var(--ease); }
 /* CONSISTENCY-1 — hover thumb manquant (vslider l'avait, cf-slider non) */
 .cf-slider:hover::-webkit-slider-thumb { transform: scale(1.2); }
-/* A11Y-SLIDER-2 — focus clavier crossfade */
-.cf-slider:focus-visible { outline: none; box-shadow: 0 0 0 2px var(--g), 0 0 0 4px rgba(var(--g-rgb), .18); }
+/* A11Y-SLIDER-2 — focus clavier crossfade (+ liseré neutre opaque, SC 2.4.13) */
+.cf-slider:focus-visible { outline: none; box-shadow: 0 0 0 2px var(--g), 0 0 0 4px rgba(var(--g-rgb), .18), 0 0 0 5px var(--focus-ring-contrast); }
 .cf-slider:focus-visible::-webkit-slider-thumb { transform: scale(1.25); }
 .cf-val          { font-size: var(--fs-caption); color: var(--t2); min-width: var(--cfg-val-min); text-align: right; }
 
@@ -3962,7 +3972,8 @@ html[data-mode="light"] .pl-folder-h:hover .pl-folder-count { background: var(--
 .queue-item  { display: flex; align-items: center; gap: var(--sp-2); padding: var(--sp-1d) var(--sp-3h); cursor: pointer; transition: background var(--dur-fast) ease, transform var(--dur-interact) var(--spring-soft); border-radius: var(--sp-1); margin: 0 var(--sp-1); }
 .queue-item:hover     { background: var(--bg3); }
 .queue-item:active    { transform: scale(.98); transition-duration: var(--dur-fast); }
-.queue-item.active    { background: var(--accent-subtle); }
+/* .queue-item.active : règle morte supprimée (L5, audit 2026-06-11) — jamais
+   posée par le JS (cf. .playing-row pour la piste courante). */
 .queue-empty          { padding: var(--sp-10) var(--sp-5); text-align: center; color: var(--t3); font-size: var(--fs-caption); }
 .q-art    { width: var(--icon-36); height: var(--icon-36); border-radius: var(--sp-1); background: var(--bg4); flex-shrink: 0; overflow: hidden; display: flex; align-items: center; justify-content: center; font-size: var(--fs-base); position: relative; }
 .q-art img { width: 100%; height: 100%; object-fit: cover; }
@@ -4158,6 +4169,12 @@ html[data-mode="light"] .pl-folder-h:hover .pl-folder-count { background: var(--
 .queue-ghost--spring {
   animation: qSpringBack var(--dur-modal) var(--ease-spring) forwards;
 }
+/* L4 (audit bugs visuels 2026-06-11) : le modificateur était togglé par
+   queue.js sans aucune règle — drag de promotion (file naturelle → explicite)
+   visuellement identique au reorder. Ring accent = signal de promotion. */
+.queue-ghost--promote {
+  box-shadow: var(--shadow-mp-drag), 0 0 0 2px var(--g);
+}
 
 /* ═══ ÉGALISEUR ══════════════════════════════════════════════ */
 
@@ -4335,9 +4352,9 @@ html[data-mode="light"] .eq-bands {
   z-index: 0;
   border-radius: var(--r-micro);
 }
-html[data-mode="light"] .eq-slider-wrap::before {
-  background: rgba(0,0,0,.16);
-}
+/* Repère 0 dB en light — le hairline blanc 20% était invisible sur fond clair
+   (perte d'un repère fonctionnel, audit 2026-06-11) */
+html[data-mode="light"] .eq-slider-wrap::before { background: rgba(0,0,0,.45); }
 
 /* Hover bande : tint art-color pour cohérence avec le mode AUTO ──────────── */
 .eq-band:hover .eq-slider-wrap {
@@ -4553,21 +4570,21 @@ html[data-mode="light"] .eq-scale { color: var(--t3); }
 }
 .eq-footer-reset { flex: 0 0 auto; }
 
-/* ── Focus visible — a11y clavier pour tous les éléments EQ ─────────────── */
-.eq-close:focus-visible,
-.eq-cat:focus-visible,
-.eq-preset:focus-visible,
-.eq-footer-reset:focus-visible {
-  outline: var(--border-w-lg) solid rgba(var(--g-rgb), .75);
-  outline-offset: var(--focus-offset);
-}
-/* Slider EQ — focus visible natif remplacé par un highlight de colonne */
+/* ── Focus visible — a11y clavier éléments EQ ───────────────────────────────
+   Boutons EQ : le ring global :focus-visible (dual-tone, style.css §focus)
+   s'applique — la règle locale à 75% d'alpha accent qui l'affaiblissait a été
+   retirée (SC 2.4.13, audit 2026-06-11). */
+/* Slider EQ — outline natif remplacé par highlight de colonne + ring dual-tone
+   sur la colonne (un tint accent 12% seul n'est pas un indicateur 3:1). */
 .eq-slider:focus-visible {
   outline: none;
 }
-.eq-slider:focus-visible ~ .eq-freq,
+.eq-slider:focus-visible ~ .eq-freq {
+  background: rgba(var(--g-rgb), .12);
+}
 .eq-band:has(.eq-slider:focus-visible) .eq-slider-wrap {
   background: rgba(var(--g-rgb), .12);
+  box-shadow: 0 0 0 2px var(--g), 0 0 0 3px var(--focus-ring-contrast);
 }
 
 /* ── EQ Slider custom track + thumb (appearance: none) ── */
@@ -4637,7 +4654,9 @@ html[data-mode="light"] .eq-slider::-moz-range-track { background: var(--bg6); }
 /* ═══ MODE CINÉMA ════════════════════════════════════════════ */
 /* ═══ MODE CINÉMA ════════════════════════════════════════════ */
 #cinema-overlay {
-  position: fixed; inset: 0; z-index: var(--z-dropdown);
+  /* V2 : --z-cinema (600) > mp-ov/drago (500) — le mini-overlay flottait
+     au-dessus de l'écran immersif quand le cinéma était à --z-dropdown. */
+  position: fixed; inset: 0; z-index: var(--z-cinema);
   background: var(--c-black);
   display: flex; /* toujours flex — visibility/opacity gèrent l'état */
   flex-direction: column; align-items: center; justify-content: flex-start;
@@ -5659,8 +5678,7 @@ html.vt-running .view.on   { animation: none !important; }
 }
 /* .tr.act background défini ligne ~725 */
 
-/* Grp label — fond transparent pour éviter artefacts scroll */
-.grp-lbl { background: var(--bg); }
+/* .grp-lbl supprimé (L2, audit 2026-06-11) — orphelin, cf. .tr-grp */
 /* Heatmap colors — calculées depuis --g (accent) via opacity */
 .hm-cell[data-n="0"] { background: var(--bg3); }
 .hm-cell[data-n="1"] { background: var(--accent-subtle); }
@@ -6558,6 +6576,13 @@ html[data-mode="light"] .rv-start-btn  { background: var(--g); }
 #vnp.art-light .vnp-title,
 #vnp.art-light .vnp-artist,
 #vnp.art-light .vnp-album { text-shadow: none; }
+/* L10 (audit bugs visuels 2026-06-11) : sur pochette claire le scrim passe
+   blanc .38 mais les cercles des boutons restaient blanc .12 → invisibles.
+   Sélecteur descendant (la classe vit sur #vnp) — pas de #id.classe (§13). */
+.art-light .vnp-back,
+.art-light .vnp-full-btn { background: rgba(0,0,0,.10); }
+.art-light .vnp-back:hover,
+.art-light .vnp-full-btn:hover { background: rgba(0,0,0,.18); }
 
 .vnp-lk {
   background: none;

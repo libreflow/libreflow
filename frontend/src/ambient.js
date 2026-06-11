@@ -26,5 +26,6 @@ export function updateAmbient(el = document.documentElement) {
   const lum = getArtLuminance();
   const isLight = lum >= 0.35;
   el.classList.toggle('art-light', isLight);
-  el.classList.toggle('art-dark',  !isLight);
+  // L6 (audit bugs visuels 2026-06-11) : .art-dark supprimé — aucun consommateur
+  // CSS ni JS (dark = état par défaut, seul .art-light a des règles).
 }

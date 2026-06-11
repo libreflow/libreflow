@@ -10,7 +10,7 @@
 //
 // Hard requirements satisfied:
 //   • bezierCurveTo path (Catmull-Rom → cubic Bezier, k = 1/6)
-//   • analyser.smoothingTimeConstant = 0.85 + per-sample 0.6/0.4 interpolation
+//   • per-sample 0.6/0.4 interpolation (smoothingTimeConstant left to caller — shared analyser)
 //   • lineWidth 1px (silence) → 3.5px (peak)
 //   • hue 220 → 280 → 320 piecewise, saturation/luminosity fixed at 65%
 //   • transparent canvas (destination-out fade, not opaque black fill)
@@ -35,7 +35,9 @@ export function createPremiumOscilloscope(canvas, analyser) {
   if (!canvas)   throw new Error('createPremiumOscilloscope: canvas required');
   if (!analyser) throw new Error('createPremiumOscilloscope: analyser required');
 
-  analyser.smoothingTimeConstant = 0.85;
+  // M8 FIX: smoothingTimeConstant intentionally not set here — shared with eq.js and viz.js.
+  // Overwriting it would affect all consumers. eq.js sets it to 0.8 at initEQ() time.
+  // If the oscilloscope ever needs a dedicated value, request a separate AnalyserNode.
 
   // OffscreenCanvas detected but not transferred — transferring would lock out
   // the host canvas without enabling worker rendering. Advisory diagnostic only.
@@ -44,6 +46,7 @@ export function createPremiumOscilloscope(canvas, analyser) {
   const ctx = canvas.getContext('2d');
   if (!ctx) throw new Error('createPremiumOscilloscope: 2D context unavailable');
 
+  // assumes analyser.fftSize >= SAMPLE_CAP (2048 >= 128 guaranteed by eq.js initEQ)
   const sampleCount = Math.min(SAMPLE_CAP, analyser.fftSize);
   const data     = new Uint8Array(sampleCount);
   const prev     = new Uint8Array(sampleCount);   prev.fill(128);
@@ -71,6 +74,11 @@ export function createPremiumOscilloscope(canvas, analyser) {
     if (!running) return;
     raf = requestAnimationFrame(draw);
     if (document.hidden) return;
+
+    // V7 (audit bugs visuels 2026-06-11) : le RO content-box ne tire pas quand
+    // seule la densité change (fenêtre déplacée entre écrans de DPI différents)
+    // — re-checker le DPR par frame (lecture triviale) et re-rasteriser.
+    if ((window.devicePixelRatio || 1) !== dpr) resize();
 
     const w = canvas.width;
     const h = canvas.height;

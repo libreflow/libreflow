@@ -266,22 +266,20 @@ export function initSettingsListeners() {
 // ══ THEMES ════════════════════════════════════════════════════════════════════
 export const THEMES = ['green', 'blue', 'purple', 'red', 'orange', 'pink', 'cyan'];
 
-export const THEME_COLORS = {
-  green: '#1db954', blue: '#3b82f6', purple: '#a855f7',
-  red: '#ef4444', orange: '#f97316', pink: '#ec4899', cyan: '#06b6d4',
-};
-
-// BUG FIX: --g-rgb était jamais défini → tous les rgba(var(--g-rgb,...)) tombaient sur le vert
-export const THEME_RGB = {
-  green: '29,185,84', blue: '59,130,246', purple: '168,85,247',
-  red: '239,68,68', orange: '249,115,22', pink: '236,72,153', cyan: '6,182,212',
-};
+// Palette : SOURCE UNIQUE = map [data-theme] de design-system.css (--g, --g-rgb,
+// --gd, --gg par thème). Les anciennes maps JS THEME_COLORS/THEME_RGB driftaient
+// (vieille palette #1db954/#3b82f6/#06b6d4 vs map CSS #34d399/#1D9BF0/#22d3ee)
+// et l'inline --g-rgb posé ici écrasait la map → accent solide ≠ accent alpha
+// (audit 2026-06-11).
 
 function _applyThemeVars(t) {
   document.documentElement.setAttribute('data-theme', t);
-  document.documentElement.style.setProperty('--g-rgb', THEME_RGB[t] || '59,130,246');
+  // M2 : mirror localStorage lu par public/boot-theme.js avant le premier paint
+  try { localStorage.setItem('lf-theme', t); } catch { /* quota/privé — non bloquant */ }
+  // Purge un éventuel --g-rgb inline résiduel (dyn-color le pose/retire lui-même)
+  if (!_dynColor) document.documentElement.style.removeProperty('--g-rgb');
   const artWrap = $id('pl-art');
-  if (artWrap) artWrap.style.setProperty('--ring-color', THEME_COLORS[t] || '#3b82f6');
+  if (artWrap) artWrap.style.setProperty('--ring-color', 'var(--g)');
 }
 
 export function setTheme(t) {
@@ -360,7 +358,7 @@ export function applyArtColor(color) {
   const artWrap = $id('pl-art');
   if (artWrap) {
     artWrap.classList.add('pl-art-glow', 'glow-on');
-    artWrap.style.setProperty('--ring-color', THEME_COLORS[_theme] || '#3b82f6');
+    artWrap.style.setProperty('--ring-color', 'var(--g)');
   }
 }
 
@@ -401,15 +399,9 @@ export function _updateArtBlur(src) {
   }, 200);
 }
 
-export function animateArtChange() {
-  const img = $id('pl-img');
-  if (!img) return;
-  img.classList.remove('art-change');
-  requestAnimationFrame(() => requestAnimationFrame(() => {
-    img.classList.add('art-change');
-    img.addEventListener('animationend', () => img.classList.remove('art-change'), { once: true });
-  }));
-}
+/* animateArtChange() supprimée (M12, audit bugs visuels 2026-06-11) : morte
+   des deux côtés — aucun call site et aucune règle CSS `.art-change`.
+   Le swap de pochette est déjà animé par trackSwap() (motion.js). */
 
 // ══ PANEL RACCOURCIS ═════════════════════════════════════════════════════════
 
@@ -433,6 +425,8 @@ export function setMode(mode) {
   _displayMode = mode;
   set('displayMode', mode);
   document.documentElement.setAttribute('data-mode', mode);
+  // M2 : mirror localStorage lu par public/boot-theme.js avant le premier paint
+  try { localStorage.setItem('lf-mode', mode); } catch { /* quota/privé — non bloquant */ }
   const icoDark  = $id('ico-mode-dark');
   const icoLight = $id('ico-mode-light');
   if (icoDark)  icoDark.style.display  = mode === 'dark'  ? '' : 'none';

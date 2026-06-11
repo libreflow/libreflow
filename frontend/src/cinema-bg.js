@@ -35,6 +35,7 @@ let _ambientColors  = null;
 let _ambientCross   = null;
 let _frameCount     = 0;
 let _ambientGen     = 0;
+let _cinBgDpr       = 1;   // V7 : DPR de la dernière rasterisation (re-check par frame)
 
 // Callbacks injectés par cinema.js via initCinemaBgModule()
 let _getCinemaState = null; // () => { cinemaOpen, cinArtRGB }
@@ -99,6 +100,9 @@ function _startAmbientAnim() {
       _ambientAnimRaf = null;
       return;
     }
+    // V7 (audit bugs visuels 2026-06-11) : DPR changé (fenêtre déplacée entre
+    // écrans de DPI différents) → re-rasteriser le fond via le chemin standard.
+    if ((window.devicePixelRatio || 1) !== _cinBgDpr) { _updateAmbientGradient(); return; }
     if (cinemaBg === 'ambient' && _frameCount++ % 2 !== 0) {
       _ambientAnimRaf = requestAnimationFrame(loop);
       return;
@@ -141,6 +145,7 @@ function _updateAmbientGradient() {
   const canvas = document.getElementById('cinema-bg');
   if (!canvas || !canvas.getContext) return;
   const dpr = window.devicePixelRatio || 1;
+  _cinBgDpr = dpr; // V7 : mémoriser le DPR de rasterisation
   const W   = window.innerWidth  || 1280;
   const H   = window.innerHeight || 800;
   const PW  = Math.round(W * dpr);

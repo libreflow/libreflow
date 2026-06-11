@@ -580,6 +580,7 @@ export function updateCinema() {
 
       if (hadArt && artWrap) {
         // Animation sortante (120ms) puis entrante — transition bi-directionnelle
+        clearTimeout(_cinSwapOutTimer); clearTimeout(_cinSwapInTimer); // M7 (audit 2026-06-11) : timers en vol — skip rapide A→B→C flashait la pochette B avant C
         artWrap.classList.add('cin-swap-out');
         _cinSwapOutTimer = setTimeout(_doSwapIn, 120);
       } else {

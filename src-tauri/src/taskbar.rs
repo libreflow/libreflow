@@ -593,6 +593,10 @@ fn bgra_to_hicon(bgra: &[u8], sz: i32) -> HICON {
         ) else {
             return HICON(std::ptr::null_mut());
         };
+        if bits.is_null() {
+            let _ = DeleteObject(HGDIOBJ(color_bm.0));
+            return HICON(std::ptr::null_mut());
+        }
         std::ptr::copy_nonoverlapping(bgra.as_ptr(), bits.cast::<u8>(), bgra.len());
         let mask_bm = CreateBitmap(sz, sz, 1, 1, None);
         let ii = ICONINFO {

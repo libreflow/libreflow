@@ -89,23 +89,37 @@ export function _getAlbumMap() {
       map.set(key, {
         key,
         displayName:   key,
-        artist:        t.artist || '',
+        artistSet:     new Set(),
+        artist:        '',
         art:           null,
         artTrack:      null,
         count:         0,
         totalDuration: 0,
-        year:          (t.year && t.year !== 1970) ? t.year : null,
+        year:          null,
       });
     }
     const a = map.get(key);
     a.count++;
     a.totalDuration += t.duration || 0;
+    if (t.artist) a.artistSet.add(t.artist);
     if (t.art && !a.art) a.art = t.art;
     // C1 — piste représentative pour l'hydratation paresseuse du drill header.
     if (!a.artTrack && t._hasArt && !t.noArt) { a.artTrack = t; _artTrackById.set(t.id, t); }
-    if (t.year && t.year !== 1970 && !a.year) a.year = t.year;
+    // AC5 (audit cards 2026-06-11) : année déterministe = min des années valides
+    // (avant : première rencontrée — arbitraire selon l'ordre du scan).
+    // 1970 reste traité en sentinelle epoch-0 (à régler à l'import, pas ici).
+    if (t.year && t.year !== 1970 && (!a.year || t.year < a.year)) a.year = t.year;
   }
   _albumMapCache = [...map.values()];
+  // AC4 (audit cards 2026-06-11) : réconciliation artiste — avant, l'artiste de
+  // la PREMIÈRE piste rencontrée était figé (arbitraire et instable pour les
+  // compilations). Un seul artiste → affiché ; plusieurs → '' + isMulti
+  // (rendu « Multi-artistes ») ; artistsLc sert à la recherche et au drill.
+  for (const a of _albumMapCache) {
+    a.isMulti   = a.artistSet.size > 1;
+    a.artist    = a.artistSet.size === 1 ? a.artistSet.values().next().value : '';
+    a.artistsLc = a.artistSet.size ? [...a.artistSet].join('\n').toLowerCase() : '';
+  }
   return _albumMapCache;
 }
 
@@ -176,15 +190,16 @@ export function renderDrillHeader(view, key) {
             ? `<button class="dh-artist-link" data-action="dh-drill-artist"
                  data-artist-key="${esc(artistKey)}"
                  data-artist-name="${esc(entry.artist)}">${esc(entry.artist)}</button>`
-            : ''}
+            : entry.isMulti ? `<span>${esc(i18n('multi_artists'))}</span>` : ''}
           ${entry.year ? `<span>${entry.year}</span>` : ''}
-          <span>${entry.count} titre${entry.count > 1 ? 's' : ''}</span>
-          ${mins > 0 ? `<span>${mins} min</span>` : ''}
+          <span>${entry.count} ${i18n('n_tracks', entry.count)}</span>
+          ${mins > 0 ? `<span>${i18n('dur_min', mins)}</span>` : ''}
         </div>
         <div class="dh-actions">
-          <!-- A11Y-13: aria-label sur les boutons icône-texte du drill header -->
-          <button class="dh-btn dh-play" data-action="dh-play-all" aria-label="Lire tout"><span aria-hidden="true">▶</span> Lire tout</button>
-          <button class="dh-btn dh-shuf" data-action="dh-shuffle-all" aria-label="Mélanger"><span aria-hidden="true">⤮</span> Mélanger</button>
+          <!-- A11Y-13: aria-label sur les boutons icône-texte du drill header.
+               AC6 : libellés via i18n (étaient hardcodés FR). -->
+          <button class="dh-btn dh-play" data-action="dh-play-all" aria-label="${esc(i18n('pl_play_all'))}"><span aria-hidden="true">▶</span> ${esc(i18n('pl_play_all'))}</button>
+          <button class="dh-btn dh-shuf" data-action="dh-shuffle-all" aria-label="${esc(i18n('pl_shuffle'))}"><span aria-hidden="true">⤮</span> ${esc(i18n('pl_shuffle'))}</button>
         </div>
       </div>`;
     _hydrateArtPlaceholders(el);   // C1 — artwork paresseux du drill header
@@ -199,8 +214,12 @@ export function renderDrillHeader(view, key) {
     const keyLc = key.toLowerCase();
     // BUG-1 FIX: calcul du total AVANT slice(0,20) — les artistes avec >20 albums
     // affichaient "20 albums" au lieu du vrai total.
+    // AC4 : matcher TOUS les artistes de l'album — une compilation apparaît
+    // désormais chez chacun de ses artistes ; clé vide = bucket « sans artiste ».
     const allArtistAlbums = _getAlbumMap()
-      .filter(a => (a.artist || '').toLowerCase() === keyLc)
+      .filter(a => keyLc
+        ? a.artistsLc.split('\n').includes(keyLc)
+        : a.artistSet.size === 0)
       .sort((a, b) => (b.year || 0) - (a.year || 0));
     const albums = allArtistAlbums.slice(0, 20);
 
@@ -231,13 +250,14 @@ export function renderDrillHeader(view, key) {
       <div class="dh-meta">
         <div class="dh-name">${esc(entry.displayName)}</div>
         <div class="dh-sub">
-          <span>${allArtistAlbums.length} album${allArtistAlbums.length > 1 ? 's' : ''}</span>
-          <span>${entry.count} titre${entry.count > 1 ? 's' : ''}</span>
+          <span>${allArtistAlbums.length} ${i18n('n_albums', allArtistAlbums.length)}</span>
+          <span>${entry.count} ${i18n('n_tracks', entry.count)}</span>
         </div>
         <div class="dh-actions">
-          <!-- A11Y-13: aria-label sur les boutons icône-texte du drill header -->
-          <button class="dh-btn dh-play" data-action="dh-play-all" aria-label="Lire tout"><span aria-hidden="true">▶</span> Lire tout</button>
-          <button class="dh-btn dh-shuf" data-action="dh-shuffle-all" aria-label="Mélanger"><span aria-hidden="true">⤮</span> Mélanger</button>
+          <!-- A11Y-13: aria-label sur les boutons icône-texte du drill header.
+               AC6 : libellés via i18n (étaient hardcodés FR). -->
+          <button class="dh-btn dh-play" data-action="dh-play-all" aria-label="${esc(i18n('pl_play_all'))}"><span aria-hidden="true">▶</span> ${esc(i18n('pl_play_all'))}</button>
+          <button class="dh-btn dh-shuf" data-action="dh-shuffle-all" aria-label="${esc(i18n('pl_shuffle'))}"><span aria-hidden="true">⤮</span> ${esc(i18n('pl_shuffle'))}</button>
         </div>
       </div>
       ${albums.length > 0 ? `
@@ -319,9 +339,10 @@ export function renderAlbumsGrid() {
   let albums = _getAlbumMap();
   // Filtrage par requête : appliquer en post-filtre sur le résultat caché
   if (queryLc) {
+    // AC4 : artistsLc couvre TOUS les artistes de l'album (compilations incluses)
     albums = albums.filter(a =>
       (a.key || '').toLowerCase().includes(queryLc) ||
-      (a.artist || '').toLowerCase().includes(queryLc)
+      a.artistsLc.includes(queryLc)
     );
   }
   // Adapter les noms de champs pour la couche de rendu (displayName→name, art→artUrl, totalDuration→totalDur)
@@ -329,6 +350,7 @@ export function renderAlbumsGrid() {
   albums = albums.map(a => ({
     name:    a.key,
     artist:  a.artist,
+    isMulti: a.isMulti,
     artUrl:  a.art,
     artTrack: a.artTrack,
     count:   a.count,
@@ -357,18 +379,30 @@ export function renderAlbumsGrid() {
       : a.artTrack
         ? `<div class="card-art-ph" aria-hidden="true" data-art-tid="${esc(a.artTrack.id)}">💿</div>`
         : `<div class="card-art-ph" aria-hidden="true">💿</div>`;
-    const meta = a.year ? `<span class="card-year">${a.year}</span>` : '';
+    // AC2 : 'sans_album' existe dans les 2 dictionnaires ('unknown_album' n'a
+    // jamais existé — la clé brute s'affichait). AC4 : fallback artiste systé-
+    // matique → le sub n'est jamais vide, hauteur de card uniforme.
+    const cardName  = a.name || i18n('sans_album');
+    const subArtist = a.artist
+      ? hlText(a.artist)
+      : esc(i18n(a.isMulti ? 'multi_artists' : 'unknown_artist'));
+    // AC7 : durée visible quand le tri 'duration' est actif (sinon ordre illisible).
+    const durMeta = albumSort === 'duration' && a.totalDur
+      ? ` · ${i18n('dur_min', Math.round(a.totalDur / 60))}` : '';
+    // AC3 : artiste échappé dans l'aria-label (tag lofty arbitraire — §13).
+    // AC5/AC6 : année hors du span ellipsé (plus éjectable par un artiste long),
+    // séparateur « · » textuel unifié.
     return `<div class="card" role="button" tabindex="0"
       data-action="drill-album" data-key="${esc(a.name)}" data-name="${esc(a.name)}"
       data-from="albums" data-display="${esc(a.name)}"
-      aria-label="${esc(a.name)}${a.artist ? ' — ' + a.artist : ''}">
+      aria-label="${esc(cardName)}${a.artist ? esc(' — ' + a.artist) : ''}">
       <div class="card-art">${artHtml}
         <button class="card-play-btn" data-action="play-card" tabindex="-1" aria-hidden="true"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><polygon points="5,3 19,12 5,21"/></svg></button>
       </div>
       <div class="card-info">
-        <span class="card-name">${hlText(a.name || i18n('unknown_album') || '?')}</span>
-        <span class="card-sub">${hlText(a.artist)}${meta}</span>
-        <span class="card-ct">${a.count} ${i18n('n_tracks', a.count)}</span>
+        <span class="card-name">${hlText(cardName)}</span>
+        <span class="card-sub">${subArtist}</span>
+        <span class="card-ct">${a.year ? `${a.year} · ` : ''}${a.count} ${i18n('n_tracks', a.count)}${durMeta}</span>
       </div>
     </div>`;
   }).join('');
@@ -449,7 +483,7 @@ export function renderArtistsGrid() {
       </div>
       <div class="card-info">
         <span class="card-name">${hlText(a.displayName || '?')}</span>
-        <span class="card-sub">${a.count} ${i18n('n_tracks', a.count)}${nbAlbums > 1 ? ` · ${nbAlbums} albums` : ''}</span>
+        <span class="card-sub">${a.count} ${i18n('n_tracks', a.count)}${nbAlbums > 1 ? ` · ${nbAlbums} ${i18n('n_albums', nbAlbums)}` : ''}</span>
       </div>
     </div>`;
   }).join('');

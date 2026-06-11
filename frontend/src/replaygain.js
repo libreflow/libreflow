@@ -41,7 +41,7 @@ export function initRgState(enabled, lufs) {
 // ── Initialisation nœud Web Audio ────────────────────────────
 
 export function initRG() {
-  if (rgGainNode) return;
+  if (rgGainNode && rgGainNode.context === eqCtx) return;
   try {
     // Toujours initialiser l'EQ d'abord (il crée le MediaElementSource unique)
     if (!eqCtx) initEQ();
@@ -67,7 +67,7 @@ export function setReplayGain(enabled) {
     initRG();
     analyzeAndApplyRG();
   } else {
-    if (rgGainNode && eqCtx) rgGainNode.gain.setTargetAtTime(1.0, eqCtx.currentTime, 0.1);
+    if (rgGainNode && eqCtx) rgGainNode.gain.setTargetAtTime(1.0, eqCtx.currentTime, 0.02);
   }
   saveCfg();
 }
@@ -118,12 +118,17 @@ export async function analyzeAndApplyRG() {
 
     // CORRUPT-2 : t.duration peut être NaN (tag manquant) → OfflineAudioContext(1, NaN) → RangeError
     const _dur = isFinite(t.duration) && t.duration > 0 ? t.duration : 30;
-    const offline = new OfflineAudioContext(2, Math.round(44100 * Math.min(30, _dur)), 44100);
-    let srcBuf    = await offline.decodeAudioData(arrayBuf);
+    // M6 FIX : decode into a 2-ch probe context to determine actual channel count,
+    // then create the analysis offline context with the correct channel count.
+    // decodeAudioData consumes the ArrayBuffer — use 2ch for the probe decode.
+    const _probeCtx = new OfflineAudioContext(2, Math.round(44100 * Math.min(30, _dur)), 44100);
+    let srcBuf      = await _probeCtx.decodeAudioData(arrayBuf);
     arrayBuf = null; // MEM-2 — libère ~30 MB avant le rendu offline (GC ne peut pas le faire avant)
+    const nChannels = srcBuf.numberOfChannels > 1 ? 2 : 1;
+    const offline   = new OfflineAudioContext(nChannels, Math.round(44100 * Math.min(30, _dur)), 44100);
     if (_rgAnalysisId !== myId) { srcBuf = null; return; }
 
-    const nch = Math.min(srcBuf.numberOfChannels, 2); // cap at 2 — BS.1770 uses L+R only
+    const nch = nChannels; // M6 FIX: use nChannels (consistent with offline context channel count)
 
     const src = offline.createBufferSource();
     src.buffer = srcBuf;

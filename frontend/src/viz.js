@@ -116,9 +116,14 @@ function _resizeCanvas() {
   const pl   = canvas.parentElement;
   if (!pl) return;
   const dpr  = window.devicePixelRatio || 1;
+  const w = pl.offsetWidth * dpr, h = pl.offsetHeight * dpr;
+  // L12 (audit bugs visuels 2026-06-11) : ne pas réassigner width/height à
+  // l'identique — chaque assignation efface le backing store (la trail de
+  // l'oscillo était coupée 1 frame à chaque tir du RO).
+  if (canvas.width === w && canvas.height === h && _dpr === dpr) return;
   _dpr = dpr;
-  canvas.width  = pl.offsetWidth  * dpr;
-  canvas.height = pl.offsetHeight * dpr;
+  canvas.width  = w;
+  canvas.height = h;
   // Les styles width/height sont gérés par CSS (width:100%; height:100%)
   // Invalider le gradient mis en cache après redimensionnement
   _grad = null;
@@ -283,6 +288,10 @@ function _draw() {
   if (vizMode === 'oscilloscope') return;
   // Vérifier eqAnalyser AVANT de planifier le prochain frame — évite une boucle infinie si l'analyser disparaît
   if (!eqAnalyser) { running = false; return; }
+
+  // V7 (audit bugs visuels 2026-06-11) : DPR changé sans resize CSS
+  // (fenêtre déplacée entre écrans de DPI différents) → re-rasteriser.
+  if ((window.devicePixelRatio || 1) !== _dpr) _resizeCanvas();
 
   // FIX : skip si le canvas n'est pas encore rendu (dimensions nulles) — évite le reschedule
   // infini quand le composant est invisible ou pas encore mis en page.

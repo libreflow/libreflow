@@ -100,6 +100,9 @@ pub async fn cd_rip_track(
     dest_path: String,
     rip_id: String,
 ) -> Result<(), String> {
+    if rip_id.len() > 64 {
+        return Err("rip_id too long".to_string());
+    }
     // Validation chemin destination (défense en profondeur — JS construit dest_path
     // depuis cd_cache_dir ou watchPath, mais on revalide côté Rust).
     validate_rip_dest(&dest_path)?;

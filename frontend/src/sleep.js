@@ -58,6 +58,9 @@ export function setSleepTimer(minutes) {
 
   // Clear active state on all option buttons
   document.querySelectorAll('.sleep-opt').forEach(b => b.classList.remove('active'));
+  // M13 (audit bugs visuels 2026-06-11) : surligner la durée choisie — le CSS
+  // .sleep-opt.active existait mais la classe n'était jamais posée.
+  document.querySelector(`.sleep-opt[data-minutes="${minutes}"]`)?.classList.add('active');
 
   _updateSleepCountdown();
   sleepTickTimer = setInterval(_sleepTick, 1000);

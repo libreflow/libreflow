@@ -165,6 +165,32 @@ export function _kmeansColors(pixels, k = 5, iters = 8) {
 }
 
 /**
+ * Extract the dominant colour of an artwork image as HSL values suitable for
+ * ambient token use. Clamps saturation ≥ 35% and lightness to [45%, 80%] so
+ * near-black or near-white covers still produce a visible, non-glaring glow.
+ *
+ * Returns { hue: 0-360, sat: 0-100, light: 0-100 } or null on failure.
+ * Used by playerbar.js to write --np-hue / --np-sat / --np-light.
+ *
+ * @param {HTMLImageElement} img  - Already-loaded image element
+ * @param {number}           size - Sampling canvas size in pixels (default 64)
+ */
+export function extractDominantHsl(img, size = 64) {
+  const colors = sampleArtColors5(img, size);
+  if (!colors || !colors.length) return null;
+  const [h, s, l] = rgbToHsl(...colors[0]);
+  // M5 (audit bugs visuels 2026-06-11) : pochette monochrome (N&B, grise) →
+  // s≈0 et hue 0 sans signification ; la clamp sat≥35% fabriquerait un halo
+  // ROUGE arbitraire. null = fallback sur les tokens --np-* par défaut.
+  if (s < 0.05) return null;
+  return {
+    hue:   Math.round(h),
+    sat:   Math.round(Math.max(0.35, Math.min(1,    s)) * 100),
+    light: Math.round(Math.max(0.45, Math.min(0.80, l)) * 100),
+  };
+}
+
+/**
  * Sample 5 dominant colours from an artwork image via k-means++.
  * DOM wrapper around _kmeansColors. Returns array of 5 boosted [r,g,b] sorted
  * by prominence×saturation, or null on failure.

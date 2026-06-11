@@ -114,6 +114,13 @@ function virtBuildRows(fl, { sort = 'az', query = '', view = 'all' } = {}) {
   }
   VIRT._offsets = offsets;
   VIRT._totalH  = offsets[rows.length];
+  // Rebuild _fiToRowIdx so scrollToIdx never falls back to O(n) linear scan,
+  // even when called before the first virtRenderWindow() (e.g. boot restore).
+  const fiMap = new Map();
+  for (let i = 0; i < rows.length; i++) {
+    if (rows[i].type === 'tr') fiMap.set(rows[i].fi, i);
+  }
+  VIRT._fiToRowIdx = fiMap;
   return rows;
 }
 

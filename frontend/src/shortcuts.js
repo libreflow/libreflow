@@ -215,7 +215,7 @@ export function initShortcuts({ updateVolSlider, closeModal, cycleSpeed }) {
     if (e.key === '/') { document.getElementById('srch')?.focus(); e.preventDefault(); }
     if (e.key.toLowerCase() === 'f' && !e.ctrlKey && !e.altKey && !cinemaOpen) toggleLike();
     if (e.key.toLowerCase() === 'm' && !e.ctrlKey && !e.altKey) { toggleMiniPlayer(); syncMiniSettingsBtn(); }
-    if (e.key.toLowerCase() === 'i' && !e.ctrlKey && !e.altKey) toggleMiniOverlay();
+    if (e.key.toLowerCase() === 'i' && !e.ctrlKey && !e.altKey && !cinemaOpen) toggleMiniOverlay();
 
     if (e.code === 'Escape') {
       const _burgerPanel = document.getElementById('tb-burger-panel');

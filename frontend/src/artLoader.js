@@ -48,10 +48,18 @@ function _evict() {
   const curIdx = get('curIdx');
   const tracks = get('tracks');
   const curId  = curIdx >= 0 ? tracks[curIdx]?.id : null;
-  // PERF-CRIT-2 FIX : utiliser la Set maintenue plutôt que querySelectorAll('img').
+  // PERF-CRIT-2 FIX : la Set est le fast-path (zéro scan DOM pour les URLs du
+  // chemin liste). FIX pochettes 2026-06-11 : elle ne voit PAS les autres
+  // surfaces (grilles renderer-grids, file queue.js `<img src=t.art>`, drill,
+  // rows re-rendues par thtml quand t.art venait de cacheArt) — révoquer une
+  // de ces URLs cassait l'<img> affichée (pochette qui disparaît). Toute
+  // candidate hors Set est donc confirmée contre le DOM réel avant révocation.
+  // Coût borné : _evict ne tourne qu'à saturation (≥ MAX_CACHE), s'arrête à la
+  // première éviction, et jamais dans la boucle rAF (§10).
   const inDom = _domBlobUrls;
   for (const [id, url] of _cache) {
     if (id === curId || inDom.has(url)) continue;
+    if (document.querySelector(`img[src="${url}"]`)) continue;
     _domBlobUrls.delete(url);
     URL.revokeObjectURL(url);
     _cache.delete(id);
@@ -219,9 +227,18 @@ export function revokeArt(trackId) {
  */
 export function cacheArt(t) {
   if (!t._artBuf) return null;
-  // Si une entrée existe deja (rare), revoke pour eviter la fuite avant remplacement
+  // Si une entrée existe deja (rare : re-scan watch-folder, tag-edit), revoke
+  // pour eviter la fuite avant remplacement — SAUF si l'URL est encore affichée
+  // (FIX pochettes 2026-06-11 : la révoquer cassait l'<img> à l'écran ; on la
+  // laisse vivre, l'orpheline sera revue par _evict une fois sortie du DOM).
   const existing = _cache.get(t.id);
-  if (existing) { URL.revokeObjectURL(existing); _cache.delete(t.id); }
+  if (existing) {
+    _cache.delete(t.id);
+    if (!document.querySelector(`img[src="${existing}"]`)) {
+      _domBlobUrls.delete(existing);
+      URL.revokeObjectURL(existing);
+    }
+  }
   _evict();
   const url = URL.createObjectURL(new Blob([t._artBuf], { type: t._artMime || 'image/jpeg' }));
   _cache.set(t.id, url);

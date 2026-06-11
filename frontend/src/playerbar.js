@@ -10,8 +10,7 @@
 //   import  : audio, setIcon, updateMediaSession              (player.js)
 //   import  : refreshQueueBadge, queueOpen, renderQueue       (queue.js)
 //   import  : cinemaOpen, updateCinema                        (cinema.js)
-//   import  : animateArtChange, applyArtColor, clearArtColor,
-//             _updateArtBlur                                  (settings.js)
+//   import  : applyArtColor, clearArtColor, _updateArtBlur    (settings.js)
 //   import  : extEmoji                                        (utils.js)
 //   import  : extractColor                                    (tags.js)
 //
@@ -29,9 +28,26 @@ import { refreshQueueBadge, queueOpen, renderQueue } from './queue.js';
 import { cinemaOpen, updateCinema }                  from './cinema.js';
 import { applyArtColor, clearArtColor,
          _updateArtBlur }                            from './settings.js';
+import { extractDominantHsl }                        from './artcolor.js';
 import { trackSwap }                                 from './motion.js';
 import { extEmoji }                                  from './utils.js';
 import { extractColor }                              from './tags.js';
+// ── Now Playing HSL ambient tokens ───────────────────────────────────────────
+// Write/clear --np-hue / --np-sat / --np-light on :root so style.css consumers
+// (#pl::before hairline, rowBreath animation) breathe with the current track art.
+function _applyNpHsl({ hue, sat, light }) {
+  const r = document.documentElement.style;
+  r.setProperty('--np-hue',   hue);
+  r.setProperty('--np-sat',   sat + '%');
+  r.setProperty('--np-light', light + '%');
+}
+function _clearNpHsl() {
+  const r = document.documentElement.style;
+  r.removeProperty('--np-hue');
+  r.removeProperty('--np-sat');
+  r.removeProperty('--np-light');
+}
+
 // ── Volume slider ─────────────────────────────────────────────────────────────
 let _volHideTimer = 0;
 
@@ -182,6 +198,31 @@ export function updateBar() {
     else if (t.art) extractColor(t.art).then(c => { if (c) { t.artColor = c; applyArtColor(c); } }).catch(e => console.warn('[playerbar:extractColor]', e));
     else clearArtColor();
     _updateArtBlur(t.art || null);
+    // NP-HSL: extract dominant HSL for --np-* ambient tokens (hairline + rowBreath)
+    if (t._npHsl) {
+      _applyNpHsl(t._npHsl);
+    } else if (t.art) {
+      // V6/M6 (audit bugs visuels 2026-06-11) : repartir des tokens par défaut
+      // pendant l'extraction — sinon la couleur de la piste précédente persiste
+      // si l'extraction échoue (load jamais tiré, image corrompue).
+      _clearNpHsl();
+      const _plImg = document.getElementById('pl-img');
+      const _doExtract = () => {
+        // V6 : ignorer les callbacks périmés — sur skip rapide A→B→C, les
+        // listeners load {once:true} s'empilent et la closure de B reçoit
+        // la pochette de C (HSL caché sur la mauvaise piste).
+        if (get('curIdx') !== _p2Idx) return;
+        const hsl = extractDominantHsl(_plImg);
+        if (hsl) { t._npHsl = hsl; _applyNpHsl(hsl); }
+      };
+      // V6 : `complete` obligatoire — naturalWidth>0 seul peut refléter
+      // l'ANCIENNE current request de <img> tant que la nouvelle pochette
+      // n'est pas décodée (drawImage lirait le bitmap de la piste N-1).
+      if (_plImg && _plImg.complete && _plImg.naturalWidth) _doExtract();
+      else if (_plImg) _plImg.addEventListener('load', _doExtract, { once: true });
+    } else {
+      _clearNpHsl();
+    }
     if (cinemaOpen) updateCinema();
     if (_shouldNotify) {
       // Notifier immédiatement (art retiré de notify_track — payloads 2-10 MB interdits §IPC).

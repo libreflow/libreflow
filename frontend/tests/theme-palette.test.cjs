@@ -6,7 +6,7 @@
 const fs = require('fs');
 const path = require('path');
 const assert = require('assert');
-const { contrastRatio } = require('./_wcag.cjs');
+const { contrastRatio, hexToRgb, relLuminance } = require('./_wcag.cjs');
 
 const DS = fs.readFileSync(path.join(__dirname, '../src/design-system.css'), 'utf8');
 
@@ -167,6 +167,66 @@ async function run() {
       assert.ok(fg && bg, `cannot resolve light ${tok}/${bg}`);
       const r = contrastRatio(fg, bg);
       assert.ok(r >= 7.0, `light ${tok} = ${r.toFixed(2)}:1 (need 7.0)`);
+    });
+  }
+
+  // ── SC 1.4.11 non-text — bordures composées >=3:1 sur le fond de base,
+  //    dans les DEUX thèmes (trou de couverture relevé par l'audit 2026-06-11 :
+  //    les bordures light étaient à 1.14–1.31:1 sans qu'aucun test ne le voie). ──
+  function parseRgba(str) {
+    const m = /^rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*(?:,\s*([\d.]+)\s*)?\)$/.exec(String(str).trim());
+    if (!m) return null;
+    return { r: +m[1], g: +m[2], b: +m[3], a: m[4] === undefined ? 1 : +m[4] };
+  }
+  // Composite une bordure rgba sur un fond hex, retourne le ratio de contraste.
+  function compositedRatio(rgbaStr, bgHex) {
+    const fg = parseRgba(rgbaStr);
+    assert.ok(fg, `valeur rgba illisible: ${rgbaStr}`);
+    const bg = hexToRgb(bgHex);
+    const comp = {
+      r: Math.round(fg.r * fg.a + bg.r * (1 - fg.a)),
+      g: Math.round(fg.g * fg.a + bg.g * (1 - fg.a)),
+      b: Math.round(fg.b * fg.a + bg.b * (1 - fg.a)),
+    };
+    const lA = relLuminance(comp), lB = relLuminance(bg);
+    const [hi, lo] = lA > lB ? [lA, lB] : [lB, lA];
+    return (hi + 0.05) / (lo + 0.05);
+  }
+
+  const BORDER_TOKENS = ['--border-subtle', '--border-default', '--border-strong'];
+  for (const [label, vars, bgTok] of [['dark', root, root['--bg-base']], ['light', lightRoot, lightRoot['--bg-base']]]) {
+    const ratios = {};
+    for (const tok of BORDER_TOKENS) {
+      await t(`${label} ${tok} composited >=3:1 on --bg-base (SC 1.4.11)`, () => {
+        assert.ok(vars[tok], `${tok} absent du bloc ${label}`);
+        const r = compositedRatio(vars[tok], bgTok);
+        ratios[tok] = r;
+        assert.ok(r >= 3.0, `${label} ${tok} = ${r.toFixed(2)}:1 (besoin 3.0)`);
+      });
+    }
+    await t(`${label} border tiers are monotonic (subtle <= default <= strong)`, () => {
+      assert.ok(ratios['--border-subtle'] <= ratios['--border-default'] + 1e-9
+             && ratios['--border-default'] <= ratios['--border-strong'] + 1e-9,
+        `ordre inversé: subtle=${ratios['--border-subtle']?.toFixed(2)} default=${ratios['--border-default']?.toFixed(2)} strong=${ratios['--border-strong']?.toFixed(2)}`);
+    });
+  }
+
+  // ── AAA 7:1 également garanti sur --bg-surface (le test historique ne
+  //    couvrait que --bg — trou relevé par l'audit 2026-06-11). ──
+  for (const [tok] of AAA_TOKENS) {
+    await t(`dark ${tok} on --bg-surface passes AAA (7:1)`, () => {
+      const fg = resolveVar(root, null, tok);
+      const bg = resolveVar(root, null, '--bg-surface');
+      assert.ok(fg && bg, `cannot resolve dark ${tok}/--bg-surface`);
+      const r = contrastRatio(fg, bg);
+      assert.ok(r >= 7.0, `dark ${tok} sur --bg-surface = ${r.toFixed(2)}:1 (need 7.0)`);
+    });
+    await t(`light ${tok} on --bg-surface passes AAA (7:1)`, () => {
+      const fg = resolveVar(lightRoot, root, tok);
+      const bg = resolveVar(lightRoot, root, '--bg-surface');
+      assert.ok(fg && bg, `cannot resolve light ${tok}/--bg-surface`);
+      const r = contrastRatio(fg, bg);
+      assert.ok(r >= 7.0, `light ${tok} sur --bg-surface = ${r.toFixed(2)}:1 (need 7.0)`);
     });
   }
 

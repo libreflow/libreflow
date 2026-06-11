@@ -30,7 +30,10 @@ export function startCinemaViz() {
 
   const ctx = canvas.getContext('2d');
   if (!ctx) return;
-  const dpr = window.devicePixelRatio || 1;
+  // V7 (audit bugs visuels 2026-06-11) : `let` — le DPR est re-lu à chaque
+  // frame dans draw() ; figé à l'ouverture, le canvas restait flou après un
+  // déplacement de fenêtre entre écrans de DPI différents.
+  let dpr = window.devicePixelRatio || 1;
   let cw = 0, ch = 0;
 
   const _initRGB = _getCinVizState?.()?.cinArtRGBTarget ?? [255, 255, 255];
@@ -314,7 +317,9 @@ export function startCinemaViz() {
     const T = timestamp !== undefined ? timestamp : performance.now();
     const w = canvas.clientWidth, h = canvas.clientHeight;
     if (w === 0 || h === 0) { _cinVizRaf = requestAnimationFrame(draw); return; }
-    if (w !== cw || h !== ch) {
+    const d = window.devicePixelRatio || 1;
+    if (w !== cw || h !== ch || d !== dpr) {
+      dpr = d;
       canvas.width  = Math.round(w * dpr);
       canvas.height = Math.round(h * dpr);
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);

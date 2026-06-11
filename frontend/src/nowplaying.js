@@ -29,6 +29,7 @@ let _npAnimRaf = null;
 let _npAnimGen = 0;
 let _npAnimT   = 0;
 let _npFrameCnt = 0;
+let _npDpr     = 1;   // V7 : DPR de la dernière rasterisation (re-check par frame)
 
 const _techInfoCache = new Map(); // path → AudioProps
 
@@ -109,6 +110,9 @@ function _startNpAnim(canvas, ctx) {
       _npAnimRaf = null;
       return;
     }
+    // V7 (audit bugs visuels 2026-06-11) : DPR changé (fenêtre déplacée entre
+    // écrans de DPI différents) → re-rasteriser via le chemin standard.
+    if ((window.devicePixelRatio || 1) !== _npDpr) { _applyNpBg(); return; }
     if (_npBgMode === 'ambient' && _npFrameCnt++ % 2 !== 0) {
       _npAnimRaf = requestAnimationFrame(loop);
       return;
@@ -139,6 +143,7 @@ function _applyNpBg() {
   const canvas = document.getElementById('vnp-canvas');
   if (!canvas) return;
   const dpr = window.devicePixelRatio || 1;
+  _npDpr = dpr; // V7 : mémoriser le DPR de rasterisation
   canvas.width  = Math.round((window.innerWidth  || 1280) * dpr);
   canvas.height = Math.round((window.innerHeight || 800)  * dpr);
   const ctx = canvas.getContext('2d');
@@ -148,6 +153,14 @@ function _applyNpBg() {
   _npFrameCnt = 0;
   _startNpAnim(canvas, ctx);
 }
+
+// M8 (audit bugs visuels 2026-06-11) : la boucle ambient se tue sur
+// document.hidden sans handler de reprise (contrairement à cinema.js) —
+// restaurer la fenêtre laissait le fond ambient/amoled figé (plus de drift
+// ni de grain) jusqu'au prochain resize ou cycle de fond.
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden && nowPlayingOpen && !_npAnimRaf) _applyNpBg();
+});
 
 export function cycleNpBg() {
   const cur = NP_BG_MODES.indexOf(_npBgMode);

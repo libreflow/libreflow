@@ -5,7 +5,7 @@
 //   - Virtual scroll : virtRenderWindow, virtAttachScroll
 //   - Rendu liste : renderLib
 //   - Stats : updateStats, scheduleStatsUpdate
-//   - Animations : _withVT, animateViewChange, scrollToCurrentTrack
+//   - Animations : _withVT, scrollToCurrentTrack
 //
 // Fixes inclus :
 //   P6   — Spring animation (el._springRaf, el._springVel, cancelAnimationFrame avant ré-attache)
@@ -48,6 +48,10 @@ let _statsTimer   = null;    // debounce updateStats
 // R-H9 : true tant que #tlist affiche des lignes squelette — le ResizeObserver
 // de virtAttachScroll recalcule alors le nombre de lignes au lieu de re-rendre la liste.
 let _skeletonActive = false;
+// C1 — réutiliser ce tableau entre les frames rAF plutôt qu'en allouer un nouveau à chaque rendu
+let _artBatch = [];
+// C2 — compteur de spring rAF actifs pour éviter querySelectorAll quand il n'y en a aucun
+let _activeSpringRafs = 0;
 
 // Restore art-loaded fade-in without inline onload (load events don't bubble → capture phase)
 document.addEventListener('load', (e) => {
@@ -76,11 +80,16 @@ export function virtRenderWindow(fl) {
     VIRT._lastListSig = sig;
     // I-2: construire la Map fi→rowIdx pour O(1) lookup dans scrollToCurrentTrack
     const fiMap = new Map();
+    let hasGroups = false;
     for (let i = 0; i < VIRT._rows.length; i++) {
       const r = VIRT._rows[i];
       if (r.type === 'tr') fiMap.set(r.fi, i);
+      else hasGroups = true;
     }
     VIRT._fiToRowIdx = fiMap;
+    // V3 : mémoriser la présence de groupes — évite le scan arrière du pin
+    // de header sur les listes non groupées.
+    VIRT._hasGroups = hasGroups;
   }
 
   const rows     = VIRT._rows;
@@ -134,7 +143,30 @@ export function virtRenderWindow(fl) {
   // le premier tr rendu reçoit tabindex="0"
   let firstTrFiFound = false;
 
-  let html = `<div class="virt-sp" style="height:${topH}px" aria-hidden="true"></div>`;
+  // H2 — utiliser un tableau de parties pour éviter les O(n) chaînes intermédiaires
+  const parts = [];
+  // V3 (audit bugs visuels 2026-06-11) : pin du header de groupe courant.
+  // Sticky × virtualisation : dès que le header sortait de la fenêtre rendue
+  // (buffer ±8 dépassé), il était retiré du DOM et l'en-tête collé disparaissait
+  // alors que son groupe occupait encore l'écran. On rend ce header juste
+  // au-dessus de la fenêtre (top spacer réduit de GRP_H — les offsets des rows
+  // suivantes sont inchangés) ; sa position naturelle étant au-dessus du
+  // viewport, position:sticky le colle à top:0.
+  let pinnedGrpIdx = -1;
+  if (VIRT._hasGroups) {
+    for (let i = firstVisible; i >= 0; i--) {
+      if (rows[i].type === 'grp') { if (i < startIdx) pinnedGrpIdx = i; break; }
+    }
+  }
+  if (pinnedGrpIdx >= 0) {
+    parts.push(`<div class="virt-sp" style="height:${Math.max(0, topH - VIRT.GRP_H)}px" aria-hidden="true"></div>`);
+    const pRow  = rows[pinnedGrpIdx];
+    const pHint = pRow.artistHint ? ` <span class="grp-artist">${esc(pRow.artistHint)}</span>` : '';
+    const pCls  = pRow.key.length === 1 ? 'tr-grp tr-grp--alpha' : 'tr-grp';
+    parts.push(`<div class="${pCls}" style="height:${VIRT.GRP_H}px" aria-hidden="true">${esc(pRow.key)}${pHint}</div>`);
+  } else {
+    parts.push(`<div class="virt-sp" style="height:${topH}px" aria-hidden="true"></div>`);
+  }
 
   for (let i = startIdx; i < endIdx; i++) {
     const row = rows[i];
@@ -142,7 +174,7 @@ export function virtRenderWindow(fl) {
       let hint = '';
       if (row.artistHint) hint = ` <span class="grp-artist">${esc(row.artistHint)}</span>`;
       const cls = row.key.length === 1 ? 'tr-grp tr-grp--alpha' : 'tr-grp';
-      html += `<div class="${cls}" style="height:${VIRT.GRP_H}px" aria-hidden="true">${esc(row.key)}${hint}</div>`;
+      parts.push(`<div class="${cls}" style="height:${VIRT.GRP_H}px" aria-hidden="true">${esc(row.key)}${hint}</div>`);
     } else {
       const t       = row.track;
       const isActive = curTrack?.id === t.id;
@@ -155,23 +187,27 @@ export function virtRenderWindow(fl) {
         isTabStop = true;
         firstTrFiFound = true;
       }
-      html += thtml(t, row.fi, { active: isActive, liked: isLiked, likedSet: liked, query, isAlbumDetail, albumDetailSort, isTabStop, setSize: fl.length });
+      parts.push(thtml(t, row.fi, { active: isActive, liked: isLiked, likedSet: liked, query, isAlbumDetail, albumDetailSort, isTabStop, setSize: fl.length }));
     }
   }
 
-  html += `<div class="virt-sp" style="height:${botH}px" aria-hidden="true"></div>`;
+  parts.push(`<div class="virt-sp" style="height:${botH}px" aria-hidden="true"></div>`);
 
   // P6 : annuler les spring animations en vol avant de remplacer le DOM
-  listEl.querySelectorAll('[data-spring-raf]').forEach(el => {
-    const id = parseInt(el.dataset.springRaf);
-    if (id) cancelAnimationFrame(id);
-  });
+  // C2 — éviter la traversée DOM et l'allocation NodeList quand aucun spring rAF n'est actif
+  if (_activeSpringRafs > 0) {
+    listEl.querySelectorAll('[data-spring-raf]').forEach(el => {
+      const id = parseInt(el.dataset.springRaf);
+      if (id) { cancelAnimationFrame(id); _activeSpringRafs--; }
+    });
+    _activeSpringRafs = 0; // remettre à zéro après nettoyage complet
+  }
 
   // R3-A FIX : sauvegarder la position de scroll avant le remplacement du DOM.
   // innerHTML = reset scrollTop à 0 — l'utilisateur perd sa position à chaque
   // changement de zoom (Ctrl+Wheel). On restaure dans un rAF après la mise en DOM.
   const _savedScrollTop = listEl.scrollTop;
-  listEl.innerHTML = html;
+  listEl.innerHTML = parts.join('');
   // I-1: le DOM a été entièrement reconstruit — invalider la référence de ligne active cachée
   // (managed by renderer-track.js patchActiveTrack)
   if (_savedScrollTop > 0) {
@@ -179,7 +215,8 @@ export function virtRenderWindow(fl) {
   }
 
   // ARCH-2/PERF-1 : précharger l'artwork des pistes visibles (lazy loading)
-  const _artBatch = [];
+  // C1 — réutiliser le tableau module-scope plutôt qu'en allouer un nouveau à chaque frame
+  _artBatch.length = 0;
   for (let _ai = startIdx; _ai < endIdx; _ai++) {
     const _ar = rows[_ai];
     if (_ar.type === 'tr' && _ar.track._hasArt && !_ar.track.art && !_ar.track.noArt) {
@@ -327,7 +364,10 @@ export function _showSkeletonRows() {
   // R-H9 : marquer l'état skeleton — le ResizeObserver de virtAttachScroll
   // recalcule le nombre de lignes tant que ce flag est actif.
   _skeletonActive = true;
-  const count = Math.max(8, Math.ceil((listEl.clientHeight || window.innerHeight) / CFG.VIRT_ROW_H));
+  // M9 (audit bugs visuels 2026-06-11) : VIRT.ROW_H (hauteur runtime synchronisée
+  // par setTlistZoom) — la constante statique laissait ~25 % du viewport vide en
+  // zoom compact (skeletons calculés à 48px, rendus à 36px via --tr-h).
+  const count = Math.max(8, Math.ceil((listEl.clientHeight || window.innerHeight) / (VIRT.ROW_H || CFG.VIRT_ROW_H)));
   let html = '';
   for (let i = 0; i < count; i++) {
     html += '<div class="tr tr-skel" aria-hidden="true">'
@@ -449,22 +489,9 @@ export function _withVT(fn) {
   }
 }
 
-/** Déclenche une animation de changement de vue sur #content-area. */
-export function animateViewChange() {
-  const ca = document.getElementById('content-area');
-  if (!ca) return;
-  ca.classList.remove('view-in');
-  // C-4: double-rAF — évite le reflow synchrone forcé; re-query dans l'inner rAF
-  // pour ne pas agir sur un nœud détaché si une transition DOM survient entre les deux ticks
-  requestAnimationFrame(() => {
-    requestAnimationFrame(() => {
-      const live = document.getElementById('content-area');
-      if (!live) return;
-      live.classList.add('view-in');
-      live.addEventListener('animationend', () => live.classList.remove('view-in'), { once: true });
-    });
-  });
-}
+/* animateViewChange() supprimée (M12, audit bugs visuels 2026-06-11) : morte
+   des deux côtés — aucun call site et aucune règle CSS `.view-in`/@keyframes.
+   La rebrancher = nouvelle feature (spec + keyframes), pas un fix. */
 
 // ── Scroll to current track ───────────────────────────────────────────────────
 
