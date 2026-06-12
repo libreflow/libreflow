@@ -349,6 +349,7 @@ export function setEQBand(idx, db) {
   if (!eqNodes[idx]) return;
   const val = Math.max(-12, Math.min(12, db));
   eqNodes[idx].gain.setTargetAtTime(val, eqCtx.currentTime, 0.01);
+  if (_currentGains?.length === EQ_BAND_COUNT) _currentGains[idx] = val;
   // Mettre à jour l'affichage du slider. Le libellé visible n'affiche plus « dB »
   // (l'échelle l'implique, ça évite le retour à la ligne) ; aria-valuetext le garde.
   const num = (val >= 0 ? '+' : '') + val.toFixed(1);

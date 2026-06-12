@@ -168,26 +168,41 @@ pub fn setup(app: &tauri::App) {
                     let title: String = m.title.chars().take(256).collect();
                     let artist: String = m.artist.chars().take(256).collect();
                     let album: String = m.album.chars().take(256).collect();
+                    // try_from : from_secs_f64 panique si d déborde u64
+                    // (f64 fini mais énorme via IPC) — thread SMTC mort.
+                    let duration = m
+                        .duration_secs
+                        .filter(|d| d.is_finite() && *d > 0.0)
+                        .and_then(|d| Duration::try_from_secs_f64(d).ok());
                     let cover = m
                         .path
                         .as_deref()
                         .and_then(|p| extract_cover(p, &mut cover_seq));
-                    let r = controls.set_metadata(MediaMetadata {
+                    let r1 = controls.set_metadata(MediaMetadata {
                         title: Some(&title),
                         artist: Some(&artist),
                         album: Some(&album),
                         cover_url: cover.as_ref().map(|(url, _)| url.as_str()),
-                        duration: m
-                            .duration_secs
-                            .filter(|d| d.is_finite() && *d > 0.0)
-                            // try_from : from_secs_f64 panique si d déborde u64
-                            // (f64 fini mais énorme via IPC) — thread SMTC mort.
-                            .and_then(|d| Duration::try_from_secs_f64(d).ok()),
+                        duration,
                     });
+                    // souvlaki 0.8 on Windows can fail to mask file:// URIs
+                    // (UNABLE_TO_MASK_PATH / HRESULT 0x800700A1). Retry without
+                    // cover so metadata still reaches SMTC.
+                    let r = if r1.is_err() && cover.is_some() {
+                        controls.set_metadata(MediaMetadata {
+                            title: Some(&title),
+                            artist: Some(&artist),
+                            album: Some(&album),
+                            cover_url: None,
+                            duration,
+                        })
+                    } else {
+                        r1
+                    };
                     // Nettoyage APRÈS set_metadata : SMTC référence l'ancienne
                     // URI jusqu'à la bascule (extension possiblement différente).
                     if let Some(old) = prev_cover.take() {
-                        let _ = std::fs::remove_file(old);
+                        drop(std::fs::remove_file(old)); // best-effort, non fatal
                     }
                     prev_cover = cover.map(|(_, p)| p);
                     r
@@ -200,9 +215,14 @@ pub fn setup(app: &tauri::App) {
                         continue;
                     }
                     // try_from : même garde anti-panic que duration ci-dessus.
-                    let progress = Some(MediaPosition(
-                        Duration::try_from_secs_f64(position_secs).unwrap_or_default(),
-                    ));
+                    // position_secs est déjà fini et ≥0 (filtré dans smtc_playback),
+                    // mais peut déborder u64 pour des valeurs énormes → log + repli 0.
+                    let position_dur = Duration::try_from_secs_f64(position_secs)
+                        .unwrap_or_else(|_| {
+                            log::warn!("[smtc] position_secs {position_secs} déborde Duration → 0");
+                            Duration::ZERO
+                        });
+                    let progress = Some(MediaPosition(position_dur));
                     controls.set_playback(if playing {
                         MediaPlayback::Playing { progress }
                     } else {
@@ -216,7 +236,7 @@ pub fn setup(app: &tauri::App) {
                         .and_then(|_| controls.set_playback(MediaPlayback::Stopped));
                     // Nettoyage APRÈS set_metadata : SMTC a basculé vers l'état vide.
                     if let Some(old) = prev_cover.take() {
-                        let _ = std::fs::remove_file(old);
+                        drop(std::fs::remove_file(old)); // best-effort, non fatal
                     }
                     r
                 }
@@ -347,6 +367,12 @@ fn extract_cover(path: &str, seq: &mut u64) -> Option<(String, PathBuf)> {
         ("$", "%24"),
         (",", "%2C"),
         (";", "%3B"),
+        ("'", "%27"),
+        ("^", "%5E"),
+        ("`", "%60"),
+        ("{", "%7B"),
+        ("}", "%7D"),
+        ("|", "%7C"),
     ] {
         slug = slug.replace(raw, enc);
     }

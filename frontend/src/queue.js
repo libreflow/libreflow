@@ -354,8 +354,8 @@ export function renderQueue() {
     // A11Y-03: role=listitem + aria-label pour chaque item (remove button labeled)
     html += explicit.map((t, i) => {
       const artHTML  = t.art ? `<img src="${esc(t.art)}" alt="">` : extEmoji(t.ext);
-      const itemLbl  = `${esc(t.name)}${t.artistFull || t.artist ? ' — ' + esc(t.artistFull || t.artist) : ''}`;
-      const rmvLbl   = `Retirer ${esc(t.name)} de la file d'attente`;
+      const itemLbl  = `${t.name}${t.artistFull || t.artist ? ' — ' + (t.artistFull || t.artist) : ''}`;
+      const rmvLbl   = `Retirer ${t.name} de la file d'attente`;
       return `<div class="queue-item queue-item--explicit" role="listitem" tabindex="0" aria-label="${esc(itemLbl)}" data-id="${t.id}" data-qi="${i}" data-action="play-queue-item" data-track-id="${t.id}">
         <div class="q-drag-handle" aria-hidden="true"><svg viewBox="0 0 6 14" aria-hidden="true" width="10" height="14"><circle cx="2" cy="2" r="1.2"/><circle cx="5" cy="2" r="1.2"/><circle cx="2" cy="7" r="1.2"/><circle cx="5" cy="7" r="1.2"/><circle cx="2" cy="12" r="1.2"/><circle cx="5" cy="12" r="1.2"/></svg></div>
         <div class="q-art" aria-hidden="true">${artHTML}
@@ -381,7 +381,7 @@ export function renderQueue() {
     // A11Y-03: role=listitem + aria-label pour chaque item naturel
     html += natural.slice(0, 50).map((t, i) => {
       const artHTML = t.art ? `<img src="${esc(t.art)}" alt="">` : extEmoji(t.ext);
-      const itemLbl = `${esc(t.name)}${t.artistFull || t.artist ? ' — ' + esc(t.artistFull || t.artist) : ''}`;
+      const itemLbl = `${t.name}${t.artistFull || t.artist ? ' — ' + (t.artistFull || t.artist) : ''}`;
       return `<div class="queue-item queue-item--natural" role="listitem" tabindex="0" aria-label="${esc(itemLbl)}" data-id="${t.id}" data-ni="${i}"
           data-action="play-queue-item" data-track-id="${t.id}">
         <div class="q-art" aria-hidden="true">${artHTML}

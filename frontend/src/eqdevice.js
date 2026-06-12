@@ -73,7 +73,11 @@ export function getActiveDeviceLabel() {
  * N'appelle PAS saveCfg — le handler doit le faire après.
  */
 export function saveCurrentDeviceProfile() {
-  const bands = getCurrentGains() ?? new Array(10).fill(0);
+  const bands = getCurrentGains();
+  if (!bands) {
+    console.warn('[eqdevice] saveCurrentDeviceProfile : EQ non initialisé — sauvegarde annulée');
+    return;
+  }
   _deviceProfiles[_activeId || 'default'] = {
     bands,
     label: _activeLabel || getActiveDeviceLabel(),

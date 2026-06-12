@@ -126,8 +126,8 @@ fn main() {
             // ── Raccourcis médias ─────────────────────────────────────────
             let shortcuts = [
                 ("MediaPlayPause", "toggle-play"),
-                ("MediaNextTrack", "next"),
-                ("MediaPreviousTrack", "prev"),
+                ("MediaTrackNext", "next"),
+                ("MediaTrackPrevious", "prev"),
                 ("MediaStop", "stop"),
             ];
             for (key, cmd) in shortcuts {
