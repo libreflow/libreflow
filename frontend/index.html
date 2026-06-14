@@ -163,27 +163,15 @@
 <div id="main" role="main">
 
   <!-- Welcome -->
-  <div class="view on" id="vw">
-    <div class="wl">
-      <img src="/icon-512.png" alt="LibreFlow logo" class="wl-logo">
-      <h1 class="wh1">Bienvenue sur LibreFlow</h1>
+  <div class="view on" id="vw" role="region" aria-label="Bienvenue">
+    <canvas class="welcome-canvas" aria-hidden="true" role="presentation"></canvas>
+    <div class="welcome-content">
+      <img src="/icon-512.png" alt="LibreFlow" class="welcome-logo">
+      <h1 class="welcome-title">LibreFlow</h1>
+      <p class="welcome-tagline">Tes musiques. Rien d'autre.</p>
+      <button class="welcome-cta" data-action="open-folder">Choisir un dossier</button>
+      <span class="welcome-hint">ou glisse tes fichiers audio ici</span>
     </div>
-    <p class="wsub">Ton lecteur audio local. Tes musiques, sans streaming, sans pub.</p>
-    <div class="wfeats">
-      <div class="wf"><span class="wf-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/><line x1="12" y1="11" x2="12" y2="17"/><line x1="9" y1="14" x2="15" y2="14"/></svg></span><div><div class="wf-t">Scan & tags auto</div><div class="wf-d">Dossiers, pochettes et métadonnées extraits automatiquement</div></div></div>
-      <div class="wf"><span class="wf-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg></span><div><div class="wf-t">Playlists & Smart Radio</div><div class="wf-d">Playlists manuelles, intelligentes et radio par affinité</div></div></div>
-      <div class="wf"><span class="wf-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="13"/><line x1="12" y1="9" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="17"/><line x1="20" y1="13" x2="20" y2="3"/><rect x="1.5" y="12.5" width="5" height="3" rx="1.5" fill="currentColor" stroke="none"/><rect x="9.5" y="7.5" width="5" height="3" rx="1.5" fill="currentColor" stroke="none"/><rect x="17.5" y="15.5" width="5" height="3" rx="1.5" fill="currentColor" stroke="none"/></svg></span><div><div class="wf-t">EQ & qualité audio</div><div class="wf-d">Égaliseur 10 bandes, ReplayGain, crossfade et visualiseur</div></div></div>
-      <div class="wf"><span class="wf-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/><line x1="2" y1="20" x2="22" y2="20"/></svg></span><div><div class="wf-t">Stats & historique</div><div class="wf-d">Artistes, albums, genres et calendrier d'écoute</div></div></div>
-    </div>
-    <button class="wbtn wbtn-scan" data-action="open-folder">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/><line x1="12" y1="11" x2="12" y2="17"/><line x1="9" y1="14" x2="15" y2="14"/></svg>
-      Choisir mon dossier Musique
-    </button>
-    <button class="wbtn wbtn-m3u" data-action="import-m3u">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-      Importer une playlist M3U
-    </button>
-    <span class="whint">ou glisse-dépose des fichiers audio dans la fenêtre</span>
   </div>
 
   <!-- Scanning -->
@@ -767,8 +755,8 @@
             <div class="set-row-sub" data-i18n="set_language_sub">Redémarre l'app pour tout appliquer</div>
           </div>
           <div class="lang-toggle">
-            <button class="lang-btn" id="lang-fr" data-action="set-lang" data-lang="fr">FR</button>
-            <button class="lang-btn" id="lang-en" data-action="set-lang" data-lang="en">EN</button>
+            <button class="lang-btn" id="lang-fr" data-action="set-lang" data-lang="fr" aria-pressed="true">FR</button>
+            <button class="lang-btn" id="lang-en" data-action="set-lang" data-lang="en" aria-pressed="false">EN</button>
           </div>
         </div>
       </div>
@@ -1159,7 +1147,7 @@
 </div>
 
 <!-- QUEUE PANEL — A11Y-07: complementary landmark -->
-<div id="queue-panel" role="complementary" data-i18n-aria="aria_queue_panel" aria-label="File d'attente">
+<div id="queue-panel" role="complementary" data-i18n-aria="aria_queue_panel" aria-label="File d'attente" tabindex="-1">
   <div class="queue-head">
     <h3><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" class="panel-title-ico"><line x1="9" y1="6" x2="21" y2="6"/><line x1="9" y1="12" x2="21" y2="12"/><line x1="9" y1="18" x2="21" y2="18"/><circle cx="3.5" cy="6" r="1.2" fill="currentColor" stroke="none"/><circle cx="3.5" cy="12" r="1.2" fill="currentColor" stroke="none"/><circle cx="3.5" cy="18" r="1.2" fill="currentColor" stroke="none"/></svg>File d'attente</h3>
     <div class="queue-head-actions">
@@ -1201,7 +1189,7 @@
   </div>
 
   <!-- Barre de contrôles EQ : marche/arrêt (bypass), AUTO (genre), A/B (comparer), profil appareil -->
-  <div class="eq-toolbar" role="group" data-i18n-aria="aria_eq_mode_group" aria-label="Contrôles EQ">
+  <div class="eq-toolbar" role="group" data-i18n-aria="aria_eq_toolbar" aria-label="Contrôles EQ">
     <button class="eq-tool-btn eq-power" data-action="eq-toggle-enabled" aria-pressed="true"
             data-i18n-title="aria_eq_power" data-i18n-aria="aria_eq_power" aria-label="Activer ou désactiver l'égaliseur">
       <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 2v9"/><path d="M5.6 7.6a8 8 0 1 0 12.8 0"/></svg>
@@ -1296,7 +1284,8 @@
 </div>
 
 <!-- CINEMA MODE -->
-<div id="cinema-overlay" role="dialog" aria-modal="true" aria-label="Mode cinéma" tabindex="-1">
+<div id="cinema-overlay" role="dialog" aria-modal="true" aria-labelledby="cinema-overlay-title" tabindex="-1">
+  <span id="cinema-overlay-title" class="sr-only">Mode cinéma</span>
   <canvas class="cinema-bg" id="cinema-bg"></canvas>
 
   <!-- Canvas visualiseur audio (full-width, fond, z=1) -->
@@ -1450,14 +1439,14 @@
 <!-- BATCH TAG EDIT MODAL -->
 <div id="batch-tag-modal-bg" data-backdrop-action="close-batch-tag-modal">
   <div id="batch-tag-modal" role="dialog" aria-modal="true" aria-labelledby="batch-tag-modal-title">
-    <div class="modal-h" id="batch-tag-modal-title">✏ Édition en lot</div>
+    <div class="modal-h" id="batch-tag-modal-title"><span aria-hidden="true">✏ </span>Édition en lot</div>
     <div id="bte-count" class="modal-s"></div>
     <div class="bte-cover-zone">
       <div id="bte-cover-preview" class="bte-cover-preview" data-action="bte-cover-click" role="button" tabindex="0">
         <span id="bte-cover-label" class="bte-cover-label">Cliquer pour choisir une pochette</span>
         <img id="bte-cover-img" class="bte-cover-img" style="display:none" alt="">
       </div>
-      <button id="bte-cover-clear" class="bte-cover-clear" style="display:none" data-action="bte-cover-clear">✕</button>
+      <button id="bte-cover-clear" class="bte-cover-clear" style="display:none" data-action="bte-cover-clear" aria-label="Retirer la pochette">✕</button>
       <input type="file" id="bte-cover-file" accept="image/jpeg,image/png" style="display:none" data-input-action="bte-cover-selected">
     </div>
     <div class="bte-fields">
