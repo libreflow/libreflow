@@ -29,6 +29,7 @@ const AMBIENT_CROSSFADE_MS = 1400;
 export let cinemaBg = 'ambient';
 
 let _cinBgCtx      = null;
+let _cinBgCanvas   = null; // référence stable au canvas — mise à jour aux transitions d'état uniquement
 let _ambientAnimRaf = null;
 let _ambientT       = 0;
 let _ambientColors  = null;
@@ -85,7 +86,8 @@ function _buildAmbientColors() {
 export function stopAmbientAnim() {
   _ambientGen++;
   if (_ambientAnimRaf) { cancelAnimationFrame(_ambientAnimRaf); _ambientAnimRaf = null; }
-  _ambientCross = null;
+  _ambientCross  = null;
+  _cinBgCanvas   = null;
 }
 
 function _startAmbientAnim() {
@@ -102,15 +104,16 @@ function _startAmbientAnim() {
     }
     // V7 (audit bugs visuels 2026-06-11) : DPR changé (fenêtre déplacée entre
     // écrans de DPI différents) → re-rasteriser le fond via le chemin standard.
-    if ((window.devicePixelRatio || 1) !== _cinBgDpr) { _updateAmbientGradient(); return; }
+    if ((window.devicePixelRatio || 1) !== _cinBgDpr) { _ambientAnimRaf = null; _updateAmbientGradient(); return; }
     if (cinemaBg === 'ambient' && _frameCount++ % 2 !== 0) {
       _ambientAnimRaf = requestAnimationFrame(loop);
       return;
     }
     _ambientT += now - last;
     last = now;
-    const canvas = document.getElementById('cinema-bg');
-    if (!canvas) { _ambientAnimRaf = null; return; }
+    // _cinBgCanvas is set once on cinema open, cleared on close
+    if (!_cinBgCanvas) { _ambientAnimRaf = null; return; }
+    const canvas = _cinBgCanvas;
     if (!_cinBgCtx || _cinBgCtx.canvas !== canvas) {
       _cinBgCtx = canvas.getContext('2d');
       if (!_cinBgCtx) { _ambientAnimRaf = requestAnimationFrame(loop); return; }
@@ -142,7 +145,9 @@ function _startAmbientAnim() {
 }
 
 function _updateAmbientGradient() {
-  const canvas = document.getElementById('cinema-bg');
+  const _found = document.getElementById('cinema-bg');
+  if (_found) _cinBgCanvas = _found;
+  const canvas = _cinBgCanvas;
   if (!canvas || !canvas.getContext) return;
   const dpr = window.devicePixelRatio || 1;
   _cinBgDpr = dpr; // V7 : mémoriser le DPR de rasterisation
@@ -153,6 +158,7 @@ function _updateAmbientGradient() {
 
   if (cinemaBg === 'amoled') {
     stopAmbientAnim();
+    _cinBgCanvas = canvas; // restore: stopAmbientAnim() nulled it; needed by animation loop
     canvas.width  = PW;
     canvas.height = PH;
     _cinBgCtx = canvas.getContext('2d');
@@ -173,6 +179,7 @@ function _updateAmbientGradient() {
   }
 
   stopAmbientAnim();
+  _cinBgCanvas = canvas; // restore: stopAmbientAnim() nulled it; needed by animation loop
   canvas.width  = PW;
   canvas.height = PH;
   _cinBgCtx = canvas.getContext('2d');
@@ -188,7 +195,10 @@ function _updateAmbientGradient() {
 
 /** Relance l'animation ambient si le mode est ambient/amoled (visibilitychange). */
 export function restartAmbientIfNeeded() {
-  if (cinemaBg === 'ambient' || cinemaBg === 'amoled') _startAmbientAnim();
+  if (cinemaBg === 'ambient' || cinemaBg === 'amoled') {
+    _cinBgCanvas = _cinBgCanvas || document.getElementById('cinema-bg');
+    _startAmbientAnim();
+  }
 }
 
 // ── API publique modes BG ─────────────────────────────────────
@@ -232,6 +242,7 @@ export function applyCinemaBg() {
   overlay.classList.add('bg-' + cinemaBg);
   updateCinemaBgBtn();
   const cinBg = document.getElementById('cinema-bg');
+  _cinBgCanvas = cinBg ?? null;
   stopAmbientAnim();
   _ambientColors = null;
   if (cinBg?.getContext) {
@@ -255,6 +266,83 @@ export function updateCinemaBgBtn() {
 /** Appelé depuis cinema.js lors d'un changement de piste/couleur pour rebuilder les couleurs ambient. */
 export function updateAmbientGradient() {
   _updateAmbientGradient();
+}
+
+// ── Welcome screen ambient (idle, no cinema required) ───────────────────────
+
+let _welcomeGen = 0;
+let _welcomeRaf = null;
+let _welcomePts = null;
+
+function _initWelcomePts(canvas) {
+  const dpr = window.devicePixelRatio || 1;
+  const W   = canvas.offsetWidth  || 800;
+  const H   = canvas.offsetHeight || 600;
+  canvas.width  = Math.round(W * dpr);
+  canvas.height = Math.round(H * dpr);
+  _welcomePts = Array.from({ length: 16 }, () => ({
+    x:  Math.random() * W,
+    y:  Math.random() * H,
+    vx: (Math.random() - 0.5) * 0.3,
+    vy: (Math.random() - 0.5) * 0.3,
+    r:  1.5 + Math.random() * 2,
+  }));
+}
+
+function _drawWelcomeFrame(canvas, dt) {
+  const ctx = canvas.getContext('2d');
+  if (!ctx || !_welcomePts) return;
+  const dpr    = window.devicePixelRatio || 1;
+  const W      = canvas.offsetWidth  || 800;
+  const H      = canvas.offsetHeight || 600;
+  if (Math.round(W * dpr) !== canvas.width || Math.round(H * dpr) !== canvas.height) {
+    _initWelcomePts(canvas);
+    return;
+  }
+  const accent = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim() || '#8B6BFF';
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, W, H);
+  for (const p of _welcomePts) {
+    p.x = (p.x + p.vx * dt / 16 + W) % W;
+    p.y = (p.y + p.vy * dt / 16 + H) % H;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+    ctx.fillStyle = accent;
+    ctx.globalAlpha = 0.08;
+    ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+}
+
+export function startWelcomeAmbient() {
+  if (_welcomeRaf) return;
+  const canvas = document.querySelector('#vw .welcome-canvas');
+  if (!canvas) return;
+  _initWelcomePts(canvas);
+  if (prefersReducedMotion()) {
+    _drawWelcomeFrame(canvas, 0);
+    return;
+  }
+  const myGen = ++_welcomeGen;
+  let last = performance.now();
+  function loop(now) {
+    if (myGen !== _welcomeGen || document.hidden) { _welcomeRaf = null; return; }
+    const dt = now - last;
+    last = now;
+    _drawWelcomeFrame(canvas, dt);
+    _welcomeRaf = requestAnimationFrame(loop);
+  }
+  _welcomeRaf = requestAnimationFrame(loop);
+}
+
+export function stopWelcomeAmbient() {
+  _welcomeGen++;
+  if (_welcomeRaf) { cancelAnimationFrame(_welcomeRaf); _welcomeRaf = null; }
+  _welcomePts = null;
+  const canvas = document.querySelector('#vw .welcome-canvas');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  if (ctx) ctx.clearRect(0, 0, canvas.width, canvas.height);
 }
 
 // ── Resize ───────────────────────────────────────────────────
