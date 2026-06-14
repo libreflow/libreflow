@@ -13,9 +13,6 @@ import { rgEnabled, rgTargetLUFS }               from './replaygain.js';
 import { updateWatchUI, getWatchPath, stopWatchFolder, startWatchNative } from './watchfolder.js';
 import { checkForUpdateManual }                   from './updater.js';
 import { toast }                                  from './ui.js';
-import { normalizePathKey, extractAudioFileArg }  from './utils.js';
-import { addToQueueNext }                         from './queue.js';
-import { next }                                   from './player.js';
 
 let _bootUIApplied = false; // BUG-AUDIT HIGH : garde anti-double-appel
 
@@ -53,13 +50,19 @@ export function _applyBootUICfgControls(cfgObj) {
   set('lastSettingsTab', cfgObj?.lastSettingsTab || 'appearance');
   const watchChk = document.getElementById('watch-folder-chk');
   if (watchChk) watchChk.addEventListener('change', async () => {
-    if (watchChk.checked) {
-      if (getWatchPath()) { await startWatchNative(); }
-      else { watchChk.checked = false; }
-    } else {
-      stopWatchFolder(true, true);
+    try {
+      if (watchChk.checked) {
+        if (getWatchPath()) { await startWatchNative(); }
+        else { watchChk.checked = false; }
+      } else {
+        stopWatchFolder(true, true);
+      }
+      saveCfg();
+    } catch (e) {
+      console.warn('[boot-ui] watch folder toggle failed:', e);
+      watchChk.checked = false;
+      toast(i18n('t_watch_err') || 'Impossible de démarrer la surveillance', 'error');
     }
-    saveCfg();
   });
   const checkUpdateBtn = document.getElementById('check-update-btn');
   if (checkUpdateBtn) {
@@ -96,18 +99,3 @@ export function _applyBootUI(cfgObj) {
   _applyBootUICfgControls(cfgObj);
 }
 
-/**
- * Joue une piste de la bibliothèque à partir d'un chemin de fichier
- * (plugin single-instance / cli — association de fichiers Windows).
- * @param {string|null} rawPath
- */
-export function _playFileArg(rawPath) {
-  if (!rawPath) return;
-  const key = normalizePathKey(rawPath);
-  const t = (get('tracks') || []).find(tr => tr.path && normalizePathKey(tr.path) === key);
-  if (!t) {
-    toast(i18n('t_file_not_in_lib') || 'Ce fichier n\'est pas dans la bibliothèque — importez son dossier d\'abord', 'info');
-    return;
-  }
-  if (addToQueueNext(t.id)) next(true);
-}

@@ -15,7 +15,7 @@ import { get, set, notify, subscribe, setBatch }           from './store.js';
 import './motion.js';
 import './player-seekbar.js';
 import { CFG, SORTS, SLBLS, SPEEDS, SPEED_LBLS } from './cfg.js';
-import { openDB, tx, dget, dall, dput, ddel, DB, getStorageEstimate } from './db.js';
+import { openDB, tx, dget, dall, dput, ddel, DB, getStorageEstimate, resetDB } from './db.js';
 import { extractColor, GENRE_ARTISTS, GENRE_KEYWORDS, guessGenre } from './tags.js';
 import { LANGS, i18n, initLang, getLang, applyLang, setLang } from './i18n.js';
 import { cinemaOpen, cinemaBg, initCinemaBg, toggleCinema, openCinema, closeCinema, updateCinema, updateCinemaProgress, setCinemaBg, cycleCinemaBg, applyCinemaBg, syncCinemaBgSettings, updateCinemaBgBtn, toggleCinemaFullscreen, CINEMA_BG_MODES, CINEMA_BG_LABELS, updateCinArtColor, startWelcomeAmbient, stopWelcomeAmbient } from './cinema.js';
@@ -104,12 +104,12 @@ import { confirmClear, closeModal } from './modal.js';
 export { confirmClear, closeModal };
 import { updateBar, updateVolSlider, setupMarquee, reflowMarquee } from './playerbar.js';
 export { updateBar, updateVolSlider };
-import { saveCfg, saveCfgNow } from './cfgsave.js';
+import { saveCfg, saveCfgNow, cancelSaveCfg } from './cfgsave.js';
 export { saveCfg, saveCfgNow };
 import { setCurIdx, setTracks, setLiked, setCtxTrackId, replaceTracks } from './state.js';
 import { setAriaValueText }                                    from './a11y.js';
 import { _clearLibraryState, _clearLibraryDOM, _clearLibraryIDB, _clearLibraryView } from './library-reset.js';
-import { _applyBootUI, _playFileArg }                         from './boot-ui.js';
+import { _applyBootUI }                                        from './boot-ui.js';
 
 let tracks  = [];       // full track array
 let liked   = new Set();
@@ -141,8 +141,9 @@ let query   = '';
 // radioActive, radioSeedId, radioQueue, _radioPlayedIds → radio.js
 // _lastNotifTrackId → playerbar.js (moved CQ-2)
 // _saveCfgTimer → cfgsave.js (moved ARCH-1)
-let _retryArtTimer    = null; // FIX #21 — annulable dans clearLibrary()
-let _orphansTimer     = null; // FIX #22 — annulable dans clearLibrary()
+let _retryArtTimer    = null;  // FIX #21 — annulable dans clearLibrary()
+let _retryArtAbort    = false; // CORE-APP-3 — stopper le loop artwork après clearLibrary()
+let _orphansTimer     = null;  // FIX #22 — annulable dans clearLibrary()
 // _pqpTrackId, _dragTrackId → playlists.js
 // _smartSeedId → smartplaylist.js
 // lang → i18n.js (initLang / getLang)
@@ -196,20 +197,27 @@ subscribe('plSort',           v => { plSort           = v; });
 subscribe('drillKey',         v => { drillKey         = v; });
 subscribe('albumDetailSort',  v => { albumDetailSort  = v; });
 
-on(EVENTS.TRACK_CHANGE, ({ track, idx }) => {
-  // radioRefillQueue() safety net — guard in radio.js absorbs concurrent calls
-  if (radioActive) radioRefillQueue().catch(e => console.warn('[radio refill safety-net]', e));
+// CORE-APP-4: serialize concurrent TRACK_CHANGE handlers to preserve radioRefillQueue ordering.
+let _trackChangeChain = Promise.resolve();
+async function _handleTrackChange({ track, idx }) {
+  // radioRefillQueue() must complete before UI update (CLAUDE.md §2 invariant)
+  if (radioActive) await radioRefillQueue().catch(e => console.warn('[radio refill safety-net]', e));
   updateBar(); patchActiveTrack(); patchPlayState(!audio.paused); _allPlayerUI();
   invoke('smtc_metadata', { meta: track ? smtcMetaFromTrack(track, audio.duration) : null })
     .catch(e => console.warn('[smtc] metadata:', e));
+}
+on(EVENTS.TRACK_CHANGE, (payload) => {
+  _trackChangeChain = _trackChangeChain
+    .then(() => _handleTrackChange(payload))
+    .catch(e => console.warn('[TRACK_CHANGE]', e));
 });
 on(EVENTS.PLAY_STATE, ({ playing }) => {
   patchPlayState(playing); _allPlayerUI();
 });
 on(EVENTS.RENDER_LIB, () => renderLib());
 on(EVENTS.FILTER_CHANGED, () => { renderLib(); updateClearFiltersBtn(); });
-on(EVENTS.LIBRARY_UPDATED, ({ tracks }) => {
-  invoke('taskbar_set_has_tracks', { hasTracks: tracks.length > 0 }).catch(e => { console.warn('[taskbar] taskbar_set_has_tracks failed:', e); });
+on(EVENTS.LIBRARY_UPDATED, ({ tracks: updatedTracks }) => {
+  invoke('taskbar_set_has_tracks', { hasTracks: updatedTracks.length > 0 }).catch(e => { console.warn('[taskbar] taskbar_set_has_tracks failed:', e); });
   updateSidebarCounts();
 });
 on(EVENTS.RENDER_LIB, () => updateSidebarCounts());
@@ -217,6 +225,11 @@ on(EVENTS.PLAYLIST_CHANGED, () => {
   renderPlNav();
   setupPlNavDrop();
 });
+on(EVENTS.OPEN_PL_MODAL,     ({ trackId }) => openNewPlaylistModal(trackId ?? null));
+on(EVENTS.CLOSE_PL_MODAL,    ()            => closePlModal());
+on(EVENTS.SET_PL_MODAL_MODE, ({ mode })    => setPlModalMode(mode));
+// I18N-2: side-effects of a lang change live here, not inside i18n.js (§6)
+on(EVENTS.LANG_CHANGED, () => { applyTheme(); setCrossfade(get('crossfadeDur') || 0); });
 
 async function boot() {
   // R-2 : health check IDB — si la DB est corrompue ou bloquée, openDB() rejette.
@@ -313,7 +326,7 @@ async function boot() {
     if (cfg.eqAutoMode)  setEQAutoMode(true);
     if (cfg.eqExpert)    setEQExpert(true);
     if (cfg.eqProfiles)  loadEQProfiles(cfg.eqProfiles);
-    initDeviceEQ(cfg.eqDeviceProfiles ?? {}).catch(e => console.warn('[boot] initDeviceEQ failed:', e)); // detects current audio output device
+    initDeviceEQ(cfg.eqDeviceProfiles ?? {}, saveCfg).catch(e => console.warn('[boot] initDeviceEQ failed:', e)); // detects current audio output device; saveCfg injected to avoid circular import
     initDevices(); // démarrer le polling USB + CD audio
     // Purge tout résidu de cache CD orphelin (rip interrompu, crash, etc.)
     cleanupCdCache(null).catch(e => console.warn('[boot] CD cache GC failed:', e));
@@ -414,8 +427,7 @@ async function boot() {
       }
       if (_bi + CFG.BOOT_CHUNK < saved.length) await new Promise(res => setTimeout(res, 0));
     }
-    tracks = _tracksArr;
-    replaceTracks(tracks);
+    replaceTracks(_tracksArr); // CORE-APP-5: replaced redundant `tracks = _tracksArr` + replaceTracks(tracks)
     emit(EVENTS.LIBRARY_UPDATED, { tracks });
 
     // Restore asset:// scope for all parent directories (reset at each launch in prod)
@@ -452,17 +464,20 @@ async function boot() {
     // Retry artwork for tracks whose scan was interrupted (metaDone=true, art=null, noArt=false)
     const _retryList = tracks.filter(t => t.metaDone && !t.art && !t.noArt && t.path);
     if (_retryList.length) {
+      _retryArtAbort = false; // CORE-APP-3: arm; _clearLibraryTimersAndBatches sets true
       _retryArtTimer = setTimeout(async () => { // FIX #21 — stocker le timer
         // Afficher un toast spinner pendant le chargement des pochettes manquantes
         const dismissSpinner = toast(i18n('t_artwork_retry', _retryList.length), 'loading');
         const BATCH = CFG.TAG_LOAD_CONCURRENCY;
         for (let i = 0; i < _retryList.length; i += BATCH) {
+          if (_retryArtAbort) { dismissSpinner?.(); return; } // CORE-APP-3: abort after clearLibrary
           const batch = _retryList.slice(i, i + BATCH).filter(t => _trackIdxMap.has(t.id));
           if (!batch.length) continue;
           batch.forEach(t => { t.metaDone = false; }); // autoriser loadTagsBg à tourner
           await Promise.all(batch.map(t => loadTagsBg(t)));
           await new Promise(r => setTimeout(r, 50));
         }
+        if (_retryArtAbort) { dismissSpinner?.(); return; } // CORE-APP-3: final check
         dismissSpinner();
         const loaded = _retryList.filter(t => t.art).length;
         if (loaded) toast(i18n('t_artwork_retry_done', loaded), 'success');
@@ -527,8 +542,9 @@ async function boot() {
   }
 
   listen('win-state', (e) => { const s = e.payload;
-    document.getElementById('tbt-max').title = (s==='maximized'||s==='fullscreen') ? i18n('tb_restore') : i18n('tb_maximize');
-  }, { target: { kind: 'Any' } }).then(u => _unlisteners.push(u));
+    const _tbtMax = document.getElementById('tbt-max');
+    if (_tbtMax) _tbtMax.title = (s==='maximized'||s==='fullscreen') ? i18n('tb_restore') : i18n('tb_maximize');
+  }, { target: { kind: 'Any' } }).then(u => _unlisteners.push(u)).catch(e => console.warn('[app:listen:win-state]', e));
   listen('media-key', function(e) { const cmd = e.payload;
     if      (cmd === 'toggle-play') togglePlay();
     else if (cmd === 'next')        next(true);
@@ -537,26 +553,26 @@ async function boot() {
     // SMTC envoie Play/Pause distincts (boutons overlay) — idempotents par garde.
     else if (cmd === 'play')        { if (audio.paused)  togglePlay(); }
     else if (cmd === 'pause')       { if (!audio.paused) togglePlay(); }
-  }).then(u => _unlisteners.push(u));
+  }).then(u => _unlisteners.push(u)).catch(e => console.warn('[app:listen:media-key]', e));
   // Scrub depuis l'overlay média (SMTC SetPosition) — position absolue en secondes.
   listen('smtc-seek', (e) => {
     const s = Number(e.payload);
     if (Number.isFinite(s) && s >= 0 && Number.isFinite(audio.duration)) {
       audio.currentTime = Math.min(s, audio.duration);
     }
-  }).then(u => _unlisteners.push(u));
+  }).then(u => _unlisteners.push(u)).catch(e => console.warn('[app:listen:smtc-seek]', e));
   // Seek relatif (Seek/SeekBy SMTC) — delta signé en secondes (positif = avant).
   listen('smtc-seek-by', (e) => {
     const delta = Number(e.payload);
     if (Number.isFinite(delta) && Number.isFinite(audio.duration)) {
       audio.currentTime = Math.max(0, Math.min(audio.currentTime + delta, audio.duration));
     }
-  }).then(u => _unlisteners.push(u));
+  }).then(u => _unlisteners.push(u)).catch(e => console.warn('[app:listen:smtc-seek-by]', e));
   // ── Plugin single-instance : 2e invocation (« Ouvrir avec » sur un fichier) ──
   listen('single-instance', (e) => {
     const argv = Array.isArray(e.payload) ? e.payload : [];
     _playFileArg(extractAudioFileArg(argv.slice(1))); // argv[0] = chemin de l'exe
-  }).then(u => _unlisteners.push(u));
+  }).then(u => _unlisteners.push(u)).catch(e => console.warn('[app:listen:single-instance]', e));
   // ── Plugin cli : fichier passé au premier lancement (association de fichiers) ──
   invoke('plugin:cli|cli_matches', undefined, { timeout: 3000 })
     .then((m) => {
@@ -677,7 +693,7 @@ waitForTauri(() => {
     else if (cmd === 'save-mini-pos' && data) {
       setMiniPos(data); saveCfg();
     }
-  }).then(u => { _unlisteners.push(u); });
+  }).then(u => { _unlisteners.push(u); }).catch(e => console.warn('[app:listen:mini-cmd]', e));
 });
 // Note: mini.html uses invoke('mini_get_state') on load to get initial state,
 // so the mini-request-state event is not needed.
@@ -724,10 +740,12 @@ export async function clearAppCache() {
   if (!ok) return;
   // 1. Annuler les timers de sauvegarde différée AVANT de fermer la DB.
   //    Sans ça, un debounce en attente peut écrire sur une DB déjà fermée → crash IDB.
+  cancelSaveCfg();
   cancelTrackBatch();
   cancelPlayLogFlush();
   // 2. Fermer la connexion IDB.
   if (DB) { try { DB.close(); } catch(e) { console.warn('[app:DB.close]', e); } }
+  resetDB(); // Nul le singleton pour que openDB() puisse rouvrir après un rechargement
   // 3. Supprimer la base. On track `deleted` séparément :
   //    onblocked = resolve était un bug silencieux — la DB n'était pas supprimée
   //    mais l'app rechargait quand même, laissant les données intactes.
@@ -746,10 +764,28 @@ export async function clearAppCache() {
   window.location.reload();
 }
 
+/**
+ * Joue une piste de la bibliothèque à partir d'un chemin de fichier
+ * (plugin single-instance / cli — association de fichiers Windows).
+ * @param {string|null} rawPath
+ */
+function _playFileArg(rawPath) {
+  if (!rawPath) return;
+  const key = normalizePathKey(rawPath);
+  const t = (get('tracks') || []).find(tr => tr.path && normalizePathKey(tr.path) === key);
+  if (!t) {
+    toast(i18n('t_file_not_in_lib') || 'Ce fichier n\'est pas dans la bibliothèque — importez son dossier d\'abord', 'info');
+    return;
+  }
+  if (addToQueueNext(t.id)) next(true);
+}
+
 /** Annule les timers de fond (artwork retry, orphelins) et les batches IDB en attente. */
 function _clearLibraryTimersAndBatches() {
   clearTimeout(_retryArtTimer); _retryArtTimer = null; // FIX #21
   clearTimeout(_orphansTimer);  _orphansTimer  = null; // FIX #22
+  _retryArtAbort = true; // CORE-APP-3: abort any in-progress artwork retry loop
+  cancelSaveCfg();
   cancelTrackBatch();
   cancelPlayLogFlush();
   setPlayLog([]);
@@ -765,6 +801,7 @@ export async function clearLibrary() {
   if (cinemaOpen) closeCinema();
   _clearLibraryTimersAndBatches();
   _clearLibraryState();
+  renderPlNav();
   _clearLibraryDOM();
   await _clearLibraryIDB();
   _clearLibraryView();
