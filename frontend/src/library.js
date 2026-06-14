@@ -51,6 +51,8 @@ function _sanitizeTagStr(val, maxLen = 500) {
 let _saveTrackBatch    = new Map();  // Map<id, Track> — pistes à flush
 let _saveTrackTimer    = null;       // debounce timer
 let _saveTrackMaxTimer = null;       // garantit un flush toutes les 2s sous charge continue
+let _flushGeneration   = 0;          // FIX FREEZE : incrémenté par cancelTrackBatch() pour annuler un flush en vol
+let _currentWriteTx    = null;       // FIX FREEZE : transaction IDB active — exposée pour abort d'urgence
 
 // ── loadTagsAndDurations ──────────────────────────────────────────────────────
 /**
@@ -283,6 +285,8 @@ export async function flushTrackBatch() {
   if (!_saveTrackBatch.size || !DB) return;
   const batch = [..._saveTrackBatch.values()];
   _saveTrackBatch.clear();
+  // FIX FREEZE : snapshot de génération avant le premier await (résolution artwork)
+  const myGen = _flushGeneration;
 
   const records = await Promise.all(batch.map(async t => {
     if (!_trackIdxMap.has(t.id)) return null;
@@ -304,23 +308,30 @@ export async function flushTrackBatch() {
     };
   }));
 
+  // FIX FREEZE : cancelTrackBatch() a été appelé pendant la résolution artwork → abandonner sans écrire
+  if (_flushGeneration !== myGen) return;
+
   const validRecords = records.filter(Boolean);
   if (!validRecords.length) return;
 
   /** Exécute une transaction IDB de type readwrite pour écrire les records donnés. */
   async function _writeTx(recs) {
     const transaction = DB.transaction('tracks', 'readwrite');
+    _currentWriteTx = transaction; // FIX FREEZE : exposé pour abort si clearLibrary() intervient
     const store = transaction.objectStore('tracks');
     for (const rec of recs) store.put(rec);
     await new Promise((ok, fail) => {
-      transaction.oncomplete = ok;
-      transaction.onerror   = () => fail(transaction.error);
+      transaction.oncomplete = () => { _currentWriteTx = null; ok(); };
+      transaction.onerror   = () => { _currentWriteTx = null; fail(transaction.error); };
+      transaction.onabort   = () => { _currentWriteTx = null; fail(new Error('tx aborted')); };
     });
   }
 
   try {
     await _writeTx(validRecords);
   } catch(e) {
+    // FIX FREEZE : abort déclenché par cancelTrackBatch() → silencieux
+    if (_flushGeneration !== myGen) return;
     if (isQuotaError(e)) {
       // ARCH-7 : quota IDB dépassé — réessayer sans artBuf (artwork sacrifié, métadonnées préservées)
       console.warn('[flushTrackBatch] Quota IDB dépassé — retry sans artwork', e);
@@ -337,6 +348,7 @@ export async function flushTrackBatch() {
           'warning'
         );
       } catch(e2) {
+        if (_flushGeneration !== myGen) return;
         console.error('[flushTrackBatch] Quota IDB critique — métadonnées non sauvegardées', e2);
         toast(
           i18n('t_idb_quota_critical') || 'Stockage plein — données non sauvegardées. Libérez de l\'espace disque immédiatement.',
@@ -381,6 +393,9 @@ export function saveTracks(...ts) {
  * réécrites après le vidage de la bibliothèque (race condition timer).
  */
 export function cancelTrackBatch() {
+  // FIX FREEZE : invalider tout flush en cours (artwork en résolution OU _writeTx() démarrée)
+  _flushGeneration++;
+  if (_currentWriteTx) { try { _currentWriteTx.abort(); } catch(_e) {} _currentWriteTx = null; }
   if (_saveTrackTimer)    { clearTimeout(_saveTrackTimer);    _saveTrackTimer    = null; }
   if (_saveTrackMaxTimer) { clearTimeout(_saveTrackMaxTimer); _saveTrackMaxTimer = null; }
   _saveTrackBatch.clear();

@@ -56,7 +56,7 @@ export async function checkForUpdate() {
     );
   } catch (e) {
     // Silent to the user — endpoint may not be configured in dev builds
-    console.warn('[updater] checkForUpdate failed (expected in dev or offline):', e?.message ?? e);
+    console.debug('[updater] checkForUpdate failed (expected in dev or offline):', e?.message ?? e);
   }
 }
 

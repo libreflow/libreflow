@@ -14,6 +14,11 @@ import { CFG } from './cfg.js';
 /** @type {Promise<void> | null} */
 let _tauriReady = null;
 
+// Évite de lancer de nouveaux invoke() pendant un reload Vite HMR — réduit les
+// "[TAURI] Couldn't find callback id" dans la console développeur.
+let _pageUnloading = false;
+window.addEventListener('beforeunload', () => { _pageUnloading = true; }, { once: true });
+
 function _waitTauriReady() {
   if (_tauriReady) return _tauriReady;
   return (_tauriReady = new Promise((res, rej) => {
@@ -72,6 +77,7 @@ function _waitTauriReady() {
  * @returns {Promise<unknown>}
  */
 async function invoke(cmd, args, opts) {
+  if (_pageUnloading) return;
   await _waitTauriReady();
   const timeout = opts?.timeout ?? CFG.IPC_TIMEOUT_MS;
   // @ts-ignore — __TAURI__ injected at runtime by Tauri, not in Window type
