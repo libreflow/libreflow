@@ -1,33 +1,6 @@
 // LibreFlow — playlists.js
-// CRUD playlists, navigation hero, drag-drop, dossiers, covers, modals.
-// Extrait de app.js (Jalon 5 — Session 143).
-// Refactorisé : CRUD → playlist-crud.js, nav sidebar → playlist-nav.js.
-//
-// Dépendances :
-//   store.js  : get, set
-//   bus.js    : emit, EVENTS
-//   i18n.js   : i18n
-//   utils.js  : esc
-//   ui.js     : toast, toastWithAction, confirmAction
-//   ctxmenu.js: closeCtxMenu
-//   smartplaylist.js: openSmartPlaylistModal, switchPlTab
-//   selection.js    : clearSelection
-//   search.js       : invalidateFilterCache
-//   playlist-crud.js: play helpers, CRUD, persistance
-//   playlist-nav.js : rendu sidebar nav + drag sidebar
-//
-// Exports publics :
-//   savePlaylists, renderPlNav, setupPlNavDrop (re-exported)
-//   renderPlHero, setPlSort, setPlModalMode
-//   openNewPlaylistModal, openRenamePlaylistModal, closePlModal, confirmPlaylistModal
-//   deletePlaylist, addTrackToPlaylist, removeTrackFromPlaylist
-//   showPlCtxMenu, ctxPlayPlaylist, ctxShufflePlaylist
-//   showPlQuickPop, closePlQuickPop, pqpAdd, pqpNew
-//   onTrackDragStart, onPlNavDragStart
-//   togglePinPlaylist, movePlToFolder, removePlFromFolder
-//   togglePlFolder, showPlFolderCtxMenu, renamePlFolder, deletePlFolder
-//   onPlCoverSelected, clearPlCover
-//   trapFocus
+// Hero display, modals, ctx menus, cover art, drag-to-reorder.
+// CRUD → playlist-crud.js  |  nav sidebar → playlist-nav.js (barrel re-exported at bottom).
 
 import { modalOpen, modalClose } from './motion.js';
 import { esc }                   from './utils.js';
@@ -52,7 +25,7 @@ import { renderPlNav, setupPlNavDrop, onPlNavDragStart,
          showPlFolderCtxMenu, _plNavInlineRename,
          setNavDragTrackId }                  from './playlist-nav.js';
 
-// ── État local du module ──────────────────────────────────────────────────────
+// ── État local du module ─────────────────────────────────────────
 let plModalMode       = 'new';  // 'new' | 'rename'
 let _pqpTrackId       = null;   // track en cours dans le quick-pop ajout playlist
 let _dragTrackId      = null;   // track en cours de drag (sidebar + reorder)
@@ -67,14 +40,12 @@ let _heroMosaicGen    = 0;      // B19 : token anti-race pour les img.onload du 
 /** Setter pour smartplaylist.js (window.setPlModalMode). */
 export function setPlModalMode(v) { plModalMode = v; }
 
-/** FIX-B9 — Attache les listeners mousedown + Escape pour fermer le ctx-menu playlist/dossier. */
+/** Attache les listeners mousedown + Escape pour fermer le ctx-menu playlist/dossier. */
 function _attachPlCtxClose(menu) {
   if (_plCtxClose)    { document.removeEventListener('mousedown', _plCtxClose,    true); _plCtxClose    = null; }
   if (_plCtxEscClose) { document.removeEventListener('keydown',   _plCtxEscClose, true); _plCtxEscClose = null; }
-  // B27 FIX : _close capture ses PROPRES références (mdHandler / escHandler).
-  // Avant, _close lisait les variables module — un 2e ctx-menu les réassignait
-  // et le _close du 1er retirait alors les listeners du 2e, laissant ceux du
-  // 1er empilés sur document.
+  // B27 FIX : _close capture ses propres références locales pour éviter que
+  // l'ouverture d'un 2e menu n'écrase les vars module et ne laisse des listeners orphelins.
   const _close = () => {
     menu.classList.remove('on');
     document.removeEventListener('mousedown', mdHandler,  true);
@@ -92,9 +63,7 @@ function _attachPlCtxClose(menu) {
   }, 0);
 }
 
-// ══ Focus trap (WCAG 2.1.2) ══════════════════════════════════════════════════
-// Confine le focus clavier à l'intérieur d'un modal tant qu'il est visible.
-// Retourne une fonction de cleanup pour retirer le listener.
+/** Focus trap (WCAG 2.1.2) — confine le focus à l'intérieur d'un modal. Retourne un cleanup. */
 export function trapFocus(containerEl) {
   const FOCUSABLE = [
     'a[href]', 'button:not([disabled])', 'input:not([disabled])',
@@ -123,14 +92,9 @@ export function trapFocus(containerEl) {
   return () => containerEl.removeEventListener('keydown', handler);
 }
 
-// ══ PLAYLISTS ════════════════════════════════════════════════════════════════
+// ── Hero playlist ─────────────────────────────────────────────────────────────
 
-// ── S92 — Hero playlist (style Spotify/Deezer) ───────────────────────────────
-
-/**
- * Rend le hero header de la vue playlist : cover, grand nom (éditable), stats.
- * Insère #pl-hero entre .vh et #pl-action-bar si absent du DOM.
- */
+/** Rend le hero header de la vue playlist : cover, nom éditable, stats. */
 export function renderPlHero(pl, fl) {
   let hero = document.getElementById('pl-hero');
   if (!hero) {
@@ -196,13 +160,10 @@ export function renderPlHero(pl, fl) {
   if (!pl.coverB64) _drawHeroMosaic(fl);
 }
 
-/**
- * Dessine une mosaïque 2×2 des pochettes des 4 premiers titres dans #pl-hero-mosaic.
- * Ignoré si le canvas n'est plus dans le DOM (playlist changée entre-temps).
- */
+/** Dessine une mosaïque 2×2 des pochettes dans #pl-hero-mosaic. */
 function _drawHeroMosaic(fl) {
-  // B19 FIX : token de génération — un img.onload lent d'une playlist précédente
-  // ne doit pas peindre sur le canvas (même id) d'une playlist ouverte depuis.
+  // B19 FIX : token de génération — évite qu'un img.onload lent d'une playlist précédente
+  // ne peigne sur le canvas d'une playlist ouverte depuis.
   const _myGen = ++_heroMosaicGen;
   const c = document.getElementById('pl-hero-mosaic');
   if (!c) return;
@@ -215,7 +176,6 @@ function _drawHeroMosaic(fl) {
   for (const t of fl) { if (t.art && arts.length < 4) arts.push(t.art); }
   if (!arts.length) return;
 
-  // Si un seul art, remplir les 4 cellules avec
   const toLoad = arts.length === 1
     ? [arts[0], arts[0], arts[0], arts[0]]
     : arts.length === 2
@@ -227,15 +187,14 @@ function _drawHeroMosaic(fl) {
     const img = new Image();
     const [px, py] = positions[i];
     img.onload = () => {
-      if (_heroMosaicGen !== _myGen) return; // B19 FIX : playlist changée entre-temps
+      if (_heroMosaicGen !== _myGen) return;
       const cv = document.getElementById('pl-hero-mosaic');
-      if (!cv) return; // canvas retiré du DOM (changement de playlist)
+      if (!cv) return;
       const ctx2d = cv.getContext('2d');
       if (ctx2d) ctx2d.drawImage(img, px, py, 100, 100);
     };
-    // S157 FIX-8 : guard onerror — laisse la cellule en fond #1a1a2a au lieu d'échouer silencieusement
     img.onerror = () => {
-      if (_heroMosaicGen !== _myGen) return; // B19 FIX : playlist changée entre-temps
+      if (_heroMosaicGen !== _myGen) return;
       const cv = document.getElementById('pl-hero-mosaic');
       if (!cv) return;
       const c2 = cv.getContext('2d');
@@ -247,10 +206,7 @@ function _drawHeroMosaic(fl) {
   }
 }
 
-/**
- * S92 — Changer le tri interne de la playlist courante.
- * Persiste dans pl.sort + invalide le filtre + re-rend.
- */
+/** Changer le tri interne de la playlist courante. Persiste dans pl.sort + re-rend. */
 export function setPlSort(val) {
   const playlists = get('playlists');
   const curPlId   = get('curPlId');
@@ -263,9 +219,7 @@ export function setPlSort(val) {
   savePlaylists();
 }
 
-/**
- * S92 — Renommage inline du nom dans le hero (double-clic).
- */
+/** Renommage inline du nom dans le hero (double-clic). */
 export function _plHeroInlineRename(plId) {
   const el = document.getElementById('pl-hero-name');
   const pl = get('playlists').find(p => p.id === plId);
@@ -306,11 +260,10 @@ export function _plHeroInlineRename(plId) {
   el.addEventListener('blur', finish, { once: true });
 }
 
-// ── Popup ajout rapide à playlist ────────────────────────────
+// ── Popup ajout rapide à playlist ─────────────────────────────────────────────
 export function showPlQuickPop(e, trackId, triggerEl) {
   e.stopPropagation();
-  // B16 FIX : e.currentTarget vaut `document` dans un listener délégué puis null
-  // une fois le dispatch terminé — utiliser l'élément déclencheur passé explicitement.
+  // B16 FIX : utiliser l'élément déclencheur explicite (e.currentTarget vaut null après dispatch).
   const _trigger = triggerEl || e.target?.closest?.('[data-action="show-pl-qpop"]');
   _pqpTrackId = trackId;
   const pop = document.getElementById('pl-quick-pop');
@@ -336,13 +289,12 @@ export function showPlQuickPop(e, trackId, triggerEl) {
        ${i18n('pl_smart_lbl')}
      </div>`;
 
-  // Afficher hors-écran d'abord pour mesurer la hauteur réelle
+  // Afficher hors-écran pour mesurer la hauteur réelle avant positionnement
   pop.style.visibility = 'hidden';
   pop.style.left = '-9999px';
   pop.style.top  = '0px';
   pop.classList.add('on');
 
-  // Positionner après le paint pour avoir offsetHeight correct
   requestAnimationFrame(() => {
     if (!_trigger) { pop.style.visibility = ''; return; }
     const rect  = _trigger.getBoundingClientRect();
@@ -351,13 +303,11 @@ export function showPlQuickPop(e, trackId, triggerEl) {
     const x = Math.max(4, Math.min(rect.left, window.innerWidth  - popW - 8));
     const opensAbove = rect.bottom + 4 + popH > window.innerHeight;
     const y = opensAbove
-      ? Math.max(4, rect.top - popH - 4)   // au-dessus si pas de place en dessous
+      ? Math.max(4, rect.top - popH - 4)
       : rect.bottom + 4;
     pop.style.left = x + 'px';
     pop.style.top  = y + 'px';
-    // FIX : adapter transform-origin selon le sens d'ouverture.
-    // Sans ça, l'animation scale partait toujours de "top left" même quand
-    // le popup s'ouvre au-dessus du bouton → effet de saut visuel.
+    // FIX : adapter transform-origin pour éviter un saut visuel à l'ouverture au-dessus
     pop.style.transformOrigin = `left ${opensAbove ? 'bottom' : 'top'}`;
     pop.style.visibility = '';
   });
@@ -385,7 +335,7 @@ document.addEventListener('click', e => {
   if (pop && pop.classList.contains('on') && !pop.contains(e.target)) closePlQuickPop();
 });
 
-// ── Drag & drop titre → playlist sidebar ─────────────────────
+// ── Drag & drop titre → playlist sidebar ──────────────────────────────────────
 export function onTrackDragStart(e, trackId) {
   _dragTrackId = trackId;
   setNavDragTrackId(trackId); // Sync drag-track state into playlist-nav.js
@@ -398,7 +348,7 @@ export function onTrackDragStart(e, trackId) {
   setTimeout(() => { const el = document.getElementById('tr-' + trackId); if (el) el.classList.add('dragging'); }, 0);
 }
 
-// ── Réorganisation playlist par drag-and-drop ──────────────
+// ── Réorganisation playlist par drag-and-drop ─────────────────────────────────
 export function _attachPlaylistReorder(tlist) {
   if (tlist._plReorderAttached) return;
   tlist._plReorderAttached = true;
@@ -436,9 +386,7 @@ export function _attachPlaylistReorder(tlist) {
 
     const pl = get('playlists').find(p => p.id === curPlId);
     if (!pl) return;
-    // B20 FIX : pas de réorganisation manuelle d'une smart playlist — l'ordre
-    // serait écrasé au prochain regenerateSmartPlaylist (contrat read-only).
-    if (pl.smart) return;
+    if (pl.smart) return; // B20 FIX : smart playlist = read-only, order reset by regenerateSmartPlaylist
 
     const fromId = _dragTrackId;
     const toId   = row.id.replace('tr-', '');
@@ -448,17 +396,13 @@ export function _attachPlaylistReorder(tlist) {
     let   toIdx   = pl.trackIds.indexOf(toId);
     if (fromIdx < 0 || toIdx < 0) return;
 
-    // Determine drop position (above or below)
     const rect = row.getBoundingClientRect();
     const insertBefore = e.clientY < rect.top + rect.height / 2;
-    if (!insertBefore) toIdx++; // insert after
+    if (!insertBefore) toIdx++;
 
-    // Remove from source position, insert at target
-    // Calculer la position cible AVANT le splice (le splice décale les indices)
-    let insertAt = toIdx; // BUG-m1 FIX : ligne morte supprimée (toIdx déjà incrémenté ci-dessus)
-    // Compenser le décalage causé par la suppression de fromIdx
+    // BUG-m1 FIX : calculer insertAt avant splice ; compenser le décalage causé par la suppression
+    let insertAt = toIdx;
     if (fromIdx < insertAt) insertAt--;
-    // Éviter no-op : si insertAt === fromIdx, l'ordre n'a pas changé
     pl.trackIds.splice(fromIdx, 1);
     pl.trackIds.splice(Math.max(0, Math.min(insertAt, pl.trackIds.length)), 0, fromId);
 
@@ -480,7 +424,7 @@ export function _detachPlaylistReorder(tlist) {
   tlist._plReorderAttached = false;
 }
 
-// ── S90 : Cover custom de playlist (upload image, stocké base64 dans IDB) ──
+// ── Cover custom de playlist (upload image → base64 → IDB) ───────────────────
 
 /** Redimensionne une image en base64 (JPEG) via canvas. */
 function _resizeImageToBase64(file, maxSize = 256) {
@@ -662,7 +606,7 @@ export function showPlCtxMenu(event, plId) {
       <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M9 6V4h6v2"/></svg>
       ${i18n('pl_delete')}
     </div>`;
-  // S157 FIX-5 : positionnement basé sur la hauteur réelle du menu (avant : Y fixe -80px → menu pouvait sortir de l'écran)
+  // S157 FIX-5 : positionnement basé sur la hauteur réelle du menu
   menu.style.visibility = 'hidden';
   menu.style.left = '0px';
   menu.style.top  = '0px';
@@ -675,28 +619,25 @@ export function showPlCtxMenu(event, plId) {
   menu.style.left = x + 'px';
   menu.style.top  = y + 'px';
   menu.style.visibility = '';
-  // FIX-B9 : fermeture mousedown extérieur + Escape (LEAK-1 FIX étendu)
-  _attachPlCtxClose(menu);
+  _attachPlCtxClose(menu); // FIX-B9 : fermeture mousedown extérieur + Escape
 }
 
-/** Lire toute la playlist depuis le menu contextuel sidebar (navigue + joue). */
+/** Lire toute la playlist depuis le ctx-menu sidebar (navigue + joue). */
 export function ctxPlayPlaylist(plId) {
   document.getElementById('pl-ctx-menu')?.classList.remove('on');
-  const niBtn = document.getElementById('ni-pl-' + plId);
-  setView('playlist', niBtn, plId);
+  setView('playlist', document.getElementById('ni-pl-' + plId), plId);
   setTimeout(() => playPlaylistFrom(0), 80);
 }
-/** Lecture aléatoire depuis le menu contextuel sidebar. */
+/** Lecture aléatoire depuis le ctx-menu sidebar. */
 export function ctxShufflePlaylist(plId) {
   document.getElementById('pl-ctx-menu')?.classList.remove('on');
-  const niBtn = document.getElementById('ni-pl-' + plId);
-  setView('playlist', niBtn, plId);
+  setView('playlist', document.getElementById('ni-pl-' + plId), plId);
   setTimeout(() => shufflePlaylist(), 80);
 }
 
 export function openRenamePlaylistModal(plId) {
   const pl = get('playlists').find(p => p.id === plId);
-  if (!pl) return; // smart playlists peuvent aussi être renommées
+  if (!pl) return;
   _plModalPrevFocus = document.activeElement;
   plModalMode = 'rename';
   document.getElementById('pl-modal-title').textContent = i18n('pl_rename_title');
@@ -707,9 +648,7 @@ export function openRenamePlaylistModal(plId) {
   document.getElementById('pl-modal-bg').dataset.renamePlId   = plId;
   _plModalCoverB64 = pl.coverB64 || null;
   _renderPlCoverPreview();
-  // FIX-B3 : reset de l'état actif des onglets AVANT de les cacher
-  // (évite le désync visuel si l'utilisateur était sur l'onglet Smart)
-  switchPlTab('manual');
+  switchPlTab('manual'); // FIX-B3 : reset onglets AVANT de les cacher (évite désync visuel)
   const tabs = document.querySelector('.pl-modal-tabs');
   if (tabs) tabs.style.display = 'none';
   document.getElementById('pl-panel-manual').style.display = '';
@@ -734,9 +673,7 @@ export function closePlModal() {
   if (_plModal) modalClose(_plModal).then(_doClose);
   else _doClose();
   closeCtxMenu();
-  // S88 FIX : reset complet de l'état modal pour éviter les fuites d'état
-  // Avant le fix, plModalMode/datasets pouvaient persister entre deux ouvertures
-  // (ex. rename → fermeture sans sauvegarde → nouvelle playlist avec mode 'rename' fantôme)
+  // S88 FIX : reset complet pour éviter les fuites d'état entre ouvertures
   plModalMode = 'new';
   const bg = document.getElementById('pl-modal-bg');
   if (bg) {
@@ -759,23 +696,16 @@ export function closePlModal() {
   _plModalPrevFocus = null;
 }
 
-// Guard anti double-submit (double clic sur "Créer" / Enter répété)
 export async function confirmPlaylistModal() {
   if (_plModalBusy) return;
-  // S88 FIX : lire le nom ET le mode IMMÉDIATEMENT et snapshoter dans des locals
-  // Avant, plModalMode était relu après l'await — risque si un autre handler le modifiait
+  // S88 FIX : snapshoter nom+mode immédiatement (plModalMode relu après await = risque de race)
   const inp     = document.getElementById('pl-modal-inp');
   const rawName = inp ? inp.value : '';
   const name    = rawName.trim();
   const mode    = plModalMode;
 
-  // S88 FIX : feedback explicite si nom vide (au lieu d'un silent return)
-  if (!name) {
-    if (inp) {
-      inp.classList.add('shake');
-      setTimeout(() => inp.classList.remove('shake'), 400);
-      inp.focus();
-    }
+  if (!name) { // S88 FIX : feedback explicite si nom vide
+    if (inp) { inp.classList.add('shake'); setTimeout(() => inp.classList.remove('shake'), 400); inp.focus(); }
     toast(i18n('t_pl_name_required') || 'Donne un nom à ta playlist', 'warning');
     return;
   }
@@ -787,10 +717,8 @@ export async function confirmPlaylistModal() {
       const pl = get('playlists').find(p => p.id === plId);
       if (!pl) { closePlModal(); return; }
       pl.name = name;
-      // S90 : sauvegarder / retirer le cover custom
-      if (_plModalCoverB64) pl.coverB64 = _plModalCoverB64;
+      if (_plModalCoverB64) pl.coverB64 = _plModalCoverB64; // S90 : cover custom
       else delete pl.coverB64;
-      // Nettoyer les datasets pour éviter les effets de bord
       document.getElementById('pl-modal-bg').dataset.selBatch     = '';
       document.getElementById('pl-modal-bg').dataset.pendingTrack = '';
       await savePlaylists();
@@ -805,18 +733,15 @@ export async function confirmPlaylistModal() {
       return;
     }
 
-    // Mode création
-    // S88 FIX : capturer les datasets AVANT toute autre opération (évite qu'un handler
-    // async concurrent ne les modifie entre-temps)
+    // Mode création — S88 FIX : capturer les datasets avant tout await
     const bg       = document.getElementById('pl-modal-bg');
     const pending  = bg.dataset.pendingTrack;
     const selBatch = bg.dataset.selBatch;
-    // Construire l'objet playlist avec le nom en local (pas via variable modifiable)
     const pl = { id: 'pl_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7), name: name, trackIds: [] };
     if (_plModalCoverB64) pl.coverB64 = _plModalCoverB64;
     if (pending) pl.trackIds.push(pending);
     if (selBatch) selBatch.split(',').filter(Boolean).forEach(id => { if (!pl.trackIds.includes(id)) pl.trackIds.push(id); });
-    // Clear datasets avant l'await pour éviter contamination si l'utilisateur réouvre le modal
+    // Clear datasets avant l'await (évite contamination si l'utilisateur réouvre le modal)
     bg.dataset.selBatch     = '';
     bg.dataset.pendingTrack = '';
     get('playlists').push(pl);
@@ -834,7 +759,6 @@ export async function confirmPlaylistModal() {
 }
 
 // FIX-B5 : Enter/Escape câblés sur tous les champs texte du modal (manuel + smart)
-// Avant : seul pl-modal-inp avait le listener → Enter ignoré dans les champs Smart
 ['pl-modal-inp', 'smart-pl-name', 'spl-rules-name'].forEach(id => {
   const el = document.getElementById(id);
   if (!el) return;
