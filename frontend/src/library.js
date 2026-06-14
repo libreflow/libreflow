@@ -1,12 +1,7 @@
 /**
- * library.js — Gestion de la bibliothèque musicale (Phase 3 refactoring)
+ * library.js — Gestion de la bibliothèque musicale.
  *
  * Possède : _saveTrackBatch, _saveTrackTimer, _scanInProgress.
- *
- * Imports directs depuis les modules stables.
- * Lit/écrit l'état applicatif via window.* (défini dans app.js).
- * Ces dépendances window.* seront éliminées lors des phases ultérieures
- * (Phase 4 : migration vers store.js/bus.js).
  *
  * Exports : loadTagsAndDurations, loadTagsBg,
  *           saveTrack, saveTracks, saveTrackNow, flushTrackBatch.
@@ -61,7 +56,7 @@ let _currentWriteTx    = null;       // FIX FREEZE : transaction IDB active — 
  */
 export async function loadTagsAndDurations(newTracks) {
   const DUR_CONCURRENCY = CFG.TAG_LOAD_CONCURRENCY; // OPT-4 : CFG au lieu de 4 hardcodé
-  const _tagsLoadingId  = 'tags-loading-' + Date.now();
+  const _tagsLoadingId  = `tags-loading-${Date.now()}-${Math.random().toString(36).slice(2, 5)}`;
   const _sbStats = document.getElementById('sb-stats');
   if (_sbStats) _sbStats.insertAdjacentHTML('beforeend',
     ` <span id="${_tagsLoadingId}" style="opacity:.5;font-size:10px">· chargement…</span>`);
@@ -123,6 +118,7 @@ export async function loadTagsAndDurations(newTracks) {
     await new Promise(r => setTimeout(r, 0)); // OPT-3 : yield event loop, délai artificiel supprimé
   }
   if (_timedOutCount > 0) toast(i18n('err_tag_timeout', _timedOutCount), 'warning');
+  if (_saveTrackMaxTimer) { clearTimeout(_saveTrackMaxTimer); _saveTrackMaxTimer = null; }
   if (_saveTrackTimer) { clearTimeout(_saveTrackTimer); await flushTrackBatch(); }
   if (_skippedCount > 0) {
     toast(i18n('t_short_tracks_skipped', _skippedCount), 'warning');

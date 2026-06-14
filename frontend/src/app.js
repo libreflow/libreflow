@@ -428,7 +428,7 @@ async function boot() {
       if (_bi + CFG.BOOT_CHUNK < saved.length) await new Promise(res => setTimeout(res, 0));
     }
     replaceTracks(_tracksArr); // CORE-APP-5: replaced redundant `tracks = _tracksArr` + replaceTracks(tracks)
-    emit(EVENTS.LIBRARY_UPDATED, { tracks });
+    emit(EVENTS.LIBRARY_UPDATED, { tracks: get('tracks') });
 
     // Restore asset:// scope for all parent directories (reset at each launch in prod)
     const _assetDirs = [...new Set(
