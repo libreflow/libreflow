@@ -1,7 +1,6 @@
 ﻿// @ts-check
 /** player.js — Moteur de lecture. Émet EVENTS.TRACK_CHANGE et EVENTS.PLAY_STATE. */
 /** @import { Track } from './types.js' */
-
 import { emit, EVENTS }                           from './bus.js';
 import { get, set, subscribe }                    from './store.js';
 import { i18n }                                   from './i18n.js';
@@ -35,7 +34,6 @@ import { _allPlayerUI }           from './allplayerui.js';
 import { playPausePress }         from './motion.js';
 import { updateMediaSessionState } from './player-mediasession.js';
 export { updateMediaSession, initMediaSession, updateMediaSessionState } from './player-mediasession.js';
-
 /** @type {string | null} */
 let _pendingVizMode     = null; // boot viz state
 let _pendingVizDisabled = false;
@@ -44,7 +42,6 @@ export function setBootVizState(mode, disabled) {
   _pendingVizMode     = mode ?? null;
   _pendingVizDisabled = !!disabled;
 }
-
 // ── Audio element / cached DOM refs ──────────────────────────────────────────
 export const audio = /** @type {HTMLAudioElement} */ (document.getElementById('audio'));
 audio.crossOrigin = 'anonymous';
@@ -59,7 +56,6 @@ const _DOM = { // cached at module init — avoids getElementById at 60fps in ti
 
 /** Invalide le cache rvProgFill quand renderRadioView() rebuild l'innerHTML. */
 export function clearRvProgFill() { _DOM.rvProgFill = null; }
-
 let curIdx        = get('curIdx');        // playback state (initialized from store)
 let shuffle       = get('shuffle');       // false
 /** @type {number[]} */
@@ -103,7 +99,6 @@ subscribe('playbackSpeed', v => { playbackSpeed = v; });
 subscribe('crossfadeDur',  v => { crossfadeDur  = v; });
 subscribe('sort',          () => { _recentFilterToastShown = false; });
 subscribe('query',         () => { _recentFilterToastShown = false; });
-
 /** @param {Track} t @returns {Promise<boolean>} */
 export async function ensureUrl(t) {
   if (t.url)  return true;
@@ -116,7 +111,6 @@ export async function ensureUrl(t) {
     return false;
   }
 }
-
 let _pressListenerEl = null; // element reference so replacement survives DOM updates
 function _attachPressListener() {
   const btn = document.querySelector('.pcplay');
@@ -162,11 +156,17 @@ function _playDirect(track, idx) { // off-filter tracks; radioRefillQueue() MUST
     audio.play().catch((e) => {
       if (e?.name !== 'AbortError') toast(i18n('t_play_start_err', e?.message), 'error');
     });
-    if (radioActive) radioRefillQueue().catch(e => console.warn('[radio] refill failed:', e)); // MUST precede TRACK_CHANGE (§3)
     _postPlaySideEffects(track);
-    emit(EVENTS.TRACK_CHANGE, { track, idx: curIdx });
-    setTimeout(() => scrollToCurrentTrack(), 50);
-    if (rgEnabled) analyzeAndApplyRG();
+    const _afterRefill = () => {
+      emit(EVENTS.TRACK_CHANGE, { track, idx: curIdx });
+      setTimeout(() => scrollToCurrentTrack(), 50);
+      if (rgEnabled) analyzeAndApplyRG();
+    };
+    if (radioActive) {
+      radioRefillQueue().then(_afterRefill).catch(e => { console.warn('[radio] refill failed:', e); _afterRefill(); });
+    } else {
+      _afterRefill();
+    }
   } finally {
     _playLock = false;
   }
@@ -215,7 +215,6 @@ export function isCurrentTrack(id) {
   const i = get('curIdx');
   return i >= 0 && get('tracks')[i]?.id === id;
 }
-
 export function togglePlay() {
   if (curIdx < 0) { if (getFiltered().length) playAt(0); return; }
   if (audio.paused) {
@@ -226,7 +225,6 @@ export function togglePlay() {
     audio.pause();
   }
 }
-
 export function prev() {
   if (audio.currentTime > 3) { audio.currentTime = 0; return; }
   if (repeat === 'one') {
@@ -272,7 +270,6 @@ export function prev() {
 export function peekNext() {
   const tracks = get('tracks');
   if (!tracks?.length || curIdx < 0) return null;
-
   if (manualQueue.length) { return tracks[/** @type {number} */ (manualQueue[0])] ?? null; }
   if (radioActive) { const rq = getRadioQueue(); return rq?.[0] ?? null; }
   if (repeat === 'one') return tracks[curIdx] ?? null;
@@ -283,7 +280,6 @@ export function peekNext() {
     const fallback = fl.find(t => _trackIdxMap?.get(t.id) !== curIdx);
     if (fallback) return fallback;
   }
-
   if (get('sort') === 'recent' && get('view') === 'all') {
     const ni = curIdx + 1;
     if (ni < tracks.length) {
@@ -292,7 +288,6 @@ export function peekNext() {
     }
     return (repeat === 'all' && tracks.length > 0) ? tracks[0] : null;
   }
-
   const fl = getFiltered();
   const t  = tracks[curIdx];
   if (!t) return null;
@@ -307,7 +302,6 @@ export function next(manual = false) { // manual=true: explicit (ignores repeat:
     clearCrossfadeTimers();
     audio.currentTime = 0; ensureEQResumed(); audio.play().catch(e => { if (e?.name !== 'AbortError') console.warn('[player] next repeat:one play() failed:', e); }); return;
   }
-
   const tracks = get('tracks');
   if (manualQueue.length) {
     const _wasLastInQueue = manualQueue.length === 1;
@@ -365,7 +359,6 @@ export function next(manual = false) { // manual=true: explicit (ignores repeat:
   const fl = getFiltered();
   const t  = tracks[curIdx];
   const fi = filteredIdx(t);
-
   if (get('sort') === 'recent' && get('view') === 'all') {
     if (get('query') && !_recentFilterToastShown) { _recentFilterToastShown = true; toast(i18n('t_recent_ignores_filter'), 'info'); }
     const ni = curIdx + 1;
@@ -377,7 +370,6 @@ export function next(manual = false) { // manual=true: explicit (ignores repeat:
     } else if (repeat === 'all') playAt(0);
     return;
   }
-
   if (fi < 0) return;
   if (fi < fl.length - 1) playAt(fi + 1); else if (repeat === 'all') playAt(0);
 }
@@ -406,7 +398,6 @@ export function toggleShuffle() {
   toast(shuffle ? i18n('t_shuffle_on') : i18n('t_shuffle_off'));
   _allPlayerUI();
 }
-
 export function toggleRepeat() {
   const m = ['none', 'all', 'one'];
   // @ts-ignore — m[] is a string[] but values are valid RepeatMode literals
@@ -428,7 +419,6 @@ export function toggleRepeat() {
   toast(lbl); // toast aria-live=polite — annonce dynamique du nouvel état (3 distincts)
   _allPlayerUI();
 }
-
 export { toggleLike, likeat } from './player-likes.js';
 /** @param {number} speed */
 export function setSpeed(speed) {
@@ -448,7 +438,6 @@ export function setSpeed(speed) {
   const liveEl = document.getElementById('np-speed-live'); // A11Y: aria-live speed announcement
   if (liveEl) liveEl.textContent = i18n('spd_label', speed);
 }
-
 export function setCrossfade(sec) {
   crossfadeDur = sec;
   set('crossfadeDur', crossfadeDur);
@@ -520,7 +509,7 @@ export function clearCrossfadeTimers() {
   if (audioOutGain && eqCtx) { audioOutGain.gain.cancelScheduledValues(eqCtx.currentTime); audioOutGain.gain.setTargetAtTime(1.0, eqCtx.currentTime, 0.01); }          // DSP-6 §9
   if (!sleepFading) {
     const vel = document.getElementById('vol'); // DSP-5: restore from DOM slider, never hardcode 1.0
-    setMasterGain(vel ? parseFloat(/** @type {any} */ (vel).value) : (masterGainNode ? masterGainNode.gain.value : 1));
+    setMasterGain(vel ? parseFloat(/** @type {any} */ (vel).value) : 1.0);
   }
   if (audioNext) { audioNext.pause(); audioNext.src = ''; }
   try { audioNextSource?.disconnect(); } catch {}
@@ -547,9 +536,9 @@ function _commitGapless() { // gapless swap: next track already buffered in audi
     _gaplessNextIdx = -1;
     const tracks = get('tracks');
     const nt  = tracks[ni];
-    if (!nt || !_trackIdxMap?.has(nt.id)) { clearCrossfadeTimers(); _playLock = false; next(); return; }
+    if (!nt || !_trackIdxMap?.has(nt.id)) { clearCrossfadeTimers(); Promise.resolve().then(() => next()); return; }
     const validIdx = trackIdx(nt);
-    if (validIdx < 0) { clearCrossfadeTimers(); _playLock = false; next(); return; }
+    if (validIdx < 0) { clearCrossfadeTimers(); Promise.resolve().then(() => next()); return; }
 
     curIdx = validIdx;
     set('curIdx', curIdx);
@@ -559,12 +548,17 @@ function _commitGapless() { // gapless swap: next track already buffered in audi
     if (playbackSpeed !== 1) audio.playbackRate = playbackSpeed;
     ensureEQResumed();
     audio.play().catch(e => { if (e?.name !== 'AbortError') console.warn('[gapless] play() failed:', e); });
-
-    if (radioActive) radioRefillQueue().catch(e => console.warn('[radio] refill failed:', e));
     _postPlaySideEffects(nt);
-    emit(EVENTS.TRACK_CHANGE, { track: nt, idx: curIdx });
-    setTimeout(() => scrollToCurrentTrack(), 50);
-    if (rgEnabled) analyzeAndApplyRG();
+    const _afterRefill = () => {
+      emit(EVENTS.TRACK_CHANGE, { track: nt, idx: curIdx });
+      setTimeout(() => scrollToCurrentTrack(), 50);
+      if (rgEnabled) analyzeAndApplyRG();
+    };
+    if (radioActive) {
+      radioRefillQueue().then(_afterRefill).catch(e => { console.warn('[radio] refill failed:', e); _afterRefill(); });
+    } else {
+      _afterRefill();
+    }
   } finally {
     _playLock = false;
   }
@@ -615,14 +609,20 @@ function _commitCrossfadeTransition(nextTrack, validNextIdx) {
   audio.play().catch(e => { if (e?.name !== 'AbortError') console.warn('[crossfade] play() failed after transition:', e); });
   audioNext.pause(); audioNext.src = ''; // @ts-ignore — audioNext guaranteed
   if (rgEnabled) analyzeAndApplyRG();
-  if (radioActive) radioRefillQueue().catch(e => console.warn('[radio] refill failed:', e));
   _postPlaySideEffects(nextTrack);
-  emit(EVENTS.TRACK_CHANGE, { track: nextTrack, idx: curIdx });
-  setTimeout(() => scrollToCurrentTrack(), 50);
-  if (queueOpen) renderQueue();
-  if (shuffle && shuffleQ.length > 0 && shuffleQ[0] === validNextIdx) {
-    shuffleQ.shift();
-    if (!shuffleQ.length && repeat !== 'none') buildQ();
+  const _afterRefill = () => {
+    emit(EVENTS.TRACK_CHANGE, { track: nextTrack, idx: curIdx });
+    setTimeout(() => scrollToCurrentTrack(), 50);
+    if (queueOpen) renderQueue();
+    if (shuffle && shuffleQ.length > 0 && shuffleQ[0] === validNextIdx) {
+      shuffleQ.shift();
+      if (!shuffleQ.length && repeat !== 'none') buildQ();
+    }
+  };
+  if (radioActive) {
+    radioRefillQueue().then(_afterRefill).catch(e => { console.warn('[radio] refill failed:', e); _afterRefill(); });
+  } else {
+    _afterRefill();
   }
 }
 
@@ -687,7 +687,6 @@ export function checkCrossfade() { // called from timeupdate
   if (!crossfadeDur) { _handleGaplessPreBuffer(remaining); return; }
   _handleCrossfadeSetup(remaining);
 }
-
 export function getNextIdx() {
   if (repeat === 'one') return -1;
   if (radioActive) {
@@ -740,7 +739,6 @@ audio.addEventListener('play', () => {
     if (eqAutoMode) { updateSmartEQGenre(_genre); startSmartEQ(); }
   }
 });
-
 audio.addEventListener('pause', () => {
   setIcon(false);
   emit(EVENTS.PLAY_STATE, { playing: false });
@@ -788,10 +786,13 @@ audio.addEventListener('timeupdate', () => {
   if (_DOM.pfill) _DOM.pfill.style.transform = 'scaleX(' + p + ')';
   if (_DOM.tc) _DOM.tc.textContent = cur;
   if (_DOM.td) _DOM.td.textContent = dur;
-  if (pbar) { // A11Y: update ARIA slider (#pbar role=slider)
-    const pNow = Math.round(p * 100);
-    pbar.setAttribute('aria-valuenow', String(pNow));
-    pbar.setAttribute('aria-valuetext', `${cur} / ${dur}`);
+  { // A11Y: update ARIA slider (#pbar role=slider)
+    const _pbar = document.getElementById('pbar');
+    if (_pbar) {
+      const pNow = Math.round(p * 100);
+      _pbar.setAttribute('aria-valuenow', String(pNow));
+      _pbar.setAttribute('aria-valuetext', `${cur} / ${dur}`);
+    }
   }
   updateCinemaProgress(p, cur, dur);
   const now = Date.now();
