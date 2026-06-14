@@ -1,6 +1,4 @@
-// LibreFlow — cinema.js
-// Mode Cinéma : overlay plein-écran, fond flou, contrôles masquables.
-//
+// LibreFlow — cinema.js — Mode Cinéma : overlay plein-écran, fond flou, contrôles masquables.
 // Exports publics (tous les consommateurs importent depuis ce fichier) :
 //   cinemaOpen, cinemaBg + toutes les fonctions BG (re-exports de cinema-bg.js)
 //   toggleCinema, openCinema, closeCinema, updateCinema, updateCinemaProgress
