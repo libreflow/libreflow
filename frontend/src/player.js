@@ -163,7 +163,7 @@ function _playDirect(track, idx) { // off-filter tracks; radioRefillQueue() MUST
       if (rgEnabled) analyzeAndApplyRG();
     };
     if (radioActive) {
-      radioRefillQueue().then(_afterRefill).catch(e => { console.warn('[radio] refill failed:', e); _afterRefill(); });
+      radioRefillQueue().catch(e => console.warn('[radio] refill failed:', e)).then(_afterRefill);
     } else {
       _afterRefill();
     }
@@ -555,7 +555,7 @@ function _commitGapless() { // gapless swap: next track already buffered in audi
       if (rgEnabled) analyzeAndApplyRG();
     };
     if (radioActive) {
-      radioRefillQueue().then(_afterRefill).catch(e => { console.warn('[radio] refill failed:', e); _afterRefill(); });
+      radioRefillQueue().catch(e => console.warn('[radio] refill failed:', e)).then(_afterRefill);
     } else {
       _afterRefill();
     }
@@ -620,7 +620,7 @@ function _commitCrossfadeTransition(nextTrack, validNextIdx) {
     }
   };
   if (radioActive) {
-    radioRefillQueue().then(_afterRefill).catch(e => { console.warn('[radio] refill failed:', e); _afterRefill(); });
+    radioRefillQueue().catch(e => console.warn('[radio] refill failed:', e)).then(_afterRefill);
   } else {
     _afterRefill();
   }
