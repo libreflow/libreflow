@@ -21,7 +21,6 @@ import { logPlay }                                from './playlog.js';
 import { rgEnabled, analyzeAndApplyRG,
          cancelRgAnalysis }                       from './replaygain.js';
 import { updateMiniProgress }                     from './miniplayer.js';
-import { updateMiniOverlayProgress } from './minioverlay.js';
 import { clearQueueOverride, queueOpen,
          renderQueue }                            from './queue.js';
 import { updateCinemaProgress }                   from './cinema.js';
@@ -779,7 +778,6 @@ audio.addEventListener('timeupdate', () => {
   if (!audio.duration) return;
   checkCrossfade();
   updateMiniProgress();
-  updateMiniOverlayProgress();
   const p   = audio.currentTime / audio.duration;
   const cur = fmt(audio.currentTime);
   const dur = fmt(audio.duration);

@@ -155,3 +155,8 @@ export function initMiniOverlayDrag() {
     el.addEventListener('pointerup',   onUp);
   });
 }
+
+// Self-register: minioverlay drives its own progress updates via timeupdate.
+// Breaks the circular import minioverlay → player → minioverlay.
+// updateMiniOverlayProgress is already throttled (250 ms) and no-ops when closed.
+audio.addEventListener('timeupdate', updateMiniOverlayProgress);
