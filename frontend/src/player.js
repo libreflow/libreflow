@@ -47,6 +47,8 @@ import { saveCfg, saveCfgNow } from './cfgsave.js';
 import { scrollToCurrentTrack }  from './renderer.js';
 import { _allPlayerUI }           from './allplayerui.js';
 import { playPausePress }         from './motion.js';
+import { updateMediaSessionState } from './player-mediasession.js';
+export { updateMediaSession, initMediaSession, updateMediaSessionState } from './player-mediasession.js';
 
 // Boot viz state (remplace window._pendingVizMode/_pendingVizDisabled)
 /** @type {string | null} */
@@ -969,64 +971,6 @@ export function setManualQueue(arr) {
   set('manualQueue', manualQueue);
   // Réinitialiser le flag QUEUE-END dès qu'une nouvelle file non-vide est posée
   if (arr.length > 0) _queueEndedToastShown = false;
-}
-
-// ── MediaSession ──────────────────────────────────────────────────────────────
-/**
- * @param {Track} t
- * @returns {void}
- */
-export function updateMediaSession(t) {
-  if (!('mediaSession' in navigator)) return;
-  const artSrc  = t._b64 || (t.art && !t.art.startsWith('blob:') ? t.art : null);
-  // AUDIO-5 : détecter le vrai MIME depuis le data: URI ou l'extension de l'URL
-  // (FLAC/WAV embarquent souvent une pochette PNG → 'image/jpeg' hardcodé = rendu cassé)
-  const artMime = artSrc && artSrc.startsWith('data:')
-    ? artSrc.slice(5, artSrc.indexOf(';'))
-    : artSrc && /\.png($|\?)/i.test(artSrc) ? 'image/png'
-    : artSrc && /\.webp($|\?)/i.test(artSrc) ? 'image/webp'
-    : 'image/jpeg';
-  navigator.mediaSession.metadata = new MediaMetadata({
-    title:  t.name,
-    artist: t.artistFull || t.artist || '',
-    album:  t.album || '',
-    artwork: artSrc ? [
-      { src: artSrc, sizes: '96x96',   type: artMime },
-      { src: artSrc, sizes: '128x128', type: artMime },
-      { src: artSrc, sizes: '256x256', type: artMime },
-      { src: artSrc, sizes: '512x512', type: artMime },
-    ] : [],
-  });
-}
-
-/** @returns {void} */
-export function initMediaSession() {
-  if (!('mediaSession' in navigator)) return;
-  navigator.mediaSession.setActionHandler('play',          () => { ensureEQResumed(); audio.play().catch(() => {}); updateMediaSessionState(); });
-  navigator.mediaSession.setActionHandler('pause',         () => { audio.pause(); updateMediaSessionState(); });
-  navigator.mediaSession.setActionHandler('previoustrack', () => prev());
-  navigator.mediaSession.setActionHandler('nexttrack',     () => next(true));
-  navigator.mediaSession.setActionHandler('seekto',        e  => { if (e.seekTime !== undefined && !isNaN(audio.duration)) audio.currentTime = e.seekTime; });
-  // Bug-1 FIX: guard isNaN(audio.duration) pour seekbackward/seekforward — cohérent avec seekto
-  navigator.mediaSession.setActionHandler('seekbackward',  e  => { if (!audio.duration || isNaN(audio.duration)) return; audio.currentTime = Math.max(0, audio.currentTime - (e.seekOffset || 10)); });
-  navigator.mediaSession.setActionHandler('seekforward',   e  => { if (!audio.duration || isNaN(audio.duration)) return; audio.currentTime = Math.min(audio.duration, audio.currentTime + (e.seekOffset || 10)); });
-  // @ts-ignore — 'togglefavorite' is a non-standard Media Session action (try/catch handles runtime errors)
-  try { navigator.mediaSession.setActionHandler('togglefavorite', () => toggleLike()); } catch(_) {}
-}
-
-/** @returns {void} */
-export function updateMediaSessionState() {
-  if (!('mediaSession' in navigator)) return;
-  navigator.mediaSession.playbackState = audio.paused ? 'paused' : 'playing';
-  if (!isNaN(audio.duration) && audio.duration > 0) {
-    try {
-      navigator.mediaSession.setPositionState({
-        duration:     audio.duration,
-        playbackRate: audio.playbackRate || 1,
-        position:     Math.min(audio.currentTime, audio.duration),
-      });
-    } catch(e) { console.warn('[mediaSession]', e); }
-  }
 }
 
 // ── Audio event listeners ─────────────────────────────────────────────────────

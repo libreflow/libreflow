@@ -942,7 +942,7 @@ waitForTauri(() => {
   // BUG-AUDIT HIGH : initShortcuts() déplacé ici depuis le niveau module — garantit
   // que __TAURI__ est prêt (F11/F12 → invoke) et le DOM chargé avant d'attacher le handler.
   initShortcuts({ updateVolSlider, closeModal, cycleSpeed });
-  initMediaSession(); // Contrôles Windows 11 SMTC / taskbar
+  initMediaSession(audio, { prev, next, toggleLike, ensureEQResumed }); // Contrôles Windows 11 SMTC / taskbar
   initMiniOverlayDrag(); // Drag du mini-player overlay in-page
   initRipple(); // Ripple feedback sur boutons et lignes
   initKeyNav({ reorderTrack: movePlaylistTrack }); // A11Y: roving tabindex arrow-key nav + Alt+↑/↓ reorder (SC 2.5.7)
