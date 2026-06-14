@@ -35,6 +35,10 @@ fn main() {
         .plugin(
             tauri_plugin_log::Builder::new()
                 .level(log::LevelFilter::Info)
+                // lofty émet des WARN attendus (bitrate-estimated duration) sur les MP3 courants
+                .level_for("lofty", log::LevelFilter::Error)
+                // l'updater tente le réseau au démarrage — app offline, erreur non actionnelle
+                .level_for("tauri_plugin_updater", log::LevelFilter::Off)
                 .targets([
                     tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::Stdout),
                     tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::LogDir {

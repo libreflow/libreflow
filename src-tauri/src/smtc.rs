@@ -202,7 +202,7 @@ pub fn setup(app: &tauri::App) {
                     // Nettoyage APRÈS set_metadata : SMTC référence l'ancienne
                     // URI jusqu'à la bascule (extension possiblement différente).
                     if let Some(old) = prev_cover.take() {
-                        drop(std::fs::remove_file(old)); // best-effort, non fatal
+                        let _ = std::fs::remove_file(old); // best-effort, non fatal
                     }
                     prev_cover = cover.map(|(_, p)| p);
                     r
@@ -217,8 +217,8 @@ pub fn setup(app: &tauri::App) {
                     // try_from : même garde anti-panic que duration ci-dessus.
                     // position_secs est déjà fini et ≥0 (filtré dans smtc_playback),
                     // mais peut déborder u64 pour des valeurs énormes → log + repli 0.
-                    let position_dur = Duration::try_from_secs_f64(position_secs)
-                        .unwrap_or_else(|_| {
+                    let position_dur =
+                        Duration::try_from_secs_f64(position_secs).unwrap_or_else(|_| {
                             log::warn!("[smtc] position_secs {position_secs} déborde Duration → 0");
                             Duration::ZERO
                         });
@@ -236,7 +236,7 @@ pub fn setup(app: &tauri::App) {
                         .and_then(|_| controls.set_playback(MediaPlayback::Stopped));
                     // Nettoyage APRÈS set_metadata : SMTC a basculé vers l'état vide.
                     if let Some(old) = prev_cover.take() {
-                        drop(std::fs::remove_file(old)); // best-effort, non fatal
+                        let _ = std::fs::remove_file(old); // best-effort, non fatal
                     }
                     r
                 }

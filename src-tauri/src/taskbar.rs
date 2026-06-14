@@ -669,7 +669,7 @@ unsafe extern "system" fn subclass_proc(
     #[cfg(debug_assertions)]
     {
         let n = SUBCLASS_CALLS.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-        if n < 8 {
+        if n < 3 {
             dlog!(
                 "[taskbar] subclass_proc #{n} msg={msg:#06x} wparam={:#x}",
                 wparam.0

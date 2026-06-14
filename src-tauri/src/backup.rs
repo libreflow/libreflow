@@ -101,8 +101,9 @@ fn _read_entry(
         .map_err(|e| format!("backup: entrée '{name}' introuvable dans l'archive — {e}"))?;
     // declared can be 0 for streaming ZIP writers that do not know the entry
     // size up-front. In that case the first check passes trivially, but the
-    // Read::take(budget + 1) ceiling below is the real guard: it prevents
-    // allocating more than budget+1 bytes regardless of declared size.
+    // Read::take(budget + 1) ceiling below is the real guard: it reads at most
+    // budget+1 bytes, and the caller rejects the entry if actual == budget+1,
+    // so the effective ceiling is budget regardless of the declared size.
     let declared = entry.size();
     if declared > *budget {
         return Err(format!(

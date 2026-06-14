@@ -409,12 +409,25 @@ mod windows_impl {
 
         let alloc_size = SECTOR_BYTES
             .checked_mul(sector_count as usize)
-            .ok_or_else(|| format!("read_audio_sectors: sector_count overflow ({})", sector_count))?;
+            .ok_or_else(|| {
+                format!(
+                    "read_audio_sectors: sector_count overflow ({})",
+                    sector_count
+                )
+            })?;
         let mut out = vec![0u8; alloc_size];
         let mut bytes_returned: u32 = 0;
 
-        let buf_len_u32 = u32::try_from(out.len())
-            .map_err(|_| format!("read_audio_sectors: alloc_size {} exceeds u32 max", out.len()))?;
+        let buf_len_u32 = u32::try_from(out.len()).map_err(|_| {
+            format!(
+                "read_audio_sectors: alloc_size {} exceeds u32 max",
+                out.len()
+            )
+        })?;
+        // SAFETY: `handle` is the CDROM device handle opened by the caller and
+        // kept alive for the duration of this call. `info` is stack-allocated and
+        // fully initialised. `out` is a Vec<u8> of exactly `buf_len_u32` bytes,
+        // guaranteed not to overflow by the checked_mul and try_from guards above.
         let ok = unsafe {
             DeviceIoControl(
                 handle,
