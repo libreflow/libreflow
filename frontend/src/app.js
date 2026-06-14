@@ -17,7 +17,7 @@ import { CFG, SORTS, SLBLS, SPEEDS, SPEED_LBLS } from './cfg.js';
 import { openDB, tx, dget, dall, dput, ddel, DB, getStorageEstimate } from './db.js';
 import { extractColor, GENRE_ARTISTS, GENRE_KEYWORDS, guessGenre } from './tags.js';
 import { LANGS, i18n, initLang, getLang, applyLang, setLang } from './i18n.js';
-import { cinemaOpen, cinemaBg, initCinemaBg, toggleCinema, openCinema, closeCinema, updateCinema, updateCinemaProgress, setCinemaBg, cycleCinemaBg, applyCinemaBg, syncCinemaBgSettings, updateCinemaBgBtn, toggleCinemaFullscreen, CINEMA_BG_MODES, CINEMA_BG_LABELS, updateCinArtColor } from './cinema.js';
+import { cinemaOpen, cinemaBg, initCinemaBg, toggleCinema, openCinema, closeCinema, updateCinema, updateCinemaProgress, setCinemaBg, cycleCinemaBg, applyCinemaBg, syncCinemaBgSettings, updateCinemaBgBtn, toggleCinemaFullscreen, CINEMA_BG_MODES, CINEMA_BG_LABELS, updateCinArtColor, startWelcomeAmbient, stopWelcomeAmbient } from './cinema.js';
 import { queueOpen, toggleQueue, closeQueue, renderQueue, playQueueItem, clearQueueOverride, addToQueueNext, addToQueueEnd, refreshQueueBadge, getQueueState, restoreQueueState, toggleQueuePin, clearQueuePin } from './queue.js';
 import { exportM3U, importM3U } from './m3u.js';
 import { VIRT } from './virt.js';
@@ -83,6 +83,7 @@ import {
   nextAlbumSort, nextArtistSort, nextGenreSort,
   statsGoToGenre, statsGoToArtist, statsGoToAlbum,
   updateClearFiltersBtn, clearAllFilters,
+  registerWelcomeHooks,
 } from './views.js';
 import { _showSkeletonRows,
          virtRenderWindow, virtAttachScroll,
@@ -259,7 +260,11 @@ on(EVENTS.TRACK_CHANGE, ({ track, idx }) => {
   // PLAY_STATE (play event) part pendant audio.play(), AVANT ce handler — et
   // patchActiveTrack() strippe .playing-row en déplaçant .act. Restaurer l'état
   // de lecture sur la nouvelle ligne active, sinon l'icône pochette reste ▶.
-  if (radioActive) radioRefillQueue().catch(e => console.warn('[radio refill]', e)); // invariant §2 — refill BEFORE bar update
+  // NOTE: radioRefillQueue() est déjà appelé AVANT emit(TRACK_CHANGE) dans player.js (invariant §2 primaire).
+  // Ce second appel est un filet de sécurité (safety net) — fire-and-forget intentionnel.
+  // Pas de risque de doublon ni de course : le guard _radioRefillInProgress dans radio.js
+  // absorbe tout appel concurrent et court-circuite immédiatement si un refill est déjà en cours.
+  if (radioActive) radioRefillQueue().catch(e => console.warn('[radio refill safety-net]', e));
   updateBar(); patchActiveTrack(); patchPlayState(!audio.paused); _allPlayerUI();
   // Contrôles médias système (SMTC) : métadonnées de la nouvelle piste.
   // audio.duration est valide ici — TRACK_CHANGE part après audio.play() (RACE-4).
@@ -314,24 +319,9 @@ on(EVENTS.PLAYLIST_CHANGED, () => {
  * @param {object|null} cfgObj — objet cfg tel que lu depuis IDB (peut être null)
  */
 let _bootUIApplied = false; // BUG-AUDIT HIGH : garde anti-double-appel (_applyBootUI ajoute des listeners)
-function _applyBootUI(cfgObj) {
-  if (_bootUIApplied) return; // idempotent — évite le double-câblage des listeners de panneau
-  _bootUIApplied = true;
-  applyLang();
-  setMode(getDisplayMode());
-  document.getElementById('pc-shuf')?.classList.toggle('on', shuffle);
-  document.getElementById('pc-shuf')?.setAttribute('aria-pressed', String(shuffle));
-  document.getElementById('pc-rep')?.classList.toggle('on', repeat !== 'none');
-  document.getElementById('pc-rep')?.setAttribute('aria-pressed', String(repeat !== 'none'));
-  updateWatchUI();
-  setTimeout(updateVolSlider, 100);
-  if (playbackSpeed !== 1) setSpeed(playbackSpeed);
-  const rgChk = document.getElementById('rg-enabled');
-  if (rgChk) rgChk.checked = rgEnabled;
-  const rgSlider = document.getElementById('rg-target');
-  if (rgSlider) rgSlider.value = rgTargetLUFS;
-  const rgLbl = document.getElementById('rg-target-lbl');
-  if (rgLbl) rgLbl.textContent = rgTargetLUFS + ' LUFS';
+
+/** Câble les contrôles cfg (autoUpdate, autostart, cdCopyrightAck, lastSettingsTab, watchChk, checkUpdateBtn). */
+function _applyBootUICfgControls(cfgObj) {
   const autoUpdateChk = document.getElementById('auto-update-chk');
   if (autoUpdateChk) {
     _autoUpdate = cfgObj?.autoUpdate !== false;
@@ -351,7 +341,7 @@ function _applyBootUI(cfgObj) {
       .catch(e => console.warn('[app:autostart] is_enabled failed:', e));
     autostartChk.addEventListener('change', async () => {
       try {
-        await invoke(autostartChk.checked ? 'plugin:autostart|enable' : 'plugin:autostart|disable');
+        await invoke(autostartChk.checked ? 'plugin:autostart|enable' : 'plugin:autostart|disable', undefined, { timeout: 3000 });
       } catch (e) {
         console.warn('[app:autostart] toggle failed:', e);
         autostartChk.checked = !autostartChk.checked; // revert UI — l'OS n'a pas appliqué
@@ -366,11 +356,8 @@ function _applyBootUI(cfgObj) {
   const watchChk = document.getElementById('watch-folder-chk');
   if (watchChk) watchChk.addEventListener('change', async () => {
     if (watchChk.checked) {
-      if (getWatchPath()) {
-        await startWatchNative();
-      } else {
-        watchChk.checked = false; // no folder selected yet — reset visually
-      }
+      if (getWatchPath()) { await startWatchNative(); }
+      else { watchChk.checked = false; } // no folder selected yet — reset visually
     } else {
       stopWatchFolder(true, true); // silent=true, keepPath=true
     }
@@ -380,6 +367,32 @@ function _applyBootUI(cfgObj) {
   if (checkUpdateBtn) {
     checkUpdateBtn.addEventListener('click', () => checkForUpdateManual(checkUpdateBtn));
   }
+}
+
+/** Synchronise les contrôles de lecture (shuffle, repeat, volume, speed, RG) avec l'état restauré. */
+function _applyBootUIPlaybackControls() {
+  document.getElementById('pc-shuf')?.classList.toggle('on', shuffle);
+  document.getElementById('pc-shuf')?.setAttribute('aria-pressed', String(shuffle));
+  document.getElementById('pc-rep')?.classList.toggle('on', repeat !== 'none');
+  document.getElementById('pc-rep')?.setAttribute('aria-pressed', String(repeat !== 'none'));
+  updateWatchUI();
+  setTimeout(updateVolSlider, 100);
+  if (playbackSpeed !== 1) setSpeed(playbackSpeed);
+  const rgChk = document.getElementById('rg-enabled');
+  if (rgChk) rgChk.checked = rgEnabled;
+  const rgSlider = document.getElementById('rg-target');
+  if (rgSlider) rgSlider.value = rgTargetLUFS;
+  const rgLbl = document.getElementById('rg-target-lbl');
+  if (rgLbl) rgLbl.textContent = rgTargetLUFS + ' LUFS';
+}
+
+function _applyBootUI(cfgObj) {
+  if (_bootUIApplied) return; // idempotent — évite le double-câblage des listeners de panneau
+  _bootUIApplied = true;
+  applyLang();
+  setMode(getDisplayMode());
+  _applyBootUIPlaybackControls();
+  _applyBootUICfgControls(cfgObj);
 }
 
 /**
@@ -532,6 +545,8 @@ async function boot() {
       }
     }
   }
+  // Welcome ambient canvas hooks — unconditional (canvas may not exist yet, calls are safe no-ops)
+  registerWelcomeHooks(startWelcomeAmbient, stopWelcomeAmbient);
   // Zoom liste de pistes — appliquer AVANT le premier rendu (tlistZoom.js)
   setTlistZoom((cfg && cfg.tlistZoom) || 'normal');
   // Ctrl/Cmd + molette → cycle le niveau de zoom sur #tlist (throttle 150ms).
@@ -792,11 +807,12 @@ async function boot() {
         event.preventDefault();
         await _flushAllAndClose();
         await appWin.destroy();
-      }).catch(() => {
-        // Fallback si onCloseRequested échoue
+      }).catch((e) => {
+        console.warn('[app:onCloseRequested promise]', e);
         window.addEventListener('beforeunload', () => { _flushAllAndClose(); });
       });
-    } catch {
+    } catch(e) {
+      console.warn('[app:onCloseRequested setup]', e);
       window.addEventListener('beforeunload', () => { _flushAllAndClose(); });
     }
   } else {
@@ -941,8 +957,8 @@ waitForTauri(() => {
     else if (cmd === 'toggle-shuffle') toggleShuffle();
     else if (cmd === 'toggle-repeat')  toggleRepeat();
     else if (cmd === 'go-home')        goHome();
-    else if (cmd === 'volume-down') { const _c=masterGainNode?masterGainNode.gain.value:audio.volume; const v=Math.max(0,_c-0.05); setMasterGain(v); const vel=document.getElementById('vol'); if(vel){vel.value=v; updateVolSlider(vel); setAriaValueText(vel, _v => `${Math.round(_v * 100)} pour cent`, v);} saveCfg(); _allPlayerUI(); }
-    else if (cmd === 'volume-up')   { const _c=masterGainNode?masterGainNode.gain.value:audio.volume; const v=Math.min(1,_c+0.05); setMasterGain(v); const vel=document.getElementById('vol'); if(vel){vel.value=v; updateVolSlider(vel); setAriaValueText(vel, _v => `${Math.round(_v * 100)} pour cent`, v);} saveCfg(); _allPlayerUI(); }
+    else if (cmd === 'volume-down') { const vel=document.getElementById('vol'); const _c=vel?parseFloat(vel.value):(masterGainNode?masterGainNode.gain.value:1); const v=Math.max(0,_c-0.05); setMasterGain(v); if(vel){vel.value=v; updateVolSlider(vel); setAriaValueText(vel, _v => `${Math.round(_v * 100)} pour cent`, v);} saveCfg(); _allPlayerUI(); }
+    else if (cmd === 'volume-up')   { const vel=document.getElementById('vol'); const _c=vel?parseFloat(vel.value):(masterGainNode?masterGainNode.gain.value:1); const v=Math.min(1,_c+0.05); setMasterGain(v); if(vel){vel.value=v; updateVolSlider(vel); setAriaValueText(vel, _v => `${Math.round(_v * 100)} pour cent`, v);} saveCfg(); _allPlayerUI(); }
     else if (cmd === 'volume-set' && data != null) { const v=Math.max(0,Math.min(1,data)); setMasterGain(v); const vel=document.getElementById('vol'); if(vel){vel.value=v; updateVolSlider(vel); setAriaValueText(vel, _v => `${Math.round(_v * 100)} pour cent`, v);} saveCfg(); _allPlayerUI(); } // QW-10
     else if (cmd === 'seek' && data != null && audio.duration) {
       audio.currentTime = data * audio.duration;
@@ -1034,46 +1050,44 @@ export async function clearAppCache() {
   window.location.reload();
 }
 
-export async function clearLibrary() {
-  closeModal();
-  // Fermer tous les panneaux ouverts avant de vider l'état (évite l'affichage de données périmées)
-  closeNowPlaying();
-  clearQueuePin(); closeQueue();
-  clearQueueOverride();
-  closeEQ();
-  if (cinemaOpen) closeCinema();
-  // FIX #21/#22 — annuler les timers de retry artwork et orphelins
-  clearTimeout(_retryArtTimer); _retryArtTimer = null;
-  clearTimeout(_orphansTimer);  _orphansTimer  = null;
-  // Annuler le batch IDB en attente (cancelTrackBatch → library.js)
+/** Annule les timers de fond (artwork retry, orphelins) et les batches IDB en attente. */
+function _clearLibraryTimersAndBatches() {
+  clearTimeout(_retryArtTimer); _retryArtTimer = null; // FIX #21
+  clearTimeout(_orphansTimer);  _orphansTimer  = null; // FIX #22
   cancelTrackBatch();
   cancelPlayLogFlush();
   setPlayLog([]);
-  // Révoquer tous les blob URLs pour libérer la mémoire (B4 FIX : guard blob: — data: URIs ne doivent pas être révoquées)
+}
+
+/** Révoque les blob URLs et réinitialise toutes les variables d'état en mémoire. */
+function _clearLibraryState() {
+  // B4 FIX : guard blob: — data: URIs ne doivent pas être révoquées
   for (const t of tracks) {
     if (t.url && t.url.startsWith('blob:'))  try { URL.revokeObjectURL(t.url);  } catch(e) { console.warn('[app:revokeObjectURL url]', e); }
     if (t.art && t.art.startsWith('blob:'))  try { URL.revokeObjectURL(t.art);  } catch(e) { console.warn('[app:revokeObjectURL art]', e); }
   }
   invalidateFilter(); replaceTracks([]); tracks = get('tracks');
-  liked   = new Set(); set('liked', liked);
+  liked = new Set(); set('liked', liked);
   playlists = []; set('playlists', playlists); recentPlays = []; set('recentPlays', recentPlays);
   curPlId = null; set('curPlId', null);
   plFolders = []; set('plFolders', plFolders); recentPls = []; set('recentPls', recentPls);
   renderPlNav();
-  curIdx  = -1; set('curIdx', -1);
+  curIdx = -1; set('curIdx', -1);
   shuffle = false; set('shuffle', false); resetShuffleQ();
-  repeat  = 'none'; set('repeat', 'none');
-  query   = ''; set('query', '');
+  repeat = 'none'; set('repeat', 'none');
+  query = ''; set('query', '');
   set('formatFilter', '');
   albumSort = 'name'; set('albumSort', 'name');
   artistSort = 'name'; set('artistSort', 'name');
   genreSort = 'count'; set('genreSort', 'count');
   albumDetailSort = 'track'; set('albumDetailSort', 'track');
+}
+
+/** Remet à zéro tous les éléments DOM : barre player, recherche, sidebar. */
+function _clearLibraryDOM() {
   // (_lastNotifTrackId dans playerbar.js se réinitialise naturellement au prochain updateBar)
-  // Arrêter l'audio
   audio.pause();
   audio.src = '';
-  // Réinitialiser la barre player
   document.title = 'LibreFlow';
   setupMarquee(document.getElementById('pl-n'), '–');
   setupMarquee(document.getElementById('pl-a'), '–');
@@ -1083,8 +1097,8 @@ export async function clearLibrary() {
   document.getElementById('pl-em').style.display  = '';
   document.getElementById('pl-em').innerHTML      = '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>';
   document.getElementById('pfill').style.transform = 'scaleX(0)';
-  document.getElementById('tc').textContent       = '0:00';
-  document.getElementById('td').textContent       = '–:––';
+  document.getElementById('tc').textContent = '0:00';
+  document.getElementById('td').textContent = '–:––';
   document.getElementById('pl-lk').classList.remove('on');
   document.getElementById('pl-lk').setAttribute('aria-pressed', 'false');
   document.getElementById('cinema-lk')?.classList.remove('on');
@@ -1098,21 +1112,22 @@ export async function clearLibrary() {
   document.getElementById('cinema-rep')?.classList.remove('on');
   document.getElementById('cinema-rep')?.setAttribute('aria-pressed', 'false');
   setIcon(false);
-  // Barre de recherche — vider le champ DOM et masquer le badge/bouton clear
   const _srch = document.getElementById('srch');
   if (_srch) _srch.value = '';
   const _srchClr = document.getElementById('srch-clear');
   if (_srchClr) _srchClr.style.display = 'none';
   document.getElementById('srch-badge')?.remove();
-  // Stats sidebar
-  { const _sbSpan = document.createElement('span'); _sbSpan.className = 'sb-empty-msg';
-    _sbSpan.innerHTML = '<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>';
-    _sbSpan.append(document.createTextNode(i18n('sb_empty')));
-    document.getElementById('sb-stats').replaceChildren(_sbSpan); }
+  const _sbSpan = document.createElement('span'); _sbSpan.className = 'sb-empty-msg';
+  _sbSpan.innerHTML = '<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>';
+  _sbSpan.append(document.createTextNode(i18n('sb_empty')));
+  document.getElementById('sb-stats').replaceChildren(_sbSpan);
   updateSidebarCounts();
   const _btnClear = document.getElementById('btn-clear');
   if (_btnClear) _btnClear.disabled = true;
-  // Vider IndexedDB
+}
+
+/** Vide les trois stores IDB (tracks, playlists, playlog) et flush cfg. */
+async function _clearLibraryIDB() {
   try {
     await new Promise((ok, fail) => {
       const store = tx('tracks', 'readwrite');
@@ -1134,26 +1149,41 @@ export async function clearLibrary() {
     });
     await saveCfgNow();
   } catch(e) { console.warn('[clearLibrary] DB error:', e); }
-  // Réinitialiser radio, crossfade, watchfolder
+}
+
+/** Réinitialise radio, crossfade, sleep, watchfolder, vue/drill, et navigue vers l'écran d'accueil. */
+function _clearLibraryView() {
   resetRadio();
   clearCrossfadeTimers();
   cancelSleepTimer(true); // BUG-D1-13 FIX: cancel sleep timer so it can't fire on an empty library
   stopWatchFolder();
-  // Réinitialiser l'état de vue et de drill (évite le flash de contenu périmé au retour)
   view = 'all'; set('view', 'all');
   drillKey = ''; set('drillKey', '');
   drillFrom = ''; set('drillFrom', '');
   drillDisplayName = ''; set('drillDisplayName', '');
   document.getElementById('drill-header')?.remove();
-  // Vider les grilles et la liste de pistes pour éviter le flash de contenu périmé
   const _tlistClr = document.getElementById('tlist');
   if (_tlistClr) _tlistClr.innerHTML = '';
   ['album-grid', 'artist-grid', 'playlist-grid'].forEach(id => {
     const g = document.getElementById(id);
     if (g) g.innerHTML = '';
   });
-  // Retour à l'écran d'accueil
   showView('wlc');
+}
+
+export async function clearLibrary() {
+  closeModal();
+  // Fermer tous les panneaux ouverts avant de vider l'état (évite l'affichage de données périmées)
+  closeNowPlaying();
+  clearQueuePin(); closeQueue();
+  clearQueueOverride();
+  closeEQ();
+  if (cinemaOpen) closeCinema();
+  _clearLibraryTimersAndBatches();
+  _clearLibraryState();
+  _clearLibraryDOM();
+  await _clearLibraryIDB();
+  _clearLibraryView();
   toast(i18n('t_cleared'), 'success');
 }
 
