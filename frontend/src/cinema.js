@@ -25,6 +25,7 @@ import {
   syncCinemaBgSettings, updateCinemaBgBtn,
   stopAmbientAnim, updateAmbientGradient, restartAmbientIfNeeded,
   initCinemaBgModule,
+  startWelcomeAmbient, stopWelcomeAmbient,
 } from './cinema-bg.js';
 
 // Re-exports pour rétrocompatibilité — tous les consommateurs importent depuis cinema.js
@@ -32,6 +33,7 @@ export {
   cinemaBg, CINEMA_BG_MODES, CINEMA_BG_LABELS,
   initCinemaBg, setCinemaBg, cycleCinemaBg, applyCinemaBg,
   syncCinemaBgSettings, updateCinemaBgBtn,
+  startWelcomeAmbient, stopWelcomeAmbient,
 };
 
 // ── State ───────────────────────────────────────────────────
