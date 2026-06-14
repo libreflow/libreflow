@@ -320,7 +320,7 @@ export function next(manual = false) { // manual=true: explicit (ignores repeat:
   }
 
   if (radioActive) {
-    radioRefillQueue() // BUG-HIGH: async — consume manualQueue in .then() (refill BEFORE UI, §2)
+    radioRefillQueue()
       .then(() => {
         if (manualQueue.length) {
           // @ts-ignore — manualQueue stores numeric indices; store type says Track[] but runtime is number[]
