@@ -136,40 +136,16 @@ let ctxTrackId  = null; // track id for context menu
 let query   = '';
 // _recentFilterToastShown et _queueEndedToastShown → player.js
 
-// ══ Variables déclarées ici pour éviter ReferenceError (utilisées avant leur section) ══
-// _coll → search.js (importé ci-dessus)
-// radioActive, radioSeedId, radioQueue, _radioPlayedIds → radio.js
-// _lastNotifTrackId → playerbar.js (moved CQ-2)
-// _saveCfgTimer → cfgsave.js (moved ARCH-1)
 let _retryArtTimer    = null;  // FIX #21 — annulable dans clearLibrary()
 let _retryArtAbort    = false; // CORE-APP-3 — stopper le loop artwork après clearLibrary()
 let _orphansTimer     = null;  // FIX #22 — annulable dans clearLibrary()
-// _pqpTrackId, _dragTrackId → playlists.js
-// _smartSeedId → smartplaylist.js
-// lang → i18n.js (initLang / getLang)
 let crossfadeDur = 0;
-// cfFadeTimer, cfNextTimer, _cfRafId, _cfGen, audioNext, audioNextSource,
-// audioNextGain, _gaplessNextIdx → player.js
-// queueOpen, _ptrState → queue.js
 let manualQueue       = [];
-// eqOpen, eqCtx, eqSource, eqNodes → eq.js
-// cinemaOpen, cinemaBg, cinemaHideTimer → cinema.js
-// eqEnabled → eq.js
-// rgEnabled, rgTargetLUFS, rgGainNode → replaygain.js
-// watchPath, watchInterval, watchSnapshot → watchfolder.js
 let albumSort         = 'name';   // 'name' | 'count' | 'duration'
 let artistSort        = 'name';   // 'name' | 'count'
 let genreSort         = 'count';  // 'count' | 'name'
 const _unlisteners    = [];        // Tauri listeners — collected for cleanup on pagehide
-// Signatures de cache pour les grilles — évite de recalculer si rien n'a changé
-// _genreGridSig → genres.js (Jalon 5)
-
-// _PSC, _albumMapCache, _artistMapCache → search.js (importés ci-dessus)
-// _saveTrackBatch, _saveTrackTimer, _scanInProgress → library.js
 let albumDetailSort   = 'track';  // 'track' | 'az' — tri dans la vue détail album
-// dupesGroups → dupes.js
-// sleepTimerEnd, sleepTickTimer, sleepFading → sleep.js
-// _playLogFlushTimer → playlog.js
 let playbackSpeed     = 1;
 
 subscribe('curIdx',          v => { curIdx          = v; });
@@ -199,16 +175,14 @@ subscribe('albumDetailSort',  v => { albumDetailSort  = v; });
 
 // CORE-APP-4: serialize concurrent TRACK_CHANGE handlers to preserve radioRefillQueue ordering.
 let _trackChangeChain = Promise.resolve();
-async function _handleTrackChange({ track, idx }) {
-  // radioRefillQueue() must complete before UI update (CLAUDE.md §2 invariant)
-  if (radioActive) await radioRefillQueue().catch(e => console.warn('[radio refill safety-net]', e));
-  updateBar(); patchActiveTrack(); patchPlayState(!audio.paused); _allPlayerUI();
-  invoke('smtc_metadata', { meta: track ? smtcMetaFromTrack(track, audio.duration) : null })
-    .catch(e => console.warn('[smtc] metadata:', e));
-}
-on(EVENTS.TRACK_CHANGE, (payload) => {
+on(EVENTS.TRACK_CHANGE, ({ track }) => {
   _trackChangeChain = _trackChangeChain
-    .then(() => _handleTrackChange(payload))
+    .then(async () => {
+      if (radioActive) await radioRefillQueue().catch(e => console.warn('[radio refill safety-net]', e));
+      updateBar(); patchActiveTrack(); patchPlayState(!audio.paused); _allPlayerUI();
+      invoke('smtc_metadata', { meta: track ? smtcMetaFromTrack(track, audio.duration) : null })
+        .catch(e => console.warn('[smtc] metadata:', e));
+    })
     .catch(e => console.warn('[TRACK_CHANGE]', e));
 });
 on(EVENTS.PLAY_STATE, ({ playing }) => {

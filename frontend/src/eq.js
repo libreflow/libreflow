@@ -8,6 +8,12 @@ import { i18n } from './i18n.js';
 
 const EQ_FREQS = [32, 64, 125, 250, 500, 1000, 2000, 4000, 8000, 16000];
 const EQ_BAND_COUNT = 10;
+// Grid dB lines — module-level to avoid per-frame allocation
+const EQ_GRID_DB = Object.freeze([-12, -6, 0, 6, 12]);
+// Pre-allocated snapshot buffer — avoids spread in draw loop
+const _gainsSnapshot = new Float64Array(EQ_BAND_COUNT);
+// Cached CanvasGradient — recreated only on canvas resize or accent color change
+let _eqGradCache = null, _eqGradKey = '';  // "W|H|ar|ag|ab"
 
 // ── Noeuds exportés (live bindings) ──────────────────────────────────────────
 export let eqCtx        = null;
@@ -19,7 +25,6 @@ export let masterGainNode = null;
 export let eqEnabled    = false;
 export let eqOpen       = false;
 export let eqAutoMode   = false;
-
 let eqLimiter = null;
 
 // ── État boot (avant initEQ()) ────────────────────────────────────────────────
@@ -85,14 +90,11 @@ let _abSavedGains  = null;       // gains sauvegardés avant mode A/B
 let _preBypassGains = null;      // gains sauvegardés avant bypass (power off) — restaurés au ré-enable
 let _currentGains   = null;      // gains intentionnels courants — synchronisés dans _applyGains() avant setTargetAtTime
 let _pendingVol     = null;      // volume mémorisé avant initEQ() (setMasterGain appelé avant l'init)
-
 let _eqProfiles = {};
-
 let _smartGenre    = '';
 let _smartLoudness = 0;
 
 // ── Boot config (sauvegardé AVANT initEQ()) ───────────────────────────────────
-/** Stocke la config boot avant que l'AudioContext existe. */
 export function initBootEQ(gains, enabled, preset) {
   _bootGains   = gains   ?? null;
   _bootEnabled = !!enabled;
@@ -100,7 +102,6 @@ export function initBootEQ(gains, enabled, preset) {
 }
 
 // ── initEQ() — singleton lazy ─────────────────────────────────────────────────
-/** Initialise le pipeline Web Audio (idempotent). */
 export function initEQ() {
   // B30: _eqInitFailed court-circuite les retries après échec de new AudioContext().
   if (_eqInitialized || _eqInitFailed) return;
@@ -131,7 +132,7 @@ export function initEQ() {
   }
 
   audioOutGain = eqCtx.createGain();
-  audioOutGain.gain.setTargetAtTime(1.0, eqCtx.currentTime, 0.02);
+  audioOutGain.gain.setValueAtTime(1.0, eqCtx.currentTime);
 
   // 10 biquad filters
   eqNodes = EQ_FREQS.map((freq, i) => {
@@ -209,7 +210,6 @@ export function ensureEQResumed() {
 }
 
 // ── setMasterGain ─────────────────────────────────────────────────────────────
-/** Met à jour le gain principal (mémorise dans _pendingVol avant initEQ). */
 export function setMasterGain(v, immediate = false) {
   const val = Math.max(0, Math.min(1, v));
   if (masterGainNode && eqCtx) {
@@ -310,7 +310,6 @@ export function setEQBand(idx, db) {
 }
 
 // ── _applyGains ───────────────────────────────────────────────────────────────
-/** Applique 10 gains aux noeuds EQ via setTargetAtTime (tc 2 ms si immediate, 20 ms sinon). */
 function _applyGains(gains, immediate = false) {
   if (!eqCtx || !eqNodes.length) return;
   const tc = immediate ? 0.002 : 0.02;
@@ -326,7 +325,7 @@ function _applyGains(gains, immediate = false) {
 
 let _animFrame = 0;
 
-/** Approximation de --spring-soft : cubic-bezier(.34,1.2,.64,1) */
+// Approximation de --spring-soft : cubic-bezier(.34,1.2,.64,1)
 function _easeSpringSoft(t) {
   if (t <= 0) return 0;
   if (t >= 1) return 1;
@@ -334,7 +333,6 @@ function _easeSpringSoft(t) {
   return 1 - u * u * u * (1 + 2.2 * t);
 }
 
-/** Anime visuellement les sliders vers targetGains (rAF 220ms, spring-soft). */
 function _animateSlidersTo(targetGains) {
   cancelAnimationFrame(_animFrame);
   const DUR    = 220; // --dur-mid
@@ -385,12 +383,10 @@ export function getActiveEqPreset() {
   return _activePreset;
 }
 
-/** Retourne une copie des gains intentionnels courants (évite les valeurs intermédiaires de ramp). */
 export function getCurrentGains() {
   return (_currentGains?.length === EQ_BAND_COUNT) ? [..._currentGains] : null;
 }
 
-/** Applique un tableau de 10 gains (en dB) depuis un profil par appareil. */
 export function applyEQGains(bands) {
   if (!Array.isArray(bands) || bands.length !== EQ_BAND_COUNT) return;
   if (!eqCtx) initEQ();
@@ -443,14 +439,8 @@ export function applyGenreEQ(genre) {
 }
 
 let _smartRunning = false;
-
-export function startSmartEQ() {
-  _smartRunning = true;
-}
-
-export function stopSmartEQ() {
-  _smartRunning = false;
-}
+export function startSmartEQ() { _smartRunning = true; }
+export function stopSmartEQ()  { _smartRunning = false; }
 
 export function updateSmartEQGenre(genre) {
   _smartGenre = genre || '';
@@ -675,13 +665,18 @@ function _drawEQCurve() {
   if (!ctx) return;
   ctx.clearRect(0, 0, W, H);
 
-  const gains = (_currentGains?.length === EQ_BAND_COUNT)
-    ? [..._currentGains]
-    : (eqNodes.length ? eqNodes.map(n => n.gain.value) : new Array(EQ_BAND_COUNT).fill(0));
+  if (_currentGains?.length === EQ_BAND_COUNT) {
+    _gainsSnapshot.set(_currentGains);
+  } else if (eqNodes.length) {
+    for (let i = 0; i < EQ_BAND_COUNT; i++) _gainsSnapshot[i] = eqNodes[i]?.gain.value ?? 0;
+  } else {
+    _gainsSnapshot.fill(0);
+  }
+  const gains = _gainsSnapshot;
 
   ctx.strokeStyle = 'rgba(255,255,255,0.08)';
   ctx.lineWidth   = 1;
-  [-12, -6, 0, 6, 12].forEach(db => {
+  EQ_GRID_DB.forEach(db => {
     const y = H / 2 - (db / 12) * (H / 2 - 8);
     ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke();
   });
@@ -706,10 +701,15 @@ function _drawEQCurve() {
   }
 
   const [ar, ag, ab] = _getArtRgb();
-  const grad = ctx.createLinearGradient(0, 0, 0, H);
-  grad.addColorStop(0,   `rgba(${ar},${ag},${ab},0.35)`);
-  grad.addColorStop(0.5, `rgba(${ar},${ag},${ab},0.12)`);
-  grad.addColorStop(1,   `rgba(${ar},${ag},${ab},0.02)`);
+  const gradKey = `${W}|${H}|${ar}|${ag}|${ab}`;
+  if (!_eqGradCache || _eqGradKey !== gradKey) {
+    _eqGradCache = ctx.createLinearGradient(0, 0, 0, H);
+    _eqGradCache.addColorStop(0,   `rgba(${ar},${ag},${ab},0.35)`);
+    _eqGradCache.addColorStop(0.5, `rgba(${ar},${ag},${ab},0.12)`);
+    _eqGradCache.addColorStop(1,   `rgba(${ar},${ag},${ab},0.02)`);
+    _eqGradKey = gradKey;
+  }
+  const grad = _eqGradCache;
 
   ctx.strokeStyle = `rgba(${ar},${ag},${ab},0.9)`;
   ctx.lineWidth   = 1.5;
