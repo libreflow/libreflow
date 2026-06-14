@@ -13,6 +13,7 @@ import { get, set, notify, subscribe, setBatch }           from './store.js';
 // Side-effect import: registers GSAP core + Flip + CustomEase once at boot.
 // Consumers import named primitives from './motion.js' as needed.
 import './motion.js';
+import './player-seekbar.js';
 import { CFG, SORTS, SLBLS, SPEEDS, SPEED_LBLS } from './cfg.js';
 import { openDB, tx, dget, dall, dput, ddel, DB, getStorageEstimate } from './db.js';
 import { extractColor, GENRE_ARTISTS, GENRE_KEYWORDS, guessGenre } from './tags.js';
