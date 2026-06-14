@@ -94,7 +94,6 @@ import { _showSkeletonRows,
          playById, patchActiveTrack, patchPlayState, patchTrackEl,
          scheduleStatsUpdate, updateStats, updateSidebarCounts,
          _withVT, scrollToCurrentTrack } from './renderer.js';
-// ── allplayerui.js (ARCH-1) ──────────────────────────────────────────────────
 import { _allPlayerUI } from './allplayerui.js';
 import { showCtxMenu, closeCtxMenu, ctxToggleLike, ctxDeleteTrack, ctxEditTags, ctxGoToArtist, ctxGoToAlbum, ctxNewPlaylist, ctxRemoveFromPlaylist, ctxSmartPlaylist, ctxPlayNext, ctxAddToQueueEnd, ctxCopyInfo } from './ctxmenu.js';
 import { initDrop } from './dropin.js';
@@ -102,72 +101,21 @@ import { initKeyNav } from './keynav.js';
 import { initShortcuts } from './shortcuts.js';
 import { setTlistZoom, initTlistZoomWheel } from './tlistZoom.js';
 import { confirmClear, closeModal } from './modal.js';
-export { confirmClear, closeModal }; // re-export pour handlers.js
+export { confirmClear, closeModal };
 import { updateBar, updateVolSlider, setupMarquee, reflowMarquee } from './playerbar.js';
-export { updateBar, updateVolSlider }; // re-exports pour library.js, selection.js, tagedit.js, handlers.js
-// ── cfgsave.js (ARCH-1) ──────────────────────────────────────────────────────
+export { updateBar, updateVolSlider };
 import { saveCfg, saveCfgNow } from './cfgsave.js';
-export { saveCfg, saveCfgNow }; // re-exports pour cinema.js, ctxmenu.js, player.js, etc.
-// ── state.js (ARCH-1) ────────────────────────────────────────────────────────
+export { saveCfg, saveCfgNow };
 import { setCurIdx, setTracks, setLiked, setCtxTrackId, replaceTracks } from './state.js';
 import { setAriaValueText }                                    from './a11y.js';
+import { _clearLibraryState, _clearLibraryDOM, _clearLibraryIDB, _clearLibraryView } from './library-reset.js';
+import { _applyBootUI, _playFileArg }                         from './boot-ui.js';
 
-// ── Helpers ──────────────────────────────────────────────────────────────────
-
-// ── JSDoc type definitions ────────────────────────────────────────────────────
-
-/**
- * A music track stored in the 'tracks' IDB store.
- * @typedef {object} Track
- * @property {string}       id          - Unique ID (hash of path)
- * @property {string}       name        - Track title
- * @property {string}       artist      - Main artist (first before feat./&)
- * @property {string}       artistFull  - Full artist string incl. featuring
- * @property {string}       album       - Album name
- * @property {string}       path        - Absolute OS path
- * @property {string}       ext         - File extension (flac, mp3, …)
- * @property {number}       duration    - Duration in seconds
- * @property {number}       dateAdded   - Unix timestamp (ms) when added
- * @property {string|null}  art         - Base64-encoded album art (JPEG/PNG) or null
- * @property {string|null}  artColor    - Dominant colour hex extracted from art
- * @property {string|null}  genre       - Guessed or tagged genre
- * @property {boolean}      liked       - In-memory liked flag (rebuilt from IDB on load)
- * @property {boolean}      metaDone    - True once tags have been fully loaded
- * @property {string|null}  url         - asset:// URL (set on first play, null until then)
- * @property {File|null}    file        - Temporary File object during tag loading, null afterward
- * @property {number|undefined} rgGain  - ReplayGain track gain in dB, if analysed
- * @property {{hue:number,sat:number,light:number}|undefined} [_npHsl] - Transient: dominant hue/sat/light for now-playing lighting (not persisted to IDB)
- */
-
-/**
- * A user-created playlist.
- * @typedef {object} Playlist
- * @property {string}   id        - UUID
- * @property {string}   name      - Display name
- * @property {string[]} trackIds  - Ordered array of Track ids
- * @property {boolean}  [smart]   - True if this is a smart playlist
- * @property {object}   [rules]   - Smart playlist filter rules
- */
-
-/**
- * A play-log entry persisted in the 'playlog' IDB store.
- * @typedef {object} PlaylogEntry
- * @property {number} ts   - Timestamp of play start (Date.now())
- * @property {string} id   - Track id
- * @property {number} dur  - Seconds actually played
- */
-
-
-
-
-// ══ State ══════════════════════════════════════
-// audio + _DOM sont dans player.js (importé ci-dessus)
 let tracks  = [];       // full track array
 let liked   = new Set();
 let curIdx  = -1;
 let shuffle    = false;    // shuffleQ est dans player.js
 let repeat     = 'none';  // none | all | one
-let _autoUpdate = true;
 let sort    = 'az';
 let view    = 'all';
 let drillKey         = '';
@@ -223,10 +171,6 @@ let albumDetailSort   = 'track';  // 'track' | 'az' — tri dans la vue détail 
 // _playLogFlushTimer → playlog.js
 let playbackSpeed     = 1;
 
-// ── Sync des vars locales depuis le store (mises à jour par player.js) ────────
-// Ces abonnements maintiennent les variables locales d'app.js en phase avec
-// l'état canonique écrit par player.js, sans casser les fonctions existantes
-// qui lisent encore ces variables directement.
 subscribe('curIdx',          v => { curIdx          = v; });
 subscribe('shuffle',         v => { shuffle         = v; });
 subscribe('repeat',          v => { repeat          = v; });
@@ -234,11 +178,9 @@ subscribe('manualQueue',     v => { manualQueue     = v; });
 subscribe('recentPlays',     v => { recentPlays     = v; });
 subscribe('playbackSpeed',   v => { playbackSpeed   = v; });
 subscribe('crossfadeDur',    v => { crossfadeDur    = v; });
-// ARCH-1 — state.js setters write to store only; subscriptions keep local vars in sync
 subscribe('liked',        v => { liked      = v; });
 subscribe('tracks',       v => { tracks     = v; });
 subscribe('ctxTrackId',   v => { ctxTrackId = v; });
-// Jalon 5 — sync des vars locales depuis le store (genres.js, future extraction)
 subscribe('drillFrom',        v => { drillFrom        = v; });
 subscribe('drillDisplayName', v => { drillDisplayName = v; });
 subscribe('genreSort',        v => { genreSort        = v; });
@@ -246,7 +188,6 @@ subscribe('albumSort',        v => { albumSort        = v; });
 subscribe('artistSort',       v => { artistSort       = v; });
 subscribe('plFolders',        v => { plFolders        = v; });
 subscribe('recentPls',        v => { recentPls        = v; });
-// Views.js — synchro vars locales depuis le store
 subscribe('view',             v => { view             = v; });
 subscribe('sort',             v => { sort             = v; });
 subscribe('query',            v => { query            = v; });
@@ -255,165 +196,27 @@ subscribe('plSort',           v => { plSort           = v; });
 subscribe('drillKey',         v => { drillKey         = v; });
 subscribe('albumDetailSort',  v => { albumDetailSort  = v; });
 
-// ── Bus event handlers ────────────────────────────────────────────────────────
-// TRACK_CHANGE : player.js a démarré une nouvelle piste → mettre à jour l'UI
 on(EVENTS.TRACK_CHANGE, ({ track, idx }) => {
-  // PLAY_STATE (play event) part pendant audio.play(), AVANT ce handler — et
-  // patchActiveTrack() strippe .playing-row en déplaçant .act. Restaurer l'état
-  // de lecture sur la nouvelle ligne active, sinon l'icône pochette reste ▶.
-  // NOTE: radioRefillQueue() est déjà appelé AVANT emit(TRACK_CHANGE) dans player.js (invariant §2 primaire).
-  // Ce second appel est un filet de sécurité (safety net) — fire-and-forget intentionnel.
-  // Pas de risque de doublon ni de course : le guard _radioRefillInProgress dans radio.js
-  // absorbe tout appel concurrent et court-circuite immédiatement si un refill est déjà en cours.
+  // radioRefillQueue() safety net — guard in radio.js absorbs concurrent calls
   if (radioActive) radioRefillQueue().catch(e => console.warn('[radio refill safety-net]', e));
   updateBar(); patchActiveTrack(); patchPlayState(!audio.paused); _allPlayerUI();
-  // Contrôles médias système (SMTC) : métadonnées de la nouvelle piste.
-  // audio.duration est valide ici — TRACK_CHANGE part après audio.play() (RACE-4).
   invoke('smtc_metadata', { meta: track ? smtcMetaFromTrack(track, audio.duration) : null })
     .catch(e => console.warn('[smtc] metadata:', e));
 });
-// PLAY_STATE : play ou pause → mettre à jour la ligne active + widgets
 on(EVENTS.PLAY_STATE, ({ playing }) => {
   patchPlayState(playing); _allPlayerUI();
 });
-// RENDER_LIB : demande de re-rendu émise par player.js (ex: toggle like)
-// Jalon 4 — évite window.renderLib() dans les satellites
 on(EVENTS.RENDER_LIB, () => renderLib());
-// FILTER_CHANGED : invalidateFilter() a été appelé (ex: chip format) → re-rendre la lib
 on(EVENTS.FILTER_CHANGED, () => { renderLib(); updateClearFiltersBtn(); });
-// LIBRARY_UPDATED : enable/disable taskbar thumbnail buttons based on track count
 on(EVENTS.LIBRARY_UPDATED, ({ tracks }) => {
   invoke('taskbar_set_has_tracks', { hasTracks: tracks.length > 0 }).catch(e => { console.warn('[taskbar] taskbar_set_has_tracks failed:', e); });
   updateSidebarCounts();
 });
-// ERG-P2 : RENDER_LIB couvre toggle like / playlog update / suppressions → re-calcul léger
 on(EVENTS.RENDER_LIB, () => updateSidebarCounts());
-// PLAYLIST_CHANGED : CRUD mutations (create, delete, pin, move, …) → re-render nav + drop wiring
 on(EVENTS.PLAYLIST_CHANGED, () => {
   renderPlNav();
   setupPlNavDrop();
 });
-
-// ══ Boot ═══════════════════════════════════════
-
-/**
- * Application entry point.
- * Initialises IndexedDB, restores persisted configuration, loads saved
- * tracks and playlists from IDB, then renders the UI.
- * Called once by DOMContentLoaded at the bottom of this file.
- *
- * @returns {Promise<void>}
- */
-
-/**
- * Affiche un skeleton pendant le chargement de la DB.
- * Appelé uniquement si cfg existe (app déjà utilisée → DB non vide).
- * Adapte le skeleton au type de vue sauvegardée (tracks / albums / artistes / genres).
- * renderLib() efface tout et affiche le vrai contenu quand les données arrivent.
- * @param {string} [savedView] — valeur de cfg.view au dernier arrêt
- */
-/**
- * Initialise la langue, le mode d'affichage et les widgets UI communs au boot,
- * que la bibliothèque soit chargée (cfgObj non null) ou que l'écran de bienvenue
- * soit affiché (cfgObj null ou incomplet). Extrait pour éliminer la duplication
- * entre les deux branches du boot (PERF-BOOT Fix B).
- * @param {object|null} cfgObj — objet cfg tel que lu depuis IDB (peut être null)
- */
-let _bootUIApplied = false; // BUG-AUDIT HIGH : garde anti-double-appel (_applyBootUI ajoute des listeners)
-
-/** Câble les contrôles cfg (autoUpdate, autostart, cdCopyrightAck, lastSettingsTab, watchChk, checkUpdateBtn). */
-function _applyBootUICfgControls(cfgObj) {
-  const autoUpdateChk = document.getElementById('auto-update-chk');
-  if (autoUpdateChk) {
-    _autoUpdate = cfgObj?.autoUpdate !== false;
-    set('autoUpdate', _autoUpdate); // ARCH-1 : sync store → cfgsave.js peut lire via get()
-    autoUpdateChk.checked = _autoUpdate;
-    autoUpdateChk.addEventListener('change', () => {
-      _autoUpdate = autoUpdateChk.checked;
-      set('autoUpdate', _autoUpdate); // ARCH-1 : sync store
-      saveCfg();
-    });
-  }
-  // Plugin autostart — l'état vit dans l'OS (registre), pas dans cfg : lecture live
-  const autostartChk = document.getElementById('autostart-chk');
-  if (autostartChk) {
-    invoke('plugin:autostart|is_enabled', undefined, { timeout: 3000 })
-      .then((on) => { autostartChk.checked = !!on; })
-      .catch(e => console.warn('[app:autostart] is_enabled failed:', e));
-    autostartChk.addEventListener('change', async () => {
-      try {
-        await invoke(autostartChk.checked ? 'plugin:autostart|enable' : 'plugin:autostart|disable', undefined, { timeout: 3000 });
-      } catch (e) {
-        console.warn('[app:autostart] toggle failed:', e);
-        autostartChk.checked = !autostartChk.checked; // revert UI — l'OS n'a pas appliqué
-        toast(i18n('t_autostart_err') || 'Impossible de modifier le démarrage automatique', 'error');
-      }
-    });
-  }
-  // CONFORMITÉ-CD : restaurer l'opt-in copyright CD au boot (sinon false → warning à chaque session)
-  set('cdCopyrightAck', cfgObj?.cdCopyrightAck === true);
-  // UX-Ergo : restaurer le dernier onglet settings ouvert
-  set('lastSettingsTab', cfgObj?.lastSettingsTab || 'appearance');
-  const watchChk = document.getElementById('watch-folder-chk');
-  if (watchChk) watchChk.addEventListener('change', async () => {
-    if (watchChk.checked) {
-      if (getWatchPath()) { await startWatchNative(); }
-      else { watchChk.checked = false; } // no folder selected yet — reset visually
-    } else {
-      stopWatchFolder(true, true); // silent=true, keepPath=true
-    }
-    saveCfg();
-  });
-  const checkUpdateBtn = document.getElementById('check-update-btn');
-  if (checkUpdateBtn) {
-    checkUpdateBtn.addEventListener('click', () => checkForUpdateManual(checkUpdateBtn));
-  }
-}
-
-/** Synchronise les contrôles de lecture (shuffle, repeat, volume, speed, RG) avec l'état restauré. */
-function _applyBootUIPlaybackControls() {
-  document.getElementById('pc-shuf')?.classList.toggle('on', shuffle);
-  document.getElementById('pc-shuf')?.setAttribute('aria-pressed', String(shuffle));
-  document.getElementById('pc-rep')?.classList.toggle('on', repeat !== 'none');
-  document.getElementById('pc-rep')?.setAttribute('aria-pressed', String(repeat !== 'none'));
-  updateWatchUI();
-  setTimeout(updateVolSlider, 100);
-  if (playbackSpeed !== 1) setSpeed(playbackSpeed);
-  const rgChk = document.getElementById('rg-enabled');
-  if (rgChk) rgChk.checked = rgEnabled;
-  const rgSlider = document.getElementById('rg-target');
-  if (rgSlider) rgSlider.value = rgTargetLUFS;
-  const rgLbl = document.getElementById('rg-target-lbl');
-  if (rgLbl) rgLbl.textContent = rgTargetLUFS + ' LUFS';
-}
-
-function _applyBootUI(cfgObj) {
-  if (_bootUIApplied) return; // idempotent — évite le double-câblage des listeners de panneau
-  _bootUIApplied = true;
-  applyLang();
-  setMode(getDisplayMode());
-  _applyBootUIPlaybackControls();
-  _applyBootUICfgControls(cfgObj);
-}
-
-/**
- * Joue une piste de la bibliothèque à partir d'un chemin de fichier
- * (plugin single-instance / cli — association de fichiers Windows).
- * Scan linéaire assumé : _trackIdxMap est indexé par id, pas par chemin, et
- * l'action est un one-shot utilisateur rare (jamais dans une boucle de rendu).
- * @param {string|null} rawPath
- */
-function _playFileArg(rawPath) {
-  if (!rawPath) return;
-  const key = normalizePathKey(rawPath);
-  const t = (get('tracks') || []).find(tr => tr.path && normalizePathKey(tr.path) === key);
-  if (!t) {
-    toast(i18n('t_file_not_in_lib') || 'Ce fichier n\'est pas dans la bibliothèque — importez son dossier d\'abord', 'info');
-    return;
-  }
-  // Route via la file manuelle : next() gère les pistes hors filtre (_playDirect)
-  if (addToQueueNext(t.id)) next(true);
-}
 
 async function boot() {
   // R-2 : health check IDB — si la DB est corrompue ou bloquée, openDB() rejette.
@@ -552,9 +355,6 @@ async function boot() {
   setTlistZoom((cfg && cfg.tlistZoom) || 'normal');
   // Ctrl/Cmd + molette → cycle le niveau de zoom sur #tlist (throttle 150ms).
   initTlistZoomWheel();
-  // PERF : charger playlists, playlog et tracks EN PARALLÈLE (était séquentiel → 3× plus lent)
-  // Les trois stores sont indépendants — aucun n'a besoin que l'autre soit chargé en premier.
-  // Afficher le skeleton adapté à la vue sauvegardée (albums/artistes/genres/liste)
   if (cfg) _showSkeletonRows(cfg.view);
   const [savedPl, savedLog, saved] = await Promise.all([
     dall('playlists').catch(e => { console.error('[boot] playlists read failed:', e); return []; }),
@@ -615,15 +415,10 @@ async function boot() {
       if (_bi + CFG.BOOT_CHUNK < saved.length) await new Promise(res => setTimeout(res, 0));
     }
     tracks = _tracksArr;
-    // RACE-1 FIX : replaceTracks() atomically does set('tracks') + rebuildTrackIdxMap()
-    // so subscribers that call trackIdx() during the set notification see a consistent map.
-    replaceTracks(tracks); // Jalon 3/4
+    replaceTracks(tracks);
     emit(EVENTS.LIBRARY_UPDATED, { tracks });
 
-    // IPC-ASSET : restaurer l'accès asset:// pour chaque dossier parent unique des pistes
-    // chargées depuis l'IDB. En production, le scope asset:// est remis à zéro à chaque
-    // lancement — sans ce call, audio.src = asset://... échoue avec MEDIA_ERR_SRC_NOT_SUPPORTED.
-    // allow_directory(recursive=true) couvre tous les sous-dossiers → O(dossiers distincts) appels.
+    // Restore asset:// scope for all parent directories (reset at each launch in prod)
     const _assetDirs = [...new Set(
       tracks.map(t => t.path ? t.path.replace(/[/\\][^/\\]+$/, '') : null).filter(Boolean)
     )];
@@ -654,10 +449,7 @@ async function boot() {
     // Rouvrir le mini-overlay si il était visible à la fermeture
     if (cfg && cfg.miniOvOpen) setTimeout(() => toggleMiniOverlay(), 350);
 
-    // ── Retry loadTagsBg en arrière-plan pour les pistes sans pochette ──────
-    // Cas : scan précédent interrompu (timeout IPC, fichier verrouillé) →
-    // metaDone=true mais art=null et noArt=false (lecture avortée, pas confirmée vide).
-    // On ne retente PAS les pistes avec noArt=true (lecture OK mais fichier sans art).
+    // Retry artwork for tracks whose scan was interrupted (metaDone=true, art=null, noArt=false)
     const _retryList = tracks.filter(t => t.metaDone && !t.art && !t.noArt && t.path);
     if (_retryList.length) {
       _retryArtTimer = setTimeout(async () => { // FIX #21 — stocker le timer
@@ -682,12 +474,8 @@ async function boot() {
     // (après l'artwork retry pour ne pas cumuler les I/O au démarrage)
     _orphansTimer = setTimeout(() => checkOrphans(), 6000); // FIX #22 — stocker le timer
 
-    // MINOR-1 FIX : applyLang() / setMode() / sync UI AVANT le await BOOT-1.
-    // Avant ce fix, ces appels venaient après le bloc if/else → bloqués jusqu'à 5s
-    // si le fichier audio de reprise était lent à répondre (NAS, fichier manquant).
     _applyBootUI(cfg);
 
-    // ── Restaurer la dernière piste et position ──────────────────────────
     if (cfg && cfg.curTrackId) {
       const resumeTrack = _trackIdxMap.has(cfg.curTrackId) ? tracks[_trackIdxMap.get(cfg.curTrackId)] : undefined;
       if (resumeTrack) {
@@ -734,7 +522,7 @@ async function boot() {
   }
   initAppVersion().catch(e => console.warn('[app:initAppVersion]', e));
   // Vérifier les mises à jour 10s après le boot (non bloquant, silencieux si pas configuré)
-  if (_autoUpdate) {
+  if (get('autoUpdate') !== false) {
     setTimeout(() => checkForUpdate().catch(e => console.warn('[app:checkForUpdate]', e)), 10_000);
   }
 
@@ -778,16 +566,9 @@ async function boot() {
     .catch(e => console.warn('[app:cli_matches]', e));
   window.addEventListener('pagehide', () => { _unlisteners.forEach(u => { try { u(); } catch(e) { console.warn('[app:unlisten]', e); } }); });
 
-  // ── Sauvegarde complète avant fermeture ──────────────────────────────────
-  // beforeunload seul ne suffit pas sous Tauri : les promises async ne sont pas attendues.
-  // On intercepte CloseRequested (Tauri v2) pour bloquer la fermeture le temps de tout flusher.
-  // Fallback : beforeunload synchrone pour les cas où Tauri n'est pas dispo (dev web).
+  // flush all pending saves before window closes (Tauri CloseRequested + beforeunload fallback)
   async function _flushAllAndClose() {
-    // Bug #20 fix : catch silencieux remplacé par un log d'avertissement.
-    // return explicite pour confirmer la résolution (utile pour onCloseRequested + await).
     try {
-      // 1. cfg (curTrackId, curPos, liked, volume, shuffle, repeat…) — flush via cfgsave.js
-      // 2. Toutes les saves en parallèle — allSettled garantit qu'aucune rejection ne coupe les autres
       await Promise.allSettled([
         saveCfgNow(),
         flushTrackBatch(),
@@ -820,79 +601,19 @@ async function boot() {
     // Fallback navigateur web (mode dev)
     window.addEventListener('beforeunload', () => { _flushAllAndClose(); });
   }
-// ══ Color extraction ═══════════════════════════
 }
-
-// ══ Open folder / Library import → library.js ═════════════════
-// openFolder, loadTagsAndDurations, loadTagsBg → library.js
-// getFiltered, rebuildTrackIdxMap, trackIdx, _trackIdxMap → search.js (imports directs)
 
 export function invalidateFilter() {
-  invalidateFilterCache();    // search.js : _GF, _PSC, _albumMapCache, _artistMapCache
-  invalidateGenreGridSig();   // genres.js (Jalon 5)
-  emit(EVENTS.FILTER_CHANGED, {}); // Jalon 4 — signal "dirty" : subscribers appellent getFiltered()
+  invalidateFilterCache();
+  invalidateGenreGridSig();
+  emit(EVENTS.FILTER_CHANGED, {});
 }
-// ══ playPlaylistFrom / playPlaylistDirect / shufflePlaylist → playlists.js (ARCH-1) ═
-// Imported above from playlists.js and re-exported for backward compat.
-
-// ══ Drag & Drop → dropin.js (CQ-2) ═════════════════════════════
-// Logique extraite dans dropin.js ; initDrop() appelé dans DOMContentLoaded ci-dessous.
-
-// ══ Keyboard shortcuts → shortcuts.js (CQ-2) ════════════════════
-// initShortcuts() est appelé dans le callback waitForTauri (voir bas de fichier),
-// pour garantir que __TAURI__ est prêt (raccourcis F11/F12 → invoke) et le DOM chargé.
-
-// ══ Persistence ═════════════════════════════════
-
-// Batch save : pendant un import, les appels saveTrack() sont accumulés et
-// écrits ensemble toutes les 250ms (une seule transaction IDB au lieu de N).
-
-// _flushTrackBatch, saveTrack, saveTracks, saveTrackNow → library.js
-
-// ══ saveCfg / saveCfgNow / _doSaveCfg → cfgsave.js (ARCH-1) ══════════════════
-// Imported at the top of this file and re-exported as saveCfg / saveCfgNow.
-
-// ══ PLAYLISTS → playlists.js ══════════════════════════════════════════════
-// savePlaylists, trapFocus, renderPlHero, setPlSort,
-// _plHeroInlineRename, _plNavInlineRename, _plNavItemHTML, renderPlNav,
-// renamePlFolder, deletePlFolder, togglePlFolder, showPlFolderCtxMenu,
-// onPlFolderDragOver/Leave/Drop, togglePinPlaylist, movePlToFolder,
-// removePlFromFolder, showPlQuickPop, pqpAdd/pqpNew/closePlQuickPop,
-// onTrackDragStart, _attachPlaylistReorder, _detachPlaylistReorder,
-// onPlNavDragStart, setupPlNavDrop,
-// _resizeImageToBase64, _renderPlCoverPreview, onPlCoverSelected, clearPlCover,
-// openNewPlaylistModal, showPlCtxMenu, ctxPlayPlaylist, ctxShufflePlaylist,
-// openRenamePlaylistModal, closePlModal, confirmPlaylistModal,
-// deletePlaylist, addTrackToPlaylist, removeTrackFromPlaylist.
-// (keyboard listener pl-modal-inp → playlists.js)
-
-
-// ══ CROSSFADE → player.js ═════════════════════════════════════
-
-// setCrossfade, initCrossfadeAudio, clearCrossfadeTimers,
-// _commitGapless, checkCrossfade, getNextIdx → player.js
-
-// ══ MINI-PLAYER → miniplayer.js ═══════════════════════════════
-
-// ══ DÉTECTION DOUBLONS → dupes.js ════════════════════════════
-
-// rescanGenres → genres.js (Jalon 5)
-
-// ══ VUE GENRES → genres.js (Jalon 5) ═════════════════════════
-
-// ══ MULTI-SÉLECTION → selection.js ════════════════════════════
-
-// ══ VITESSE DE LECTURE ════════════════════════════════════════
-
 export function cycleSpeed() {
   const cur = SPEEDS.indexOf(playbackSpeed);
   const next = (cur + 1) % SPEEDS.length;
   setSpeed(SPEEDS[next]);
 }
 
-// setSpeed → player.js
-
-// FIX DRAG-MODULE → dropin.js : initDrop() résout #drago + attache les listeners après DOMContentLoaded
 document.addEventListener('DOMContentLoaded', () => { initDrop(); });
 
 // Attendre __TAURI__ avant de démarrer (fix build MSI)
@@ -902,8 +623,6 @@ function waitForTauri(cb, n = 0) {
   else { console.warn('[LibreFlow] __TAURI__ non disponible'); cb(); }
 }
 
-// ARCH-4 : Global error boundary — attrape les exceptions non gérées et les rejections de promesse
-// pour éviter un crash silencieux de l'UI. Affiché en toast 'error' pour informer l'utilisateur.
 window.addEventListener('error', (e) => {
   if (e.filename && !e.filename.includes('LibreFlow') && !e.filename.includes('localhost')) return; // ignorer les erreurs d'extensions tierces
   console.error('[LibreFlow] Uncaught error:', e.error || e.message);
@@ -919,33 +638,23 @@ window.addEventListener('unhandledrejection', (e) => {
   toast(`Erreur asynchrone : ${msg}`, 'error');
 });
 
-// ── Listener `resize` global centralisé (audit responsive 2026-05-22) ─────────
-// Un seul listener debouncé dispatche vers les sous-systèmes ouverts. Le virtual
-// scroll garde son propre ResizeObserver sur #tlist (renderer.js, plus précis).
-// Modèle : le handler resize de cinema.js. Debounce 180ms, aucune allocation
-// dans une boucle rAF.
-//   - R-H4 : Now Playing — redimensionne le canvas plein écran #vnp-canvas.
-//   - R-M6 : mini-overlay — re-clampe left/top aux bornes du viewport.
-//   - R-L9 : barre now-playing — ré-évalue le marquee titre/artiste.
 let _globalResizeTimer = null;
 window.addEventListener('resize', () => {
   clearTimeout(_globalResizeTimer);
   _globalResizeTimer = setTimeout(() => {
-    onResizeNowPlaying();  // R-H4 — no-op si Now Playing fermé
-    reclampMiniOverlay();  // R-M6 — no-op si mini-overlay fermé
-    reflowMarquee();       // R-L9 — no-op si aucune piste courante
+    onResizeNowPlaying();
+    reclampMiniOverlay();
+    reflowMarquee();
   }, 180);
 });
 
 waitForTauri(() => {
-  boot().catch(e => console.error('[LibreFlow] boot failed:', e)); // FIX #19
-  // BUG-AUDIT HIGH : initShortcuts() déplacé ici depuis le niveau module — garantit
-  // que __TAURI__ est prêt (F11/F12 → invoke) et le DOM chargé avant d'attacher le handler.
+  boot().catch(e => console.error('[LibreFlow] boot failed:', e));
   initShortcuts({ updateVolSlider, closeModal, cycleSpeed });
-  initMediaSession(audio, { prev, next, toggleLike, ensureEQResumed }); // Contrôles Windows 11 SMTC / taskbar
-  initMiniOverlayDrag(); // Drag du mini-player overlay in-page
-  initRipple(); // Ripple feedback sur boutons et lignes
-  initKeyNav({ reorderTrack: movePlaylistTrack }); // A11Y: roving tabindex arrow-key nav + Alt+↑/↓ reorder (SC 2.5.7)
+  initMediaSession(audio, { prev, next, toggleLike, ensureEQResumed });
+  initMiniOverlayDrag();
+  initRipple();
+  initKeyNav({ reorderTrack: movePlaylistTrack });
 
   // Commandes depuis le mini-player (fenêtre séparée)
   // BUG FIX F6 : stocker l'unlistener mini-cmd avec les autres (voir boot())
@@ -998,13 +707,6 @@ if (_contentArea) {
   }, { passive: true });
 }
 
-// ── Toast notification (supprimé lors du refactoring, réintégré ici) ────────
-// ── Toast riche — type : 'info' | 'success' | 'error' | 'warning' ──
-// toast / toastWithAction / _TOAST_ICONS / _TOAST_DUR → ui.js (Phase 6)
-
-// ══ statsGoToGenre / statsGoToArtist / statsGoToAlbum → views.js (ARCH-1) ════
-// Imported above from views.js and re-exported for backward compat.
-
 /** Jouer un album ou artiste depuis sa card grid (hover play button). */
 export function playCardByKey(from, key, displayName) {
   _withVT(() => {
@@ -1012,13 +714,6 @@ export function playCardByKey(from, key, displayName) {
     setTimeout(() => playPlaylistFrom(0), 80);
   });
 }
-
-// ── Volume slider, marquee, now-playing bar → playerbar.js (CQ-2) ────────────
-// updateVolSlider(), setupMarquee(), updateBar() extraits dans playerbar.js.
-// Re-exportés ci-dessus pour les consommateurs existants (handlers.js, library.js…).
-
-// ── Modal de confirmation "vider la bibliothèque" → modal.js (CQ-2) ──────────
-// confirmClear(), closeModal() extraits dans modal.js ; re-exportés ci-dessus.
 
 export async function clearAppCache() {
   const ok = await confirmAction(
@@ -1060,124 +755,6 @@ function _clearLibraryTimersAndBatches() {
   setPlayLog([]);
 }
 
-/** Révoque les blob URLs et réinitialise toutes les variables d'état en mémoire. */
-function _clearLibraryState() {
-  // B4 FIX : guard blob: — data: URIs ne doivent pas être révoquées
-  for (const t of tracks) {
-    if (t.url && t.url.startsWith('blob:'))  try { URL.revokeObjectURL(t.url);  } catch(e) { console.warn('[app:revokeObjectURL url]', e); }
-    if (t.art && t.art.startsWith('blob:'))  try { URL.revokeObjectURL(t.art);  } catch(e) { console.warn('[app:revokeObjectURL art]', e); }
-  }
-  // FIX freeze : vider tracks[] AVANT d'émettre FILTER_CHANGED (bus synchrone).
-  // L'ancien ordre appelait invalidateFilter() en premier, ce qui déclenchait
-  // renderLib() → getFiltered() → tri O(n log n) sur les 50k pistes encore en place.
-  replaceTracks([]); tracks = get('tracks'); invalidateFilter();
-  liked = new Set(); set('liked', liked);
-  playlists = []; set('playlists', playlists); recentPlays = []; set('recentPlays', recentPlays);
-  curPlId = null; set('curPlId', null);
-  plFolders = []; set('plFolders', plFolders); recentPls = []; set('recentPls', recentPls);
-  renderPlNav();
-  curIdx = -1; set('curIdx', -1);
-  shuffle = false; set('shuffle', false); resetShuffleQ();
-  repeat = 'none'; set('repeat', 'none');
-  query = ''; set('query', '');
-  set('formatFilter', '');
-  albumSort = 'name'; set('albumSort', 'name');
-  artistSort = 'name'; set('artistSort', 'name');
-  genreSort = 'count'; set('genreSort', 'count');
-  albumDetailSort = 'track'; set('albumDetailSort', 'track');
-}
-
-/** Remet à zéro tous les éléments DOM : barre player, recherche, sidebar. */
-function _clearLibraryDOM() {
-  // (_lastNotifTrackId dans playerbar.js se réinitialise naturellement au prochain updateBar)
-  audio.pause();
-  audio.src = '';
-  document.title = 'LibreFlow';
-  setupMarquee(document.getElementById('pl-n'), '–');
-  setupMarquee(document.getElementById('pl-a'), '–');
-  _updateArtBlur(null);
-  clearArtColor(); // réinitialise --art-color, --g, --g-rgb, --gd, --gg
-  document.getElementById('pl-img').style.display = 'none';
-  document.getElementById('pl-em').style.display  = '';
-  document.getElementById('pl-em').innerHTML      = '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>';
-  document.getElementById('pfill').style.transform = 'scaleX(0)';
-  document.getElementById('tc').textContent = '0:00';
-  document.getElementById('td').textContent = '–:––';
-  document.getElementById('pl-lk').classList.remove('on');
-  document.getElementById('pl-lk').setAttribute('aria-pressed', 'false');
-  document.getElementById('cinema-lk')?.classList.remove('on');
-  document.getElementById('cinema-lk')?.setAttribute('aria-pressed', 'false');
-  document.getElementById('pc-shuf').classList.remove('on');
-  document.getElementById('pc-shuf').setAttribute('aria-pressed', 'false');
-  document.getElementById('cinema-shuf')?.classList.remove('on');
-  document.getElementById('cinema-shuf')?.setAttribute('aria-pressed', 'false');
-  document.getElementById('pc-rep').classList.remove('on');
-  document.getElementById('pc-rep').setAttribute('aria-pressed', 'false');
-  document.getElementById('cinema-rep')?.classList.remove('on');
-  document.getElementById('cinema-rep')?.setAttribute('aria-pressed', 'false');
-  setIcon(false);
-  const _srch = document.getElementById('srch');
-  if (_srch) _srch.value = '';
-  const _srchClr = document.getElementById('srch-clear');
-  if (_srchClr) _srchClr.style.display = 'none';
-  document.getElementById('srch-badge')?.remove();
-  const _sbSpan = document.createElement('span'); _sbSpan.className = 'sb-empty-msg';
-  _sbSpan.innerHTML = '<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>';
-  _sbSpan.append(document.createTextNode(i18n('sb_empty')));
-  document.getElementById('sb-stats').replaceChildren(_sbSpan);
-  updateSidebarCounts();
-  const _btnClear = document.getElementById('btn-clear');
-  if (_btnClear) _btnClear.disabled = true;
-}
-
-/** Vide les trois stores IDB (tracks, playlists, playlog) et flush cfg. */
-async function _clearLibraryIDB() {
-  try {
-    await new Promise((ok, fail) => {
-      const store = tx('tracks', 'readwrite');
-      store.clear().onerror = e => fail(e.target.error);
-      store.transaction.oncomplete = ok;
-      store.transaction.onerror   = e => fail(e.target.error);
-      store.transaction.onabort   = () => fail(new Error('[clearLibrary] tracks tx aborted'));
-    });
-    await new Promise((ok, fail) => {
-      const store = tx('playlists', 'readwrite');
-      store.clear().onerror = e => fail(e.target.error);
-      store.transaction.oncomplete = ok;
-      store.transaction.onerror   = e => fail(e.target.error);
-      store.transaction.onabort   = () => fail(new Error('[clearLibrary] playlists tx aborted'));
-    });
-    await new Promise((ok, fail) => {
-      const store = tx('playlog', 'readwrite');
-      store.clear().onerror = e => fail(e.target.error);
-      store.transaction.oncomplete = ok;
-      store.transaction.onerror   = e => fail(e.target.error);
-      store.transaction.onabort   = () => fail(new Error('[clearLibrary] playlog tx aborted'));
-    });
-    await saveCfgNow();
-  } catch(e) { console.warn('[clearLibrary] DB error:', e); }
-}
-
-/** Réinitialise radio, crossfade, sleep, watchfolder, vue/drill, et navigue vers l'écran d'accueil. */
-function _clearLibraryView() {
-  resetRadio();
-  clearCrossfadeTimers();
-  cancelSleepTimer(true); // BUG-D1-13 FIX: cancel sleep timer so it can't fire on an empty library
-  stopWatchFolder();
-  view = 'all'; set('view', 'all');
-  drillKey = ''; set('drillKey', '');
-  drillFrom = ''; set('drillFrom', '');
-  drillDisplayName = ''; set('drillDisplayName', '');
-  document.getElementById('drill-header')?.remove();
-  const _tlistClr = document.getElementById('tlist');
-  if (_tlistClr) _tlistClr.innerHTML = '';
-  ['album-grid', 'artist-grid', 'playlist-grid'].forEach(id => {
-    const g = document.getElementById(id);
-    if (g) g.innerHTML = '';
-  });
-  showView('wlc');
-}
-
 export async function clearLibrary() {
   closeModal();
   // Fermer tous les panneaux ouverts avant de vider l'état (évite l'affichage de données périmées)
@@ -1194,6 +771,3 @@ export async function clearLibrary() {
   toast(i18n('t_cleared'), 'success');
 }
 
-// ── State mutation helpers → state.js (ARCH-1) ────────────────────────────────
-// setCurIdx / setLiked / setTracks / setCtxTrackId imported from state.js + re-exported above.
-// app.js local vars stay in sync via subscribe() callbacks (lines above).
