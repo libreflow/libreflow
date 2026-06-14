@@ -86,8 +86,10 @@ async function run() {
     assert.ok(re.test(HTML), '#cinema-overlay missing aria-modal="true"');
   });
   await t('#cinema-overlay has aria-label', () => {
-    const re = /id="cinema-overlay"[^>]*aria-label="/;
-    assert.ok(re.test(HTML), '#cinema-overlay missing aria-label');
+    // aria-label OR aria-labelledby sont valides pour role=dialog (WCAG SC 4.1.2).
+    const hasLabel = /id="cinema-overlay"[^>]*aria-label="/.test(HTML);
+    const hasLabelledBy = /id="cinema-overlay"[^>]*aria-labelledby="/.test(HTML);
+    assert.ok(hasLabel || hasLabelledBy, '#cinema-overlay missing aria-label or aria-labelledby');
   });
 
   // --- SC 4.1.2 EQ band sliders need aria-orientation -------------------

@@ -364,7 +364,12 @@ pub fn check_paths(paths: Vec<String>) -> Vec<String> {
             }
             let parent_safe = path
                 .parent()
-                .map(|parent| parent.as_os_str().is_empty() || is_safe_dir(parent))
+                .map(|parent| {
+                    if parent.as_os_str().is_empty() {
+                        return true;
+                    }
+                    is_safe_dir(parent)
+                })
                 .unwrap_or(false);
             // Chemin hors périmètre → considéré orphelin ; sinon test d'existence réel.
             !parent_safe || !path.exists()

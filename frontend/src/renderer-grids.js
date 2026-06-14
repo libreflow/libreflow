@@ -12,9 +12,10 @@ import { hlText }                                            from './renderer-tr
 import { cancelSearchDebounce }                              from './views.js';
 
 // ── État interne (caches grilles) ─────────────────────────────────────────────
-let _albumMapCache  = null;
-let _artistMapCache = null;
-let _tracksSig      = ''; // content hash for selective map invalidation
+let _albumMapCache    = null;
+let _artistMapCache   = null;
+let _formatChipsCache = null; // { sig: string, formats: string[] } — invalidated with tracks[]
+let _tracksSig        = ''; // content hash for selective map invalidation
 const _artTrackById     = new Map();   // trackId → piste représentative (carte grille/drill)
 // R5-B FIX : un IntersectionObserver par grille (Albums / Artistes) au lieu d'un unique
 // partagé. L'ancien code déconnectait l'observer Albums quand la grille Artistes en créait
@@ -284,8 +285,9 @@ export function renderDrillHeader(view, key) {
  * virtual scroll, non nécessaire ici).
  */
 export function invalidateGridMaps() {
-  _albumMapCache  = null;
-  _artistMapCache = null;
+  _albumMapCache    = null;
+  _artistMapCache   = null;
+  _formatChipsCache = null;
   _artTrackById.clear();
 }
 
@@ -298,9 +300,10 @@ export function invalidateGridMaps() {
 export function invalidateGridMapsIfChanged(tracks) {
   const newSig = _computeTracksSig(tracks);
   if (newSig !== _tracksSig) {
-    _tracksSig      = newSig;
-    _albumMapCache  = null;
-    _artistMapCache = null;
+    _tracksSig        = newSig;
+    _albumMapCache    = null;
+    _artistMapCache   = null;
+    _formatChipsCache = null;
     // R5-A FIX : vider la Map trackId→piste des grilles — évite les références
     // à des pistes supprimées et la fuite mémoire associée.
     _artTrackById.clear();
@@ -594,9 +597,10 @@ export function drillDown(from, key, displayName) {
   // couteux des maps a chaque navigation sur une bibliotheque de 50k pistes).
   const _drillSig = _computeTracksSig(get('tracks') || []);
   if (_drillSig !== _tracksSig) {
-    _tracksSig      = _drillSig;
-    _albumMapCache  = null;
-    _artistMapCache = null;
+    _tracksSig        = _drillSig;
+    _albumMapCache    = null;
+    _artistMapCache   = null;
+    _formatChipsCache = null;
     // R5-A FIX : cohérence avec renderLib — vider les références grille obsolètes.
     _artTrackById.clear();
   }
@@ -753,8 +757,16 @@ export function updateBreadcrumb() {
 export function renderFormatChips() {
   const bar = document.getElementById('format-bar');
   if (!bar) return;
-  const tracks = get('tracks');
-  const formats = [...new Set(tracks.map(t => t.ext).filter(Boolean))].sort();
+  const tracks = get('tracks') || [];
+  // Compute once per tracks[] state — formats change only on import/removal, never on filter/sort.
+  const sig = _computeTracksSig(tracks);
+  let formats;
+  if (_formatChipsCache && _formatChipsCache.sig === sig) {
+    formats = _formatChipsCache.formats;
+  } else {
+    formats = [...new Set(tracks.map(t => t.ext).filter(Boolean))].sort();
+    if (formats.length >= 2) _formatChipsCache = { sig, formats };
+  }
   if (formats.length < 2) { bar.innerHTML = ''; return; }
   const active = get('formatFilter') || '';
   bar.innerHTML = [

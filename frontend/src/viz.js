@@ -193,7 +193,7 @@ export function startViz() {
   if (!smoothed  || smoothed.length  !== bins) smoothed  = new Float32Array(bins);
   if (!_vizData  || _vizData.length  !== bins) _vizData  = new Uint8Array(bins);
   running = true;
-  if (eqCtx && eqCtx.state === 'suspended') eqCtx.resume();
+  if (eqCtx && eqCtx.state === 'suspended') eqCtx.resume().catch(e => console.warn('[viz:resume]', e));
   _startEngine();
 }
 

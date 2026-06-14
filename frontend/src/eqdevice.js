@@ -17,7 +17,7 @@
 //   renderDeviceProfiles()         — met à jour la section UI dans #set-page-audio
 
 import { eqNodes, applyEQGains, getCurrentGains } from './eq.js';
-import { esc }                    from './ui.js';
+import { esc, toast }             from './ui.js';
 
 // ── État module ───────────────────────────────────────────────────────────────
 /** @type {{ [deviceId: string]: { bands: number[], label: string } }} */
@@ -76,6 +76,7 @@ export function saveCurrentDeviceProfile() {
   const bands = getCurrentGains();
   if (!bands) {
     console.warn('[eqdevice] saveCurrentDeviceProfile : EQ non initialisé — sauvegarde annulée');
+    toast('EQ non initialisé — impossible de sauvegarder le profil', 'error');
     return;
   }
   _deviceProfiles[_activeId || 'default'] = {

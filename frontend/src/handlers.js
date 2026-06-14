@@ -288,6 +288,7 @@ const _ACTIONS = {
 
   // ── Organize ──────────────────────────────────────────────
   'organize-trigger': async (btn) => {
+    closeSettings();
     const scheme = btn.dataset.scheme || 'artist-album';
     await organizePreview(scheme);
   },

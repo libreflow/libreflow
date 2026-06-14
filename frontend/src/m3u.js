@@ -92,8 +92,9 @@ export function exportXSPF() {
     if (!t.path) continue;
     const artist = t.artistFull || t.artist || '';
     const dur    = isFinite(t.duration) && t.duration > 0 ? Math.round(t.duration * 1000) : 0;
-    // Convertir chemin Windows / Unix en URI file://
-    const uri = 'file:///' + t.path.replace(/\\/g, '/').replace(/^\//, '');
+    // Convertir chemin Windows / Unix en URI file:// ; encoder espaces et # (RFC 3986)
+    const uri = 'file:///' + t.path.replace(/\\/g, '/').replace(/^\//, '')
+      .replace(/ /g, '%20').replace(/#/g, '%23');
     lines.push('    <track>');
     lines.push(`      <location>${esc(uri)}</location>`);
     lines.push(`      <title>${esc(t.name)}</title>`);

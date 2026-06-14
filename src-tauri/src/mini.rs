@@ -123,6 +123,13 @@ pub async fn mini_close(app: AppHandle) -> Result<(), String> {
 
 #[tauri::command]
 pub async fn mini_update(app: AppHandle, data: Value) -> Result<(), String> {
+    // Cap payload to prevent RAM bloat from a buggy or large JS payload.
+    // 512 KB to accommodate base64 artwork (~80-130 KB typical).
+    let raw = serde_json::to_string(&data)
+        .map_err(|e| format!("mini_update: serde error: {e}"))?;
+    if raw.len() > 524_288 {
+        return Err("mini_update: payload trop volumineux (>512 KB)".to_string());
+    }
     *app.state::<MiniState>().0.lock().await = Some(data.clone());
     if let Some(win) = app.get_webview_window("mini") {
         if let Err(e) = win.emit("mini-update", &data) {

@@ -266,6 +266,7 @@ export const en = {
     aria_scroll_to_current:  'Go to current track',
     aria_close_queue:        'Close queue',
     aria_eq_mode_group:      'EQ mode',
+    aria_eq_toolbar:         'EQ controls',
     aria_repeat:             'Repeat mode',
     aria_theme_green:        'Green',
     aria_theme_blue:         'Blue',

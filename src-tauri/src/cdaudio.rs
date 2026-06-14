@@ -407,9 +407,14 @@ mod windows_impl {
             track_mode: TRACK_MODE_CDDA,
         };
 
-        let mut out = vec![0u8; SECTOR_BYTES * sector_count as usize];
+        let alloc_size = SECTOR_BYTES
+            .checked_mul(sector_count as usize)
+            .ok_or_else(|| format!("read_audio_sectors: sector_count overflow ({})", sector_count))?;
+        let mut out = vec![0u8; alloc_size];
         let mut bytes_returned: u32 = 0;
 
+        let buf_len_u32 = u32::try_from(out.len())
+            .map_err(|_| format!("read_audio_sectors: alloc_size {} exceeds u32 max", out.len()))?;
         let ok = unsafe {
             DeviceIoControl(
                 handle,
@@ -417,7 +422,7 @@ mod windows_impl {
                 Some(&info as *const _ as *const _),
                 std::mem::size_of::<RawReadInfo>() as u32,
                 Some(out.as_mut_ptr() as *mut _),
-                out.len() as u32,
+                buf_len_u32,
                 Some(&mut bytes_returned),
                 None,
             )

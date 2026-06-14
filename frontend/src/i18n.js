@@ -161,8 +161,8 @@ export function applyLang() {
   // Lang toggle highlight
   const lf = document.getElementById('lang-fr');
   const le = document.getElementById('lang-en');
-  if (lf) lf.classList.toggle('on', lang === 'fr');
-  if (le) le.classList.toggle('on', lang === 'en');
+  if (lf) { lf.classList.toggle('on', lang === 'fr'); lf.setAttribute('aria-pressed', String(lang === 'fr')); }
+  if (le) { le.classList.toggle('on', lang === 'en'); le.setAttribute('aria-pressed', String(lang === 'en')); }
 
   // Mode buttons highlight
   const md = document.getElementById('mode-dark-btn');

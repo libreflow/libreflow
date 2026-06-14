@@ -597,10 +597,16 @@ export function toggleEQAB() {
     _abSavedGains = (_currentGains?.length === EQ_BAND_COUNT)
       ? [..._currentGains]
       : (EQ_PRESETS[_activePreset] ? [...EQ_PRESETS[_activePreset]] : new Array(EQ_BAND_COUNT).fill(0));
-    _applyGains(EQ_PRESETS.flat);
+    const flatGains = EQ_PRESETS.flat;
+    _applyGains(flatGains);
+    _animateSlidersTo(flatGains);  // sync visuel sliders → flat (Passe 2)
   } else {
     // Mode B : restaure gains sauvegardés
-    if (_abSavedGains) _applyGains(_abSavedGains);
+    // _animateSlidersTo couplé à _applyGains — garder audio + sliders synchrones.
+    if (_abSavedGains) {
+      _applyGains(_abSavedGains);
+      _animateSlidersTo(_abSavedGains);
+    }
     _abSavedGains = null;
   }
   const btn = document.querySelector('#eq-panel .eq-ab-btn');
@@ -705,8 +711,8 @@ export function renderEQBands() {
 function _resetBand(idx, slider) {
   if (isNaN(idx) || !eqCtx || !eqNodes[idx]) return;
   eqNodes[idx].gain.setTargetAtTime(0, eqCtx.currentTime, 0.01);
+  if (_currentGains?.length === EQ_BAND_COUNT) _currentGains[idx] = 0;  // sync intentional-target cache
   const targetGains = getCurrentGains() ?? eqNodes.map(n => n.gain.value);
-  targetGains[idx] = 0;
   _animateSlidersTo(targetGains);
   if (_activePreset !== 'custom') { _activePreset = 'custom'; _updatePresetBtns('custom'); }
   const wrap = slider?.closest('.eq-slider-wrap');
@@ -737,9 +743,9 @@ function _getArtRgb() {
 function _updateCurveHeight() {
   const panel = document.getElementById('eq-panel');
   if (!panel) return;
-  const active = eqNodes.length
-    ? eqNodes.some(n => Math.abs(n.gain.value) > 0.05)
-    : false;
+  const active = (_currentGains?.length === EQ_BAND_COUNT)
+    ? _currentGains.some(g => Math.abs(g) > 0.05)
+    : (eqNodes.length ? eqNodes.some(n => Math.abs(n.gain.value) > 0.05) : false);
   panel.classList.toggle('eq-curve-active', active);
 }
 
@@ -790,9 +796,10 @@ function _drawEQCurve() {
   ctx.clearRect(0, 0, W, H);
 
   // Fond transparent (géré par CSS)
-  const gains = eqNodes.length
-    ? eqNodes.map(n => n.gain.value)
-    : new Array(EQ_BAND_COUNT).fill(0);
+  // M5: prefer _currentGains (intentional target) over n.gain.value (mid-ramp snapshot)
+  const gains = (_currentGains?.length === EQ_BAND_COUNT)
+    ? [..._currentGains]
+    : (eqNodes.length ? eqNodes.map(n => n.gain.value) : new Array(EQ_BAND_COUNT).fill(0));
 
   // Grille horizontale (0 dB ligne centrale)
   ctx.strokeStyle = 'rgba(255,255,255,0.08)';

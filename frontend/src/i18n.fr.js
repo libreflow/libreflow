@@ -279,6 +279,7 @@ export const fr = {
     aria_scroll_to_current:  'Aller à la piste en cours',
     aria_close_queue:        "Fermer la file d'attente",
     aria_eq_mode_group:      'Mode EQ',
+    aria_eq_toolbar:         'Contrôles EQ',
     aria_repeat:             'Mode répétition',
     aria_theme_green:        'Vert',
     aria_theme_blue:         'Bleu',

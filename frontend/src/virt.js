@@ -3,6 +3,9 @@
 
 // P3 FIX : Intl.Collator caché pour les tris de groupes
 const _cmp = new Intl.Collator('fr', { sensitivity: 'base', ignorePunctuation: true }).compare;
+// BUG-FIX [MEDIUM] : Map pré-allouée au scope module pour éviter N allocations `{}` dans virtBuildRows()
+// (une par album lors du tri 'album'). Vidée avec .clear() entre chaque groupe → zéro allocation temporaire.
+const _artistCountMap = new Map();
 // LibreFlow — Virtual scroll engine
 //
 // Renders only the rows visible in the viewport + VIRT_BUFFER rows on each side.
@@ -97,9 +100,15 @@ function virtBuildRows(fl, { sort = 'az', query = '', view = 'all' } = {}) {
       // Pour le tri album : inclure l'artiste majoritaire du groupe comme indice visuel
       let artistHint = '';
       if (sort === 'album' && grps.get(k).length) {
-        const artistCounts = {};
-        grps.get(k).forEach(t => { const a = t.artist||''; artistCounts[a] = (artistCounts[a]||0) + 1; });
-        artistHint = Object.entries(artistCounts).sort((a,b)=>b[1]-a[1])[0]?.[0] || '';
+        // Reuse module-scope Map (no per-group allocation); find majority artist in one pass
+        _artistCountMap.clear();
+        for (const t of grps.get(k)) {
+          const a = t.artist || '';
+          _artistCountMap.set(a, (_artistCountMap.get(a) || 0) + 1);
+        }
+        let maxA = '', maxC = 0;
+        for (const [a, c] of _artistCountMap) { if (c > maxC) { maxC = c; maxA = a; } }
+        artistHint = maxA;
       }
       rows.push({ type:'grp', key: k, artistHint });
       grps.get(k).forEach(t => { rows.push({ type:'tr', track: t, fi: fi++ }); });
@@ -127,8 +136,19 @@ function virtBuildRows(fl, { sort = 'az', query = '', view = 'all' } = {}) {
 // O(1) grâce au prefix-sum
 /** @param {VirtRow[]} rows @returns {number} */
 function virtTotalH(rows)         { return VIRT._totalH; }
-/** @param {VirtRow[]} rows @param {number} idx @returns {number} */
-function virtOffsetOf(rows, idx)  { return VIRT._offsets[idx] || 0; }
+/**
+ * Pixel offset of the row at `idx` in the prefix-sum array.
+ * Returns 0 for index 0 (first row, offset genuinely 0).
+ * Returns 0 and does NOT scroll when `idx` is out of bounds (guard prevents
+ * conflating "first element" with "invalid index" — BUG-PASSE2-1 fix).
+ * @param {VirtRow[]} rows
+ * @param {number} idx
+ * @returns {number}
+ */
+function virtOffsetOf(rows, idx) {
+  if (idx < 0 || idx > rows.length) return 0;
+  return VIRT._offsets[idx] ?? 0;
+}
 
 /**
  * Binary-search the index of the first row visible at the given scroll position.

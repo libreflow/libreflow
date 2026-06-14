@@ -26,7 +26,7 @@ export function startCinemaViz() {
   const analyser = eqAnalyser;
   const ac       = eqCtx;
   if (!analyser || !ac) return;
-  if (ac.state === 'suspended') ac.resume();
+  if (ac.state === 'suspended') ac.resume().catch(e => console.warn('[cinema-viz:resume]', e));
 
   const ctx = canvas.getContext('2d');
   if (!ctx) return;

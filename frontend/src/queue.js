@@ -20,7 +20,11 @@ import { i18n }                           from './i18n.js';
 import { get, set }                       from './store.js';
 import { getFiltered, filteredIdx, _trackIdxMap,
          invalidateFilterCache }          from './search.js';
-import { playAt, togglePlay, isCurrentTrack, audio } from './player.js';
+// NOTE: seuls playAt + togglePlay sont importés de player.js.
+// `audio` et `isCurrentTrack` ont été retirés pour réduire le couplage circulaire
+// player.js ↔ queue.js (§6 CLAUDE.md). `audio` est accédé via le DOM ;
+// `isCurrentTrack` est réimplémenté localement via get('curIdx')/get('tracks').
+import { playAt, togglePlay } from './player.js';
 import { patchPlayState } from './renderer.js';
 import { closeSettings } from './settings.js';
 import { emit, EVENTS } from './bus.js';
@@ -67,13 +71,28 @@ let _springBackTimer = null;
 
 // ── Data builders ────────────────────────────────────────────
 
+/**
+ * Résout un id vers un objet Track, en vérifiant à la fois la présence dans
+ * _trackIdxMap ET que l'index retourné est dans les bornes de tracks[].
+ * Retourne null si l'id est absent, si l'index est undefined/hors-bornes,
+ * ou si l'entrée tracks est elle-même absente (état transitoire).
+ * @param {string} id
+ * @returns {object|null}
+ */
+function _resolveTrack(id) {
+  const idx = _trackIdxMap?.get(id);
+  if (idx == null) return null;
+  const tracks = get('tracks');
+  if (idx < 0 || idx >= tracks.length) return null;
+  return tracks[idx] ?? null;
+}
+
 /** Queue explicite : map _queueOverride vers Track[], filtre IDs invalides. */
 function _buildExplicitQueue() {
   if (!_queueOverride || !_queueOverride.length) return [];
-  const tracks = get('tracks');
   return _queueOverride
-    .filter(id => _trackIdxMap?.has(id))
-    .map(id => tracks[_trackIdxMap.get(id)]);
+    .map(id => _resolveTrack(id))
+    .filter(Boolean);
 }
 
 /** Queue naturelle : tracks filtrées après la piste en cours, sans les IDs explicites. */
@@ -296,7 +315,7 @@ export function renderQueue() {
     const artHTML = t?.art
       ? `<img src="${esc(t.art)}" alt="">`
       : extEmoji(t?.ext ?? '');
-    const row = `<div class="queue-item queue-item--loop" data-action="play-queue-item" data-track-id="${t?.id}">
+    const row = `<div class="queue-item queue-item--loop" role="listitem" aria-label="${esc(t?.name ?? '')} — ${esc(t?.artistFull || t?.artist || '')} (en boucle)" data-action="play-queue-item" data-track-id="${t?.id}">
       <div class="q-art q-art--loop">${artHTML}
         <button class="q-art-hover-play" data-action="toggle-play" tabindex="-1" aria-hidden="true">
           <svg class="icon-play" viewBox="0 0 24 24" width="12" height="12" fill="currentColor" aria-hidden="true"><polygon points="5,3 19,12 5,21"/></svg>
@@ -310,7 +329,9 @@ export function renderQueue() {
       <div class="q-dur">${fmtd(t?.duration ?? 0)}</div>
     </div>`;
     el.innerHTML = Array(5).fill(row).join('');
-    patchPlayState(!audio.paused);
+    // Accès DOM local — évite l'import circulaire depuis player.js (§6)
+    const _audioEl = /** @type {HTMLAudioElement|null} */ (document.getElementById('audio'));
+    patchPlayState(_audioEl ? !_audioEl.paused : false);
     return;
   }
 
@@ -347,9 +368,9 @@ export function renderQueue() {
 
   // ── Section "Prochainement" (queue explicite) ─────────────
   if (explicit.length) {
-    html += `<div class="queue-section-header" role="presentation">
+    html += `<div class="queue-section-header" role="none">
       <span class="queue-section-label">${esc(i18n('queue_upcoming', explicit.length))}</span>
-      <button class="queue-clear-btn" data-action="clear-queue" aria-label="${esc(i18n('queue_clear_all'))}" title="${esc(i18n('queue_clear_all'))}">✕ tout</button>
+      <button class="queue-clear-btn" data-action="clear-queue" aria-label="${esc(i18n('queue_clear_all') || 'Vider la file d\'attente')}" title="${esc(i18n('queue_clear_all'))}"><span aria-hidden="true">✕ tout</span></button>
     </div>`;
     // A11Y-03: role=listitem + aria-label pour chaque item (remove button labeled)
     html += explicit.map((t, i) => {
@@ -400,7 +421,9 @@ export function renderQueue() {
 
   el.innerHTML = html;
   // innerHTML wipes .playing-row -> restore from audio state.
-  patchPlayState(!audio.paused);
+  // Accès DOM local — évite l'import circulaire depuis player.js (§6)
+  const _audioEl = /** @type {HTMLAudioElement|null} */ (document.getElementById('audio'));
+  patchPlayState(_audioEl ? !_audioEl.paused : false);
 }
 
 // ── Drag helpers ─────────────────────────────────────────────
@@ -613,10 +636,12 @@ function _onPromotionUp() {
 
 export function playQueueItem(id) {
   if (_ptrState) return;
-  const t = (_trackIdxMap.has(id) ? get('tracks')[_trackIdxMap.get(id)] : undefined);
+  const t = _resolveTrack(id);
   if (!t) return;
   // repeat=one : toggle au lieu de redémarrer la piste courante.
-  if (isCurrentTrack(id)) { togglePlay(); return; }
+  // Réimplémentation locale de isCurrentTrack — évite l'import depuis player.js (§6)
+  const _ci = get('curIdx');
+  if (_ci >= 0 && get('tracks')[_ci]?.id === id) { togglePlay(); return; }
   const fi = filteredIdx(t);
   if (fi >= 0) { removeFromQueue(id); playAt(fi, { keepQueue: true }); return; }
   // UX-QUEUE-1 FIX : piste hors vue courante → basculer vers 'all' et jouer
@@ -647,7 +672,7 @@ export function playQueueItem(id) {
  * @returns {boolean} true si succès
  */
 export function addToQueueNext(trackId) {
-  const t = (_trackIdxMap.has(trackId) ? get('tracks')[_trackIdxMap.get(trackId)] : null);
+  const t = _resolveTrack(trackId);
   if (!t) return false;
   const explicit = _buildExplicitQueue().filter(u => u.id !== trackId);
   explicit.unshift(t);
@@ -664,7 +689,7 @@ export function addToQueueNext(trackId) {
  * @returns {boolean} true si succès
  */
 export function addToQueueEnd(trackId) {
-  const t = _trackIdxMap.has(trackId) ? get('tracks')[_trackIdxMap.get(trackId)] : null;
+  const t = _resolveTrack(trackId);
   if (!t) return false;
   // Construire la file si elle n'existe pas encore
   if (!_queueOverride) {

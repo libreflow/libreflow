@@ -1066,7 +1066,10 @@ function _clearLibraryState() {
     if (t.url && t.url.startsWith('blob:'))  try { URL.revokeObjectURL(t.url);  } catch(e) { console.warn('[app:revokeObjectURL url]', e); }
     if (t.art && t.art.startsWith('blob:'))  try { URL.revokeObjectURL(t.art);  } catch(e) { console.warn('[app:revokeObjectURL art]', e); }
   }
-  invalidateFilter(); replaceTracks([]); tracks = get('tracks');
+  // FIX freeze : vider tracks[] AVANT d'émettre FILTER_CHANGED (bus synchrone).
+  // L'ancien ordre appelait invalidateFilter() en premier, ce qui déclenchait
+  // renderLib() → getFiltered() → tri O(n log n) sur les 50k pistes encore en place.
+  replaceTracks([]); tracks = get('tracks'); invalidateFilter();
   liked = new Set(); set('liked', liked);
   playlists = []; set('playlists', playlists); recentPlays = []; set('recentPlays', recentPlays);
   curPlId = null; set('curPlId', null);
@@ -1134,18 +1137,21 @@ async function _clearLibraryIDB() {
       store.clear().onerror = e => fail(e.target.error);
       store.transaction.oncomplete = ok;
       store.transaction.onerror   = e => fail(e.target.error);
+      store.transaction.onabort   = () => fail(new Error('[clearLibrary] tracks tx aborted'));
     });
     await new Promise((ok, fail) => {
       const store = tx('playlists', 'readwrite');
       store.clear().onerror = e => fail(e.target.error);
       store.transaction.oncomplete = ok;
       store.transaction.onerror   = e => fail(e.target.error);
+      store.transaction.onabort   = () => fail(new Error('[clearLibrary] playlists tx aborted'));
     });
     await new Promise((ok, fail) => {
       const store = tx('playlog', 'readwrite');
       store.clear().onerror = e => fail(e.target.error);
       store.transaction.oncomplete = ok;
       store.transaction.onerror   = e => fail(e.target.error);
+      store.transaction.onabort   = () => fail(new Error('[clearLibrary] playlog tx aborted'));
     });
     await saveCfgNow();
   } catch(e) { console.warn('[clearLibrary] DB error:', e); }

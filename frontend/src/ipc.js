@@ -77,16 +77,24 @@ async function invoke(cmd, args, opts) {
   // @ts-ignore — __TAURI__ injected at runtime by Tauri, not in Window type
   if (!timeout) return window.__TAURI__.core.invoke(cmd, args);
   let _timerId = 0;
+  let _timedOut = false;
   // @ts-ignore — __TAURI__ injected at runtime by Tauri, not in Window type
   const _invokeP = window.__TAURI__.core.invoke(cmd, args).finally(() => clearTimeout(_timerId));
   // Si le timeout gagne la course, la branche invoke devient orpheline : son
   // rejet tardif (Result::Err après le délai) déclencherait unhandledrejection.
-  _invokeP.catch(() => {});
+  _invokeP.catch((e) => {
+    if (_timedOut) {
+      // Late Rust rejection after timeout — swallowed to avoid unhandledrejection,
+      // but logged for diagnosability.
+      console.warn('[ipc] late rejection for', cmd, ':', e?.message ?? e);
+    }
+  });
   return Promise.race([
     _invokeP,
     new Promise((_, fail) => {
       _timerId = setTimeout(
         () => {
+          _timedOut = true;
           console.warn('[ipc] timeout:', cmd);
           fail(new Error(`[ipc] ${cmd} timed out after ${timeout}ms`));
         },

@@ -112,6 +112,8 @@ function _clampSeekTipLeft(ratio, pbarW) {
 
 /** @param {number} ratio */
 function _applySeekRatio(ratio) {
+  // Bug-3 FIX: guard contre audio.duration NaN ou 0 (fichier non chargé / vidé mid-drag)
+  if (!audio.duration || isNaN(audio.duration)) return;
   ratio = Math.max(0, Math.min(1, ratio));
   audio.currentTime = ratio * audio.duration;
   if (pfill) pfill.style.transform = `scaleX(${ratio})`;
@@ -392,9 +394,6 @@ export async function playAt(filteredIdx, { skipScroll = false, keepQueue = fals
   }
 }
 
-// BUG-D1-8 FIX: track whether audioNext was mid-crossfade when paused so we can resume it
-let _crossfadeWasActive = false;
-
 /** Compare id to the currently-playing track via store (no closure on `curIdx`). */
 export function isCurrentTrack(id) {
   const i = get('curIdx');
@@ -407,17 +406,14 @@ export function togglePlay() {
   if (audio.paused) {
     ensureEQResumed();
     audio.play().catch(e => { if (e?.name !== 'AbortError') console.warn('[player] togglePlay() failed:', e); });
-    // BUG-D1-8 FIX: resume audioNext if it was paused mid-crossfade
-    if (_crossfadeWasActive && audioNext && audioNext.src && audioNext.src !== location.href) {
-      audioNext.play().catch(e => { if (e?.name !== 'AbortError') console.warn('[player] audioNext resume failed:', e); });
-    }
-    _crossfadeWasActive = false;
   } else {
     // B3 FIX : annuler tout crossfade en cours au pause. Sans ça, cfFadeTimer
     // fire ~crossfadeDur plus tard et exécute audio.src=…/audio.play() → la
     // lecture reprend toute seule alors que l'utilisateur a mis en pause.
+    // Pausing mid-crossfade promotes the next track: clearCrossfadeTimers() tears down
+    // audioNext src + all DSP nodes (audioNextGain/audioNextRgGain/audioNextSource set
+    // to null), so attempting to resume audioNext after pause is not recoverable.
     if (cfFadeTimer || cfNextTimer || _cfRafId) clearCrossfadeTimers();
-    _crossfadeWasActive = false;
     audio.pause();
   }
 }
@@ -432,6 +428,9 @@ export function prev() {
   const tracks = get('tracks'); // Phase 4
   const fl = getFiltered();
   const t  = tracks[curIdx];
+  // Bug-5 FIX: t peut être undefined si curIdx est hors-bornes après une suppression rapide
+  // → filteredIdx(undefined) lèverait TypeError sur t.id.
+  if (!t) return;
   const fi = filteredIdx(t); // P4 — O(1) via posMap
 
   // En tri "recent" : naviguer dans l'ordre stable de tracks[]
@@ -503,6 +502,16 @@ export function peekNext() {
     const ni = /** @type {number} */ (shuffleQ[0]); // peek, pas shift
     return tracks[ni] ?? null;
   }
+  // Bug-7 FIX: shuffle actif mais shuffleQ épuisé (pas encore rebuildé par buildQ()).
+  // Pour ne pas signaler null (→ arrêt crossfade gapless), on préview la première piste
+  // que buildQ() produirait : la piste courante est exclue, on retourne la première de
+  // la liste filtrée différente de curIdx. Utilise _trackIdxMap (O(1)) — pas d'indexOf.
+  if (shuffle && repeat !== 'none') {
+    const fl = getFiltered();
+    // @ts-ignore — _trackIdxMap.get() returns number; curIdx comparison is safe
+    const fallback = fl.find(t => _trackIdxMap?.get(t.id) !== curIdx);
+    if (fallback) return fallback;
+  }
 
   // Séquentiel — cas spécial sort:recent (même logique que next())
   if (get('sort') === 'recent' && get('view') === 'all') {
@@ -548,6 +557,9 @@ export function next(manual = false) {
       _queueEndedToastShown = true;
       setTimeout(() => toast(i18n('t_queue_ended'), 'info'), 400);
     }
+    // Bug-2 FIX: l'index peut être hors-bornes si une piste a été supprimée sans
+    // que adjustShuffleQAfterDelete() ait nettoyé la file manuelle.
+    if (ni < 0 || ni >= tracks.length || !tracks[ni]) return;
     const _tq = tracks[ni];
     getFiltered(); // warm cache for filteredIdx O(1)
     const fi  = filteredIdx(_tq); // P4 — O(1)
@@ -556,18 +568,32 @@ export function next(manual = false) {
   }
 
   // ── Radio active, file vide → recharger ──────────────────────────────────
+  // BUG-HIGH FIX : radioRefillQueue() est async — consommer manualQueue dans .then()
+  // garantit que la file est peuplée avant le test (invariant §2 : refill AVANT UI).
   if (radioActive) {
-    radioRefillQueue().catch(e => console.warn('[radio] refill failed:', e));
-    if (manualQueue.length) {
-      // @ts-ignore — manualQueue stores numeric indices; store type says Track[] but runtime is number[]
-      const ni = /** @type {number} */ (manualQueue.shift());
-      set('manualQueue', [...manualQueue]);
-      const _tq2 = tracks[ni];
-      getFiltered(); // warm cache for filteredIdx O(1)
-      const fi   = filteredIdx(_tq2); // P4 — O(1)
-      if (fi >= 0) { playAt(fi); return; }
-      if (tracks[ni]) { _playDirect(tracks[ni], ni); return; }
-    }
+    radioRefillQueue()
+      .then(() => {
+        if (manualQueue.length) {
+          // @ts-ignore — manualQueue stores numeric indices; store type says Track[] but runtime is number[]
+          const ni = /** @type {number} */ (manualQueue.shift());
+          set('manualQueue', [...manualQueue]);
+          // Bug-2b FIX (même patron que Bug-2): guard hors-bornes dans le chemin radio async
+          if (ni < 0 || ni >= tracks.length || !tracks[ni]) return;
+          const _tq2 = tracks[ni];
+          getFiltered(); // warm cache for filteredIdx O(1)
+          const fi   = filteredIdx(_tq2); // P4 — O(1)
+          if (fi >= 0) { playAt(fi); return; }
+          if (tracks[ni]) { _playDirect(tracks[ni], ni); }
+        } else {
+          // Queue encore vide après refill : le guard B34 (_radioRefillInProgress) a
+          // court-circuité un refill concurrent — laisser ce refill se terminer.
+          // Retry différé pour éviter un stall silencieux sans boucle synchrone infinie.
+          console.warn('[radio] manualQueue vide après refill — retry dans 500 ms');
+          setTimeout(() => { if (radioActive) next(); }, 500);
+        }
+      })
+      .catch(e => console.warn('[radio] refill failed:', e));
+    return; // sortir immédiatement — la suite s'exécute dans .then() après refill
   }
 
   // ── Shuffle ───────────────────────────────────────────────────────────────
@@ -785,71 +811,64 @@ export function setCrossfade(sec) {
   saveCfg();
 }
 
+/** Crée l'élément Audio pour le crossfade et hérite la vitesse courante. @returns {HTMLAudioElement} */
+function _createAudioNextElement() {
+  const el = new Audio();
+  el.crossOrigin = 'anonymous';
+  el.preload = 'auto';
+  if (playbackSpeed !== 1) el.playbackRate = playbackSpeed; // GAPLESS-1 FIX
+  return el;
+}
+
+/** Connecte audioNext au graphe Web Audio (DSP-7). @returns {void} */
+function _connectAudioNextToGraph() {
+  if (!eqCtx || eqCtx.state === 'closed' || audioNextSource) return;
+  try {
+    // DSP-7 graph : audioNext → audioNextSource → audioNextRgGain → audioNextGain → eqNodes[0]
+    audioNextSource = eqCtx.createMediaElementSource(/** @type {HTMLAudioElement} */ (audioNext));
+    audioNextRgGain = eqCtx.createGain();
+    audioNextRgGain.gain.setTargetAtTime(1.0, eqCtx.currentTime, 0.001); // neutre — init sans zipper §9
+    audioNextGain   = eqCtx.createGain();
+    audioNextGain.gain.setTargetAtTime(0, eqCtx.currentTime, 0.001);     // muet au départ — transition minimale §9
+    // @ts-ignore — audioNextSource just assigned above, guaranteed non-null here
+    audioNextSource.connect(audioNextRgGain);
+    audioNextRgGain.connect(audioNextGain);
+    audioNextGain.connect(eqNodes.length > 0 ? eqNodes[0] : eqCtx.destination);
+  } catch(e) {
+    // BUG-D1-10 FIX: catch InvalidStateError or other AudioNode creation failures
+    console.warn('[crossfade initAudio]', e);
+    if (audioNext) { audioNext.pause(); audioNext.src = ''; audioNext = null; }
+    audioNextSource = null; audioNextGain = null; audioNextRgGain = null;
+  }
+}
+
 /** @returns {void} */
 export function initCrossfadeAudio() {
-  // BUG-D1-10 FIX: if audioNext exists but is in a non-ended state (e.g. was already playing
-  // mid-crossfade before clearCrossfadeTimers was called and immediately re-called), tear it
-  // down cleanly rather than trying to re-use a potentially stale MediaElementSource.
+  // BUG-D1-10 FIX: tear down stale/partial audioNext before re-init
   if (audioNext && audioNextSource) {
-    // Already fully wired — skip re-init only if the AudioContext is still valid
-    if (eqCtx && eqCtx.state !== 'closed') return;
-    // AudioContext is closed/invalid — fall through to rebuild below
+    if (eqCtx && eqCtx.state !== 'closed') return; // déjà câblé et valide
+    // AudioContext fermé/invalide — reconstruire
     try { audioNextSource?.disconnect(); } catch {}
     try { audioNextGain?.disconnect(); } catch {}
     try { audioNextRgGain?.disconnect(); } catch {}
     audioNext.pause(); audioNext.src = '';
     audioNext = null; audioNextSource = null; audioNextGain = null; audioNextRgGain = null;
   }
-
-  // BUG-D1-10 FIX: if audioNext exists but source was never created (partial init), reset it
   if (audioNext && !audioNextSource) {
     audioNext.pause(); audioNext.src = '';
     audioNext = null;
   }
 
-  audioNext = new Audio();
-  audioNext.crossOrigin = 'anonymous';
-  audioNext.preload = 'auto';
-  // GAPLESS-1 FIX : hériter la vitesse courante
-  if (playbackSpeed !== 1) audioNext.playbackRate = playbackSpeed;
+  audioNext = _createAudioNextElement();
 
-  // Connecter audioNext au graph Web Audio (EQ + RG)
-  // DSP-7 graph : audioNext → audioNextSource → audioNextRgGain → audioNextGain → eqNodes[0]
-  //   audioNextRgGain : compensation ReplayGain (valeur stable, définie au lancement du CF)
-  //   audioNextGain   : fondu 0→1 pur (forme cosinus)
   if (!eqCtx) initEQ();
-  // ARCH-10: réagir aux suspensions/interruptions de l'AudioContext (tab cachée, sleep OS,
-  // politique autoplay) — évite le silence silencieux sans intervention de l'utilisateur.
+  // ARCH-10: réagir aux suspensions/interruptions de l'AudioContext
   if (eqCtx && !eqCtx.onstatechange) {
     eqCtx.onstatechange = () => {
-      if (eqCtx.state === 'suspended' || eqCtx.state === 'interrupted') {
-        ensureEQResumed();
-      }
+      if (eqCtx.state === 'suspended' || eqCtx.state === 'interrupted') ensureEQResumed();
     };
   }
-  if (eqCtx && eqCtx.state !== 'closed' && !audioNextSource) {
-    try {
-      audioNextSource = eqCtx.createMediaElementSource(audioNext);
-      audioNextRgGain = eqCtx.createGain();
-      audioNextRgGain.gain.setValueAtTime(1.0, eqCtx.currentTime); // neutre par défaut — §9: no direct .value=
-      audioNextGain   = eqCtx.createGain();
-      audioNextGain.gain.setValueAtTime(0, eqCtx.currentTime);     // muet au départ — sera 0→1 pendant le fondu — §9: no direct .value=
-      // @ts-ignore — audioNextSource just assigned above, guaranteed non-null here
-      audioNextSource.connect(audioNextRgGain);
-      audioNextRgGain.connect(audioNextGain);
-      if (eqNodes.length > 0) {
-        audioNextGain.connect(eqNodes[0]);
-      } else {
-        audioNextGain.connect(eqCtx.destination);
-      }
-    } catch(e) {
-      // BUG-D1-10 FIX: catch InvalidStateError or other AudioNode creation failures
-      console.warn('[crossfade initAudio]', e);
-      // Tear down the partially-created element to avoid leaking a source-less Audio node
-      if (audioNext) { audioNext.pause(); audioNext.src = ''; audioNext = null; }
-      audioNextSource = null; audioNextGain = null; audioNextRgGain = null;
-    }
-  }
+  _connectAudioNextToGraph();
 }
 
 /** @returns {void} */
@@ -896,6 +915,16 @@ export function clearCrossfadeTimers() {
 function _commitGapless() {
   // Guard: concurrent skip (media key / crossfade) can set _playLock while gapless swap fires.
   if (_playLock) { _gaplessNextIdx = -1; next(); return; }
+  // Bug-6 FIX: si l'AudioContext a été fermé par l'OS entre le pré-buffer et l'event 'ended',
+  // clearCrossfadeTimers() accèderait à eqCtx.currentTime sur un contexte 'closed' (InvalidStateError).
+  // On abort proprement et on laisse next() reconstruire l'AudioContext via ensureEQResumed().
+  if (eqCtx && eqCtx.state === 'closed') {
+    _gaplessNextIdx = -1;
+    audioNextSource = null; audioNextGain = null; audioNextRgGain = null;
+    if (audioNext) { audioNext.pause(); audioNext.src = ''; }
+    next();
+    return;
+  }
   _playLock = true;
   try {
     const ni  = _gaplessNextIdx;
@@ -926,155 +955,143 @@ function _commitGapless() {
   }
 }
 
-// Appelé depuis timeupdate — gère le pré-buffer gapless ET le lancement du crossfade
-/** @returns {void} */
-export function checkCrossfade() {
-  if (curIdx < 0 || audio.paused) return;
-  if (sleepFading) return; // le sleep fade gère son propre volume
-  const remaining = audio.duration - audio.currentTime;
-  if (isNaN(remaining) || remaining <= 0) return;
+// ── Helpers privés checkCrossfade (§16 : fonctions < 50 lignes) ──────────────
 
-  // ── Gapless pre-buffer (crossfadeDur=0) ──────────────────────────────────
-  if (!crossfadeDur && remaining < 3.0 && _gaplessNextIdx < 0 && !cfFadeTimer) {
-    const _gni = getNextIdx();
-    if (_gni >= 0 && _gni !== curIdx) {
-      const tracks = get('tracks'); // Phase 4
-      const _gnt = tracks[_gni];
-      if (_gnt) {
-        _gaplessNextIdx = _gni;
-        initCrossfadeAudio();
-        ensureUrl(_gnt).then(ok => {
-          if (!ok || crossfadeDur || _gaplessNextIdx !== _gni) { _gaplessNextIdx = -1; return; }
-          // @ts-ignore — url guaranteed set by ensureUrl(ok) above
-          if (audioNext) { audioNext.src = _gnt.url; audioNext.preload = 'auto'; }
-        }).catch(e => { console.warn('[gapless] ensureUrl failed:', e); _gaplessNextIdx = -1; }); // évite _commitGapless sur src invalide
-      }
-    }
+/** Pré-buffer gapless : charge audioNext avant la fin de la piste courante (crossfadeDur=0).
+ * @param {number} remaining
+ * @returns {void}
+ */
+function _handleGaplessPreBuffer(remaining) {
+  if (remaining >= 3.0 || _gaplessNextIdx >= 0 || cfFadeTimer) return;
+  const _gni = getNextIdx();
+  if (_gni < 0 || _gni === curIdx) return;
+  const tracks = get('tracks');
+  const _gnt   = tracks[_gni];
+  if (!_gnt) return;
+  _gaplessNextIdx = _gni;
+  initCrossfadeAudio();
+  ensureUrl(_gnt).then(ok => {
+    if (!ok || crossfadeDur || _gaplessNextIdx !== _gni) { _gaplessNextIdx = -1; return; }
+    // @ts-ignore — url guaranteed set by ensureUrl(ok)
+    if (audioNext) { audioNext.src = _gnt.url; audioNext.preload = 'auto'; }
+  }).catch(e => { console.warn('[gapless] ensureUrl failed:', e); _gaplessNextIdx = -1; });
+}
+
+/** Reset des nœuds de gain après fin de transition crossfade. @returns {void} */
+function _resetCfGains() {
+  if (audioNextGain && eqCtx)   { audioNextGain.gain.cancelScheduledValues(eqCtx.currentTime);   audioNextGain.gain.setTargetAtTime(0, eqCtx.currentTime, 0.01); }
+  if (audioNextRgGain && eqCtx) { audioNextRgGain.gain.cancelScheduledValues(eqCtx.currentTime); audioNextRgGain.gain.setTargetAtTime(1.0, eqCtx.currentTime, 0.01); }
+  if (audioOutGain && eqCtx)    { audioOutGain.gain.cancelScheduledValues(eqCtx.currentTime);    audioOutGain.gain.setTargetAtTime(1.0, eqCtx.currentTime, 0.01); }
+  // DSP-5 : restaurer le gain depuis le slider DOM — JAMAIS hardcoder 1.0
+  // @ts-ignore — vol is an input[type=range] with .value property
+  if (!sleepFading) { const _vel = document.getElementById('vol'); setMasterGain(_vel ? parseFloat(_vel.value) : (masterGainNode ? masterGainNode.gain.value : 1)); }
+}
+
+/** Callback de fin de fondu : swapper audio principal → audioNext. @returns {void} */
+function _commitCrossfadeTransition(nextTrack, validNextIdx) {
+  if (_cfRafId) { cancelAnimationFrame(_cfRafId); _cfRafId = null; }
+  if (validNextIdx < 0) {
+    audio.pause(); _resetCfGains();
+    // @ts-ignore — audioNext guaranteed by initCrossfadeAudio()
+    audioNext.pause(); audioNext.src = '';
+    return;
   }
+  // BUG-6 FIX : sauvegarder la position AVANT de pauser audioNext
+  // @ts-ignore — audioNext guaranteed by initCrossfadeAudio()
+  const _cfPos = audioNext.currentTime;
+  audio.pause();
+  curIdx = validNextIdx;
+  set('curIdx', curIdx);
+  // @ts-ignore — url guaranteed set by ensureUrl(ok)
+  audio.src = nextTrack.url;
+  if (playbackSpeed !== 1) audio.playbackRate = playbackSpeed;
+  if (_cfPos > 0.05) audio.currentTime = _cfPos;
+  _resetCfGains();
+  ensureEQResumed();
+  audio.play().catch(e => { if (e?.name !== 'AbortError') console.warn('[crossfade] play() failed after transition:', e); });
+  // @ts-ignore — audioNext guaranteed by initCrossfadeAudio()
+  audioNext.pause(); audioNext.src = '';
+  if (rgEnabled) analyzeAndApplyRG();
+  if (radioActive) radioRefillQueue().catch(e => console.warn('[radio] refill failed:', e));
+  _postPlaySideEffects(nextTrack);
+  emit(EVENTS.TRACK_CHANGE, { track: nextTrack, idx: curIdx });
+  setTimeout(() => scrollToCurrentTrack(), 50);
+  if (queueOpen) renderQueue();
+  if (shuffle && shuffleQ.length > 0 && shuffleQ[0] === validNextIdx) {
+    shuffleQ.shift();
+    if (!shuffleQ.length && repeat !== 'none') buildQ();
+  }
+}
 
-  // ── Crossfade (crossfadeDur > 0) ─────────────────────────────────────────
-  if (!crossfadeDur || remaining > crossfadeDur + 0.2) return;
-  if (cfFadeTimer || _cfPending) return; // guard étendu — protège pendant l'await ensureUrl
-
-  const nextIdx = getNextIdx();
+/** Lance le setup crossfade (crossfadeDur > 0) : load audioNext + schedule fades.
+ * @param {number} remaining
+ * @returns {void}
+ */
+function _handleCrossfadeSetup(remaining) {
+  if (remaining > crossfadeDur + 0.2) return;
+  if (cfFadeTimer || _cfPending) return;
+  const nextIdx   = getNextIdx();
   if (nextIdx < 0 || nextIdx === curIdx) return;
-  const tracks    = get('tracks'); // Phase 4
+  const tracks    = get('tracks');
   const nextTrack = tracks[nextIdx];
   if (!nextTrack) return;
 
   initCrossfadeAudio();
-
-  const _myCfGen = _cfGen; // capturer avant tout await / setTimeout
+  const _myCfGen = _cfGen;
   _cfPending = true;
   ensureUrl(nextTrack).then(ok => {
     _cfPending = false;
     if (!ok || cfFadeTimer || audio.paused || !audioNext) return;
-    // CROSSFADE-RACE FIX : vérifier que clearCrossfadeTimers() n'a pas été appelé
-    if (_cfGen !== _myCfGen) return;
+    if (_cfGen !== _myCfGen) return; // CROSSFADE-RACE FIX
 
-    // @ts-ignore — audioNext guaranteed by initCrossfadeAudio(); url guaranteed by ensureUrl(ok)
+    // @ts-ignore — url guaranteed by ensureUrl(ok)
     audioNext.src = nextTrack.url;
-    // M4 FIX: removed redundant cancelScheduledValues+setValueAtTime(0) block here.
-    // The definitive setup inside the setTimeout below is the single canonical site.
-    // The early block risked interrupting an in-progress fade curve from a parallel
-    // invocation if eqCtx.currentTime advanced during the 80 ms startDelay.
-
-    const startDelay = 80;
     const _genAtStart = _cfGen;
+    // Démarrer audioNext avec 80 ms de délai pour stabiliser le décodeur
     setTimeout(() => {
       if (_cfGen !== _genAtStart) return;
-      // R-4 : eqCtx peut être suspendu après sleep OS → reprendre avant audioNext.play()
       ensureEQResumed();
       // @ts-ignore — audioNext guaranteed by initCrossfadeAudio()
       audioNext.play().catch(e => { if (e?.name !== 'AbortError') console.warn('[crossfade] audioNext.play() failed:', e); });
-    }, startDelay);
+    }, 80);
 
     const durationMs = crossfadeDur * 1000;
-    // B1 FIX : != null pour accepter rgGain=0 (niveau cible atteint) ; cap 3.162 ≈ +10 dB max
-    const rgGainVal  = (rgEnabled && nextTrack.rgGain != null) ? Math.min(CFG.RG_GAIN_CAP, nextTrack.rgGain) : 1;
+    // B1 FIX : != null pour accepter rgGain=0 ; cap 3.162 ≈ +10 dB max
+    const rgGainVal = (rgEnabled && nextTrack.rgGain != null) ? Math.min(CFG.RG_GAIN_CAP, nextTrack.rgGain) : 1;
 
-    // DSP-7: appliquer la compensation RG sur le nœud dédié (stable, indépendant du fondu)
     if (audioNextRgGain && eqCtx) {
       audioNextRgGain.gain.cancelScheduledValues(eqCtx.currentTime);
-      audioNextRgGain.gain.setValueAtTime(rgGainVal, eqCtx.currentTime);
+      audioNextRgGain.gain.setValueAtTime(rgGainVal, eqCtx.currentTime); // snapshot instantané du niveau RG
     }
-
-    // ── Fade-in via AudioParam (equal-power, 0→1 pur — RG géré par audioNextRgGain) ─
     if (audioNextGain && eqCtx) {
       audioNextGain.gain.cancelScheduledValues(eqCtx.currentTime);
       audioNextGain.gain.setValueAtTime(0, eqCtx.currentTime);
       audioNextGain.gain.setValueCurveAtTime(FADE_IN_CURVE, eqCtx.currentTime, crossfadeDur);
     }
-
-    // ── DSP-6 : Fade-out via audioOutGain (sample-accurate, AudioParam) ────
-    // Remplace le rAF audio.volume loop — plus propre, synchronisé avec le fade-in.
-    // Skippé si sleepFading (le masterGainNode gère déjà la baisse de volume globale).
     if (!sleepFading && audioOutGain && eqCtx) {
       audioOutGain.gain.cancelScheduledValues(eqCtx.currentTime);
       audioOutGain.gain.setValueAtTime(1.0, eqCtx.currentTime);
       audioOutGain.gain.setValueCurveAtTime(FADE_OUT_CURVE, eqCtx.currentTime, crossfadeDur);
     }
 
-    // ── Transition finale ─────────────────────────────────────────────────
     cfFadeTimer = setTimeout(() => {
       cfFadeTimer = null;
-      // M-05 : revérifier la génération crossfade — clearCrossfadeTimers() a pu
-      // être appelé pendant le fondu (skip manuel, sleep, suppression de piste).
-      if (_cfGen !== _genAtStart) return;
-      if (_cfRafId) { cancelAnimationFrame(_cfRafId); _cfRafId = null; }
-
-      // BUG FIX : revalider la piste — elle peut avoir été supprimée pendant le fondu
-      const validNextIdx = _trackIdxMap?.has(nextTrack.id)
-        ? trackIdx(nextTrack) : -1;
-
-      // Helper local : reset des nœuds de gain après transition
-      function _resetGains() {
-        if (audioNextGain && eqCtx) { audioNextGain.gain.cancelScheduledValues(eqCtx.currentTime); audioNextGain.gain.setTargetAtTime(0, eqCtx.currentTime, 0.01); }
-        if (audioNextRgGain && eqCtx) { audioNextRgGain.gain.cancelScheduledValues(eqCtx.currentTime); audioNextRgGain.gain.setTargetAtTime(1.0, eqCtx.currentTime, 0.01); }
-        // DSP-6 : restaurer audioOutGain à 1.0 pour la nouvelle piste principale
-        if (audioOutGain && eqCtx) { audioOutGain.gain.cancelScheduledValues(eqCtx.currentTime); audioOutGain.gain.setTargetAtTime(1.0, eqCtx.currentTime, 0.01); }
-        // DSP-5 : restaurer audio.volume depuis le slider DOM (JAMAIS hardcoder 1.0)
-        // @ts-ignore — vol is an input[type=range] with .value property
-        if (!sleepFading) { const _vel = document.getElementById('vol'); setMasterGain(_vel ? parseFloat(_vel.value) : (masterGainNode ? masterGainNode.gain.value : 1)); }
-      }
-
-      if (validNextIdx < 0) {
-        audio.pause();
-        _resetGains();
-        // @ts-ignore — audioNext guaranteed by initCrossfadeAudio()
-        audioNext.pause(); audioNext.src = '';
-        return;
-      }
-
-      // BUG-6 FIX : sauvegarder la position AVANT de pauser audioNext (évite reset à 0)
-      // @ts-ignore — audioNext guaranteed by initCrossfadeAudio()
-      const _cfPos = audioNext.currentTime;
-      audio.pause();
-      curIdx = validNextIdx;
-      set('curIdx', curIdx);
-      // @ts-ignore — url guaranteed set by ensureUrl(ok) above
-      audio.src = nextTrack.url;
-      if (playbackSpeed !== 1) audio.playbackRate = playbackSpeed;
-      // Continuer depuis la position du fondu (ne pas repartir de 0)
-      if (_cfPos > 0.05) audio.currentTime = _cfPos;
-      _resetGains();
-      ensureEQResumed(); audio.play().catch(e => { if (e?.name !== 'AbortError') console.warn('[crossfade] play() failed after transition:', e); });
-      // @ts-ignore — audioNext guaranteed by initCrossfadeAudio()
-      audioNext.pause(); audioNext.src = '';
-
-      if (rgEnabled) analyzeAndApplyRG();
-      if (radioActive) radioRefillQueue().catch(e => console.warn('[radio] refill failed:', e)); // DOIT précéder TRACK_CHANGE (règle critique)
-      _postPlaySideEffects(nextTrack);
-      emit(EVENTS.TRACK_CHANGE, { track: nextTrack, idx: curIdx });
-      setTimeout(() => scrollToCurrentTrack(), 50);
-      if (queueOpen) renderQueue();
-      // Avancer shuffleQ si la piste suivante en est issue
-      if (shuffle && shuffleQ.length > 0 && shuffleQ[0] === validNextIdx) {
-        shuffleQ.shift();
-        if (!shuffleQ.length && repeat !== 'none') buildQ();
-      }
+      if (_cfGen !== _genAtStart) return; // M-05 : guard génération
+      const validNextIdx = _trackIdxMap?.has(nextTrack.id) ? trackIdx(nextTrack) : -1;
+      _commitCrossfadeTransition(nextTrack, validNextIdx);
     }, durationMs + 50); // +50 ms de marge pour les ramps AudioParam
   }).catch(e => { _cfPending = false; console.warn('[crossfade] setup failed:', e); });
+}
+
+// Appelé depuis timeupdate — dispatcher gapless / crossfade (§16 : < 15 lignes)
+/** @returns {void} */
+export function checkCrossfade() {
+  if (curIdx < 0 || audio.paused) return;
+  if (sleepFading) return; // le sleep fade gère son propre volume
+  const remaining = audio.duration - audio.currentTime;
+  if (isNaN(remaining) || remaining <= 0) return;
+  if (!crossfadeDur) { _handleGaplessPreBuffer(remaining); return; }
+  _handleCrossfadeSetup(remaining);
 }
 
 /** @returns {number} */
@@ -1088,6 +1105,9 @@ export function getNextIdx() {
   if (shuffle && shuffleQ.length > 0) return shuffleQ[0];
   const tracks = get('tracks'); // Phase 4
   const fl     = getFiltered();
+  // Bug-4 FIX: tracks[curIdx] peut être undefined si la bibliothèque a muté (suppression
+  // rapide) avant que curIdx soit mis à jour → filteredIdx(undefined) lèverait TypeError.
+  if (!tracks[curIdx]) return -1;
   const pos    = filteredIdx(tracks[curIdx]); // P4 — O(1) via posMap
   if (pos >= 0 && pos < fl.length - 1) return trackIdx(fl[pos + 1]);
   if (repeat === 'all' && fl.length > 0) return trackIdx(fl[0]);
@@ -1159,8 +1179,9 @@ export function initMediaSession() {
   navigator.mediaSession.setActionHandler('previoustrack', () => prev());
   navigator.mediaSession.setActionHandler('nexttrack',     () => next(true));
   navigator.mediaSession.setActionHandler('seekto',        e  => { if (e.seekTime !== undefined && !isNaN(audio.duration)) audio.currentTime = e.seekTime; });
-  navigator.mediaSession.setActionHandler('seekbackward',  e  => { audio.currentTime = Math.max(0, audio.currentTime - (e.seekOffset || 10)); });
-  navigator.mediaSession.setActionHandler('seekforward',   e  => { audio.currentTime = Math.min(audio.duration || 0, audio.currentTime + (e.seekOffset || 10)); });
+  // Bug-1 FIX: guard isNaN(audio.duration) pour seekbackward/seekforward — cohérent avec seekto
+  navigator.mediaSession.setActionHandler('seekbackward',  e  => { if (!audio.duration || isNaN(audio.duration)) return; audio.currentTime = Math.max(0, audio.currentTime - (e.seekOffset || 10)); });
+  navigator.mediaSession.setActionHandler('seekforward',   e  => { if (!audio.duration || isNaN(audio.duration)) return; audio.currentTime = Math.min(audio.duration, audio.currentTime + (e.seekOffset || 10)); });
   // @ts-ignore — 'togglefavorite' is a non-standard Media Session action (try/catch handles runtime errors)
   try { navigator.mediaSession.setActionHandler('togglefavorite', () => toggleLike()); } catch(_) {}
 }

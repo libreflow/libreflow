@@ -88,7 +88,7 @@ export async function savePlaylists() {
       transaction.oncomplete = ok;
       transaction.onerror   = () => fail(transaction.error);
     });
-  } catch(e) { console.warn('[savePlaylists]', e); }
+  } catch(e) { console.warn('[savePlaylists]', e); throw e; }
 }
 
 // ── Pinned ────────────────────────────────────────────────────

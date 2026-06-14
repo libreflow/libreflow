@@ -344,7 +344,10 @@ fn extract_cover(path: &str, seq: &mut u64) -> Option<(String, PathBuf)> {
     };
     *seq += 1;
     let dest = std::env::temp_dir().join(format!("libreflow_smtc_{}.{ext}", *seq % 4));
-    std::fs::write(&dest, pic.data()).ok()?;
+    if std::fs::write(&dest, pic.data()).is_err() {
+        let _ = std::fs::remove_file(&dest);
+        return None;
+    }
     // Encodage URI complet : %TEMP% peut contenir caractères spéciaux dans le
     // nom d'utilisateur (parenthèses, +, &, =, …). '%' encodé EN PREMIER pour
     // éviter le double-encodage. Les séparateurs de chemin '/' et ':' (lettre

@@ -52,6 +52,29 @@ let _skeletonActive = false;
 let _artBatch = [];
 // C2 — compteur de spring rAF actifs pour éviter querySelectorAll quand il n'y en a aucun
 let _activeSpringRafs = 0;
+// DOM-CACHE : #tlist est un élément permanent — le mettre en cache évite ~4 lookups
+// getElementById par frame de scroll (hot path à 60 Hz). Initialisé au DOMContentLoaded.
+// Invalider en le repassant à null ne s'applique pas ici (l'élément n'est jamais recréé).
+let _listEl = null;
+document.addEventListener('DOMContentLoaded', () => { _listEl = document.getElementById('tlist'); }, { once: true });
+
+// DOM-CACHE sidebar : les 6 boutons de vue sont permanents. Cacher leurs références élimine
+// 6 getElementById + 1 Object.entries() allocation par déclenchement de updateSidebarCounts().
+// Initialisés au DOMContentLoaded (même listener, ordre garanti).
+let _sidebarBtnAll       = null;
+let _sidebarBtnLiked     = null;
+let _sidebarBtnRecent    = null;
+let _sidebarBtnPlaylists = null;
+let _sidebarBtnArtists   = null;
+let _sidebarBtnAlbums    = null;
+document.addEventListener('DOMContentLoaded', () => {
+  _sidebarBtnAll       = document.getElementById('ni-all');
+  _sidebarBtnLiked     = document.getElementById('ni-liked');
+  _sidebarBtnRecent    = document.getElementById('ni-recent');
+  _sidebarBtnPlaylists = document.getElementById('ni-playlists');
+  _sidebarBtnArtists   = document.getElementById('ni-artists');
+  _sidebarBtnAlbums    = document.getElementById('ni-albums');
+}, { once: true });
 
 // Restore art-loaded fade-in without inline onload (load events don't bubble → capture phase)
 document.addEventListener('load', (e) => {
@@ -62,7 +85,9 @@ document.addEventListener('load', (e) => {
 
 /** Rend uniquement la fenêtre visible + buffer. */
 export function virtRenderWindow(fl) {
-  const listEl = document.getElementById('tlist');
+  // DOM-CACHE : utiliser la référence module-scope ; fallback défensif si appel avant DOMContentLoaded.
+  if (!_listEl) _listEl = document.getElementById('tlist');
+  const listEl = _listEl;
   if (!listEl || !fl) return;
 
   // R-H9 : un rendu réel de la liste sort de l'état skeleton.
@@ -195,18 +220,25 @@ export function virtRenderWindow(fl) {
 
   // P6 : annuler les spring animations en vol avant de remplacer le DOM
   // C2 — éviter la traversée DOM et l'allocation NodeList quand aucun spring rAF n'est actif
-  if (_activeSpringRafs > 0) {
-    listEl.querySelectorAll('[data-spring-raf]').forEach(el => {
-      const id = parseInt(el.dataset.springRaf);
-      if (id) { cancelAnimationFrame(id); _activeSpringRafs--; }
-    });
-    _activeSpringRafs = 0; // remettre à zéro après nettoyage complet
-  }
+  // BUG-FIX: ne PAS décrémenter _activeSpringRafs dans la boucle — reset atomique après sweep
+  // complet pour éviter le drift du compteur si un cancel intermédiaire lançait une exception.
+  listEl.querySelectorAll('[data-spring-raf]').forEach(el => {
+    const id = parseInt(el.dataset.springRaf, 10);
+    if (!isNaN(id)) cancelAnimationFrame(id);
+  });
+  _activeSpringRafs = 0;
 
   // R3-A FIX : sauvegarder la position de scroll avant le remplacement du DOM.
   // innerHTML = reset scrollTop à 0 — l'utilisateur perd sa position à chaque
   // changement de zoom (Ctrl+Wheel). On restaure dans un rAF après la mise en DOM.
-  const _savedScrollTop = listEl.scrollTop;
+  //
+  // LIMITATION CONNUE (MEDIUM) : full innerHTML replace détruit et recrée ~17 nœuds DOM
+  // (buffer ±8) à chaque frame de scroll, forçant un reflow complet du navigateur.
+  // Alternative future : algorithme de diff de fenêtre (retirer les rows sortis,
+  // ajouter les rows entrants) pour n'écrire que le delta. Non implémenté car le
+  // virtual scroll réduit déjà drastiquement le travail DOM ; à réévaluer si les
+  // benchmarks (npm run bench) montrent une régression > 5 % sur 50k pistes.
+  const _savedScrollTop = scrollTop;
   listEl.innerHTML = parts.join('');
   // I-1: le DOM a été entièrement reconstruit — invalider la référence de ligne active cachée
   // (managed by renderer-track.js patchActiveTrack)
@@ -290,8 +322,9 @@ export function renderLib() {
 
   virtRenderWindow(fl);
 
-  // (Re)attacher le scroll
-  const listEl = document.getElementById('tlist');
+  // (Re)attacher le scroll — DOM-CACHE : fallback défensif si _listEl pas encore initialisé.
+  if (!_listEl) _listEl = document.getElementById('tlist');
+  const listEl = _listEl;
   virtAttachScroll(listEl);
 
   // État vide : afficher un message contextuel quand la liste est vide
@@ -359,7 +392,9 @@ export function renderLib() {
 
 /** Affiche des lignes squelette pendant le chargement des données. */
 export function _showSkeletonRows() {
-  const listEl = document.getElementById('tlist');
+  // DOM-CACHE : fallback défensif si _listEl pas encore initialisé.
+  if (!_listEl) _listEl = document.getElementById('tlist');
+  const listEl = _listEl;
   if (!listEl) return;
   // R-H9 : marquer l'état skeleton — le ResizeObserver de virtAttachScroll
   // recalcule le nombre de lignes tant que ce flag est actif.
@@ -398,6 +433,8 @@ export function playById(id) {
 /** Met à jour les compteurs de la bibliothèque (#lib-stats). */
 export function updateStats() {
   const tracks = get('tracks') || [];
+  const _btnClearEl = document.getElementById('btn-clear');
+  if (_btnClearEl) _btnClearEl.disabled = (tracks.length === 0);
   const sbEl = document.getElementById('sb-stats');
   if (!sbEl) return;
   if (tracks.length === 0) {
@@ -444,16 +481,20 @@ export function updateSidebarCounts() {
   const liked     = get('liked');
   const recent    = get('recentPlays') || [];
   const playlists = get('playlists')   || [];
-  const counts = {
-    'ni-all':       tracks.length,
-    'ni-liked':     liked ? liked.size : 0,
-    'ni-recent':    recent.length,
-    'ni-playlists': playlists.length,
-    'ni-artists':   tracks.length ? _getArtistMap().filter(a => a.key).length : 0,
-    'ni-albums':    tracks.length ? _getAlbumMap().length  : 0,
-  };
-  for (const [id, n] of Object.entries(counts)) {
-    const btn = document.getElementById(id);
+  // BUG-FIX: remplacer Object.entries(counts) + getElementById par un tableau littéral
+  // de paires [élément caché, compte] — élimine l'allocation Object.entries et les 6
+  // getElementById à chaque appel. Fallback défensif si les caches ne sont pas encore peuplés.
+  const _artistCount = tracks.length ? _getArtistMap().filter(a => a.key).length : 0;
+  const _albumCount  = tracks.length ? _getAlbumMap().length : 0;
+  const _sidebarPairs = [
+    [_sidebarBtnAll       ?? document.getElementById('ni-all'),       tracks.length],
+    [_sidebarBtnLiked     ?? document.getElementById('ni-liked'),     liked ? liked.size : 0],
+    [_sidebarBtnRecent    ?? document.getElementById('ni-recent'),    recent.length],
+    [_sidebarBtnPlaylists ?? document.getElementById('ni-playlists'), playlists.length],
+    [_sidebarBtnArtists   ?? document.getElementById('ni-artists'),   _artistCount],
+    [_sidebarBtnAlbums    ?? document.getElementById('ni-albums'),    _albumCount],
+  ];
+  for (const [btn, n] of _sidebarPairs) {
     if (!btn) continue;
     let badge = btn.querySelector('.ni-count');
     if (n > 0) {
@@ -515,7 +556,9 @@ export function scrollToCurrentTrack() {
   const rowIdx = VIRT._fiToRowIdx?.get(fi);
   if (rowIdx == null) return;
 
-  const listEl = document.getElementById('tlist');
+  // DOM-CACHE : fallback défensif si _listEl pas encore initialisé.
+  if (!_listEl) _listEl = document.getElementById('tlist');
+  const listEl = _listEl;
   if (!listEl) return;
 
   const offset  = virtOffsetOf(rows, rowIdx);
@@ -564,7 +607,7 @@ export async function renderImportHistory() {
     return `<div class="import-entry">
       <span class="import-date">${esc(dateStr)}</span>
       <span class="import-src">${esc(src)}</span>
-      <span class="import-count">${e.count} titre${e.count > 1 ? 's' : ''}</span>
+      <span class="import-count">${esc(String(Number(e.count) || 0))} titre${Number(e.count) > 1 ? 's' : ''}</span>
     </div>`;
   }).join('');
 }

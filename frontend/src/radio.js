@@ -27,7 +27,7 @@ import { setView } from './views.js';
 import { setManualQueue } from './player.js';
 import { closeCtxMenu } from './ctxmenu.js';
 import { cinemaOpen, toggleCinemaRadio } from './cinema.js';
-import { savePlaylists, renderPlNav, setupPlNavDrop } from './playlists.js';
+import { savePlaylists } from './playlist-crud.js'; // §6 : pas d'import direct de playlists.js (module feature) — savePlaylists vient de playlist-crud.js (non-feature) et émet EVENTS.PLAYLIST_CHANGED en interne → app.js câble renderPlNav() + setupPlNavDrop()
 
 // ── Constantes ───────────────────────────────────────────────
 const RADIO_SIZE           = CFG.RADIO_QUEUE_SIZE;
@@ -210,6 +210,12 @@ export async function startRadio(trackId) {
   // Relire APRÈS l'éventuel await (rebuildTrackIdxMap crée un nouveau Map → snapshot stale)
   const tracks       = get('tracks'); // Phase 4
   const curIdx       = get('curIdx');
+  // Guard post-await : la bibliothèque peut avoir été vidée pendant l'await confirmAction()
+  // (ex. clearLibrary() appelé dans un autre contexte). Le guard de ligne 195 n'est plus actif ici.
+  if (tracks.length < 3) {
+    toast(i18n('radio_need_more'), 'warning');
+    return;
+  }
 
   const seed = trackId
     ? (_trackIdxMap.has(trackId) ? tracks[_trackIdxMap.get(trackId)] : undefined)
@@ -333,7 +339,11 @@ export async function radioRefillQueue() {
   if (!radioActive) return;
   const tracks = get('tracks'); // Phase 4
   const curIdx = get('curIdx');
-  if (tracks.length < 3) { resetRadio(); return; }
+  if (tracks.length < 3) {
+    resetRadio();
+    toast(i18n('radio_need_more'), 'warning');
+    return;
+  }
   const cur = tracks[curIdx];
   if (!cur) return;
 
@@ -442,6 +452,11 @@ function _syncRadioLibBar(active) {
 
   bar.classList.add('on');
   bar.dataset.seedId = seedIdStr;
+  // SECURITY: toutes les valeurs interpolées dans innerHTML DOIVENT être passées par esc().
+  // - seedName / seedArtist : déjà esc() (lignes 432-433) — valeurs lofty, traitées comme non-fiables.
+  // - i18n() : retourne du texte pur (pas de HTML) — wrappé par esc() par précaution.
+  // - seedArtist est injecté DANS un <span> littéral (structure HTML contrôlée), pas comme HTML brut.
+  // NE PAS supprimer les appels esc() sans audit de sécurité complet.
   const t_see  = esc(i18n('radio_see_queue'));
   const t_save = esc(i18n('radio_save_lbl'));
   const t_stop = esc(i18n('radio_stop_btn'));
@@ -514,9 +529,8 @@ export async function radioSaveAsPlaylist() {
   const name = i18n('radio_pl_name', seed ? seed.name : 'Mix');
   const pl = { id: 'pl_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7), name, trackIds: ids }; // BUG-m2 FIX : suffixe aléatoire pour éviter collision si sauvegardé 2× dans la même ms
   get('playlists').push(pl);
-  notify('playlists'); // CM-5 FIX: push() in-place → notify() so subscribers see the change
   try {
-    await savePlaylists();
+    await savePlaylists(); // savePlaylists() calls notify('playlists') + emits EVENTS.PLAYLIST_CHANGED
   } catch (e) {
     // Roll back : retirer la playlist ajoutée optimistiquement si la sauvegarde échoue
     const playlists = get('playlists');
@@ -526,8 +540,8 @@ export async function radioSaveAsPlaylist() {
     toast(i18n('radio_save_error') || 'Erreur lors de la sauvegarde', 'error');
     return;
   }
-  renderPlNav();
-  setupPlNavDrop();
+  // renderPlNav() + setupPlNavDrop() déclenchés via EVENTS.PLAYLIST_CHANGED émis
+  // par savePlaylists() (playlist-crud.js l.79) → handler app.js l.286. §6.
   // Ne pas naviguer vers la playlist → ne polluent pas "Récentes" + l'utilisateur reste sur la radio.
   // Un toast avec bouton "Voir →" permet d'y accéder si besoin.
   toastWithAction(
