@@ -29,6 +29,8 @@ import { updateBreadcrumb, updateStats }                    from './renderer.js'
 
 // ── Cache de signature ────────────────────────────────────────────────────────
 let _genreGridSig = null;
+let _rescanInProgress = false;
+let _genreVersion = 0;
 
 // ── Caches emoji / couleur (évite le scan O(n) répété pour le même genre) ────
 const _emojiCache = new Map();
@@ -182,7 +184,7 @@ export function renderGenresGrid() {
   const query     = get('query');
   const genreSort = get('genreSort');
 
-  const _sig = `${tracks.length}|${genreSort}|${query}`;
+  const _sig = `${tracks.length}|${genreSort}|${query}|${_genreVersion}`;
   const _grid = document.getElementById('genre-grid');
   if (_sig === _genreGridSig && _grid && _grid.children.length > 0) {
     setContentView('genres'); updateBreadcrumb(); return;
@@ -195,7 +197,9 @@ export function renderGenresGrid() {
   if (!grid) {
     grid = document.createElement('div');
     grid.id = 'genre-grid';
-    document.getElementById('content-area').appendChild(grid);
+    const _contentArea = document.getElementById('content-area');
+    if (!_contentArea) return;
+    _contentArea.appendChild(grid);
   }
 
   // Construire la map des genres (enrichie : arts, durée totale, top artiste, variantes)
@@ -328,32 +332,41 @@ export function drillGenre(key, displayName) {
 // ══ Rescan genres ══════════════════════════════════════════════════════════════
 
 export async function rescanGenres(force = false, silent = false) {
-  const tracks = get('tracks');
-  if (!tracks.length) { if (!silent) toast(i18n('t_genre_lib_empty'), 'warning'); return; }
-  const toProcess = force ? tracks : tracks.filter(t => !t.genre);
-  if (!toProcess.length) { if (!silent) toast(i18n('t_genre_all_done'), 'success'); return; }
-  if (!silent) toast(i18n('t_genre_start', toProcess.length, force));
+  if (_rescanInProgress) return;
+  _rescanInProgress = true;
+  try {
+    const tracks = get('tracks');
+    if (!tracks.length) { if (!silent) toast(i18n('t_genre_lib_empty'), 'warning'); return; }
+    const toProcess = force ? tracks : tracks.filter(t => !t.genre);
+    if (!toProcess.length) { if (!silent) toast(i18n('t_genre_all_done'), 'success'); return; }
+    if (!silent) toast(i18n('t_genre_start', toProcess.length, force));
 
-  // Passe 1 — heuristique tags (instantané, par chunks pour ne pas bloquer l'UI)
-  // M-11 FIX: accumuler les pistes modifiées et appeler saveTracks() une seule fois
-  // après tous les chunks — évite de réinitialiser le timer debounce à chaque piste.
-  const CHUNK = 200;
-  let countHeuristic = 0;
-  const genreModified = [];
-  for (let i = 0; i < toProcess.length; i += CHUNK) {
-    const end = Math.min(i + CHUNK, toProcess.length);
-    for (let j = i; j < end; j++) {
-      const t = toProcess[j];
-      const guessed = guessGenre(t);
-      if (guessed) { t.genre = guessed; genreModified.push(t); countHeuristic++; }
+    // Passe 1 — heuristique tags (instantané, par chunks pour ne pas bloquer l'UI)
+    // M-11 FIX: accumuler les pistes modifiées et appeler saveTracks() une seule fois
+    // après tous les chunks — évite de réinitialiser le timer debounce à chaque piste.
+    const CHUNK = 200;
+    let countHeuristic = 0;
+    const genreModified = [];
+    for (let i = 0; i < toProcess.length; i += CHUNK) {
+      const end = Math.min(i + CHUNK, toProcess.length);
+      for (let j = i; j < end; j++) {
+        const t = toProcess[j];
+        const guessed = guessGenre(t);
+        if (guessed) { t.genre = guessed; genreModified.push(t); countHeuristic++; }
+      }
+      await new Promise(r => setTimeout(r, 0));
     }
-    await new Promise(r => setTimeout(r, 0));
-  }
-  if (genreModified.length) saveTracks(...genreModified);
-  invalidateFilterCache(); emit(EVENTS.FILTER_CHANGED, {}); emit(EVENTS.RENDER_LIB, {}); updateStats();
+    for (let _i = 0; _i < genreModified.length; _i += 500) {
+      saveTracks(...genreModified.slice(_i, _i + 500));
+    }
+    _genreVersion++;
+    invalidateFilterCache(); emit(EVENTS.FILTER_CHANGED, {}); emit(EVENTS.RENDER_LIB, {}); updateStats();
 
-  if (!silent && countHeuristic > 0) {
-    toast(i18n('t_genre_done', countHeuristic), 'success');
+    if (!silent && countHeuristic > 0) {
+      toast(i18n('t_genre_done', countHeuristic), 'success');
+    }
+  } finally {
+    _rescanInProgress = false;
   }
 }
 

@@ -199,8 +199,8 @@ export function promptAction(title, defaultVal = '', okLabel = 'OK', cancelLabel
     const bg = document.createElement('div');
     bg.className = 'prompt-bg prompt-modal-bg';
     bg.innerHTML = `
-      <div class="modal prompt-modal" role="dialog" aria-modal="true">
-        <div class="modal-title"></div>
+      <div class="modal prompt-modal" role="dialog" aria-modal="true" aria-labelledby="prompt-modal-title">
+        <div class="modal-title" id="prompt-modal-title"></div>
         <input class="prompt-input" type="text" />
         <div class="modal-actions">
           <button class="mbtn secondary prompt-cancel"></button>
@@ -218,7 +218,10 @@ export function promptAction(title, defaultVal = '', okLabel = 'OK', cancelLabel
     input.value = defaultVal;
 
     const removeTrap = _trapFocus(bg.querySelector('.modal') || bg);
+    let _finished = false;
     const finish = (val) => {
+      if (_finished) return;
+      _finished = true;
       removeTrap();
       const _pm = bg.querySelector('.modal');
       const _doRemove = () => { bg.remove(); _prevFocus?.focus(); resolve(val); };

@@ -27,7 +27,8 @@ export const ART_MIME_ALLOWLIST = ['image/jpeg', 'image/png', 'image/gif', 'imag
 
 // ── Cache LRU ─────────────────────────────────────────────────
 // Map insertion-ordered : le premier élément est le plus ancien (LRU).
-const _cache = new Map(); // trackId → blob: URL
+const _cache    = new Map(); // trackId → blob: URL
+const _inflight = new Map(); // trackId → Promise<string|null> (dedup concurrent calls)
 
 // PERF-CRIT-2 FIX : Set des blob: URLs actuellement référencées par un <img> dans le DOM.
 // Maintenue par _patchArtDOM (add) et revokeArt (delete).
@@ -83,6 +84,11 @@ function _patchArtDOM(t) {
   img.alt       = '';
   img.setAttribute('aria-hidden', 'true');
   img.onload    = () => img.classList.add('art-loaded');
+  img.onerror   = () => { img.style.display = 'none'; _domBlobUrls.delete(t.art); };
+  // ART-2 : retirer l'ancienne blob: URL de la Set avant remplacement pour
+  // éviter qu'une URL orpheline soit considérée comme "en DOM" par _evict().
+  const prevSrc = img.src;
+  if (prevSrc?.startsWith('blob:')) _domBlobUrls.delete(prevSrc);
   img.src       = t.art;
   // PERF-CRIT-2 FIX : enregistrer l'URL dans la Set pour que _evict() sache
   // qu'elle est référencée dans le DOM sans scanner querySelectorAll('img').
@@ -107,11 +113,11 @@ function _patchArtDOM(t) {
  * @param {object} t - Track object (doit avoir _hasArt, noArt, id)
  * @returns {Promise<string|null>} blob: URL ou null si la piste n'a pas d'artwork
  */
-export async function getArtUrl(t) {
-  if (!t || !t._hasArt || t.noArt) return null;
+export function getArtUrl(t) {
+  if (!t || !t._hasArt || t.noArt) return Promise.resolve(null);
 
   // Artwork déjà résolu
-  if (t.art) return t.art;
+  if (t.art) return Promise.resolve(t.art);
 
   // Hit LRU — réutiliser l'URL existante (rafraîchir l'ordre LRU)
   if (_cache.has(t.id)) {
@@ -119,9 +125,18 @@ export async function getArtUrl(t) {
     _cache.delete(t.id);
     _cache.set(t.id, cached);           // déplace en fin (= plus récent)
     t.art = cached;
-    return cached;
+    return Promise.resolve(cached);
   }
 
+  // ART-1 : dédupliquer les appels concurrents pour éviter des blob: URLs fantômes.
+  if (_inflight.has(t.id)) return _inflight.get(t.id);
+
+  const p = _fetchFromIdb(t).finally(() => _inflight.delete(t.id));
+  _inflight.set(t.id, p);
+  return p;
+}
+
+async function _fetchFromIdb(t) {
   // Bytes déjà en mémoire (LRU évicté, mais _artBuf non effacé) — recréer sans IDB
   if (t._artBuf) {
     _evict();

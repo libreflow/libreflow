@@ -13,7 +13,6 @@ import { savePlaylists,
 
 // ── État local du module ──────────────────────────────────────────────────────
 let _dragPlId         = null;   // playlist en cours de drag (sidebar réorganisation)
-let _plNavDropInit    = false;  // setupPlNavDrop one-shot (flag module vs DOM node)
 
 // Listeners ctx-menu dossier (fermeture mousedown extérieur + Escape)
 let _plCtxClose    = null;
@@ -118,7 +117,15 @@ export function _plNavInlineRename(plId, spanEl) {
     const newName = spanEl.textContent.trim();
     if (newName && newName !== orig) {
       pl.name = newName;
-      await savePlaylists();
+      try {
+        await savePlaylists();
+      } catch (e) {
+        pl.name = orig;
+        spanEl.textContent = orig;
+        console.warn('[playlist-nav] inline rename IDB failed:', e);
+        toast(i18n('error_save') || 'Erreur de sauvegarde', 'error');
+        return;
+      }
       renderPlNav();
       const curPlId = get('curPlId');
       if (get('view') === 'playlist' && curPlId === plId) {
@@ -248,10 +255,13 @@ export async function renamePlFolder(folderId) {
   // S157 FIX-3 : modal cohérent (window.prompt natif est bloquant en Tauri v2)
   const name = await promptAction(i18n('pl_folder_rename_prompt'), f.name, i18n('pl_rename_btn'), i18n('btn_cancel'));
   if (!name) return;
+  const origName = f.name;
   f.name = name;
-  saveCfg();
-  renderPlNav();
-  setupPlNavDrop();
+  try { saveCfg(); renderPlNav(); setupPlNavDrop(); }
+  catch(e) {
+    f.name = origName;
+    console.warn('[playlist-nav] renamePlFolder failed:', e);
+  }
 }
 
 export async function deletePlFolder(folderId) {
@@ -337,8 +347,8 @@ export function onPlNavDragStart(e, plId) {
 // Appelé une seule fois à l'init — idempotent grâce au flag _initialized.
 export function setupPlNavDrop() {
   const nav = document.getElementById('pl-list-nav');
-  if (!nav || _plNavDropInit) return;
-  _plNavDropInit = true;
+  if (!nav || nav.dataset.dropInit) return;
+  nav.dataset.dropInit = '1';
 
   nav.addEventListener('dragover', e => {
     // Priorité 1 : drag d'une playlist vers un dossier

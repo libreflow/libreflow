@@ -77,11 +77,14 @@ function _waitTauriReady() {
  * @returns {Promise<unknown>}
  */
 async function invoke(cmd, args, opts) {
-  if (_pageUnloading) return;
+  if (_pageUnloading) return Promise.reject(new DOMException('Page unloading', 'AbortError'));
   await _waitTauriReady();
   const timeout = opts?.timeout ?? CFG.IPC_TIMEOUT_MS;
   // @ts-ignore — __TAURI__ injected at runtime by Tauri, not in Window type
-  if (!timeout) return window.__TAURI__.core.invoke(cmd, args);
+  if (!timeout) {
+    if (!window.__TAURI__?.core) throw new Error('[ipc] Tauri non initialisé');
+    return window.__TAURI__.core.invoke(cmd, args);
+  }
   let _timerId = 0;
   let _timedOut = false;
   // @ts-ignore — __TAURI__ injected at runtime by Tauri, not in Window type

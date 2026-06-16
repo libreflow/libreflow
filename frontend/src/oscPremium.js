@@ -49,7 +49,7 @@ export function createPremiumOscilloscope(canvas, analyser) {
   // assumes analyser.fftSize >= SAMPLE_CAP (2048 >= 128 guaranteed by eq.js initEQ)
   const sampleCount = Math.min(SAMPLE_CAP, analyser.fftSize);
   const data     = new Uint8Array(sampleCount);
-  const prev     = new Uint8Array(sampleCount);   prev.fill(128);
+  const prev     = new Float32Array(sampleCount); prev.fill(128);
   const smoothed = new Float32Array(sampleCount); smoothed.fill(128);
 
   let dpr = 1;

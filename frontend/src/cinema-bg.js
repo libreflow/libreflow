@@ -85,6 +85,7 @@ function _buildAmbientColors() {
 
 export function stopAmbientAnim() {
   _ambientGen++;
+  _frameCount    = 0;
   if (_ambientAnimRaf) { cancelAnimationFrame(_ambientAnimRaf); _ambientAnimRaf = null; }
   _ambientCross  = null;
   _cinBgCanvas   = null;
@@ -121,7 +122,10 @@ function _startAmbientAnim() {
       _cinBgCtx.setTransform(_dpr, 0, 0, _dpr, 0, 0);
     }
     const cinArtRGB = _getCinemaState?.()?.cinArtRGB ?? '255,255,255';
-    renderAmbientFrame(_ambientT, canvas, _cinBgCtx, cinemaBg, cinArtRGB, _ambientColors);
+    const _dprNow = window.devicePixelRatio || 1;
+    // AMBIENT-RENDERER-1: pass logical CSS dimensions instead of reading window.inner* inside renderer
+    renderAmbientFrame(_ambientT, canvas, _cinBgCtx, cinemaBg, cinArtRGB, _ambientColors,
+      canvas.width / _dprNow, canvas.height / _dprNow);
     // WCAG 2.3.3 — fond décoratif : sous prefers-reduced-motion, on rend 1 frame
     // statique du gradient puis on arrête la boucle (pas de crossfade ni breathing).
     if (prefersReducedMotion()) {
@@ -133,9 +137,10 @@ function _startAmbientAnim() {
       const { snapshot, start, dur } = _ambientCross;
       const p    = Math.min(1, (now - start) / dur);
       const ease = p < 0.5 ? 2 * p * p : 1 - Math.pow(-2 * p + 2, 2) / 2;
-      const _cW  = window.innerWidth || 1280, _cH = window.innerHeight || 800;
       _cinBgCtx.globalAlpha = 1 - ease;
-      _cinBgCtx.drawImage(snapshot, 0, 0, _cW, _cH);
+      _cinBgCtx.setTransform(1, 0, 0, 1, 0, 0);
+      _cinBgCtx.drawImage(snapshot, 0, 0, canvas.width, canvas.height);
+      _cinBgCtx.setTransform(_cinBgDpr, 0, 0, _cinBgDpr, 0, 0);
       _cinBgCtx.globalAlpha = 1;
       if (p >= 1) _ambientCross = null;
     }
@@ -270,9 +275,10 @@ export function updateAmbientGradient() {
 
 // ── Welcome screen ambient (idle, no cinema required) ───────────────────────
 
-let _welcomeGen = 0;
-let _welcomeRaf = null;
-let _welcomePts = null;
+let _welcomeGen     = 0;
+let _welcomeRaf     = null;
+let _welcomeRunning = false;
+let _welcomePts     = null;
 
 function _initWelcomePts(canvas) {
   const dpr = window.devicePixelRatio || 1;
@@ -315,7 +321,11 @@ function _drawWelcomeFrame(canvas, dt) {
 }
 
 export function startWelcomeAmbient() {
-  if (_welcomeRaf) return;
+  if (_welcomeRunning) {
+    _welcomeGen++;
+  } else {
+    _welcomeRunning = true;
+  }
   const canvas = document.querySelector('#vw .welcome-canvas');
   if (!canvas) return;
   _initWelcomePts(canvas);
@@ -336,6 +346,7 @@ export function startWelcomeAmbient() {
 }
 
 export function stopWelcomeAmbient() {
+  _welcomeRunning = false;
   _welcomeGen++;
   if (_welcomeRaf) { cancelAnimationFrame(_welcomeRaf); _welcomeRaf = null; }
   _welcomePts = null;

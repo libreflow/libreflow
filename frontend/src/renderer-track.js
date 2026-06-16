@@ -98,7 +98,7 @@ export function thtml(t, fi, { active = false, liked = false, likedSet, query = 
   draggable="true" data-drag-action="track-drag">
   ${trackNum}<div class="tart">
     ${artInner}
-    <button class="tart-hover-play" data-action="play-track" data-track-id="${esc(t.id)}" tabindex="-1" aria-label="${i18n('play') || 'Lire'}">
+    <button class="tart-hover-play" data-action="play-track" data-track-id="${esc(t.id)}" tabindex="-1" aria-label="${esc(i18n('play') || 'Lire')}">
       <svg class="icon-play" viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true"><polygon points="5,3 19,12 5,21"/></svg>
       <svg class="icon-pause" viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true"><rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/></svg>
     </button>
@@ -168,6 +168,7 @@ export function patchTrackEl(id) {
   if (!t) return;
 
   const fi    = filteredIdx(t); // recalcul frais — évite un dataset stale
+  if (fi < 0) { el?.remove(); return; }
   const liked = get('liked');
   const query = get('query') || '';
   const curIdx = get('curIdx');

@@ -58,14 +58,15 @@ function _regenerateNoise() {
  * @param {'ambient'|'amoled'} mode
  * @param {string}  colorStr      - "r,g,b" — dominant art colour (used by amoled halo)
  * @param {{cT:[r,g,b], cL:[r,g,b], cR:[r,g,b]}|null} ambientColors
- * @precondition The caller must apply `ctx.setTransform(dpr, 0, 0, dpr, 0, 0)` for HiDPI.
- *   This function reads window.innerWidth/innerHeight in CSS px — correct only when the
- *   transform is set. See cinema.js _updateAmbientGradient for reference.
+ * @param {number} W              - Canvas CSS width in logical pixels (canvas.width / dpr)
+ * @param {number} H              - Canvas CSS height in logical pixels (canvas.height / dpr)
+ * @precondition The caller must apply `ctx.setTransform(dpr, 0, 0, dpr, 0, 0)` for HiDPI
+ *   and pass canvas.width/dpr and canvas.height/dpr as W and H.
  */
-export function renderAmbientFrame(t, canvas, ctx, mode, colorStr, ambientColors) {
-  const W = window.innerWidth  || 1280;
-  const H = window.innerHeight || 800;
+export function renderAmbientFrame(t, canvas, ctx, mode, colorStr, ambientColors, W, H) {
   if (!ctx) return;
+  if (W === undefined || W <= 0) W = canvas.width  || 1280;
+  if (H === undefined || H <= 0) H = canvas.height || 800;
 
   // M-03 : invalider les caches dépendants du contexte quand celui-ci change
   // (cinema ↔ nowplaying partagent ces singletons). _vignetteGrad est un

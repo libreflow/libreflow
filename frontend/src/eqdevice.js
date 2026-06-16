@@ -5,16 +5,17 @@
 // Les profils sont persistés dans cfg sous la clé eqDeviceProfiles.
 //
 // Pas d'import de cfgsave.js pour éviter la dépendance circulaire :
-// les mutations appellent saveCfg() depuis handlers.js après retour.
+// app.js injecte saveCfg via le 2ème paramètre de initDeviceEQ().
+// Les mutations manuelles appellent saveCfg() depuis handlers.js après retour.
 //
 // Exports :
-//   initDeviceEQ(savedProfiles)    — boot : charge profils + écoute devicechange
-//   getDeviceProfiles()            — { [deviceId]: { bands, label } }
-//   getActiveDeviceId()            — deviceId courant ('' = défaut OS)
-//   getActiveDeviceLabel()         — label lisible ou fallback
-//   saveCurrentDeviceProfile()     — enregistre les gains actuels pour l'appareil courant
-//   deleteDeviceProfile(deviceId)  — supprime un profil
-//   renderDeviceProfiles()         — met à jour la section UI dans #set-page-audio
+//   initDeviceEQ(savedProfiles, onSave?) — boot : charge profils + écoute devicechange
+//   getDeviceProfiles()                  — { [deviceId]: { bands, label } }
+//   getActiveDeviceId()                  — deviceId courant ('' = défaut OS)
+//   getActiveDeviceLabel()               — label lisible ou fallback
+//   saveCurrentDeviceProfile()           — enregistre les gains actuels pour l'appareil courant
+//   deleteDeviceProfile(deviceId)        — supprime un profil
+//   renderDeviceProfiles()               — met à jour la section UI dans #set-page-audio
 
 import { eqNodes, applyEQGains, getCurrentGains } from './eq.js';
 import { esc, toast }             from './ui.js';
@@ -26,6 +27,8 @@ let _activeId       = '';   // deviceId courant — '' = sortie par défaut OS
 let _activeLabel    = '';   // label lisible du device actuel
 let _knownIds       = [];   // snapshot des audiooutput deviceIds pour détection ajout/retrait
 let _defaultLabel   = 'Sortie par défaut'; // fallback i18n — mis à jour par app.js via setDefaultDeviceLabel()
+/** @type {(() => void) | null} Injecté par app.js pour éviter la dépendance circulaire cfgsave ↔ eqdevice */
+let _onSave = null;
 
 // ── Initialisation ────────────────────────────────────────────────────────────
 
@@ -33,11 +36,13 @@ let _defaultLabel   = 'Sortie par défaut'; // fallback i18n — mis à jour par
  * Appelé au boot par app.js après chargement des profils depuis IDB.
  * Lance la détection du device courant et écoute les changements.
  * @param {Object} savedProfiles — cfg.eqDeviceProfiles ou {}
+ * @param {(() => void) | null} [onSave] — callback saveCfg injecté par app.js (évite import circulaire)
  */
-export async function initDeviceEQ(savedProfiles) {
+export async function initDeviceEQ(savedProfiles, onSave = null) {
   if (savedProfiles && typeof savedProfiles === 'object') {
     _deviceProfiles = { ...savedProfiles };
   }
+  if (typeof onSave === 'function') _onSave = onSave;
   await _refreshActiveDevice();
   if (navigator.mediaDevices) {
     navigator.mediaDevices.addEventListener('devicechange', _onDeviceChange);
@@ -179,6 +184,7 @@ async function _onDeviceChange() {
       const profileKey = _activeId || 'default';
       if (_deviceProfiles[profileKey]) {
         applyEQGains(_deviceProfiles[profileKey].bands);
+        _onSave?.();
       }
     }
 

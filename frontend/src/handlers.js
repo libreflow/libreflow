@@ -266,8 +266,8 @@ const _ACTIONS = {
 
   // ── Window controls ───────────────────────────────────────
   'win-minimize':    ()    => openMiniAndMinimize(),
-  'win-maximize':    ()    => invoke('win_maximize'),
-  'win-close':       ()    => invoke('win_close'),
+  'win-maximize':    () => invoke('win_maximize').catch(e => console.warn('[handlers] win_maximize:', e)),
+  'win-close':       () => invoke('win_close').catch(e => console.warn('[handlers] win_close:', e)),
 
   // ── Settings — appearance ─────────────────────────────────
   'set-lang':              btn  => { setLang(btn.dataset.lang); saveCfg(); },
@@ -530,7 +530,8 @@ function _handleClick(e) {
   const handler = _ACTIONS[action];
   if (handler) {
     e._lfActionHandled = true; // B25 FIX : marqueur — empêche _handleBackdropClick de re-déclencher
-    handler(btn, e);
+    const _p = handler(btn, e);
+    if (_p instanceof Promise) _p.catch(err => console.warn('[handlers] action', action, 'rejected:', err));
   } else {
     console.warn('[handlers] Action inconnue :', action);
   }

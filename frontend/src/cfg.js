@@ -17,8 +17,10 @@ export const CFG = Object.freeze({
   WATCH_INTERVAL_MS:     30000,   // ms — intervalle de surveillance dossier (fallback)
   VIRT_BUFFER:               8,   // lignes buffer virtual scroll de chaque côté
   VIRT_ROW_H:               48,   // px — hauteur d'une ligne piste
+  VIRT_ROW_H_MICRO:         28,   // px — ligne piste en zoom "micro" (tlistZoom)
   VIRT_ROW_H_COMPACT:       36,   // px — ligne piste en zoom "compact" (tlistZoom)
   VIRT_ROW_H_COMFORTABLE:   60,   // px — ligne piste en zoom "comfortable" (tlistZoom)
+  VIRT_ROW_H_SPACIOUS:      76,   // px — ligne piste en zoom "spacious" (tlistZoom)
   VIRT_GRP_H:               28,   // px — hauteur d'un en-tête de groupe
   TAG_LOAD_CONCURRENCY:      8,   // pistes chargées en parallèle — 8 optimal SSD (read_tags Rust = I/O léger, pas de thread JS bloqué)
   PLAYLOG_MAX_ENTRIES:    2000,   // max entrées dans playlog IDB
@@ -36,6 +38,8 @@ export const CFG = Object.freeze({
   BOOT_CHUNK:             5000,   // pistes traitées par tranche au boot (yield entre tranches)
   STAGGER_CAP:              12,   // nb maximum d'éléments animés en stagger (perf)
   VIEW_FADE_MS:            200,   // durée ms du cross-fade de vue — doit correspondre à --motion-base
+  ORGANIZE_TIMEOUT_MS:  120_000,  // ms — timeout pour organize_files (run réel)
+  ORGANIZE_DRY_RUN_TIMEOUT_MS: 30_000, // ms — timeout pour organize_files (dry-run)
 });
 
 export const SORTS = ['az', 'za', 'artist', 'album', 'recent'];

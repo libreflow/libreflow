@@ -31,7 +31,8 @@ let _npAnimT   = 0;
 let _npFrameCnt = 0;
 let _npDpr     = 1;   // V7 : DPR de la dernière rasterisation (re-check par frame)
 
-const _techInfoCache = new Map(); // path → AudioProps
+const _techInfoCache  = new Map(); // path → AudioProps
+const _TECH_CACHE_MAX = 200;       // NP-1 : borne l'empreinte mémoire (eviction FIFO)
 
 const _EXPAND_ICON   = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="16" height="16"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>`;
 const _COMPRESS_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="16" height="16"><polyline points="4 14 10 14 10 20"/><polyline points="20 10 14 10 14 4"/><line x1="10" y1="14" x2="21" y2="3"/><line x1="3" y1="21" x2="10" y2="14"/></svg>`;
@@ -119,7 +120,10 @@ function _startNpAnim(canvas, ctx) {
     }
     _npAnimT += now - last;
     last = now;
-    renderAmbientFrame(_npAnimT, canvas, ctx, _npBgMode, _npArtRGB, _npColors);
+    const _dprNow = window.devicePixelRatio || 1;
+    // AMBIENT-RENDERER-1: pass logical CSS dimensions instead of reading window.inner* inside renderer
+    renderAmbientFrame(_npAnimT, canvas, ctx, _npBgMode, _npArtRGB, _npColors,
+      canvas.width / _dprNow, canvas.height / _dprNow);
     // WCAG 2.3.3 — fond décoratif : sous prefers-reduced-motion, 1 frame statique puis stop.
     if (prefersReducedMotion()) { _npAnimRaf = null; return; }
     _npAnimRaf = requestAnimationFrame(loop);
@@ -176,13 +180,26 @@ export function initNpBg(mode) {
 
 // ── IPC (lazy, cached) ────────────────────────────────────────────────────────
 
-async function _loadTechInfo(path) {
-  if (_techInfoCache.has(path)) return _techInfoCache.get(path);
-  try {
-    const info = await invoke('read_audio_props', { path });
-    _techInfoCache.set(path, info);
-    return info;
-  } catch(e) { console.warn('[nowplaying] read_audio_props IPC failed for', path, ':', e); return null; }
+const _techInfoInFlight = new Map(); // path → Promise<AudioProps|null> (NP-3 dedup)
+
+function _techCacheSet(path, info) {
+  // NP-1 : éviction FIFO quand le cache atteint la limite.
+  if (_techInfoCache.size >= _TECH_CACHE_MAX) {
+    _techInfoCache.delete(_techInfoCache.keys().next().value);
+  }
+  _techInfoCache.set(path, info);
+}
+
+function _loadTechInfo(path) {
+  if (_techInfoCache.has(path)) return Promise.resolve(_techInfoCache.get(path));
+  // NP-3 : dédupliquer les appels concurrents (skip rapide entre tracks).
+  if (_techInfoInFlight.has(path)) return _techInfoInFlight.get(path);
+  const p = invoke('read_audio_props', { path })
+    .then(info => { _techCacheSet(path, info); return info; })
+    .catch(e => { console.warn('[nowplaying] read_audio_props IPC failed for', path, ':', e); return null; })
+    .finally(() => _techInfoInFlight.delete(path));
+  _techInfoInFlight.set(path, p);
+  return p;
 }
 
 // ── Render ────────────────────────────────────────────────────────────────────
@@ -195,8 +212,6 @@ function _renderNowPlaying(t, info) {
     ? `<img id="vnp-art-img" src="${esc(t.art)}" class="vnp-art" alt="">`
     : `<div class="vnp-art vnp-art-ph"></div>`;
 
-  const bgStyle = t.art ? ` style="background-image:url('${esc(t.art)}')"` : '';
-
   const codec    = formatCodec(t.ext);
   const bitrate  = formatBitrate(info?.bitrate ?? t.bitrate ?? null);
   const quality  = formatBitDepth(info?.bit_depth ?? t.bitDepth ?? null, info?.sample_rate ?? t.sampleRate ?? null);
@@ -204,7 +219,7 @@ function _renderNowPlaying(t, info) {
   const isLiked = get('liked')?.has(t.id) ?? false;
 
   vnp.innerHTML = `
-    <div class="vnp-bg" aria-hidden="true"${bgStyle}></div>
+    <div class="vnp-bg" aria-hidden="true"></div>
     <canvas id="vnp-canvas" aria-hidden="true"></canvas>
     <button id="vnp-bg-btn" class="vnp-bg-btn" data-action="cycle-np-bg" aria-label="Changer l'arrière-plan" title="Changer l'arrière-plan">⬡</button>
     <button class="vnp-back" data-action="close-now-playing" aria-label="Retour">
@@ -239,6 +254,11 @@ function _renderNowPlaying(t, info) {
         ${t.artist ? `<button class="vnp-link" data-action="np-drill-artist" data-artist-key="${esc(t.artist)}" data-artist-name="${esc(t.artist)}">→ Artiste</button>` : ''}
       </div>
     </div>`;
+
+  // NP-2 : injecter le background-image via style property pour éviter qu'un
+  // caractère ')' dans t.art (blob: URL) ne casse le contexte CSS url().
+  const _npBg = vnp.querySelector('.vnp-bg');
+  if (_npBg && t.art) _npBg.style.backgroundImage = `url('${t.art}')`;
 }
 
 // ── Public API ────────────────────────────────────────────────────────────────

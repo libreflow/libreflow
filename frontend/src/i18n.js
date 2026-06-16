@@ -4,10 +4,7 @@
 // i18n(key, ...args) lives in app.js because it reads the app-level `lang` var.
 // Import LANGS here when you need direct dict access (e.g. language pickers).
 
-import { toast }        from './ui.js';
 import { emit, EVENTS } from './bus.js';
-import { applyTheme } from './settings.js';
-import { setCrossfade } from './player.js';
 import { updateStats } from './renderer.js';
 import { get } from './store.js';
 import { fr }  from './i18n.fr.js';
@@ -59,9 +56,10 @@ export function applyLang() {
     // Never use with keys that interpolate user data (t.name, artist, path, etc.).
     if (el) el.innerHTML = i18n(key);
   };
-  const setAttrEl = (id, attr, key) => {
+  // I18N-3: accept pre-translated value directly — callers already pass i18n() result
+  const setAttrEl = (id, attr, val) => {
     const el = document.getElementById(id);
-    if (el) el[attr] = i18n(key);
+    if (el) el[attr] = val;
   };
   const setBtnText = (sel, key, isId = false) => {
     const el = isId ? document.getElementById(sel) : document.querySelector(sel);
@@ -174,7 +172,6 @@ export function applyLang() {
   const vlib = document.getElementById('vlib');
   if (vlib && vlib.classList.contains('on')) emit(EVENTS.RENDER_LIB, {});
 
-  // Apply theme and crossfade
-  applyTheme();
-  setCrossfade(get('crossfadeDur') || 0);
+  // Notify app.js to apply theme + crossfade (I18N-2: removed direct cross-module calls, §6 §9)
+  emit(EVENTS.LANG_CHANGED, {});
 }

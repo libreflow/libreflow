@@ -239,7 +239,15 @@ export function _plHeroInlineRename(plId) {
     const newName = el.textContent.trim();
     if (newName && newName !== orig) {
       pl.name = newName;
-      await savePlaylists();
+      try {
+        await savePlaylists();
+      } catch (e) {
+        pl.name = orig;
+        el.textContent = orig;
+        console.warn('[playlists] hero inline rename IDB failed:', e);
+        toast(i18n('error_save') || 'Erreur de sauvegarde', 'error');
+        return;
+      }
       renderPlNav();
       const vht = document.getElementById('vhtitle');
       if (vht) vht.textContent = newName;
@@ -327,7 +335,8 @@ export function closePlCtxMenu() {
 export function getPqpTrackId() { return _pqpTrackId; }
 
 export function closePlQuickPop() {
-  document.getElementById('pl-quick-pop').classList.remove('on');
+  // PLAYLISTS-5: optional chaining guards against missing element
+  document.getElementById('pl-quick-pop')?.classList.remove('on');
   _pqpTrackId = null;
 }
 document.addEventListener('click', e => {
@@ -347,6 +356,8 @@ export function onTrackDragStart(e, trackId) {
   e.dataTransfer.setData('text/plain', trackId);
   setTimeout(() => { const el = document.getElementById('tr-' + trackId); if (el) el.classList.add('dragging'); }, 0);
 }
+// PLAYLISTS-1: clear _dragTrackId on drag cancel so spurious reorders cannot occur
+document.addEventListener('dragend', () => { _dragTrackId = null; });
 
 // ── Réorganisation playlist par drag-and-drop ─────────────────────────────────
 export function _attachPlaylistReorder(tlist) {
@@ -401,12 +412,20 @@ export function _attachPlaylistReorder(tlist) {
     if (!insertBefore) toIdx++;
 
     // BUG-m1 FIX : calculer insertAt avant splice ; compenser le décalage causé par la suppression
+    // PLAYLISTS-4: snapshot trackIds; rollback splice on IDB failure
+    const _snapshot = [...pl.trackIds];
     let insertAt = toIdx;
     if (fromIdx < insertAt) insertAt--;
     pl.trackIds.splice(fromIdx, 1);
     pl.trackIds.splice(Math.max(0, Math.min(insertAt, pl.trackIds.length)), 0, fromId);
 
-    await savePlaylists();
+    try { await savePlaylists(); }
+    catch (e) {
+      pl.trackIds = _snapshot;
+      console.warn('[playlists] reorder IDB failed:', e);
+      toast(i18n('error_save') || 'Erreur de sauvegarde', 'error');
+      return;
+    }
     invalidateFilterCache(); emit(EVENTS.FILTER_CHANGED, {});
     emit(EVENTS.RENDER_LIB, {});
   };
@@ -670,7 +689,8 @@ export function closePlModal() {
   const _plBg = document.getElementById('pl-modal-bg');
   const _plModal = document.getElementById('pl-modal');
   const _doClose = () => _plBg.classList.remove('on');
-  if (_plModal) modalClose(_plModal).then(_doClose);
+  // PLAYLISTS-7: .catch(_doClose) ensures _doClose runs even if modalClose rejects
+  if (_plModal) modalClose(_plModal).then(_doClose).catch(_doClose);
   else _doClose();
   closeCtxMenu();
   // S88 FIX : reset complet pour éviter les fuites d'état entre ouvertures
@@ -716,12 +736,21 @@ export async function confirmPlaylistModal() {
       const plId = document.getElementById('pl-modal-bg').dataset.renamePlId;
       const pl = get('playlists').find(p => p.id === plId);
       if (!pl) { closePlModal(); return; }
+      // PLAYLISTS-2: snapshot before mutation; rollback on IDB failure
+      const origName  = pl.name;
+      const origCover = pl.coverB64;
       pl.name = name;
       if (_plModalCoverB64) pl.coverB64 = _plModalCoverB64; // S90 : cover custom
       else delete pl.coverB64;
       document.getElementById('pl-modal-bg').dataset.selBatch     = '';
       document.getElementById('pl-modal-bg').dataset.pendingTrack = '';
-      await savePlaylists();
+      try { await savePlaylists(); }
+      catch (e) {
+        pl.name = origName;
+        if (origCover !== undefined) pl.coverB64 = origCover; else delete pl.coverB64;
+        console.warn('[playlists] rename IDB failed:', e);
+        toast(i18n('error_save') || 'Erreur de sauvegarde', 'error'); return;
+      }
       renderPlNav();
       setupPlNavDrop();
       closePlModal();
@@ -744,9 +773,15 @@ export async function confirmPlaylistModal() {
     // Clear datasets avant l'await (évite contamination si l'utilisateur réouvre le modal)
     bg.dataset.selBatch     = '';
     bg.dataset.pendingTrack = '';
+    // PLAYLISTS-3: push to memory, rollback on IDB failure
     get('playlists').push(pl);
     notify('playlists'); // CM-5 FIX: push() in-place → notify() so subscribers see the change
-    await savePlaylists();
+    try { await savePlaylists(); }
+    catch (e) {
+      const pls = get('playlists'); pls.splice(pls.indexOf(pl), 1); notify('playlists');
+      console.warn('[playlists] new playlist IDB failed:', e);
+      toast(i18n('error_save') || 'Erreur de sauvegarde', 'error'); return;
+    }
     renderPlNav();
     setupPlNavDrop();
     closePlModal();

@@ -184,8 +184,8 @@ export function openSettings() {
   switchSetTab(_VALID_TABS.includes(_lastTab) ? _lastTab : 'appearance');
   $id('lang-fr')?.classList.toggle('on', getLang() === 'fr');
   $id('lang-en')?.classList.toggle('on', getLang() === 'en');
-  // Sync zoom radios
-  _syncTlistZoomRadios();
+  // Sync zoom slider
+  _syncTlistZoomSlider();
   // Sync dynColor checkbox
   _syncDynColorChk();
   syncCinemaBgSettings();
@@ -254,12 +254,14 @@ export function initSettingsListeners() {
   window.addEventListener('focus', () => syncMiniSettingsBtn(), { signal });
   const chk = $id('dyn-color-chk');
   if (chk) chk.addEventListener('change', e => setDynColor(e.target.checked), { signal });
-  // Zoom liste de pistes
-  document.querySelectorAll('input[name="tlist-zoom"]').forEach(r => {
-    r.addEventListener('change', e => {
-      if (e.target.checked) setTlistZoom(e.target.value);
+  // Zoom liste de pistes — slider
+  const _zoomSlider = $id('tlist-zoom-slider');
+  if (_zoomSlider) {
+    _zoomSlider.addEventListener('input', e => {
+      const levels = ['micro', 'compact', 'normal', 'comfortable', 'spacious'];
+      setTlistZoom(levels[+e.target.value]);
     }, { signal });
-  });
+  }
   return () => ac.abort();
 }
 
@@ -294,10 +296,18 @@ export function setTheme(t) {
   saveCfg();
 }
 
-function _syncTlistZoomRadios() {
+const _ZOOM_LEVELS = ['micro', 'compact', 'normal', 'comfortable', 'spacious'];
+
+function _syncTlistZoomSlider() {
   const cur = get('tlistZoom') || 'normal';
-  document.querySelectorAll('input[name="tlist-zoom"]').forEach(r => {
-    r.checked = r.value === cur;
+  const idx = _ZOOM_LEVELS.indexOf(cur);
+  const slider = $id('tlist-zoom-slider');
+  if (slider) {
+    slider.value = String(idx >= 0 ? idx : 2);
+    slider.setAttribute('aria-valuetext', cur);
+  }
+  document.querySelectorAll('.tlist-zoom-ticks span').forEach((s, i) => {
+    s.classList.toggle('active', i === (idx >= 0 ? idx : 2));
   });
 }
 

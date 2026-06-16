@@ -137,13 +137,16 @@ async function _relocateOrphan(track, rowEl, btnEl) {
   btnEl.textContent = '…';
 
   let newPath;
+  let _ipcErr = false;
   try {
     newPath = await invoke('pick_audio_file', undefined, { timeout: 0 });
   } catch(e) {
     console.warn('[orphans] pick_audio_file:', e);
+    _ipcErr = true;
   }
 
   if (!newPath) {
+    if (_ipcErr) toast('Impossible d\'ouvrir le sélecteur de fichier', 'error');
     btnEl.disabled = false;
     btnEl.textContent = prevLabel;
     return;
@@ -164,6 +167,7 @@ async function _relocateOrphan(track, rowEl, btnEl) {
     tracks[idx].path     = newPath;
     tracks[idx].url      = convertFileSrc(newPath);
     tracks[idx].metaDone = false;
+    rebuildTrackIdxMap();
     await saveTrackNow(tracks[idx]);
   }
 

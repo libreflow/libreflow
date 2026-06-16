@@ -231,7 +231,7 @@ export async function startRadio(trackId) {
   try {
     radioQueue = await buildRadioQueue(seed);
   } catch(e) {
-    console.error('[radio] buildRadioQueue failed in startRadio:', e);
+    console.warn('[radio] buildRadioQueue failed in startRadio:', e);
     radioActive = false;
     radioSeedId = null;
     _syncRadioButtons(false);
@@ -277,19 +277,26 @@ export async function stopRadio() {
   if (_radioStopInProgress) return; // guard : empêche deux appels concurrents pendant l'await
   _radioStopInProgress = true;
   try {
-  // Confirmation si la file contient encore des titres
-  if (radioActive && radioQueue.length > 0) {
-    const n  = radioQueue.length;
-    const ok = await confirmAction(
-      i18n('radio_stop_title'),
-      i18n('radio_stop_body', n),
-      i18n('radio_stop_btn'),
-      'danger'
-    );
-    if (!ok) return;
-  }
-  _radioTeardown();
-  toast(i18n('radio_stopped'));
+    // Confirmation si la file contient encore des titres
+    let ok = true;
+    if (radioActive && radioQueue.length > 0) {
+      const n = radioQueue.length;
+      try {
+        ok = await confirmAction(
+          i18n('radio_stop_title'),
+          i18n('radio_stop_body', n),
+          i18n('radio_stop_btn'),
+          'danger'
+        );
+      } catch(e) {
+        console.warn('[stopRadio]', e);
+        ok = false;
+      }
+    }
+    if (ok) {
+      _radioTeardown();
+      toast(i18n('radio_stopped'));
+    }
   } finally {
     _radioStopInProgress = false;
   }
@@ -372,8 +379,10 @@ export async function radioRefillQueue() {
       }
 
       const exclude = new Set([..._radioPlayedIds, ...radioQueue.map(t => t.id)]);
-      const extra   = (await buildRadioQueue(cur, exclude)).slice(0, RADIO_SIZE - radioQueue.length);
+      const extra = (await buildRadioQueue(cur, exclude)).slice(0, RADIO_SIZE - radioQueue.length);
       radioQueue.push(...extra);
+    } catch(e) {
+      console.warn('[radio] buildRadioQueue refill error:', e);
     } finally {
       _radioRefillInProgress = false;
     }
@@ -491,6 +500,7 @@ function _syncRadioLibBar(active) {
 
 // Lock anti-double-clic : empêche deux dialogs "Arrêter ?" simultanées.
 let _radioToggleLock = false;
+let _radioSavingPl   = false; // RADIO-2: guard anti-double-clic pour radioSaveAsPlaylist
 
 /** Toggle radio depuis le player bar : démarre depuis le titre courant, ou arrête. */
 export async function toggleRadio() {
@@ -514,43 +524,49 @@ export function syncRadioLibBar() { _syncRadioLibBar(radioActive); }
 
 export async function radioSaveAsPlaylist() {
   if (!radioActive) return;
-  const seed = _trackIdxMap.has(radioSeedId)
-    ? get('tracks')[_trackIdxMap.get(radioSeedId)] // Phase 4
-    : null;
-
-  // seed + file complète (dédoublonnée via Set → O(1))
-  const seen = new Set();
-  const ids  = [];
-  const push = id => { if (!seen.has(id)) { seen.add(id); ids.push(id); } };
-  if (seed) push(seed.id);
-  for (const t of radioQueue) push(t.id);
-  if (!ids.length) { toast(i18n('radio_pl_empty'), 'warning'); return; }
-
-  const name = i18n('radio_pl_name', seed ? seed.name : 'Mix');
-  const pl = { id: 'pl_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7), name, trackIds: ids }; // BUG-m2 FIX : suffixe aléatoire pour éviter collision si sauvegardé 2× dans la même ms
-  get('playlists').push(pl);
+  if (_radioSavingPl) return; // RADIO-2: guard anti-concurrence
+  _radioSavingPl = true;
   try {
-    await savePlaylists(); // savePlaylists() calls notify('playlists') + emits EVENTS.PLAYLIST_CHANGED
-  } catch (e) {
-    // Roll back : retirer la playlist ajoutée optimistiquement si la sauvegarde échoue
-    const playlists = get('playlists');
-    const idx = playlists.indexOf(pl);
-    if (idx >= 0) playlists.splice(idx, 1);
-    notify('playlists');
-    toast(i18n('radio_save_error') || 'Erreur lors de la sauvegarde', 'error');
-    return;
+    const seed = _trackIdxMap.has(radioSeedId)
+      ? get('tracks')[_trackIdxMap.get(radioSeedId)] // Phase 4
+      : null;
+
+    // seed + file complète (dédoublonnée via Set → O(1))
+    const seen = new Set();
+    const ids  = [];
+    const push = id => { if (!seen.has(id)) { seen.add(id); ids.push(id); } };
+    if (seed) push(seed.id);
+    for (const t of radioQueue) push(t.id);
+    if (!ids.length) { toast(i18n('radio_pl_empty'), 'warning'); return; }
+
+    const name = i18n('radio_pl_name', seed ? seed.name : 'Mix');
+    const pl = { id: 'pl_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7), name, trackIds: ids }; // BUG-m2 FIX : suffixe aléatoire pour éviter collision si sauvegardé 2× dans la même ms
+    get('playlists').push(pl);
+    try {
+      await savePlaylists(); // savePlaylists() calls notify('playlists') + emits EVENTS.PLAYLIST_CHANGED
+    } catch (e) {
+      // Roll back : retirer la playlist ajoutée optimistiquement si la sauvegarde échoue
+      const playlists = get('playlists');
+      const idx = playlists.indexOf(pl);
+      if (idx >= 0) playlists.splice(idx, 1);
+      notify('playlists');
+      toast(i18n('radio_save_error') || 'Erreur lors de la sauvegarde', 'error');
+      return;
+    }
+    // renderPlNav() + setupPlNavDrop() déclenchés via EVENTS.PLAYLIST_CHANGED émis
+    // par savePlaylists() (playlist-crud.js l.79) → handler app.js l.286. §6.
+    // Ne pas naviguer vers la playlist → ne polluent pas "Récentes" + l'utilisateur reste sur la radio.
+    // Un toast avec bouton "Voir →" permet d'y accéder si besoin.
+    toastWithAction(
+      i18n('radio_pl_saved', name, ids.length),
+      'success',
+      i18n('radio_pl_see') || 'Voir →',
+      () => setView('playlist', document.getElementById('ni-playlists'), pl.id),
+      6000
+    );
+  } finally {
+    _radioSavingPl = false; // RADIO-2: relâche le verrou dans tous les cas
   }
-  // renderPlNav() + setupPlNavDrop() déclenchés via EVENTS.PLAYLIST_CHANGED émis
-  // par savePlaylists() (playlist-crud.js l.79) → handler app.js l.286. §6.
-  // Ne pas naviguer vers la playlist → ne polluent pas "Récentes" + l'utilisateur reste sur la radio.
-  // Un toast avec bouton "Voir →" permet d'y accéder si besoin.
-  toastWithAction(
-    i18n('radio_pl_saved', name, ids.length),
-    'success',
-    i18n('radio_pl_see') || 'Voir →',
-    () => setView('playlist', document.getElementById('ni-playlists'), pl.id),
-    6000
-  );
 }
 
 export async function radioRegenerateFromCurrent() {
@@ -568,7 +584,7 @@ export async function radioRegenerateFromCurrent() {
   try {
     radioQueue = await buildRadioQueue(cur);
   } catch(e) {
-    console.error('[radio] buildRadioQueue failed in radioRegenerateFromCurrent:', e);
+    console.warn('[radio] buildRadioQueue failed in radioRegenerateFromCurrent:', e);
     radioSeedId     = _prevSeedId;
     _radioPlayedIds = _prevPlayedIds;
     toast(i18n('radio_no_track'), 'error');

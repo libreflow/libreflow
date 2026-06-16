@@ -5,13 +5,13 @@
 // Le canal passe par les deux sources (main + crossfade) car l'analyser est en fin
 // de chaîne EQ, avant la destination.
 //
-// API publique (window.*) :
-//   window.initViz()              — à appeler une fois après initEQ()
-//   window.startViz()             — démarrer le rendu rAF (au play)
-//   window.stopViz()              — arrêter le rendu + effacer (au pause/stop)
-//   window.updateVizColor(color)  — mettre à jour la couleur (artColor → string rgb/hex)
-//   window.setVizMode(mode)       — 'bars' | 'oscilloscope' | 'circle'
-//   window.getVizMode()           — retourner le mode courant
+// API publique (ESM named exports) :
+//   initViz()              — à appeler une fois après initEQ()
+//   startViz()             — démarrer le rendu rAF (au play)
+//   stopViz()              — arrêter le rendu + effacer (au pause/stop)
+//   updateVizColor(color)  — mettre à jour la couleur (artColor → string rgb/hex)
+//   setVizMode(mode)       — 'bars' | 'oscilloscope' | 'circle'
+//   getVizMode()           — retourner le mode courant
 
 import { eqAnalyser, eqCtx } from './eq.js';
 import { audio }               from './player.js';
@@ -104,7 +104,7 @@ export function initViz() {
   // Déconnecter l'éventuel observer précédent avant d'en créer un nouveau
   if (_resizeObs) { _resizeObs.disconnect(); _resizeObs = null; }
   _resizeObs = new ResizeObserver(_resizeCanvas);
-  _resizeObs.observe(canvas.parentElement);
+  _resizeObs.observe(canvas.parentElement ?? canvas);
   // Différer le premier resize — offsetWidth peut être 0 avant le premier layout
   requestAnimationFrame(_resizeCanvas);
   // Si viz désactivé par défaut, masquer le canvas immédiatement
@@ -436,7 +436,5 @@ function _drawCircle(bins, w, h) {
   canvasCtx.fill();
 }
 
-/* ── Exports window.* ─────────────────────────────────────── */
-// setVizMode / getVizMode sont intentionnellement absents ici :
-// app.js les importe et les ré-exporte sur window — un seul point d'export.
-Object.assign(window, { initViz, startViz, stopViz, updateVizColor, setVizEnabled, getVizEnabled });
+// All public symbols are exported as named ESM exports above.
+// Global window.* assignment removed (VIZ-3) — callers must import from './viz.js'.

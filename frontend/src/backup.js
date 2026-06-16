@@ -175,7 +175,8 @@ export async function importBackup() {
       }
     }
     if (addedPlaylists.length) {
-      await _batchPut('playlists', addedPlaylists);
+      const _plPersisted = await _batchPut('playlists', addedPlaylists);
+      if (!_plPersisted) { toast('Sauvegarde IDB des playlists échouée', 'error'); }
       set('playlists', newPlaylists);
       notify('playlists');
     }
@@ -184,10 +185,12 @@ export async function importBackup() {
     const existingPlaylog = await dall('playlog').catch(() => []);
     const existingTs = new Set();
     for (const l of existingPlaylog) existingTs.add(l.ts);
-    await _batchPut('playlog', backupPlaylog.filter(l => !existingTs.has(l.ts)));
+    const _playlogPersisted = await _batchPut('playlog', backupPlaylog.filter(l => !existingTs.has(l.ts)));
+    if (!_playlogPersisted) { toast('Sauvegarde IDB du playlog échouée', 'error'); }
 
     // ── Imports history : merge par id (put = upsert sur keyPath 'id') ─────────
-    await _batchPut('imports', backupImports);
+    const _importsPersisted = await _batchPut('imports', backupImports);
+    if (!_importsPersisted) { toast('Sauvegarde IDB des imports échouée', 'error'); }
 
     const added = addedTracks.length;
     toast(

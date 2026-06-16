@@ -365,7 +365,10 @@ export function nextGenreSort() {
 // ══ CHANGEMENT DE VUE ════════════════════════════════════════════════════════
 
 export function setView(v, btn, plId) {
-  runViewTransition();
+  // VIEWS-VT-1 FIX : runViewTransition() is the CSS-animation fallback only —
+  // do NOT call it when the View Transitions API is available, otherwise both
+  // CSS fade AND startViewTransition() run simultaneously.
+  if (typeof document.startViewTransition !== 'function') runViewTransition();
   // Annuler le debounce de recherche en cours
   if (_searchDebounceTimer) { clearTimeout(_searchDebounceTimer); _searchDebounceTimer = null; }
   // Nettoyer la sélection active avant tout changement de vue (BUG-1 FIX)
@@ -399,15 +402,24 @@ export function setView(v, btn, plId) {
       set('plSort', 'manual');
     }
 
-    invalidateFilter();
-    // BUG-2 FIX : vider la recherche lors d'un changement de vue top-level (cohérent avec goHome)
+    // VIEWS-SQ-1 FIX : clear search immediately without going through the debounce
+    // path (onSearch('') would schedule a setTimeout, leaving stale query visible
+    // until the debounce fires).  Set store + DOM synchronously, cancel any
+    // in-flight debounce, then invalidate caches so the subsequent invalidateFilter()
+    // call below renders with an empty query from the start.
+    // VIEWS-SQ-2 FIX : only emit FILTER_CHANGED once (via the single invalidateFilter()
+    // below) to avoid the double render that occurred when switching views with an
+    // active search (the old code emitted FILTER_CHANGED before AND after clearing).
     const _srch = document.getElementById('srch');
     if (_srch && _srch.value) {
       _srch.value = '';
-      onSearch('');
-      const _clr = document.getElementById('srch-clear');
-      if (_clr) _clr.style.display = 'none';
+      set('query', '');
+      cancelSearchDebounce();
+      document.getElementById('srch-clear')?.style?.setProperty('display', 'none');
+      invalidateFilterCache();
+      invalidateGenreGridSig();
     }
+    invalidateFilter();
     // RACE-3 FIX : reconstruire le shuffleQ quand la vue change pendant le shuffle
     if (get('shuffle')) buildQ();
 
@@ -464,7 +476,7 @@ export function setView(v, btn, plId) {
       artistSortBtn = document.createElement('button');
       artistSortBtn.id = 'artist-sort-btn';
       artistSortBtn.className = 'sort-btn';
-      artistSortBtn.onclick = nextArtistSort;
+      artistSortBtn.addEventListener('click', nextArtistSort);
       mainSortBtn?.parentNode?.insertBefore(artistSortBtn, mainSortBtn.nextSibling);
     }
     artistSortBtn.title = i18n('sort_btn_artists');
@@ -476,7 +488,7 @@ export function setView(v, btn, plId) {
       genreSortBtn = document.createElement('button');
       genreSortBtn.id = 'genre-sort-btn';
       genreSortBtn.className = 'sort-btn';
-      genreSortBtn.onclick = nextGenreSort;
+      genreSortBtn.addEventListener('click', nextGenreSort);
       mainSortBtn?.parentNode?.insertBefore(genreSortBtn, mainSortBtn.nextSibling);
     }
     genreSortBtn.title = i18n('sort_btn_genres');
@@ -488,14 +500,14 @@ export function setView(v, btn, plId) {
       albumDetailSortBtn = document.createElement('button');
       albumDetailSortBtn.id = 'album-detail-sort-btn';
       albumDetailSortBtn.className = 'sort-btn';
-      albumDetailSortBtn.onclick = () => {
+      albumDetailSortBtn.addEventListener('click', () => {
         const cur = get('albumDetailSort') || 'track';
         const next = cur === 'track' ? 'az' : 'track';
         set('albumDetailSort', next);
         albumDetailSortBtn.title = i18n(next === 'track' ? 'sort_btn_track_num' : 'sort_btn_az_ttl');
         albumDetailSortBtn.querySelector('span').textContent = next === 'track' ? i18n('sort_by_track_lbl') : i18n('sort_az');
         invalidateFilter(); VIRT._lastListSig = ''; renderLib(); saveCfg();
-      };
+      });
       albumDetailSortBtn.innerHTML = `<span>${i18n('sort_by_track_lbl')}</span>`;
       albumDetailSortBtn.title = i18n('sort_btn_track_num');
       mainSortBtn?.parentNode?.insertBefore(albumDetailSortBtn, mainSortBtn);
@@ -512,7 +524,7 @@ export function setView(v, btn, plId) {
       plNewBtn.id = 'pl-new-btn';
       plNewBtn.className = 'sort-btn';
       plNewBtn.title = i18n('sb_new_pl') || 'Nouvelle playlist';
-      plNewBtn.onclick = openNewPlaylistModal;
+      plNewBtn.addEventListener('click', openNewPlaylistModal);
       plNewBtn.innerHTML = '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>';
       mainSortBtn?.parentNode?.insertBefore(plNewBtn, mainSortBtn.nextSibling);
     }
@@ -522,7 +534,7 @@ export function setView(v, btn, plId) {
       plSmartBtn.id = 'pl-smart-btn';
       plSmartBtn.className = 'sort-btn';
       plSmartBtn.title = i18n('sb_smart_pl') || 'Playlist intelligente';
-      plSmartBtn.onclick = openSmartPlaylistModal;
+      plSmartBtn.addEventListener('click', openSmartPlaylistModal);
       plSmartBtn.innerHTML = '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>';
       mainSortBtn?.parentNode?.insertBefore(plSmartBtn, plNewBtn);
     }

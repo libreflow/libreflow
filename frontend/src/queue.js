@@ -160,11 +160,11 @@ export function clearQueueOverride() {
  * @returns {boolean}
  */
 export function moveQueueItem(id, dir) {
-  const ex  = _buildExplicitQueue();
-  const idx = ex.findIndex(t => t.id === id);
-  if (moveByOne(ex, idx, dir) < 0) return false;
-  _queueOverride        = ex.map(t => t.id);
-  _queueOverrideTrackId = get('tracks')[get('curIdx')]?.id ?? null;
+  if (!_queueOverride) return false;
+  const idx = _queueOverride.indexOf(id);
+  const copy = [..._queueOverride];
+  if (moveByOne(copy, idx, dir) < 0) return false;
+  _queueOverride = copy;
   renderQueue();
   return true;
 }
@@ -235,7 +235,7 @@ export function toggleQueue() {
   btn?.setAttribute('aria-expanded', queueOpen ? 'true' : 'false');
   document.getElementById('app')?.classList.toggle('panel-queue-open', queueOpen);
   if (eqOpen) closeEQ();
-  if (queueOpen && document.getElementById('settings-panel').classList.contains('on')) closeSettings();
+  if (queueOpen && document.getElementById('settings-panel')?.classList.contains('on')) closeSettings();
   if (queueOpen) {
     renderQueue(); initQueueDrag();
     const panel = document.getElementById('queue-panel');
@@ -282,7 +282,7 @@ export function closeQueue() {
 export function toggleQueuePin() {
   const pinned = !get('queuePinned');
   set('queuePinned', pinned);
-  document.getElementById('app').classList.toggle('panel-queue-pinned', pinned);
+  document.getElementById('app')?.classList.toggle('panel-queue-pinned', pinned);
   const btn = document.querySelector('.queue-pin-btn');
   btn?.setAttribute('aria-pressed', String(pinned));
   btn?.setAttribute('aria-label',
@@ -292,7 +292,7 @@ export function toggleQueuePin() {
 export function clearQueuePin() {
   if (!get('queuePinned')) return;
   set('queuePinned', false);
-  document.getElementById('app').classList.remove('panel-queue-pinned');
+  document.getElementById('app')?.classList.remove('panel-queue-pinned');
   const btn = document.querySelector('.queue-pin-btn');
   btn?.setAttribute('aria-pressed', 'false');
   btn?.setAttribute('aria-label', "Épingler la file d'attente");

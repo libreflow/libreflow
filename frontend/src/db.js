@@ -12,18 +12,30 @@ import { CFG } from './cfg.js';
 /** @type {IDBDatabase|null} Singleton IDB connection. Initialised by openDB(). */
 export let DB = null;
 
+/**
+ * Nulls the singleton DB reference after it has been closed (e.g. clearAppCache).
+ * Allows a subsequent openDB() call to re-open a fresh connection.
+ */
+export function resetDB() { DB = null; }
+
 // ══ IndexedDB ══════════════════════════════════
+
+/** In-flight openDB() promise — prevents TOCTOU race where two concurrent callers
+ *  both pass the `if (DB)` null-check before the connection is established. */
+let _openPromise = null;
 
 /**
  * Open (or reuse) the 'lp4' IndexedDB database.
  * Must be called once at boot before any IDB helpers are used.
  * Safe to call multiple times — returns immediately if already open.
+ * Concurrent callers share one in-flight Promise (DB-1 fix).
  *
  * @returns {Promise<void>}
  */
 async function openDB() {
   if (DB) return;
-  DB = await new Promise((ok, fail) => {
+  if (_openPromise) return _openPromise;
+  _openPromise = new Promise((ok, fail) => {
     const r = indexedDB.open('lp4', 5); // v5 : ajout du store imports
     r.onupgradeneeded = e => {
       const d = e.target.result;
@@ -37,6 +49,11 @@ async function openDB() {
     r.onerror   = () => fail(r.error);
     r.onblocked = () => fail(new Error('IDB bloqué — fermer les autres instances de LibreFlow'));
   });
+  try {
+    DB = await _openPromise;
+  } finally {
+    _openPromise = null;
+  }
 }
 
 /**

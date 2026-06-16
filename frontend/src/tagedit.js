@@ -226,6 +226,12 @@ export async function saveTagEdit(trackId) {
   if (_nameInp) _nameInp.removeAttribute('aria-invalid');
   if (_nameErr) _nameErr.textContent = '';
 
+  // Snapshot pour rollback en cas d'échec IDB (TAGEDIT-2)
+  const _orig = {
+    name: t.name, artistFull: t.artistFull, artist: t.artist,
+    album: t.album, genre: t.genre, year: t.year, track: t.track,
+  };
+
   // Appliquer les modifications en mémoire
   const _unknownArtist = i18n('unknown_artist');
   t.name       = name;
@@ -242,9 +248,17 @@ export async function saveTagEdit(trackId) {
   // Nettoyer l'éditeur
   _cleanTagEditor(el);
   _editingTrackId = null;
+  _outsideClickActive = false; // TAGEDIT-1: réactiver outside-click pour la prochaine ouverture
 
-  // 1. Persister en IDB immédiatement (toujours réussit)
-  await saveTrackNow(t);
+  // 1. Persister en IDB immédiatement
+  try {
+    await saveTrackNow(t);
+  } catch (e) {
+    Object.assign(t, _orig);
+    console.warn('[tagedit] IDB save failed:', e);
+    toast(i18n('te_write_fail', String(e)) || 'Sauvegarde échouée', 'error');
+    return;
+  }
 
   // 2. Écrire dans le fichier audio via Rust (lofty)
   //    Erreur non fatale : les modifs sont déjà en IDB, on avertit juste l'utilisateur

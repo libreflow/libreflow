@@ -55,9 +55,14 @@ export const EVENTS = Object.freeze({
   // Search / filter
   FILTER_CHANGED:   'search:filtered',   // { list }
   // Playlists
-  PLAYLIST_CHANGED: 'playlist:changed',  // { playlists }
+  PLAYLIST_CHANGED:  'playlist:changed',   // {}
+  OPEN_PL_MODAL:     'ui:open_pl_modal',   // { trackId }
+  CLOSE_PL_MODAL:    'ui:close_pl_modal',  // {}
+  SET_PL_MODAL_MODE: 'ui:pl_modal_mode',   // { mode }
   // UI
   VIEW_CHANGE:      'ui:view',           // { view }
   THEME_CHANGE:     'ui:theme',          // { theme }
   RENDER_LIB:       'ui:render_lib',     // {} — demande un renderLib() à app.js
+  // i18n
+  LANG_CHANGED:     'i18n:lang_changed', // {} — langue changée, app.js applique les side-effects
 });

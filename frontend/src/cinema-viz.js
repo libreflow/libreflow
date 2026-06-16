@@ -6,7 +6,9 @@ import { quickTo, tween, kill, timeline, eases } from './motion.js';
 import { rgbToHsl, hslToRgb } from './artcolor.js';
 
 // ── État module ──────────────────────────────────────────────
+const _RADII_BAR = [3, 3, 0, 0]; // hoisted — avoids allocation inside rAF loop
 let _cinVizRaf = null;
+let _colTween  = null; // CINEMA-VIZ-1: hoisted to module scope so stopCinemaViz can kill it
 let _beatTimer = null;
 let _getCinVizState = null; // () => { cinemaOpen, cinemaBg, cinArtRGBTarget }
 
@@ -38,11 +40,13 @@ export function startCinemaViz() {
 
   const _initRGB = _getCinVizState?.()?.cinArtRGBTarget ?? [255, 255, 255];
   const _col = { r: _initRGB[0], g: _initRGB[1], b: _initRGB[2] };
-  let _colKey = '', _colTween = null;
+  let _colKey = '';
+  // CINEMA-VIZ-1: _colTween is module-level; reset it when a new viz session starts
+  if (_colTween) { _colTween.kill(); _colTween = null; }
 
   const _envRms = { v: 0.0 };
   const _envMul = { v: 1.0 };
-  const _qRms   = quickTo(_envRms, 'v', { duration: 0.22, ease: 'power2.out' });
+  // CINEMA-VIZ-2: _qRms was created but never called — removed (dead code)
 
   const BAR_STD = 56;
   const _bars   = Array.from({ length: BAR_STD }, () => ({ h: 0 }));
@@ -302,6 +306,7 @@ export function startCinemaViz() {
   }
 
   // ── Buffer fréquence ──────────────────────────────────────────────────────
+  // CINEMA-VIZ-4: allocated once here; no per-frame guard needed inside draw()
   let _vizBuf = new Uint8Array(analyser.frequencyBinCount);
 
   // ── Boucle RAF principale ─────────────────────────────────────────────────
@@ -326,7 +331,7 @@ export function startCinemaViz() {
       cw = w; ch = h;
     }
     ctx.clearRect(0, 0, w, h);
-    if (_vizBuf.length !== analyser.frequencyBinCount) _vizBuf = new Uint8Array(analyser.frequencyBinCount);
+    // CINEMA-VIZ-4: buffer allocation moved to startCinemaViz(); no guard needed here
     analyser.getByteFrequencyData(_vizBuf);
 
     const { cinArtRGBTarget } = st;
@@ -344,13 +349,11 @@ export function startCinemaViz() {
     const totalBins = analyser.frequencyBinCount;
     const lMax      = Math.log2(totalBins * 0.65);
     const lMin      = Math.log2(1);
-    let   avgH      = 0;
+    // CINEMA-VIZ-3: avgH was accumulated here but never read — removed
     for (let i = 0; i < barCount; i++) {
       const bin = Math.round(Math.pow(2, lMin + (i / barCount) * (lMax - lMin)));
       _qs[i](_vizBuf[Math.min(bin, totalBins - 1)] / 255);
-      avgH += _bars[i].h;
     }
-    avgH /= barCount;
 
     const { cinemaBg } = st;
     if (cinemaBg === 'liquid') {
@@ -363,7 +366,7 @@ export function startCinemaViz() {
       for (let i = 0; i < barCount; i++) {
         const v = _bars[i].h, bh = Math.max(2, v * h * 0.42);
         ctx.globalAlpha = 0.05 + v * 0.35;
-        if (ctx.roundRect) { ctx.beginPath(); ctx.roundRect(i * bw + 1, h - bh, bw - 2, bh, [3,3,0,0]); ctx.fill(); }
+        if (ctx.roundRect) { ctx.beginPath(); ctx.roundRect(i * bw + 1, h - bh, bw - 2, bh, _RADII_BAR); ctx.fill(); }
         else { ctx.fillRect(i * bw + 1, h - bh, bw - 2, bh); }
         if (v > 0.18) { ctx.globalAlpha = v * 0.07; ctx.fillRect(i * bw + 1, h, bw - 2, bh * 0.28); }
       }
@@ -372,14 +375,17 @@ export function startCinemaViz() {
     _cinVizRaf = requestAnimationFrame(draw);
   }
 
+  // CINEMA-VIZ-5: schedule via rAF so first frame is tracked and stoppable immediately
   if (_cinVizRaf) cancelAnimationFrame(_cinVizRaf);
-  draw();
+  _cinVizRaf = requestAnimationFrame(draw);
   canvas.style.opacity = '1';
 }
 
 /** Arrête le loop RAF du visualiseur et nettoie les effets visuels. */
 export function stopCinemaViz() {
   if (_cinVizRaf) { cancelAnimationFrame(_cinVizRaf); _cinVizRaf = null; }
+  // CINEMA-VIZ-1: kill the module-level colour tween so it doesn't fire after stop
+  if (_colTween) { _colTween.kill(); _colTween = null; }
   if (_beatTimer) {
     clearTimeout(_beatTimer);
     _beatTimer = null;

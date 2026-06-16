@@ -135,10 +135,10 @@ let _lastNotifTrackId = null;
  * cinéma, notification OS, MediaSession).
  */
 export function updateBar() {
-  const curIdx = get('curIdx');
-  if (curIdx < 0) return;
+  const _phase1Idx = get('curIdx');
+  if (_phase1Idx < 0) return;
   const tracks = get('tracks');
-  const t = tracks[curIdx];
+  const t = tracks[_phase1Idx];
   if (!t) return; // guard : curIdx hors bornes (ex. clearLibrary pendant un event en queue)
 
   // Phase 1 : feedback visuel critique — même frame que l'event (INP-1)
@@ -186,13 +186,13 @@ export function updateBar() {
   if (_shouldNotify) _lastNotifTrackId = t.id;
 
   // Phase 2 : opérations lourdes — différées après le premier paint.
-  // RACE-3 FIX : re-lire curIdx depuis le store — la closure `t` peut être périmée
-  // si un changement de piste rapide survient entre Phase 1 et Phase 2.
+  // RACE-3 / PLAYERBAR-1 FIX : capturer _phase1Idx en Phase 1 et le comparer
+  // au store en Phase 2 — si curIdx a changé, un nouveau updateBar() a pris
+  // la main ; ce callback est périmé et doit s'arrêter.
   requestAnimationFrame(() => setTimeout(() => {
-    const _p2Idx = get('curIdx');
-    if (_p2Idx < 0) return;
+    if (get('curIdx') !== _phase1Idx) return; // stale — newer track took over
     const _p2Tracks = get('tracks');
-    const t = _p2Tracks[_p2Idx]; // re-read — may differ from Phase-1 t if track changed
+    const t = _p2Tracks[_phase1Idx]; // re-read — may differ from Phase-1 t if track changed
     if (!t) return;
     if (t.artColor) applyArtColor(t.artColor);
     else if (t.art) extractColor(t.art).then(c => { if (c) { t.artColor = c; applyArtColor(c); } }).catch(e => console.warn('[playerbar:extractColor]', e));
@@ -211,7 +211,7 @@ export function updateBar() {
         // V6 : ignorer les callbacks périmés — sur skip rapide A→B→C, les
         // listeners load {once:true} s'empilent et la closure de B reçoit
         // la pochette de C (HSL caché sur la mauvaise piste).
-        if (get('curIdx') !== _p2Idx) return;
+        if (get('curIdx') !== _phase1Idx) return;
         const hsl = extractDominantHsl(_plImg);
         if (hsl) { t._npHsl = hsl; _applyNpHsl(hsl); }
       };

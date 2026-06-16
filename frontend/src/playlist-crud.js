@@ -95,8 +95,15 @@ export async function savePlaylists() {
 export async function togglePinPlaylist(plId) {
   const pl = get('playlists').find(p => p.id === plId);
   if (!pl) return;
+  const wasPinned = !!pl.pinned;
   pl.pinned = !pl.pinned;
-  await savePlaylists();
+  try { await savePlaylists(); }
+  catch(e) {
+    pl.pinned = wasPinned;
+    console.warn('[togglePinPlaylist] IDB failed:', e);
+    toast(i18n('error_save') || 'Erreur de sauvegarde', 'error');
+    return;
+  }
   toast(pl.pinned ? i18n('t_pl_pinned') : i18n('t_pl_unpinned'), 'success');
 }
 
@@ -167,7 +174,12 @@ export async function addTrackToPlaylist(trackId, plId) {
   const sid = String(trackId);
   if (pl.trackIds.some(id => String(id) === sid)) { toast(i18n('t_already_in'), 'warning'); return; }
   pl.trackIds.push(sid);
-  await savePlaylists();
+  try { await savePlaylists(); }
+  catch(e) {
+    pl.trackIds.pop();
+    console.warn('[addTrackToPlaylist] IDB failed:', e);
+    toast(i18n('error_save') || 'Erreur de sauvegarde', 'error'); return;
+  }
   if (get('view') === 'playlist' && get('curPlId') === plId) emit(EVENTS.RENDER_LIB, {});
   toast(i18n('t_added_to', pl.name), 'success');
 }
@@ -186,8 +198,14 @@ export async function deletePlaylist(e, plId) {
     );
     if (!confirmed) return;
     // Suppression définitive (playlist avec contenu)
+    const prevPlaylists = [...get('playlists')];
     set('playlists', get('playlists').filter(p => p.id !== plId));
-    await savePlaylists();
+    try { await savePlaylists(); }
+    catch(e) {
+      set('playlists', prevPlaylists);
+      console.warn('[deletePlaylist] IDB failed:', e);
+      toast(i18n('error_save') || 'Erreur de sauvegarde', 'error'); return;
+    }
     const curPlId = get('curPlId');
     if (curPlId === plId) { setView('all', document.getElementById('ni-all')); set('curPlId', null); }
     // Comme la branche "playlist vide" : notifier app.js pour re-render la nav,

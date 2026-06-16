@@ -139,24 +139,6 @@ export class LfToastStack extends LitElement {
     @keyframes t-in  { from { transform: translateY(20px); opacity: 0; } }
     @keyframes t-out { to   { transform: translateY(20px); opacity: 0; } }
 
-    :host-context(html[data-mode="light"]) .t-item {
-      background: var(--lf-toast-bg, rgba(255, 255, 255, 0.92));
-      color: var(--lf-toast-fg, rgba(15, 17, 23, 0.92));
-      box-shadow:
-        0 6px 10px rgba(0, 0, 0, .10),
-        0 1px 18px rgba(0, 0, 0, .08),
-        0 3px 5px rgba(0, 0, 0, .14);
-    }
-    :host-context(html[data-mode="light"]) .t-action {
-      color: var(--lf-toast-action);
-    }
-    :host-context(html[data-mode="light"]) .t-close {
-      color: rgba(15, 17, 23, 0.6);
-    }
-    :host-context(html[data-mode="light"]) .t-close:hover {
-      color: rgba(15, 17, 23, 0.92);
-      background: rgba(0, 0, 0, 0.06);
-    }
   `;
 
   constructor() {
@@ -166,6 +148,7 @@ export class LfToastStack extends LitElement {
      *                 closable: boolean, dismissing: boolean }>} */
     this._items = [];
     this._timers = new Map();  // id → setTimeout handle (jamais sérialisé)
+    this._barRafs = [];        // LIT-COMPONENTS-5: rAF handles for .t-bar shrink animations
     this.closeLabel = 'Fermer';
   }
 
@@ -222,6 +205,10 @@ export class LfToastStack extends LitElement {
     // Phase 1: mark as dismissing → triggers t-out animation via render().
     this._items = toastReducer(this._items, { type: 'mark-dismissing', id });
 
+    // LIT-COMPONENTS-6: fallback for when CSS animations are disabled (prefers-reduced-motion
+    // or UA override) — animationend never fires, so force finalize after the animation budget.
+    this.updateComplete.then(() => { setTimeout(() => this._finalize(id), 350); });
+
     this.dispatchEvent(new CustomEvent('lf-toast-dismiss', {
       detail: { id }, bubbles: true, composed: true,
     }));
@@ -274,9 +261,15 @@ export class LfToastStack extends LitElement {
     const bars = this.shadowRoot.querySelectorAll('.t-bar:not([data-bar-started])');
     bars.forEach(bar => {
       bar.dataset.barStarted = '1';
-      requestAnimationFrame(() => {
+      // LIT-COMPONENTS-5: store outer rAF handle so disconnectedCallback can cancel it
+      // if the component unmounts before the animation fires.  Once it fires, remove
+      // the handle so _barRafs stays bounded (one entry per in-flight bar, not cumulative).
+      const h = requestAnimationFrame(() => {
+        const idx = this._barRafs.indexOf(h);
+        if (idx !== -1) this._barRafs.splice(idx, 1);
         requestAnimationFrame(() => { bar.style.transform = 'scaleX(0)'; });
       });
+      this._barRafs.push(h);
     });
   }
 
@@ -284,6 +277,9 @@ export class LfToastStack extends LitElement {
     super.disconnectedCallback();
     for (const handle of this._timers.values()) clearTimeout(handle);
     this._timers.clear();
+    // LIT-COMPONENTS-5: cancel pending rAF closures holding .t-bar DOM refs.
+    for (const h of this._barRafs) cancelAnimationFrame(h);
+    this._barRafs = [];
   }
 
   // LOW: aria-label hardcoded FR — to be parameterized via prop when WC i18n strategy is finalized.

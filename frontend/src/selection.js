@@ -28,7 +28,7 @@ import { saveCfg }                        from './cfgsave.js';
 import { setCurIdx, setTracks, setLiked, replaceTracks } from './state.js';
 import { updateBar }                       from './playerbar.js';
 import { updateStats } from './renderer.js';
-import { savePlaylists, renderPlNav, openNewPlaylistModal } from './playlists.js';
+import { savePlaylists } from './playlist-crud.js';
 
 // ── État interne ──────────────────────────────────────────────
 export let selection     = new Set(); // trackIds sélectionnés
@@ -116,7 +116,7 @@ export function selAddToPlaylist() {
   if (!get('playlists').length) {
     // Aucune playlist → proposer d'en créer une et ajouter les titres après
     const batchIds = ids.join(',');
-    openNewPlaylistModal(null); // remet selBatch à ''
+    emit(EVENTS.OPEN_PL_MODAL, { trackId: null }); // remet selBatch à ''
     const _plModalBg = document.getElementById('pl-modal-bg');
     if (_plModalBg) _plModalBg.dataset.selBatch = batchIds; // stocker après
     return;
@@ -170,21 +170,30 @@ export async function selAddBatch(plId) {
   const ids = [...selection].map(String); // normaliser en strings (B6)
   if (plId === '__new__') {
     const batchIds = ids.join(',');
-    openNewPlaylistModal(null); // ouvre le modal (remet selBatch à '')
+    emit(EVENTS.OPEN_PL_MODAL, { trackId: null }); // ouvre le modal (remet selBatch à '')
     // Stocker le batch APRÈS l'ouverture (sinon openNewPlaylistModal l'efface)
-    document.getElementById('pl-modal-bg').dataset.selBatch = batchIds;
+    const _bg = document.getElementById('pl-modal-bg');
+    if (_bg) _bg.dataset.selBatch = batchIds;
     return;
   }
   const pl = get('playlists').find(p => p.id === plId);
   if (!pl) return;
+  const _snapshot = [...pl.trackIds];
   let added = 0;
   const existingIds = new Set(pl.trackIds.map(String));
   for (const id of ids) {
     if (!existingIds.has(id)) { pl.trackIds.push(id); existingIds.add(id); added++; }
   }
   // Persister d'abord, puis vider la sélection (B9)
-  await savePlaylists();
-  renderPlNav();
+  try {
+    await savePlaylists();
+  } catch (e) {
+    pl.trackIds = _snapshot;
+    console.warn('[selection] selAddBatch IDB failed:', e);
+    toast(i18n('error_save') || 'Erreur de sauvegarde', 'error');
+    return;
+  }
+  emit(EVENTS.PLAYLIST_CHANGED, {});
   if (get('view') === 'playlist' && get('curPlId') === plId) emit(EVENTS.RENDER_LIB, {});
   clearSelection(); // après persist (B9 fix)
   toast(i18n('t_sel_added_to_pl', added, pl.name), 'success');
@@ -360,6 +369,11 @@ export function selBatchTagEdit() {
   const albumEl  = document.getElementById('bte-album');
   const genreEl  = document.getElementById('bte-genre');
   const countEl  = document.getElementById('bte-count');
+
+  if (!yearEl || !artistEl || !albumEl || !genreEl) {
+    console.warn('[selBatchTagEdit] modal DOM not ready'); return;
+  }
+
   const n = ids.length;
 
   if (countEl) countEl.textContent = `${n} titre${n > 1 ? 's' : ''} sélectionné${n > 1 ? 's' : ''}`;

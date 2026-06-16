@@ -101,20 +101,10 @@ export function virtRenderWindow(fl) {
   const midId = fl[fl.length >> 1]?.id || '';
   const sig = `${fl.length}|${sort}|${query}|${view}|${fl[0]?.id||''}|${midId}|${fl[fl.length-1]?.id||''}`;
   if (VIRT._lastListSig !== sig) {
+    // virtBuildRows sets VIRT._fiToRowIdx and VIRT._hasGroups as derived
+    // projections of the row array — no need to rebuild them here.
     VIRT._rows        = virtBuildRows(fl, { sort, query, view });
     VIRT._lastListSig = sig;
-    // I-2: construire la Map fi→rowIdx pour O(1) lookup dans scrollToCurrentTrack
-    const fiMap = new Map();
-    let hasGroups = false;
-    for (let i = 0; i < VIRT._rows.length; i++) {
-      const r = VIRT._rows[i];
-      if (r.type === 'tr') fiMap.set(r.fi, i);
-      else hasGroups = true;
-    }
-    VIRT._fiToRowIdx = fiMap;
-    // V3 : mémoriser la présence de groupes — évite le scan arrière du pin
-    // de header sur les listes non groupées.
-    VIRT._hasGroups = hasGroups;
   }
 
   const rows     = VIRT._rows;
@@ -137,9 +127,9 @@ export function virtRenderWindow(fl) {
 
   VIRT._startIdx = startIdx;
   VIRT._endIdx   = endIdx;
-  const tracks  = get('tracks');
+  const tracks  = get('tracks') || [];
   const liked   = get('liked');
-  const curTrack = curIdx >= 0 ? tracks[curIdx] : null;
+  const curTrack = curIdx >= 0 && tracks.length > curIdx ? tracks[curIdx] : null;
 
   const topH    = virtOffsetOf(rows, startIdx);
   const totalH  = virtTotalH(rows);

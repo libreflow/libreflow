@@ -82,6 +82,7 @@ export function releaseFocus(dialogEl) {
 // La modale "vider la bibliothèque" utilise désormais <lf-modal id="clear-modal">
 // qui gère le focus trap en interne.
 let _autoTrapInstalled = false;
+const _autoTrapObservers = [];
 
 /** Initialise l'observateur global. Idempotent — appelé une fois au boot. */
 export function installAutoFocusTrap() {
@@ -114,7 +115,15 @@ export function installAutoFocusTrap() {
       else                                                              releaseFocus(dialog);
     });
     obs.observe(bg, { attributes: true, attributeFilter: ['class'] });
+    _autoTrapObservers.push(obs);
   }
+}
+
+/** Déconnecte tous les observateurs auto-trap. Utile pour les tests ou teardown. */
+export function uninstallAutoFocusTrap() {
+  _autoTrapObservers.forEach(o => o.disconnect());
+  _autoTrapObservers.length = 0;
+  _autoTrapInstalled = false;
 }
 
 /**

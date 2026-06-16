@@ -70,6 +70,15 @@ export function saveCfg() {
   _saveCfgTimer = setTimeout(_doSaveCfg, CFG.CFG_SAVE_DEBOUNCE);
 }
 
+/**
+ * Annule tout save différé en attente. Appeler avant de fermer/réinitialiser la DB
+ * pour éviter qu'un debounce orphelin écrive sur une connexion fermée.
+ */
+export function cancelSaveCfg() {
+  clearTimeout(_saveCfgTimer);
+  _saveCfgTimer = null;
+}
+
 // ── Implémentation ────────────────────────────────────────────────────────────
 
 async function _doSaveCfg() {
@@ -157,7 +166,7 @@ async function _doSaveCfg() {
   } catch (e) {
     if (isQuotaError(e)) {
       // ARCH-7 : quota IDB — cfg est petit, si ça échoue c'est vraiment critique
-      console.error('[cfgsave] Quota IDB dépassé — configuration non persistée:', e);
+      console.warn('[cfgsave] Quota IDB dépassé — configuration non persistée:', e);
       toast(i18n('err_quota'), 'error');
     } else {
       console.warn('[cfgsave] IDB save failed — config non persistée:', e);

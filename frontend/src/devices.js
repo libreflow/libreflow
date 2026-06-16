@@ -161,11 +161,12 @@ export async function importFromDrive(drivePath) {
     return;
   }
 
-  const added = await importPaths(files);
-  if (added > 0) {
-    toast(`${added} piste(s) importée(s) depuis le lecteur USB`, 'success');
-  } else {
-    toast('Aucune nouvelle piste trouvée (déjà dans la bibliothèque ?)', 'info');
+  try {
+    const added = await importPaths(files);
+    toast(added > 0 ? `${added} piste(s) importée(s)` : 'Aucune nouvelle piste', added > 0 ? 'success' : 'info');
+  } catch (e) {
+    console.warn('[devices] importPaths failed:', e);
+    toast('Erreur lors de l\'import depuis le lecteur', 'error');
   }
 }
 

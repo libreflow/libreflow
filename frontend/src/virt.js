@@ -125,11 +125,17 @@ function virtBuildRows(fl, { sort = 'az', query = '', view = 'all' } = {}) {
   VIRT._totalH  = offsets[rows.length];
   // Rebuild _fiToRowIdx so scrollToIdx never falls back to O(n) linear scan,
   // even when called before the first virtRenderWindow() (e.g. boot restore).
+  // Also record whether any group rows exist so virtRenderWindow can skip the
+  // pin-header scan entirely for flat (ungrouped) lists — avoids a second O(n)
+  // traversal that was previously done inline in virtRenderWindow.
   const fiMap = new Map();
+  let hasGroups = false;
   for (let i = 0; i < rows.length; i++) {
     if (rows[i].type === 'tr') fiMap.set(rows[i].fi, i);
+    else hasGroups = true;
   }
   VIRT._fiToRowIdx = fiMap;
+  VIRT._hasGroups  = hasGroups;
   return rows;
 }
 

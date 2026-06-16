@@ -23,6 +23,7 @@ import { toast, esc }            from './ui.js';
 import { VIRT }                  from './virt.js';
 import { rebuildTrackIdxMap,
          invalidateFilterCache } from './search.js';
+import { CFG }                   from './cfg.js';
 
 // ── État module ───────────────────────────────────────────────────────────────
 /** @type {Array<{from:string,to:string}>} */
@@ -126,7 +127,7 @@ export async function organizePreview(scheme) {
 
   let dryResult;
   try {
-    dryResult = await invoke('organize_files', { moves, dryRun: true });
+    dryResult = await invoke('organize_files', { moves, dryRun: true }, { timeout: CFG.ORGANIZE_DRY_RUN_TIMEOUT_MS });
   } catch (e) {
     toast(`Erreur de validation : ${e}`, 'error');
     return;
@@ -156,11 +157,16 @@ export async function organizeConfirm() {
 
   let result;
   try {
-    result = await invoke('organize_files', { moves: _pendingMoves, dryRun: false }, { timeout: 0 });
+    result = await invoke('organize_files', { moves: _pendingMoves, dryRun: false }, { timeout: CFG.ORGANIZE_TIMEOUT_MS });
   } catch (e) {
     toast(`Erreur lors de l'organisation : ${e}`, 'error');
     organizeCancel();
     return;
+  }
+
+  if (!result || typeof result.error_count !== 'number') {
+    toast('Réponse inattendue du serveur', 'error');
+    organizeCancel(); return;
   }
 
   const failCount = result.error_count;

@@ -398,11 +398,13 @@ export async function ctxDeleteTrack() {
   let undone = false;
   const idbTimer = setTimeout(async () => {
     if (undone) return;
-    // Révoquer les blob URLs maintenant que la fenêtre undo est expirée (MEM-1/MEM-2)
-    if (t.art && t.art.startsWith('blob:')) try { URL.revokeObjectURL(t.art); } catch {}
-    if (t.url && t.url.startsWith('blob:')) try { URL.revokeObjectURL(t.url); } catch {}
-    await ddel('tracks', t.id);
-    if (playlistsChanged) savePlaylists();
+    try {
+      // Révoquer les blob URLs maintenant que la fenêtre undo est expirée (MEM-1/MEM-2)
+      if (t.art?.startsWith('blob:')) try { URL.revokeObjectURL(t.art); } catch {}
+      if (t.url?.startsWith('blob:')) try { URL.revokeObjectURL(t.url); } catch {}
+      await ddel('tracks', t.id);
+      if (playlistsChanged) await savePlaylists();
+    } catch (e) { console.warn('[ctxDeleteTrack] IDB delete failed:', e); }
   }, UNDO_MS);
 
   toastWithAction(

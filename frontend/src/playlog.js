@@ -54,7 +54,11 @@ export function logPlay(t) {
   const entry = { ts, id: t.id, dur: t.duration || 0 };
   playLog.push(entry);
   _pendingTs.add(entry.ts);
-  if (playLog.length > CFG.PLAYLOG_MAX_ENTRIES) playLog = playLog.slice(-CFG.PLAYLOG_MAX_ENTRIES);
+  if (playLog.length > CFG.PLAYLOG_MAX_ENTRIES) {
+    const _dropped = playLog.slice(0, playLog.length - CFG.PLAYLOG_MAX_ENTRIES);
+    _dropped.forEach(e => _pendingTs.delete(e.ts));
+    playLog = playLog.slice(-CFG.PLAYLOG_MAX_ENTRIES);
+  }
   if (_playLogFlushTimer) clearTimeout(_playLogFlushTimer);
   _playLogFlushTimer = setTimeout(flushPlayLog, CFG.PLAYLOG_FLUSH_DELAY);
 }

@@ -36,37 +36,3 @@ export function setAriaValueText(el, fmt, val) {
   el.setAttribute('aria-valuetext', fmt(val));
 }
 
-/**
- * Configure un focus trap sur un conteneur. Retourne une fonction d'arrêt.
- */
-export function trapFocusIn(container) {
-  if (!container) return () => {};
-  const lastFocused = document.activeElement;
-  const focusables = () => container.querySelectorAll(
-    'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
-  );
-  const onKey = (e) => {
-    if (e.key === 'Escape') {
-      const closeBtn = container.querySelector('[data-action="close"], .modal-close');
-      if (closeBtn) closeBtn.click();
-      return;
-    }
-    if (e.key !== 'Tab') return;
-    const list = focusables();
-    if (!list.length) { e.preventDefault(); return; }
-    const first = list[0], last = list[list.length - 1];
-    if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
-    else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
-  };
-  document.addEventListener('keydown', onKey);
-  requestAnimationFrame(() => {
-    const list = focusables();
-    if (list.length) list[0].focus();
-  });
-  return function release() {
-    document.removeEventListener('keydown', onKey);
-    if (lastFocused && document.contains(lastFocused) && typeof lastFocused.focus === 'function') {
-      lastFocused.focus();
-    }
-  };
-}

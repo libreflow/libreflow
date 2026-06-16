@@ -9,7 +9,7 @@
 //   import  : i18n                    (i18n.js)
 //   import  : VIRT                    (virt.js)
 //   window  : tracks, toast, saveCfg, updateStats, renderLib,
-//             loadTagsBg, rebuildTrackIdxMap
+//             loadTagsBg — rebuildTrackIdxMap encapsulated by pushTracks() (state.js)
 //
 // Exports publics :
 //   initWatchPath, getWatchPath
@@ -22,7 +22,7 @@ import { i18n }                           from './i18n.js';
 import { get, notify }                    from './store.js';
 import { on, emit, EVENTS }               from './bus.js';
 import { VIRT }                           from './virt.js';
-import { rebuildTrackIdxMap, invalidateFilterCache } from './search.js';
+import { invalidateFilterCache } from './search.js';
 import { toast }                          from './ui.js';
 import { setView, showView }              from './views.js';
 import { loadTagsBg, loadTagsAndDurations } from './library.js';
@@ -131,9 +131,12 @@ async function _doInitialScan(files) {
     // B6 FIX : drainer les events watcher mis en file dans _pendingPaths pendant
     // que _importing tenait le lock — sinon ces fichiers ne sont importés que si
     // un autre event watcher arrive ensuite (sinon jamais).
+    // WATCHFOLDER-2 FIX : each pending batch wrapped in its own try/catch so a
+    // drain failure cannot leave _importing=true and deadlock all future imports.
     while (_pendingPaths.length) {
       const pending = _pendingPaths.splice(0);
-      await _doImportPaths(pending);
+      try { await _doImportPaths(pending); }
+      catch(e) { console.warn('[watchfolder] pending drain failed:', e); }
     }
     _importing = false;
   }
@@ -182,7 +185,7 @@ export async function toggleWatchFolder() {
   try {
     result = await invoke('open_folder', undefined, { timeout: 0 });
   } catch(err) {
-    console.error('[watchfolder] open_folder failed:', err);
+    console.warn('[watchfolder] open_folder failed:', err);
     toast(i18n('t_scan_error', err?.message ?? String(err)), 'error');
     return;
   }
@@ -216,7 +219,7 @@ function _reloadTagsForPaths(paths) {
   const byPath = new Map(tracks.map(t => [t.path, t]));
   for (const p of paths) {
     const t = byPath.get(p);
-    if (!t || !t.metaDone) continue; // skip if already loading
+    if (!t || !t.metaDone) continue; // TODO: track in _modPendingRetry set and reschedule after current load
     t.metaDone = false;
     loadTagsBg(t);
   }
@@ -240,10 +243,15 @@ export async function startWatchNative() {
   _starting = true;
   try {
     // Démarrer le watcher Rust — timeout pour NAS déconnecté ou chemin invalide (IPC-1 FIX)
-    await Promise.race([
-      invoke('watch_folder_start', { path: watchPath }),
-      new Promise((_, rej) => setTimeout(() => rej(new Error('watch_folder_start timeout')), CFG.IPC_TIMEOUT_MS)),
-    ]);
+    // WATCHFOLDER-1 FIX : clearTimeout in finally so the orphaned setTimeout handle
+    // does not fire 15 s later and raise an unhandled rejection after race resolves.
+    let _wt;
+    try {
+      await Promise.race([
+        invoke('watch_folder_start', { path: watchPath }),
+        new Promise((_, rej) => { _wt = setTimeout(() => rej(new Error('[watchfolder] start timeout')), CFG.IPC_TIMEOUT_MS); }),
+      ]);
+    } finally { clearTimeout(_wt); }
 
     // Écouter les événements émis par Rust quand de nouveaux fichiers audio apparaissent
     // SEC-10 : debounce WATCH_DEBOUNCE_MS pour batcher les bursts d'événements du watcher
@@ -255,12 +263,19 @@ export async function startWatchNative() {
       if (!newFiles.length) return;
       _watchRawPaths.push(...newFiles);
       if (_watchDebTimer) clearTimeout(_watchDebTimer);
+      // WATCHFOLDER-3 FIX : async debounce body wrapped in try/catch so a rejection
+      // from importPaths does not become an unhandled promise rejection.
       _watchDebTimer = setTimeout(async () => {
         _watchDebTimer = null;
         const batch = _watchRawPaths.splice(0);
         if (!batch.length) return;
-        const added = await importPaths(batch);
-        if (added) toast(i18n('t_new_files', added), 'success');
+        try {
+          const added = await importPaths(batch);
+          if (added) toast(i18n('t_new_files', added), 'success');
+        } catch(e) {
+          console.warn('[watchfolder] importPaths from watcher failed:', e);
+          toast(i18n('t_scan_error', e?.message ?? String(e)), 'error');
+        }
       }, CFG.WATCH_DEBOUNCE_MS);
     });
 

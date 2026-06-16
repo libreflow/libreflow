@@ -5,7 +5,8 @@ import { get, set }                                          from './store.js';
 import { emit, EVENTS }                                      from './bus.js';
 import { _trackIdxMap, invalidateFilterCache, _coll }        from './search.js';
 import { VIRT }                                              from './virt.js';
-import { esc, fmtd }                                         from './utils.js';
+import { esc }                                                from './utils.js';
+import { updatePlActionBar, updateBreadcrumb }              from './renderer-playlist-bar.js';
 import { i18n }                                              from './i18n.js';
 import { getArtUrl }                                         from './artLoader.js';
 import { hlText }                                            from './renderer-track.js';
@@ -16,15 +17,11 @@ let _albumMapCache    = null;
 let _artistMapCache   = null;
 let _formatChipsCache = null; // { sig: string, formats: string[] } — invalidated with tracks[]
 let _tracksSig        = ''; // content hash for selective map invalidation
-const _artTrackById     = new Map();   // trackId → piste représentative (carte grille/drill)
 // R5-B FIX : un IntersectionObserver par grille (Albums / Artistes) au lieu d'un unique
 // partagé. L'ancien code déconnectait l'observer Albums quand la grille Artistes en créait
 // un nouveau, laissant des placeholders non-hydratés dans la grille Albums si les deux
 // grilles étaient rendues dans la même session.
 const _gridArtObservers = new Map(); // gridEl → IntersectionObserver
-
-// ── État interne (pl-action-bar) ──────────────────────────────────────────────
-let _plHero = null;    // référence au #pl-hero courant (FIX-B1)
 
 // ── Private helpers ───────────────────────────────────────────────────────────
 
@@ -46,7 +43,15 @@ function _computeTracksSig(tracks) {
 function _hydrateArtPlaceholders(rootEl, { observe = false } = {}) {
   if (!rootEl) return;
   const hydrate = (ph) => {
-    const t = _artTrackById.get(ph.getAttribute('data-art-tid'));
+    // GRID-ART-1 FIX : utiliser _trackIdxMap (toujours cohérente avec tracks[]) au lieu
+    // de _artTrackById (Map privée qui peut être effacée par invalidateGridMapsIfChanged
+    // pendant qu'un IntersectionObserver est en vol) — évite les pochettes définitivement
+    // manquantes quand un import/watch-folder change la signature de tracks[] entre le
+    // rendu de la grille et le premier callback de l'observer.
+    const tid = ph.getAttribute('data-art-tid');
+    const idx = _trackIdxMap.get(tid);
+    const tracks = get('tracks') || [];
+    const t = idx !== undefined ? tracks[idx] : null;
     if (!t) return;
     getArtUrl(t).then(url => {
       if (!url || !ph.isConnected) return;
@@ -54,9 +59,17 @@ function _hydrateArtPlaceholders(rootEl, { observe = false } = {}) {
       img.alt = '';
       img.setAttribute('aria-hidden', 'true');
       if (ph.dataset.artImgClass) img.className = ph.dataset.artImgClass;
+      img.onerror = () => {
+        if (!img.isConnected) return;
+        const fb = document.createElement('div');
+        fb.className = ph.className || 'card-art-ph';
+        fb.setAttribute('aria-hidden', 'true');
+        fb.textContent = ph.textContent || '';
+        img.replaceWith(fb);
+      };
       img.src = url;
       ph.replaceWith(img);
-    }).catch((e) => console.warn('[getArtUrl]', t?.id, e));
+    }).catch((e) => console.warn('[getArtUrl]', tid, e));
   };
   const phs = rootEl.querySelectorAll('[data-art-tid]');
   if (observe && 'IntersectionObserver' in window) {
@@ -75,6 +88,29 @@ function _hydrateArtPlaceholders(rootEl, { observe = false } = {}) {
   } else {
     for (const ph of phs) hydrate(ph);
   }
+}
+
+/**
+ * Attache un listener d'erreur (capture) sur un conteneur de grille.
+ * Remplace toute <img> cassée par un placeholder SVG-moins visuel.
+ */
+function _attachGridArtFallback(grid) {
+  grid.addEventListener('error', e => {
+    const img = e.target;
+    if (img.tagName !== 'IMG' || !img.isConnected) return;
+    const card = img.closest('.card');
+    const isArtist = card?.classList.contains('card-artist');
+    const fb = document.createElement('div');
+    fb.setAttribute('aria-hidden', 'true');
+    if (isArtist) {
+      fb.className = 'card-art-ph card-art-circle';
+      fb.textContent = card.querySelector('.card-name')?.textContent?.[0]?.toUpperCase() || '?';
+    } else {
+      fb.className = 'card-art-ph';
+      fb.textContent = '💿';
+    }
+    img.replaceWith(fb);
+  }, true /* capture — error ne bulle pas */);
 }
 
 /** Construit la liste des entrées album depuis tracks[]. */
@@ -105,7 +141,7 @@ export function _getAlbumMap() {
     if (t.artist) a.artistSet.add(t.artist);
     if (t.art && !a.art) a.art = t.art;
     // C1 — piste représentative pour l'hydratation paresseuse du drill header.
-    if (!a.artTrack && t._hasArt && !t.noArt) { a.artTrack = t; _artTrackById.set(t.id, t); }
+    if (!a.artTrack && t._hasArt && !t.noArt) { a.artTrack = t; }
     // AC5 (audit cards 2026-06-11) : année déterministe = min des années valides
     // (avant : première rencontrée — arbitraire selon l'ordre du scan).
     // 1970 reste traité en sentinelle epoch-0 (à régler à l'import, pas ici).
@@ -143,7 +179,7 @@ export function _getArtistMap() {
     if (t.album) a.albumCount.add(t.album);
     if (t.art && !a.art) a.art = t.art;
     // C1 — piste représentative pour l'hydratation paresseuse du drill header.
-    if (!a.artTrack && t._hasArt && !t.noArt) { a.artTrack = t; _artTrackById.set(t.id, t); }
+    if (!a.artTrack && t._hasArt && !t.noArt) { a.artTrack = t; }
   }
   _artistMapCache = [...map.values()];
   return _artistMapCache;
@@ -288,7 +324,6 @@ export function invalidateGridMaps() {
   _albumMapCache    = null;
   _artistMapCache   = null;
   _formatChipsCache = null;
-  _artTrackById.clear();
 }
 
 /**
@@ -304,9 +339,6 @@ export function invalidateGridMapsIfChanged(tracks) {
     _albumMapCache    = null;
     _artistMapCache   = null;
     _formatChipsCache = null;
-    // R5-A FIX : vider la Map trackId→piste des grilles — évite les références
-    // à des pistes supprimées et la fuite mémoire associée.
-    _artTrackById.clear();
   }
 }
 
@@ -350,11 +382,15 @@ export function renderAlbumsGrid() {
   }
   // Adapter les noms de champs pour la couche de rendu (displayName→name, art→artUrl, totalDuration→totalDur)
   // On crée une vue légère (pas de copie profonde — les valeurs sont scalaires ou refs partagées).
+  // GRID-ART-2 FIX : a.art est un snapshot capturé au build du cache (peut être null si l'artwork
+  // n'était pas encore résolu à ce moment). a.artTrack.art est la valeur LIVE sur l'objet piste
+  // (mis à jour par getArtUrl dès la première hydratation). Le fallback évite un aller-retour
+  // placeholder→observer→hydratation quand l'artwork est déjà en mémoire.
   albums = albums.map(a => ({
     name:    a.key,
     artist:  a.artist,
     isMulti: a.isMulti,
-    artUrl:  a.art,
+    artUrl:  a.art || a.artTrack?.art || null,
     artTrack: a.artTrack,
     count:   a.count,
     totalDur: a.totalDuration,
@@ -410,6 +446,7 @@ export function renderAlbumsGrid() {
     </div>`;
   }).join('');
 
+  _attachGridArtFallback(grid);
   _hydrateArtPlaceholders(grid, { observe: true });   // C1 — artwork paresseux des cartes
   updateBreadcrumb();
 }
@@ -454,7 +491,7 @@ export function renderArtistsGrid() {
       a.count++;
       if (t.album) a.albumCount.add(t.album);
       if (!a.art && t.art) a.art = t.art;
-      if (!a.artTrack && t._hasArt && !t.noArt) { a.artTrack = t; _artTrackById.set(t.id, t); }
+      if (!a.artTrack && t._hasArt && !t.noArt) { a.artTrack = t; }
     }
     artists = [...artistMap.values()];
   }
@@ -471,8 +508,10 @@ export function renderArtistsGrid() {
   }
 
   grid.innerHTML = artists.map(a => {
-    const artHtml = a.art
-      ? `<img src="${esc(a.art)}" alt="" aria-hidden="true">`
+    // GRID-ART-2 FIX : même fallback live que renderAlbumsGrid — utiliser a.artTrack.art si a.art est stale/null.
+    const resolvedArt = a.art || a.artTrack?.art || null;
+    const artHtml = resolvedArt
+      ? `<img src="${esc(resolvedArt)}" alt="" aria-hidden="true">`
       : a.artTrack
         ? `<div class="card-art-ph card-art-circle" aria-hidden="true" data-art-tid="${esc(a.artTrack.id)}">${esc(a.displayName?.[0]?.toUpperCase() || '?')}</div>`
         : `<div class="card-art-ph card-art-circle" aria-hidden="true">${esc(a.displayName?.[0]?.toUpperCase() || '?')}</div>`;
@@ -491,6 +530,7 @@ export function renderArtistsGrid() {
     </div>`;
   }).join('');
 
+  _attachGridArtFallback(grid);
   _hydrateArtPlaceholders(grid, { observe: true });   // C1 — artwork paresseux des cartes
   updateBreadcrumb();
 }
@@ -601,8 +641,6 @@ export function drillDown(from, key, displayName) {
     _albumMapCache    = null;
     _artistMapCache   = null;
     _formatChipsCache = null;
-    // R5-A FIX : cohérence avec renderLib — vider les références grille obsolètes.
-    _artTrackById.clear();
   }
   emit(EVENTS.FILTER_CHANGED, {});
 
@@ -635,118 +673,6 @@ export function drillDown(from, key, displayName) {
   emit(EVENTS.RENDER_LIB, {});
 }
 
-// ── updatePlActionBar ─────────────────────────────────────────────────────────
-
-/** Génère ou met à jour la barre d'action pour la playlist courante.
- *  FIX-B2 : ancrée après #pl-hero dans le DOM. */
-export function updatePlActionBar() {
-  const curPlId   = get('curPlId');
-  const playlists = get('playlists') || [];
-  const tracks    = get('tracks')    || [];
-
-  const pl = curPlId ? playlists.find(p => p.id === curPlId) : null;
-  if (!pl) {
-    const existing = document.getElementById('pl-action-bar');
-    if (existing) existing.remove();
-    return;
-  }
-
-  const plTracks = pl.trackIds.map(id => {
-    const idx = _trackIdxMap.get(id);
-    return idx !== undefined ? tracks[idx] : null;
-  }).filter(Boolean);
-  // BUG-2 FIX: count = pistes résolues uniquement (sans les IDs orphelins)
-  const count    = plTracks.length;
-  const totalDur = plTracks.reduce((s, t) => s + (t.duration || 0), 0);
-
-  const plSort = get('plSort') || 'manual';
-  const sorts = [
-    { v: 'manual',   l: i18n('pl_sort_manual')   || 'Manuel' },
-    { v: 'az',       l: i18n('sort_az')           || 'A–Z' },
-    { v: 'za',       l: i18n('sort_za')           || 'Z–A' },
-    { v: 'artist',   l: i18n('sort_artist')       || 'Artiste' },
-    { v: 'album',    l: i18n('sort_album')         || 'Album' },
-    { v: 'duration', l: i18n('pl_sort_duration')  || 'Durée' },
-  ];
-  const sortOptions = sorts.map(s =>
-    `<option value="${s.v}"${plSort === s.v ? ' selected' : ''}>${esc(s.l)}</option>`
-  ).join('');
-
-  const html = `<div id="pl-action-bar" class="pl-action-bar">
-    <span class="pl-bar-count">${count} ${i18n('n_tracks', count)}${totalDur > 0 ? ' · ' + fmtd(totalDur) : ''}</span>
-    <span class="pl-bar-spacer"></span>
-    <button class="pl-act-btn" data-action="play-pl-from" data-idx="0">▶ ${i18n('pl_play_all') || 'Tout lire'}</button>
-    <button class="pl-act-btn" data-action="shuffle-cur-pl">⇀ ${i18n('pl_shuffle') || 'Aléatoire'}</button>
-    <select class="pl-sort-sel" data-input-action="pl-sort" aria-label="${i18n('sort') || 'Tri'}">${sortOptions}</select>
-    <button class="pl-act-btn icon-btn" data-action="show-cur-pl-menu" aria-label="${i18n('pl_more') || 'Plus'}">•••</button>
-  </div>`;
-
-  // FIX-B2 : insérer après #pl-hero, pas dans un slot pré-existant
-  const hero = document.getElementById('pl-hero');
-  const existing = document.getElementById('pl-action-bar');
-  if (existing) existing.remove();
-  if (hero) {
-    _plHero = hero; // FIX-B1 : mémoriser la référence
-    hero.insertAdjacentHTML('afterend', html);
-  } else {
-    // Fallback : insérer dans content-area
-    const ca = document.getElementById('content-area');
-    if (ca) ca.insertAdjacentHTML('afterbegin', html);
-  }
-}
-
-// ── updateBreadcrumb ──────────────────────────────────────────────────────────
-
-/** Met à jour le fil d'Ariane selon l'état de drill-down courant. */
-export function updateBreadcrumb() {
-  const bc = document.getElementById('breadcrumb');
-  if (!bc) return;
-
-  const view         = get('view')         || 'all';
-  const drillKey     = get('drillKey')     || '';
-  const drillFrom    = get('drillFrom')    || '';
-  const drillDisplay = get('drillDisplayName') || drillKey;
-  const curPlId      = get('curPlId');
-  const playlists    = get('playlists') || [];
-
-  // Afficher uniquement en drill-down
-  const isDrill = drillKey || (view === 'playlist' && curPlId) ||
-    ['album-detail', 'artist-detail', 'genre-detail'].includes(view);
-
-  if (!isDrill) {
-    bc.style.display = 'none';
-    bc.innerHTML = '';
-    return;
-  }
-
-  bc.style.display = '';
-
-  const fromLabels = {
-    albums:  i18n('lib_albums')  || 'Albums',
-    artists: i18n('lib_artists') || 'Artistes',
-    genres:  'Genres',
-    playlists: i18n('nav_playlists') || 'Playlists',
-  };
-
-  let items = [];
-  if (drillFrom) {
-    items.push({ label: fromLabels[drillFrom] || drillFrom, action: `setView('${drillFrom}')` });
-    items.push({ label: drillDisplay, current: true });
-  } else if (view === 'playlist' && curPlId) {
-    const pl = playlists.find(p => p.id === curPlId);
-    items.push({ label: fromLabels.playlists, action: "setView('playlists')" });
-    items.push({ label: pl?.name || '?', current: true });
-  }
-
-  bc.innerHTML = items.map((item, i) => {
-    if (item.current) {
-      return `<span class="bc-cur" aria-current="page">${esc(item.label)}</span>`;
-    }
-    return `<button class="bc-link" data-action="bc-navigate" data-bc-idx="${i}">${esc(item.label)}</button>
-            <span class="bc-sep" aria-hidden="true">›</span>`;
-  }).join('');
-}
-
 // ── renderFormatChips ─────────────────────────────────────────────────────────
 
 /**
@@ -776,3 +702,5 @@ export function renderFormatChips() {
     ),
   ].join('');
 }
+
+export { updatePlActionBar, updateBreadcrumb } from './renderer-playlist-bar.js';

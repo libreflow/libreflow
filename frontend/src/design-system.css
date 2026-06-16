@@ -550,6 +550,10 @@ html[data-mode="light"] {
   --art-hero:     148px;   /* hero cover — taille pleine */
   --art-list:      56px;   /* colonne artwork dans rangée track (grid) */
   --tr-h:          48px;   /* hauteur d'une ligne piste — pilotée par data-tlist-zoom */
+  --tr-font:    0.875rem;  /* taille titre piste — pilotée par data-tlist-zoom */
+  --tr-font-sub: 0.75rem;  /* taille artiste/album — pilotée par data-tlist-zoom */
+  --tr-pad-v:       6px;   /* padding vertical ligne piste — pilotée par data-tlist-zoom */
+  --tr-lh:          1.3;   /* line-height titre/sous-titre — pilotée par data-tlist-zoom */
 
   /* Éléments structurels — tracks & sliders */
   --track-h-xs: 2px;   /* indicateurs fins, tab active line */
@@ -1078,10 +1082,15 @@ html[data-mode="light"] {
   initial-value: #8B6BFF;
 }
 
-/* ── Zoom liste de pistes (rapatrié de style.css — pilote --tr-h/--art-list §13) ── */
-:root[data-tlist-zoom="compact"]     { --tr-h: 36px; --art-list: 42px; }
-:root[data-tlist-zoom="normal"]      { --tr-h: 48px; --art-list: 56px; }  /* Normal = pré-feature (intouché) */
-:root[data-tlist-zoom="comfortable"] { --tr-h: 60px; --art-list: 70px; }
+/* ── Zoom liste de pistes (pilote --tr-h / --art-list / --tr-font / --tr-font-sub / --tr-pad-v / --tr-lh) ── */
+:root[data-tlist-zoom="micro"]       { --tr-h: 28px; --art-list: 26px; --tr-font: 0.75rem;   --tr-font-sub: 0.6875rem; --tr-pad-v: 0px;  --tr-lh: 1.1;  }
+:root[data-tlist-zoom="compact"]     { --tr-h: 36px; --art-list: 32px; --tr-font: 0.8125rem; --tr-font-sub: 0.6875rem; --tr-pad-v: 2px;  --tr-lh: 1.2;  }
+:root[data-tlist-zoom="normal"]      { --tr-h: 48px; --art-list: 44px; --tr-font: 0.875rem;  --tr-font-sub: 0.75rem;   --tr-pad-v: 6px;  --tr-lh: 1.3;  }
+:root[data-tlist-zoom="comfortable"] { --tr-h: 60px; --art-list: 56px; --tr-font: 0.9375rem; --tr-font-sub: 0.8125rem; --tr-pad-v: 8px;  --tr-lh: 1.35; }
+:root[data-tlist-zoom="spacious"]    { --tr-h: 76px; --art-list: 70px; --tr-font: 1rem;      --tr-font-sub: 0.875rem;  --tr-pad-v: 10px; --tr-lh: 1.4;  }
+/* micro : sous-titre et album masqués — pas assez de place verticale */
+:root[data-tlist-zoom="micro"] .ts,
+:root[data-tlist-zoom="micro"] .ta  { display: none; }
 
 /* ── Thèmes couleur (accent par défaut = Electric Indigo via --accent) ─── */
 [data-theme="indigo"] { --g:#8B6BFF; --g-rgb:139,107,255; --gd:rgba(139,107,255,.14); --gg:rgba(139,107,255,.28); }

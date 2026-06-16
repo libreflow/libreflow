@@ -167,7 +167,7 @@
  * Niveaux de zoom de la liste de pistes.
  * Correspond aux valeurs de TLIST_ZOOM_LEVELS dans tlistZoom.js.
  *
- * @typedef {'compact'|'normal'|'comfortable'} ZoomLevel
+ * @typedef {'micro'|'compact'|'normal'|'comfortable'|'spacious'} ZoomLevel
  */
 
 /**
@@ -186,6 +186,7 @@
  * @property {{ view: string }} 'ui:view'
  * @property {{ theme: string }} 'ui:theme'
  * @property {{}} 'ui:render_lib'
+ * @property {{}} 'i18n:lang_changed'
  */
 
 // ── ActionKey — union des data-action strings du registre handlers.js ──────────

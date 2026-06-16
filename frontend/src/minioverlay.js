@@ -9,7 +9,8 @@
 //   updateMiniOverlayProgress, initMiniOverlayDrag
 
 import { get }   from './store.js';
-import { audio } from './player.js';
+
+const audio = /** @type {HTMLAudioElement} */ (document.getElementById('audio'));
 
 const SVG_PLAY  = `<svg viewBox="0 0 24 24"><polygon points="6 3 20 12 6 21" fill="currentColor"/></svg>`;
 const SVG_PAUSE = `<svg viewBox="0 0 24 24"><rect x="5.5" y="4" width="4" height="16" rx="1.5" fill="currentColor"/><rect x="14.5" y="4" width="4" height="16" rx="1.5" fill="currentColor"/></svg>`;
