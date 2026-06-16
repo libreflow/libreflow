@@ -54,6 +54,7 @@
  * @property {string|null}      ctxTrackId
  * @property {string}           formatFilter
  * @property {string}           tlistZoom
+ * @property {boolean}          queuePinned
  */
 
 /** @type {AppState} */
@@ -98,6 +99,7 @@ const _state = {
   ctxTrackId:        null,      // string | null — track id for context menu
   formatFilter:      '',        // '' = tous, 'MP3'/'FLAC'/etc. = filtre actif
   tlistZoom:         'normal',  // 'normal' | 'compact' | 'comfortable' — track list zoom level
+  queuePinned:       false,     // boolean — whether the queue panel is pinned open
 };
 
 /** @type {Map<string, Set<Function>>} */

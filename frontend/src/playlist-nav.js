@@ -257,10 +257,13 @@ export async function renamePlFolder(folderId) {
   if (!name) return;
   const origName = f.name;
   f.name = name;
-  try { saveCfg(); renderPlNav(); setupPlNavDrop(); }
-  catch(e) {
+  try {
+    await saveCfg();
+    renderPlNav();
+    setupPlNavDrop();
+  } catch(e) {
     f.name = origName;
-    console.warn('[playlist-nav] renamePlFolder failed:', e);
+    console.warn('[playlist-nav] renamePlFolder: saveCfg failed:', e);
   }
 }
 

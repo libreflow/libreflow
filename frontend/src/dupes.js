@@ -119,6 +119,7 @@ export async function removeDupeTrack(id, gi, ti) {
     // adjustShuffleQAfterDelete + setCurIdx (l'idx est encore valide avant splice).
     adjustShuffleQAfterDelete(idx); // BUG-D2-2 FIX: sync shuffle queue
     get('liked').delete(t.id);
+    notify('liked');
     if (get('curIdx') === idx) { audio.pause(); setCurIdx(-1); }
     else if (get('curIdx') > idx) setCurIdx(get('curIdx') - 1);
     removeTrackAt(idx); // splice + rebuildTrackIdxMap + notify('tracks')
@@ -182,6 +183,7 @@ export async function deleteAllDupes() {
   // liked migré Set<id> : supprimer directement les IDs supprimés
   const liked = get('liked');
   idsToDelete.forEach(id => liked.delete(id));
+  notify('liked');
   dupesGroups = [];
   _renderDupes();
   updateDupesBadge();

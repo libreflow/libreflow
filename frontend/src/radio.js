@@ -542,6 +542,7 @@ export async function radioSaveAsPlaylist() {
     const name = i18n('radio_pl_name', seed ? seed.name : 'Mix');
     const pl = { id: 'pl_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7), name, trackIds: ids }; // BUG-m2 FIX : suffixe aléatoire pour éviter collision si sauvegardé 2× dans la même ms
     get('playlists').push(pl);
+    notify('playlists'); // BUG-3 FIX: push() in-place → notify() so subscribers see the change immediately
     try {
       await savePlaylists(); // savePlaylists() calls notify('playlists') + emits EVENTS.PLAYLIST_CHANGED
     } catch (e) {

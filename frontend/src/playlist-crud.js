@@ -113,8 +113,16 @@ export async function movePlToFolder(plId, folderId) {
   if (!pl) return;
   const folder = get('plFolders').find(f => f.id === folderId);
   if (!folder) return;
+  const prevFolderId = pl.folderId;
   pl.folderId = folderId;
-  await savePlaylists();
+  try {
+    await savePlaylists();
+  } catch (e) {
+    pl.folderId = prevFolderId;
+    notify('playlists');
+    console.warn('[playlist-crud] movePlToFolder: save failed, rolled back:', e);
+    return;
+  }
   toast(i18n('t_pl_moved_to_folder', folder.name) || `Déplacée dans « ${folder.name} »`, 'success');
 }
 
@@ -122,8 +130,16 @@ export async function movePlToFolder(plId, folderId) {
 export async function removePlFromFolder(plId) {
   const pl = get('playlists').find(p => p.id === plId);
   if (!pl || !pl.folderId) return;
+  const prevFolderId = pl.folderId;
   delete pl.folderId;
-  await savePlaylists();
+  try {
+    await savePlaylists();
+  } catch (e) {
+    pl.folderId = prevFolderId;
+    notify('playlists');
+    console.warn('[playlist-crud] removePlFromFolder: save failed, rolled back:', e);
+    return;
+  }
   toast(i18n('t_pl_removed_from_folder') || 'Retirée du dossier', 'success');
 }
 

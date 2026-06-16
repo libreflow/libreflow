@@ -69,6 +69,7 @@ import { resolveConfirm }                                      from './ui.js';
 import { setCrossfade }                                        from './player.js';
 import { importM3U, exportM3U, exportXSPF }                    from './m3u.js';
 import { invoke }                                              from './ipc.js';
+import { CFG }                                                from './cfg.js';
 import { setAriaValueText }                                    from './a11y.js';
 import { cycleSpeed, closeModal, clearLibrary, confirmClear, clearAppCache, updateVolSlider, playPlaylistFrom, shufflePlaylist, playPlaylistDirect, playCardByKey, saveCfg } from './app.js';
 import { _syncVizBtns, openSettings, closeSettings, toggleSettings, toggleMode, toggleShortcuts, closeShortcuts, setTheme, setMode, switchSetTab, syncMiniSettingsBtn } from './settings.js';
@@ -266,8 +267,8 @@ const _ACTIONS = {
 
   // ── Window controls ───────────────────────────────────────
   'win-minimize':    ()    => openMiniAndMinimize(),
-  'win-maximize':    () => invoke('win_maximize').catch(e => console.warn('[handlers] win_maximize:', e)),
-  'win-close':       () => invoke('win_close').catch(e => console.warn('[handlers] win_close:', e)),
+  'win-maximize':    () => invoke('win_maximize', {}, { timeout: CFG.IPC_TIMEOUT_MS }).catch(e => console.warn('[handlers] win_maximize:', e)),
+  'win-close':       () => invoke('win_close', {}, { timeout: CFG.IPC_TIMEOUT_MS }).catch(e => console.warn('[handlers] win_close:', e)),
 
   // ── Settings — appearance ─────────────────────────────────
   'set-lang':              btn  => { setLang(btn.dataset.lang); saveCfg(); },

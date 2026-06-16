@@ -188,26 +188,21 @@ function _drawHeroMosaic(fl) {
     const [px, py] = positions[i];
     img.onload = () => {
       if (_heroMosaicGen !== _myGen) return;
-      const cv = document.getElementById('pl-hero-mosaic');
-      if (!cv) return;
-      const ctx2d = cv.getContext('2d');
-      if (ctx2d) ctx2d.drawImage(img, px, py, 100, 100);
+      const cv = document.getElementById('pl-hero-mosaic'); if (!cv) return;
+      const ctx2d = cv.getContext('2d'); if (ctx2d) ctx2d.drawImage(img, px, py, 100, 100);
     };
     img.onerror = () => {
       if (_heroMosaicGen !== _myGen) return;
-      const cv = document.getElementById('pl-hero-mosaic');
-      if (!cv) return;
-      const c2 = cv.getContext('2d');
-      if (!c2) return;
-      c2.fillStyle = '#1a1a2a';
-      c2.fillRect(px, py, 100, 100);
+      const cv = document.getElementById('pl-hero-mosaic'); if (!cv) return;
+      const c2 = cv.getContext('2d'); if (!c2) return;
+      c2.fillStyle = '#1a1a2a'; c2.fillRect(px, py, 100, 100);
     };
     img.src = toLoad[i];
   }
 }
 
 /** Changer le tri interne de la playlist courante. Persiste dans pl.sort + re-rend. */
-export function setPlSort(val) {
+export async function setPlSort(val) {
   const playlists = get('playlists');
   const curPlId   = get('curPlId');
   const pl = playlists.find(p => p.id === curPlId);
@@ -216,7 +211,7 @@ export function setPlSort(val) {
   pl.sort = val;
   invalidateFilterCache(); emit(EVENTS.FILTER_CHANGED, {});
   emit(EVENTS.RENDER_LIB, {});
-  savePlaylists();
+  await savePlaylists().catch(e => console.warn('[playlists] setPlSort save failed:', e));
 }
 
 /** Renommage inline du nom dans le hero (double-clic). */
@@ -320,17 +315,9 @@ export function showPlQuickPop(e, trackId, triggerEl) {
     pop.style.visibility = '';
   });
 }
-export function pqpAdd(plId) {
-  if (_pqpTrackId) addTrackToPlaylist(_pqpTrackId, plId);
-  closePlQuickPop();
-}
-export function pqpNew() {
-  closePlQuickPop();
-  openNewPlaylistModal(_pqpTrackId);
-}
-export function closePlCtxMenu() {
-  document.getElementById('pl-ctx-menu')?.classList.remove('on');
-}
+export function pqpAdd(plId) { if (_pqpTrackId) addTrackToPlaylist(_pqpTrackId, plId); closePlQuickPop(); }
+export function pqpNew() { closePlQuickPop(); openNewPlaylistModal(_pqpTrackId); }
+export function closePlCtxMenu() { document.getElementById('pl-ctx-menu')?.classList.remove('on'); }
 
 export function getPqpTrackId() { return _pqpTrackId; }
 
@@ -802,7 +789,6 @@ export async function confirmPlaylistModal() {
     if (e.code === 'Escape') { e.preventDefault(); closePlModal(); }
   });
 });
-
 // ── Barrel re-exports — call sites externes inchangés ────────────────────────
 export { savePlaylists, addTrackToPlaylist, removeTrackFromPlaylist,
          deletePlaylist, togglePinPlaylist, movePlToFolder,

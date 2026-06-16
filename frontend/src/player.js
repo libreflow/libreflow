@@ -182,7 +182,6 @@ export async function playAt(filteredIdx, { skipScroll = false, keepQueue = fals
 
     curIdx = trackIdx(t.id);
     set('curIdx', curIdx);
-    if (radioActive) radioRefillQueue().catch(e => console.warn('[radio] refill failed:', e)); // MUST precede TRACK_CHANGE
     const ok = await ensureUrl(t);
     if (!ok) { toast(i18n('t_not_found'), 'error'); return; }
     if (!_trackIdxMap?.has(t.id)) return; // RACE-1: track deleted during await
@@ -197,13 +196,20 @@ export async function playAt(filteredIdx, { skipScroll = false, keepQueue = fals
       return;
     }
 
-    emit(EVENTS.TRACK_CHANGE, { track: t, idx: curIdx }); // RACE-4: after audio.play()
     _postPlaySideEffects(t);
     // @ts-ignore — filter(Boolean) narrows to string[] at runtime; join returns string
     const _wTitle = [t.name, t.artistFull || t.artist].filter(Boolean).join(' — ');
     invoke('win_set_title', { title: _wTitle ? `${_wTitle} | LibreFlow` : 'LibreFlow' }).catch((e) => console.warn('[win_set_title]', e));
-    if (!skipScroll) setTimeout(() => scrollToCurrentTrack(), 50);
-    if (rgEnabled) analyzeAndApplyRG();
+    const _afterRefill = () => {
+      emit(EVENTS.TRACK_CHANGE, { track: t, idx: curIdx }); // RACE-4: after audio.play() and radioRefillQueue
+      if (!skipScroll) setTimeout(() => scrollToCurrentTrack(), 50);
+      if (rgEnabled) analyzeAndApplyRG();
+    };
+    if (radioActive) {
+      radioRefillQueue().catch(e => console.warn('[player] radioRefillQueue failed', e)).then(_afterRefill);
+    } else {
+      _afterRefill();
+    }
   } finally {
     _playLock = false;
   }
