@@ -13,7 +13,7 @@
 import { eqCtx, eqSource, eqNodes, audioOutGain, initEQ } from './eq.js';
 import { CFG }                               from './cfg.js';
 import { get }                               from './store.js';
-import { saveTrack }                         from './library.js';
+import { emit, EVENTS }                       from './bus.js';
 import { saveCfg } from './cfgsave.js';
 import { invoke } from './ipc.js'; // BUG-M2 FIX : allow_asset_dir avant fetch(t.url)
 
@@ -192,7 +192,7 @@ export async function analyzeAndApplyRG() {
     t.rgPeak = Math.min(1.0, _peak);
     srcBuf = null; // allow GC of the 30 MB AudioBuffer
     applyRGGain(t.rgGain);
-    saveTrack(t); // persister en IDB pour ne pas recalculer au prochain démarrage
+    emit(EVENTS.TRACK_SAVE_REQUEST, { track: t }); // library.js écoute et persiste en IDB
   } catch(e) {
     // AUDIO-1 FIX : format non décodable — appliquer gain neutre explicitement.
     // Sans ça, rgGainNode conserve le gain du titre précédent (risque de saturation soudaine).

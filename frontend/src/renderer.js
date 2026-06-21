@@ -20,7 +20,7 @@
 //   FIX-A1  — role=button + tabindex=0 + aria-label sur cartes grille
 
 import { get, set }                                          from './store.js';
-import { emit, EVENTS }                                      from './bus.js';
+import { emit, on, EVENTS }                                  from './bus.js';
 import { getFiltered, filteredIdx, trackIdx,
          _trackIdxMap, invalidateFilterCache, _coll }        from './search.js';
 import { VIRT, virtBuildRows, virtIdxAtScroll,
@@ -1265,6 +1265,9 @@ export function scheduleStatsUpdate() {
   if (_statsTimer) clearTimeout(_statsTimer);
   _statsTimer = setTimeout(updateStats, CFG.STATS_UPDATE_DELAY);
 }
+
+// Déclenché par i18n.js lors d'un changement de langue — évite le cycle i18n ↔ renderer.
+on(EVENTS.LANG_CHANGED, () => updateStats());
 
 // ── ERG-P2 : Compteurs par vue dans la sidebar ────────────────────────────────
 /**

@@ -60,4 +60,12 @@ export const EVENTS = Object.freeze({
   VIEW_CHANGE:      'ui:view',           // { view }
   THEME_CHANGE:     'ui:theme',          // { theme }
   RENDER_LIB:       'ui:render_lib',     // {} — demande un renderLib() à app.js
+  // Panel coordination (évite les cycles d'import entre panneaux)
+  PANEL_CLOSE_QUEUE:    'panel:close_queue',    // {}
+  PANEL_CLOSE_SETTINGS: 'panel:close_settings', // {}
+  VIEW_REQUEST:         'ui:view_request',       // { view: string, btn: Element|null }
+  // i18n
+  LANG_CHANGED:         'i18n:lang_changed',     // {}
+  // Library
+  TRACK_SAVE_REQUEST:   'library:save_request',  // { track }
 });

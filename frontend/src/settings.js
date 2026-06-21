@@ -10,14 +10,17 @@
 import { get, set }                                      from './store.js';
 import { getMiniOpen }                                   from './miniplayer.js';
 import { eqOpen, closeEQ }                               from './eq.js';
-import { queueOpen, closeQueue }                         from './queue.js';
 import { getLang, i18n }                                 from './i18n.js';
 import { syncCinemaBgSettings, updateCinArtColor }       from './cinema.js';
 import { updateVizColor, getVizMode, getVizEnabled }     from './viz.js';
 import { saveCfg }       from './cfgsave.js';
+import { emit, on, EVENTS } from './bus.js';
 import { _allPlayerUI } from './allplayerui.js';
 import { $id, $input, $select } from './dom.js';
 import { setTlistZoom }         from './tlistZoom.js';
+
+// Fermeture via bus — évite le cycle d'import settings.js ↔ queue.js.
+on(EVENTS.PANEL_CLOSE_SETTINGS, () => { if ($id('settings-panel')?.classList.contains('on')) closeSettings(); });
 
 // ── État local ────────────────────────────────────────────────────────────────
 let _theme          = 'blue';
@@ -167,7 +170,7 @@ export function toggleSettings() {
 
 export function openSettings() {
   if (eqOpen)    closeEQ();
-  if (queueOpen) closeQueue();
+  emit(EVENTS.PANEL_CLOSE_QUEUE, {});
   const panel = $id('settings-panel');
   if (!panel) return;
   // A11Y-05: sauvegarder l'élément qui a déclenché l'ouverture pour le restaurer à la fermeture
@@ -428,7 +431,7 @@ export function toggleShortcuts() {
   _shortcutsOpen = !_shortcutsOpen;
   if (_shortcutsOpen) {
     if (eqOpen)    closeEQ();
-    if (queueOpen) closeQueue();
+    emit(EVENTS.PANEL_CLOSE_QUEUE, {});
   }
   $id('shortcuts-panel')?.classList.toggle('open', _shortcutsOpen);
 }

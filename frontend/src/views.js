@@ -12,9 +12,8 @@
 import { get, set, subscribe }                                        from './store.js';
 import { CFG, SORTS, SLBLS }                                         from './cfg.js';
 import { i18n }                                                       from './i18n.js';
-import { emit, EVENTS }                                              from './bus.js';
+import { emit, on, EVENTS }                                          from './bus.js';
 import { eqOpen, closeEQ }                                           from './eq.js';
-import { queueOpen, closeQueue }                                     from './queue.js';
 import { VIRT }                                                       from './virt.js';
 import { getFiltered, _trackIdxMap, invalidateFilterCache,
          wasFuzzySearch }                                            from './search.js';
@@ -37,6 +36,10 @@ function invalidateFilter() {
   invalidateGenreGridSig();
   emit(EVENTS.FILTER_CHANGED, {});
 }
+
+// Répond aux demandes de navigation émises par d'autres modules (ex: queue.js).
+// Évite le cycle d'import queue.js ↔ views.js.
+on(EVENTS.VIEW_REQUEST, ({ view, btn }) => setView(view, btn ?? null));
 
 // ── Helpers d'état ────────────────────────────────────────────────────────────
 // Toutes les lectures passent par get() — les mutations set() maintiennent le store à jour.
@@ -145,7 +148,7 @@ export function goHome() {
   } else {
     showView('welcome');
   }
-  closeQueue();
+  emit(EVENTS.PANEL_CLOSE_QUEUE, {});
   closeEQ();
 }
 
