@@ -37,9 +37,14 @@ function invalidateFilter() {
   emit(EVENTS.FILTER_CHANGED, {});
 }
 
-// Répond aux demandes de navigation émises par d'autres modules (ex: queue.js).
-// Évite le cycle d'import queue.js ↔ views.js.
-on(EVENTS.VIEW_REQUEST, ({ view, btn }) => setView(view, btn ?? null));
+// Répond aux demandes de navigation émises par d'autres modules (ex: queue.js, playlists.js).
+// Évite les cycles d'import queue.js ↔ views.js, playlists.js ↔ views.js.
+on(EVENTS.VIEW_REQUEST, ({ view, btn, plId }) => setView(view, btn ?? null, plId));
+// Stats demande la navigation vers un genre ou un artiste — évite le cycle stats.js ↔ views.js.
+on(EVENTS.STATS_DRILL_GENRE, ({ key, displayName }) => statsGoToGenre(key, displayName));
+on(EVENTS.STATS_DRILL_ARTIST, ({ displayName }) => statsGoToArtist(displayName));
+// Renderer demande l'annulation du debounce de recherche — évite le cycle renderer.js ↔ views.js.
+on(EVENTS.SEARCH_DEBOUNCE_CANCEL, () => cancelSearchDebounce());
 
 // ── Helpers d'état ────────────────────────────────────────────────────────────
 // Toutes les lectures passent par get() — les mutations set() maintiennent le store à jour.

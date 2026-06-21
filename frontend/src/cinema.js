@@ -23,10 +23,13 @@ import { audio, toggleLike, next, prev }      from './player.js';
 import { radioActive, stopRadio, startRadio, getRadioQueue } from './radio.js';
 import { toast }                                        from './ui.js';
 import { saveCfg }                   from './cfgsave.js';
-import { updateVolSlider }            from './playerbar.js';
 import { rgbToHsl, hslToRgb, boostSat, regionAvg, sampleArtColors } from './artcolor.js';
+import { emit, on, EVENTS }          from './bus.js';
 import { renderAmbientFrame }                from './ambientRenderer.js';
 import { timeline, set as motionSet, kill as motionKill, eases } from './motion.js';
+
+// Radio demande le toggle cinéma — évite le cycle d'import cinema.js ↔ radio.js.
+on(EVENTS.CINEMA_RADIO_TOGGLE, () => { if (cinemaOpen) toggleCinemaRadio(); });
 
 // ── State ───────────────────────────────────────────────────
 export let cinemaOpen     = false;
@@ -439,9 +442,9 @@ function _onCinemaTrapKey(e) {
 // ── Scroll molette → volume ──────────────────────────────────
 function _syncCinVol(v) {
   const cvol = document.getElementById('cinema-vol');
-  if (cvol) { cvol.value = v; updateVolSlider(cvol); }
+  if (cvol) { cvol.value = v; emit(EVENTS.VOL_SLIDER_UPDATE, { elId: 'cinema-vol' }); }
   const vel = document.getElementById('vol');
-  if (vel) { vel.value = v; updateVolSlider(vel); }
+  if (vel) { vel.value = v; emit(EVENTS.VOL_SLIDER_UPDATE, { elId: 'vol' }); }
   saveCfg();
 }
 

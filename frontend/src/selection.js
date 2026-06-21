@@ -19,7 +19,7 @@ import { ddel }                                         from './db.js';
 import { invoke, convertFileSrc }                       from './ipc.js';
 import { i18n }                                         from './i18n.js';
 import { get, subscribe, notify }                       from './store.js';
-import { emit, EVENTS }                                 from './bus.js';
+import { emit, on, EVENTS }                             from './bus.js';
 import { getFiltered, _trackIdxMap, invalidateFilterCache } from './search.js';
 import { audio, resetShuffleQ, clearCrossfadeTimers }   from './player.js';
 import { saveTrackNow }                                 from './library.js';
@@ -29,6 +29,8 @@ import { setCurIdx, setTracks, setLiked, replaceTracks } from './state.js';
 import { updateBar }                       from './playerbar.js';
 import { updateStats } from './renderer.js';
 import { savePlaylists, renderPlNav, openNewPlaylistModal } from './playlists.js';
+// Playlists demande l'effacement de la sélection — évite le cycle playlists.js ↔ selection.js.
+on(EVENTS.SELECTION_CLEAR, () => clearSelection());
 
 // ── État interne ──────────────────────────────────────────────
 export let selection     = new Set(); // trackIds sélectionnés

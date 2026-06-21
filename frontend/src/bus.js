@@ -68,4 +68,19 @@ export const EVENTS = Object.freeze({
   LANG_CHANGED:         'i18n:lang_changed',     // {}
   // Library
   TRACK_SAVE_REQUEST:   'library:save_request',  // { track }
+  // Settings / theme
+  THEME_APPLY_REQUEST:  'theme:apply_request',     // {}
+  // Player bar
+  VOL_SLIDER_UPDATE:    'player:vol_slider_update', // { elId: string }
+  // Context menu
+  CTX_MENU_CLOSE:       'ui:ctx_menu_close',        // {}
+  // Selection
+  SELECTION_CLEAR:      'selection:clear',           // {}
+  // Stats navigation
+  STATS_DRILL_GENRE:    'nav:stats_genre',           // { key, displayName }
+  STATS_DRILL_ARTIST:   'nav:stats_artist',          // { displayName }
+  // Search
+  SEARCH_DEBOUNCE_CANCEL: 'search:debounce_cancel',  // {}
+  // Cinema
+  CINEMA_RADIO_TOGGLE:  'cinema:radio_toggle',       // {}
 });

@@ -21,6 +21,8 @@ import { setTlistZoom }         from './tlistZoom.js';
 
 // Fermeture via bus — évite le cycle d'import settings.js ↔ queue.js.
 on(EVENTS.PANEL_CLOSE_SETTINGS, () => { if ($id('settings-panel')?.classList.contains('on')) closeSettings(); });
+// i18n demande l'application du thème — évite le cycle d'import i18n.js ↔ settings.js.
+on(EVENTS.THEME_APPLY_REQUEST, () => applyTheme());
 
 // ── État local ────────────────────────────────────────────────────────────────
 let _theme          = 'blue';

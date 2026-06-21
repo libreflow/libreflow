@@ -6,7 +6,6 @@
 
 import { toast }        from './ui.js';
 import { emit, EVENTS } from './bus.js';
-import { applyTheme } from './settings.js';
 import { setCrossfade } from './player.js';
 import { get } from './store.js';
 
@@ -1547,6 +1546,6 @@ export function applyLang() {
   if (vlib && vlib.classList.contains('on')) emit(EVENTS.RENDER_LIB, {});
 
   // Apply theme and crossfade
-  applyTheme();
+  emit(EVENTS.THEME_APPLY_REQUEST, {});
   setCrossfade(get('crossfadeDur') || 0);
 }

@@ -32,7 +32,6 @@ import { prefetchArts, getArtUrl }                           from './artLoader.j
 
 // Imports circulaires — OK en ES modules (appelés à l'exécution, pas à l'init)
 import { playAt, audio }                                     from './player.js';
-import { cancelSearchDebounce }                              from './views.js';
 import { playLog }                                           from './playlog.js';
 import { getImports }                                        from './imports.js';
 
@@ -974,7 +973,7 @@ export function renderPlaylistsGrid() {
  *  @param {string} from        - 'albums' | 'artists'
  *  @param {string} displayName - Nom d'affichage (propre, avec casse d'origine) */
 export function drillDown(from, key, displayName) {
-  cancelSearchDebounce(); // annule tout debounce de recherche en cours avant de drill
+  emit(EVENTS.SEARCH_DEBOUNCE_CANCEL, {}); // annule tout debounce de recherche en cours avant de drill
   set('drillKey',         key);
   set('drillFrom',        from);
   set('drillDisplayName', displayName || key);
