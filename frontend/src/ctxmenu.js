@@ -17,7 +17,7 @@ import { esc }                                          from './utils.js';
 import { ddel }                                         from './db.js';
 import { i18n }                                         from './i18n.js';
 import { get }                                          from './store.js';
-import { emit, EVENTS }                                 from './bus.js';
+import { emit, on, EVENTS }                             from './bus.js';
 import { trackIdx, _trackIdxMap, invalidateFilterCache } from './search.js';
 import { addToQueueNext, addToQueueEnd }                        from './queue.js';
 import { audio }                                        from './player.js';
@@ -30,6 +30,8 @@ import { openNewPlaylistModal, removeTrackFromPlaylist, savePlaylists, movePlayl
 import { openSmartPlaylistModal } from './smartplaylist.js';
 import { openTagEditor } from './tagedit.js';
 import { invoke }        from './ipc.js';
+// Playlists demande la fermeture du menu contextuel — évite le cycle playlists.js ↔ ctxmenu.js.
+on(EVENTS.CTX_MENU_CLOSE, () => closeCtxMenu());
 
 // ── Context menu (right-click on track) ──────────────────────
 

@@ -19,7 +19,7 @@ import { DB, dget }    from './db.js';
 import { get }         from './store.js';
 import { CFG }         from './cfg.js';
 import { trackIdx }    from './search.js';
-import { updateBar }   from './playerbar.js';
+import { emit, EVENTS } from './bus.js';
 
 // ── Constantes ────────────────────────────────────────────────
 const MAX_CACHE = CFG.MAX_ART_CACHE;   // 60 entrées ≈ 6 MB max
@@ -176,7 +176,7 @@ export async function loadArt(t) {
   if (!url) return;
   _patchArtDOM(t);
   // updateBar uniquement quand l'artwork vient d'être résolu (parité avec l'ancien comportement).
-  if (!hadArt && trackIdx(t.id) === get('curIdx')) updateBar();
+  if (!hadArt && trackIdx(t.id) === get('curIdx')) emit(EVENTS.PLAYERBAR_UPDATE, {});
 }
 
 /**

@@ -21,10 +21,11 @@ import { getFiltered, filteredIdx, _trackIdxMap,
          invalidateFilterCache }          from './search.js';
 import { playAt, togglePlay, isCurrentTrack, audio } from './player.js';
 import { patchPlayState } from './renderer.js';
-import { closeSettings } from './settings.js';
-import { emit, EVENTS } from './bus.js';
+import { emit, on, EVENTS } from './bus.js';
 import { toast, toastWithAction } from './ui.js';
-import { setView } from './views.js';
+
+// Fermeture via bus — évite les cycles d'import avec views.js et settings.js.
+on(EVENTS.PANEL_CLOSE_QUEUE, () => { if (queueOpen) closeQueue(); });
 
 // ── Focus trap ──────────────────────────────────────────────
 // FOCUS-1 FIX : trap Tab/Shift+Tab dans #queue-panel quand ouvert.
@@ -215,7 +216,7 @@ export function toggleQueue() {
   btn?.setAttribute('aria-expanded', queueOpen ? 'true' : 'false');
   document.getElementById('app')?.classList.toggle('panel-queue-open', queueOpen);
   if (eqOpen) closeEQ();
-  if (queueOpen && document.getElementById('settings-panel').classList.contains('on')) closeSettings();
+  if (queueOpen) emit(EVENTS.PANEL_CLOSE_SETTINGS, {});
   if (queueOpen) {
     renderQueue(); initQueueDrag();
     const panel = document.getElementById('queue-panel');
@@ -597,7 +598,7 @@ export function playQueueItem(id) {
     set('query', '');
     invalidateFilterCache();
   }
-  setView('all', document.getElementById('ni-all'));
+  emit(EVENTS.VIEW_REQUEST, { view: 'all', btn: document.getElementById('ni-all') });
   emit(EVENTS.FILTER_CHANGED, {});
   emit(EVENTS.RENDER_LIB, {});
   toast(i18n('t_queue_filter_cleared') || 'Vue réinitialisée pour jouer ce titre', 'info');

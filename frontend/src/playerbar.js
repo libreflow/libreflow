@@ -31,6 +31,10 @@ import { animateArtChange, applyArtColor, clearArtColor,
          _updateArtBlur }                            from './settings.js';
 import { extEmoji }                                  from './utils.js';
 import { extractColor }                              from './tags.js';
+import { on, EVENTS }                               from './bus.js';
+// Cinéma demande la mise à jour du slider volume — évite le cycle cinema.js ↔ playerbar.js.
+on(EVENTS.VOL_SLIDER_UPDATE, ({ elId }) => updateVolSlider(document.getElementById(elId)));
+on(EVENTS.PLAYERBAR_UPDATE, () => updateBar());
 // ── Volume slider ─────────────────────────────────────────────────────────────
 let _volHideTimer = 0;
 

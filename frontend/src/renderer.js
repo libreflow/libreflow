@@ -20,7 +20,7 @@
 //   FIX-A1  — role=button + tabindex=0 + aria-label sur cartes grille
 
 import { get, set }                                          from './store.js';
-import { emit, EVENTS }                                      from './bus.js';
+import { emit, on, EVENTS }                                  from './bus.js';
 import { getFiltered, filteredIdx, trackIdx,
          _trackIdxMap, invalidateFilterCache, _coll }        from './search.js';
 import { VIRT, virtBuildRows, virtIdxAtScroll,
@@ -32,7 +32,6 @@ import { prefetchArts, getArtUrl }                           from './artLoader.j
 
 // Imports circulaires — OK en ES modules (appelés à l'exécution, pas à l'init)
 import { playAt, audio }                                     from './player.js';
-import { cancelSearchDebounce }                              from './views.js';
 import { playLog }                                           from './playlog.js';
 import { getImports }                                        from './imports.js';
 
@@ -974,7 +973,7 @@ export function renderPlaylistsGrid() {
  *  @param {string} from        - 'albums' | 'artists'
  *  @param {string} displayName - Nom d'affichage (propre, avec casse d'origine) */
 export function drillDown(from, key, displayName) {
-  cancelSearchDebounce(); // annule tout debounce de recherche en cours avant de drill
+  emit(EVENTS.SEARCH_DEBOUNCE_CANCEL, {}); // annule tout debounce de recherche en cours avant de drill
   set('drillKey',         key);
   set('drillFrom',        from);
   set('drillDisplayName', displayName || key);
@@ -1265,6 +1264,9 @@ export function scheduleStatsUpdate() {
   if (_statsTimer) clearTimeout(_statsTimer);
   _statsTimer = setTimeout(updateStats, CFG.STATS_UPDATE_DELAY);
 }
+
+// Déclenché par i18n.js lors d'un changement de langue — évite le cycle i18n ↔ renderer.
+on(EVENTS.LANG_CHANGED, () => updateStats());
 
 // ── ERG-P2 : Compteurs par vue dans la sidebar ────────────────────────────────
 /**

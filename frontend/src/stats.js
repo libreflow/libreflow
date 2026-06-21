@@ -9,9 +9,9 @@
 import { playLog } from './playlog.js';
 import { esc, extEmoji, fmtDuration } from './utils.js';
 import { getLang, i18n } from './i18n.js';
-import { statsGoToGenre, statsGoToArtist } from './views.js'; // ARCH-1 — no longer from app.js
 import { _normalizeGenre, _trackIdxMap } from './search.js'; // B35 : clé de drill genre normalisée
 import { get } from './store.js';
+import { emit, EVENTS } from './bus.js';
 
 // ── État UI persistent entre re-renders ───────────────────────
 let _heatPeriod        = 30;   // 7 | 30 | 90 jours
@@ -270,7 +270,7 @@ export function renderStats(tracks, trackIdxMap) {
     artistsContainer.addEventListener('click', e => {
       const row = e.target.closest('.artist-month-row[data-artist]');
       if (!row) return;
-      statsGoToArtist(row.dataset.artist);
+      emit(EVENTS.STATS_DRILL_ARTIST, { displayName: row.dataset.artist });
     });
   }
 
@@ -282,7 +282,7 @@ export function renderStats(tracks, trackIdxMap) {
       if (!row) return;
       const key     = row.dataset.genreKey;
       const display = row.dataset.genre;
-      statsGoToGenre(key, display);
+      emit(EVENTS.STATS_DRILL_GENRE, { key, displayName: display });
     });
   }
 

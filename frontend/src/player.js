@@ -15,7 +15,7 @@
  */
 /** @import { Track } from './types.js' */
 
-import { emit, EVENTS }                           from './bus.js';
+import { emit, on, EVENTS }                       from './bus.js';
 import { get, set, subscribe }                    from './store.js';
 import { i18n }                                   from './i18n.js';
 import { invoke, convertFileSrc }                 from './ipc.js';
@@ -46,6 +46,11 @@ import { toast }                                        from './ui.js';
 import { saveCfg, saveCfgNow } from './cfgsave.js';
 import { scrollToCurrentTrack }  from './renderer.js';
 import { _allPlayerUI }           from './allplayerui.js';
+
+on(EVENTS.SLEEP_CROSSFADE_STOP, () => {
+  clearCrossfadeTimers();
+  if (audioNext) audioNext.pause();
+});
 
 // Boot viz state (remplace window._pendingVizMode/_pendingVizDisabled)
 /** @type {string | null} */

@@ -1,0 +1,574 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LibreFlow — Audit Architecture 2026-06-21</title>
+<style>
+  :root {
+    --bg:#0d0f14;--bg2:#13161e;--bg3:#1a1e2a;--border:#2a2f3e;
+    --accent:#5b8dee;--accent2:#7c5ce8;--green:#2ecc71;--yellow:#f1c40f;
+    --orange:#e67e22;--red:#e74c3c;--text:#e4e8f0;--muted:#8892a4;
+    --rust:#ce6e34;--audio:#9b59b6;--ui:#1abc9c;--data:#3498db;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--text);font-family:'Segoe UI',system-ui,sans-serif;font-size:14px;line-height:1.5}
+  nav{position:sticky;top:0;z-index:100;background:rgba(13,15,20,.97);border-bottom:1px solid var(--border);display:flex;gap:4px;padding:8px 24px;backdrop-filter:blur(12px);flex-wrap:wrap}
+  nav a{padding:4px 12px;border-radius:6px;background:var(--bg3);color:var(--muted);font-size:12px;font-weight:600;text-decoration:none;white-space:nowrap;transition:.15s}
+  nav a:hover{background:var(--border);color:var(--text)}
+  nav .brand{color:var(--accent);margin-right:8px;font-size:13px;font-weight:700}
+  .page{max-width:1280px;margin:0 auto;padding:32px 24px 80px}
+  h1{font-size:28px;font-weight:700}
+  h1 span{color:var(--accent)}
+  .subtitle{color:var(--muted);margin-top:6px;font-size:14px}
+  h2{font-size:18px;font-weight:700;margin:40px 0 16px;padding-bottom:8px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px}
+  h3{font-size:15px;font-weight:600;margin-bottom:8px}
+  .grid-2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  .grid-3{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+  @media(max-width:900px){.grid-2,.grid-3{grid-template-columns:1fr}}
+  .card{background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:16px 20px}
+  .card.warn{border-color:var(--orange)}.card.error{border-color:var(--red)}.card.ok{border-color:var(--green)}.card.info{border-color:var(--accent)}
+  .badge{display:inline-block;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:700;letter-spacing:.04em;line-height:1.6}
+  .br{background:rgba(231,76,60,.15);color:var(--red)}.bo{background:rgba(230,126,34,.15);color:var(--orange)}.by{background:rgba(241,196,15,.15);color:var(--yellow)}.bg{background:rgba(46,204,113,.15);color:var(--green)}.bb{background:rgba(91,141,238,.15);color:var(--accent)}
+  .fr{display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid rgba(42,47,62,.5);font-size:13px}
+  .fr:last-child{border-bottom:none}
+  .fn{font-family:monospace;flex:1;color:var(--muted)}.fn strong{color:var(--text)}
+  .fb{width:120px;height:6px;background:var(--bg3);border-radius:3px;overflow:hidden;flex-shrink:0}
+  .fbi{height:100%;border-radius:3px}
+  .fl{width:48px;text-align:right;font-variant-numeric:tabular-nums;flex-shrink:0}
+  .flow{display:flex;align-items:center;overflow-x:auto;padding:16px 0;flex-wrap:nowrap;gap:0}
+  .fs{flex-shrink:0;background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:10px 14px;text-align:center;min-width:90px;font-size:12px}
+  .fs .lb{font-weight:600;color:var(--text);margin-bottom:2px}.fs .sb{color:var(--muted);font-size:10px}
+  .fa{flex-shrink:0;color:var(--muted);font-size:18px;padding:0 4px}
+  .tl{position:relative;padding-left:32px}
+  .tl::before{content:'';position:absolute;left:11px;top:12px;bottom:12px;width:2px;background:var(--border)}
+  .ti{position:relative;padding:8px 0;display:flex;gap:12px;align-items:flex-start}
+  .td{position:absolute;left:-26px;top:12px;width:12px;height:12px;border-radius:50%;background:var(--accent);border:2px solid var(--bg)}
+  .td.p{background:var(--green)}.td.bg2{background:var(--audio)}.td.w{background:var(--orange)}
+  .tt{font-weight:600;color:var(--text);font-size:13px}.ts{color:var(--muted);font-size:12px;margin-top:2px}
+  code{font-family:monospace;background:var(--bg3);padding:1px 6px;border-radius:4px;font-size:12px;color:var(--accent)}
+  .bt{width:100%;border-collapse:collapse;font-size:13px}
+  .bt th{text-align:left;padding:8px 12px;color:var(--muted);font-weight:600;font-size:11px;letter-spacing:.05em;text-transform:uppercase;border-bottom:1px solid var(--border)}
+  .bt td{padding:10px 12px;border-bottom:1px solid rgba(42,47,62,.5);vertical-align:top}
+  .bt tr:last-child td{border-bottom:none}
+  .bt tr:hover td{background:rgba(255,255,255,.02)}
+  .sg{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:12px}
+  .sc{background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:14px 16px;text-align:center}
+  .sn{font-size:28px;font-weight:800;line-height:1}.sl{color:var(--muted);font-size:11px;margin-top:4px;text-transform:uppercase;letter-spacing:.04em}
+  hr{border:none;border-top:1px solid var(--border);margin:32px 0}
+  .cl{background:var(--bg3);border-left:3px solid var(--accent);border-radius:0 8px 8px 0;padding:12px 16px;margin:12px 0;font-size:13px;color:var(--muted)}
+  .cl strong{color:var(--text)}.cl.w{border-color:var(--orange)}.cl.e{border-color:var(--red)}.cl.ok{border-color:var(--green)}
+  .ok-row{display:flex;align-items:flex-start;gap:8px;padding:7px;background:rgba(46,204,113,.08);border-radius:6px;border:1px solid rgba(46,204,113,.2);font-size:13px}
+  .warn-row{display:flex;align-items:flex-start;gap:8px;padding:7px;background:rgba(241,196,15,.08);border-radius:6px;border:1px solid rgba(241,196,15,.2);font-size:13px}
+  .chain-step{background:var(--bg3);border-radius:8px;padding:10px 14px;border-left:3px solid var(--data);margin-bottom:2px}
+</style>
+</head>
+<body>
+<nav>
+  <span class="brand">&#9889; LibreFlow Audit</span>
+  <a href="#overview">Vue d'ensemble</a>
+  <a href="#modules">Modules</a>
+  <a href="#boot">D&eacute;marrage</a>
+  <a href="#dataflow">Flux</a>
+  <a href="#audio">Audio</a>
+  <a href="#bottlenecks">Goulots</a>
+  <a href="#actions">Actions</a>
+</nav>
+<div class="page">
+
+<h1>LibreFlow &mdash; <span>Audit Architecture</span></h1>
+<p class="subtitle">Tauri 2 &middot; Vanilla ESM JS &middot; Rust backend &middot; IndexedDB &middot; Web Audio API &nbsp;&middot;&nbsp; 2026-06-21</p>
+
+<!-- STATS -->
+<div class="sg" style="margin-top:24px">
+  <div class="sc"><div class="sn" style="color:var(--accent)">65</div><div class="sl">Modules JS</div></div>
+  <div class="sc"><div class="sn" style="color:var(--rust)">7</div><div class="sl">Fichiers Rust</div></div>
+  <div class="sc"><div class="sn" style="color:var(--text)">24 k</div><div class="sl">Lignes JS</div></div>
+  <div class="sc"><div class="sn" style="color:var(--rust)">3.6 k</div><div class="sl">Lignes Rust</div></div>
+  <div class="sc"><div class="sn" style="color:var(--red)">6</div><div class="sl">Fichiers &gt; 800 L</div></div>
+  <div class="sc"><div class="sn" style="color:var(--yellow)">5</div><div class="sl">Fichiers 600&ndash;800 L</div></div>
+  <div class="sc"><div class="sn" style="color:var(--green)">50 k</div><div class="sl">Tracks max</div></div>
+  <div class="sc"><div class="sn" style="color:var(--audio)">5</div><div class="sl">IDB Stores</div></div>
+</div>
+
+<!-- ARCHITECTURE DIAGRAM -->
+<h2 id="overview">&#127959; Vue d&apos;ensemble de l&apos;architecture</h2>
+<div class="card" style="padding:24px;overflow-x:auto">
+<svg viewBox="0 0 960 575" xmlns="http://www.w3.org/2000/svg" style="min-width:700px;width:100%">
+  <defs>
+    <marker id="a1" markerWidth="7" markerHeight="5" refX="6" refY="2.5" orient="auto"><polygon points="0 0,7 2.5,0 5" fill="#5b8dee" opacity=".7"/></marker>
+    <marker id="a2" markerWidth="7" markerHeight="5" refX="6" refY="2.5" orient="auto"><polygon points="0 0,7 2.5,0 5" fill="#ce6e34" opacity=".7"/></marker>
+  </defs>
+  <!-- Layer backgrounds -->
+  <rect x="8" y="6"   w="944" h="68" rx="10" fill="#1a0d06" stroke="#ce6e34" stroke-width="1.5" opacity=".85"/>
+  <text x="20" y="24" font-size="10" fill="#ce6e34" font-weight="700">RUST BACKEND (Tauri 2)</text>
+  <rect x="8" y="86"  w="944" h="44" rx="10" fill="#0d1320" stroke="#5b8dee" stroke-width="1.5" opacity=".8"/>
+  <text x="20" y="103" font-size="10" fill="#5b8dee" font-weight="700">IPC BRIDGE</text>
+  <rect x="8" y="142" w="944" h="68" rx="10" fill="#0d1520" stroke="#3498db" stroke-width="1.5" opacity=".8"/>
+  <text x="20" y="160" font-size="10" fill="#3498db" font-weight="700">DATA LAYER</text>
+  <rect x="8" y="222" w="944" h="68" rx="10" fill="#13101f" stroke="#7c5ce8" stroke-width="1.5" opacity=".8"/>
+  <text x="20" y="240" font-size="10" fill="#7c5ce8" font-weight="700">CORE STATE</text>
+  <rect x="8" y="302" w="944" h="68" rx="10" fill="#130d1f" stroke="#9b59b6" stroke-width="1.5" opacity=".8"/>
+  <text x="20" y="320" font-size="10" fill="#9b59b6" font-weight="700">AUDIO PIPELINE</text>
+  <rect x="8" y="382" w="944" h="68" rx="10" fill="#0d1a18" stroke="#1abc9c" stroke-width="1.5" opacity=".8"/>
+  <text x="20" y="400" font-size="10" fill="#1abc9c" font-weight="700">UI / FEATURES</text>
+  <rect x="8" y="462" w="944" h="100" rx="10" fill="#141520" stroke="#f1c40f" stroke-width="2" opacity=".9"/>
+  <text x="20" y="480" font-size="10" fill="#f1c40f" font-weight="700">ORCHESTRATION</text>
+  <!-- Rust modules -->
+  <rect x="20"  y="30" w="116" h="30" rx="5" fill="#2a1508" stroke="#ce6e34" stroke-width="1"/>
+  <text x="78"  y="50" font-size="10" fill="#ce6e34" text-anchor="middle">commands.rs 1427L &#9888;</text>
+  <rect x="146" y="30" w="106" h="30" rx="5" fill="#2a1508" stroke="#ce6e34" stroke-width="1"/>
+  <text x="199" y="50" font-size="10" fill="#ce6e34" text-anchor="middle">cdaudio.rs 735L</text>
+  <rect x="262" y="30" w="106" h="30" rx="5" fill="#2a1508" stroke="#ce6e34" stroke-width="1"/>
+  <text x="315" y="50" font-size="10" fill="#ce6e34" text-anchor="middle">taskbar.rs 704L</text>
+  <rect x="378" y="30" w="100" h="30" rx="5" fill="#2a1508" stroke="#ce6e34" stroke-width="1"/>
+  <text x="428" y="50" font-size="10" fill="#ce6e34" text-anchor="middle">watch.rs 132L</text>
+  <rect x="488" y="30" w="100" h="30" rx="5" fill="#2a1508" stroke="#ce6e34" stroke-width="1"/>
+  <text x="538" y="50" font-size="10" fill="#ce6e34" text-anchor="middle">backup.rs 150L</text>
+  <rect x="598" y="30" w="90" h="30" rx="5" fill="#2a1508" stroke="#ce6e34" stroke-width="1"/>
+  <text x="643" y="50" font-size="10" fill="#ce6e34" text-anchor="middle">mini.rs 148L</text>
+  <rect x="698" y="30" w="118" h="30" rx="5" fill="#2a1508" stroke="#ce6e34" stroke-width="1"/>
+  <text x="757" y="50" font-size="10" fill="#ce6e34" text-anchor="middle">main.rs + lib.rs</text>
+  <!-- IPC -->
+  <rect x="290" y="95" w="380" h="26" rx="5" fill="#0d1a2e" stroke="#5b8dee" stroke-width="1.5"/>
+  <text x="480" y="112" font-size="11" fill="#5b8dee" text-anchor="middle" font-weight="700">ipc.js &mdash; invoke() / listen() / convertFileSrc()</text>
+  <!-- Data Layer -->
+  <rect x="20"  y="156" w="152" h="38" rx="5" fill="#0d1828" stroke="#3498db" stroke-width="1"/>
+  <text x="96"  y="172" font-size="10" fill="#3498db" text-anchor="middle">db.js (IDB lp4 v5)</text>
+  <text x="96"  y="185" font-size="9"  fill="#3498db" opacity=".7" text-anchor="middle">tracks &middot; playlists &middot; cfg &middot; playlog</text>
+  <rect x="182" y="156" w="130" h="38" rx="5" fill="#0d1828" stroke="#3498db" stroke-width="1"/>
+  <text x="247" y="172" font-size="10" fill="#3498db" text-anchor="middle">store.js</text>
+  <text x="247" y="185" font-size="9"  fill="#3498db" opacity=".7" text-anchor="middle">get / set / subscribe</text>
+  <rect x="322" y="156" w="128" h="38" rx="5" fill="#0d1828" stroke="#3498db" stroke-width="1"/>
+  <text x="386" y="172" font-size="10" fill="#3498db" text-anchor="middle">cfg.js</text>
+  <text x="386" y="185" font-size="9"  fill="#3498db" opacity=".7" text-anchor="middle">CFG frozen &middot; magic numbers</text>
+  <rect x="460" y="156" w="138" h="38" rx="5" fill="#0d1828" stroke="#3498db" stroke-width="1"/>
+  <text x="529" y="172" font-size="10" fill="#3498db" text-anchor="middle">artLoader.js</text>
+  <text x="529" y="185" font-size="9"  fill="#3498db" opacity=".7" text-anchor="middle">LRU blob:URL 200 max</text>
+  <rect x="608" y="156" w="170" h="38" rx="5" fill="#0d1828" stroke="#f1c40f" stroke-width="1"/>
+  <text x="693" y="172" font-size="10" fill="#f1c40f" text-anchor="middle">i18n.js &#9888; 1553L</text>
+  <text x="693" y="185" font-size="9"  fill="#f1c40f" opacity=".7" text-anchor="middle">cfgsave.js 165L</text>
+  <!-- Core State -->
+  <rect x="20"  y="236" w="192" h="38" rx="5" fill="#18102e" stroke="#7c5ce8" stroke-width="2"/>
+  <text x="116" y="252" font-size="10" fill="#e0c7ff" text-anchor="middle" font-weight="700">tracks[] + _trackIdxMap</text>
+  <text x="116" y="265" font-size="9"  fill="#7c5ce8" text-anchor="middle">search.js &middot; rebuildTrackIdxMap() O(n)</text>
+  <rect x="222" y="236" w="145" h="38" rx="5" fill="#18102e" stroke="#7c5ce8" stroke-width="1"/>
+  <text x="294" y="252" font-size="10" fill="#b89ee8" text-anchor="middle">state.js</text>
+  <text x="294" y="265" font-size="9"  fill="#7c5ce8" opacity=".7" text-anchor="middle">pushTracks / removeTrackAt</text>
+  <rect x="377" y="236" w="120" h="38" rx="5" fill="#18102e" stroke="#7c5ce8" stroke-width="1"/>
+  <text x="437" y="252" font-size="10" fill="#b89ee8" text-anchor="middle">bus.js</text>
+  <text x="437" y="265" font-size="9"  fill="#7c5ce8" opacity=".7" text-anchor="middle">EVENTS typed</text>
+  <rect x="507" y="236" w="180" h="38" rx="5" fill="#18102e" stroke="#7c5ce8" stroke-width="1"/>
+  <text x="597" y="252" font-size="10" fill="#b89ee8" text-anchor="middle">search.js &mdash; getFiltered()</text>
+  <text x="597" y="265" font-size="9"  fill="#7c5ce8" opacity=".7" text-anchor="middle">NLC cache &middot; posMap O(1)</text>
+  <rect x="697" y="236" w="125" h="38" rx="5" fill="#18102e" stroke="#7c5ce8" stroke-width="1"/>
+  <text x="759" y="252" font-size="10" fill="#b89ee8" text-anchor="middle">playlog.js</text>
+  <text x="759" y="265" font-size="9"  fill="#7c5ce8" opacity=".7" text-anchor="middle">flush 3s debounce</text>
+  <!-- Audio Pipeline -->
+  <rect x="20"  y="316" w="120" h="38" rx="5" fill="#13081e" stroke="#9b59b6" stroke-width="2"/>
+  <text x="80"  y="332" font-size="10" fill="#c7a0e8" text-anchor="middle" font-weight="700">player.js &#9888;</text>
+  <text x="80"  y="345" font-size="9"  fill="#9b59b6" opacity=".7" text-anchor="middle">1269L audio+crossfade</text>
+  <rect x="150" y="316" w="112" h="38" rx="5" fill="#13081e" stroke="#9b59b6" stroke-width="1"/>
+  <text x="206" y="332" font-size="10" fill="#c7a0e8" text-anchor="middle">eq.js &#9888;</text>
+  <text x="206" y="345" font-size="9"  fill="#9b59b6" opacity=".7" text-anchor="middle">889L EQ+Smart</text>
+  <rect x="272" y="316" w="126" h="38" rx="5" fill="#13081e" stroke="#9b59b6" stroke-width="1"/>
+  <text x="335" y="332" font-size="10" fill="#c7a0e8" text-anchor="middle">replaygain.js</text>
+  <text x="335" y="345" font-size="9"  fill="#9b59b6" opacity=".7" text-anchor="middle">OfflineAudioCtx</text>
+  <rect x="408" y="316" w="110" h="38" rx="5" fill="#13081e" stroke="#9b59b6" stroke-width="1"/>
+  <text x="463" y="332" font-size="10" fill="#c7a0e8" text-anchor="middle">viz.js</text>
+  <text x="463" y="345" font-size="9"  fill="#9b59b6" opacity=".7" text-anchor="middle">canvas rAF 8 modes</text>
+  <rect x="528" y="316" w="120" h="38" rx="5" fill="#13081e" stroke="#9b59b6" stroke-width="1"/>
+  <text x="588" y="332" font-size="10" fill="#c7a0e8" text-anchor="middle">cinema.js &#9888;</text>
+  <text x="588" y="345" font-size="9"  fill="#9b59b6" opacity=".7" text-anchor="middle">1226L GSAP</text>
+  <rect x="658" y="316" w="148" h="38" rx="5" fill="#13081e" stroke="#9b59b6" stroke-width="1"/>
+  <text x="732" y="332" font-size="10" fill="#c7a0e8" text-anchor="middle">sleep / devices</text>
+  <text x="732" y="345" font-size="9"  fill="#9b59b6" opacity=".7" text-anchor="middle">eqdevice.js</text>
+  <!-- UI Features -->
+  <rect x="20"  y="396" w="120" h="38" rx="5" fill="#071a16" stroke="#1abc9c" stroke-width="2"/>
+  <text x="80"  y="412" font-size="10" fill="#8df0da" text-anchor="middle" font-weight="700">renderer.js &#9888;</text>
+  <text x="80"  y="425" font-size="9"  fill="#1abc9c" opacity=".7" text-anchor="middle">1438L DOM+virt</text>
+  <rect x="150" y="396" w="100" h="38" rx="5" fill="#071a16" stroke="#1abc9c" stroke-width="1"/>
+  <text x="200" y="412" font-size="10" fill="#8df0da" text-anchor="middle">virt.js</text>
+  <text x="200" y="425" font-size="9"  fill="#1abc9c" opacity=".7" text-anchor="middle">149L Int32Array</text>
+  <rect x="260" y="396" w="122" h="38" rx="5" fill="#071a16" stroke="#f1c40f" stroke-width="1"/>
+  <text x="321" y="412" font-size="10" fill="#f1c40f" text-anchor="middle">playlists.js &#9888;</text>
+  <text x="321" y="425" font-size="9"  fill="#f1c40f" opacity=".7" text-anchor="middle">1487L CRUD+DnD</text>
+  <rect x="392" y="396" w="100" h="38" rx="5" fill="#071a16" stroke="#1abc9c" stroke-width="1"/>
+  <text x="442" y="412" font-size="10" fill="#8df0da" text-anchor="middle">views.js 571L</text>
+  <text x="442" y="425" font-size="9"  fill="#1abc9c" opacity=".7" text-anchor="middle">showView / goHome</text>
+  <rect x="502" y="396" w="100" h="38" rx="5" fill="#071a16" stroke="#1abc9c" stroke-width="1"/>
+  <text x="552" y="412" font-size="10" fill="#8df0da" text-anchor="middle">queue.js 647L</text>
+  <text x="552" y="425" font-size="9"  fill="#1abc9c" opacity=".7" text-anchor="middle">override queue</text>
+  <rect x="612" y="396" w="100" h="38" rx="5" fill="#071a16" stroke="#f1c40f" stroke-width="1"/>
+  <text x="662" y="412" font-size="10" fill="#f1c40f" text-anchor="middle">radio.js</text>
+  <text x="662" y="425" font-size="9"  fill="#f1c40f" opacity=".7" text-anchor="middle">771L (96%)</text>
+  <rect x="722" y="396" w="178" h="38" rx="5" fill="#071a16" stroke="#1abc9c" stroke-width="1"/>
+  <text x="811" y="412" font-size="10" fill="#8df0da" text-anchor="middle">+15 modules</text>
+  <text x="811" y="425" font-size="9"  fill="#1abc9c" opacity=".7" text-anchor="middle">ui &middot; settings &middot; ctxmenu &middot; tagedit...</text>
+  <!-- Orchestration -->
+  <rect x="20"  y="476" w="440" h="72" rx="5" fill="#1a1b10" stroke="#f1c40f" stroke-width="2"/>
+  <text x="240" y="493" font-size="12" fill="#f1c40f" text-anchor="middle" font-weight="700">app.js &mdash; 1070L</text>
+  <text x="240" y="508" font-size="9"  fill="#f1c40f" opacity=".8" text-anchor="middle">50+ imports directs &middot; boot sequence &middot; wiring &middot; re-exports</text>
+  <text x="240" y="522" font-size="9"  fill="#f1c40f" opacity=".6" text-anchor="middle">GOD MODULE &mdash; tout le c&acirc;blage passe ici</text>
+  <text x="240" y="538" font-size="8"  fill="#f1c40f" opacity=".5" text-anchor="middle">ARCH-1 refactoring en cours (store.js + bus.js)</text>
+  <rect x="470" y="476" w="248" h="72" rx="5" fill="#1a1b10" stroke="#f1c40f" stroke-width="1.5"/>
+  <text x="594" y="493" font-size="11" fill="#f1c40f" text-anchor="middle" font-weight="700">handlers.js &mdash; 717L</text>
+  <text x="594" y="508" font-size="9"  fill="#f1c40f" opacity=".7" text-anchor="middle">event listeners DOM aggreg&eacute;s</text>
+  <rect x="728" y="476" w="178" h="72" rx="5" fill="#1a1b10" stroke="#f1c40f" stroke-width="1.5"/>
+  <text x="817" y="493" font-size="11" fill="#f1c40f" text-anchor="middle" font-weight="700">Lit Components</text>
+  <text x="817" y="508" font-size="9"  fill="#f1c40f" opacity=".7" text-anchor="middle">lf-toast-stack (Phase 0)</text>
+  <text x="817" y="521" font-size="8"  fill="#f1c40f" opacity=".5" text-anchor="middle">phases modales/sidebar pr&eacute;vues</text>
+  <!-- IPC arrows -->
+  <line x1="480" y1="80" x2="480" y2="86" stroke="#5b8dee" stroke-width="1.5" marker-end="url(#a1)" opacity=".7" stroke-dasharray="3,2"/>
+  <line x1="400" y1="74" x2="400" y2="80" stroke="#ce6e34" stroke-width="1.5" marker-end="url(#a2)" opacity=".7" stroke-dasharray="3,2"/>
+</svg>
+</div>
+
+<!-- MODULES -->
+<h2 id="modules">&#128230; Modules &mdash; Taille &amp; Violations du cap (800 L)</h2>
+<div class="cl w"><strong>Cap CLAUDE.md &sect;16 : 800 lignes max.</strong> 6 fichiers JS le d&eacute;passent + 1 fichier Rust. Chaque violation augmente la charge cognitive et rend les tests plus difficiles.</div>
+<div class="grid-2" style="margin-top:16px">
+  <div class="card error">
+    <h3>&#128308; JS &mdash; Violations (&gt; 800 L)</h3>
+    <div class="fr"><span class="fn"><strong>i18n.js</strong></span><div class="fb"><div class="fbi" style="width:100%;background:#e74c3c"></div></div><span class="fl" style="color:var(--red)">1553</span><span class="badge br">+94%</span></div>
+    <div class="fr"><span class="fn"><strong>playlists.js</strong></span><div class="fb"><div class="fbi" style="width:97%;background:#e74c3c"></div></div><span class="fl" style="color:var(--red)">1487</span><span class="badge br">+86%</span></div>
+    <div class="fr"><span class="fn"><strong>renderer.js</strong></span><div class="fb"><div class="fbi" style="width:93%;background:#e74c3c"></div></div><span class="fl" style="color:var(--red)">1438</span><span class="badge br">+80%</span></div>
+    <div class="fr"><span class="fn"><strong>player.js</strong></span><div class="fb"><div class="fbi" style="width:82%;background:#e67e22"></div></div><span class="fl" style="color:var(--orange)">1269</span><span class="badge bo">+59%</span></div>
+    <div class="fr"><span class="fn"><strong>cinema.js</strong></span><div class="fb"><div class="fbi" style="width:79%;background:#e67e22"></div></div><span class="fl" style="color:var(--orange)">1226</span><span class="badge bo">+53%</span></div>
+    <div class="fr"><span class="fn"><strong>eq.js</strong></span><div class="fb"><div class="fbi" style="width:57%;background:#e67e22"></div></div><span class="fl" style="color:var(--orange)">889</span><span class="badge bo">+11%</span></div>
+    <h3 style="margin-top:14px">&#129408; Rust &mdash; Violations</h3>
+    <div class="fr"><span class="fn"><strong>commands.rs</strong></span><div class="fb"><div class="fbi" style="width:92%;background:#e74c3c"></div></div><span class="fl" style="color:var(--red)">1427</span><span class="badge br">+78%</span></div>
+    <div class="fr"><span class="fn"><strong>cdaudio.rs</strong></span><div class="fb"><div class="fbi" style="width:47%;background:#f1c40f"></div></div><span class="fl" style="color:var(--yellow)">735</span><span class="badge by">92%</span></div>
+  </div>
+  <div class="card warn">
+    <h3>&#128993; JS &mdash; Zone d&apos;alerte (600&ndash;800 L)</h3>
+    <div class="fr"><span class="fn"><strong>radio.js</strong></span><div class="fb"><div class="fbi" style="width:50%;background:#f1c40f"></div></div><span class="fl" style="color:var(--yellow)">771</span><span class="badge by">96%</span></div>
+    <div class="fr"><span class="fn"><strong>handlers.js</strong></span><div class="fb"><div class="fbi" style="width:46%;background:#f1c40f"></div></div><span class="fl" style="color:var(--yellow)">717</span><span class="badge by">90%</span></div>
+    <div class="fr"><span class="fn"><strong>queue.js</strong></span><div class="fb"><div class="fbi" style="width:42%;background:#f1c40f"></div></div><span class="fl" style="color:var(--yellow)">647</span><span class="badge by">81%</span></div>
+    <div class="fr"><span class="fn"><strong>smartplaylist.js</strong></span><div class="fb"><div class="fbi" style="width:39%;background:#f1c40f"></div></div><span class="fl" style="color:var(--yellow)">611</span><span class="badge by">76%</span></div>
+    <div class="fr"><span class="fn"><strong>views.js</strong></span><div class="fb"><div class="fbi" style="width:37%;background:#f1c40f"></div></div><span class="fl" style="color:var(--yellow)">571</span><span class="badge by">71%</span></div>
+    <h3 style="margin-top:14px">&#9989; Modules exemplaires (&lt; 200 L)</h3>
+    <div class="fr"><span class="fn">cfg.js</span><div class="fb"><div class="fbi" style="width:3%;background:#2ecc71"></div></div><span class="fl" style="color:var(--green)">47</span><span class="badge bg">id&eacute;al</span></div>
+    <div class="fr"><span class="fn">bus.js</span><div class="fb"><div class="fbi" style="width:4%;background:#2ecc71"></div></div><span class="fl" style="color:var(--green)">63</span><span class="badge bg">id&eacute;al</span></div>
+    <div class="fr"><span class="fn">virt.js</span><div class="fb"><div class="fbi" style="width:9%;background:#2ecc71"></div></div><span class="fl" style="color:var(--green)">149</span><span class="badge bg">OK</span></div>
+    <div class="fr"><span class="fn">ipc.js</span><div class="fb"><div class="fbi" style="width:9%;background:#2ecc71"></div></div><span class="fl" style="color:var(--green)">148</span><span class="badge bg">OK</span></div>
+    <div class="fr"><span class="fn">store.js</span><div class="fb"><div class="fbi" style="width:11%;background:#2ecc71"></div></div><span class="fl" style="color:var(--green)">181</span><span class="badge bg">OK</span></div>
+  </div>
+</div>
+
+<!-- BOOT SEQUENCE -->
+<h2 id="boot">&#128640; S&eacute;quence de d&eacute;marrage</h2>
+<div class="grid-2">
+  <div class="card">
+    <h3>Ordre d&apos;ex&eacute;cution (app.js boot())</h3>
+    <div class="tl" style="margin-top:12px">
+      <div class="ti"><div class="td"></div><div><div class="tt">1. <code>openDB()</code></div><div class="ts">Connexion IndexedDB 'lp4' v5 &mdash; bloquant, tout attend.</div></div></div>
+      <div class="ti"><div class="td p"></div><div><div class="tt">2. <code>Promise.all([dall('playlists'), dall('playlog'), dall('tracks')])</code></div><div class="ts">3 lectures IDB en parall&egrave;le. <strong>dall('tracks')</strong> = lecture enti&egrave;re &mdash; potentiellement 10&ndash;30 MB &agrave; 50k tracks. Timeout 30s.</div></div></div>
+      <div class="ti"><div class="td"></div><div><div class="tt">3. <code>rebuildTrackIdxMap()</code></div><div class="ts">Map&lt;id&rarr;idx&gt; O(n) synchrone &mdash; ~2ms &agrave; 50k tracks. Invariant critique &sect;2.</div></div></div>
+      <div class="ti"><div class="td w"></div><div><div class="tt">4. <code>radioRefillQueue()</code> <em>avant</em> <code>updateBar()</code></div><div class="ts">Ordre load-bearing. Inversion = bug silencieux. Invariant &sect;2.</div></div></div>
+      <div class="ti"><div class="td"></div><div><div class="tt">5. <code>renderLib()</code> + <code>virtBuildRows()</code></div><div class="ts">Premier rendu. Descripteurs lignes + prefix-sum Int32Array.</div></div></div>
+      <div class="ti"><div class="td bg2"></div><div><div class="tt">6. <code>loadTagsBg()</code> &mdash; background</div><div class="ts">Tags ID3 manquants, concurrence 8 (<code>CFG.TAG_LOAD_CONCURRENCY</code>). Non bloquant.</div></div></div>
+    </div>
+  </div>
+  <div class="card">
+    <h3>Cha&icirc;ne de d&eacute;pendances boot</h3>
+    <div style="margin-top:12px;display:flex;flex-direction:column;gap:8px">
+      <div class="chain-step" style="border-color:var(--data)"><strong style="color:var(--data)">IDB &mdash; dall('tracks')</strong><div style="font-size:12px;color:var(--muted);margin-top:2px">Lecture enti&egrave;re en m&eacute;moire. Cover art exclue (artLoader.js LRU).</div></div>
+      <div style="text-align:center;color:var(--muted)">&darr;</div>
+      <div class="chain-step" style="border-color:var(--accent2)"><strong style="color:var(--accent2)">store.js &mdash; set('tracks')</strong><div style="font-size:12px;color:var(--muted);margin-top:2px">Notification &rarr; search.js invalide cache NLC automatiquement.</div></div>
+      <div style="text-align:center;color:var(--muted)">&darr;</div>
+      <div class="chain-step" style="border-color:var(--accent2)"><strong style="color:var(--accent2)">rebuildTrackIdxMap()</strong><div style="font-size:12px;color:var(--muted);margin-top:2px">Map&lt;id,idx&gt; O(n) synchrone mais unique au boot.</div></div>
+      <div style="text-align:center;color:var(--muted)">&darr;</div>
+      <div class="chain-step" style="border-color:var(--ui)"><strong style="color:var(--ui)">renderer.js + virt.js</strong><div style="font-size:12px;color:var(--muted);margin-top:2px">virtBuildRows() &rarr; Int32Array &rarr; DOM initial (viewport only).</div></div>
+      <div style="text-align:center;color:var(--muted)">&darr; parall&egrave;le</div>
+      <div class="chain-step" style="border-color:var(--audio)"><strong style="color:var(--audio)">loadTagsBg() + audio init</strong><div style="font-size:12px;color:var(--muted);margin-top:2px">AudioContext au premier play (autoplay policy). Tags en fond.</div></div>
+    </div>
+  </div>
+</div>
+
+<!-- DATA FLOWS -->
+<h2 id="dataflow">&#128260; Flux de donn&eacute;es cl&eacute;s</h2>
+<div style="display:flex;flex-direction:column;gap:14px">
+  <div class="card">
+    <h3>&#9312; Import / Scan (watchfolder ou dropin)</h3>
+    <div class="flow">
+      <div class="fs" style="border-color:var(--rust)"><div class="lb" style="color:var(--rust)">FS Events</div><div class="sb">Rust notify</div></div>
+      <div class="fa">&rarr;</div>
+      <div class="fs" style="border-color:var(--accent)"><div class="lb">IPC listen</div><div class="sb">watch-new-files</div></div>
+      <div class="fa">&rarr;</div>
+      <div class="fs" style="border-color:var(--ui)"><div class="lb" style="color:var(--ui)">watchfolder.js</div><div class="sb">debounce 500ms</div></div>
+      <div class="fa">&rarr;</div>
+      <div class="fs" style="border-color:var(--ui)"><div class="lb" style="color:var(--ui)">library.js</div><div class="sb">pushTracks()</div></div>
+      <div class="fa">&rarr;</div>
+      <div class="fs" style="border-color:var(--accent2)"><div class="lb" style="color:var(--accent2)">state.js</div><div class="sb">rebuildIdxMap</div></div>
+      <div class="fa">&rarr;</div>
+      <div class="fs" style="border-color:var(--data)"><div class="lb" style="color:var(--data)">IDB dput</div><div class="sb">debounce 250ms</div></div>
+      <div class="fa">&rarr;</div>
+      <div class="fs" style="border-color:var(--rust)"><div class="lb" style="color:var(--rust)">loadTagsBg</div><div class="sb">read_tags &times;8</div></div>
+      <div class="fa">&rarr;</div>
+      <div class="fs" style="border-color:var(--ui)"><div class="lb" style="color:var(--ui)">renderer</div><div class="sb">patchTrackEl()</div></div>
+    </div>
+  </div>
+  <div class="card">
+    <h3>&#9313; Recherche / Filtrage (hot path &#128293;)</h3>
+    <div class="flow">
+      <div class="fs"><div class="lb">Saisie user</div><div class="sb">#searchbar</div></div>
+      <div class="fa">&rarr;</div>
+      <div class="fs" style="border-color:var(--yellow)"><div class="lb" style="color:var(--yellow)">debounce</div><div class="sb">150ms CFG</div></div>
+      <div class="fa">&rarr;</div>
+      <div class="fs" style="border-color:var(--accent2)"><div class="lb" style="color:var(--accent2)">search.js</div><div class="sb">invalidate O(1)</div></div>
+      <div class="fa">&rarr;</div>
+      <div class="fs" style="border-color:var(--accent2)"><div class="lb" style="color:var(--accent2)">getFiltered()</div><div class="sb">NLC scan O(n)</div></div>
+      <div class="fa">&rarr;</div>
+      <div class="fs" style="border-color:var(--ui)"><div class="lb" style="color:var(--ui)">virtBuildRows</div><div class="sb">O(n)+prefix-sum</div></div>
+      <div class="fa">&rarr;</div>
+      <div class="fs" style="border-color:var(--green)"><div class="lb" style="color:var(--green)">#tlist DOM</div><div class="sb">viewport only</div></div>
+    </div>
+    <div style="font-size:12px;color:var(--muted);margin-top:8px;padding-top:8px;border-top:1px solid var(--border)"><strong style="color:var(--text)">NLC</strong> = name+artist+artistFull+album+genre en minuscules, cach&eacute; par g&eacute;n&eacute;ration. Le <strong style="color:var(--text)">trigram fuzzy</strong> ne se d&eacute;clenche qu&apos;en fallback &mdash; gain mesur&eacute; : 315 MB heap &rarr; stable, 180ms &rarr; 70ms.</div>
+  </div>
+  <div class="card">
+    <h3>&#9314; Changement de piste (ordre load-bearing)</h3>
+    <div class="flow">
+      <div class="fs"><div class="lb">next() / click</div><div class="sb">player.js</div></div>
+      <div class="fa">&rarr;</div>
+      <div class="fs" style="border-color:var(--orange)"><div class="lb" style="color:var(--orange)">radioRefillQueue</div><div class="sb">&#9888; AVANT updateBar</div></div>
+      <div class="fa">&rarr;</div>
+      <div class="fs" style="border-color:var(--audio)"><div class="lb" style="color:var(--audio)">ensureUrl()</div><div class="sb">convertFileSrc</div></div>
+      <div class="fa">&rarr;</div>
+      <div class="fs" style="border-color:var(--audio)"><div class="lb" style="color:var(--audio)">crossfade</div><div class="sb">setTargetAtTime</div></div>
+      <div class="fa">&rarr;</div>
+      <div class="fs" style="border-color:var(--audio)"><div class="lb" style="color:var(--audio)">ReplayGain</div><div class="sb">analyzeAndApplyRG</div></div>
+      <div class="fa">&rarr;</div>
+      <div class="fs" style="border-color:var(--accent2)"><div class="lb" style="color:var(--accent2)">bus EVENTS</div><div class="sb">TRACK_CHANGE</div></div>
+      <div class="fa">&rarr;</div>
+      <div class="fs" style="border-color:var(--ui)"><div class="lb" style="color:var(--ui)">updateBar()</div><div class="sb">DOM marquee</div></div>
+    </div>
+  </div>
+</div>
+
+<!-- AUDIO PIPELINE -->
+<h2 id="audio">&#127925; Pipeline Audio</h2>
+<div class="grid-2">
+  <div class="card">
+    <h3>Cha&icirc;ne Web Audio (invariant &sect;9)</h3>
+    <div style="margin-top:12px;overflow-x:auto">
+    <svg viewBox="0 0 520 215" xmlns="http://www.w3.org/2000/svg" style="min-width:460px;width:100%">
+      <defs><marker id="aa" markerWidth="6" markerHeight="5" refX="5" refY="2.5" orient="auto"><polygon points="0 0,6 2.5,0 5" fill="#9b59b6"/></marker></defs>
+      <rect x="6"   y="80" w="68" h="38" rx="5" fill="#13081e" stroke="#9b59b6" stroke-width="1.5"/>
+      <text x="40"  y="97"  font-size="9" fill="#c7a0e8" text-anchor="middle" font-weight="600">audio</text>
+      <text x="40"  y="110" font-size="8" fill="#9b59b6" opacity=".7" text-anchor="middle">HTMLAudio</text>
+      <line x1="74" y1="99" x2="90" y2="99" stroke="#9b59b6" stroke-width="1.5" marker-end="url(#aa)"/>
+      <rect x="93"  y="70" w="76" h="58" rx="5" fill="#13081e" stroke="#9b59b6" stroke-width="1.5"/>
+      <text x="131" y="93"  font-size="9" fill="#c7a0e8" text-anchor="middle">MediaElement</text>
+      <text x="131" y="105" font-size="9" fill="#c7a0e8" text-anchor="middle">Source</text>
+      <text x="131" y="118" font-size="8" fill="#9b59b6" opacity=".6" text-anchor="middle">crossOrigin</text>
+      <line x1="131" y1="70" x2="131" y2="50" stroke="#7c5ce8" stroke-width="1.5" stroke-dasharray="3,2"/>
+      <text x="131" y="45" font-size="8" fill="#7c5ce8" text-anchor="middle">ReplayGain</text>
+      <text x="131" y="35" font-size="7" fill="#7c5ce8" opacity=".7" text-anchor="middle">(source, pas output)</text>
+      <line x1="169" y1="99" x2="187" y2="99" stroke="#9b59b6" stroke-width="1.5" marker-end="url(#aa)"/>
+      <rect x="190" y="60" w="78" h="78" rx="5" fill="#1a0828" stroke="#9b59b6" stroke-width="2"/>
+      <text x="229" y="83"  font-size="11" fill="#c7a0e8" text-anchor="middle" font-weight="700">EQ</text>
+      <text x="229" y="96"  font-size="9"  fill="#9b59b6" text-anchor="middle">BiquadFilter</text>
+      <text x="229" y="108" font-size="9"  fill="#9b59b6" text-anchor="middle">&times;10 bandes</text>
+      <text x="229" y="120" font-size="8"  fill="#7c5ce8" text-anchor="middle">setTargetAtTime</text>
+      <line x1="268" y1="99" x2="286" y2="99" stroke="#9b59b6" stroke-width="1.5" marker-end="url(#aa)"/>
+      <rect x="289" y="76" w="60" h="46" rx="5" fill="#13081e" stroke="#9b59b6" stroke-width="1.5"/>
+      <text x="319" y="96"  font-size="9" fill="#c7a0e8" text-anchor="middle">Analyser</text>
+      <text x="319" y="109" font-size="8" fill="#9b59b6" opacity=".7" text-anchor="middle">&rarr; viz.js</text>
+      <line x1="349" y1="99" x2="367" y2="99" stroke="#9b59b6" stroke-width="1.5" marker-end="url(#aa)"/>
+      <rect x="370" y="80" w="56" h="38" rx="5" fill="#13081e" stroke="#9b59b6" stroke-width="1.5"/>
+      <text x="398" y="96"  font-size="9" fill="#c7a0e8" text-anchor="middle">Limiter</text>
+      <text x="398" y="109" font-size="8" fill="#9b59b6" opacity=".7" text-anchor="middle">-1dB</text>
+      <line x1="426" y1="99" x2="444" y2="99" stroke="#9b59b6" stroke-width="1.5" marker-end="url(#aa)"/>
+      <rect x="447" y="80" w="62" h="38" rx="5" fill="#1a0828" stroke="#9b59b6" stroke-width="1.5"/>
+      <text x="478" y="96"  font-size="9" fill="#c7a0e8" text-anchor="middle">MasterGain</text>
+      <text x="478" y="109" font-size="8" fill="#9b59b6" opacity=".7" text-anchor="middle">&rarr; speakers</text>
+      <rect x="6" y="152" w="504" h="52" rx="5" fill="rgba(241,196,15,.06)" stroke="rgba(241,196,15,.3)" stroke-width="1"/>
+      <text x="258" y="170" font-size="9" fill="#f1c40f" text-anchor="middle">&#9888; Crossfade : audioNext (source B) ramp in via GainNode s&eacute;par&eacute;, source A ramp out simultan&eacute;ment.</text>
+      <text x="258" y="184" font-size="9" fill="#f1c40f" text-anchor="middle">MasterGain (= #vol slider DOM) jamais reset. audio.volume jamais assign&eacute; directement.</text>
+      <text x="258" y="197" font-size="8" fill="#f1c40f" opacity=".7" text-anchor="middle">R&eacute;f : CLAUDE.md &sect;9 + &sect;13</text>
+    </svg>
+    </div>
+  </div>
+  <div class="card">
+    <h3>Invariants audio (&sect;9, &sect;13)</h3>
+    <div style="margin-top:8px;display:flex;flex-direction:column;gap:8px">
+      <div class="ok-row"><span style="color:var(--green)">&#10003;</span><div><strong>setTargetAtTime()</strong> &mdash; tous les params audio. Jamais <code>.value =</code> direct.</div></div>
+      <div class="ok-row"><span style="color:var(--green)">&#10003;</span><div><strong>Ordre de la cha&icirc;ne</strong> &mdash; Source &rarr; EQ &rarr; Analyser &rarr; Limiter &rarr; Output. Strict.</div></div>
+      <div class="ok-row"><span style="color:var(--green)">&#10003;</span><div><strong>ReplayGain &agrave; la source</strong> &mdash; Gain sur le n&oelig;ud source, pas sur l&apos;output.</div></div>
+      <div class="warn-row"><span style="color:var(--yellow)">&#9888;</span><div><strong>OfflineAudioContext RG</strong> &mdash; Analyse sur thread principal. Pas de Web Worker. Cap 30MB/30s.</div></div>
+      <div class="warn-row"><span style="color:var(--yellow)">&#9888;</span><div><strong>viz.js rAF continu</strong> &mdash; Canvas analyser tourne en boucle. Frame budget partag&eacute; avec le scroll.</div></div>
+    </div>
+  </div>
+</div>
+
+<!-- BOTTLENECKS -->
+<h2 id="bottlenecks">&#128678; Goulots d&apos;&eacute;tranglement identifi&eacute;s</h2>
+<div class="card">
+<table class="bt">
+  <thead><tr><th>S&eacute;v&eacute;rit&eacute;</th><th>Cat&eacute;gorie</th><th>Probl&egrave;me</th><th>Localisation</th></tr></thead>
+  <tbody>
+    <tr>
+      <td><span class="badge br">CRITIQUE</span></td>
+      <td>Architecture</td>
+      <td><strong>app.js &mdash; God Module</strong><br><span style="font-size:12px;color:var(--muted)">50+ imports directs, 1070L. Toute la logique de c&acirc;blage passe ici. Modifier un module oblige souvent &agrave; toucher app.js. Couplage maximal.</span></td>
+      <td><code>app.js:1&ndash;100</code></td>
+    </tr>
+    <tr>
+      <td><span class="badge br">CRITIQUE</span></td>
+      <td>Taille</td>
+      <td><strong>i18n.js &mdash; 1553L (194% du cap)</strong><br><span style="font-size:12px;color:var(--muted)">Cha&icirc;nes statiques m&eacute;lang&eacute;es &agrave; la logique i18n. Parse initial lent. Doit &ecirc;tre split en JSON de donn&eacute;es + module logique court.</span></td>
+      <td><code>i18n.js</code></td>
+    </tr>
+    <tr>
+      <td><span class="badge br">CRITIQUE</span></td>
+      <td>Taille</td>
+      <td><strong>playlists.js + renderer.js &mdash; &gt;1430L chacun</strong><br><span style="font-size:12px;color:var(--muted)">renderer.js m&eacute;lange rendu DOM, helpers, virt wiring. playlists.js m&eacute;lange CRUD, drag-drop, modals, dossiers. Difficult&eacute; de test et de review.</span></td>
+      <td><code>playlists.js</code>, <code>renderer.js</code></td>
+    </tr>
+    <tr>
+      <td><span class="badge bo">HAUT</span></td>
+      <td>Performance</td>
+      <td><strong>rebuildTrackIdxMap() O(n) synchrone</strong><br><span style="font-size:12px;color:var(--muted)">Chaque mutation de tracks[] d&eacute;clenche un rebuild complet (~2ms &agrave; 50k). Appel&eacute; &agrave; chaque import batch, suppression, tag edit. Bloque le thread JS.</span></td>
+      <td><code>search.js:60</code></td>
+    </tr>
+    <tr>
+      <td><span class="badge bo">HAUT</span></td>
+      <td>Performance</td>
+      <td><strong>dall('tracks') au boot &mdash; full scan IDB</strong><br><span style="font-size:12px;color:var(--muted)">Lecture enti&egrave;re du store en m&eacute;moire. Sans cover art en IDB (migr&eacute;e LRU) c&apos;est ~10&ndash;30 MB. Timeout 30s. Pas de lazy load ni pagination.</span></td>
+      <td><code>db.js:dall()</code></td>
+    </tr>
+    <tr>
+      <td><span class="badge bo">HAUT</span></td>
+      <td>Performance</td>
+      <td><strong>virtBuildRows() O(n) &agrave; chaque filtre/tri</strong><br><span style="font-size:12px;color:var(--muted)">Reconstruction des descripteurs + prefix-sum &agrave; chaque changement de vue ou filtre. ~5&ndash;10ms &agrave; 50k. La signature _lastListSig existe mais n&apos;est pas pleinement exploit&eacute;e.</span></td>
+      <td><code>virt.js:84</code></td>
+    </tr>
+    <tr>
+      <td><span class="badge bo">HAUT</span></td>
+      <td>Architecture</td>
+      <td><strong>window.* shims dans player.js et library.js</strong><br><span style="font-size:12px;color:var(--muted)">Refactoring ARCH-1 incomplet. Ces modules utilisent encore window.saveCfg, window.getFiltered etc. D&eacute;pendances implicites invisibles au bundler.</span></td>
+      <td><code>player.js</code>, <code>library.js</code></td>
+    </tr>
+    <tr>
+      <td><span class="badge by">MOYEN</span></td>
+      <td>Performance</td>
+      <td><strong>ReplayGain sans Web Worker</strong><br><span style="font-size:12px;color:var(--muted)">Analyse OfflineAudioContext sur thread principal. Gros fichier = freeze UI possible m&ecirc;me avec le cap 30s/30MB.</span></td>
+      <td><code>replaygain.js</code></td>
+    </tr>
+    <tr>
+      <td><span class="badge by">MOYEN</span></td>
+      <td>Performance</td>
+      <td><strong>loadTagsBg() concurrence 8 &mdash; non adaptatif HDD/SSD</strong><br><span style="font-size:12px;color:var(--muted)">CFG.TAG_LOAD_CONCURRENCY=8 optimal sur SSD. Sur HDD, 8 lectures parall&egrave;les saturent le disque. Aucune d&eacute;tection du type de stockage.</span></td>
+      <td><code>library.js:61</code></td>
+    </tr>
+    <tr>
+      <td><span class="badge by">MOYEN</span></td>
+      <td>Architecture</td>
+      <td><strong>commands.rs &mdash; 1427L monolithique</strong><br><span style="font-size:12px;color:var(--muted)">Toutes les commandes Tauri (tags, FS, taskbar, fen&ecirc;tre, backup) dans un seul fichier.</span></td>
+      <td><code>commands.rs</code></td>
+    </tr>
+    <tr>
+      <td><span class="badge bb">INFO</span></td>
+      <td>UX</td>
+      <td><strong>IPC timeout 15s &mdash; feedback tardif</strong><br><span style="font-size:12px;color:var(--muted)">CFG.IPC_TIMEOUT_MS=15s. 15s sans r&eacute;ponse Rust sans aucun feedback. Un spinner &agrave; 2s am&eacute;liorerait l&apos;exp&eacute;rience.</span></td>
+      <td><code>cfg.js:24</code>, <code>ipc.js:68</code></td>
+    </tr>
+    <tr>
+      <td><span class="badge bb">INFO</span></td>
+      <td>Architecture</td>
+      <td><strong>bus.js sous-utilis&eacute;</strong><br><span style="font-size:12px;color:var(--muted)">Bien con&ccedil;u mais beaucoup de callbacks cross-module passent encore par window.* ou app.js. EVENTS.RENDER_LIB montre la migration en cours.</span></td>
+      <td><code>bus.js</code>, <code>app.js</code></td>
+    </tr>
+  </tbody>
+</table>
+</div>
+
+<!-- ACTIONS -->
+<h2 id="actions">&#128161; Actions recommand&eacute;es</h2>
+<div class="grid-3">
+  <div class="card error">
+    <h3 style="color:var(--red)">&#128308; Priorit&eacute; 1 &mdash; Imm&eacute;diat</h3>
+    <div style="margin-top:10px;display:flex;flex-direction:column;gap:10px;font-size:13px">
+      <div><strong>Extraire les strings i18n</strong><br><span style="color:var(--muted)">S&eacute;parer <code>i18n.js</code> (1553L) en donn&eacute;es (JS/JSON) + logique pure (~150L). Gain parse initial.</span></div>
+      <hr style="border-color:var(--border)">
+      <div><strong>Splitter renderer.js</strong><br><span style="color:var(--muted)">Extraire <code>renderer-grids.js</code> (albums/artistes/genres) + <code>renderer-helpers.js</code>. Reste ~500L.</span></div>
+      <hr style="border-color:var(--border)">
+      <div><strong>Splitter playlists.js</strong><br><span style="color:var(--muted)">Extraire <code>playlist-dnd.js</code> + <code>playlist-folders.js</code>. R&eacute;duction ~600L.</span></div>
+    </div>
+  </div>
+  <div class="card warn">
+    <h3 style="color:var(--orange)">&#128993; Priorit&eacute; 2 &mdash; Court terme</h3>
+    <div style="margin-top:10px;display:flex;flex-direction:column;gap:10px;font-size:13px">
+      <div><strong>Finaliser ARCH-1 &mdash; &eacute;liminer window.*</strong><br><span style="color:var(--muted)">Remplacer <code>window.*</code> dans <code>player.js</code> et <code>library.js</code> par store.js/bus.js.</span></div>
+      <hr style="border-color:var(--border)">
+      <div><strong>Splitter commands.rs</strong><br><span style="color:var(--muted)">Extraire <code>commands/tags.rs</code>, <code>commands/fs.rs</code>, <code>commands/window.rs</code>.</span></div>
+      <hr style="border-color:var(--border)">
+      <div><strong>Web Worker pour ReplayGain</strong><br><span style="color:var(--muted)">D&eacute;placer l&apos;analyse OfflineAudioContext en Worker pour ne pas bloquer le thread UI.</span></div>
+      <hr style="border-color:var(--border)">
+      <div><strong>Adapter TAG_LOAD_CONCURRENCY</strong><br><span style="color:var(--muted)">D&eacute;tecter HDD vs SSD et r&eacute;duire &agrave; 4 sur HDD automatiquement.</span></div>
+    </div>
+  </div>
+  <div class="card info">
+    <h3 style="color:var(--accent)">&#128309; Priorit&eacute; 3 &mdash; Moyen terme</h3>
+    <div style="margin-top:10px;display:flex;flex-direction:column;gap:10px;font-size:13px">
+      <div><strong>Boot lazy-load tracks</strong><br><span style="color:var(--muted)">Charger 500 premières pour l&apos;affichage, reste en fond. Premier rendu O(1) perçu.</span></div>
+      <hr style="border-color:var(--border)">
+      <div><strong>Migrer vers bus.js</strong><br><span style="color:var(--muted)">Remplacer les callbacks app.js/window.* par EVENTS.*. D&eacute;coupler progressivement.</span></div>
+      <hr style="border-color:var(--border)">
+      <div><strong>Feedback progressif IPC</strong><br><span style="color:var(--muted)">Toast spinner apr&egrave;s 2s d&apos;attente. Actuellement rien pendant 15s.</span></div>
+      <hr style="border-color:var(--border)">
+      <div><strong>Cache virtBuildRows</strong><br><span style="color:var(--muted)">Exploiter _lastListSig pour &eacute;viter le rebuild O(n) si tracks+sort+query inchang&eacute;s.</span></div>
+    </div>
+  </div>
+</div>
+
+<!-- STRENGTHS -->
+<h2>&#9989; Points forts de l&apos;architecture</h2>
+<div class="grid-2">
+  <div class="card ok" style="font-size:13px">
+    <h3 style="color:var(--green);margin-bottom:10px">Architecture solide</h3>
+    <div style="display:flex;flex-direction:column;gap:7px">
+      <div><span class="badge bg">&#10003;</span> <strong>store.js</strong> &mdash; r&eacute;actif minimal (181L), z&eacute;ro dep, re-entrancy guard, setBatch atomique</div>
+      <div><span class="badge bg">&#10003;</span> <strong>bus.js</strong> &mdash; EventBus typ&eacute;, EVENTS constants, unsubscribe propre</div>
+      <div><span class="badge bg">&#10003;</span> <strong>ipc.js</strong> &mdash; timeout syst&eacute;matique, waitTauriReady(), invokeRetry + backoff</div>
+      <div><span class="badge bg">&#10003;</span> <strong>virt.js</strong> &mdash; Int32Array prefix-sum, binary search O(log n), &plusmn;8 buffer, 0 alloc rAF</div>
+      <div><span class="badge bg">&#10003;</span> <strong>state.js</strong> &mdash; mutations atomiques tracks[] avec rebuild garanti (ARCH-3)</div>
+      <div><span class="badge bg">&#10003;</span> <strong>cfg.js</strong> &mdash; toutes les magic numbers centralis&eacute;es, frozen Object</div>
+      <div><span class="badge bg">&#10003;</span> <strong>search.js</strong> &mdash; NLC cache par g&eacute;n&eacute;ration (O(1) invalidation), trigrams lazy</div>
+      <div><span class="badge bg">&#10003;</span> <strong>artLoader.js</strong> &mdash; LRU cache 200 blob:URL, IDB sans cover art base64</div>
+    </div>
+  </div>
+  <div class="card ok" style="font-size:13px">
+    <h3 style="color:var(--green);margin-bottom:10px">Invariants bien gard&eacute;s</h3>
+    <div style="display:flex;flex-direction:column;gap:7px">
+      <div><span class="badge bg">&#10003;</span> Offline garanti &mdash; z&eacute;ro fetch/XHR/WebSocket, fonts @fontsource</div>
+      <div><span class="badge bg">&#10003;</span> IDB writes d&eacute;bounc&eacute;s (250ms tracks, 800ms cfg, 3s playlog)</div>
+      <div><span class="badge bg">&#10003;</span> audio.volume jamais assign&eacute; &mdash; DOM #vol slider = source de v&eacute;rit&eacute;</div>
+      <div><span class="badge bg">&#10003;</span> setTargetAtTime() partout &mdash; pas de zipper noise garanti</div>
+      <div><span class="badge bg">&#10003;</span> Pas d&apos;innerHTML avec contenu non s&ucirc;r &mdash; thtml() &eacute;chappe syst&eacute;matiquement</div>
+      <div><span class="badge bg">&#10003;</span> Tags lofty sanitiz&eacute;s (_sanitizeTagStr, maxLen=500)</div>
+      <div><span class="badge bg">&#10003;</span> WCAG 2.1/2.2 AA &mdash; focus ring dual-tone, aria-current, role=dialog</div>
+      <div><span class="badge bg">&#10003;</span> removeTracksBatch() &mdash; tri d&eacute;fensif + rebuild unique</div>
+    </div>
+  </div>
+</div>
+
+<hr>
+<div class="card info">
+  <h3 style="color:var(--accent)">&#128203; R&eacute;sum&eacute; ex&eacute;cutif</h3>
+  <p style="margin-top:8px;color:var(--muted);font-size:13px;line-height:1.8">LibreFlow est un player desktop offline bien architect&eacute; avec des invariants critiques solidement gard&eacute;s. La base technique &mdash; <code>store.js</code>, <code>bus.js</code>, <code>ipc.js</code>, <code>virt.js</code> &mdash; est propre et extensible.</p>
+  <p style="margin-top:8px;color:var(--muted);font-size:13px;line-height:1.8"><strong style="color:var(--text)">Goulot principal &mdash; structural :</strong> <code>app.js</code> est un god module (50+ imports) qui cr&eacute;e un couplage fort. Le refactoring ARCH-1 est sur la bonne voie mais incomplet. 6 fichiers JS d&eacute;passent le cap de 800L, dont <code>i18n.js</code> &agrave; presque 2&times;.</p>
+  <p style="margin-top:8px;color:var(--muted);font-size:13px;line-height:1.8"><strong style="color:var(--text)">Goulots de performance :</strong> concentr&eacute;s sur le boot (<code>dall()</code> full scan) et les premi&egrave;res mutations apr&egrave;s import (<code>rebuildTrackIdxMap</code> O(n), <code>virtBuildRows</code> O(n)). &Agrave; 50k tracks, ces op&eacute;rations restent dans des bornes acceptables mais le lazy-load au boot serait l&apos;am&eacute;lioration la plus impactante.</p>
+  <p style="margin-top:8px;color:var(--muted);font-size:13px;line-height:1.8"><strong style="color:var(--text)">Action n&deg;1 :</strong> splitter <code>i18n.js</code>, <code>renderer.js</code> et <code>playlists.js</code> pour revenir sous 800L. Ratio impact/risque maximal &mdash; aucun comportement modifi&eacute;.</p>
+</div>
+
+<p style="margin-top:24px;color:var(--muted);font-size:12px;text-align:center">Audit automatique &mdash; libreflow/libreflow &mdash; 2026-06-21</p>
+</div>
+<script>
+  document.querySelectorAll('nav a[href^="#"]').forEach(a=>{
+    a.addEventListener('click',e=>{e.preventDefault();document.getElementById(a.getAttribute('href').slice(1))?.scrollIntoView({behavior:'smooth',block:'start'})})
+  })
+</script>
+</body>
+</html>

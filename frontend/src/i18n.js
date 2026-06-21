@@ -6,9 +6,7 @@
 
 import { toast }        from './ui.js';
 import { emit, EVENTS } from './bus.js';
-import { applyTheme } from './settings.js';
 import { setCrossfade } from './player.js';
-import { updateStats } from './renderer.js';
 import { get } from './store.js';
 
 export const LANGS = {
@@ -1469,8 +1467,8 @@ export function applyLang() {
     el.setAttribute('aria-label', i18n(el.dataset.ariaI18n));
   });
 
-  // Stats
-  updateStats();
+  // Stats — renderer écoute LANG_CHANGED et appelle updateStats() lui-même.
+  emit(EVENTS.LANG_CHANGED, {});
 
   // Sort label
   const SLBLS_I18N = { az: 'sort_az', za: 'sort_za', artist: 'sort_artist', album: 'sort_album', recent: 'sort_recent' };
@@ -1548,6 +1546,6 @@ export function applyLang() {
   if (vlib && vlib.classList.contains('on')) emit(EVENTS.RENDER_LIB, {});
 
   // Apply theme and crossfade
-  applyTheme();
+  emit(EVENTS.THEME_APPLY_REQUEST, {});
   setCrossfade(get('crossfadeDur') || 0);
 }

@@ -38,12 +38,10 @@ import { emit, EVENTS }          from './bus.js';
 import { DB }                    from './db.js';
 import { toast, toastWithAction, confirmAction, promptAction } from './ui.js';
 import { closeCtxMenu }          from './ctxmenu.js';
-import { openSmartPlaylistModal, switchPlTab } from './smartplaylist.js';
 import { clearSelection }        from './selection.js';
 import { invalidateFilterCache, getFiltered } from './search.js';
 import { invalidateGenreGridSig }              from './genres.js';
 import { saveCfg }                             from './cfgsave.js';
-import { setView }                             from './views.js';
 import { renderPlaylistsGrid }                 from './renderer.js';
 import { playAt, buildQ }                      from './player.js';
 import { _allPlayerUI }                        from './allplayerui.js';
@@ -74,7 +72,7 @@ export function playPlaylistFrom(fi) {
 export function playPlaylistDirect(plId, event) {
   if (event) event.stopPropagation();
   const navBtn = document.getElementById('ni-pl-' + plId);
-  setView('playlist', navBtn, plId);
+  emit(EVENTS.VIEW_REQUEST, { view: 'playlist', btn: navBtn, plId });
   requestAnimationFrame(() => playPlaylistFrom(0));
 }
 
@@ -596,7 +594,7 @@ export function togglePlFolder(folderId) {
 export function showPlFolderCtxMenu(event, folderId) {
   event.preventDefault();
   event.stopPropagation();
-  closeCtxMenu();
+  emit(EVENTS.CTX_MENU_CLOSE, {});
   let menu = document.getElementById('pl-ctx-menu');
   if (!menu) {
     menu = document.createElement('div');
@@ -1113,7 +1111,7 @@ export function openNewPlaylistModal(preTrackId) {
   const tabs = document.querySelector('.pl-modal-tabs');
   if (tabs) tabs.style.display = '';
   document.getElementById('pl-modal-bg').classList.add('on');
-  switchPlTab('manual');
+  emit(EVENTS.SMART_PLAYLIST_SWITCH_TAB, { tab: 'manual' });
   const plModal = document.getElementById('pl-modal');
   if (plModal && !_plModalFocusTrap) {
     _plModalFocusTrap = _buildPlFocusTrap(plModal);
@@ -1128,7 +1126,7 @@ export function showPlCtxMenu(event, plId) {
   const pl = get('playlists').find(p => p.id === plId);
   if (!pl) return;
   // Fermer tout menu ouvert
-  closeCtxMenu();
+  emit(EVENTS.CTX_MENU_CLOSE, {});
   let menu = document.getElementById('pl-ctx-menu');
   if (!menu) {
     menu = document.createElement('div');
@@ -1213,14 +1211,14 @@ export function showPlCtxMenu(event, plId) {
 export function ctxPlayPlaylist(plId) {
   document.getElementById('pl-ctx-menu')?.classList.remove('on');
   const niBtn = document.getElementById('ni-pl-' + plId);
-  setView('playlist', niBtn, plId);
+  emit(EVENTS.VIEW_REQUEST, { view: 'playlist', btn: niBtn, plId });
   setTimeout(() => playPlaylistFrom(0), 80);
 }
 /** Lecture aléatoire depuis le menu contextuel sidebar. */
 export function ctxShufflePlaylist(plId) {
   document.getElementById('pl-ctx-menu')?.classList.remove('on');
   const niBtn = document.getElementById('ni-pl-' + plId);
-  setView('playlist', niBtn, plId);
+  emit(EVENTS.VIEW_REQUEST, { view: 'playlist', btn: niBtn, plId });
   setTimeout(() => shufflePlaylist(), 80);
 }
 
@@ -1239,7 +1237,7 @@ export function openRenamePlaylistModal(plId) {
   _renderPlCoverPreview();
   // FIX-B3 : reset de l'état actif des onglets AVANT de les cacher
   // (évite le désync visuel si l'utilisateur était sur l'onglet Smart)
-  switchPlTab('manual');
+  emit(EVENTS.SMART_PLAYLIST_SWITCH_TAB, { tab: 'manual' });
   const tabs = document.querySelector('.pl-modal-tabs');
   if (tabs) tabs.style.display = 'none';
   document.getElementById('pl-panel-manual').style.display = '';
@@ -1263,7 +1261,7 @@ export function closePlModal() {
     _plBg.classList.remove('on', 'modal-closing');
   }, { once: true });
   setTimeout(() => _plBg.classList.remove('on', 'modal-closing'), 250);
-  closeCtxMenu();
+  emit(EVENTS.CTX_MENU_CLOSE, {});
   // S88 FIX : reset complet de l'état modal pour éviter les fuites d'état
   // Avant le fix, plModalMode/datasets pouvaient persister entre deux ouvertures
   // (ex. rename → fermeture sans sauvegarde → nouvelle playlist avec mode 'rename' fantôme)
@@ -1355,9 +1353,9 @@ export async function confirmPlaylistModal() {
     renderPlNav();
     setupPlNavDrop();
     closePlModal();
-    if (selBatch) { clearSelection(); toast(i18n('t_added_to', name), 'success'); }
+    if (selBatch) { emit(EVENTS.SELECTION_CLEAR, {}); toast(i18n('t_added_to', name), 'success'); }
     else if (pending) toast(i18n('t_added_to', name), 'success');
-    else { setView('playlist', document.getElementById('ni-pl-'+pl.id), pl.id); toast(i18n('t_pl_created', name), 'success'); }
+    else { emit(EVENTS.VIEW_REQUEST, { view: 'playlist', btn: document.getElementById('ni-pl-'+pl.id), plId: pl.id }); toast(i18n('t_pl_created', name), 'success'); }
   } finally {
     _plModalBusy = false;
   }
@@ -1380,7 +1378,7 @@ export async function deletePlaylist(e, plId) {
     set('playlists', get('playlists').filter(p => p.id !== plId));
     await savePlaylists();
     const curPlId = get('curPlId');
-    if (curPlId === plId) { setView('all', document.getElementById('ni-all')); set('curPlId', null); }
+    if (curPlId === plId) { emit(EVENTS.VIEW_REQUEST, { view: 'all', btn: document.getElementById('ni-all') }); set('curPlId', null); }
     renderPlNav();
     toast(i18n('t_pl_deleted'), 'success');
   } else {
@@ -1388,7 +1386,7 @@ export async function deletePlaylist(e, plId) {
     const plSnapshot = { ...pl, trackIds: [...(pl.trackIds || [])] };
     set('playlists', get('playlists').filter(p => p.id !== plId));
     const curPlId = get('curPlId');
-    if (curPlId === plId) { setView('all', document.getElementById('ni-all')); set('curPlId', null); }
+    if (curPlId === plId) { emit(EVENTS.VIEW_REQUEST, { view: 'all', btn: document.getElementById('ni-all') }); set('curPlId', null); }
     renderPlNav();
 
     let undone = false;

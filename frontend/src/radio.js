@@ -23,11 +23,9 @@ import { get, notify }                        from './store.js';
 import { getFiltered, filteredIdx, _trackIdxMap } from './search.js';
 import { audio, playAt }                      from './player.js';
 import { toast, toastWithAction, confirmAction }                       from './ui.js';
-import { setView } from './views.js';
 import { setManualQueue } from './player.js';
-import { closeCtxMenu } from './ctxmenu.js';
-import { cinemaOpen, toggleCinemaRadio } from './cinema.js';
 import { savePlaylists, renderPlNav, setupPlNavDrop } from './playlists.js';
+import { emit, EVENTS } from './bus.js';
 
 // ── Constantes ───────────────────────────────────────────────
 const RADIO_SIZE           = CFG.RADIO_QUEUE_SIZE;
@@ -251,7 +249,7 @@ export async function startRadio(trackId) {
     else {
       // Le seed n'est pas dans la vue filtrée courante → basculer sur "Tous les titres"
       // et attendre que _withVT + la transition CSS soient terminées (≥ 250ms) avant playAt.
-      setView('all', document.getElementById('ni-all'));
+      emit(EVENTS.VIEW_REQUEST, { view: 'all', btn: document.getElementById('ni-all') });
       setTimeout(() => {
         const fi2 = filteredIdx(seed);
         if (fi2 >= 0) playAt(fi2);
@@ -272,7 +270,7 @@ function _radioTeardown() {
   _syncRadioButtons(false);
   // Si on est sur la vue radio, retour à Tous les titres
   if (get('view') === 'radio') {
-    setView('all', document.getElementById('ni-all'));
+    emit(EVENTS.VIEW_REQUEST, { view: 'all', btn: document.getElementById('ni-all') });
   }
 }
 
@@ -325,7 +323,7 @@ export function ctxStartRadio() {
   const ctxId = get('ctxTrackId');
   const tracks = get('tracks');
   const t = (_trackIdxMap.has(ctxId) ? tracks[_trackIdxMap.get(ctxId)] : undefined);
-  closeCtxMenu();
+  emit(EVENTS.CTX_MENU_CLOSE, {});
   if (t) startRadio(t.id);
 }
 
@@ -551,7 +549,7 @@ export async function radioSaveAsPlaylist() {
     i18n('radio_pl_saved', name, ids.length),
     'success',
     i18n('radio_pl_see') || 'Voir →',
-    () => setView('playlist', document.getElementById('ni-playlists'), pl.id),
+    () => emit(EVENTS.VIEW_REQUEST, { view: 'playlist', btn: document.getElementById('ni-playlists'), plId: pl.id }),
     6000
   );
 }
@@ -744,8 +742,10 @@ export function renderRadioView() {
 
 /** Ouvre la vue radio (démarre si nécessaire). Appelé depuis la sidebar ou la bannière. */
 export async function openRadioView(btn) {
-  // Si en mode cinéma → toggle via cinema.js (met à jour updateCinema() + bouton #cinema-radio)
-  if (cinemaOpen) { toggleCinemaRadio(); return; }
+  // Si en mode cinéma → toggle via bus (cinema.js répond et vérifie cinemaOpen localement)
+  if (document.getElementById('cinema-overlay')?.classList.contains('on')) {
+    emit(EVENTS.CINEMA_RADIO_TOGGLE, {}); return;
+  }
 
   // Bug #8 fix : ignorer le `btn` passé (peut être un bouton bannière ou n'importe quel élément
   // cliqué). setView() attend l'item nav #ni-radio pour activer la bonne entrée de sidebar.
@@ -763,7 +763,7 @@ export async function openRadioView(btn) {
   // Déjà sur la vue radio → rien à faire (évite un flash de transition inutile)
   if (get('view') === 'radio') return;
 
-  setView('radio', niBtn);
+  emit(EVENTS.VIEW_REQUEST, { view: 'radio', btn: niBtn });
 }
 
 // window.* supprimé — playRadioTrackAt/removeRadioTrack sont des exports ES
