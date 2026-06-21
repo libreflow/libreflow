@@ -63,7 +63,7 @@ export const EVENTS = Object.freeze({
   // Panel coordination (évite les cycles d'import entre panneaux)
   PANEL_CLOSE_QUEUE:    'panel:close_queue',    // {}
   PANEL_CLOSE_SETTINGS: 'panel:close_settings', // {}
-  VIEW_REQUEST:         'ui:view_request',       // { view: string, btn: Element|null }
+  VIEW_REQUEST:         'ui:view_request',       // { view: string, btn: Element|null, plId?: string }
   // i18n
   LANG_CHANGED:         'i18n:lang_changed',     // {}
   // Library
@@ -83,4 +83,10 @@ export const EVENTS = Object.freeze({
   SEARCH_DEBOUNCE_CANCEL: 'search:debounce_cancel',  // {}
   // Cinema
   CINEMA_RADIO_TOGGLE:  'cinema:radio_toggle',       // {}
+  // Smart playlist
+  SMART_PLAYLIST_SWITCH_TAB: 'smartplaylist:switch_tab', // { tab: string }
+  // Player bar update (from artLoader)
+  PLAYERBAR_UPDATE:           'player:bar_update',         // {}
+  // Sleep
+  SLEEP_CROSSFADE_STOP:       'sleep:crossfade_stop',      // {}
 });

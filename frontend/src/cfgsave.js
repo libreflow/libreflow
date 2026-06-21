@@ -29,7 +29,6 @@
 import { get }                                        from './store.js';
 import { CFG }                                        from './cfg.js';
 import { DB, dput, isQuotaError }                     from './db.js';
-import { audio }                                      from './player.js';
 import { getLang, i18n }                              from './i18n.js';
 import { getTheme, getDynColor, getDisplayMode }      from './settings.js';
 import { rgEnabled, rgTargetLUFS }                    from './replaygain.js';
@@ -45,6 +44,8 @@ import { getQueueState }                              from './queue.js';
 import { radioActive, getRadioSeedId }               from './radio.js';
 import { getDeviceProfiles }                            from './eqdevice.js';
 import { toast }                                      from './ui.js';
+
+const _audioEl = /** @type {HTMLAudioElement|null} */ (document.getElementById('audio'));
 
 // ── Debounce timer (module-local) ─────────────────────────────────────────────
 let _saveCfgTimer = null;
@@ -104,8 +105,8 @@ async function _doSaveCfg() {
 
     const likedIds    = liked instanceof Set ? [...liked] : [];
     const curTrackId  = curIdx >= 0 && tracks[curIdx] ? tracks[curIdx].id : null;
-    const curPos      = curTrackId && audio.duration > 0
-      ? Math.floor(audio.currentTime)
+    const curPos      = curTrackId && (_audioEl?.duration ?? 0) > 0
+      ? Math.floor(_audioEl?.currentTime ?? 0)
       : 0;
 
     // ── État DOM supplémentaire ───────────────────────────────────────────────

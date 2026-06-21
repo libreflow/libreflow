@@ -17,11 +17,12 @@ import { esc } from './utils.js';
 import { i18n } from './i18n.js';
 import { get, notify }  from './store.js'; // Phase 4
 import { playLog } from './playlog.js'; // Bug #1 fix : accès direct, window.__playLogRef__ n'existe pas
-import { emit, EVENTS } from './bus.js';
+import { emit, on, EVENTS } from './bus.js';
 import { _trackIdxMap, trackIdx } from './search.js';
 import { toast }                                        from './ui.js';
-import { setView } from './views.js';
 import { setPlModalMode, savePlaylists, renderPlNav, setupPlNavDrop, closePlModal } from './playlists.js';
+
+on(EVENTS.SMART_PLAYLIST_SWITCH_TAB, ({ tab }) => switchPlTab(tab));
 
 // ── État interne ──────────────────────────────────────────────
 let _smartSeedId  = null;
@@ -521,7 +522,7 @@ export async function confirmSmartPlaylist() {
     await savePlaylists();
     renderPlNav(); setupPlNavDrop();
     closePlModal();
-    setView('playlist', document.getElementById('ni-pl-'+pl.id), pl.id);
+    emit(EVENTS.VIEW_REQUEST, { view: 'playlist', btn: document.getElementById('ni-pl-'+pl.id), plId: pl.id });
     toast(i18n('t_smart_pl_created', name, result.length), 'success');
     return;
   }
@@ -547,7 +548,7 @@ export async function confirmSmartPlaylist() {
   await savePlaylists();
   renderPlNav(); setupPlNavDrop();
   closePlModal();
-  setView('playlist', document.getElementById('ni-pl-'+pl.id), pl.id);
+  emit(EVENTS.VIEW_REQUEST, { view: 'playlist', btn: document.getElementById('ni-pl-'+pl.id), plId: pl.id });
   toast(i18n('t_smart_pl_created', name, result.length), 'success');
 }
 

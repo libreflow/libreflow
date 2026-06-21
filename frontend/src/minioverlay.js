@@ -9,7 +9,8 @@
 //   updateMiniOverlayProgress, initMiniOverlayDrag
 
 import { get }   from './store.js';
-import { audio } from './player.js';
+
+const _audio = /** @type {HTMLAudioElement|null} */ (document.getElementById('audio'));
 
 const SVG_PLAY  = `<svg viewBox="0 0 24 24"><polygon points="6 3 20 12 6 21" fill="currentColor"/></svg>`;
 const SVG_PAUSE = `<svg viewBox="0 0 24 24"><rect x="5.5" y="4" width="4" height="16" rx="1.5" fill="currentColor"/><rect x="14.5" y="4" width="4" height="16" rx="1.5" fill="currentColor"/></svg>`;
@@ -45,7 +46,7 @@ export function syncMiniOverlay() {
 
   // Icône play/pause
   const playBtn = document.getElementById('mp-ov-play');
-  if (playBtn) playBtn.innerHTML = (audio && !audio.paused) ? SVG_PAUSE : SVG_PLAY;
+  if (playBtn) playBtn.innerHTML = (_audio && !_audio.paused) ? SVG_PAUSE : SVG_PLAY;
 
   const titleEl  = document.getElementById('mp-ov-title');
   const artistEl = document.getElementById('mp-ov-artist');
@@ -94,9 +95,9 @@ export function updateMiniOverlayProgress() {
   const now = Date.now();
   if (now - _lastOvProg < 250) return;
   _lastOvProg = now;
-  if (!audio || !audio.duration) return;
+  if (!_audio || !_audio.duration) return;
   const fill = document.getElementById('mp-ov-fill');
-  if (fill) fill.style.width = (audio.currentTime / audio.duration * 100).toFixed(1) + '%';
+  if (fill) fill.style.width = (_audio.currentTime / _audio.duration * 100).toFixed(1) + '%';
 }
 
 // ── R-M6 : re-clamp au resize ──────────────────────────────────────

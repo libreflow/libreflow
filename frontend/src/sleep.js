@@ -11,7 +11,7 @@
 
 import { CFG }                              from './cfg.js';
 import { i18n }                             from './i18n.js';
-import { audio, audioNext, clearCrossfadeTimers } from './player.js';
+import { emit, EVENTS }                     from './bus.js';
 import { radioActive, stopRadioSilent }     from './radio.js';
 import { toast }                                        from './ui.js';
 import { masterGainNode, eqCtx, setMasterGain }        from './eq.js';
@@ -101,7 +101,7 @@ export function cancelSleepTimer(silent) {
   _sleepWarnedMin = false; _sleepWarned5Min = false;
   // Restore volume to the user's set level (read slider — never hardcode = 1)
   const _vel = document.getElementById('vol');
-  const _targetVol = _vel ? parseFloat(_vel.value) : audio.volume;
+  const _targetVol = _vel ? parseFloat(_vel.value) : (document.getElementById('audio')?.volume ?? 1);
   // DSP-5 : restaurer via masterGainNode (graph) ; sinon fallback HTML
   if (masterGainNode && eqCtx) {
     masterGainNode.gain.setTargetAtTime(_targetVol, eqCtx.currentTime, 0.05);
@@ -124,9 +124,8 @@ function _sleepTick() {
     clearInterval(sleepTickTimer); sleepTickTimer = null;
     // BUG FIX: cancel crossfade before pausing — otherwise cfFadeTimer/cfNextTimer
     // keep running in the background after shutdown
-    clearCrossfadeTimers();
-    audio.pause();
-    if (audioNext) { audioNext.pause(); }
+    document.getElementById('audio')?.pause();
+    emit(EVENTS.SLEEP_CROSSFADE_STOP, {});
     if (radioActive) stopRadioSilent(); // prevent auto-resume — variante synchrone, pas de dialog
     cancelSleepTimer(true);
     toast(i18n('t_sleep_done'));
@@ -148,7 +147,7 @@ function _sleepTick() {
     // BUG FIX : annuler tout crossfade en cours dès que le sleep fade démarre.
     // Sans ça, audioNextGain continue de monter (fade-in de la piste suivante)
     // pendant que le sleep tente d'éteindre l'audio — les deux s'opposent.
-    clearCrossfadeTimers();
+    emit(EVENTS.SLEEP_CROSSFADE_STOP, {});
   }
   if (sleepFading) {
     const ratio = Math.max(0, remaining / (CFG.SLEEP_FADE_SECS * 1000));

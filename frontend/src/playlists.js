@@ -37,7 +37,8 @@ import { get, set, notify }      from './store.js';
 import { emit, EVENTS }          from './bus.js';
 import { DB }                    from './db.js';
 import { toast, toastWithAction, confirmAction, promptAction } from './ui.js';
-import { openSmartPlaylistModal, switchPlTab } from './smartplaylist.js';
+import { closeCtxMenu }          from './ctxmenu.js';
+import { clearSelection }        from './selection.js';
 import { invalidateFilterCache, getFiltered } from './search.js';
 import { invalidateGenreGridSig }              from './genres.js';
 import { saveCfg }                             from './cfgsave.js';
@@ -1110,7 +1111,7 @@ export function openNewPlaylistModal(preTrackId) {
   const tabs = document.querySelector('.pl-modal-tabs');
   if (tabs) tabs.style.display = '';
   document.getElementById('pl-modal-bg').classList.add('on');
-  switchPlTab('manual');
+  emit(EVENTS.SMART_PLAYLIST_SWITCH_TAB, { tab: 'manual' });
   const plModal = document.getElementById('pl-modal');
   if (plModal && !_plModalFocusTrap) {
     _plModalFocusTrap = _buildPlFocusTrap(plModal);
@@ -1236,7 +1237,7 @@ export function openRenamePlaylistModal(plId) {
   _renderPlCoverPreview();
   // FIX-B3 : reset de l'état actif des onglets AVANT de les cacher
   // (évite le désync visuel si l'utilisateur était sur l'onglet Smart)
-  switchPlTab('manual');
+  emit(EVENTS.SMART_PLAYLIST_SWITCH_TAB, { tab: 'manual' });
   const tabs = document.querySelector('.pl-modal-tabs');
   if (tabs) tabs.style.display = 'none';
   document.getElementById('pl-panel-manual').style.display = '';
