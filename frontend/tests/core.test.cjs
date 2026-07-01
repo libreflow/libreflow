@@ -927,25 +927,20 @@ section('motion.js -- public surface (static source check)');
     'prefersReducedMotion',
     'eases',
     'tween',
-    'from',
     'set',
     'timeline',
     'kill',
-    'flip',
-    '_meta',
   ];
   for (const name of expectedExports) {
     const re = new RegExp('export\\s+(?:function|const|class)\\s+' + name + '\\b');
     assert(re.test(src), 'motion.js exports ' + name);
   }
 
-  assert(/gsap\.registerPlugin\(\s*Flip\s*,\s*CustomEase\s*\)/.test(src),
-    'motion.js registers Flip + CustomEase at load');
+  assert(/gsap\.registerPlugin\(\s*CustomEase\s*\)/.test(src),
+    'motion.js registers CustomEase at load');
 
   assert(/eases\s*=\s*Object\.freeze\(/.test(src),
     'eases token table is Object.freeze-d');
-  assert(/flip\s*=\s*Object\.freeze\(/.test(src),
-    'flip namespace is Object.freeze-d');
 
   for (const easeName of ['lf-premium', 'lf-snap', 'lf-overshoot']) {
     assert(src.includes("'" + easeName + "'"),
@@ -953,7 +948,6 @@ section('motion.js -- public surface (static source check)');
   }
 
   assert(/from\s+['"]gsap['"]/.test(src), 'imports from "gsap"');
-  assert(/from\s+['"]gsap\/Flip['"]/.test(src), 'imports from "gsap/Flip"');
   assert(/from\s+['"]gsap\/CustomEase['"]/.test(src), 'imports from "gsap/CustomEase"');
 
   assert(/prefers-reduced-motion/.test(src),
@@ -2027,8 +2021,10 @@ section('components/lf-toast-stack.logic.js -- import-smoke');
 
   // =============================================================================
   // cinema split — vérification statique (lignes + exports publics)
+  // cinema-viz.js / cinema-bg.js removed in 804181a (dead-module sweep);
+  // guard with try/catch so the suite doesn't crash while these tests are red.
   // =============================================================================
-  {
+  try {
     const fs = require('fs'), path = require('path');
     const root = path.join(__dirname, '../..');
     const read = f => fs.readFileSync(path.join(root, f), 'utf8');
@@ -2061,6 +2057,9 @@ section('components/lf-toast-stack.logic.js -- import-smoke');
     assert(/export \{[\s\S]*?cinemaBg/.test(cinSrc),       "cinema.js re-exporte cinemaBg");
     assert(/export let cinemaOpen/.test(cinSrc),            "cinema.js exporte toujours cinemaOpen");
     assert(/export function updateCinema/.test(cinSrc),     "cinema.js exporte toujours updateCinema");
+  } catch (e) {
+    console.error('  KO  cinema split crashed:', e.message);
+    _ko++;
   }
 
   // =============================================================================
@@ -2120,8 +2119,10 @@ section('components/lf-toast-stack.logic.js -- import-smoke');
 
   // =============================================================================
   // Cards Albums — uniformité (audit 2026-06-11, AC1-AC8)
+  // renderer-grids.js / i18n.fr.js / i18n.en.js removed (dead-module sweep);
+  // guard with try/catch so the suite doesn't crash while these tests are red.
   // =============================================================================
-  {
+  try {
     const fs = require('fs'), path = require('path');
     const root = path.join(__dirname, '../..');
     const read = f => fs.readFileSync(path.join(root, f), 'utf8');
@@ -2160,6 +2161,9 @@ section('components/lf-toast-stack.logic.js -- import-smoke');
       'drill header : pluriels via i18n (plus de hardcode FR)');
     assert(!/Lire tout|Mélanger/.test(rgSrc),
       'drill header : libellés boutons via i18n');
+  } catch (e) {
+    console.error('  KO  cards Albums crashed:', e.message);
+    _ko++;
   }
 
   // lf-modal reducer (Phase 1)
@@ -2184,6 +2188,51 @@ section('components/lf-toast-stack.logic.js -- import-smoke');
     console.error('  KO  lf-modal import/test crashed:', e.message);
     _ko++;
   }
+
+  // =============================================================================
+  // queue.js — logique peekFirstExplicit / consumeFirstExplicit
+  // =============================================================================
+  section('queue.js -- peekFirstExplicit / consumeFirstExplicit (logique inline)');
+
+  (function () {
+    // Simulation légère de _trackIdxMap + tracks[]
+    const _tmap = new Map([['t1', 0], ['t2', 1], ['t3', 2]]);
+    const _tr   = [{ id: 't1', name: 'A' }, { id: 't2', name: 'B' }, { id: 't3', name: 'C' }];
+
+    function _peek(q) {
+      if (!q?.length) return null;
+      for (const id of q) {
+        if (_tmap.has(id)) return _tr[_tmap.get(id)];
+      }
+      return null;
+    }
+
+    function _consume(q) {
+      if (!q?.length) return { track: null, remaining: null };
+      const track = _peek(q);
+      if (!track) return { track: null, remaining: null };
+      const fi  = q.findIndex(id => _tmap.has(id));
+      const rem = q.slice(fi + 1);
+      return { track, remaining: rem.length ? rem : null };
+    }
+
+    assert(_peek(null)      === null, 'peekFirstExplicit: queue null → null');
+    assert(_peek([])        === null, 'peekFirstExplicit: queue vide → null');
+    assert(_peek(['t1']).id === 't1', 'peekFirstExplicit: retourne le premier track');
+    assert(_peek(['dead', 't2']).id === 't2', 'peekFirstExplicit: saute les IDs obsolètes');
+
+    const r1 = _consume(['t1', 't2', 't3']);
+    assert(r1.track.id === 't1',      'consumeFirstExplicit: retourne le premier track');
+    assert(r1.remaining.length === 2, 'consumeFirstExplicit: remaining a 2 items');
+
+    const r2 = _consume(['t1']);
+    assert(r2.track.id   === 't1', 'consumeFirstExplicit: retourne le dernier track');
+    assert(r2.remaining  === null, 'consumeFirstExplicit: remaining null quand vide');
+
+    const r3 = _consume(['dead1', 'dead2', 't2']);
+    assert(r3.track.id  === 't2', 'consumeFirstExplicit: saute stale IDs en tête');
+    assert(r3.remaining === null, 'consumeFirstExplicit: remaining null après stale purge');
+  }());
 
   // -- Résultat -----------------------------------------------------------
   console.log('\n═══════════════════════════════════════════════════════════');

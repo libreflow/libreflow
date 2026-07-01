@@ -86,10 +86,8 @@ async function run() {
     assert.ok(re.test(HTML), '#cinema-overlay missing aria-modal="true"');
   });
   await t('#cinema-overlay has aria-label', () => {
-    // aria-label OR aria-labelledby sont valides pour role=dialog (WCAG SC 4.1.2).
-    const hasLabel = /id="cinema-overlay"[^>]*aria-label="/.test(HTML);
-    const hasLabelledBy = /id="cinema-overlay"[^>]*aria-labelledby="/.test(HTML);
-    assert.ok(hasLabel || hasLabelledBy, '#cinema-overlay missing aria-label or aria-labelledby');
+    const re = /id="cinema-overlay"[^>]*aria-label="/;
+    assert.ok(re.test(HTML), '#cinema-overlay missing aria-label');
   });
 
   // --- SC 4.1.2 EQ band sliders need aria-orientation -------------------
@@ -119,10 +117,10 @@ async function run() {
 
   // --- SC 1.3.1 : liste virtualisée annonce la position (X sur Y) -------------
   await t('renderer.js emits aria-setsize/aria-posinset on track rows', () => {
-    const rt = readRepoFile('frontend/src/renderer-track.js');
-    assert.ok(/aria-setsize="\$\{setSize\}"/.test(rt),
+    const rj = readRepoFile('frontend/src/renderer.js');
+    assert.ok(/aria-setsize="\$\{setSize\}"/.test(rj),
       'thtml() doit poser aria-setsize sur les lignes de piste');
-    assert.ok(/aria-posinset="\$\{fi \+ 1\}"/.test(rt),
+    assert.ok(/aria-posinset="\$\{fi \+ 1\}"/.test(rj),
       'thtml() doit poser aria-posinset (fi+1) sur les lignes de piste');
   });
 
@@ -182,10 +180,11 @@ async function run() {
   // 3 flashs/s : BEAT_COOLDOWN >= 334 ms. (Audit : le visualizer lisse + clear
   // chaque frame, prefers-reduced-motion coupe toutes les boucles — pas de flash.)
   await t('cinema beat cooldown keeps flashes <=3/sec (SC 2.3.1)', () => {
-    // Le beat detector vit désormais dans cinema-viz.js (split de cinema.js).
-    const cj = readRepoFile('frontend/src/cinema-viz.js');
-    const m = /BEAT_COOLDOWN\s*=\s*(\d+)/.exec(cj);
-    assert.ok(m, 'BEAT_COOLDOWN introuvable dans cinema-viz.js');
+    // BEAT_COOLDOWN moved to cinema-viz.js after cinema split — check both files
+    const cj  = readRepoFile('frontend/src/cinema.js');
+    const cvj = (() => { try { return readRepoFile('frontend/src/cinema-viz.js'); } catch { return ''; } })();
+    const m = /BEAT_COOLDOWN\s*=\s*(\d+)/.exec(cvj) || /BEAT_COOLDOWN\s*=\s*(\d+)/.exec(cj);
+    assert.ok(m, 'BEAT_COOLDOWN introuvable dans cinema.js ni cinema-viz.js');
     assert.ok(parseInt(m[1], 10) >= 334,
       `BEAT_COOLDOWN ${m[1]}ms < 334ms → risque de >3 flashs/s (SC 2.3.1)`);
   });
@@ -267,6 +266,36 @@ async function run() {
       || /text-decoration\s*:/i.test(m[0]);
     assert.ok(hasCue,
       '.pc.on (shuffle/repeat actif) ne doit pas reposer sur la couleur seule — ajouter un fond/poids/anneau');
+  });
+
+  // --- SC 4.1.2 Dupes panel must expose dialog role + modal (GAP-01) ---------
+  await t('#dupes-panel has role="dialog" (SC 4.1.2)', () => {
+    const re = /id="dupes-panel"[^>]*role="dialog"|role="dialog"[^>]*id="dupes-panel"/;
+    assert.ok(re.test(HTML), '#dupes-panel missing role="dialog"');
+  });
+  await t('#dupes-panel has aria-modal="true" (SC 4.1.2)', () => {
+    const re = /id="dupes-panel"[^>]*aria-modal="true"|aria-modal="true"[^>]*id="dupes-panel"/;
+    assert.ok(re.test(HTML), '#dupes-panel missing aria-modal="true"');
+  });
+  await t('#dupes-panel has aria-labelledby (SC 4.1.2)', () => {
+    const re = /id="dupes-panel"[^>]*aria-labelledby="|aria-labelledby="[^"]*"[^>]*id="dupes-panel"/;
+    assert.ok(re.test(HTML), '#dupes-panel missing aria-labelledby');
+  });
+
+  // --- SC 4.1.2 Cinema progress bar must expose slider role (GAP-04) ----------
+  await t('#cinema-pbar has role="slider" (SC 4.1.2)', () => {
+    const re = /id="cinema-pbar"[^>]*role="slider"|role="slider"[^>]*id="cinema-pbar"/;
+    assert.ok(re.test(HTML), '#cinema-pbar missing role="slider"');
+  });
+  await t('#cinema-pbar has aria-valuenow/min/max (SC 4.1.2)', () => {
+    const re = /id="cinema-pbar"[^>]*aria-valuenow="|aria-valuenow="[^"]*"[^>]*id="cinema-pbar"/;
+    assert.ok(re.test(HTML), '#cinema-pbar missing aria-valuenow');
+  });
+
+  // --- SC 4.1.2 Cover preview button must have an accessible name (GAP-07) ----
+  await t('#bte-cover-preview has aria-label or aria-labelledby (SC 4.1.2)', () => {
+    const re = /id="bte-cover-preview"[^>]*(aria-label="|aria-labelledby=")/;
+    assert.ok(re.test(HTML), '#bte-cover-preview (role=button) missing aria-label or aria-labelledby');
   });
 
   if (fail) { console.log(`\nA11Y FAIL: ${fail}/${pass + fail}`); process.exit(1); }

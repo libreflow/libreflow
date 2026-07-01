@@ -54,9 +54,8 @@ export async function checkForUpdate() {
       () => _installUpdate(update),
       0
     );
-  } catch (e) {
-    // Silent to the user — endpoint may not be configured in dev builds
-    console.debug('[updater] checkForUpdate failed (expected in dev or offline):', e?.message ?? e);
+  } catch {
+    // Silencieux — endpoint non configuré, pas de réseau, clé invalide, etc.
   }
 }
 

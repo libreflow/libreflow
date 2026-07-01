@@ -10,7 +10,8 @@
 //   import  : audio, setIcon, updateMediaSession              (player.js)
 //   import  : refreshQueueBadge, queueOpen, renderQueue       (queue.js)
 //   import  : cinemaOpen, updateCinema                        (cinema.js)
-//   import  : applyArtColor, clearArtColor, _updateArtBlur    (settings.js)
+//   import  : animateArtChange, applyArtColor, clearArtColor,
+//             _updateArtBlur                                  (settings.js)
 //   import  : extEmoji                                        (utils.js)
 //   import  : extractColor                                    (tags.js)
 //
@@ -26,43 +27,26 @@ import { audio, setIcon, updateMediaSession,
          peekNext }                                 from './player.js';
 import { refreshQueueBadge, queueOpen, renderQueue } from './queue.js';
 import { cinemaOpen, updateCinema }                  from './cinema.js';
-import { applyArtColor, clearArtColor,
+import { animateArtChange, applyArtColor, clearArtColor,
          _updateArtBlur }                            from './settings.js';
-import { extractDominantHsl }                        from './artcolor.js';
-import { trackSwap }                                 from './motion.js';
 import { extEmoji }                                  from './utils.js';
 import { extractColor }                              from './tags.js';
-// ── Now Playing HSL ambient tokens ───────────────────────────────────────────
-// Write/clear --np-hue / --np-sat / --np-light on :root so style.css consumers
-// (#pl::before hairline, rowBreath animation) breathe with the current track art.
-function _applyNpHsl({ hue, sat, light }) {
-  const r = document.documentElement.style;
-  r.setProperty('--np-hue',   hue);
-  r.setProperty('--np-sat',   sat + '%');
-  r.setProperty('--np-light', light + '%');
-}
-function _clearNpHsl() {
-  const r = document.documentElement.style;
-  r.removeProperty('--np-hue');
-  r.removeProperty('--np-sat');
-  r.removeProperty('--np-light');
-}
-
+import { on, EVENTS }                               from './bus.js';
+// Cinéma demande la mise à jour du slider volume — évite le cycle cinema.js ↔ playerbar.js.
+on(EVENTS.VOL_SLIDER_UPDATE, ({ elId }) => updateVolSlider(document.getElementById(elId)));
+on(EVENTS.PLAYERBAR_UPDATE, () => updateBar());
 // ── Volume slider ─────────────────────────────────────────────────────────────
 let _volHideTimer = 0;
 
 /**
  * Met à jour le fond dégradé du slider volume et affiche un tooltip temporaire.
- * @param {Element|null} [el]        — élément #vol ; résolu via getElementById si omis.
- * @param {string|null}  [fillColor] — couleur de remplissage CSS (défaut : var(--g)).
- *                                     Cinéma passe rgb(_cinArtRGB) pour teinte pochette.
+ * @param {Element|null} [el] — élément #vol ; résolu via getElementById si omis.
  */
-export function updateVolSlider(el, fillColor) {
+export function updateVolSlider(el) {
   const vel = (el instanceof Element) ? el : document.getElementById('vol');
   if (!vel) return;
-  const pct  = Math.round(+vel.value * 100);
-  const fill = fillColor ?? 'var(--g)';
-  vel.style.background = `linear-gradient(to right, ${fill} ${pct}%, var(--bg5) ${pct}%)`;
+  const pct = Math.round(+vel.value * 100);
+  vel.style.background = `linear-gradient(to right, var(--g) ${pct}%, var(--bg5) ${pct}%)`;
   const tip = document.getElementById('vol-tip');
   if (tip) {
     tip.textContent = pct + '%';
@@ -70,6 +54,26 @@ export function updateVolSlider(el, fillColor) {
     tip.classList.add('on');
     clearTimeout(_volHideTimer);
     _volHideTimer = setTimeout(() => tip.classList.remove('on'), 1200);
+  }
+  _syncVolIcon(+vel.value);
+}
+
+function _syncVolIcon(vol) {
+  const muted = vol <= 0;
+  const low   = vol > 0 && vol < 0.5;
+  const w1 = document.getElementById('vol-wave1');
+  const w2 = document.getElementById('vol-wave2');
+  const x1 = document.getElementById('vol-x1');
+  const x2 = document.getElementById('vol-x2');
+  const btn = document.getElementById('btn-vol-mute');
+  if (w1) w1.style.display = muted ? 'none' : '';
+  if (w2) w2.style.display = (muted || low) ? 'none' : '';
+  if (x1) x1.style.display = muted ? '' : 'none';
+  if (x2) x2.style.display = muted ? '' : 'none';
+  if (btn) {
+    btn.setAttribute('aria-pressed', String(muted));
+    btn.setAttribute('aria-label', muted ? i18n('vol_unmute') : i18n('vol_mute'));
+    btn.title = muted ? i18n('vol_unmute') : i18n('vol_mute');
   }
 }
 
@@ -135,10 +139,10 @@ let _lastNotifTrackId = null;
  * cinéma, notification OS, MediaSession).
  */
 export function updateBar() {
-  const _phase1Idx = get('curIdx');
-  if (_phase1Idx < 0) return;
+  const curIdx = get('curIdx');
+  if (curIdx < 0) return;
   const tracks = get('tracks');
-  const t = tracks[_phase1Idx];
+  const t = tracks[curIdx];
   if (!t) return; // guard : curIdx hors bornes (ex. clearLibrary pendant un event en queue)
 
   // Phase 1 : feedback visuel critique — même frame que l'event (INP-1)
@@ -150,21 +154,13 @@ export function updateBar() {
   setupMarquee(document.getElementById('pl-a'), t.artistFull || t.artist || i18n('unknown_artist'));
 
   const img = document.getElementById('pl-img'), em = document.getElementById('pl-em');
-  if (img && em) {
-    if (t.art) { img.src = t.art; img.alt = t.album || t.name || ''; img.style.display = 'block'; em.style.display = 'none'; }
-    else       { img.alt = ''; img.style.display = 'none'; em.style.display = ''; em.textContent = extEmoji(t.ext); }
-  }
-
-  // GSAP track swap — animate art container + title + artist after content update
-  const artEl    = document.getElementById('pl-art');
-  const titleEl  = document.getElementById('pl-n');
-  const artistEl = document.getElementById('pl-a');
-  if (artEl && titleEl && artistEl) trackSwap(artEl, titleEl, artistEl);
+  if (t.art) { img.src = t.art; img.alt = t.album || t.name || ''; img.style.display = 'block'; em.style.display = 'none'; animateArtChange(); }
+  else       { img.alt = ''; img.style.display = 'none'; em.style.display = ''; em.innerHTML = extEmoji(t.ext); }
 
   const liked = get('liked');
   const _isLikedNow = liked instanceof Set ? liked.has(t.id) : false;
-  const _plLk = document.getElementById('pl-lk');
-  if (_plLk) { _plLk.classList.toggle('on', _isLikedNow); _plLk.setAttribute('aria-pressed', String(_isLikedNow)); }
+  document.getElementById('pl-lk').classList.toggle('on', _isLikedNow);
+  document.getElementById('pl-lk').setAttribute('aria-pressed', String(_isLikedNow));
   document.getElementById('cinema-lk')?.classList.toggle('on', _isLikedNow);
   document.getElementById('cinema-lk')?.setAttribute('aria-pressed', String(_isLikedNow));
 
@@ -186,57 +182,37 @@ export function updateBar() {
   if (_shouldNotify) _lastNotifTrackId = t.id;
 
   // Phase 2 : opérations lourdes — différées après le premier paint.
-  // RACE-3 / PLAYERBAR-1 FIX : capturer _phase1Idx en Phase 1 et le comparer
-  // au store en Phase 2 — si curIdx a changé, un nouveau updateBar() a pris
-  // la main ; ce callback est périmé et doit s'arrêter.
+  // RACE-3 FIX : re-lire curIdx depuis le store — la closure `t` peut être périmée
+  // si un changement de piste rapide survient entre Phase 1 et Phase 2.
   requestAnimationFrame(() => setTimeout(() => {
-    if (get('curIdx') !== _phase1Idx) return; // stale — newer track took over
+    const _p2Idx = get('curIdx');
+    if (_p2Idx < 0) return;
     const _p2Tracks = get('tracks');
-    const t = _p2Tracks[_phase1Idx]; // re-read — may differ from Phase-1 t if track changed
+    const t = _p2Tracks[_p2Idx]; // re-read — may differ from Phase-1 t if track changed
     if (!t) return;
     if (t.artColor) applyArtColor(t.artColor);
     else if (t.art) extractColor(t.art).then(c => { if (c) { t.artColor = c; applyArtColor(c); } }).catch(e => console.warn('[playerbar:extractColor]', e));
     else clearArtColor();
     _updateArtBlur(t.art || null);
-    // NP-HSL: extract dominant HSL for --np-* ambient tokens (hairline + rowBreath)
-    if (t._npHsl) {
-      _applyNpHsl(t._npHsl);
-    } else if (t.art) {
-      // V6/M6 (audit bugs visuels 2026-06-11) : repartir des tokens par défaut
-      // pendant l'extraction — sinon la couleur de la piste précédente persiste
-      // si l'extraction échoue (load jamais tiré, image corrompue).
-      _clearNpHsl();
-      const _plImg = document.getElementById('pl-img');
-      const _doExtract = () => {
-        // V6 : ignorer les callbacks périmés — sur skip rapide A→B→C, les
-        // listeners load {once:true} s'empilent et la closure de B reçoit
-        // la pochette de C (HSL caché sur la mauvaise piste).
-        if (get('curIdx') !== _phase1Idx) return;
-        const hsl = extractDominantHsl(_plImg);
-        if (hsl) { t._npHsl = hsl; _applyNpHsl(hsl); }
-      };
-      // V6 : `complete` obligatoire — naturalWidth>0 seul peut refléter
-      // l'ANCIENNE current request de <img> tant que la nouvelle pochette
-      // n'est pas décodée (drawImage lirait le bitmap de la piste N-1).
-      if (_plImg && _plImg.complete && _plImg.naturalWidth) _doExtract();
-      else if (_plImg) _plImg.addEventListener('load', _doExtract, { once: true });
-    } else {
-      _clearNpHsl();
-    }
     if (cinemaOpen) updateCinema();
     if (_shouldNotify) {
-      // Notifier immédiatement (art retiré de notify_track — payloads 2-10 MB interdits §IPC).
-      invoke('notify_track', { data: { title: t.name, artist: t.artistFull || t.artist || '' } }).catch(e => console.warn('[playerbar:notify_track]', e));
-      // Pré-cacher t._b64 lazily pour miniplayer.js (transfer cross-window blob: → data:).
-      if (!t._b64 && t._artBuf) {
-        new Promise(res => {
-          const fr = new FileReader();
-          fr.onload = () => res(fr.result);
-          fr.readAsDataURL(new Blob([t._artBuf], { type: t._artMime || 'image/jpeg' }));
-        }).then(b64 => { t._b64 = b64; }).catch(() => {});
-      } else if (!t._b64 && t.art && t.art.startsWith('data:')) {
-        t._b64 = t.art;
-      }
+      // ART-IDB : base64 généré lazily depuis _artBuf (fire-and-forget, pas bloquant)
+      (async () => {
+        let artUrl = null;
+        if (t._b64) {
+          artUrl = t._b64;
+        } else if (t.art && t.art.startsWith('data:')) {
+          artUrl = t.art;
+        } else if (t._artBuf) {
+          artUrl = await new Promise(res => {
+            const fr = new FileReader();
+            fr.onload = () => res(fr.result);
+            fr.readAsDataURL(new Blob([t._artBuf], { type: t._artMime || 'image/jpeg' }));
+          });
+          t._b64 = artUrl; // cache pour le prochain changement de piste
+        }
+        invoke('notify_track', { data: { title: t.name, artist: t.artistFull || t.artist || '', art: artUrl } }).catch(e => console.warn('[playerbar:notify_track]', e));
+      })();
       updateMediaSession(t);
     }
     if (queueOpen) renderQueue();

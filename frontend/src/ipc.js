@@ -14,11 +14,6 @@ import { CFG } from './cfg.js';
 /** @type {Promise<void> | null} */
 let _tauriReady = null;
 
-// Évite de lancer de nouveaux invoke() pendant un reload Vite HMR — réduit les
-// "[TAURI] Couldn't find callback id" dans la console développeur.
-let _pageUnloading = false;
-window.addEventListener('beforeunload', () => { _pageUnloading = true; }, { once: true });
-
 function _waitTauriReady() {
   if (_tauriReady) return _tauriReady;
   return (_tauriReady = new Promise((res, rej) => {
@@ -50,25 +45,17 @@ function _waitTauriReady() {
 /** @overload @param {'write_tags'} cmd @param {{ data: { path: string, title: string, artist: string, album: string, genre: string, year: number|null, track_number: number|null } }} args @returns {Promise<void>} */
 /** @overload @param {'write_cover'} cmd @param {{ data: { audio_path: string, image_path: string } }} args @returns {Promise<void>} */
 /** @overload @param {'write_replaygain_tags'} cmd @param {{ data: { path: string, gain_db: number, peak: number } }} args @returns {Promise<void>} */
-/** @overload @param {'notify_track'} cmd @param {{ data: { title: string, artist: string } }} args @returns {Promise<void>} */
+/** @overload @param {'notify_track'} cmd @param {{ data: { title: string, artist: string, art?: string|null } }} args @returns {Promise<void>} */
 /** @overload @param {'win_set_title'} cmd @param {{ title: string }} args @returns {Promise<void>} */
 /** @overload @param {'taskbar_set_playing'} cmd @param {{ playing: boolean }} args @returns {Promise<void>} */
 /** @overload @param {'taskbar_set_has_tracks'} cmd @param {{ hasTracks: boolean }} args @returns {Promise<void>} */
 /** @overload @param {'mini_update'} cmd @param {{ data: Record<string, unknown> }} args @returns {Promise<void>} */
 /** @overload @param {'mini_progress'} cmd @param {{ data: Record<string, unknown> }} args @returns {Promise<void>} */
-/** @overload @param {'read_audio_bytes'} cmd @param {{ path: string }} args @returns {Promise<number[]>} */
 /** @overload @param {'allow_asset_dir'} cmd @param {{ path: string }} args @returns {Promise<void>} */
 /** @overload @param {'watch_folder_start'} cmd @param {{ path: string }} args @returns {Promise<void>} */
 /** @overload @param {'pick_audio_file'} cmd @returns {Promise<string | null>} */
 /** @overload @param {'pick_image'} cmd @returns {Promise<string | null>} */
 /** @overload @param {'win_close'|'win_minimize'|'win_maximize'|'mini_toggle'|'mini_close'|'watch_folder_stop'|'open_devtools'} cmd @returns {Promise<void>} */
-/** @overload @param {'smtc_metadata'} cmd @param {{ meta: { title: string, artist: string, album: string, path: string|null, durationSecs: number|null } | null }} args @returns {Promise<void>} */
-/** @overload @param {'smtc_playback'} cmd @param {{ playing: boolean, positionSecs: number }} args @returns {Promise<void>} */
-/** @overload @param {'plugin:clipboard-manager|write_text'} cmd @param {{ text: string }} args @returns {Promise<void>} */
-/** @overload @param {'plugin:cli|cli_matches'} cmd @returns {Promise<{ args?: Record<string, { value?: unknown, occurrences?: number }> }>} */
-/** @overload @param {'plugin:opener|reveal_item_in_dir'} cmd @param {{ path: string }} args @returns {Promise<void>} */
-/** @overload @param {'plugin:autostart|enable'|'plugin:autostart|disable'} cmd @returns {Promise<void>} */
-/** @overload @param {'plugin:autostart|is_enabled'} cmd @returns {Promise<boolean>} */
 /**
  * @param {string} cmd
  * @param {Record<string, unknown>} [args]
@@ -77,33 +64,21 @@ function _waitTauriReady() {
  * @returns {Promise<unknown>}
  */
 async function invoke(cmd, args, opts) {
-  if (_pageUnloading) return Promise.reject(new DOMException('Page unloading', 'AbortError'));
   await _waitTauriReady();
   const timeout = opts?.timeout ?? CFG.IPC_TIMEOUT_MS;
   // @ts-ignore — __TAURI__ injected at runtime by Tauri, not in Window type
-  if (!timeout) {
-    if (!window.__TAURI__?.core) throw new Error('[ipc] Tauri non initialisé');
-    return window.__TAURI__.core.invoke(cmd, args);
-  }
-  let _timerId = 0;
-  let _timedOut = false;
+  if (!timeout) return window.__TAURI__.core.invoke(cmd, args);
+  let _timerId;
   // @ts-ignore — __TAURI__ injected at runtime by Tauri, not in Window type
   const _invokeP = window.__TAURI__.core.invoke(cmd, args).finally(() => clearTimeout(_timerId));
-  // Si le timeout gagne la course, la branche invoke devient orpheline : son
-  // rejet tardif (Result::Err après le délai) déclencherait unhandledrejection.
-  _invokeP.catch((e) => {
-    if (_timedOut) {
-      // Late Rust rejection after timeout — swallowed to avoid unhandledrejection,
-      // but logged for diagnosability.
-      console.warn('[ipc] late rejection for', cmd, ':', e?.message ?? e);
-    }
-  });
+  // Suppress late Rust rejections that arrive after the race resolves — without this,
+  // an error from the losing arm fires an unhandledrejection event.
+  _invokeP.catch(() => {});
   return Promise.race([
     _invokeP,
     new Promise((_, fail) => {
       _timerId = setTimeout(
         () => {
-          _timedOut = true;
           console.warn('[ipc] timeout:', cmd);
           fail(new Error(`[ipc] ${cmd} timed out after ${timeout}ms`));
         },
@@ -152,15 +127,14 @@ function convertFileSrc(filePath) {
  * @param {string} cmd
  * @param {Record<string, unknown>} [args]
  * @param {number} [maxRetries]
- * @param {{ timeout?: number }} [opts]
  * @returns {Promise<unknown>}
  */
-async function invokeRetry(cmd, args, maxRetries = 3, opts) {
+async function invokeRetry(cmd, args, maxRetries = 3) {
   let delay = 200;
   for (let attempt = 0; attempt < maxRetries; attempt++) {
     try {
       // @ts-ignore — invokeRetry passes generic string cmd, overloads handle specific commands
-      return await invoke(cmd, args, opts);
+      return await invoke(cmd, args);
     } catch (err) {
       if (attempt === maxRetries - 1) {
         const argsSnippet = args ? JSON.stringify(args).slice(0, 120) : '(none)';

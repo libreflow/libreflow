@@ -12,6 +12,8 @@ import { fmt }                   from './utils.js';
 import { get, subscribe }        from './store.js';
 import { audio }                 from './player.js';
 import { radioActive }           from './radio.js';
+import { dget }                  from './db.js';
+import { ART_MIME_ALLOWLIST }    from './artLoader.js';
 
 // Position du mini-player (remplace window._miniPos du BOOT-2)
 let _miniPos = null;
@@ -56,7 +58,6 @@ export async function toggleMiniPlayer() {
   // IMPORTANT : await updateMiniPlayer() avant mini_toggle pour garantir que le
   // mutex Rust est peuplé avant que mini.html charge et appelle mini_get_state.
   // Sans await : race condition (mini_update IPC pas encore fini quand le mini charge).
-  const _prevMiniOpen = _miniOpen;
   _miniOpen = !_miniOpen;
   // Marquer le bouton toolbar comme actif
   const tbtMini = document.getElementById('tbt-mini');
@@ -65,7 +66,7 @@ export async function toggleMiniPlayer() {
   invoke('mini_toggle')
     .then(() => invoke('win_minimize').catch(() => {}))
     .catch(() => {
-      _miniOpen = _prevMiniOpen; // restaurer l'état pré-toggle (et non hardcoder false)
+      _miniOpen = false;
       document.getElementById('tbt-mini')?.classList.remove('on');
       document.getElementById('tbt-mini')?.setAttribute('aria-pressed', 'false');
     });
@@ -76,19 +77,16 @@ export async function openMiniAndMinimize() {
   const tbtMini = document.getElementById('tbt-mini');
   if (tbtMini) { tbtMini.classList.add('on'); tbtMini.setAttribute('aria-pressed', 'true'); }
   await updateMiniPlayer();
-  invoke('mini_toggle')
-    .then(() => invoke('win_minimize').catch(() => {}))
-    .catch(() => {
-      _miniOpen = false;
-      if (tbtMini) { tbtMini.classList.remove('on'); tbtMini.setAttribute('aria-pressed', 'false'); }
-    });
+  invoke('win_minimize').catch(() => {
+    _miniOpen = false;
+    if (tbtMini) { tbtMini.classList.remove('on'); tbtMini.setAttribute('aria-pressed', 'false'); }
+  });
 }
 
 // ── Mise à jour état complet ──────────────────────────────────
 
 export async function updateMiniPlayer() {
   if (!_miniOpen) return; // guard cohérent avec updateMiniProgress
-  if (!audio) return; // guard avant init (dép circulaire player.js → miniplayer.js)
   const curIdx = get('curIdx');
   const tracks = get('tracks'); // Phase 4 — store alimenté depuis Jalon 3
   const liked  = get('liked');
@@ -102,7 +100,7 @@ export async function updateMiniPlayer() {
     progress: audio.duration ? (audio.currentTime / audio.duration * 100) : 0,
     time: fmt(audio.currentTime),
     duration: audio.duration ? fmt(audio.duration) : '',
-    volume:  parseFloat(document.getElementById('vol')?.value ?? '1'), // §2 : lu depuis #vol DOM
+    volume:  audio.volume,                  // indicateur volume mini.html
     miniPos: _miniPos,                       // restauration position (premier applyState)
   };
   if (curIdx < 0) {
@@ -122,15 +120,25 @@ export async function updateMiniPlayer() {
   } else if (t.art && !t.art.startsWith('blob:')) {
     artForMini = t.art; // asset:// URLs → OK cross-window
   } else if (t.art && t.art.startsWith('blob:')) {
-    // blob: URLs ne sont pas accessibles cross-window (§15 : fetch() banni).
-    // Utiliser t._artBuf (rempli par artLoader.js) pour la conversion base64.
-    if (t._artBuf) {
-      try {
-        const u8 = new Uint8Array(t._artBuf);
-        // Détecter le MIME réel depuis les magic bytes (PNG: 89 50 4E 47, sinon JPEG)
+    // blob: URLs inaccessibles cross-window — convertir en base64 via _artBuf ou IDB (fetch interdit §15)
+    try {
+      let buf = t._artBuf || null;
+      let mimeHint = t._artMime || 'image/jpeg';
+      if (!buf) {
+        const rec = await dget('tracks', t.id).catch(() => null);
+        if (rec?.artBuf) {
+          buf = rec.artBuf;
+          const rawMime = rec.artMime || 'image/jpeg';
+          mimeHint = ART_MIME_ALLOWLIST.includes(rawMime) ? rawMime : 'image/jpeg';
+          t._artBuf  = buf;
+          t._artMime = mimeHint;
+        }
+      }
+      if (buf) {
+        const u8 = new Uint8Array(buf);
+        // Détecter le MIME depuis les magic bytes (PNG: 89 50 4E 47, sinon JPEG)
         const isPNG = u8.length >= 4 && u8[0] === 0x89 && u8[1] === 0x50 && u8[2] === 0x4E && u8[3] === 0x47;
-        const mime  = isPNG ? 'image/png' : (t._artMime || 'image/jpeg');
-        // BUG FIX F4 : encoder par chunks pour éviter stack overflow > ~250 Ko
+        const mime  = isPNG ? 'image/png' : 'image/jpeg';
         let binary = '';
         const CHUNK = 8192;
         for (let i = 0; i < u8.length; i += CHUNK) {
@@ -138,11 +146,8 @@ export async function updateMiniPlayer() {
         }
         artForMini = `data:${mime};base64,${btoa(binary)}`;
         t._b64 = artForMini;
-      } catch(e) { console.warn('[miniplayer] art base64 conversion failed:', e); artForMini = null; }
-    } else {
-      console.warn('[miniplayer] blob: URL sans _artBuf disponible, artwork ignoré pour le mini:', t.id);
-      artForMini = null;
-    }
+      }
+    } catch(e) { console.warn('[miniplayer] art base64 conversion failed:', e); artForMini = null; }
   }
   // await garantit que le mutex Rust est écrit avant que toggleMiniPlayer continue
   await invoke('mini_update', { data: { ...base,
@@ -186,7 +191,6 @@ export function resetMiniProgressThrottle() {
 
 export function updateMiniProgress() {
   if (!_miniOpen) return; // BUG FIX : ne pas invoquer IPC si le mini est fermé
-  if (!audio) return; // guard avant init
   const curIdx = get('curIdx');
   if (curIdx < 0 || !audio.duration) return;
   const now = Date.now();

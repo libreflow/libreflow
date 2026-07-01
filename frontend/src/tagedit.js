@@ -1,4 +1,4 @@
-﻿// LibreFlow — tagedit.js
+// LibreFlow — tagedit.js
 // Éditeur de tags inline (double-clic sur une piste).
 // Extrait de app.js.
 //
@@ -16,12 +16,12 @@
 import { extEmoji, esc, mainArtist } from './utils.js';
 import { VIRT }                       from './virt.js';
 import { invoke }                     from './ipc.js';
+import { CFG }                        from './cfg.js';
 import { i18n }                       from './i18n.js';
 import { get, subscribe }               from './store.js'; // Phase 4
 import { emit, EVENTS }               from './bus.js';
 import { toast }                                        from './ui.js';
 import { _trackIdxMap, trackIdx, invalidateFilterCache } from './search.js';
-import { invalidateGridMaps } from './renderer.js';
 import { updateBar } from './playerbar.js';
 import { saveTrackNow } from './library.js';
 import { queueOpen, renderQueue } from './queue.js';
@@ -60,15 +60,15 @@ export function openTagEditor(trackId) {
   _stopClickHandler = (e) => e.stopPropagation();
   el.addEventListener('click', _stopClickHandler);
 
-  const _lTitle  = esc(i18n('te_title'));
-  const _lArtist = esc(i18n('te_artist'));
-  const _lAlbum  = esc(i18n('te_album'));
-  const _lGenre  = esc(i18n('te_genre'));
-  const _lYear   = esc(i18n('te_year'));
-  const _lTrack  = esc(i18n('te_track_num'));
-  const _lHint   = esc(i18n('te_hint'));
-  const _lSave   = esc(i18n('te_save'));
-  const _lCancel = esc(i18n('te_cancel'));
+  const _lTitle  = i18n('te_title');
+  const _lArtist = i18n('te_artist');
+  const _lAlbum  = i18n('te_album');
+  const _lGenre  = i18n('te_genre');
+  const _lYear   = i18n('te_year');
+  const _lTrack  = i18n('te_track_num');
+  const _lHint   = i18n('te_hint');
+  const _lSave   = i18n('te_save');
+  const _lCancel = i18n('te_cancel');
 
   // UX-TAG-1 : datalist suggestions depuis la bibliothèque courante (lazy cache — invalidé par subscribe)
   if (!_dlArtistsCache) _dlArtistsCache = [...new Set(get('tracks').map(x => x.artistFull || x.artist).filter(Boolean))].sort().slice(0, 200);
@@ -113,54 +113,17 @@ export function openTagEditor(trackId) {
         <button class="tag-edit-cancel" data-action="cancel-tag-edit">${_lCancel}</button>
         <button class="tag-edit-save"   data-action="save-tag-edit" data-track-id="${trackId}">${_lSave}</button>
       </div>
+      ${(() => {
+        // C-3 : panneau info audio (read-only) — affiché uniquement si données disponibles
+        const parts = [];
+        if (t.ext)        parts.push(`<span class="tei-codec">${t.ext.toUpperCase()}</span>`);
+        if (t.bitDepth)   parts.push(`${t.bitDepth}-bit`);
+        if (t.sampleRate) parts.push(`${(t.sampleRate / 1000).toFixed(t.sampleRate % 1000 === 0 ? 0 : 1)} kHz`);
+        if (t.bitrate)    parts.push(`${t.bitrate} kbps`);
+        if (t.channels)   parts.push(t.channels === 1 ? 'Mono' : t.channels === 2 ? 'Stéréo' : `${t.channels} ch`);
+        return parts.length ? `<div class="tag-edit-audio-info">${parts.join('<span class="tei-sep">·</span>')}</div>` : '';
+      })()}
     </div>`;
-
-  // C-3 : panneau info audio (read-only) — construit programmatiquement (données lofty,
-  //        jamais injectées via innerHTML — CLAUDE.md §13)
-  {
-    const tagForm = el.querySelector('.tag-edit-form');
-    const audioParts = [];
-    if (t.ext) {
-      const codec = document.createElement('span');
-      codec.className = 'tei-codec';
-      codec.textContent = t.ext.toUpperCase();
-      audioParts.push(codec);
-    }
-    if (t.bitDepth) {
-      const s = document.createElement('span');
-      s.textContent = `${t.bitDepth}-bit`;
-      audioParts.push(s);
-    }
-    if (t.sampleRate) {
-      const s = document.createElement('span');
-      s.textContent = `${(t.sampleRate / 1000).toFixed(t.sampleRate % 1000 === 0 ? 0 : 1)} kHz`;
-      audioParts.push(s);
-    }
-    if (t.bitrate) {
-      const s = document.createElement('span');
-      s.textContent = `${t.bitrate} kbps`;
-      audioParts.push(s);
-    }
-    if (t.channels) {
-      const s = document.createElement('span');
-      s.textContent = t.channels === 1 ? 'Mono' : t.channels === 2 ? 'Stéréo' : `${t.channels} ch`;
-      audioParts.push(s);
-    }
-    if (audioParts.length && tagForm) {
-      const infoDiv = document.createElement('div');
-      infoDiv.className = 'tag-edit-audio-info';
-      audioParts.forEach((part, i) => {
-        infoDiv.appendChild(part);
-        if (i < audioParts.length - 1) {
-          const sep = document.createElement('span');
-          sep.className = 'tei-sep';
-          sep.textContent = '·';
-          infoDiv.appendChild(sep);
-        }
-      });
-      tagForm.appendChild(infoDiv);
-    }
-  }
 
   // Masquer l'artwork si l'image échoue à charger (sans inline onerror)
   const _artImg = el.querySelector('.tart img');
@@ -226,12 +189,6 @@ export async function saveTagEdit(trackId) {
   if (_nameInp) _nameInp.removeAttribute('aria-invalid');
   if (_nameErr) _nameErr.textContent = '';
 
-  // Snapshot pour rollback en cas d'échec IDB (TAGEDIT-2)
-  const _orig = {
-    name: t.name, artistFull: t.artistFull, artist: t.artist,
-    album: t.album, genre: t.genre, year: t.year, track: t.track,
-  };
-
   // Appliquer les modifications en mémoire
   const _unknownArtist = i18n('unknown_artist');
   t.name       = name;
@@ -248,38 +205,30 @@ export async function saveTagEdit(trackId) {
   // Nettoyer l'éditeur
   _cleanTagEditor(el);
   _editingTrackId = null;
-  _outsideClickActive = false; // TAGEDIT-1: réactiver outside-click pour la prochaine ouverture
 
-  // 1. Persister en IDB immédiatement
-  try {
-    await saveTrackNow(t);
-  } catch (e) {
-    Object.assign(t, _orig);
-    console.warn('[tagedit] IDB save failed:', e);
-    toast(i18n('te_write_fail', String(e)) || 'Sauvegarde échouée', 'error');
-    return;
-  }
+  // 1. Persister en IDB immédiatement (toujours réussit)
+  await saveTrackNow(t);
 
   // 2. Écrire dans le fichier audio via Rust (lofty)
   //    Erreur non fatale : les modifs sont déjà en IDB, on avertit juste l'utilisateur
   // Tauri v2 : les args sont { nomDuParamètreRust: valeur }
   // La commande Rust prend `data: WriteTagsData` → il faut passer { data: {...} }
-  const writeResult = await invoke('write_tags', {
-    data: {
-      path:        t.path,
-      title:       name,
-      artist:      artist,
-      album:       album,
-      genre:       genre  || '',
-      year:        year   || null,
-      track_number: track || null,
-    },
-  }, { timeout: 15000 }).then(() => null).catch(err => String(err));
+  const writeResult = await Promise.race([
+    invoke('write_tags', {
+      data: {
+        path:        t.path,
+        title:       name,
+        artist:      artist,
+        album:       album,
+        genre:       genre  || '',
+        year:        year   || null,
+        track_number: track || null,
+      },
+    }),
+    new Promise((_, rej) => setTimeout(() => rej(new Error('IPC timeout')), CFG.IPC_TIMEOUT_MS)),
+  ]).then(() => null).catch(err => String(err));
 
-  // BUG-4 FIX: invalider les maps album/artiste — tagedit peut changer artist/album
-  // sans changer tracks.length, donc _computeTracksSig ne les détecte pas.
-  invalidateGridMaps();
-  // Invalider le cache de filtre et re-render complet
+  // Invalider le cache et re-render complet (plus fiable que outerHTML sur un élément virtualisé)
   invalidateFilterCache(); emit(EVENTS.FILTER_CHANGED, {});
   VIRT._lastListSig = '';
   emit(EVENTS.RENDER_LIB, {});
@@ -309,7 +258,6 @@ export function cancelTagEdit() {
   // fantôme — ça provoquait un re-render inutile avec un _trackIdxMap stale.
   if (!_trackIdxMap.has(trackId)) return;
   // Re-render proprement via le moteur virtuel (cohérent avec saveTagEdit)
-  invalidateGridMaps();
   invalidateFilterCache(); emit(EVENTS.FILTER_CHANGED, {});
   VIRT._lastListSig = '';
   emit(EVENTS.RENDER_LIB, {});

@@ -6,7 +6,6 @@ mod cdaudio;
 mod cdaudio_toc;
 mod commands;
 mod mini;
-mod smtc;
 #[cfg(target_os = "windows")]
 mod taskbar;
 mod watch;
@@ -19,69 +18,14 @@ use tauri_plugin_window_state::Builder as WindowStateBuilder;
 static MINI_CLOSE_SEQ: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
 
 fn main() {
-    let builder = tauri::Builder::default()
-        // single-instance DOIT rester le premier plugin enregistré : il court-circuite
-        // le boot des instances surnuméraires et refocalise l'instance existante en
-        // lui transmettant les arguments CLI (association de fichiers).
-        .plugin(tauri_plugin_single_instance::init(|app, argv, _cwd| {
-            if let Some(win) = app.get_webview_window("main") {
-                let _ = win.unminimize();
-                let _ = win.set_focus();
-                if let Err(e) = win.emit("single-instance", &argv) {
-                    log::warn!("[single-instance] emit argv failed: {e}");
-                }
-            }
-        }))
-        .plugin(
-            tauri_plugin_log::Builder::new()
-                .level(log::LevelFilter::Info)
-                // lofty émet des WARN attendus (bitrate-estimated duration) sur les MP3 courants
-                .level_for("lofty", log::LevelFilter::Error)
-                // l'updater tente le réseau au démarrage — app offline, erreur non actionnelle
-                .level_for("tauri_plugin_updater", log::LevelFilter::Off)
-                .targets([
-                    tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::Stdout),
-                    tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::LogDir {
-                        file_name: Some("libreflow".into()),
-                    }),
-                ])
-                .max_file_size(2_000_000)
-                .rotation_strategy(tauri_plugin_log::RotationStrategy::KeepOne)
-                .build(),
-        )
+    tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
-        // persisted-scope APRÈS fs : persiste entre les sessions le scope fs + asset
-        // accordé à l'exécution (dossiers musique choisis par l'utilisateur).
-        .plugin(tauri_plugin_persisted_scope::init())
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .plugin(WindowStateBuilder::default().build())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
-        .plugin(tauri_plugin_cli::init())
-        .plugin(tauri_plugin_opener::init())
-        .plugin(tauri_plugin_clipboard_manager::init())
-        .plugin(tauri_plugin_autostart::init(
-            tauri_plugin_autostart::MacosLauncher::LaunchAgent,
-            None,
-        ));
-
-    // Bloque les comportements WebView par défaut (Ctrl+P, F5, Ctrl+F, menu contextuel
-    // natif…) en production uniquement — debug garde reload + devtools.
-    // FOCUS_MOVE exclu : Flags::all() appelle preventDefault() sur Shift+Tab,
-    // ce qui tue la navigation clavier inverse (WCAG 2.1.1) en release.
-    #[cfg(not(debug_assertions))]
-    let builder = builder.plugin(
-        tauri_plugin_prevent_default::Builder::new()
-            .with_flags(
-                tauri_plugin_prevent_default::Flags::all()
-                    .difference(tauri_plugin_prevent_default::Flags::FOCUS_MOVE),
-            )
-            .build(),
-    );
-
-    builder
         .manage(mini::MiniState(Default::default()))
         .manage(mini::MiniOpenGuard(tokio::sync::Mutex::new(())))
         .manage(watch::WatchState(Default::default()))
@@ -99,8 +43,6 @@ fn main() {
             commands::win_set_title,
             commands::taskbar_set_playing,
             commands::taskbar_set_has_tracks,
-            smtc::smtc_metadata,
-            smtc::smtc_playback,
             mini::mini_toggle,
             mini::mini_close,
             mini::mini_update,
@@ -109,9 +51,9 @@ fn main() {
             watch::watch_folder_start,
             watch::watch_folder_stop,
             commands::allow_asset_dir,
+            commands::get_or_create_default_music_dir,
             commands::check_paths,
             commands::read_audio_props,
-            commands::read_audio_bytes,
             commands::read_tags,
             commands::organize_files,
             commands::export_backup,
@@ -130,8 +72,8 @@ fn main() {
             // ── Raccourcis médias ─────────────────────────────────────────
             let shortcuts = [
                 ("MediaPlayPause", "toggle-play"),
-                ("MediaTrackNext", "next"),
-                ("MediaTrackPrevious", "prev"),
+                ("MediaNextTrack", "next"),
+                ("MediaPreviousTrack", "prev"),
                 ("MediaStop", "stop"),
             ];
             for (key, cmd) in shortcuts {
@@ -142,13 +84,13 @@ fn main() {
                             if event.state == ShortcutState::Pressed {
                                 if let Some(win) = app.get_webview_window("main") {
                                     if let Err(e) = win.emit("media-key", &cmd_str) {
-                                        log::warn!("[shortcuts] emit media-key failed: {e}");
+                                        eprintln!("[shortcuts] emit media-key failed: {e}");
                                     }
                                 }
                             }
                         })
                 {
-                    log::warn!("[shortcuts] on_shortcut({key}) failed: {e}");
+                    eprintln!("[shortcuts] on_shortcut({key}) failed: {e}");
                 }
             }
 
@@ -158,12 +100,9 @@ fn main() {
                 if let Some(main_win_tb) = app.get_webview_window("main") {
                     taskbar::setup(main_win_tb, app.handle().clone());
                 } else {
-                    log::warn!("[taskbar] fenêtre main introuvable — thumbnail toolbar désactivée");
+                    eprintln!("[taskbar] fenêtre main introuvable — thumbnail toolbar désactivée");
                 }
             }
-
-            // ── Contrôles médias système (SMTC) — thread souvlaki dédié ──
-            smtc::setup(app);
 
             // ── Fusionner les deux on_window_event en un seul ─────────────
             if let Some(main_win) = app.get_webview_window("main") {
@@ -198,7 +137,7 @@ fn main() {
                                             });
                                             if let Err(e) = mini_win.emit("mini-will-close", &token)
                                             {
-                                                log::warn!(
+                                                eprintln!(
                                                     "[main] emit mini-will-close failed: {e}"
                                                 );
                                             }
@@ -209,7 +148,7 @@ fn main() {
                                             .await;
                                             app.unlisten(eid);
                                             if let Err(e) = mini_win.close() {
-                                                log::warn!("[main] mini_win.close() failed: {e}");
+                                                eprintln!("[main] mini_win.close() failed: {e}");
                                             }
                                         }
                                     }
@@ -227,7 +166,7 @@ fn main() {
                                     "normal"
                                 };
                                 if let Err(e) = w.emit("win-state", state_str) {
-                                    log::warn!("[main] emit win-state failed: {e}");
+                                    eprintln!("[main] emit win-state failed: {e}");
                                 }
                             }
                         }
@@ -239,14 +178,14 @@ fn main() {
                     }
                 });
             } else {
-                log::warn!("[setup] fenêtre main introuvable — window events non enregistrés");
+                eprintln!("[setup] fenêtre main introuvable — window events non enregistrés");
             }
 
             Ok(())
         })
         .run(tauri::generate_context!())
         .unwrap_or_else(|e| {
-            log::error!("[LibreFlow] Erreur fatale au démarrage : {e}");
+            eprintln!("[LibreFlow] Erreur fatale au démarrage : {e}");
             std::process::exit(1);
         });
 }

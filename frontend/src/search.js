@@ -21,7 +21,6 @@
 /** @import { Track } from './types.js' */
 
 import { get, subscribe } from './store.js';
-import { CFG } from './cfg.js';
 
 // ── Trigram helpers ───────────────────────────────────────────────────────────
 
@@ -230,79 +229,6 @@ function _filterByQuery(tracks, query) {
   });
 }
 
-// ── Relevance scorer ──────────────────────────────────────────────────────────
-
-// Field weights (title > artist > album > genre). Higher = more important.
-const _FIELD_W = [['name', 4], ['artist', 3], ['artistFull', 3], ['album', 2], ['genre', 1]];
-
-/**
- * Position rank within a field: prefix(3) > word-start(2) > substring(1) > none(0).
- * `wb` (optional) is a precompiled \b-anchored regex for the single-term query q.
- * For multi-word queries the word-boundary test (rank 2) won't fire for the full phrase;
- * those degrade gracefully to substring rank (1) via `l.includes(q)`.
- * @param {string | null | undefined} s
- * @param {string} q  — single lowercased term (or full lowercased query)
- * @param {RegExp} [wb]
- * @returns {number}
- */
-function _posRank(s, q, wb) {
-  if (!s) return 0;
-  const l = s.toLowerCase();
-  if (l.startsWith(q)) return 3;
-  const re = wb || new RegExp('\\b' + q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
-  if (re.test(l)) return 2;
-  if (l.includes(q)) return 1;
-  return 0;
-}
-
-/**
- * Relevance of track t for query q. Normalises q defensively.
- * Higher = better; 0 = no match.
- * @param {Track} t
- * @param {string} q
- * @returns {number}
- */
-export function relevanceScore(t, q) {
-  const qq = q.trim().toLowerCase();
-  if (!qq) return 0;
-  let best = 0;
-  for (const [field, w] of _FIELD_W) {
-    const r = _posRank(t[field], qq);
-    if (r) best = Math.max(best, w * 4 + r); // field dominates; position breaks within-field ties
-  }
-  return best;
-}
-
-/** Like relevanceScore but reuses a precompiled word-boundary regex (hot path). */
-function _relevanceScoreCached(t, q, wb) {
-  let best = 0;
-  for (const [field, w] of _FIELD_W) {
-    const r = _posRank(t[field], q, wb);
-    if (r) best = Math.max(best, w * 4 + r);
-  }
-  return best;
-}
-
-/**
- * Sorts a list of tracks by relevance score descending, then title alphabetically.
- * Returns a new array — does not mutate `list`.
- * Precomputes scores O(n) and builds the word-boundary regex once per search
- * to avoid millions of RegExp allocations in the sort comparator.
- * @param {Track[]} list
- * @param {string} q  — raw query (will be trimmed+lowercased)
- * @returns {Track[]}
- */
-function _relevanceSort(list, q) {
-  const qq = q.trim().toLowerCase();
-  const wb = new RegExp('\\b' + qq.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
-  const score = new Map();
-  for (const t of list) score.set(t, _relevanceScoreCached(t, qq, wb));
-  return [...list].sort((a, b) => {
-    const d = score.get(b) - score.get(a);
-    return d !== 0 ? d : _compare(a.name, b.name);
-  });
-}
-
 // ── Tri ───────────────────────────────────────────────────────────────────────
 
 /**
@@ -361,7 +287,7 @@ export function wasFuzzySearch() { return _lastWasFuzzy; }
 export function getFiltered() {
   const tracks      = get('tracks')      || [];
   const sort        = get('sort')        || 'az';
-  const query       = (get('query') || '').trim();
+  const query       = get('query')       || '';
   const view        = get('view')        || 'all';
   const drillKey    = get('drillKey')    || '';
   const drillFrom   = get('drillFrom')   || '';
@@ -403,10 +329,7 @@ export function getFiltered() {
         (t.artistFull || '').toLowerCase() === key
       );
     } else if (drillFrom === 'genres') {
-      src = src.filter(t => {
-        if (!t.genre) return false;
-        return t.genre.split(/[\/,;|]/).some(part => _normalizeGenre(part.trim()) === drillKey);
-      });
+      src = src.filter(t => _normalizeGenre(t.genre) === drillKey);
     }
   } else if (view === 'liked') {
     src = src.filter(t => liked?.has(t.id));
@@ -441,6 +364,7 @@ export function getFiltered() {
     } else if (query.trim().length >= 3) {
       // Fuzzy fallback — trigram Jaccard similarity.
       // PM-2 : c'est UNIQUEMENT ici qu'on construit les trigrammes (lazy par track).
+      const FUZZY_THRESHOLD = 0.4;
       const qTrigrams = _trigrams(query.toLowerCase().replace(/\s+/g, ' ').trim());
       // PM-1: pre-compute scores once (O(n)) so both filter and sort use O(1) Map lookups
       // instead of recomputing _trigramScore ~2×n×log(n) times inside the sort comparator.
@@ -451,7 +375,7 @@ export function getFiltered() {
         _scores.set(t.id, _trigramScore(qTrigrams, t._trigrams));
       }
       const fuzzy = src
-        .filter(t => (_scores.get(t.id) ?? 0) >= CFG.FUZZY_THRESHOLD)
+        .filter(t => (_scores.get(t.id) ?? 0) >= FUZZY_THRESHOLD)
         .sort((a, b) => (_scores.get(b.id) ?? 0) - (_scores.get(a.id) ?? 0));
       _lastWasFuzzy = fuzzy.length > 0;
       // Cache result directly and return — skip normal sort since results are ordered by score
@@ -490,10 +414,6 @@ export function getFiltered() {
         return ta !== tb ? ta - tb : _compare(a.name || '', b.name || '');
       });
     }
-  } else if (query) {
-    // Query active → order by relevance (prefix/word/substring × field weight),
-    // alpha tie-break. Non-query path keeps the user-chosen sort.
-    result = _relevanceSort(filtered, query);
   } else {
     result = _sortTracks(filtered, sort, recentPlays);
   }
@@ -516,6 +436,33 @@ export function getFiltered() {
  * @param {Track | string | null} track
  * @returns {number}
  */
+/**
+ * Score the relevance of a track to a lowercased query string.
+ * Field priority: name > artist > album. Position priority: prefix > word-start > substring.
+ * Returns 0 if no field matches.
+ *
+ * @param {{ name?: string, artist?: string, album?: string }} track
+ * @param {string} query
+ * @returns {number}
+ */
+export function relevanceScore(track, query) {
+  if (!query) return 0;
+  const q = query.toLowerCase();
+
+  function _fieldScore(field) {
+    if (!field) return 0;
+    const f = field.toLowerCase();
+    if (f.startsWith(q)) return 3;
+    if (f.split(/\s+/).some(w => w.startsWith(q))) return 2;
+    if (f.includes(q)) return 1;
+    return 0;
+  }
+
+  return _fieldScore(track.name)   * 100
+       + _fieldScore(track.artist) * 10
+       + _fieldScore(track.album)  * 1;
+}
+
 export function filteredIdx(track) {
   if (!track || !_GF.posMap) return -1;
   // Compatibilité : appelé avec un objet piste ou un id string direct

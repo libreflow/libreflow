@@ -1,80 +1,107 @@
-// LibreFlow — cinema.js — Mode Cinéma : overlay plein-écran, fond flou, contrôles masquables.
-import { fmt, extEmoji }                      from './utils.js';
-import { eqCtx, masterGainNode, setMasterGain } from './eq.js';
-import { i18n }                                from './i18n.js';
-import { get }                                 from './store.js';
+// LibreFlow — cinema.js
+// Mode Cinéma : overlay plein-écran, fond flou, contrôles masquables.
+// Extrait de app.js.
+//
+// Dépendances :
+//   import  : fmt  (utils.js)
+//   import  : saveCfg (cfgsave.js), updateVolSlider (playerbar.js)
+//   window  : audio, curIdx, tracks, liked, shuffle, repeat, getFiltered (getters), toast
+//
+// Exports publics (utilisés par app.js) :
+//   cinemaOpen, cinemaBg
+//   toggleCinema, openCinema, closeCinema, updateCinema, updateCinemaProgress
+//   setCinemaBg, cycleCinemaBg, applyCinemaBg, syncCinemaBgSettings, updateCinemaBgBtn
+//   toggleCinemaFullscreen, toggleCinemaRadio
+//   CINEMA_BG_MODES, CINEMA_BG_LABELS
+
+import { fmt }                               from './utils.js';
+import { eqCtx, eqAnalyser, masterGainNode, setMasterGain } from './eq.js'; // réutiliser le graphe EQ existant
+import { i18n }                               from './i18n.js';
+import { get, set }                           from './store.js';
 import { getFiltered, filteredIdx }            from './search.js';
-import { audio, toggleLike, next, prev }       from './player.js';
+import { audio, toggleLike, next, prev }      from './player.js';
 import { radioActive, stopRadio, startRadio, getRadioQueue } from './radio.js';
-import { toast }                               from './ui.js';
-import { saveCfg }                             from './cfgsave.js';
-import { updateVolSlider }                     from './playerbar.js';
-import { timeline, set as motionSet, kill as motionKill, eases } from './motion.js';
-
+import { toast }                                        from './ui.js';
+import { saveCfg }                   from './cfgsave.js';
+import { rgbToHsl, hslToRgb, boostSat, regionAvg, sampleArtColors } from './artcolor.js';
+import { emit, on, EVENTS }          from './bus.js';
+import { timeline, tween, set as motionSet, kill as motionKill, eases } from './motion.js';
+import { cinemaBg, CINEMA_BG_MODES, CINEMA_BG_LABELS, applyCinemaBg, setCinemaBg, cycleCinemaBg,
+         syncCinemaBgSettings, updateCinemaBgBtn, initCinemaBg, initCinemaBgModule,
+         updateCinArtColor, updateCinArtRGBFromTrack, getArtColorStr,
+         _cinArtRGBCur, _cinArtRGBTarget, _LERP_K,
+         startAmbientAnim, stopAmbientAnim, resetAmbientColors, updateAmbientGradient } from './cinema-bg.js';
 import { startCinemaViz, stopCinemaViz, initCinemaVizModule } from './cinema-viz.js';
-import {
-  cinemaBg, CINEMA_BG_MODES, CINEMA_BG_LABELS,
-  initCinemaBg, setCinemaBg, cycleCinemaBg, applyCinemaBg,
-  syncCinemaBgSettings, updateCinemaBgBtn,
-  stopAmbientAnim, updateAmbientGradient, restartAmbientIfNeeded,
-  initCinemaBgModule,
-  startWelcomeAmbient, stopWelcomeAmbient,
-} from './cinema-bg.js';
 
-// Re-exports pour rétrocompatibilité — tous les consommateurs importent depuis cinema.js
-export {
-  cinemaBg, CINEMA_BG_MODES, CINEMA_BG_LABELS,
-  initCinemaBg, setCinemaBg, cycleCinemaBg, applyCinemaBg,
-  syncCinemaBgSettings, updateCinemaBgBtn,
-  startWelcomeAmbient, stopWelcomeAmbient,
-};
+export { cinemaBg, CINEMA_BG_MODES, CINEMA_BG_LABELS, applyCinemaBg, setCinemaBg, cycleCinemaBg,
+         syncCinemaBgSettings, updateCinemaBgBtn, initCinemaBg, updateCinArtColor };
+
+// Radio demande le toggle cinéma — évite le cycle d'import cinema.js ↔ radio.js.
+on(EVENTS.CINEMA_RADIO_TOGGLE, () => { if (cinemaOpen) toggleCinemaRadio(); });
 
 // ── State ───────────────────────────────────────────────────
 export let cinemaOpen     = false;
 let cinemaHideTimer       = null;
-let _heartTimer           = null;
 
-// A11Y A.8 — focus captured before open, restored on close.
+// ── A11Y: focus management (A.8) ────────────────────────────
+// Stores the element that had focus before cinema opened so it
+// can be restored when the overlay closes.
 let _cinemaLastFocus = null;
 
-// DOM cache peuplé dans openCinema, vidé dans closeCinema.
+// DOM cache (peuplé dans openCinema, vidé dans closeCinema)
+// Utilisé par updateCinemaProgress() pour les mises à jour timeupdate à 60 fps.
 let _cinFill    = null;
 let _cinTc      = null;
 let _cinTd      = null;
-let _lastCinArt  = null; // évite le bug de normalisation url("…")
+let _cinPbar    = null;
+let _lastCinArt  = null; // dernière URL d'art — évite le bug de normalisation url("…")
+// _cinBgCtx → cinema-bg.js
 
-let _cinArtRGB       = '255,255,255';
-let _cinArtRGBTarget = [255,255,255];
-let _cinArtRGBCur    = [255,255,255];
-let _kbVariant  = 0;
-let _lastCinIdx = -1;
+// Visualiseur : _cinVizRaf et _beatTimer vivent dans cinema-viz.js
+// Couleur dominante : _cinArtRGB*, _cinArtRGBTarget, _cinArtRGBCur, _LERP_K vivent dans cinema-bg.js
+let _kbVariant  = 0;                  // variante Ken Burns courante (0-3)
+let _lastCinIdx = -1;                 // dernier curIdx vu dans updateCinema — détecte le changement de piste
 
+// Horloge
 let _clockInterval = null;
 
-// Timers de swap pochette — stockés pour annulation dans closeCinema().
+// Timers pour l'animation de swap pochette — stockés pour annulation dans closeCinema()
 let _cinSwapOutTimer = null;
 let _cinSwapInTimer  = null;
 
-// GSAP timeline d'ouverture — kill au close + au re-open (évite les séquences superposées).
+// GSAP timeline pour la chorégraphie d'ouverture — kill au close + au re-open
+// (évite que deux séquences se superposent si l'utilisateur toggle vite).
 let _openTl = null;
 
-// ── Init inter-modules ───────────────────────────────────────
-initCinemaBgModule(
-  () => ({ cinemaOpen, cinArtRGB: _cinArtRGB }),
-  () => updateCinema(),
-);
-initCinemaVizModule(
-  () => ({ cinemaOpen, cinemaBg, cinArtRGBTarget: _cinArtRGBTarget }),
-);
-
-// ── Constantes d'animation ──────────────────────────────────
+// ── Constantes ──────────────────────────────────────────────
+// Modes, labels, AMBIENT_CROSSFADE_MS → cinema-bg.js
 const CINEMA_CONTROLS_HIDE_MS  = 3000;  // délai avant masquage des contrôles
+const CIN_SWAP_OUT_MS          =  120;  // durée animation pochette sortante
+const CIN_SWAP_IN_MS           =  440;  // durée animation pochette entrante
+const HEART_BURST_MS           =  750;  // durée de la particule coeur
+const CLOCK_TICK_MS            = 1000;  // intervalle de mise à jour de l'horloge
+
+// ── Init modules ─────────────────────────────────────────────
+// Doit être posé après la déclaration de cinemaOpen et updateCinema.
+// Ces deux appels sont effectués après le bloc de déclarations.
+// (voir plus bas, juste après la déclaration de updateCinema)
+
+// ── Resize handler — redessine blur/ambient si dimensions changent ──
+let _resizeTimer = null;
+window.addEventListener('resize', () => {
+  if (!cinemaOpen) return;
+  clearTimeout(_resizeTimer);
+  _resizeTimer = setTimeout(() => {
+    if (cinemaBg === 'ambient' || cinemaBg === 'amoled' || cinemaBg === 'waves' || cinemaBg === 'starfield') applyCinemaBg();
+  }, 200);
+});
 
 // ── Ouverture / fermeture ────────────────────────────────────
 
 export function toggleCinema() {
   if (cinemaOpen) closeCinema(); else openCinema();
 }
+
 
 // ── Raccourcis clavier cinema ────────────────────────────────
 function _onArtDblClick(e) {
@@ -94,25 +121,27 @@ function _onArtDblClick(e) {
   heart.style.left = cx + 'px';
   heart.style.top  = cy + 'px';
   overlay.appendChild(heart);
-  if (_heartTimer) { clearTimeout(_heartTimer); }
-  _heartTimer = setTimeout(() => { heart.remove(); _heartTimer = null; }, 750);
+  setTimeout(() => heart.remove(), HEART_BURST_MS);
 }
 
-/** Lit le volume depuis le slider DOM #vol (source de vérité — §2). Fallback : 0.8. */
+/** Lit le volume depuis le slider DOM #vol (source de vérité — §2). Fallbacks : master gain puis 1. */
 function _readVol() {
-  const dom = parseFloat(document.getElementById('vol')?.value ?? '');
-  return Number.isFinite(dom) ? dom : 0.8;
+  const dom = parseFloat(document.getElementById('vol')?.value);
+  if (Number.isFinite(dom)) return dom;
+  return masterGainNode?.gain.value ?? 1;
 }
 
 function _onCinKey(e) {
   if (!cinemaOpen) return;
+  // Ignorer si focus sur un input/slider
   const _ct = e.target.tagName;
   if (_ct === 'INPUT' || _ct === 'TEXTAREA' || _ct === 'SELECT' || e.target.isContentEditable) return;
-  _showControls();
+  _showControls(); // reset idle timer sur toute touche
+  // audio imported from player.js
   switch (e.code) {
     case 'Space':
       e.preventDefault();
-      if (audio) { audio.paused ? audio.play().catch(() => {}) : audio.pause(); updateCinema(); }
+      if (audio) { audio.paused ? audio.play().catch(() => {}) : audio.pause(); updateCinema(); } // B33 FIX : .catch — évite un rejet non géré si autoplay refuse
       break;
     case 'ArrowLeft':
       e.preventDefault();
@@ -148,7 +177,7 @@ function _onCinKey(e) {
       break;
     case 'KeyR':
       e.preventDefault();
-      toggleCinemaRadio();
+      toggleCinemaRadio().catch(err => console.warn('[cinema] radio toggle:', err));
       break;
     case 'Escape':
       // Si plein écran actif → quitter le plein écran uniquement (pas fermer le cinéma)
@@ -161,12 +190,16 @@ function _onCinKey(e) {
   }
 }
 
-// A11Y A.8 — Tab trap; separate from _onCinKey for clean removal in closeCinema().
+// ── A11Y A.8 — Tab trap ──────────────────────────────────────
+// Separate from _onCinKey so it can be removed cleanly in closeCinema().
+// Traps Tab focus within the overlay. ESC and all other keys are handled
+// exclusively by _onCinKey (which also manages fullscreen exit).
 function _onCinemaTrapKey(e) {
   const overlay = document.getElementById('cinema-overlay');
   if (!overlay || !overlay.classList.contains('active')) return;
 
   if (e.key === 'Tab') {
+    _showControls(); // A11Y : rendre les contrôles visibles lors de la navigation clavier
     const focusables = overlay.querySelectorAll(
       'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
     );
@@ -184,17 +217,19 @@ function _onCinemaTrapKey(e) {
   }
 }
 
+// ── Scroll molette → volume ──────────────────────────────────
 function _syncCinVol(v) {
   const cvol = document.getElementById('cinema-vol');
-  if (cvol) { cvol.value = v; updateVolSlider(cvol, `rgb(${_cinArtRGB})`); }
+  if (cvol) { cvol.value = v; emit(EVENTS.VOL_SLIDER_UPDATE, { elId: 'cinema-vol' }); }
   const vel = document.getElementById('vol');
-  if (vel) { vel.value = v; updateVolSlider(vel); }
+  if (vel) { vel.value = v; emit(EVENTS.VOL_SLIDER_UPDATE, { elId: 'vol' }); }
   saveCfg();
 }
 
 function _onCinWheel(e) {
   e.preventDefault();
   e.stopPropagation();
+  // audio imported from player.js
   if (!audio) return;
   const delta = e.deltaY < 0 ? 0.05 : -0.05;
   const v = Math.min(1, Math.max(0, _readVol() + delta));
@@ -208,45 +243,46 @@ export function openCinema() {
   cinemaOpen = true;
   const overlay = document.getElementById('cinema-overlay');
   if (!overlay) return;
-  // A11Y A.8 — capture focus before open; overlay has tabindex="-1" so it is focusable.
+  // A11Y A.8 — capture previous focus; move focus into overlay on next paint
+  // (overlay has tabindex="-1" from A.7, so it is programmatically focusable)
   _cinemaLastFocus = document.activeElement;
   requestAnimationFrame(() => overlay.focus());
   overlay.classList.add('active');
+  // Marquer le bouton toolbar comme actif (état toggle visible)
   const tbtCinema = document.getElementById('tbt-cinema');
   if (tbtCinema) { tbtCinema.classList.add('on'); tbtCinema.setAttribute('aria-pressed', 'true'); }
-  // Cache pour updateCinemaProgress (timeupdate à 60 fps)
+  // Mettre en cache les refs cinéma pour updateCinemaProgress (timeupdate à 60 fps)
   _cinFill = document.getElementById('cinema-fill');
   _cinTc   = document.getElementById('cinema-tc');
   _cinTd   = document.getElementById('cinema-td');
+  _cinPbar = document.getElementById('cinema-pbar');
+  // Synchroniser le slider volume avec l'état courant de l'audio
   const volSlider = document.getElementById('cinema-vol');
   if (volSlider) volSlider.value = _readVol();
   applyCinemaBg();
   updateCinema();
   _startClock();
   startCinemaViz();
+  // Animation d'entrée : scale 0.88 → 1 + fade-in
   const artWrap = document.querySelector('.cinema-art-wrap');
   if (artWrap) {
     artWrap.classList.remove('cin-enter');
     requestAnimationFrame(() => requestAnimationFrame(() => {
       artWrap.classList.add('cin-enter');
-      _startKenBurns();
+      _startKenBurns(); // démarrer Ken Burns à l'ouverture du mode cinéma
     }));
   }
-  overlay.removeEventListener('mousemove', onCinemaMouseMove);
-  overlay.addEventListener('mousemove', onCinemaMouseMove);
-  overlay.removeEventListener('click',     onCinemaMouseMove);
-  overlay.addEventListener('click',     onCinemaMouseMove);
+  overlay.removeEventListener('mousemove', _onCinemaMouseMove);
+  overlay.addEventListener('mousemove', _onCinemaMouseMove);
+  overlay.removeEventListener('click',     _onCinemaMouseMove);
+  overlay.addEventListener('click',     _onCinemaMouseMove);
   overlay.removeEventListener('wheel',     _onCinWheel);
   overlay.addEventListener('wheel',     _onCinWheel, { passive: false });
   document.removeEventListener('keydown',  _onCinKey);
   document.addEventListener('keydown',  _onCinKey);
   document.removeEventListener('keydown', _onCinemaTrapKey);
   document.addEventListener('keydown', _onCinemaTrapKey);
-  document.removeEventListener('fullscreenchange', _onFullscreenChange);
-  document.addEventListener('fullscreenchange', _onFullscreenChange);
-  document.removeEventListener('visibilitychange', _onVisibilityChange);
-  document.addEventListener('visibilitychange', _onVisibilityChange);
-  // Double-clic pochette → like/unlike (removeEventListener d'abord : évite les listeners zombies).
+  // Double-clic pochette → like/unlike (removeEventListener d'abord : évite les listeners zombies)
   const _artWrapDb = document.querySelector('.cinema-art-wrap');
   _artWrapDb?.removeEventListener('dblclick', _onArtDblClick);
   _artWrapDb?.addEventListener('dblclick', _onArtDblClick);
@@ -254,37 +290,29 @@ export function openCinema() {
   _runOpenChoreography();
 }
 
-// Re-mesure l'overflow du titre après que #cinema-info est pleinement visible
-// (appelée depuis onComplete de _openTl — autoAlpha:0 pendant l'animation donne scrollWidth=0).
-function _recheckTitleScroll() {
-  const elT = document.getElementById('cinema-title');
-  if (!elT) return;
-  const overflow = elT.scrollWidth - elT.clientWidth;
-  if (overflow > 4) {
-    // Durée proportionnelle à l'overflow → vitesse constante ~45 px/s (Spotify-like).
-    // 17.1 = 45 px/s × 0.38 (fraction de l'animation dédiée au défilement aller).
-    const dur = Math.max(8, overflow / 17.1).toFixed(2);
-    elT.style.setProperty('--cinema-title-scroll', `-${overflow}px`);
-    elT.style.setProperty('--cinema-title-dur', `${dur}s`);
-    elT.classList.add('is-scrolling');
-  } else {
-    elT.style.removeProperty('--cinema-title-scroll');
-    elT.style.removeProperty('--cinema-title-dur');
-    elT.classList.remove('is-scrolling');
-  }
-}
-
+// Chorégraphie d'ouverture GSAP — complémente la CSS .cin-enter sur .cinema-art-wrap
+// (qui gère le scale + fade de la pochette). Cette timeline anime title / artist /
+// progress / contrôles / horloge avec un séquencement type Apple Music.
+// L'animation collapse en gsap.set instantané si prefers-reduced-motion = reduce.
 function _runOpenChoreography() {
+  // Killer d'éventuelle timeline en vol (re-open rapide) + reset des inline styles
+  // qu'elle aurait laissés pour éviter le drift visuel à la prochaine séquence.
   if (_openTl) { _openTl.kill(); _openTl = null; }
   const targets = [
-    '#cinema-info',
+    '#cinema-info', '#cinema-title', '#cinema-artist',
     '#cinema-pbar', '#cinema-tc', '#cinema-td',
     '#cinema-controls',
     '#cinema-clock',
   ];
   for (const sel of targets) motionKill(sel);
 
-  motionSet('#cinema-info',     { y: 24, autoAlpha: 0 });
+  // État initial : utiliser gsap.set (pas inline CSS) — évite tout flash visible
+  // avant la première frame de la timeline (les éléments seraient sinon rendus
+  // dans leur état CSS naturel pendant 1 frame).
+  // Parent #cinema-info visible immédiatement — on anime chaque enfant texte séparément.
+  motionSet('#cinema-info',     { y: 0, autoAlpha: 1 });
+  motionSet('#cinema-title',    { y: 22, autoAlpha: 0 });
+  motionSet('#cinema-artist',   { y: 16, autoAlpha: 0 });
   motionSet('#cinema-pbar',     { scaleX: 0.7, transformOrigin: 'left center', autoAlpha: 0 });
   motionSet('#cinema-tc',       { autoAlpha: 0 });
   motionSet('#cinema-td',       { autoAlpha: 0 });
@@ -294,17 +322,23 @@ function _runOpenChoreography() {
   _openTl = timeline({
     defaults: { ease: eases.PREMIUM },
     onComplete() {
-      motionSet('#cinema-info, #cinema-pbar, #cinema-controls > *', { clearProps: 'transform' });
+      // Supprime TOUS les styles GSAP inline posés pendant l'animation (opacity, visibility, transform)
+      // pour que les règles CSS (.ctrl-on) reprennent le contrôle — sans ça, les éléments restent
+      // visibles en permanence même quand ctrl-on est retiré (inline style > CSS specificity).
+      motionSet(
+        '#cinema-info, #cinema-title, #cinema-artist, #cinema-pbar, #cinema-tc, #cinema-td, #cinema-controls > *, #cinema-clock',
+        { clearProps: 'transform,opacity,visibility' }
+      );
       _openTl = null;
-      _recheckTitleScroll();
     },
   });
 
   _openTl
-    .to('#cinema-info', { y: 0, autoAlpha: 1, duration: 0.45 }, 0.08)
-    .to('#cinema-pbar', { scaleX: 1, autoAlpha: 1, duration: 0.50 }, '-=0.30')
-    .to('#cinema-tc',   { autoAlpha: 1, duration: 0.35 }, '<')
-    .to('#cinema-td',   { autoAlpha: 1, duration: 0.35 }, '<')
+    .to('#cinema-title',  { y: 0, autoAlpha: 1, duration: 0.48 }, 0.06)
+    .to('#cinema-artist', { y: 0, autoAlpha: 1, duration: 0.42 }, 0.14)
+    .to('#cinema-pbar',   { scaleX: 1, autoAlpha: 1, duration: 0.50 }, '-=0.28')
+    .to('#cinema-tc',     { autoAlpha: 1, duration: 0.35 }, '<')
+    .to('#cinema-td',     { autoAlpha: 1, duration: 0.35 }, '<')
     .to('#cinema-controls > *', {
       y: 0, autoAlpha: 1, duration: 0.42, stagger: 0.035,
     }, '-=0.32')
@@ -316,34 +350,39 @@ export function closeCinema() {
   const overlay = document.getElementById('cinema-overlay');
   if (!overlay) return;
   overlay.classList.remove('active', 'ctrl-on');
+  // Retirer l'état actif du bouton toolbar
   const tbtCinema = document.getElementById('tbt-cinema');
   if (tbtCinema) { tbtCinema.classList.remove('on'); tbtCinema.setAttribute('aria-pressed', 'false'); }
+  // Cache unique — évite 2 querySelector distincts sur la même requête
   const _aw = document.querySelector('.cinema-art-wrap');
   _aw?.classList.remove('cin-enter', 'cin-swap-out', 'cin-swap');
-  overlay.removeEventListener('mousemove', onCinemaMouseMove);
-  overlay.removeEventListener('click',     onCinemaMouseMove);
+  overlay.removeEventListener('mousemove', _onCinemaMouseMove);
+  overlay.removeEventListener('click',     _onCinemaMouseMove);
   overlay.removeEventListener('wheel',     _onCinWheel);
   document.removeEventListener('keydown',  _onCinKey);
   document.removeEventListener('keydown',  _onCinemaTrapKey);
-  document.removeEventListener('fullscreenchange', _onFullscreenChange);
-  document.removeEventListener('visibilitychange', _onVisibilityChange);
   _aw?.removeEventListener('dblclick', _onArtDblClick);
-  if (cinemaHideTimer) { clearTimeout(cinemaHideTimer); cinemaHideTimer = null; }
+  if (cinemaHideTimer) { clearTimeout(cinemaHideTimer); cinemaHideTimer = null; } // Bug 5 fix
   clearTimeout(_cinSwapOutTimer); _cinSwapOutTimer = null;
   clearTimeout(_cinSwapInTimer);  _cinSwapInTimer  = null;
+  clearTimeout(_resizeTimer);     _resizeTimer     = null; // évite applyCinemaBg() orphelin après fermeture
+  // Killer la timeline d'ouverture si elle est encore en vol + reset des inline
+  // styles laissés par gsap (autoAlpha posé display:none / opacity:0 sur l'élément).
   if (_openTl) { _openTl.kill(); _openTl = null; }
-  motionSet('#cinema-info, #cinema-pbar, #cinema-tc, #cinema-td, #cinema-controls > *, #cinema-clock',
+  motionSet('#cinema-info, #cinema-title, #cinema-artist, #cinema-pbar, #cinema-tc, #cinema-td, #cinema-controls > *, #cinema-clock',
     { clearProps: 'transform,opacity,visibility,display' });
-  _cinFill = _cinTc = _cinTd = null;
-  _lastCinArt = null;
-  _lastCinIdx = -1;
-  // A11Y A.8 — restore focus to the element that was focused before cinema opened.
+  // Libérer les refs cachées
+  _cinFill = _cinTc = _cinTd = _cinPbar = null;
+  _lastCinArt = null; // reset pour forcer le swap à la prochaine ouverture
+  _lastCinIdx = -1;   // reset pour détecter le changement de piste à la prochaine ouverture
+  // A11Y A.8 — restore focus to the element that was focused before cinema opened
   if (_cinemaLastFocus && document.contains(_cinemaLastFocus) && typeof _cinemaLastFocus.focus === 'function') {
     _cinemaLastFocus.focus();
   }
   _cinemaLastFocus = null;
   _stopKenBurns();
   stopAmbientAnim();
+  resetAmbientColors();
   _stopClock();
   stopCinemaViz();
   // Quitter le plein écran si actif
@@ -365,51 +404,17 @@ function _hideControls() {
   if (overlay) overlay.classList.remove('ctrl-on');
 }
 
-function onCinemaMouseMove() {
+function _onCinemaMouseMove() {
   _showControls();
 }
 
 // ── Rendu cinéma ─────────────────────────────────────────────
 
-/** Retourne la couleur dominante courante "r,g,b". */
-export function getCinArtRGB() { return _cinArtRGB; }
+// updateCinArtColor, _parseColorToRGB, updateCinArtRGBFromTrack → cinema-bg.js
 
-export function updateCinArtColor(hex) {
-  const rgb = _parseColorToRGB(hex);
-  if (rgb) {
-    _cinArtRGBTarget = rgb.split(',').map(Number);
-    _cinArtRGB = rgb; // mise à jour immédiate du fallback statique
-  } else {
-    _cinArtRGBTarget = [255, 255, 255];
-    _cinArtRGB = '255,255,255';
-  }
-}
+// ── Ken Burns — zoom+pan lent sur la pochette (direction aléatoire) ────────
 
-function _parseColorToRGB(str) {
-  if (!str || str === 'transparent') return null;
-  if (str.startsWith('rgb')) {
-    const m = str.match(/(\d+),\s*(\d+),\s*(\d+)/);
-    if (m) return `${m[1]},${m[2]},${m[3]}`;
-  }
-  if (str.startsWith('#') && str.length >= 7) {
-    const r = parseInt(str.slice(1, 3), 16);
-    const g = parseInt(str.slice(3, 5), 16);
-    const b = parseInt(str.slice(5, 7), 16);
-    return `${r},${g},${b}`;
-  }
-  return null;
-}
-
-function _updateCinArtRGB(t) {
-  const parsed = _parseColorToRGB(t?.artColor);
-  if (parsed) { _cinArtRGB = parsed; _cinArtRGBTarget = parsed.split(',').map(Number); return; }
-  const css = getComputedStyle(document.documentElement).getPropertyValue('--art-color').trim();
-  const parsed2 = _parseColorToRGB(css);
-  if (parsed2) { _cinArtRGB = parsed2; _cinArtRGBTarget = parsed2.split(',').map(Number); return; }
-  _cinArtRGB = '255,255,255'; _cinArtRGBTarget = [255, 255, 255];
-}
-
-// ── Ken Burns ───────────────────────────────────────────────
+/** Démarre une variante Ken Burns aléatoire sur #cinema-art-img. */
 function _startKenBurns() {
   const img = document.getElementById('cinema-art-img');
   if (!img || img.style.display === 'none') return;
@@ -419,6 +424,7 @@ function _startKenBurns() {
   img.classList.add('cin-kb-' + _kbVariant);
 }
 
+/** Stoppe le Ken Burns et remet l'image à son état neutre. */
 function _stopKenBurns() {
   const img = document.getElementById('cinema-art-img');
   if (!img) return;
@@ -428,21 +434,20 @@ function _stopKenBurns() {
 export function updateCinema() {
   if (!cinemaOpen) return;
   const curIdx = get('curIdx');
-  const tracks = get('tracks');
-  if (!audio) return;
+  const tracks = get('tracks'); // Phase 4 — store alimenté depuis Jalon 3
+  // audio imported from player.js
+  if (!audio) return; // Bug 4 fix : audio peut être null avant l'init du player
   const t = curIdx >= 0 ? tracks[curIdx] : null;
   const title  = t ? t.name : '–';
   const artist = t ? (t.artistFull || t.artist || '–') : '–';
   const art    = t ? (t.art || null) : null;
 
-  // ARCH-5 : snap couleur LERP à la cible sur changement de piste (évite les artefacts résiduels).
+  // ARCH-5 : Réinitialiser l'état interne lors d'un changement de piste.
+  // Snap immédiat de la couleur LERP vers la nouvelle cible — évite les artefacts visuels
+  // de couleur résiduelle de la piste précédente dans le visualiseur spectrum.
   const _trackChanged = curIdx !== _lastCinIdx;
   _lastCinIdx = curIdx;
   if (_trackChanged) {
-    // Snap couleur LERP → couleur cible immédiatement (pas de fondu depuis l'ancienne piste)
-    _cinArtRGBCur[0] = _cinArtRGBTarget[0];
-    _cinArtRGBCur[1] = _cinArtRGBTarget[1];
-    _cinArtRGBCur[2] = _cinArtRGBTarget[2];
     // Effacer le canvas visualiseur pour éviter les artefacts de persistance entre pistes
     const vizCanvas = document.getElementById('cinema-viz');
     if (vizCanvas) {
@@ -453,18 +458,14 @@ export function updateCinema() {
 
   // Mettre à jour la couleur dominante pour le visualiseur (même logique que viz.js/_vizRGB)
   // Fallback : lire la CSS var --art-color posée par applyArtColor() dans app.js
-  _updateCinArtRGB(t);
-  // Après _updateCinArtRGB, si la piste a changé, synchroniser aussi _cinArtRGBCur avec la nouvelle valeur
+  const _artRgb = updateCinArtRGBFromTrack(t);
+  // Snap instantané sur changement de piste — évite le fondu depuis l'ancienne couleur
   if (_trackChanged) {
-    _cinArtRGBCur[0] = _cinArtRGBTarget[0];
-    _cinArtRGBCur[1] = _cinArtRGBTarget[1];
-    _cinArtRGBCur[2] = _cinArtRGBTarget[2];
+    const parts = _artRgb.split(',').map(Number);
+    _cinArtRGBCur[0] = parts[0]; _cinArtRGBCur[1] = parts[1]; _cinArtRGBCur[2] = parts[2];
   }
   // Propager --cin-rgb → teinte CSS du sous-titre artiste et album
-  document.getElementById('cinema-overlay')?.style.setProperty('--cin-rgb', _cinArtRGB);
-  // Mettre à jour le gradient de la barre de volume cinéma avec la couleur de la pochette
-  const _cvol = document.getElementById('cinema-vol');
-  if (_cvol) updateVolSlider(_cvol, `rgb(${_cinArtRGB})`);
+  document.getElementById('cinema-overlay')?.style.setProperty('--cin-rgb', _artRgb);
 
   const elT = document.getElementById('cinema-title');
   const elA = document.getElementById('cinema-artist');
@@ -472,31 +473,12 @@ export function updateCinema() {
   const em   = document.getElementById('cinema-art-em');
   const bg   = document.getElementById('cinema-bg');
 
-  if (elT) {
-    if (_trackChanged) {
-      elT.classList.remove('is-scrolling');
-      elT.style.removeProperty('--cinema-title-scroll');
-      elT.style.removeProperty('--cinema-title-dur');
-    }
-    // Span interne réutilisé — le parent garde overflow:hidden fixe,
-    // c'est le span qui se translate (sinon la zone de clip bouge avec l'élément).
-    let inner = elT.querySelector('.cin-title-inner');
-    if (!inner) {
-      inner = document.createElement('span');
-      inner.className = 'cin-title-inner';
-      elT.replaceChildren(inner);
-    }
-    inner.textContent = title;
-    // Mesure après reflow — _recheckTitleScroll() calcule aussi la durée proportionnelle.
-    // Skip rAF check while open-animation is running (_openTl active) — autoAlpha:0 gives scrollWidth=0.
-    // onComplete calls _recheckTitleScroll() once #cinema-info is fully visible.
-    requestAnimationFrame(() => { if (elT.isConnected && !_openTl) _recheckTitleScroll(); });
-  }
+  if (elT) elT.textContent = title;
   if (elA) elA.textContent = artist;
   // Ligne album + année — absente si données manquantes (masquée via display:none)
   const elAlb = document.getElementById('cinema-album');
   if (elAlb) {
-    const parts = [t?.album, (t?.year && t.year !== 1970) ? `(${t.year})` : null].filter(Boolean);
+    const parts = [t?.album, t?.year ? `(${t.year})` : null].filter(Boolean);
     elAlb.textContent = parts.join(' ');
     elAlb.style.display = parts.length ? '' : 'none';
   }
@@ -519,7 +501,7 @@ export function updateCinema() {
         if (artWrap) {
           artWrap.classList.remove('cin-swap-out', 'cin-swap');
           requestAnimationFrame(() => artWrap.classList.add('cin-swap'));
-          _cinSwapInTimer = setTimeout(() => artWrap.classList.remove('cin-swap'), 440);
+          _cinSwapInTimer = setTimeout(() => artWrap.classList.remove('cin-swap'), CIN_SWAP_IN_MS);
         }
         _startKenBurns(); // nouvelle piste → nouvelle direction Ken Burns
         if (cinemaBg === 'ambient' || cinemaBg === 'amoled') updateAmbientGradient();
@@ -527,9 +509,8 @@ export function updateCinema() {
 
       if (hadArt && artWrap) {
         // Animation sortante (120ms) puis entrante — transition bi-directionnelle
-        clearTimeout(_cinSwapOutTimer); clearTimeout(_cinSwapInTimer); // M7 (audit 2026-06-11) : timers en vol — skip rapide A→B→C flashait la pochette B avant C
         artWrap.classList.add('cin-swap-out');
-        _cinSwapOutTimer = setTimeout(_doSwapIn, 120);
+        _cinSwapOutTimer = setTimeout(_doSwapIn, CIN_SWAP_OUT_MS);
       } else {
         // Premier chargement : pas d'animation sortante, swap immédiat
         _doSwapIn();
@@ -540,30 +521,7 @@ export function updateCinema() {
     }
   } else {
     if (img) img.style.display = 'none';
-    if (em)  {
-      em.style.display = 'flex';
-      // t.ext = donnée lofty → textContent ; SVG de fallback = HTML statique trusted (§13)
-      if (t) em.textContent = extEmoji(t.ext);
-      else {
-        const _svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-        _svg.setAttribute('viewBox', '0 0 24 24');
-        _svg.setAttribute('width', '48');
-        _svg.setAttribute('height', '48');
-        _svg.setAttribute('fill', 'none');
-        _svg.setAttribute('stroke', 'currentColor');
-        _svg.setAttribute('stroke-width', '1');
-        _svg.setAttribute('stroke-linecap', 'round');
-        _svg.setAttribute('opacity', '.3');
-        const _path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-        _path.setAttribute('d', 'M9 18V5l12-2v13');
-        const _c1 = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-        _c1.setAttribute('cx', '6'); _c1.setAttribute('cy', '18'); _c1.setAttribute('r', '3');
-        const _c2 = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-        _c2.setAttribute('cx', '18'); _c2.setAttribute('cy', '16'); _c2.setAttribute('r', '3');
-        _svg.appendChild(_path); _svg.appendChild(_c1); _svg.appendChild(_c2);
-        em.replaceChildren(_svg);
-      }
-    }
+    if (em)  { em.style.display = 'flex'; em.innerHTML = '<svg viewBox="0 0 24 24" width="48" height="48" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" opacity=".3"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>'; }
     document.querySelector('.cinema-art-wrap')?.style.removeProperty('--cin-bg-url');
     _lastCinArt = null;
   }
@@ -606,6 +564,10 @@ export function updateCinema() {
   if (td)  td.textContent = audio.duration ? fmt(audio.duration) : '–:––';
 }
 
+// ── Init sub-modules (posé ici : cinemaOpen et updateCinema sont désormais déclarés) ──
+initCinemaBgModule({ getCinemaOpen: () => cinemaOpen, onUpdateCinema: () => updateCinema(), getIsPlaying: () => !audio.paused });
+initCinemaVizModule({ getCinemaOpen: () => cinemaOpen });
+
 /**
  * Mise à jour légère de la progression — appelée depuis le handler timeupdate
  * de app.js à ~60 fps (evite getElementById par cycle grâce au cache _cinFill/Tc/Td).
@@ -615,6 +577,10 @@ export function updateCinemaProgress(p, cur, dur) {
   if (_cinFill) _cinFill.style.transform = 'scaleX(' + p + ')';
   if (_cinTc)   _cinTc.textContent = cur;
   if (_cinTd)   _cinTd.textContent = dur;
+  if (_cinPbar) {
+    _cinPbar.setAttribute('aria-valuenow', Math.round(p * 100));
+    _cinPbar.setAttribute('aria-valuetext', cur + ' / ' + dur);
+  }
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -631,19 +597,14 @@ export function toggleCinemaFullscreen() {
 
 // ── Radio depuis le cinéma ───────────────────────────────────
 export async function toggleCinemaRadio() {
-  try {
-    if (radioActive) {
-      await stopRadio();
-    } else {
-      const t = get('tracks')?.[get('curIdx')]; // Phase 4
-      if (!t) { toast?.(i18n('radio_no_seed'), 'warning'); return; }
-      await startRadio(t.id);
-    }
-    updateCinema();
-  } catch(e) {
-    toast(i18n('radio_error') || 'Radio error', 'error');
-    console.warn('[cinema:toggleCinemaRadio]', e);
+  if (radioActive) {
+    await stopRadio();
+  } else {
+    const t = get('tracks')?.[get('curIdx')]; // Phase 4
+    if (!t) { toast?.(i18n('radio_no_seed'), 'warning'); return; }
+    await startRadio(t.id);
   }
+  updateCinema();
 }
 
 // Icônes expand / compress pour le bouton
@@ -659,6 +620,7 @@ const _onFullscreenChange = () => {
   btn.innerHTML = full ? _FS_ICON_COMPRESS : _FS_ICON_EXPAND;
   btn.title = full ? i18n('t_cin_fs_exit') : i18n('t_cin_fs_enter');
 };
+document.addEventListener('fullscreenchange', _onFullscreenChange);
 
 // ═══════════════════════════════════════════════════════════
 // ── Horloge idle ─────────────────────────────────────────────
@@ -678,12 +640,14 @@ function _updateClock() {
 function _startClock() {
   _stopClock();   // Bug 2 fix : éviter un double intervalle si appelé plusieurs fois
   _updateClock(); // affichage immédiat sans attendre le premier tick
-  _clockInterval = setInterval(_updateClock, 1000); // toutes les 1s
+  _clockInterval = setInterval(_updateClock, CLOCK_TICK_MS);
 }
 
 function _stopClock() {
   if (_clockInterval) { clearInterval(_clockInterval); _clockInterval = null; }
 }
+
+// _startViz / _stopViz → cinema-viz.js (startCinemaViz / stopCinemaViz)
 
 // ═══════════════════════════════════════════════════════════
 // ── Piste suivante ───────────────────────────────────────────
@@ -743,15 +707,11 @@ function _updateNextTrack() {
 }
 
 // ── Visibilité onglet — relancer le loop ambient si l'onglet redevient visible ──
-function _onVisibilityChange() {
-  if (!document.hidden && cinemaOpen) {
-    restartAmbientIfNeeded();
-    const cinVizCanvas = document.getElementById('cinema-viz');
-    if ((cinemaBg === 'liquid' || cinemaBg === 'aurora') && cinVizCanvas?.style.opacity === '0') {
-      startCinemaViz();
-    }
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden && cinemaOpen && (cinemaBg === 'ambient' || cinemaBg === 'amoled' || cinemaBg === 'waves' || cinemaBg === 'starfield')) {
+    startAmbientAnim();
   }
-}
+});
 
 // ── Barre de progression cinéma (click pour seek) ───────────
 document.addEventListener('DOMContentLoaded', function() {
@@ -759,7 +719,7 @@ document.addEventListener('DOMContentLoaded', function() {
   if (cpbar) {
     cpbar.addEventListener('click', function(e) {
       // audio imported from player.js
-      if (!audio || !audio.duration) return;
+      if (!audio.duration) return;
       const r = cpbar.getBoundingClientRect();
       audio.currentTime = ((e.clientX - r.left) / r.width) * audio.duration;
     });

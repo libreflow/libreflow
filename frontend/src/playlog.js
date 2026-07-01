@@ -22,12 +22,7 @@ const _pendingTs = new Set();
 let _lastTs = 0;
 
 /** Replace the playLog array (used by boot() after loading from IDB). */
-export function setPlayLog(arr) {
-  playLog = arr;
-  // Le bookkeeping de flush référence l'ancien tableau — purger, sinon les ts
-  // fantômes s'accumulent à chaque clear/ré-import sur la durée de la session.
-  _pendingTs.clear();
-}
+export function setPlayLog(arr) { playLog = arr; }
 
 /** Cancel any pending flush timer — must be called before DB.close(). */
 export function cancelPlayLogFlush() {
@@ -54,11 +49,7 @@ export function logPlay(t) {
   const entry = { ts, id: t.id, dur: t.duration || 0 };
   playLog.push(entry);
   _pendingTs.add(entry.ts);
-  if (playLog.length > CFG.PLAYLOG_MAX_ENTRIES) {
-    const _dropped = playLog.slice(0, playLog.length - CFG.PLAYLOG_MAX_ENTRIES);
-    _dropped.forEach(e => _pendingTs.delete(e.ts));
-    playLog = playLog.slice(-CFG.PLAYLOG_MAX_ENTRIES);
-  }
+  if (playLog.length > CFG.PLAYLOG_MAX_ENTRIES) playLog = playLog.slice(-CFG.PLAYLOG_MAX_ENTRIES);
   if (_playLogFlushTimer) clearTimeout(_playLogFlushTimer);
   _playLogFlushTimer = setTimeout(flushPlayLog, CFG.PLAYLOG_FLUSH_DELAY);
 }

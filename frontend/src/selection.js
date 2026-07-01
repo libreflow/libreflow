@@ -15,20 +15,23 @@
 
 import { esc, mainArtist }                              from './utils.js';
 import { VIRT }                                         from './virt.js';
+import { CFG }                                          from './cfg.js';
 import { ddel }                                         from './db.js';
 import { invoke, convertFileSrc }                       from './ipc.js';
 import { i18n }                                         from './i18n.js';
 import { get, subscribe, notify }                       from './store.js';
-import { emit, EVENTS }                                 from './bus.js';
+import { emit, on, EVENTS }                             from './bus.js';
 import { getFiltered, _trackIdxMap, invalidateFilterCache } from './search.js';
 import { audio, resetShuffleQ, clearCrossfadeTimers }   from './player.js';
 import { saveTrackNow }                                 from './library.js';
-import { toast, toastWithAction, openModalEl, closeModalEl }             from './ui.js';
+import { toast, toastWithAction }                                        from './ui.js';
 import { saveCfg }                        from './cfgsave.js';
 import { setCurIdx, setTracks, setLiked, replaceTracks } from './state.js';
 import { updateBar }                       from './playerbar.js';
 import { updateStats } from './renderer.js';
-import { savePlaylists } from './playlist-crud.js';
+import { savePlaylists, renderPlNav, openNewPlaylistModal } from './playlists.js';
+// Playlists demande l'effacement de la sélection — évite le cycle playlists.js ↔ selection.js.
+on(EVENTS.SELECTION_CLEAR, () => clearSelection());
 
 // ── État interne ──────────────────────────────────────────────
 export let selection     = new Set(); // trackIds sélectionnés
@@ -36,7 +39,6 @@ export let selectionMode = false;     // actif = affiche les checkboxes
 let _selAnchorId         = null;      // anchor pour Shift+click
 let _bteCoverPath        = null;      // chemin absolu de l'image choisie pour le batch cover
 let _bteSnapshotIds      = null;      // B5 : snapshot des ids sélectionnés à l'ouverture du modal batch-tag
-let _bteOpenedFrom       = null;      // élément qui avait le focus avant l'ouverture du modal batch-tag
 
 // ── Invalidation automatique de la sélection ─────────────────
 // Quand tracks[] change (scan, suppression, import…), les IDs sélectionnés
@@ -50,7 +52,7 @@ subscribe('tracks', () => {
 
 export function enterSelectionMode() {
   selectionMode = true;
-  document.getElementById('sel-bar')?.classList.add('on');
+  document.getElementById('sel-bar').classList.add('on');
   updateSelBar();
 }
 
@@ -58,25 +60,16 @@ export function clearSelection() {
   selection.clear();
   selectionMode = false;
   _selAnchorId  = null;
-  document.getElementById('sel-bar')?.classList.remove('on');
+  document.getElementById('sel-bar').classList.remove('on');
   // Retirer .selected uniquement sur les éléments visibles (pas besoin de renderLib complet)
   document.querySelectorAll('.tr.selected').forEach(el => el.classList.remove('selected'));
   // Invalider le cache filtre (selection peut affecter certaines vues) sans re-render coûteux
   VIRT._lastListSig = '';
-  // Fermer le picker playlist s'il est resté ouvert (clearSelection peut être
-  // déclenché par subscribe('tracks') pendant un scan watch-folder) et retirer
-  // son listener document — sinon picker visible orphelin + listener qui traîne.
-  const _picker = document.getElementById('sel-pl-picker');
-  if (_picker) {
-    _picker.style.display = 'none';
-    if (_picker._closePicker) { document.removeEventListener('click', _picker._closePicker); _picker._closePicker = null; }
-  }
 }
 
 export function updateSelBar() {
   const n = selection.size;
-  const _selCount = document.getElementById('sel-count');
-  if (_selCount) _selCount.textContent = `${n} titre${n!==1?'s':''} sélectionné${n!==1?'s':''}`;
+  document.getElementById('sel-count').textContent = `${n} titre${n!==1?'s':''} sélectionné${n!==1?'s':''}`;
 }
 
 export function toggleTrackSelection(trackId, e) {
@@ -116,14 +109,12 @@ export function selAddToPlaylist() {
   if (!get('playlists').length) {
     // Aucune playlist → proposer d'en créer une et ajouter les titres après
     const batchIds = ids.join(',');
-    emit(EVENTS.OPEN_PL_MODAL, { trackId: null }); // remet selBatch à ''
-    const _plModalBg = document.getElementById('pl-modal-bg');
-    if (_plModalBg) _plModalBg.dataset.selBatch = batchIds; // stocker après
+    openNewPlaylistModal(null); // remet selBatch à ''
+    document.getElementById('pl-modal-bg').dataset.selBatch = batchIds; // stocker après
     return;
   }
   // Afficher un mini-picker en dessous du sel-bar
   const bar = document.getElementById('sel-bar');
-  if (!bar) return;
   // Créer un menu temporaire
   let picker = document.getElementById('sel-pl-picker');
   if (!picker) {
@@ -135,7 +126,7 @@ export function selAddToPlaylist() {
     document.body.appendChild(picker);
   }
   picker.innerHTML = get('playlists').map(pl =>
-    `<button class="sleep-opt" data-action="sel-add-batch" data-pl-id="${esc(pl.id)}">${esc(pl.name)} <span style="color:var(--t3);font-size:10px">${pl.trackIds.length}</span></button>`
+    `<button class="sleep-opt" data-action="sel-add-batch" data-pl-id="${pl.id}">${esc(pl.name)} <span style="color:var(--t3);font-size:10px">${pl.trackIds.length}</span></button>`
   ).join('') +
   `<div style="height:1px;background:var(--bg4);margin:3px 0"></div>
    <button class="sleep-opt" data-action="sel-add-batch" data-pl-id="__new__">+ Nouvelle playlist</button>`;
@@ -170,30 +161,21 @@ export async function selAddBatch(plId) {
   const ids = [...selection].map(String); // normaliser en strings (B6)
   if (plId === '__new__') {
     const batchIds = ids.join(',');
-    emit(EVENTS.OPEN_PL_MODAL, { trackId: null }); // ouvre le modal (remet selBatch à '')
+    openNewPlaylistModal(null); // ouvre le modal (remet selBatch à '')
     // Stocker le batch APRÈS l'ouverture (sinon openNewPlaylistModal l'efface)
-    const _bg = document.getElementById('pl-modal-bg');
-    if (_bg) _bg.dataset.selBatch = batchIds;
+    document.getElementById('pl-modal-bg').dataset.selBatch = batchIds;
     return;
   }
   const pl = get('playlists').find(p => p.id === plId);
   if (!pl) return;
-  const _snapshot = [...pl.trackIds];
   let added = 0;
   const existingIds = new Set(pl.trackIds.map(String));
   for (const id of ids) {
     if (!existingIds.has(id)) { pl.trackIds.push(id); existingIds.add(id); added++; }
   }
   // Persister d'abord, puis vider la sélection (B9)
-  try {
-    await savePlaylists();
-  } catch (e) {
-    pl.trackIds = _snapshot;
-    console.warn('[selection] selAddBatch IDB failed:', e);
-    toast(i18n('error_save') || 'Erreur de sauvegarde', 'error');
-    return;
-  }
-  emit(EVENTS.PLAYLIST_CHANGED, {});
+  await savePlaylists();
+  renderPlNav();
   if (get('view') === 'playlist' && get('curPlId') === plId) emit(EVENTS.RENDER_LIB, {});
   clearSelection(); // après persist (B9 fix)
   toast(i18n('t_sel_added_to_pl', added, pl.name), 'success');
@@ -369,14 +351,9 @@ export function selBatchTagEdit() {
   const albumEl  = document.getElementById('bte-album');
   const genreEl  = document.getElementById('bte-genre');
   const countEl  = document.getElementById('bte-count');
-
-  if (!yearEl || !artistEl || !albumEl || !genreEl) {
-    console.warn('[selBatchTagEdit] modal DOM not ready'); return;
-  }
-
   const n = ids.length;
 
-  if (countEl) countEl.textContent = `${n} titre${n > 1 ? 's' : ''} sélectionné${n > 1 ? 's' : ''}`;
+  countEl.textContent = `${n} titre${n > 1 ? 's' : ''} sélectionné${n > 1 ? 's' : ''}`;
 
   function applyCommon(el, field) {
     const v = commonVal(field);
@@ -404,18 +381,14 @@ export function selBatchTagEdit() {
   const btn = document.getElementById('bte-confirm-btn');
   if (btn) btn.disabled = false;
 
-  _bteOpenedFrom = document.activeElement;
-  openModalEl(modal); // show backdrop + animate inner [role="dialog"]
+  modal.classList.add('on'); // FIX : .on déclenche fade-in (visibility+opacity, pas display)
   // Focus sur l'artiste (plus logique que l'année)
   artistEl.focus();
   artistEl.select();
 }
 
 export function closeBatchTagModal() {
-  const prevFocus = _bteOpenedFrom;
-  _bteOpenedFrom = null;
-  closeModalEl(document.getElementById('batch-tag-modal-bg'))
-    .then(() => prevFocus?.focus());
+  document.getElementById('batch-tag-modal-bg').classList.remove('on');
   bteCoverClear(); // reset cover state
   _bteSnapshotIds = null; // B5 : libérer le snapshot batch-tag
 }
@@ -492,7 +465,7 @@ export async function confirmBatchTagEdit() {
             year:         t.year    ?? null,
             track_number: t.track   ?? null,
           }}),
-          new Promise((_, rej) => setTimeout(() => rej(new Error('IPC timeout')), 15000)),
+          new Promise((_, rej) => setTimeout(() => rej(new Error('IPC timeout')), CFG.IPC_TIMEOUT_MS)),
         ]);
       }
       // Écrire la pochette si une image a été sélectionnée
@@ -502,12 +475,11 @@ export async function confirmBatchTagEdit() {
             audio_path: t.path,
             image_path: coverPath,
           }}),
-          new Promise((_, rej) => setTimeout(() => rej(new Error('cover timeout')), 20000)),
+          new Promise((_, rej) => setTimeout(() => rej(new Error('cover timeout')), CFG.IPC_COVER_TIMEOUT_MS)),
         ]);
         // Mettre à jour l'art en mémoire (blob URL via convertFileSrc)
         if (t.art && t.art.startsWith('blob:')) try { URL.revokeObjectURL(t.art); } catch {}
         t.art = convertFileSrc(coverPath);
-        t._hasArt = true;
         t.noArt = false;
         t.artColor = null; // sera recalculé au prochain affichage
       }

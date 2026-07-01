@@ -24,9 +24,8 @@ function _isModalOpen() {
   if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return true;
   // Any open modal/dialog overlay
   if (ae.closest('[role="dialog"]')) return true;
-  if (ae.closest('#ctx-menu'))         return true;
-  if (ae.closest('#sleep-menu'))       return true;
-  if (ae.closest('#tb-burger-panel'))  return true;
+  if (ae.closest('#ctx-menu'))       return true;
+  if (ae.closest('#sleep-menu'))     return true;
   if (ae.closest('#eq-panel'))       return true;
   if (ae.closest('#queue-panel'))    return true;
   if (ae.closest('#settings-panel')) return true;
@@ -180,10 +179,7 @@ function _handlePage(listEl, dir) {
   if (!fl.length) return;
 
   // Page size en lignes = viewport / ROW_H - 1 (garde une ligne de contexte).
-  // M10 (audit bugs visuels 2026-06-11) : VIRT.ROW_H = hauteur runtime (suit le
-  // zoom compact/normal/comfortable) — la constante statique faisait sauter
-  // PageUp/Down ~25 % trop court en compact et au-delà du viewport en comfortable.
-  const rowH = VIRT.ROW_H || CFG.VIRT_ROW_H;
+  const rowH = CFG.VIRT_ROW_H || 36;
   const pageSize = Math.max(1, Math.floor(listEl.clientHeight / rowH) - 1);
 
   const focused = document.activeElement?.closest('.tr:not(.tr-skel)');

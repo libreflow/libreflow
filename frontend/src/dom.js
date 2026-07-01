@@ -1,29 +1,29 @@
 // LibreFlow — dom.js
 // Shared DOM-narrowing helpers for type-safe getElementById and querySelector access.
-// Returns nullable typed references so callers must guard for missing elements
-// rather than silently operating on undefined behaviour.
+// Returns typed references so checkJs does not complain about property access on
+// HTMLElement | null without needing per-site @ts-ignore.
 
 /**
  * @param {string} id
- * @returns {HTMLElement | null}
+ * @returns {HTMLElement}
  */
 export function $id(id) {
-  return document.getElementById(id);
+  return /** @type {HTMLElement} */ (document.getElementById(id));
 }
 
 /**
  * @param {string} id
- * @returns {HTMLInputElement | null}
+ * @returns {HTMLInputElement}
  */
 export function $input(id) {
-  return /** @type {HTMLInputElement | null} */ (document.getElementById(id));
+  return /** @type {HTMLInputElement} */ (document.getElementById(id));
 }
 
 /**
  * @param {string} id
- * @returns {HTMLSelectElement | null}
+ * @returns {HTMLSelectElement}
  */
 export function $select(id) {
-  return /** @type {HTMLSelectElement | null} */ (document.getElementById(id));
+  return /** @type {HTMLSelectElement} */ (document.getElementById(id));
 }
 

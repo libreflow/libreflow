@@ -29,7 +29,7 @@ import { openSmartPlaylistModal }                                    from './sma
 import { saveCfg }                                                   from './cfgsave.js';
 import { clearSelection }                                            from './selection.js';
 import { runViewTransition }                                         from './view-transition.js';
-import { viewEnter, viewExit, staggerIn }                             from './motion.js';
+import { transitionViews, staggerIn }                                from './motion.js';
 
 // Inline helper — équivalent de app.js:invalidateFilter() (ARCH-1, no circular dep)
 function invalidateFilter() {
@@ -122,44 +122,15 @@ export function _showViewRaw(v) {
   }
 
   const prev = document.querySelector('.view.on');
-  if (prev && prev !== next) {
-    // Keep prev visible during exit: override display:none (set by removing .on),
-    // pin it absolutely so it doesn't push next down, then fade it out.
-    prev.classList.remove('on');
-    prev.style.display       = 'flex';
-    prev.style.position      = 'absolute';
-    prev.style.inset         = '0';
-    prev.style.pointerEvents = 'none';
-    prev.style.zIndex        = '1';
-    // Generation counter: if a new navigation targets `prev` before this exit
-    // animation finishes (A→B→A < 140ms), _exitGen will have been bumped and
-    // the stale callback aborts without touching the now-active DOM element.
-    const exitGen = (prev._exitGen = (prev._exitGen || 0) + 1);
-    viewExit(prev).then(() => {
-      if (prev._exitGen !== exitGen) return; // stale exit — abort
-      prev.style.display = '';
-      prev.style.position = '';
-      prev.style.inset = '';
-      prev.style.pointerEvents = '';
-      prev.style.zIndex = '';
-    });
-  }
 
-  // Clear stale exit-animation inline styles in case a prior viewExit on `next`
-  // was killed (e.g. double-click open→close) before its .then() cleanup fired.
-  if (prev && prev !== next) {
-    next.style.display       = '';
-    next.style.position      = '';
-    next.style.inset         = '';
-    next.style.pointerEvents = '';
-    next.style.zIndex        = '';
+  if (typeof document.startViewTransition === 'function') {
+    // VT API path : simple swap, browser handles visual transition
+    if (prev && prev !== next) prev.classList.remove('on');
+    next.classList.add('on');
+  } else {
+    // Fallback path : GSAP "exit on top" cross-fade
+    transitionViews(prev !== next ? prev : null, next);
   }
-
-  next.classList.add('on');
-  // Only animate if actually switching to a different view element.
-  // Albums/artists/genres/playlists all map to #vlib — no animation needed
-  // when the element is already visible (would flash opacity on live content).
-  if (prev && prev !== next) viewEnter(next); // skip on boot (prev=null) to avoid opacity flash
 
   // Welcome ambient particle hooks — no-ops until registerWelcomeHooks() is called.
   if (next.id === 'vw') _welcomeOnShow?.();
@@ -212,6 +183,8 @@ function _setSrchDisabled(disabled) {
 }
 
 let _searchDebounceTimer = null;
+let _navDirTimer = null;
+const _NAV_ORDER = ['all', 'liked', 'recent', 'artists', 'albums', 'genres', 'playlists', 'radio'];
 
 /** Annule le debounce de recherche en cours (ex: drill-down depuis renderer.js). */
 export function cancelSearchDebounce() {
@@ -374,6 +347,15 @@ export function setView(v, btn, plId) {
   // Nettoyer la sélection active avant tout changement de vue (BUG-1 FIX)
   clearSelection();
 
+  // Direction slide — active les animations directionnelles CSS (navSlideOut/In)
+  const _fi = _NAV_ORDER.indexOf(get('view') || 'all');
+  const _ti = _NAV_ORDER.indexOf(v);
+  if (_fi >= 0 && _ti >= 0 && _fi !== _ti) {
+    clearTimeout(_navDirTimer);
+    document.documentElement.setAttribute('data-nav-dir', _ti > _fi ? 'forward' : 'back');
+    _navDirTimer = setTimeout(() => document.documentElement.removeAttribute('data-nav-dir'), 400);
+  }
+
   _withVT(() => {
     // BUG-10 FIX : fermer les popups flottants lors d'un changement de vue
     document.getElementById('pl-quick-pop')?.classList.remove('on');
@@ -427,11 +409,25 @@ export function setView(v, btn, plId) {
     VIRT._lastWindowSig = '';
     VIRT._lastScrollTop = null;
 
-    document.querySelectorAll('.ni').forEach(b => {
+    document.querySelectorAll('.ni, .sb-nav-btn').forEach(b => {
       b.classList.remove('on');
       b.removeAttribute('aria-current');
     });
-    if (btn) { btn.classList.add('on'); btn.setAttribute('aria-current', 'page'); }
+    // Library sub-views keep #ni-all active in sidebar; tabs handle sub-view distinction
+    const _LIB_VIEWS = ['all', 'artists', 'albums', 'radio'];
+    if (_LIB_VIEWS.includes(v)) {
+      const _niAll = document.getElementById('ni-all');
+      if (_niAll) { _niAll.classList.add('on'); _niAll.setAttribute('aria-current', 'page'); }
+    }
+    if (btn && !btn.classList.contains('lib-tab')) {
+      btn.classList.add('on'); btn.setAttribute('aria-current', 'page');
+    }
+    // Sync lib-tab underline indicators
+    document.querySelectorAll('.lib-tab').forEach(t => { t.classList.remove('on'); t.setAttribute('aria-selected', 'false'); });
+    if (_LIB_VIEWS.includes(v)) {
+      const _tab = document.querySelector(`.lib-tab[data-view="${v}"]`);
+      if (_tab) { _tab.classList.add('on'); _tab.setAttribute('aria-selected', 'true'); }
+    }
 
     // Reset grid/list visibility
     const ag = document.getElementById('album-grid');

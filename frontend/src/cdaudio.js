@@ -24,20 +24,24 @@ import { saveCfg }                            from './cfgsave.js';
 import { rebuildTrackIdxMap, trackIdx, filteredIdx, getFiltered,
          invalidateFilterCache }              from './search.js';
 import { VIRT }                               from './virt.js';
-import { getWatchPath, importPaths }          from './watchfolder.js';
+import { getWatchPath, importPaths, initWatchPath, startWatchNative } from './watchfolder.js';
 import { playAt }                             from './player.js';
 import {
+  detectNewAudioCds,
   buildEphemeralCdTrack,
   cleanupEphemeralForDrive,
   extractDestPath,
   calculateRipPercent,
 } from './cdaudio_pure.js';
 
+export { detectNewAudioCds };
+
 // ── État module ───────────────────────────────────────────────────────────────
 
 let _currentRipId     = null;
 let _currentDrive     = null;
 let _progressUnlisten = null;
+let _prefetchTimer    = null;
 let _prefetchAudioListener = null;
 let _cdModalPrevFocus = null;
 // B22 : rips anticipés réutilisables — Map<idx piste CD, tempPath FLAC>, scopée au drive.
@@ -117,8 +121,8 @@ export async function playCdTrack(drivePath, idx) {
   const bg  = document.getElementById('cd-modal-bg');
   const toc = bg?._toc;
   if (!toc) { toast('TOC perdu — réessayer', 'error'); return; }
-  const tocTrack = toc.tracks.find(t => t.idx === idx) || toc.tracks[0];
-  if (!tocTrack) return;
+  const tocTrack = toc.tracks.find(t => t.idx === idx);
+  if (!tocTrack) { toast(`Piste ${idx} introuvable dans le TOC`, 'error'); return; }
   // CONFORMITÉ-CD : avertissement copyright one-shot (DMCA / EUCD).
   if (!(await _ensureCdCopyrightAck())) return;
 
@@ -127,28 +131,27 @@ export async function playCdTrack(drivePath, idx) {
   let tempPath = _consumePrefetch(drivePath, tocTrack.idx);
   if (!tempPath) {
     const rip_id = crypto.randomUUID();
-    try {
-      tempPath = await _tempPathForRip(rip_id);
-      _showProgressUi();
-      await _subscribeProgress(rip_id);
+    tempPath = await _tempPathForRip(rip_id);
+    _showProgressUi();
+    await _subscribeProgress(rip_id);
 
+    try {
       _currentRipId = rip_id;
       await invoke('cd_rip_track', {
         drive: drivePath, trackIdx: tocTrack.idx, destPath: tempPath, ripId: rip_id,
       }, { timeout: 0 });
-
-      _unsubscribeProgress();
     } catch (e) {
       _unsubscribeProgress();
-      _currentRipId = null;
       if (String(e) === 'cancelled') { _resetProgressUi(); return; }
-      console.warn('[cdaudio] playCdTrack failed:', e);
-      _resetProgressUi?.();
-      toast(i18n('cd_err_rip') || 'Erreur de lecture CD', 'error');
+      console.warn('[cdaudio] cd_rip_track failed:', e);
+      toast(i18n('cd_err_rip'), 'error');
+      _resetProgressUi();
       return;
     } finally {
       _currentRipId = null;
     }
+
+    _unsubscribeProgress();
   }
 
   // Inject ephemeral track + play
@@ -185,10 +188,21 @@ export async function extractCd(drivePath) {
   const toc = bg?._toc;
   if (!toc) { toast('TOC perdu — réessayer', 'error'); return; }
 
-  const watchPath = getWatchPath();
+  let watchPath = getWatchPath();
   if (!watchPath) {
-    toast('Aucun dossier de surveillance configuré', 'error');
-    return;
+    let defaultDir;
+    try {
+      defaultDir = await invoke('get_or_create_default_music_dir');
+    } catch (e) {
+      console.warn('[cdaudio] get_or_create_default_music_dir failed:', e);
+      toast(i18n('cd_err_auto_folder'), 'error');
+      return;
+    }
+    initWatchPath(defaultDir);
+    await startWatchNative();
+    watchPath = defaultDir;
+    saveCfg();
+    toast(i18n('cd_auto_folder'), 'info');
   }
   // CONFORMITÉ-CD : avertissement copyright one-shot (DMCA / EUCD).
   if (!(await _ensureCdCopyrightAck())) return;
@@ -203,7 +217,7 @@ export async function extractCd(drivePath) {
   for (let i = 0; i < toc.tracks.length; i++) {
     const tocTrack = toc.tracks[i];
     const rip_id = crypto.randomUUID();
-    const dest   = extractDestPath(watchPath, label, tocTrack.idx, dateStr, watchPath.includes('/') ? '/' : '\\');
+    const dest   = extractDestPath(watchPath, label, tocTrack.idx, dateStr);
     // Texte affiche progression GLOBALE (track i+1/N — XX%) en complément de la barre de remplissage par track.
     // L'audit (UI 2026-05-19) signalait que la barre revenait à zéro entre chaque piste sans repère global.
     const _globalPct = Math.round((i / totalTracks) * 100);
@@ -291,8 +305,7 @@ export async function cleanupCdCache(drivePath) {
 
 async function _tempPathForRip(rip_id) {
   const dir = await invoke('cd_cache_dir');
-  const sep = dir.includes('/') ? '/' : '\\';
-  return `${dir}${sep}${rip_id}.flac`;
+  return `${dir}\\${rip_id}.flac`;
 }
 
 async function _subscribeProgress(rip_id) {
@@ -337,6 +350,7 @@ function _setProgressText(t) {
 }
 
 function _formatDuration(sec) {
+  if (!Number.isFinite(sec) || sec < 0) return '?:??';
   const m = Math.floor(sec / 60), s = Math.floor(sec % 60);
   return `${m}:${String(s).padStart(2, '0')}`;
 }
@@ -359,6 +373,7 @@ function _schedulePrefetch(drivePath, nextIdx, totalTracks) {
     audio.removeEventListener('timeupdate', fn);
     _prefetchAudioListener = null;
   }
+  if (_prefetchTimer) { clearTimeout(_prefetchTimer); _prefetchTimer = null; }
   if (nextIdx > totalTracks) return;
 
   const audio = document.getElementById('audio');

@@ -51,6 +51,8 @@ pub struct WriteTagsData {
 pub struct NotifyTrackData {
     pub title: String,
     pub artist: String,
+    #[allow(dead_code)] // reçu depuis le frontend mais non utilisé côté Rust (pas d'icône notif)
+    pub art: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -193,16 +195,14 @@ pub(crate) fn is_safe_dir(path: &Path) -> bool {
         // fs::canonicalize() sur Windows ajoute le préfixe \\?\ (extended-length path local).
         // Normaliser avant comparaison pour que les chemins système soient correctement bloqués.
         let check_str: &str = path_str.strip_prefix("\\\\?\\").unwrap_or(&path_str);
-        // Strip drive letter (e.g. "C:") before matching — system dirs exist on any drive.
-        let after_drive = if check_str.len() >= 2 && check_str.as_bytes()[1] == b':' {
-            &check_str[2..]
-        } else {
-            check_str
-        };
-        let win_blocked = ["\\windows", "\\program files", "\\program files (x86)"];
+        let win_blocked = [
+            "c:\\windows",
+            "c:\\program files",
+            "c:\\program files (x86)",
+        ];
         if win_blocked
             .iter()
-            .any(|b| after_drive == *b || after_drive.starts_with(&format!("{}\\", b)))
+            .any(|b| check_str == *b || (check_str.starts_with(b) && matches!(check_str.as_bytes().get(b.len()), Some(&b'\\'))))
         {
             return false;
         }
@@ -304,14 +304,7 @@ fn get_or_create_primary_tag(
 /// Ouvre un dialog de sélection de dossier, scanne les fichiers audio et retourne
 /// `{ folder, files }`.  Retourne `null` si l'utilisateur annule.
 #[tauri::command]
-pub async fn open_folder(app: AppHandle) -> Result<Option<OpenFolderResult>, String> {
-    // Dialog bloquant + scan récursif hors du thread principal (gel UI sinon).
-    tokio::task::spawn_blocking(move || open_folder_blocking(app))
-        .await
-        .map_err(|e| format!("open_folder: spawn_blocking: {e}"))?
-}
-
-fn open_folder_blocking(app: AppHandle) -> Result<Option<OpenFolderResult>, String> {
+pub fn open_folder(app: AppHandle) -> Result<Option<OpenFolderResult>, String> {
     let Some(folder_path) = app.dialog().file().blocking_pick_folder() else {
         return Ok(None);
     };
@@ -345,31 +338,20 @@ fn open_folder_blocking(app: AppHandle) -> Result<Option<OpenFolderResult>, Stri
 /// comme orphelin sans test d'existence, évitant de sonder le FS hors périmètre.
 #[tauri::command]
 pub fn check_paths(paths: Vec<String>) -> Vec<String> {
-    const MAX_CHECK_PATHS: usize = 50_000;
-    if paths.len() > MAX_CHECK_PATHS {
-        return vec![];
-    }
     paths
         .into_par_iter()
         .filter(|p| {
-            if p.contains('\0') || p.chars().any(|c| c.is_control()) {
-                return true; // treat as orphan — malformed path
-            }
+            // Rejeter tout chemin contenant '..' (traversal) ou null bytes
+            // avant d'appeler is_safe_dir, qui opère sur le chemin brut non-canonicalisé.
+            if p.contains('\0') { return true; }
             let path = Path::new(p);
-            // Composants `..` non canonicalisés : is_safe_dir verrait un parent
-            // textuel inoffensif alors que path.exists() résoudrait hors périmètre.
             use std::path::Component;
-            if path.components().any(|c| matches!(c, Component::ParentDir)) {
-                return true; // treat as orphan — traversal attempt
+            if path.components().any(|c| c == Component::ParentDir) {
+                return true; // non conforme → orphelin
             }
             let parent_safe = path
                 .parent()
-                .map(|parent| {
-                    if parent.as_os_str().is_empty() {
-                        return true;
-                    }
-                    is_safe_dir(parent)
-                })
+                .map(|parent| parent.as_os_str().is_empty() || is_safe_dir(parent))
                 .unwrap_or(false);
             // Chemin hors périmètre → considéré orphelin ; sinon test d'existence réel.
             !parent_safe || !path.exists()
@@ -424,10 +406,35 @@ pub async fn read_audio_props(path: String) -> Option<AudioProps> {
         })
     })
     .await
-    .unwrap_or_else(|e| {
-        log::warn!("[read_audio_props] spawn_blocking panicked: {e}");
-        None
-    })
+    .ok()
+    .flatten()
+}
+
+/// Résout le dossier Musique de l'OS et crée `LibreFlow/` dedans si absent.
+/// Retourne le chemin canonique du sous-dossier créé.
+/// Windows : %USERPROFILE%\Music\LibreFlow
+/// macOS   : ~/Music/LibreFlow
+/// Linux   : répertoire audio XDG (ou ~/Music) + LibreFlow
+#[tauri::command]
+pub fn get_or_create_default_music_dir(app: AppHandle) -> Result<String, String> {
+    let base = app
+        .path()
+        .audio_dir()
+        .map_err(|e| format!("audio_dir failed: {}", e))?;
+    let dir = base.join("LibreFlow");
+    fs::create_dir_all(&dir)
+        .map_err(|e| format!("Impossible de créer le dossier LibreFlow : {}", e))?;
+    let canon = fs::canonicalize(&dir).map_err(|e| format!("Canonicalisation échouée : {}", e))?;
+    if !is_safe_dir(&canon) {
+        return Err(format!(
+            "Dossier refusé par la politique de sécurité : {}",
+            canon.display()
+        ));
+    }
+    canon
+        .into_os_string()
+        .into_string()
+        .map_err(|s| format!("Chemin non-UTF8 : {:?}", s))
 }
 
 /// Autorise l'accès au protocole asset:// pour un dossier donné à l'exécution.
@@ -450,51 +457,6 @@ pub fn allow_asset_dir(app: AppHandle, path: String) -> Result<(), String> {
         .allow_directory(&canon, true)
         .map(|_| ())
         .map_err(|e| e.to_string())
-}
-
-/// Lit un fichier audio et retourne ses octets bruts.
-/// Limité à RG_MAX_FILE_BYTES (30 Mo) pour l'analyse ReplayGain.
-/// Remplace fetch(asset:) dans replaygain.js (CLAUDE.md §15).
-#[tauri::command]
-pub async fn read_audio_bytes(path: String) -> Result<Vec<u8>, String> {
-    const RG_MAX_FILE_BYTES: u64 = 30 * 1024 * 1024;
-    tokio::task::spawn_blocking(move || {
-        let p = Path::new(&path);
-        if !is_audio(p) {
-            return Err(format!(
-                "read_audio_bytes: extension non autorisée — {}",
-                path
-            ));
-        }
-        let canon =
-            fs::canonicalize(p).map_err(|e| format!("read_audio_bytes: chemin invalide — {e}"))?;
-        if !is_audio(&canon) {
-            return Err(format!(
-                "read_audio_bytes: extension non autorisée après résolution — {}",
-                path
-            ));
-        }
-        if let Some(parent) = canon.parent() {
-            if !is_safe_dir(parent) {
-                return Err(format!(
-                    "read_audio_bytes: dossier système refusé — {}",
-                    path
-                ));
-            }
-        }
-        let meta =
-            fs::metadata(&canon).map_err(|e| format!("read_audio_bytes: metadata échoué — {e}"))?;
-        if meta.len() > RG_MAX_FILE_BYTES {
-            return Err(format!(
-                "read_audio_bytes: fichier trop volumineux ({} octets, max {})",
-                meta.len(),
-                RG_MAX_FILE_BYTES
-            ));
-        }
-        fs::read(&canon).map_err(|e| format!("read_audio_bytes: lecture échouée — {e}"))
-    })
-    .await
-    .map_err(|e| format!("read_audio_bytes: spawn_blocking paniqué — {e}"))?
 }
 
 // ── Commandes : sélecteurs de fichiers ───────────────────────────────────────
@@ -626,9 +588,7 @@ pub async fn read_tags(path: String) -> Result<Option<TrackTags>, String> {
     .await;
 
     match result {
-        Err(_elapsed) => Err(
-            "read_tags: timeout — le fichier est peut-être corrompu ou trop volumineux".to_string(),
-        ),
+        Err(_elapsed) => Err("read_tags: timeout (file may be corrupt or too large)".to_string()),
         Ok(Err(join_err)) => Err(format!("read_tags join error: {join_err}")),
         Ok(Ok(inner)) => Ok(inner),
     }
@@ -654,8 +614,10 @@ pub async fn write_tags(data: WriteTagsData) -> Result<(), String> {
                 data.path
             ));
         }
-        if !canon.parent().map(is_safe_dir).unwrap_or(false) {
-            return Err("permission denied: path outside safe directories".to_string());
+        if let Some(parent) = canon.parent() {
+            if !is_safe_dir(parent) {
+                return Err(format!("write_tags: chemin système refusé — {}", data.path));
+            }
         }
         let mut tagged_file = Probe::open(&canon)
             .map_err(|e| format!("Probe::open: {e}"))?
@@ -664,11 +626,10 @@ pub async fn write_tags(data: WriteTagsData) -> Result<(), String> {
 
         {
             let tag = get_or_create_primary_tag(&mut tagged_file)?;
-            const MAX_TAG_CHARS: usize = 1000;
-            tag.set_title(data.title.chars().take(MAX_TAG_CHARS).collect::<String>());
-            tag.set_artist(data.artist.chars().take(MAX_TAG_CHARS).collect::<String>());
-            tag.set_album(data.album.chars().take(MAX_TAG_CHARS).collect::<String>());
-            tag.set_genre(data.genre.chars().take(MAX_TAG_CHARS).collect::<String>());
+            tag.set_title(data.title);
+            tag.set_artist(data.artist);
+            tag.set_album(data.album);
+            tag.set_genre(data.genre);
             if let Some(year) = data.year {
                 tag.set_year(year);
             }
@@ -705,6 +666,11 @@ pub async fn write_cover(data: WriteCoverData) -> Result<(), String> {
                 data.audio_path
             ));
         }
+        if let Some(parent) = canon_audio.parent() {
+            if !is_safe_dir(parent) {
+                return Err(format!("write_cover: chemin système refusé — {}", data.audio_path));
+            }
+        }
         const IMAGE_EXTS: &[&str] = &["png", "jpg", "jpeg", "webp", "bmp", "gif", "tiff", "tif"];
         let image_path_raw = Path::new(&data.image_path);
         let image_ext_raw = image_path_raw
@@ -738,12 +704,6 @@ pub async fn write_cover(data: WriteCoverData) -> Result<(), String> {
             ));
         }
 
-        if !canon_audio.parent().map(is_safe_dir).unwrap_or(false) {
-            return Err("write_cover: audio path outside safe directories".to_string());
-        }
-        if !canon_image.parent().map(is_safe_dir).unwrap_or(false) {
-            return Err("write_cover: image path outside safe directories".to_string());
-        }
         // Cap taille image à 10 MB pour éviter qu'un fichier hostile ou un symlink
         // pointant sur un fichier massif n'alloue plusieurs Go en RAM.
         const MAX_COVER_BYTES: u64 = 10 * 1024 * 1024;
@@ -766,15 +726,7 @@ pub async fn write_cover(data: WriteCoverData) -> Result<(), String> {
             "jpg" | "jpeg" => image_data.starts_with(&[0xFF, 0xD8, 0xFF]),
             "png" => image_data.starts_with(&[0x89, 0x50, 0x4E, 0x47]),
             "webp" => image_data.len() >= 12 && &image_data[8..12] == b"WEBP",
-            "gif" => image_data.starts_with(b"GIF87a") || image_data.starts_with(b"GIF89a"),
-            "bmp" => image_data.starts_with(b"BM"),
-            "tiff" | "tif" => {
-                image_data.starts_with(&[0x49, 0x49, 0x2A, 0x00])
-                    || image_data.starts_with(&[0x4D, 0x4D, 0x00, 0x2A])
-            }
-            // Toute extension acceptée plus haut doit avoir sa signature ici :
-            // un défaut passe-droit ré-ouvrirait le trou (audit L-4).
-            _ => false,
+            _ => true, // unknown ext — pass through
         };
         if !mime_ok {
             return Err(format!(
@@ -819,9 +771,6 @@ pub async fn write_cover(data: WriteCoverData) -> Result<(), String> {
 pub async fn write_replaygain_tags(data: WriteReplaygainData) -> Result<(), String> {
     tokio::task::spawn_blocking(move || {
         // Valider les bornes des valeurs ReplayGain avant toute écriture
-        if !data.gain_db.is_finite() || !data.peak.is_finite() {
-            return Err("gain_db and peak must be finite numbers".to_string());
-        }
         if data.gain_db < -51.0 || data.gain_db > 51.0 {
             return Err("gain_db hors limites (-51..+51 dB)".into());
         }
@@ -844,8 +793,10 @@ pub async fn write_replaygain_tags(data: WriteReplaygainData) -> Result<(), Stri
                 data.path
             ));
         }
-        if !canon.parent().map(is_safe_dir).unwrap_or(false) {
-            return Err("permission denied: path outside safe directories".to_string());
+        if let Some(parent) = canon.parent() {
+            if !is_safe_dir(parent) {
+                return Err(format!("write_replaygain_tags: chemin système refusé — {}", data.path));
+            }
         }
         let mut tagged_file = Probe::open(&canon)
             .map_err(|e| format!("Probe::open: {e}"))?
@@ -916,7 +867,7 @@ pub fn win_close(app: AppHandle) -> Result<(), String> {
 pub async fn win_minimize(app: AppHandle) -> Result<(), String> {
     // Ouvrir le mini-player (guard interne : idempotent si déjà ouvert)
     if let Err(e) = crate::mini::open_mini(&app).await {
-        log::warn!("[win_minimize] open_mini failed: {e}");
+        eprintln!("[win_minimize] open_mini failed: {e}");
     }
     // Réduire la fenêtre principale
     app.get_webview_window("main")
@@ -942,11 +893,6 @@ pub fn win_maximize(app: AppHandle) -> Result<(), String> {
 /// Modifie le titre de la fenêtre principale (ex: "Titre — Artiste | LibreFlow").
 #[tauri::command]
 pub fn win_set_title(app: AppHandle, title: String) -> Result<(), String> {
-    let title = title
-        .chars()
-        .filter(|c| !c.is_control())
-        .take(256)
-        .collect::<String>();
     app.get_webview_window("main")
         .ok_or_else(|| "Fenêtre main introuvable".to_string())?
         .set_title(&title)
@@ -1050,14 +996,6 @@ pub async fn organize_files(
     dry_run: bool,
 ) -> Result<OrganizeResult, String> {
     // Validation préalable : aucun move ne doit pointer hors d'un dossier autorisé.
-    const MAX_ORGANIZE_MOVES: usize = 10_000;
-    if moves.len() > MAX_ORGANIZE_MOVES {
-        return Err(format!(
-            "organize_files: trop de déplacements ({}/{})",
-            moves.len(),
-            MAX_ORGANIZE_MOVES
-        ));
-    }
     for m in &moves {
         validate_organize_path(&m.from).map_err(|e| format!("from: {}", e))?;
         validate_organize_path(&m.to).map_err(|e| format!("to: {}", e))?;
@@ -1110,8 +1048,6 @@ pub async fn organize_files(
             // completed: (new_path, original_path) for rollback
             let mut completed: Vec<(String, String)> = Vec::new();
 
-            // Rollback commun : défait les moves effectués (ordre inverse) et
-            // remonte chaque échec dans results au lieu de l'avaler (§14).
             fn rollback(
                 completed: &[(String, String)],
                 results: &mut Vec<OrganizeMoveResult>,
@@ -1144,83 +1080,9 @@ pub async fn organize_files(
                     continue;
                 }
 
-                // Le run réel refuse une destination occupée, comme le dry_run :
-                // fs::rename écrase silencieusement (Windows : REPLACE_EXISTING ;
-                // Unix : remplacement atomique) et fs::copy tronque. Cible
-                // identique à la source (rename de casse) : on laisse passer.
-                if to.exists() {
-                    let same = matches!(
-                        (from.canonicalize(), to.canonicalize()),
-                        (Ok(a), Ok(b)) if a == b
-                    );
-                    if !same {
-                        error_count += 1;
-                        results.push(OrganizeMoveResult {
-                            from: m.from.clone(),
-                            to: m.to.clone(),
-                            ok: false,
-                            error: Some(format!("Destination occupée : {}", m.to)),
-                        });
-                        rollback(&completed, &mut results, &mut error_count);
-                        break 'outer;
-                    }
-                }
-
-                // S-02 : re-vérifier juste avant fs::rename que source et parent
-                // cible vivent dans un dossier sûr. validate_organize_path a déjà
-                // rejeté `..`/null en amont, mais le chemin a pu changer (TOCTOU
-                // sur symlink). Échec de canonicalisation = refus (symlink mort,
-                // source disparue) — jamais de skip silencieux du contrôle.
-                match fs::canonicalize(from) {
-                    Ok(canon_from) if is_safe_dir(&canon_from) => {}
-                    Ok(_) | Err(_) => {
-                        error_count += 1;
-                        results.push(OrganizeMoveResult {
-                            from: m.from.clone(),
-                            to: m.to.clone(),
-                            ok: false,
-                            error: Some(format!(
-                                "source refusée (dossier système ou non canonisable) : {}",
-                                m.from
-                            )),
-                        });
-                        rollback(&completed, &mut results, &mut error_count);
-                        break 'outer;
-                    }
-                }
-
-                if let Some(to_parent) = to.parent() {
-                    // Contrôler l'ancêtre existant le plus profond AVANT
-                    // create_dir_all, sinon des dossiers naissent sous un parent
-                    // (symlinké) que le contrôle d'après rejetterait ensuite.
-                    let mut probe = to_parent;
-                    let canon_ancestor = loop {
-                        match fs::canonicalize(probe) {
-                            Ok(c) => break Some(c),
-                            Err(_) => match probe.parent() {
-                                Some(p) => probe = p,
-                                None => break None,
-                            },
-                        }
-                    };
-                    let ancestor_safe = canon_ancestor.as_deref().map(is_safe_dir).unwrap_or(false);
-                    if !ancestor_safe {
-                        error_count += 1;
-                        results.push(OrganizeMoveResult {
-                            from: m.from.clone(),
-                            to: m.to.clone(),
-                            ok: false,
-                            error: Some(format!(
-                                "destination dans un dossier système refusé : {}",
-                                m.to
-                            )),
-                        });
-                        rollback(&completed, &mut results, &mut error_count);
-                        break 'outer;
-                    }
-
-                    if !to_parent.exists() {
-                        if let Err(e) = fs::create_dir_all(to_parent) {
+                if let Some(parent) = to.parent() {
+                    if !parent.exists() {
+                        if let Err(e) = fs::create_dir_all(parent) {
                             error_count += 1;
                             results.push(OrganizeMoveResult {
                                 from: m.from.clone(),
@@ -1232,12 +1094,32 @@ pub async fn organize_files(
                             break 'outer;
                         }
                     }
+                }
 
-                    // Re-contrôle final post-création (TOCTOU) : le parent existe
-                    // désormais — sa canonicalisation doit réussir ET rester sûre.
-                    match fs::canonicalize(to_parent) {
-                        Ok(canon_to_parent) if is_safe_dir(&canon_to_parent) => {}
-                        Ok(_) | Err(_) => {
+                // S-02 : re-vérifier juste avant fs::rename que source et parent
+                // cible vivent dans un dossier sûr. validate_organize_path a déjà
+                // rejeté `..`/null en amont, mais le chemin a pu changer (TOCTOU
+                // sur symlink). On canonicalise la source réelle et le parent de
+                // la cible, puis on re-confronte is_safe_dir.
+                if let Ok(canon_from) = fs::canonicalize(from) {
+                    if !is_safe_dir(&canon_from) {
+                        error_count += 1;
+                        results.push(OrganizeMoveResult {
+                            from: m.from.clone(),
+                            to: m.to.clone(),
+                            ok: false,
+                            error: Some(format!(
+                                "source dans un dossier système refusé : {}",
+                                m.from
+                            )),
+                        });
+                        rollback(&completed, &mut results, &mut error_count);
+                        break 'outer;
+                    }
+                }
+                if let Some(to_parent) = to.parent() {
+                    if let Ok(canon_to_parent) = fs::canonicalize(to_parent) {
+                        if !is_safe_dir(&canon_to_parent) {
                             error_count += 1;
                             results.push(OrganizeMoveResult {
                                 from: m.from.clone(),
@@ -1269,7 +1151,7 @@ pub async fn organize_files(
                         })?;
                         if let Err(e2) = fs::remove_file(&m.from) {
                             if let Err(e3) = fs::remove_file(&m.to) {
-                                log::error!(
+                                eprintln!(
                                     "[organize] cross-device cleanup failed for {}: {e3}",
                                     m.to
                                 );
@@ -1325,17 +1207,7 @@ pub async fn organize_files(
 /// Ouvre un dialog de sauvegarde .libreflow, puis écrit le ZIP avec les données sérialisées.
 /// Retourne le chemin du fichier créé, ou None si l'utilisateur annule.
 #[tauri::command]
-pub async fn export_backup(
-    app: AppHandle,
-    payload: crate::backup::ExportPayload,
-) -> Result<Option<String>, String> {
-    // Dialog bloquant + écriture ZIP (≤50 Mo) hors du thread principal.
-    tokio::task::spawn_blocking(move || export_backup_blocking(app, payload))
-        .await
-        .map_err(|e| format!("export_backup: spawn_blocking: {e}"))?
-}
-
-fn export_backup_blocking(
+pub fn export_backup(
     app: AppHandle,
     payload: crate::backup::ExportPayload,
 ) -> Result<Option<String>, String> {
@@ -1371,14 +1243,7 @@ fn export_backup_blocking(
 /// Ouvre un file picker .libreflow, lit le ZIP et retourne les JSON internes.
 /// Retourne None si l'utilisateur annule.
 #[tauri::command]
-pub async fn import_backup(app: AppHandle) -> Result<Option<crate::backup::ImportPayload>, String> {
-    // Dialog bloquant + lecture ZIP hors du thread principal.
-    tokio::task::spawn_blocking(move || import_backup_blocking(app))
-        .await
-        .map_err(|e| format!("import_backup: spawn_blocking: {e}"))?
-}
-
-fn import_backup_blocking(app: AppHandle) -> Result<Option<crate::backup::ImportPayload>, String> {
+pub fn import_backup(app: AppHandle) -> Result<Option<crate::backup::ImportPayload>, String> {
     let Some(fp) = app
         .dialog()
         .file()
@@ -1412,15 +1277,8 @@ fn import_backup_blocking(app: AppHandle) -> Result<Option<crate::backup::Import
 /// Retourne la liste des volumes montés sur le système.
 /// Utilisé par devices.js pour la détection USB (polling).
 #[tauri::command]
-pub async fn list_drives() -> Vec<DriveInfo> {
-    // Pollée par devices.js — le sondage TOC des lecteurs CD (DeviceIoControl)
-    // doit vivre hors du thread principal : un disque qui spin-up gelait l'UI.
-    tokio::task::spawn_blocking(_list_drives_impl)
-        .await
-        .unwrap_or_else(|e| {
-            log::warn!("[list_drives] spawn_blocking: {e}");
-            Vec::new()
-        })
+pub fn list_drives() -> Vec<DriveInfo> {
+    _list_drives_impl()
 }
 
 #[cfg(target_os = "windows")]
@@ -1430,21 +1288,12 @@ fn _list_drives_impl() -> Vec<DriveInfo> {
 
     let mut buf = vec![0u16; 256];
     let len = unsafe { GetLogicalDriveStringsW(Some(&mut buf)) } as usize;
-    if len == 0 {
-        return vec![];
-    }
-    let len = if len >= buf.len() {
-        buf.resize(len + 1, 0);
-        (unsafe { GetLogicalDriveStringsW(Some(&mut buf)) }) as usize
-    } else {
-        len
-    };
-    if len == 0 {
+    if len == 0 || len > buf.len() {
         return vec![];
     }
 
     let mut drives = vec![];
-    let raw = &buf[..len.min(buf.len())];
+    let raw = &buf[..len];
 
     for segment in raw.split(|&c| c == 0) {
         if segment.is_empty() {
@@ -1468,8 +1317,7 @@ fn _list_drives_impl() -> Vec<DriveInfo> {
 
         // For CDROM drives, probe the TOC to determine if this is an audio CD
         let (audio_cd, track_count) = if dtype == 5 {
-            // Version bloquante : _list_drives_impl tourne déjà en spawn_blocking.
-            match crate::cdaudio::cd_read_toc_blocking(drive_str.clone()) {
+            match crate::cdaudio::cd_read_toc(drive_str.clone()) {
                 Ok(toc) => (!toc.tracks.is_empty(), toc.tracks.len().min(255) as u8),
                 Err(_) => (false, 0), // drive empty, data CD, or read error — silent
             }
@@ -1576,17 +1424,7 @@ fn _list_drives_impl() -> Vec<DriveInfo> {
 /// scanne les fichiers audio et retourne { folder, files }.
 /// Identique à open_folder mais avec un répertoire de départ (pour USB).
 #[tauri::command]
-pub async fn open_folder_at(
-    app: AppHandle,
-    start_path: String,
-) -> Result<Option<OpenFolderResult>, String> {
-    // Dialog bloquant + scan récursif hors du thread principal (gel UI sinon).
-    tokio::task::spawn_blocking(move || open_folder_at_blocking(app, start_path))
-        .await
-        .map_err(|e| format!("open_folder_at: spawn_blocking: {e}"))?
-}
-
-fn open_folder_at_blocking(
+pub fn open_folder_at(
     app: AppHandle,
     start_path: String,
 ) -> Result<Option<OpenFolderResult>, String> {

@@ -46,12 +46,11 @@ function _sanitizeForPath(s) {
     .slice(0, 80) || 'unnamed';
 }
 
-export function extractDestPath(baseDir, label, trackIdx, dateStr, sep) {
-  sep = sep || '/';
+export function extractDestPath(baseDir, label, trackIdx, dateStr) {
   const safe = _sanitizeForPath(label);
-  const dir  = `${baseDir}${sep}CD_${safe}_${dateStr}`;
+  const dir  = `${baseDir}\\CD_${safe}_${dateStr}`;
   const file = `${formatTrackLabel(trackIdx)}.flac`;
-  return `${dir}${sep}${file}`;
+  return `${dir}\\${file}`;
 }
 
 export function calculateRipPercent(sectorCurrent, sectorTotal) {

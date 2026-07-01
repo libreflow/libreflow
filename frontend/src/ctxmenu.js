@@ -13,11 +13,11 @@
 //   ctxNewPlaylist, ctxRemoveFromPlaylist, ctxSmartPlaylist,
 //   ctxPlayNext, ctxAddToQueueEnd, ctxCopyInfo
 
-import { esc, trackCopyText }                           from './utils.js';
+import { esc }                                          from './utils.js';
 import { ddel }                                         from './db.js';
 import { i18n }                                         from './i18n.js';
 import { get }                                          from './store.js';
-import { emit, EVENTS }                                 from './bus.js';
+import { emit, on, EVENTS }                             from './bus.js';
 import { trackIdx, _trackIdxMap, invalidateFilterCache } from './search.js';
 import { addToQueueNext, addToQueueEnd }                        from './queue.js';
 import { audio }                                        from './player.js';
@@ -30,6 +30,8 @@ import { openNewPlaylistModal, removeTrackFromPlaylist, savePlaylists, movePlayl
 import { openSmartPlaylistModal } from './smartplaylist.js';
 import { openTagEditor } from './tagedit.js';
 import { invoke }        from './ipc.js';
+// Playlists demande la fermeture du menu contextuel — évite le cycle playlists.js ↔ ctxmenu.js.
+on(EVENTS.CTX_MENU_CLOSE, () => closeCtxMenu());
 
 // ── Context menu (right-click on track) ──────────────────────
 
@@ -131,14 +133,6 @@ export function showCtxMenu(e, trackId) {
   const rgBtn = document.getElementById('ctx-write-rg');
   if (rgBtn) rgBtn.style.display = (t && t.rgGain !== undefined && t.path) ? '' : 'none';
 
-  // Plugin opener — visible seulement si la piste a un fichier local
-  const revealBtn = document.getElementById('ctx-reveal-file');
-  if (revealBtn) revealBtn.style.display = (t && t.path) ? '' : 'none';
-
-  // Plugin clipboard-manager — copier le chemin : même condition que reveal
-  const copyPathBtn = document.getElementById('ctx-copy-path');
-  if (copyPathBtn) copyPathBtn.style.display = (t && t.path) ? '' : 'none';
-
   // Position — calculée avant d'ouvrir pour éviter le flash
   // Le menu est déjà rendu (display block) mais invisible (opacity 0)
   // offsetWidth/Height sont donc valides sans toggler display
@@ -233,34 +227,12 @@ export function ctxCopyInfo() {
     ? get('tracks')[_trackIdxMap.get(get('ctxTrackId'))] : null;
   closeCtxMenu();
   if (!t) return;
-  _copyToClipboard(trackCopyText(t, i18n('unknown_artist') || 'Artiste inconnu'));
-}
-
-/** Copie le chemin du fichier de la piste (plugin clipboard-manager). */
-export function ctxCopyPath() {
-  const t = _trackIdxMap.has(get('ctxTrackId'))
-    ? get('tracks')[_trackIdxMap.get(get('ctxTrackId'))] : null;
-  closeCtxMenu();
-  if (!t?.path) return;
-  _copyToClipboard(t.path);
-}
-
-/** Écrit dans le presse-papier OS via le plugin (fiable hors focus webview) ;
- *  fallback navigator.clipboard pour le dev hors Tauri. */
-async function _copyToClipboard(text) {
-  if (!text) return;
-  try {
-    await invoke('plugin:clipboard-manager|write_text', { text });
-    toast(i18n('t_ctx_copied'), 'success');
-  } catch (e) {
-    try {
-      await navigator.clipboard.writeText(text);
-      toast(i18n('t_ctx_copied'), 'success');
-    } catch (e2) {
-      console.warn('[ctxmenu] clipboard write failed:', e, e2);
-      toast(i18n('t_copy_err') || 'Copie impossible', 'error');
-    }
-  }
+  const unknownArtist = i18n('unknown_artist') || 'Artiste inconnu';
+  const text = (t.artist && t.artist !== unknownArtist && t.artist !== 'Unknown Artist')
+    ? `${t.artist} — ${t.name}` : t.name;
+  navigator.clipboard.writeText(text)
+    .then(()  => toast(i18n('t_ctx_copied'), 'success'))
+    .catch(()  => {});
 }
 
 export function ctxEditTags() {
@@ -325,56 +297,29 @@ export async function ctxDeleteTrack() {
   if (!t) return;
   // P4-5 : body enrichi avec pochette + artiste pour les actions destructives
   const _unknownArtist = i18n('unknown_artist') || 'Artiste inconnu';
-  const _artist = t.artistFull || t.artist || '';
-  const _frag = document.createDocumentFragment();
-  const _preview = document.createElement('div');
-  Object.assign(_preview.style, { display:'flex', alignItems:'center', gap:'10px', padding:'8px 10px', background:'var(--bg3)', borderRadius:'8px', marginBottom:'10px' });
-  if (t.art) {
-    const _img = document.createElement('img');
-    _img.src = t.art; _img.alt = '';
-    Object.assign(_img.style, { width:'40px', height:'40px', borderRadius:'6px', objectFit:'cover', flexShrink:'0', verticalAlign:'middle' });
-    _preview.appendChild(_img);
-  } else {
-    const _ic = document.createElement('span');
-    Object.assign(_ic.style, { width:'40px', height:'40px', borderRadius:'6px', background:'var(--bg4)', display:'inline-flex', alignItems:'center', justifyContent:'center', flexShrink:'0', fontSize:'18px' });
-    _ic.textContent = '🎵';
-    _preview.appendChild(_ic);
-  }
-  const _meta = document.createElement('div');
-  _meta.style.minWidth = '0';
-  const _nameEl = document.createElement('div');
-  Object.assign(_nameEl.style, { fontWeight:'600', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' });
-  _nameEl.textContent = t.name;
-  _meta.appendChild(_nameEl);
-  if (_artist && _artist !== _unknownArtist) {
-    const _artEl = document.createElement('div');
-    Object.assign(_artEl.style, { fontSize:'.82em', opacity:'.7', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' });
-    _artEl.textContent = _artist;
-    _meta.appendChild(_artEl);
-  }
-  _preview.appendChild(_meta);
-  _frag.appendChild(_preview);
-  const _bodyText = document.createElement('span');
-  _bodyText.textContent = i18n('ctx_delete_body') || 'Le titre sera retiré de la bibliothèque. Le fichier sur le disque ne sera pas supprimé.';
-  _frag.appendChild(_bodyText);
-  // Capturer AVANT l'await : la piste peut être supprimée par un autre flux pendant la modale (TOCTOU)
+  const _artist = esc(t.artistFull || t.artist || ''); // L-01 : esc() cohérent (était un .replace ad-hoc)
+  const _artHtml = t.art
+    ? `<img src="${esc(t.art)}" alt="" style="width:40px;height:40px;border-radius:6px;object-fit:cover;flex-shrink:0;vertical-align:middle">`
+    : `<span style="width:40px;height:40px;border-radius:6px;background:var(--bg4);display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;font-size:18px">🎵</span>`;
+  const _trackPreview = `<div style="display:flex;align-items:center;gap:10px;padding:8px 10px;background:var(--bg3);border-radius:8px;margin-bottom:10px">${_artHtml}<div style="min-width:0"><div style="font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(t.name)}</div>${_artist && _artist !== _unknownArtist ? `<div style="font-size:.82em;opacity:.7;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${_artist}</div>` : ''}</div></div>`;
+  const ok = await confirmAction(
+    i18n('ctx_delete_h', t.name) || `Supprimer « ${t.name} » ?`,
+    _trackPreview + (i18n('ctx_delete_body') || `Le titre sera retiré de la bibliothèque. Le fichier sur le disque ne sera <strong>pas</strong> supprimé.`),
+    i18n('ctx_delete_btn') || 'Supprimer'
+  );
+  if (!ok) return;
   const ti = trackIdx(t.id);
-  const oldTracks  = [...get('tracks')];
+
+  // ── Snapshot pour undo ──────────────────────────────────────────────────────
+  const oldTracks  = [...get('tracks')]; // spread — nouvelle ref, différente de l'array muté in-place
   const wasLiked   = get('liked').has(t.id);
   const oldCurIdx  = get('curIdx');
+  // Snapshot des playlists affectées pour restaurer l'ordre exact en cas d'undo
   const affectedPlSnapshots = [];
   get('playlists').forEach(pl => {
     if (pl.trackIds?.includes(t.id)) affectedPlSnapshots.push({ pl, ids: [...pl.trackIds] });
   });
   const playlistsChanged = affectedPlSnapshots.length > 0;
-  const ok = await confirmAction(
-    i18n('ctx_delete_h', t.name) || `Supprimer « ${t.name} » ?`,
-    _frag,
-    i18n('ctx_delete_btn') || 'Supprimer'
-  );
-  if (!ok) return;
-  // Valider que la piste n'a pas disparu pendant la modale
-  if (ti < 0 || get('tracks')[ti]?.id !== t.id) return;
 
   // ── Suppression immédiate (UI) ──────────────────────────────────────────────
   // liked est maintenant Set<string> d'IDs — pas de décalage d'indices nécessaire
@@ -398,13 +343,11 @@ export async function ctxDeleteTrack() {
   let undone = false;
   const idbTimer = setTimeout(async () => {
     if (undone) return;
-    try {
-      // Révoquer les blob URLs maintenant que la fenêtre undo est expirée (MEM-1/MEM-2)
-      if (t.art?.startsWith('blob:')) try { URL.revokeObjectURL(t.art); } catch {}
-      if (t.url?.startsWith('blob:')) try { URL.revokeObjectURL(t.url); } catch {}
-      await ddel('tracks', t.id);
-      if (playlistsChanged) await savePlaylists();
-    } catch (e) { console.warn('[ctxDeleteTrack] IDB delete failed:', e); }
+    // Révoquer les blob URLs maintenant que la fenêtre undo est expirée (MEM-1/MEM-2)
+    if (t.art && t.art.startsWith('blob:')) try { URL.revokeObjectURL(t.art); } catch {}
+    if (t.url && t.url.startsWith('blob:')) try { URL.revokeObjectURL(t.url); } catch {}
+    await ddel('tracks', t.id);
+    if (playlistsChanged) savePlaylists();
   }, UNDO_MS);
 
   toastWithAction(
@@ -428,19 +371,6 @@ export async function ctxDeleteTrack() {
     },
     UNDO_MS
   );
-}
-
-/** Révèle le fichier de la piste dans l'Explorateur (plugin opener, reveal only). */
-export async function ctxRevealFile() {
-  const t = (_trackIdxMap.has(get('ctxTrackId')) ? get('tracks')[_trackIdxMap.get(get('ctxTrackId'))] : undefined);
-  closeCtxMenu();
-  if (!t?.path) return;
-  try {
-    await invoke('plugin:opener|reveal_item_in_dir', { path: t.path });
-  } catch (e) {
-    console.warn('[ctxRevealFile]', e);
-    toast(i18n('t_reveal_err') || 'Impossible d\'ouvrir l\'emplacement du fichier', 'error');
-  }
 }
 
 // ── F-7 — Écriture ReplayGain dans les tags fichier ──────────────────────────
@@ -467,12 +397,12 @@ export async function ctxWriteRG() {
 
   const dismiss = toast(i18n('t_rg_writing') || 'Écriture des tags RG…', 'loading');
   try {
-    await invoke('write_replaygain_tags', { data: { path: t.path, gain_db: gainDB, peak } }, { timeout: 15000 });
+    await invoke('write_replaygain_tags', { data: { path: t.path, gain_db: gainDB, peak } });
     dismiss?.();
     toast(i18n('t_rg_written', t.name) || `Tags RG écrits : « ${t.name} »`, 'success');
   } catch (e) {
     dismiss?.();
     console.warn('[ctxWriteRG]', e);
-    toast(i18n('t_rg_write_err') || 'Erreur écriture RG', 'error');
+    toast(i18n('t_rg_write_err') || `Erreur écriture RG : ${e}`, 'error');
   }
 }

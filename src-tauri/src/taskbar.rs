@@ -36,9 +36,8 @@ use windows::Win32::{
 };
 
 // ── Helper : trace de diagnostic (debug builds seulement) ──────────────────
-// Les warnings réels (mutex poisonné, échec COM, hwnd manquant) passent par
-// log::warn!/log::error! (visibles en release via tauri-plugin-log) ; ce macro
-// est réservé au tracing happy-path.
+// Les warnings réels (mutex poisonné, échec COM, hwnd manquant) restent en
+// eprintln! direct ; ce macro est réservé au tracing happy-path.
 #[cfg(debug_assertions)]
 macro_rules! dlog { ($($t:tt)*) => { eprintln!($($t)*) } }
 #[cfg(not(debug_assertions))]
@@ -51,7 +50,7 @@ macro_rules! dlog {
 // on récupère la donnée (probablement cohérente) et on continue.
 fn lock_recover<T>(m: &'static Mutex<T>) -> std::sync::MutexGuard<'static, T> {
     m.lock().unwrap_or_else(|poison| {
-        log::warn!("[taskbar] mutex poisonné — récupération gracieuse");
+        eprintln!("[taskbar] mutex poisonné — récupération gracieuse");
         poison.into_inner()
     })
 }
@@ -122,7 +121,7 @@ fn com_init_sta() -> Option<ComGuard> {
             dlog!("[taskbar] CoInitializeEx OK (hr={hr:?})");
             Some(ComGuard)
         } else {
-            log::error!("[taskbar] CoInitializeEx ERREUR : {hr:?}");
+            eprintln!("[taskbar] CoInitializeEx ERREUR : {hr:?}");
             None
         }
     }
@@ -140,14 +139,14 @@ fn create_taskbar_list3() -> Option<ITaskbarList3> {
     unsafe {
         match CoCreateInstance::<_, ITaskbarList3>(&TaskbarList, None, CLSCTX_ALL) {
             Err(e) => {
-                log::error!("[taskbar] CoCreateInstance ERREUR : {e:?}");
+                eprintln!("[taskbar] CoCreateInstance ERREUR : {e:?}");
                 None
             }
             Ok(tb3) => {
                 dlog!("[taskbar] ITaskbarList3 créé");
                 match tb3.HrInit() {
                     Err(e) => {
-                        log::error!("[taskbar] HrInit ERREUR : {e:?}");
+                        eprintln!("[taskbar] HrInit ERREUR : {e:?}");
                         None
                     }
                     Ok(_) => {
@@ -344,7 +343,7 @@ pub fn setup(main_win: tauri::WebviewWindow, app: AppHandle) {
         dlog!("[taskbar] HWND = {hwnd_raw:#x}");
         unsafe { setup_impl(hwnd_raw, app) }
     } else {
-        log::warn!("[taskbar] hwnd() introuvable — thumbnail toolbar désactivée");
+        eprintln!("[taskbar] hwnd() introuvable — thumbnail toolbar désactivée");
     }
 }
 
@@ -424,7 +423,7 @@ unsafe fn setup_impl(hwnd_raw: isize, app: AppHandle) {
     // de la fenêtre, prérequis de SetWindowSubclass.
     let r = unsafe { SetWindowSubclass(hwnd, Some(subclass_proc), SUBCLASS_UID, 0) };
     if r.0 == 0 {
-        log::error!("[taskbar] SetWindowSubclass ERREUR (r=0) — thumbnail toolbar inactive");
+        eprintln!("[taskbar] SetWindowSubclass ERREUR (r=0) — thumbnail toolbar inactive");
     } else {
         dlog!("[taskbar] SetWindowSubclass OK");
     }
@@ -491,7 +490,7 @@ fn build_image_list(playing: bool) -> HIMAGELIST {
     // On loggue et on sort tôt — les icônes créées sont libérées avant le retour
     // pour ne pas fuiter de HICON.
     if il.0 == 0 {
-        log::warn!("[taskbar] ImageList_Create a renvoyé NULL — image list ignorée");
+        eprintln!("[taskbar] ImageList_Create a renvoyé NULL — image list ignorée");
         for ic in icons {
             // SAFETY: ic provient de make_icon_* (CreateIconIndirect) ; DestroyIcon
             // tolère un HICON invalide, l'appel reste sûr même si la création a échoué.
@@ -594,12 +593,13 @@ fn bgra_to_hicon(bgra: &[u8], sz: i32) -> HICON {
         ) else {
             return HICON(std::ptr::null_mut());
         };
-        if bits.is_null() {
+        std::ptr::copy_nonoverlapping(bgra.as_ptr(), bits.cast::<u8>(), bgra.len());
+        let mask_bm = CreateBitmap(sz, sz, 1, 1, None);
+        if mask_bm.0.is_null() {
+            eprintln!("[taskbar] CreateBitmap failed (GDI OOM?)");
             let _ = DeleteObject(HGDIOBJ(color_bm.0));
             return HICON(std::ptr::null_mut());
         }
-        std::ptr::copy_nonoverlapping(bgra.as_ptr(), bits.cast::<u8>(), bgra.len());
-        let mask_bm = CreateBitmap(sz, sz, 1, 1, None);
         let ii = ICONINFO {
             fIcon: BOOL(1),
             xHotspot: 0,
@@ -669,7 +669,7 @@ unsafe extern "system" fn subclass_proc(
     #[cfg(debug_assertions)]
     {
         let n = SUBCLASS_CALLS.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-        if n < 3 {
+        if n < 8 {
             dlog!(
                 "[taskbar] subclass_proc #{n} msg={msg:#06x} wparam={:#x}",
                 wparam.0
@@ -689,7 +689,9 @@ unsafe extern "system" fn subclass_proc(
         if let Some(k) = key {
             dlog!("[taskbar] WM_COMMAND btn={btn_id:#x} → '{k}'");
             if let Some(tx) = BTN_TX.get() {
-                let _ = tx.try_send(k.to_string());
+                if let Err(e) = tx.try_send(k.to_string()) {
+                    dlog!("[taskbar] btn '{k}' dropped (channel full): {e}");
+                }
             }
             return LRESULT(0);
         }

@@ -28,22 +28,21 @@ export class LfToastStack extends LitElement {
   static _seq = 0;
 
   static properties = {
-    _items:     { state: true },
-    closeLabel: { type: String },
+    _items: { state: true },
   };
 
   static styles = css`
     /* Google Material Snackbar look — single dark slab, accent via icon + thin progress bar. */
     :host {
       position: fixed;
-      bottom: calc(var(--pb, 96px) + var(--space-4));
+      bottom: calc(var(--pb, 96px) + 16px);
       left: 50%;
       transform: translateX(-50%);
       display: flex;
       flex-direction: column-reverse;
       align-items: center;
-      gap: var(--space-2);
-      z-index: var(--z-toast, 9000);
+      gap: 8px;
+      z-index: 9999;
       pointer-events: none;
       font-family: var(--lf-font-ui, var(--font-body));
     }
@@ -60,9 +59,9 @@ export class LfToastStack extends LitElement {
       display: flex;
       align-items: center;
       gap: 12px;
-      min-width: var(--lf-toast-min-w);
+      min-width: 288px;
       max-width: 568px;
-      font-size: var(--text-sm);
+      font-size: 14px;
       line-height: 20px;
       letter-spacing: .01786em;
       overflow: hidden;
@@ -94,7 +93,7 @@ export class LfToastStack extends LitElement {
       flex: 0 0 auto;
       background: transparent;
       border: none;
-      color: var(--lf-toast-action);
+      color: var(--lf-toast-action, var(--lf-toast-accent, #8ab4f8));
       padding: 6px 8px;
       margin: -4px -4px -4px 8px;
       border-radius: 4px;
@@ -116,12 +115,6 @@ export class LfToastStack extends LitElement {
       cursor: pointer;
       padding: 2px 4px;
       border-radius: 4px;
-      /* SC 2.5.8 — cible tactile minimum 24×24 px (CLAUDE.md §2 WCAG 2.2) */
-      min-width: 24px;
-      min-height: 24px;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
     }
     .t-close:hover { color: rgba(255, 255, 255, .92); background: rgba(255, 255, 255, .08); }
 
@@ -139,6 +132,24 @@ export class LfToastStack extends LitElement {
     @keyframes t-in  { from { transform: translateY(20px); opacity: 0; } }
     @keyframes t-out { to   { transform: translateY(20px); opacity: 0; } }
 
+    :host-context(html[data-mode="light"]) .t-item {
+      background: var(--lf-toast-bg, rgba(255, 255, 255, 0.92));
+      color: var(--lf-toast-fg, rgba(15, 17, 23, 0.92));
+      box-shadow:
+        0 6px 10px rgba(0, 0, 0, .10),
+        0 1px 18px rgba(0, 0, 0, .08),
+        0 3px 5px rgba(0, 0, 0, .14);
+    }
+    :host-context(html[data-mode="light"]) .t-action {
+      color: var(--lf-toast-action, var(--lf-toast-accent, #2563eb));
+    }
+    :host-context(html[data-mode="light"]) .t-close {
+      color: rgba(15, 17, 23, 0.6);
+    }
+    :host-context(html[data-mode="light"]) .t-close:hover {
+      color: rgba(15, 17, 23, 0.92);
+      background: rgba(0, 0, 0, 0.06);
+    }
   `;
 
   constructor() {
@@ -148,8 +159,6 @@ export class LfToastStack extends LitElement {
      *                 closable: boolean, dismissing: boolean }>} */
     this._items = [];
     this._timers = new Map();  // id → setTimeout handle (jamais sérialisé)
-    this._barRafs = [];        // LIT-COMPONENTS-5: rAF handles for .t-bar shrink animations
-    this.closeLabel = 'Fermer';
   }
 
   /**
@@ -205,10 +214,6 @@ export class LfToastStack extends LitElement {
     // Phase 1: mark as dismissing → triggers t-out animation via render().
     this._items = toastReducer(this._items, { type: 'mark-dismissing', id });
 
-    // LIT-COMPONENTS-6: fallback for when CSS animations are disabled (prefers-reduced-motion
-    // or UA override) — animationend never fires, so force finalize after the animation budget.
-    this.updateComplete.then(() => { setTimeout(() => this._finalize(id), 350); });
-
     this.dispatchEvent(new CustomEvent('lf-toast-dismiss', {
       detail: { id }, bubbles: true, composed: true,
     }));
@@ -239,15 +244,11 @@ export class LfToastStack extends LitElement {
   // CustomEvent is dispatched last so listeners can tell apart action vs plain dismiss.
   _onActionClick(ev, id, onClick) {
     ev.stopPropagation();
-    // dismiss + dispatch dans le finally : si le callback action throw, le toast
-    // est quand même retiré ET l'événement émis (sinon dispatch jamais atteint).
     try { typeof onClick === 'function' && onClick(); }
-    finally {
-      this._dismiss(id);
-      this.dispatchEvent(new CustomEvent('lf-toast-action', {
-        detail: { id }, bubbles: true, composed: true,
-      }));
-    }
+    finally { this._dismiss(id); }
+    this.dispatchEvent(new CustomEvent('lf-toast-action', {
+      detail: { id }, bubbles: true, composed: true,
+    }));
   }
 
   /**
@@ -261,15 +262,9 @@ export class LfToastStack extends LitElement {
     const bars = this.shadowRoot.querySelectorAll('.t-bar:not([data-bar-started])');
     bars.forEach(bar => {
       bar.dataset.barStarted = '1';
-      // LIT-COMPONENTS-5: store outer rAF handle so disconnectedCallback can cancel it
-      // if the component unmounts before the animation fires.  Once it fires, remove
-      // the handle so _barRafs stays bounded (one entry per in-flight bar, not cumulative).
-      const h = requestAnimationFrame(() => {
-        const idx = this._barRafs.indexOf(h);
-        if (idx !== -1) this._barRafs.splice(idx, 1);
+      requestAnimationFrame(() => {
         requestAnimationFrame(() => { bar.style.transform = 'scaleX(0)'; });
       });
-      this._barRafs.push(h);
     });
   }
 
@@ -277,9 +272,6 @@ export class LfToastStack extends LitElement {
     super.disconnectedCallback();
     for (const handle of this._timers.values()) clearTimeout(handle);
     this._timers.clear();
-    // LIT-COMPONENTS-5: cancel pending rAF closures holding .t-bar DOM refs.
-    for (const h of this._barRafs) cancelAnimationFrame(h);
-    this._barRafs = [];
   }
 
   // LOW: aria-label hardcoded FR — to be parameterized via prop when WC i18n strategy is finalized.
@@ -302,7 +294,7 @@ export class LfToastStack extends LitElement {
             </button>
           ` : null}
           ${t.closable ? html`
-            <button class="t-close" aria-label=${this.closeLabel}
+            <button class="t-close" aria-label="Fermer"
                     @click=${(ev) => this._onCloseClick(ev, t.id)}>×</button>
           ` : null}
           <span class="t-bar" aria-hidden="true"

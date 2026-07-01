@@ -33,6 +33,7 @@ export const CFG = Object.freeze({
   SHORT_TRACK_MIN_SECS:     20,   // s  — durée min d'une piste valide (< = ignorée)
   RG_GAIN_CAP:           3.162,   // gain linéaire max ReplayGain ≈ +10 dB (B1 fix)
   MAX_ART_CACHE:           200,   // ARCH-2 — cache LRU blob: URL artwork (liste + grilles albums/artistes)
+  ART_B64_MAX_CHARS:  4_000_000,   // ~3 MB binary — cap art base64 pour éviter IDB/DOM blow-up
   QUEUE_ROW_H:              50,   // px — hauteur d'un .queue-item (padding 7px*2 + art 36px)
   FUZZY_THRESHOLD:         0.4,   // seuil minimal Jaccard similarity pour la recherche floue
   BOOT_CHUNK:             5000,   // pistes traitées par tranche au boot (yield entre tranches)

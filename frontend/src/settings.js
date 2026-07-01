@@ -7,18 +7,22 @@
  * ARCH-1 : saveCfg depuis cfgsave.js, _allPlayerUI depuis allplayerui.js (deps circulaires brisées).
  */
 
-import { panelOpen, panelClose }                          from './motion.js';
 import { get, set }                                      from './store.js';
 import { getMiniOpen }                                   from './miniplayer.js';
 import { eqOpen, closeEQ }                               from './eq.js';
-import { queueOpen, closeQueue }                         from './queue.js';
 import { getLang, i18n }                                 from './i18n.js';
 import { syncCinemaBgSettings, updateCinArtColor }       from './cinema.js';
 import { updateVizColor, getVizMode, getVizEnabled }     from './viz.js';
 import { saveCfg }       from './cfgsave.js';
+import { emit, on, EVENTS } from './bus.js';
 import { _allPlayerUI } from './allplayerui.js';
 import { $id, $input, $select } from './dom.js';
 import { setTlistZoom }         from './tlistZoom.js';
+
+// Fermeture via bus — évite le cycle d'import settings.js ↔ queue.js.
+on(EVENTS.PANEL_CLOSE_SETTINGS, () => { if ($id('settings-panel')?.classList.contains('on')) closeSettings(); });
+// i18n demande l'application du thème — évite le cycle d'import i18n.js ↔ settings.js.
+on(EVENTS.THEME_APPLY_REQUEST, () => applyTheme());
 
 // ── État local ────────────────────────────────────────────────────────────────
 let _theme          = 'blue';
@@ -168,7 +172,7 @@ export function toggleSettings() {
 
 export function openSettings() {
   if (eqOpen)    closeEQ();
-  if (queueOpen) closeQueue();
+  emit(EVENTS.PANEL_CLOSE_QUEUE, {});
   const panel = $id('settings-panel');
   if (!panel) return;
   // A11Y-05: sauvegarder l'élément qui a déclenché l'ouverture pour le restaurer à la fermeture
@@ -184,8 +188,8 @@ export function openSettings() {
   switchSetTab(_VALID_TABS.includes(_lastTab) ? _lastTab : 'appearance');
   $id('lang-fr')?.classList.toggle('on', getLang() === 'fr');
   $id('lang-en')?.classList.toggle('on', getLang() === 'en');
-  // Sync zoom slider
-  _syncTlistZoomSlider();
+  // Sync zoom radios
+  _syncTlistZoomRadios();
   // Sync dynColor checkbox
   _syncDynColorChk();
   syncCinemaBgSettings();
@@ -193,7 +197,7 @@ export function openSettings() {
   syncMiniSettingsBtn();
   // A11Y-05: mettre en place le piège de focus
   const box = $id('settings-box');
-  if (box) { _setupSettingsFocusTrap(box); panelOpen(box); }
+  if (box) _setupSettingsFocusTrap(box);
   // Ergonomie UX : focus initial sur le tab actif (WAI-ARIA dialog+tabs pattern)
   // plutôt que sur la croix de fermeture — l'utilisateur peut Arrow-naviguer ou Tab vers le contenu.
   setTimeout(() => {
@@ -213,18 +217,25 @@ export function closeSettings() {
     box.removeEventListener('keydown', _settingsFocusTrap);
     _settingsFocusTrap = null;
   }
+  panel.classList.add('closing');
+  // BUG-M3 FIX : animationend peut ne jamais se déclencher si l'animation est désactivée
+  // (prefers-reduced-motion, GPU désactivé, transition CSS absente) → fallback 400ms
+  let _closeHandled = false;
+  const _onClose = () => {
+    if (_closeHandled) return;
+    _closeHandled = true;
+    panel.classList.remove('on', 'closing');
+    // A11Y-05: restaurer le focus à l'élément déclencheur après la fermeture de l'animation
+    if (_settingsTrigger) {
+      _settingsTrigger.focus();
+      _settingsTrigger = null;
+    }
+  };
+  panel.addEventListener('animationend', _onClose, { once: true });
+  setTimeout(_onClose, 400); // fallback si animationend ne se déclenche jamais
   const trigger = $id('tbt-settings');
   trigger?.classList.remove('active');
   trigger?.setAttribute('aria-expanded', 'false');
-  const _doClose = () => {
-    // Guard: settings was re-opened before panelClose.then fired — don't hide it.
-    if (panel.classList.contains('on')) return;
-    panel.classList.remove('on');
-    // A11Y-05: restaurer le focus à l'élément déclencheur après la fermeture de l'animation
-    if (_settingsTrigger) { _settingsTrigger.focus(); _settingsTrigger = null; }
-  };
-  if (!box) { _doClose(); return; }
-  panelClose(box).then(_doClose);
 }
 
 // BUG-AUDIT HIGH : listeners document/window encapsulés dans initSettingsListeners()
@@ -254,34 +265,34 @@ export function initSettingsListeners() {
   window.addEventListener('focus', () => syncMiniSettingsBtn(), { signal });
   const chk = $id('dyn-color-chk');
   if (chk) chk.addEventListener('change', e => setDynColor(e.target.checked), { signal });
-  // Zoom liste de pistes — slider
-  const _zoomSlider = $id('tlist-zoom-slider');
-  if (_zoomSlider) {
-    _zoomSlider.addEventListener('input', e => {
-      const levels = ['micro', 'compact', 'normal', 'comfortable', 'spacious'];
-      setTlistZoom(levels[+e.target.value]);
+  // Zoom liste de pistes
+  document.querySelectorAll('input[name="tlist-zoom"]').forEach(r => {
+    r.addEventListener('change', e => {
+      if (e.target.checked) setTlistZoom(e.target.value);
     }, { signal });
-  }
+  });
   return () => ac.abort();
 }
 
 // ══ THEMES ════════════════════════════════════════════════════════════════════
 export const THEMES = ['green', 'blue', 'purple', 'red', 'orange', 'pink', 'cyan'];
 
-// Palette : SOURCE UNIQUE = map [data-theme] de design-system.css (--g, --g-rgb,
-// --gd, --gg par thème). Les anciennes maps JS THEME_COLORS/THEME_RGB driftaient
-// (vieille palette #1db954/#3b82f6/#06b6d4 vs map CSS #34d399/#1D9BF0/#22d3ee)
-// et l'inline --g-rgb posé ici écrasait la map → accent solide ≠ accent alpha
-// (audit 2026-06-11).
+export const THEME_COLORS = {
+  green: '#1db954', blue: '#3b82f6', purple: '#a855f7',
+  red: '#ef4444', orange: '#f97316', pink: '#ec4899', cyan: '#06b6d4',
+};
+
+// BUG FIX: --g-rgb était jamais défini → tous les rgba(var(--g-rgb,...)) tombaient sur le vert
+export const THEME_RGB = {
+  green: '29,185,84', blue: '59,130,246', purple: '168,85,247',
+  red: '239,68,68', orange: '249,115,22', pink: '236,72,153', cyan: '6,182,212',
+};
 
 function _applyThemeVars(t) {
   document.documentElement.setAttribute('data-theme', t);
-  // M2 : mirror localStorage lu par public/boot-theme.js avant le premier paint
-  try { localStorage.setItem('lf-theme', t); } catch { /* quota/privé — non bloquant */ }
-  // Purge un éventuel --g-rgb inline résiduel (dyn-color le pose/retire lui-même)
-  if (!_dynColor) document.documentElement.style.removeProperty('--g-rgb');
+  document.documentElement.style.setProperty('--g-rgb', THEME_RGB[t] || '59,130,246');
   const artWrap = $id('pl-art');
-  if (artWrap) artWrap.style.setProperty('--ring-color', 'var(--g)');
+  if (artWrap) artWrap.style.setProperty('--ring-color', THEME_COLORS[t] || '#3b82f6');
 }
 
 export function setTheme(t) {
@@ -296,18 +307,10 @@ export function setTheme(t) {
   saveCfg();
 }
 
-const _ZOOM_LEVELS = ['micro', 'compact', 'normal', 'comfortable', 'spacious'];
-
-function _syncTlistZoomSlider() {
+function _syncTlistZoomRadios() {
   const cur = get('tlistZoom') || 'normal';
-  const idx = _ZOOM_LEVELS.indexOf(cur);
-  const slider = $id('tlist-zoom-slider');
-  if (slider) {
-    slider.value = String(idx >= 0 ? idx : 2);
-    slider.setAttribute('aria-valuetext', cur);
-  }
-  document.querySelectorAll('.tlist-zoom-ticks span').forEach((s, i) => {
-    s.classList.toggle('active', i === (idx >= 0 ? idx : 2));
+  document.querySelectorAll('input[name="tlist-zoom"]').forEach(r => {
+    r.checked = r.value === cur;
   });
 }
 
@@ -368,7 +371,7 @@ export function applyArtColor(color) {
   const artWrap = $id('pl-art');
   if (artWrap) {
     artWrap.classList.add('pl-art-glow', 'glow-on');
-    artWrap.style.setProperty('--ring-color', 'var(--g)');
+    artWrap.style.setProperty('--ring-color', THEME_COLORS[_theme] || '#3b82f6');
   }
 }
 
@@ -409,9 +412,15 @@ export function _updateArtBlur(src) {
   }, 200);
 }
 
-/* animateArtChange() supprimée (M12, audit bugs visuels 2026-06-11) : morte
-   des deux côtés — aucun call site et aucune règle CSS `.art-change`.
-   Le swap de pochette est déjà animé par trackSwap() (motion.js). */
+export function animateArtChange() {
+  const img = $id('pl-img');
+  if (!img) return;
+  img.classList.remove('art-change');
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+    img.classList.add('art-change');
+    img.addEventListener('animationend', () => img.classList.remove('art-change'), { once: true });
+  }));
+}
 
 // ══ PANEL RACCOURCIS ═════════════════════════════════════════════════════════
 
@@ -424,7 +433,7 @@ export function toggleShortcuts() {
   _shortcutsOpen = !_shortcutsOpen;
   if (_shortcutsOpen) {
     if (eqOpen)    closeEQ();
-    if (queueOpen) closeQueue();
+    emit(EVENTS.PANEL_CLOSE_QUEUE, {});
   }
   $id('shortcuts-panel')?.classList.toggle('open', _shortcutsOpen);
 }
@@ -435,8 +444,6 @@ export function setMode(mode) {
   _displayMode = mode;
   set('displayMode', mode);
   document.documentElement.setAttribute('data-mode', mode);
-  // M2 : mirror localStorage lu par public/boot-theme.js avant le premier paint
-  try { localStorage.setItem('lf-mode', mode); } catch { /* quota/privé — non bloquant */ }
   const icoDark  = $id('ico-mode-dark');
   const icoLight = $id('ico-mode-light');
   if (icoDark)  icoDark.style.display  = mode === 'dark'  ? '' : 'none';

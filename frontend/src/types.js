@@ -167,7 +167,7 @@
  * Niveaux de zoom de la liste de pistes.
  * Correspond aux valeurs de TLIST_ZOOM_LEVELS dans tlistZoom.js.
  *
- * @typedef {'micro'|'compact'|'normal'|'comfortable'|'spacious'} ZoomLevel
+ * @typedef {'compact'|'normal'|'comfortable'} ZoomLevel
  */
 
 /**
@@ -186,7 +186,6 @@
  * @property {{ view: string }} 'ui:view'
  * @property {{ theme: string }} 'ui:theme'
  * @property {{}} 'ui:render_lib'
- * @property {{}} 'i18n:lang_changed'
  */
 
 // ── ActionKey — union des data-action strings du registre handlers.js ──────────
@@ -219,7 +218,7 @@
 /** @typedef {'clear-selection'|'sel-add-playlist'|'sel-toggle-like'|'sel-batch-tag-edit'|'sel-remove'|'sel-add-batch'|'bte-cover-click'|'bte-cover-clear'|'close-batch-tag-modal'|'confirm-batch-tag-edit'} SelectionAction */
 
 /** Actions menu contextuel */
-/** @typedef {'ctx-toggle-like'|'ctx-delete'|'ctx-edit-tags'|'ctx-go-artist'|'ctx-go-album'|'ctx-new-playlist'|'ctx-remove-pl'|'ctx-smart-playlist'|'ctx-play-next'|'ctx-add-queue-end'|'ctx-copy-info'|'ctx-copy-path'|'ctx-reveal-file'|'add-track-to-pl'} CtxMenuAction */
+/** @typedef {'ctx-toggle-like'|'ctx-delete'|'ctx-edit-tags'|'ctx-go-artist'|'ctx-go-album'|'ctx-new-playlist'|'ctx-remove-pl'|'ctx-smart-playlist'|'ctx-play-next'|'ctx-add-queue-end'|'ctx-copy-info'|'add-track-to-pl'} CtxMenuAction */
 
 /** Actions doublons */
 /** @typedef {'close-dupes'|'detect-dupes'|'delete-all-dupes'|'remove-dupe-track'} DupesAction */

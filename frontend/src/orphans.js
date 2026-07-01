@@ -110,7 +110,18 @@ async function _openOrphanDialog(orphanTracks) {
 
   bg.querySelector('.orphan-close-btn').addEventListener('click', close);
   bg.addEventListener('click', e => { if (e.target === bg) close(); });
-  bg.addEventListener('keydown', e => { if (e.key === 'Escape') close(); });
+  bg.addEventListener('keydown', e => {
+    if (e.key === 'Escape') { close(); return; }
+    if (e.key === 'Tab') {
+      const focusable = [...bg.querySelectorAll(
+        'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])'
+      )];
+      if (!focusable.length) { e.preventDefault(); return; }
+      const first = focusable[0], last = focusable[focusable.length - 1];
+      if (e.shiftKey) { if (document.activeElement === first) { e.preventDefault(); last.focus(); } }
+      else            { if (document.activeElement === last)  { e.preventDefault(); first.focus(); } }
+    }
+  });
 
   bg.querySelector('.orphan-delete-btn').addEventListener('click', async () => {
     const remaining = fresh.filter(t => _missingPaths.has(t.path));
@@ -137,16 +148,13 @@ async function _relocateOrphan(track, rowEl, btnEl) {
   btnEl.textContent = '…';
 
   let newPath;
-  let _ipcErr = false;
   try {
     newPath = await invoke('pick_audio_file', undefined, { timeout: 0 });
   } catch(e) {
     console.warn('[orphans] pick_audio_file:', e);
-    _ipcErr = true;
   }
 
   if (!newPath) {
-    if (_ipcErr) toast('Impossible d\'ouvrir le sélecteur de fichier', 'error');
     btnEl.disabled = false;
     btnEl.textContent = prevLabel;
     return;
@@ -167,7 +175,6 @@ async function _relocateOrphan(track, rowEl, btnEl) {
     tracks[idx].path     = newPath;
     tracks[idx].url      = convertFileSrc(newPath);
     tracks[idx].metaDone = false;
-    rebuildTrackIdxMap();
     await saveTrackNow(tracks[idx]);
   }
 

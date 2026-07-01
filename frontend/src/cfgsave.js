@@ -13,8 +13,8 @@
 //   import  : getTheme, getDynColor, getDisplayMode (settings.js)
 //   import  : rgEnabled, rgTargetLUFS (replaygain.js)
 //   store   : cinemaBg — synced by cinema.js via set('cinemaBg',…)
-//   import  : eqEnabled, eqNodes, eqAutoMode,
-//             getActiveEqPreset, getEQProfiles, getCurrentGains (eq.js)
+//   import  : eqEnabled, eqAutoMode,
+//             getActiveEqPreset, getEQProfiles, getEQGains (eq.js)
 //   import  : getVizMode, getVizEnabled (viz.js)
 //   import  : getWatchPath (watchfolder.js)
 //   import  : getMiniPos (miniplayer.js)
@@ -29,15 +29,13 @@
 import { get }                                        from './store.js';
 import { CFG }                                        from './cfg.js';
 import { DB, dput, isQuotaError }                     from './db.js';
-import { audio }                                      from './player.js';
 import { getLang, i18n }                              from './i18n.js';
 import { getTheme, getDynColor, getDisplayMode }      from './settings.js';
 import { rgEnabled, rgTargetLUFS }                    from './replaygain.js';
 // cinemaBg is read from the store (set by cinema.js via set('cinemaBg',…))
 // to avoid a cinema.js ↔ cfgsave.js circular dependency.
-import { eqEnabled, eqNodes, eqAutoMode, eqExpert,
-         getActiveEqPreset, getEQProfiles,
-         getCurrentGains }                             from './eq.js';
+import { eqEnabled, eqAutoMode, eqExpert,
+         getActiveEqPreset, getEQProfiles, getEQGains } from './eq.js';
 import { getVizMode, getVizEnabled }                  from './viz.js';
 import { getWatchPath }                               from './watchfolder.js';
 import { getMiniPos }                                 from './miniplayer.js';
@@ -68,15 +66,6 @@ export function saveCfgNow() {
 export function saveCfg() {
   if (_saveCfgTimer) clearTimeout(_saveCfgTimer);
   _saveCfgTimer = setTimeout(_doSaveCfg, CFG.CFG_SAVE_DEBOUNCE);
-}
-
-/**
- * Annule tout save différé en attente. Appeler avant de fermer/réinitialiser la DB
- * pour éviter qu'un debounce orphelin écrive sur une connexion fermée.
- */
-export function cancelSaveCfg() {
-  clearTimeout(_saveCfgTimer);
-  _saveCfgTimer = null;
 }
 
 // ── Implémentation ────────────────────────────────────────────────────────────
@@ -113,9 +102,10 @@ async function _doSaveCfg() {
     const tlistZoom      = get('tlistZoom') || 'normal';            // zoom liste pistes
 
     const likedIds    = liked instanceof Set ? [...liked] : [];
+    const _audioEl    = /** @type {HTMLAudioElement|null} */ (document.getElementById('audio'));
     const curTrackId  = curIdx >= 0 && tracks[curIdx] ? tracks[curIdx].id : null;
-    const curPos      = curTrackId && audio.duration > 0
-      ? Math.floor(audio.currentTime)
+    const curPos      = curTrackId && (_audioEl?.duration ?? 0) > 0
+      ? Math.floor(_audioEl?.currentTime ?? 0)
       : 0;
 
     // ── État DOM supplémentaire ───────────────────────────────────────────────
@@ -141,7 +131,7 @@ async function _doSaveCfg() {
       npBg: get('npBg') ?? 'blur',
       shuffle, repeat, albumSort, artistSort, genreSort, albumDetailSort,
       eqEnabled, eqExpert,
-      eqGains: getCurrentGains() ?? null,
+      eqGains: getEQGains(),
       eqPreset: getActiveEqPreset(),
       vizMode: getVizMode(), vizEnabled: getVizEnabled(),
       eqAutoMode, eqProfiles: getEQProfiles(),
@@ -154,7 +144,6 @@ async function _doSaveCfg() {
       drillKey, drillFrom, drillDisplayName,
       plFolders, recentPls,
       heatPeriod:  getHeatPeriod(),
-      queuePinned: get('queuePinned') === true,
       queueState:  getQueueState(),
       radioSeedId: radioActive ? getRadioSeedId() : null,
       autoUpdate,
@@ -166,7 +155,7 @@ async function _doSaveCfg() {
   } catch (e) {
     if (isQuotaError(e)) {
       // ARCH-7 : quota IDB — cfg est petit, si ça échoue c'est vraiment critique
-      console.warn('[cfgsave] Quota IDB dépassé — configuration non persistée:', e);
+      console.error('[cfgsave] Quota IDB dépassé — configuration non persistée:', e);
       toast(i18n('err_quota'), 'error');
     } else {
       console.warn('[cfgsave] IDB save failed — config non persistée:', e);

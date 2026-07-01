@@ -1,4 +1,4 @@
-﻿// LibreFlow — backup.js
+// LibreFlow — backup.js
 // Export et import de la bibliothèque au format .libreflow (ZIP).
 //
 // Flux export :
@@ -28,20 +28,17 @@ const BACKUP_FORMAT_VERSION = 1;
 /**
  * Écrit tout un lot dans un store via UNE seule transaction IDB (vs N dput).
  * Non bloquant en cas d'échec : log + continue, conservant la tolérance
- * fire-and-forget de l'ancien restore. Retourne false si l'écriture a échoué
- * (quota plein, DB corrompue) pour que l'appelant puisse avertir l'utilisateur.
+ * fire-and-forget de l'ancien restore.
  */
 async function _batchPut(storeName, records) {
-  if (!DB || !records || !records.length) return true;
+  if (!DB || !records || !records.length) return;
   try {
     const tx = DB.transaction(storeName, 'readwrite');
     const store = tx.objectStore(storeName);
     for (const rec of records) store.put(rec);
     await new Promise((ok, fail) => { tx.oncomplete = ok; tx.onerror = () => fail(tx.error); });
-    return true;
   } catch (e) {
     console.warn(`[backup] batch IDB write (${storeName}) failed:`, e);
-    return false;
   }
 }
 
@@ -83,7 +80,7 @@ export async function exportBackup(includeFiles = false) {
         imports:   JSON.stringify(imports ?? []),
         config:    JSON.stringify(cfg     ?? {}),
       },
-    }, { timeout: 0 });
+    });
 
     if (result) {
       toast(`Bibliothèque exportée — ${(tracks ?? []).length} piste(s)`, 'success');
@@ -109,7 +106,7 @@ export async function importBackup() {
   if (btn) { btn.disabled = true; btn.textContent = 'Restauration…'; }
 
   try {
-    const payload = await invoke('import_backup', {}, { timeout: 0 });
+    const payload = await invoke('import_backup', {});
     if (!payload) {
       toast('Import annulé', 'info');
       return;
@@ -138,7 +135,6 @@ export async function importBackup() {
     const addedTracks   = [];
 
     for (const t of backupTracks) {
-      if (!t?.id || typeof t.id !== 'string' || !t.path || typeof t.path !== 'string') continue;
       if (!existingIds.has(t.id)) {
         addedTracks.push(t);
         existingIds.add(t.id); // évite les doublons si le backup contient des ids dupliqués
@@ -147,14 +143,10 @@ export async function importBackup() {
 
     if (addedTracks.length) {
       // Une seule transaction IDB pour tout le lot (vs un dput par piste).
-      const _persisted = await _batchPut('tracks', addedTracks);
-      // Divergence mémoire/IDB : les pistes restent jouables cette session mais
-      // disparaîtront au prochain démarrage — l'utilisateur doit le savoir.
-      if (!_persisted) toast('Sauvegarde IDB échouée — les pistes importées seront perdues au redémarrage', 'error');
+      await _batchPut('tracks', addedTracks);
       // Mutation in-place du tableau du store : pas de set() (qui notifierait
       // AVANT rebuildTrackIdxMap, exposant un _trackIdxMap stale aux subscribers).
-      const _arr = get('tracks');
-      for (let _i = 0; _i < addedTracks.length; _i++) _arr.push(addedTracks[_i]);
+      get('tracks').push(...addedTracks);
       rebuildTrackIdxMap();
       invalidateFilterCache();
       if (VIRT) VIRT._lastListSig = '';
@@ -175,8 +167,7 @@ export async function importBackup() {
       }
     }
     if (addedPlaylists.length) {
-      const _plPersisted = await _batchPut('playlists', addedPlaylists);
-      if (!_plPersisted) { toast('Sauvegarde IDB des playlists échouée', 'error'); }
+      await _batchPut('playlists', addedPlaylists);
       set('playlists', newPlaylists);
       notify('playlists');
     }
@@ -185,12 +176,10 @@ export async function importBackup() {
     const existingPlaylog = await dall('playlog').catch(() => []);
     const existingTs = new Set();
     for (const l of existingPlaylog) existingTs.add(l.ts);
-    const _playlogPersisted = await _batchPut('playlog', backupPlaylog.filter(l => !existingTs.has(l.ts)));
-    if (!_playlogPersisted) { toast('Sauvegarde IDB du playlog échouée', 'error'); }
+    await _batchPut('playlog', backupPlaylog.filter(l => !existingTs.has(l.ts)));
 
     // ── Imports history : merge par id (put = upsert sur keyPath 'id') ─────────
-    const _importsPersisted = await _batchPut('imports', backupImports);
-    if (!_importsPersisted) { toast('Sauvegarde IDB des imports échouée', 'error'); }
+    await _batchPut('imports', backupImports);
 
     const added = addedTracks.length;
     toast(

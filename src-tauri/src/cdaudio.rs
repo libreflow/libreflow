@@ -40,7 +40,7 @@ fn rip_cancel_lock() -> std::sync::MutexGuard<'static, Option<HashMap<String, Ar
     let mut guard = match RIP_CANCEL.lock() {
         Ok(g) => g,
         Err(poisoned) => {
-            log::warn!("[cdaudio] WARN: RIP_CANCEL mutex was poisoned; recovering");
+            eprintln!("[cdaudio] WARN: RIP_CANCEL mutex was poisoned; recovering");
             poisoned.into_inner()
         }
     };
@@ -50,7 +50,7 @@ fn rip_cancel_lock() -> std::sync::MutexGuard<'static, Option<HashMap<String, Ar
     guard
 }
 
-#[allow(dead_code)]
+#[cfg(target_os = "windows")]
 fn register_cancel(rip_id: &str) -> Result<Arc<AtomicBool>, String> {
     let flag = Arc::new(AtomicBool::new(false));
     let mut guard = rip_cancel_lock();
@@ -69,7 +69,7 @@ fn register_cancel(rip_id: &str) -> Result<Arc<AtomicBool>, String> {
     Ok(flag)
 }
 
-#[allow(dead_code)]
+#[cfg(target_os = "windows")]
 fn unregister_cancel(rip_id: &str) {
     let mut guard = rip_cancel_lock();
     if let Some(map) = guard.as_mut() {
@@ -80,15 +80,7 @@ fn unregister_cancel(rip_id: &str) {
 // ── Tauri commands ────────────────────────────────────────────────────────────
 
 #[tauri::command]
-pub async fn cd_read_toc(drive: String) -> Result<CdToc, String> {
-    // DeviceIoControl bloquant (spin-up disque = secondes) hors du thread
-    // principal — appelée aussi par le polling list_drives côté devices.js.
-    tokio::task::spawn_blocking(move || cd_read_toc_blocking(drive))
-        .await
-        .map_err(|e| format!("cd_read_toc: spawn_blocking: {e}"))?
-}
-
-pub(crate) fn cd_read_toc_blocking(drive: String) -> Result<CdToc, String> {
+pub fn cd_read_toc(drive: String) -> Result<CdToc, String> {
     #[cfg(target_os = "windows")]
     {
         windows_impl::read_toc(&drive)
@@ -108,9 +100,6 @@ pub async fn cd_rip_track(
     dest_path: String,
     rip_id: String,
 ) -> Result<(), String> {
-    if rip_id.len() > 64 {
-        return Err("rip_id too long".to_string());
-    }
     // Validation chemin destination (défense en profondeur — JS construit dest_path
     // depuis cd_cache_dir ou watchPath, mais on revalide côté Rust).
     validate_rip_dest(&dest_path)?;
@@ -210,7 +199,9 @@ pub fn cd_cancel_rip(rip_id: String) -> Result<(), String> {
             return Ok(());
         }
     }
-    Err(format!("rip_id {} not found", rip_id))
+    // rip_id absent = rip déjà terminé (CancelGuard a déjà supprimé l'entrée).
+    // Traiter comme annulation réussie plutôt que d'alerter le JS inutilement.
+    Ok(())
 }
 
 /// Returns the absolute path of the CD ephemeral-rip cache directory,
@@ -257,7 +248,7 @@ mod windows_impl {
     use windows::core::PCWSTR;
     use windows::Win32::Foundation::{CloseHandle, HANDLE};
     use windows::Win32::Storage::FileSystem::{
-        CreateFileW, FILE_FLAGS_AND_ATTRIBUTES, FILE_SHARE_READ, OPEN_EXISTING,
+        CreateFileW, FILE_FLAGS_AND_ATTRIBUTES, FILE_SHARE_READ, FILE_SHARE_WRITE, OPEN_EXISTING,
     };
     use windows::Win32::System::IO::DeviceIoControl;
 
@@ -300,7 +291,7 @@ mod windows_impl {
             CreateFileW(
                 PCWSTR(wide.as_ptr()),
                 GENERIC_READ_U32,
-                FILE_SHARE_READ,
+                FILE_SHARE_READ | FILE_SHARE_WRITE,
                 None,
                 OPEN_EXISTING,
                 FILE_FLAGS_AND_ATTRIBUTES(0),
@@ -407,27 +398,9 @@ mod windows_impl {
             track_mode: TRACK_MODE_CDDA,
         };
 
-        let alloc_size = SECTOR_BYTES
-            .checked_mul(sector_count as usize)
-            .ok_or_else(|| {
-                format!(
-                    "read_audio_sectors: sector_count overflow ({})",
-                    sector_count
-                )
-            })?;
-        let mut out = vec![0u8; alloc_size];
+        let mut out = vec![0u8; SECTOR_BYTES * sector_count as usize];
         let mut bytes_returned: u32 = 0;
 
-        let buf_len_u32 = u32::try_from(out.len()).map_err(|_| {
-            format!(
-                "read_audio_sectors: alloc_size {} exceeds u32 max",
-                out.len()
-            )
-        })?;
-        // SAFETY: `handle` is the CDROM device handle opened by the caller and
-        // kept alive for the duration of this call. `info` is stack-allocated and
-        // fully initialised. `out` is a Vec<u8> of exactly `buf_len_u32` bytes,
-        // guaranteed not to overflow by the checked_mul and try_from guards above.
         let ok = unsafe {
             DeviceIoControl(
                 handle,
@@ -435,7 +408,7 @@ mod windows_impl {
                 Some(&info as *const _ as *const _),
                 std::mem::size_of::<RawReadInfo>() as u32,
                 Some(out.as_mut_ptr() as *mut _),
-                buf_len_u32,
+                out.len() as u32,
                 Some(&mut bytes_returned),
                 None,
             )
@@ -450,6 +423,13 @@ mod windows_impl {
             ));
         }
 
+        let expected = SECTOR_BYTES * sector_count as usize;
+        if (bytes_returned as usize) < expected {
+            return Err(format!(
+                "IOCTL_CDROM_RAW_READ at LBA {}: short read ({} < {} bytes expected)",
+                start_lba, bytes_returned, expected
+            ));
+        }
         out.truncate(bytes_returned as usize);
         Ok(out)
     }
@@ -544,14 +524,14 @@ mod windows_impl {
                             // saturer le pool spawn_blocking sur un CD irrécupérable.
                             self.consecutive_errors += 1;
                             if self.consecutive_errors >= MAX_CONSECUTIVE_ERRORS {
-                                log::error!(
+                                eprintln!(
                                     "[cdaudio] ERROR: LBA {} — {} échecs de lecture consécutifs; abandon du rip",
                                     lba, self.consecutive_errors
                                 );
                                 self.aborted.store(true, Ordering::SeqCst);
                                 return false; // EOF forcé — read_samples détectera l'abandon
                             }
-                            log::warn!(
+                            eprintln!(
                                 "[cdaudio] WARN: LBA {} — read failed after 3 retries; padding {} sectors with silence ({}/{})",
                                 lba, chunk, self.consecutive_errors, MAX_CONSECUTIVE_ERRORS
                             );
@@ -582,7 +562,7 @@ mod windows_impl {
                         "sector_total":   self.sectors_total,
                     }),
                 ) {
-                    log::warn!("[cdaudio] emit cd-rip-progress failed: {e}");
+                    eprintln!("[cdaudio] emit cd-rip-progress failed: {e}");
                 }
                 self.last_emit = std::time::Instant::now();
             }
@@ -756,7 +736,7 @@ mod windows_impl {
                 "sector_total": total_sectors,
             }),
         ) {
-            log::warn!("[cdaudio] emit cd-rip-progress 100% failed: {e}");
+            eprintln!("[cdaudio] emit cd-rip-progress 100% failed: {e}");
         }
 
         Ok(())

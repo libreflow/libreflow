@@ -56,6 +56,77 @@ export function regionAvg(tc, x, y, w, h) {
 }
 
 /**
+ * K-means++ colour clustering on RGBA pixel data.
+ * Returns k clusters sorted by score (saturation × size) descending.
+ *
+ * @param {Uint8ClampedArray} px      RGBA pixel data
+ * @param {number}            k       number of clusters
+ * @param {number}            maxIter max iterations (default 8)
+ * @returns {{ center: number[], size: number, score: number }[]}
+ */
+export function _kmeansColors(px, k, maxIter = 8) {
+  const n = px.length >> 2;
+  if (n === 0 || k <= 0) return [];
+
+  // K-means++ initialisation: pick first center from pixel 0, then farthest
+  const centers = [[px[0], px[1], px[2]]];
+  for (let c = 1; c < k; c++) {
+    let totalDist = 0;
+    const dists = new Float64Array(n);
+    for (let i = 0; i < n; i++) {
+      const r = px[i*4], g = px[i*4+1], b = px[i*4+2];
+      let minD = Infinity;
+      for (const ct of centers) {
+        const d = (r-ct[0])**2 + (g-ct[1])**2 + (b-ct[2])**2;
+        if (d < minD) minD = d;
+      }
+      dists[i] = minD;
+      totalDist += minD;
+    }
+    if (totalDist === 0) {
+      centers.push([...centers[0]]);
+    } else {
+      let maxD = -1, maxI = 0;
+      for (let i = 0; i < n; i++) { if (dists[i] > maxD) { maxD = dists[i]; maxI = i; } }
+      centers.push([px[maxI*4], px[maxI*4+1], px[maxI*4+2]]);
+    }
+  }
+
+  // K-means iterations: assign then update
+  const assign = new Int32Array(n);
+  for (let iter = 0; iter < maxIter; iter++) {
+    for (let i = 0; i < n; i++) {
+      const r = px[i*4], g = px[i*4+1], b = px[i*4+2];
+      let minD = Infinity, minC = 0;
+      for (let c = 0; c < k; c++) {
+        const d = (r-centers[c][0])**2 + (g-centers[c][1])**2 + (b-centers[c][2])**2;
+        if (d < minD) { minD = d; minC = c; }
+      }
+      assign[i] = minC;
+    }
+    const sums = Array.from({ length: k }, () => [0, 0, 0, 0]);
+    for (let i = 0; i < n; i++) {
+      const c = assign[i];
+      sums[c][0] += px[i*4]; sums[c][1] += px[i*4+1]; sums[c][2] += px[i*4+2]; sums[c][3]++;
+    }
+    for (let c = 0; c < k; c++) {
+      if (sums[c][3] > 0) {
+        centers[c] = [sums[c][0]/sums[c][3]|0, sums[c][1]/sums[c][3]|0, sums[c][2]/sums[c][3]|0];
+      }
+    }
+  }
+
+  const sizes = new Int32Array(k);
+  for (let i = 0; i < n; i++) sizes[assign[i]]++;
+
+  return Array.from({ length: k }, (_, c) => {
+    const [r, g, b] = centers[c];
+    const [, sat] = rgbToHsl(r, g, b);
+    return { center: [r, g, b], size: sizes[c], score: sat * sizes[c] };
+  }).sort((a, b) => b.score - a.score);
+}
+
+/**
  * Sample 3 colour zones from an artwork image and return boosted colours.
  * Returns { cT, cL, cR } as [r,g,b], or null on failure.
  * @param {HTMLImageElement} img  - Already-loaded image element
@@ -80,133 +151,4 @@ export function sampleArtColors(img, size) {
       cR: boostSat(...regionAvg(tc, hw, by, hw, bh)),   // bottom-right
     };
   } catch(e) { console.warn('[artcolor] sampleArtColors failed:', e); return null; }
-}
-
-/** k-means++ initialisation: selects k diverse seed centers from the pixel buffer. */
-function _kmeansInitCenters(pixels, n, k) {
-  const centers = [];
-  const fp = Math.floor(Math.random() * n) * 4;
-  centers.push([pixels[fp], pixels[fp+1], pixels[fp+2]]);
-  for (let c = 1; c < k; c++) {
-    const dists = new Float32Array(n); let total = 0;
-    for (let i = 0; i < n; i++) {
-      const pi = i*4; let minD2 = Infinity;
-      for (const ct of centers) {
-        const d=(pixels[pi]-ct[0])**2+(pixels[pi+1]-ct[1])**2+(pixels[pi+2]-ct[2])**2;
-        if (d < minD2) minD2 = d;
-      }
-      dists[i] = minD2; total += minD2;
-    }
-    if (total === 0) {
-      const cp2 = Math.floor(Math.random() * n) * 4;
-      centers.push([pixels[cp2], pixels[cp2+1], pixels[cp2+2]]);
-      continue;
-    }
-    let r2 = Math.random() * total, chosen = n - 1;
-    for (let i = 0; i < n; i++) { r2 -= dists[i]; if (r2 <= 0) { chosen = i; break; } }
-    const cp = chosen * 4; centers.push([pixels[cp], pixels[cp+1], pixels[cp+2]]);
-  }
-  return centers;
-}
-
-/**
- * K-means++ colour clustering on a flat RGBA pixel buffer.
- * Pure function — no DOM. Exported for testability.
- * @param {Uint8ClampedArray} pixels - flat RGBA buffer
- * @param {number} k     - clusters (default 5)
- * @param {number} iters - EM iterations (default 8)
- * @returns {{ center:[r,g,b], size:number, score:number }[]} sorted by score desc
- */
-export function _kmeansColors(pixels, k = 5, iters = 8) {
-  const n = pixels.length >> 2;
-  if (n === 0 || k <= 0) return [];
-  const centers = _kmeansInitCenters(pixels, n, k);
-  const assign = new Int32Array(n);
-  for (let iter = 0; iter < iters; iter++) {
-    for (let i = 0; i < n; i++) {
-      const pi = i*4; let best = 0, bestD = Infinity;
-      for (let c = 0; c < k; c++) {
-        const d=(pixels[pi]-centers[c][0])**2+(pixels[pi+1]-centers[c][1])**2+(pixels[pi+2]-centers[c][2])**2;
-        if (d < bestD) { bestD = d; best = c; }
-      }
-      assign[i] = best;
-    }
-    const acc = Array.from({length: k}, () => [0,0,0,0]);
-    for (let i = 0; i < n; i++) {
-      const pi = i*4, a = acc[assign[i]];
-      a[0] += pixels[pi]; a[1] += pixels[pi+1]; a[2] += pixels[pi+2]; a[3]++;
-    }
-    for (let c = 0; c < k; c++) {
-      const a = acc[c];
-      if (a[3] > 0) { centers[c] = [a[0]/a[3]|0, a[1]/a[3]|0, a[2]/a[3]|0]; continue; }
-      // empty cluster — reinitialize to a pixel from the largest non-empty cluster
-      let bigC = 0;
-      for (let j = 1; j < k; j++) { if (acc[j][3] > acc[bigC][3]) bigC = j; }
-      if (acc[bigC][3] === 0) continue; // all clusters empty (degenerate case)
-      for (let i = 0; i < n; i++) {
-        if (assign[i] === bigC) { const pi=i*4; centers[c]=[pixels[pi],pixels[pi+1],pixels[pi+2]]; break; }
-      }
-    }
-  }
-  for (let i = 0; i < n; i++) {
-    const pi = i * 4; let best = 0, bestD = Infinity;
-    for (let c = 0; c < k; c++) {
-      const d=(pixels[pi]-centers[c][0])**2+(pixels[pi+1]-centers[c][1])**2+(pixels[pi+2]-centers[c][2])**2;
-      if (d < bestD) { bestD = d; best = c; }
-    }
-    assign[i] = best;
-  }
-  const sizes = new Int32Array(k);
-  for (let i = 0; i < n; i++) sizes[assign[i]]++;
-  return centers.map((ct, i) => {
-    const [, s] = rgbToHsl(ct[0], ct[1], ct[2]);
-    return { center: ct, size: sizes[i], score: (sizes[i] / n) * s };
-  }).sort((a, b) => b.score - a.score);
-}
-
-/**
- * Extract the dominant colour of an artwork image as HSL values suitable for
- * ambient token use. Clamps saturation ≥ 35% and lightness to [45%, 80%] so
- * near-black or near-white covers still produce a visible, non-glaring glow.
- *
- * Returns { hue: 0-360, sat: 0-100, light: 0-100 } or null on failure.
- * Used by playerbar.js to write --np-hue / --np-sat / --np-light.
- *
- * @param {HTMLImageElement} img  - Already-loaded image element
- * @param {number}           size - Sampling canvas size in pixels (default 64)
- */
-export function extractDominantHsl(img, size = 64) {
-  const colors = sampleArtColors5(img, size);
-  if (!colors || !colors.length) return null;
-  const [h, s, l] = rgbToHsl(...colors[0]);
-  // M5 (audit bugs visuels 2026-06-11) : pochette monochrome (N&B, grise) →
-  // s≈0 et hue 0 sans signification ; la clamp sat≥35% fabriquerait un halo
-  // ROUGE arbitraire. null = fallback sur les tokens --np-* par défaut.
-  if (s < 0.05) return null;
-  return {
-    hue:   Math.round(h),
-    sat:   Math.round(Math.max(0.35, Math.min(1,    s)) * 100),
-    light: Math.round(Math.max(0.45, Math.min(0.80, l)) * 100),
-  };
-}
-
-/**
- * Sample 5 dominant colours from an artwork image via k-means++.
- * DOM wrapper around _kmeansColors. Returns array of 5 boosted [r,g,b] sorted
- * by prominence×saturation, or null on failure.
- * @param {HTMLImageElement} img
- * @param {number} size - sampling canvas size in pixels (default 64)
- */
-export function sampleArtColors5(img, size = 64) {
-  if (!img || !img.naturalWidth) return null;
-  try {
-    const c = document.createElement('canvas');
-    c.width = c.height = size;
-    const tc = c.getContext('2d', { willReadFrequently: true });
-    tc.drawImage(img, 0, 0, size, size);
-    const { data } = tc.getImageData(0, 0, size, size);
-    const clusters = _kmeansColors(data, 5, 8);
-    if (!clusters.length) return null;
-    return clusters.map(cl => boostSat(...cl.center));
-  } catch (e) { console.warn('[artcolor] sampleArtColors5 failed:', e); return null; }
 }

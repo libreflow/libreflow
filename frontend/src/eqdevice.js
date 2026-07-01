@@ -5,20 +5,19 @@
 // Les profils sont persistés dans cfg sous la clé eqDeviceProfiles.
 //
 // Pas d'import de cfgsave.js pour éviter la dépendance circulaire :
-// app.js injecte saveCfg via le 2ème paramètre de initDeviceEQ().
-// Les mutations manuelles appellent saveCfg() depuis handlers.js après retour.
+// les mutations appellent saveCfg() depuis handlers.js après retour.
 //
 // Exports :
-//   initDeviceEQ(savedProfiles, onSave?) — boot : charge profils + écoute devicechange
-//   getDeviceProfiles()                  — { [deviceId]: { bands, label } }
-//   getActiveDeviceId()                  — deviceId courant ('' = défaut OS)
-//   getActiveDeviceLabel()               — label lisible ou fallback
-//   saveCurrentDeviceProfile()           — enregistre les gains actuels pour l'appareil courant
-//   deleteDeviceProfile(deviceId)        — supprime un profil
-//   renderDeviceProfiles()               — met à jour la section UI dans #set-page-audio
+//   initDeviceEQ(savedProfiles)    — boot : charge profils + écoute devicechange
+//   getDeviceProfiles()            — { [deviceId]: { bands, label } }
+//   getActiveDeviceId()            — deviceId courant ('' = défaut OS)
+//   getActiveDeviceLabel()         — label lisible ou fallback
+//   saveCurrentDeviceProfile()     — enregistre les gains actuels pour l'appareil courant
+//   deleteDeviceProfile(deviceId)  — supprime un profil
+//   renderDeviceProfiles()         — met à jour la section UI dans #set-page-audio
 
-import { eqNodes, applyEQGains, getCurrentGains } from './eq.js';
-import { esc, toast }             from './ui.js';
+import { eqNodes, applyEQGains } from './eq.js';
+import { esc }                    from './ui.js';
 
 // ── État module ───────────────────────────────────────────────────────────────
 /** @type {{ [deviceId: string]: { bands: number[], label: string } }} */
@@ -26,9 +25,6 @@ let _deviceProfiles = {};
 let _activeId       = '';   // deviceId courant — '' = sortie par défaut OS
 let _activeLabel    = '';   // label lisible du device actuel
 let _knownIds       = [];   // snapshot des audiooutput deviceIds pour détection ajout/retrait
-let _defaultLabel   = 'Sortie par défaut'; // fallback i18n — mis à jour par app.js via setDefaultDeviceLabel()
-/** @type {(() => void) | null} Injecté par app.js pour éviter la dépendance circulaire cfgsave ↔ eqdevice */
-let _onSave = null;
 
 // ── Initialisation ────────────────────────────────────────────────────────────
 
@@ -36,13 +32,11 @@ let _onSave = null;
  * Appelé au boot par app.js après chargement des profils depuis IDB.
  * Lance la détection du device courant et écoute les changements.
  * @param {Object} savedProfiles — cfg.eqDeviceProfiles ou {}
- * @param {(() => void) | null} [onSave] — callback saveCfg injecté par app.js (évite import circulaire)
  */
-export async function initDeviceEQ(savedProfiles, onSave = null) {
+export async function initDeviceEQ(savedProfiles) {
   if (savedProfiles && typeof savedProfiles === 'object') {
     _deviceProfiles = { ...savedProfiles };
   }
-  if (typeof onSave === 'function') _onSave = onSave;
   await _refreshActiveDevice();
   if (navigator.mediaDevices) {
     navigator.mediaDevices.addEventListener('devicechange', _onDeviceChange);
@@ -61,14 +55,11 @@ export function getActiveDeviceId() {
   return _activeId;
 }
 
-/** Met à jour le libellé fallback depuis app.js après boot i18n. */
-export function setDefaultDeviceLabel(label) { _defaultLabel = label; }
-
 /** @returns {string} Label lisible ou fallback */
 export function getActiveDeviceLabel() {
   if (_activeLabel) return _activeLabel;
   if (_activeId && _activeId !== 'default') return `ID:${_activeId.slice(0, 8)}`;
-  return _defaultLabel;
+  return 'Sortie par défaut';
 }
 
 // ── Mutations (sans saveCfg — appelé par handlers.js après) ──────────────────
@@ -78,12 +69,9 @@ export function getActiveDeviceLabel() {
  * N'appelle PAS saveCfg — le handler doit le faire après.
  */
 export function saveCurrentDeviceProfile() {
-  const bands = getCurrentGains();
-  if (!bands) {
-    console.warn('[eqdevice] saveCurrentDeviceProfile : EQ non initialisé — sauvegarde annulée');
-    toast('EQ non initialisé — impossible de sauvegarder le profil', 'error');
-    return;
-  }
+  const bands = eqNodes.length
+    ? eqNodes.map(n => n.gain.value)
+    : new Array(10).fill(0);
   _deviceProfiles[_activeId || 'default'] = {
     bands,
     label: _activeLabel || getActiveDeviceLabel(),
@@ -184,7 +172,6 @@ async function _onDeviceChange() {
       const profileKey = _activeId || 'default';
       if (_deviceProfiles[profileKey]) {
         applyEQGains(_deviceProfiles[profileKey].bands);
-        _onSave?.();
       }
     }
 

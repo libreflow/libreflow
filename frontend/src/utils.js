@@ -9,8 +9,12 @@
 //   extEmoji(ext)    SVG music-note icon for audio file entries
 //   fmtDuration(s)   Format seconds as "Xh Ym", "Xm", or "Xs"
 //   normTag(s)       Normalize a metadata tag string (trim, NFC, collapse spaces)
-//   mainArtist(raw)  Extract primary artist, stripping feat./collab suffixes
-//   moveByOne(a,i,d) Move array item one step (single-pointer reorder, WCAG 2.2 SC 2.5.7)
+//   mainArtist(raw)              Extract primary artist, stripping feat./collab suffixes
+//   moveByOne(a,i,d)             Move array item one step (single-pointer reorder, WCAG 2.2 SC 2.5.7)
+//   normalizePathKey(p)          Normalize path to a case-insensitive lookup key
+//   extractAudioFileArg(argv)    Find first safe audio path in an argv array
+//   trackCopyText(t, i18n)       Format track for clipboard ("Artist — Title" or "Title")
+//   smtcMetaFromTrack(t, dur)    Build capped, safe SMTC metadata object
 
 /** Escape a string for safe insertion into HTML. */
 export function esc(s = '') {
@@ -75,49 +79,6 @@ export function isSafePath(p) {
   return true;
 }
 
-/** Normalise un chemin pour comparaison (séparateurs unifiés + casse Windows). */
-export function normalizePathKey(p) {
-  return String(p || '').replace(/\\/g, '/').toLowerCase();
-}
-
-/** Extensions audio acceptées — miroir de la liste du scanner Rust (commands.rs). */
-const AUDIO_EXTS = ['mp3', 'flac', 'aac', 'm4a', 'ogg', 'opus', 'wav', 'wma', 'aiff', 'ape', 'alac'];
-
-/** Premier argument d'argv ressemblant à un fichier audio sûr (ignore les flags
- *  et les chemins rejetés par isSafePath). Pour single-instance / CLI file arg. */
-export function extractAudioFileArg(argv) {
-  if (!Array.isArray(argv)) return null;
-  for (const a of argv) {
-    if (typeof a !== 'string' || !a || a.startsWith('-')) continue;
-    if (!isSafePath(a)) continue;
-    const ext = a.slice(a.lastIndexOf('.') + 1).toLowerCase();
-    if (AUDIO_EXTS.includes(ext)) return a;
-  }
-  return null;
-}
-
-/** Texte de copie d'une piste : « Artiste — Titre », ou titre seul si l'artiste
- *  est inconnu. Pur — testable. `unknownArtist` = libellé i18n courant. */
-export function trackCopyText(t, unknownArtist) {
-  if (!t || !t.name) return '';
-  return (t.artist && t.artist !== unknownArtist && t.artist !== 'Unknown Artist')
-    ? `${t.artist} — ${t.name}` : t.name;
-}
-
-/** Payload `smtc_metadata` (contrôles médias système) depuis une piste.
- *  Pur — testable. Champs cappés (tags non fiables), path filtré par isSafePath. */
-export function smtcMetaFromTrack(t, durationSecs) {
-  if (!t || !t.name) return null;
-  const cap = (s) => String(s).slice(0, 256);
-  return {
-    title:  cap(t.name),
-    artist: cap(t.artistFull || t.artist || ''),
-    album:  cap(t.album || ''),
-    path:   (t.path && isSafePath(t.path)) ? t.path : null,
-    durationSecs: (Number.isFinite(durationSecs) && durationSecs > 0) ? durationSecs : null,
-  };
-}
-
 /** Extract the primary artist from a raw tag, stripping feat./collab suffixes. */
 export function mainArtist(raw) {
   if (!raw) return '';
@@ -130,6 +91,72 @@ export function mainArtist(raw) {
     .replace(/\s*,\s*.+$/, '')
     .trim();
   return s || normTag(raw);
+}
+
+/** Normalize a file path to a case-insensitive lookup key (backslashes → slashes, lowercase). */
+export function normalizePathKey(p) {
+  if (p == null) return '';
+  return String(p).replace(/\\/g, '/').toLowerCase();
+}
+
+const _AUDIO_EXTS = new Set([
+  'mp3', 'flac', 'ogg', 'opus', 'aac', 'm4a', 'wav', 'wma', 'ape', 'mka', 'mp4', 'webm',
+]);
+
+/**
+ * Find the first audio file path in an argv array.
+ * Skips --flags and non-audio extensions.
+ * Fail-closed: returns null immediately if any non-flag argument fails isSafePath(),
+ * aborting the entire search (not just skipping the bad entry).
+ *
+ * @param {string[] | null} argv
+ * @returns {string | null}
+ */
+export function extractAudioFileArg(argv) {
+  if (!argv || !argv.length) return null;
+  for (const arg of argv) {
+    if (!arg || typeof arg !== 'string' || arg.startsWith('--')) continue;
+    const ext = arg.split('.').pop()?.toLowerCase() || '';
+    if (!_AUDIO_EXTS.has(ext)) continue;
+    if (!isSafePath(arg)) return null;
+    return arg;
+  }
+  return null;
+}
+
+/**
+ * Format a track for clipboard copy: "Artist — Title" or just "Title" when artist is unknown.
+ *
+ * @param {{ name?: string, artist?: string } | null} track
+ * @param {string} unknownArtistI18n  - i18n value of "Unknown Artist" in the current locale
+ * @returns {string}
+ */
+export function trackCopyText(track, unknownArtistI18n) {
+  if (!track || !track.name) return '';
+  const a = track.artist;
+  if (!a || a === unknownArtistI18n || a === 'Unknown Artist') return track.name;
+  return `${a} — ${track.name}`;
+}
+
+/**
+ * Build a safe SMTC metadata object from a track, capping field lengths and validating the path.
+ *
+ * @param {{ name?: string, artist?: string, artistFull?: string, album?: string, path?: string } | null} track
+ * @param {number} durationSecs
+ * @returns {{ title: string, artist: string, album: string, path: string|null, durationSecs: number|null } | null}
+ */
+export function smtcMetaFromTrack(track, durationSecs) {
+  if (!track) return null;
+  const cap = (s, n) => String(s || '').slice(0, n);
+  const rawPath = track.path || null;
+  return {
+    title:       cap(track.name, 256),
+    artist:      cap(track.artistFull || track.artist, 256),
+    album:       cap(track.album, 256),
+    path:        rawPath && isSafePath(rawPath) ? rawPath : null,
+    durationSecs: (typeof durationSecs === 'number' && isFinite(durationSecs) && durationSecs >= 0)
+                  ? durationSecs : null,
+  };
 }
 
 /**

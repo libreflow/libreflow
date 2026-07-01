@@ -9,9 +9,9 @@
 import { playLog } from './playlog.js';
 import { esc, extEmoji, fmtDuration } from './utils.js';
 import { getLang, i18n } from './i18n.js';
-import { statsGoToGenre, statsGoToArtist } from './views.js'; // ARCH-1 — no longer from app.js
 import { _normalizeGenre, _trackIdxMap } from './search.js'; // B35 : clé de drill genre normalisée
 import { get } from './store.js';
+import { emit, EVENTS } from './bus.js';
 
 // ── État UI persistent entre re-renders ───────────────────────
 let _heatPeriod        = 30;   // 7 | 30 | 90 jours
@@ -21,10 +21,6 @@ let _cachedTrackIdxMap = null;
 // sig = "${tracks.length}|${playLog.length}|${_heatPeriod}"
 // Invalidé automatiquement dès que l'un des 3 facteurs change.
 let _statsSig          = null;
-// ── Event listener lifecycle (AbortController) ────────────────
-// Un seul listener délégué sur #stats-content, annulé/réinstallé à chaque
-// render pour éviter l'accumulation sur re-renders successifs (B-6 audit).
-let _statsAbortCtrl    = null;
 
 /**
  * Render the statistics panel (#stats-content).
@@ -250,7 +246,7 @@ export function renderStats(tracks, trackIdxMap) {
     </div>
     <div class="stats-heatmap">
       <div class="heatmap-grid" style="grid-template-columns:repeat(${_heatPeriod},1fr);gap:${_heatPeriod > 30 ? 2 : 3}px">
-        ${heatCounts.map((n, i) => `<div class="hm-cell" data-n="${heatLevel(n)}" data-day="${i}" title="${esc(dayLabels[i])} · ${i18n('stats_plays', n)}"></div>`).join('')}
+        ${heatCounts.map((n, i) => `<div class="hm-cell" data-n="${heatLevel(n)}" data-day="${i}" title="${dayLabels[i]} · ${i18n('stats_plays', n)}"></div>`).join('')}
       </div>
       <div class="hm-legend">
         <span>${i18n('stats_hm_less')}</span>
@@ -268,89 +264,98 @@ export function renderStats(tracks, trackIdxMap) {
     });
   });
 
+  // ── Artiste click → naviguer vers la vue artiste ─────────
+  const artistsContainer = el.querySelector('.stats-artists-month');
+  if (artistsContainer) {
+    artistsContainer.addEventListener('click', e => {
+      const row = e.target.closest('.artist-month-row[data-artist]');
+      if (!row) return;
+      emit(EVENTS.STATS_DRILL_ARTIST, { displayName: row.dataset.artist });
+    });
+  }
+
+  // ── Genre click → naviguer vers la vue genre ─────────────
+  const genresContainer = el.querySelector('.stats-genres');
+  if (genresContainer) {
+    genresContainer.addEventListener('click', e => {
+      const row = e.target.closest('.genre-bar-row[data-genre-key]');
+      if (!row) return;
+      const key     = row.dataset.genreKey;
+      const display = row.dataset.genre;
+      emit(EVENTS.STATS_DRILL_GENRE, { key, displayName: display });
+    });
+  }
+
   // ── Changer la période du heatmap : voir export setHeatPeriod() ci-dessous ─
 
-  // ── Event delegation — un seul listener sur el (B-6 audit : évite l'accumulation) ──
-  // Annule le listener du render précédent avant d'en créer un nouveau.
-  if (_statsAbortCtrl) _statsAbortCtrl.abort();
-  _statsAbortCtrl = new AbortController();
-  const { signal } = _statsAbortCtrl;
+  // ── Heatmap click → panneau de détail du jour ────────────
+  const heatmapGrid  = el.querySelector('.heatmap-grid');
+  const dayDetailEl  = el.querySelector('.stats-day-detail');
+  if (heatmapGrid && dayDetailEl) {
+    heatmapGrid.addEventListener('click', e => {
+      const cell = e.target.closest('.hm-cell[data-day]');
+      if (!cell) return;
 
-  el.addEventListener('click', e => {
-    // Artiste → vue artiste
-    const artistRow = e.target.closest('.artist-month-row[data-artist]');
-    if (artistRow) { statsGoToArtist(artistRow.dataset.artist); return; }
+      const dayIdx  = parseInt(cell.dataset.day, 10);
+      const daysAgo = (_heatPeriod - 1) - dayIdx; // 0 = le plus ancien, _heatPeriod-1 = aujourd'hui
 
-    // Genre → vue genre
-    const genreRow = e.target.closest('.genre-bar-row[data-genre-key]');
-    if (genreRow) { statsGoToGenre(genreRow.dataset.genreKey, genreRow.dataset.genre); return; }
-
-    // Heatmap cell → panneau de détail du jour
-    const cell = e.target.closest('.hm-cell[data-day]');
-    if (!cell) return;
-    const dayDetailEl = el.querySelector('.stats-day-detail');
-    if (!dayDetailEl) return;
-
-    const dayIdx  = parseInt(cell.dataset.day, 10);
-    const daysAgo = (_heatPeriod - 1) - dayIdx; // 0 = le plus ancien, _heatPeriod-1 = aujourd'hui
-
-    // Toggle : re-clic sur la même cellule → fermer
-    if (dayDetailEl.dataset.activeDay === String(dayIdx) && dayDetailEl.style.display !== 'none') {
-      dayDetailEl.style.display = 'none';
-      dayDetailEl.dataset.activeDay = '';
-      cell.classList.remove('hm-active');
-      return;
-    }
-
-    // Désactiver l'ancienne cellule active
-    el.querySelectorAll('.hm-cell.hm-active').forEach(c => c.classList.remove('hm-active'));
-    cell.classList.add('hm-active');
-    dayDetailEl.dataset.activeDay = String(dayIdx);
-
-    // Calculer la plage horaire du jour (minuit → minuit)
-    // `now` est capturé à l'heure du render — stable pour toute la durée du panel stats.
-    const dayStart = now - (daysAgo + 1) * DAY;
-    const dayEnd   = now - daysAgo * DAY;
-
-    // Agréger les écoutes de ce jour
-    const dayPlayCounts = {};
-    for (const entry of playLog) {
-      if (!entry.ts) continue; // guard : entrée corrompue sans timestamp
-      const ts = Math.floor(entry.ts / 1000); // µs → ms
-      if (ts >= dayStart && ts < dayEnd) {
-        dayPlayCounts[entry.id] = (dayPlayCounts[entry.id] || 0) + 1;
+      // Toggle : re-clic sur la même cellule → fermer
+      if (dayDetailEl.dataset.activeDay === String(dayIdx) && dayDetailEl.style.display !== 'none') {
+        dayDetailEl.style.display = 'none';
+        dayDetailEl.dataset.activeDay = '';
+        cell.classList.remove('hm-active');
+        return;
       }
-    }
-    const dayTracks = Object.entries(dayPlayCounts)
-      .sort((a, b) => b[1] - a[1])
-      .map(([id, n]) => ({ t: trackIdxMap.has(id) ? tracks[trackIdxMap.get(id)] : null, n }))
-      .filter(x => x.t);
-    const totalDayPlays = dayTracks.reduce((s, x) => s + x.n, 0);
 
-    dayDetailEl.style.display = '';
+      // Désactiver l'ancienne cellule active
+      el.querySelectorAll('.hm-cell.hm-active').forEach(c => c.classList.remove('hm-active'));
+      cell.classList.add('hm-active');
+      dayDetailEl.dataset.activeDay = String(dayIdx);
 
-    if (dayTracks.length === 0) {
-      dayDetailEl.innerHTML = `<div class="stats-day-empty">${i18n('stats_no_history', esc(dayLabels[dayIdx]))}</div>`;
-    } else {
-      dayDetailEl.innerHTML = `
-        <div class="stats-day-header">
-          <span class="stats-day-date">${esc(dayLabels[dayIdx])}</span>
-          <span class="stats-day-count">${i18n('stats_plays', totalDayPlays)}</span>
-        </div>
-        <div class="stats-top">
-          ${dayTracks.slice(0, 8).map(({ t, n }, i) => `
-          <div class="stats-top-row" data-action="play-track" data-track-id="${t.id}">
-            <span class="stats-rank${i < 3 ? ' top3' : ''}">${i + 1}</span>
-            ${t.art
-              ? `<img class="stats-top-art" src="${esc(t.art)}" alt="">`
-              : `<div class="stats-top-art" style="display:flex;align-items:center;justify-content:center;font-size:var(--fs-base)">${extEmoji(t.ext)}</div>`}
-            <div class="stats-top-info">
-              <div class="stats-top-name">${esc(t.name)}</div>
-              <div class="stats-top-artist">${esc(t.artistFull || t.artist || '')}</div>
-            </div>
-            ${n > 1 ? `<span class="stats-top-count">${n}×</span>` : '<span class="stats-top-count" style="opacity:.3">1×</span>'}
-          </div>`).join('')}
-        </div>`;
-    }
-  }, { signal });
+      // Calculer la plage horaire du jour (minuit → minuit)
+      const dayStart = now - (daysAgo + 1) * DAY;
+      const dayEnd   = now - daysAgo * DAY;
+
+      // Agréger les écoutes de ce jour
+      const dayPlayCounts = {};
+      for (const entry of playLog) {
+        if (!entry.ts) continue; // guard : entrée corrompue sans timestamp (cohérent avec les autres boucles)
+        const ts = Math.floor(entry.ts / 1000); // µs → ms
+        if (ts >= dayStart && ts < dayEnd) {
+          dayPlayCounts[entry.id] = (dayPlayCounts[entry.id] || 0) + 1;
+        }
+      }
+      const dayTracks = Object.entries(dayPlayCounts)
+        .sort((a, b) => b[1] - a[1])
+        .map(([id, n]) => ({ t: trackIdxMap.has(id) ? tracks[trackIdxMap.get(id)] : null, n }))
+        .filter(x => x.t);
+      const totalDayPlays = dayTracks.reduce((s, x) => s + x.n, 0);
+
+      dayDetailEl.style.display = '';
+
+      if (dayTracks.length === 0) {
+        dayDetailEl.innerHTML = `<div class="stats-day-empty">${i18n('stats_no_history', dayLabels[dayIdx])}</div>`;
+      } else {
+        dayDetailEl.innerHTML = `
+          <div class="stats-day-header">
+            <span class="stats-day-date">${dayLabels[dayIdx]}</span>
+            <span class="stats-day-count">${i18n('stats_plays', totalDayPlays)}</span>
+          </div>
+          <div class="stats-top">
+            ${dayTracks.slice(0, 8).map(({ t, n }, i) => `
+            <div class="stats-top-row" data-action="play-track" data-track-id="${t.id}">
+              <span class="stats-rank${i < 3 ? ' top3' : ''}">${i + 1}</span>
+              ${t.art
+                ? `<img class="stats-top-art" src="${esc(t.art)}" alt="">`
+                : `<div class="stats-top-art" style="display:flex;align-items:center;justify-content:center;font-size:var(--fs-base)">${extEmoji(t.ext)}</div>`}
+              <div class="stats-top-info">
+                <div class="stats-top-name">${esc(t.name)}</div>
+                <div class="stats-top-artist">${esc(t.artistFull || t.artist || '')}</div>
+              </div>
+              ${n > 1 ? `<span class="stats-top-count">${n}×</span>` : '<span class="stats-top-count" style="opacity:.3">1×</span>'}
+            </div>`).join('')}
+          </div>`;
+      }
+    });
+  }
 }

@@ -25,8 +25,7 @@ import { togglePlay, prev, next, toggleShuffle, toggleRepeat, toggleLike,
          likeat, playAt, isCurrentTrack, audio }              from './player.js';
 import { toggleQueue, closeQueue, playQueueItem,
          addToQueueNext, addToQueueEnd,
-         removeFromQueue, clearExplicitQueue, moveQueueItem,
-         toggleQueuePin, clearQueuePin }                        from './queue.js';
+         removeFromQueue, clearExplicitQueue, moveQueueItem }  from './queue.js';
 import { toggleEQ, closeEQ, applyEQPreset,
          filterEQPresets, setMasterGain,
          setEQExpert, eqOpen,
@@ -56,10 +55,9 @@ import { showCtxMenu, closeCtxMenu,
          ctxGoToArtist, ctxGoToAlbum,
          ctxNewPlaylist, ctxRemoveFromPlaylist, ctxSmartPlaylist,
          ctxPlayNext, ctxAddToQueueEnd, ctxCopyInfo, ctxWriteRG,
-         ctxMoveTrackUp, ctxMoveTrackDown, ctxRevealFile,
-         ctxCopyPath } from './ctxmenu.js';
+         ctxMoveTrackUp, ctxMoveTrackDown } from './ctxmenu.js';
 import { toggleCinema, closeCinema, cycleCinemaBg,
-         toggleCinemaFullscreen, getCinArtRGB }               from './cinema.js';
+         toggleCinemaFullscreen }                              from './cinema.js';
 import { openRadioView, ctxStartRadio,
          radioSaveAsPlaylist, radioRegenerateFromCurrent,
          stopRadio, playRadioTrackAt, removeRadioTrack }       from './radio.js';
@@ -109,19 +107,7 @@ import { emit, EVENTS }                                        from './bus.js';
 
 // ── Module state ──────────────────────────────────────────────────────────
 let _registered = false;  // Guard against double-registration during HMR
-
-// ── Burger menu ─────────────────────────────────────────────────────────────
-function _burgerOutside(e) {
-  const panel = document.getElementById('tb-burger-panel');
-  if (!panel?.classList.contains('on')) return;
-  const btn = document.getElementById('tbt-burger');
-  if (!panel.contains(e.target) && !btn?.contains(e.target)) {
-    panel.classList.remove('on');
-    btn?.setAttribute('aria-expanded', 'false');
-    panel.querySelectorAll('[role="menuitem"]').forEach(el => el.setAttribute('tabindex', '-1'));
-    btn?.focus();
-  }
-}
+let _preMuteVol = 1;      // Volume before mute — restored on unmute
 
 // ── Registre d'actions ────────────────────────────────────────────────────
 
@@ -134,9 +120,26 @@ const _ACTIONS = {
   'toggle-repeat':         ()    => toggleRepeat(),
   'toggle-like':           ()    => toggleLike(),
   'cycle-speed':           ()    => cycleSpeed(),
+  'toggle-mute':           ()    => {
+    const volEl = document.getElementById('vol');
+    if (!volEl) return;
+    const current = parseFloat(volEl.value);
+    if (current > 0) {
+      _preMuteVol = current;
+      volEl.value = 0;
+      setMasterGain(0);
+    } else {
+      const restore = _preMuteVol > 0 ? _preMuteVol : 1;
+      volEl.value = restore;
+      setMasterGain(restore);
+    }
+    updateVolSlider(volEl);
+    setAriaValueText(volEl, _v => `${Math.round(_v * 100)} pour cent`, parseFloat(volEl.value));
+    saveCfg();
+  },
 
   // ── Mini-player / overlay ─────────────────────────────────
-  'toggle-mini-player':    async () => { clearQueuePin(); await toggleMiniPlayer(); syncMiniSettingsBtn(); },
+  'toggle-mini-player':    async () => { await toggleMiniPlayer(); syncMiniSettingsBtn(); },
   'toggle-mini-overlay':   ()    => toggleMiniOverlay(),
 
   // ── Now Playing ───────────────────────────────────────────
@@ -155,8 +158,7 @@ const _ACTIONS = {
 
   // ── Queue ─────────────────────────────────────────────────
   'toggle-queue':          ()    => { closeNowPlaying(); toggleQueue(); },
-  'close-queue':           ()    => { clearQueuePin(); closeQueue(); saveCfg(); },
-  'toggle-queue-pin':      ()    => { toggleQueuePin(); saveCfg(); },
+  'close-queue':           ()    => closeQueue(),
   'clear-queue':           ()    => clearExplicitQueue(),
   'remove-from-queue':     btn  => { removeFromQueue(btn.dataset.trackId); },
   'queue-move-up':         btn  => moveQueueItem(btn.dataset.id, -1),
@@ -168,7 +170,7 @@ const _ACTIONS = {
     // Exclusivité de panneau, symétrique à toggleQueue() (qui ferme l'EQ) :
     // à l'ouverture, fermer la file d'attente et les réglages s'ils sont ouverts.
     if (!eqOpen) {
-      clearQueuePin(); closeQueue();
+      closeQueue();
       if (document.getElementById('settings-panel')?.classList.contains('on')) closeSettings();
     }
     toggleEQ();
@@ -186,8 +188,33 @@ const _ACTIONS = {
   'sleep-custom':          ()    => setSleepCustom(),
   'cancel-sleep':          ()    => cancelSleepTimer(),
 
+  // ── More popover ──────────────────────────────────────────
+  'toggle-sb-more': (btn) => {
+    const pop = document.getElementById('sb-more-pop');
+    if (!pop) return;
+    const willOpen = pop.hidden;
+    pop.hidden = !willOpen;
+    btn.setAttribute('aria-expanded', String(willOpen));
+    if (!willOpen) return;
+    const first = pop.querySelector('[role="menuitem"]');
+    if (first) first.focus();
+    const onClose = (e) => {
+      if (e.type === 'keydown' && e.key !== 'Escape') return;
+      if (e.type === 'click' && btn.contains(e.target)) return;
+      pop.hidden = true;
+      btn.setAttribute('aria-expanded', 'false');
+      if (e.key === 'Escape') btn.focus();
+      document.removeEventListener('click', onClose, true);
+      document.removeEventListener('keydown', onClose, true);
+    };
+    setTimeout(() => {
+      document.addEventListener('click', onClose, true);
+      document.addEventListener('keydown', onClose, true);
+    }, 0);
+  },
+
   // ── Cinema ────────────────────────────────────────────────
-  'toggle-cinema':         ()    => { clearQueuePin(); toggleCinema(); },
+  'toggle-cinema':         ()    => toggleCinema(),
   'close-cinema':          ()    => closeCinema(),
   'cinema-fullscreen':     ()    => toggleCinemaFullscreen(),
   'cycle-cinema-bg':       ()    => cycleCinemaBg(),
@@ -231,8 +258,6 @@ const _ACTIONS = {
   'ctx-play-next':         ()    => ctxPlayNext(),
   'ctx-add-queue-end':     ()    => ctxAddToQueueEnd(),
   'ctx-copy-info':         ()    => ctxCopyInfo(),
-  'ctx-copy-path':         ()    => ctxCopyPath(),
-  'ctx-reveal-file':       ()    => ctxRevealFile(),
   'add-track-to-pl':       btn  => { addTrackToPlaylist(btn.dataset.trackId, btn.dataset.plId); closeCtxMenu(); },
 
   // ── Dupes ─────────────────────────────────────────────────
@@ -267,8 +292,8 @@ const _ACTIONS = {
 
   // ── Window controls ───────────────────────────────────────
   'win-minimize':    ()    => openMiniAndMinimize(),
-  'win-maximize':    () => invoke('win_maximize', {}, { timeout: CFG.IPC_TIMEOUT_MS }).catch(e => console.warn('[handlers] win_maximize:', e)),
-  'win-close':       () => invoke('win_close', {}, { timeout: CFG.IPC_TIMEOUT_MS }).catch(e => console.warn('[handlers] win_close:', e)),
+  'win-maximize':    ()    => invoke('win_maximize', {}, { timeout: CFG.IPC_TIMEOUT_MS }).catch(e => console.warn('[win_maximize]', e)),
+  'win-close':       ()    => invoke('win_close',    {}, { timeout: CFG.IPC_TIMEOUT_MS }).catch(e => console.warn('[win_close]', e)),
 
   // ── Settings — appearance ─────────────────────────────────
   'set-lang':              btn  => { setLang(btn.dataset.lang); saveCfg(); },
@@ -289,7 +314,6 @@ const _ACTIONS = {
 
   // ── Organize ──────────────────────────────────────────────
   'organize-trigger': async (btn) => {
-    closeSettings();
     const scheme = btn.dataset.scheme || 'artist-album';
     await organizePreview(scheme);
   },
@@ -364,21 +388,6 @@ const _ACTIONS = {
   'clear-filters':         ()   => clearAllFilters(),
 
   // ── Misc (app.js) ─────────────────────────────────────────
-  'toggle-burger-menu': () => {
-    const panel = document.getElementById('tb-burger-panel');
-    const btn   = document.getElementById('tbt-burger');
-    const open  = panel?.classList.contains('on');
-    panel?.classList.toggle('on', !open);
-    btn?.setAttribute('aria-expanded', String(!open));
-    if (!open && panel) {
-      // WAI-ARIA menu pattern: focus first item, set roving tabindex
-      const items = [...panel.querySelectorAll('[role="menuitem"]')];
-      items.forEach((el, i) => el.setAttribute('tabindex', i === 0 ? '0' : '-1'));
-      items[0]?.focus();
-    } else if (open && panel) {
-      panel.querySelectorAll('[role="menuitem"]').forEach(el => el.setAttribute('tabindex', '-1'));
-    }
-  },
   // UX-Ergo : 'open-settings' devient un toggle — re-presser le bouton ferme le panneau.
   // Le nom data-action est conservé pour la compatibilité HTML existante.
   'open-settings':         ()    => toggleSettings(),
@@ -508,7 +517,36 @@ const _ACTIONS = {
 
   // Smart playlist
   'set-smart-seed':        btn  => _setSmartSeed(btn.dataset.trackId),
+
+  // ── Inline search toggle ──────────────────────────────────
+  'toggle-search': () => {
+    const wrap   = document.getElementById('vh-srch-wrap');
+    const toggle = document.getElementById('srch-toggle');
+    const input  = document.getElementById('srch');
+    if (!wrap || !toggle || !input) return;
+    if (!wrap.hidden) {
+      _closeSearch(wrap, toggle, input);
+    } else {
+      _openSearch(wrap, toggle, input);
+    }
+  },
 };
+
+// ── Inline search helpers ─────────────────────────────────────────────────
+
+export function _openSearch(wrap, toggle, input) {
+  wrap.hidden = false;
+  toggle.setAttribute('aria-expanded', 'true');
+  input.focus();
+}
+
+export function _closeSearch(wrap, toggle, input) {
+  wrap.hidden = true;
+  toggle.setAttribute('aria-expanded', 'false');
+  input.value = '';
+  input.dispatchEvent(new Event('input', { bubbles: true }));
+  toggle.focus();
+}
 
 // ── A11Y-10 : guard typage ────────────────────────────────────────────────
 // Vérifie si l'élément focalisé est un champ de saisie texte.
@@ -573,7 +611,6 @@ function _handleInput(e) {
       const v = +el.value;
       setMasterGain(v);
       if (main) { main.value = el.value; updateVolSlider(main); }
-      updateVolSlider(el, `rgb(${getCinArtRGB()})`); // teinte art-color sur le slider cinéma
       setAriaValueText(el,   _v => `${Math.round(_v * 100)} pour cent`, v);
       if (main) setAriaValueText(main, _v => `${Math.round(_v * 100)} pour cent`, v);
       break;
@@ -726,7 +763,6 @@ export function registerHandlers() {
   _registered = true;
   const ac = new AbortController();
   const { signal } = ac;
-  document.addEventListener('click',       _burgerOutside,       { capture: true, signal });
   document.addEventListener('click',       _handleClick,        { signal });
   document.addEventListener('click',       _handleBackdropClick, { signal });
   document.addEventListener('input',       _handleInput,        { signal });

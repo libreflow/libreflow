@@ -10,6 +10,7 @@
 // Exports publics :
 //   exportM3U, exportXSPF, importM3U
 
+import { CFG } from './cfg.js';
 import { i18n } from './i18n.js';
 import { get, set, notify }  from './store.js'; // Phase 4
 import { _trackIdxMap, getFiltered } from './search.js';
@@ -53,7 +54,7 @@ export function exportM3U() {
   const plName = (view === 'playlist' && pl) ? pl.name : 'libreflow';
   a.download = plName + '.m3u';
   a.click();
-  setTimeout(() => URL.revokeObjectURL(url), 10000);
+  setTimeout(() => URL.revokeObjectURL(url), CFG.URL_REVOKE_DELAY_MS);
   toast(i18n('t_m3u_exported'), 'success');
 }
 
@@ -92,9 +93,8 @@ export function exportXSPF() {
     if (!t.path) continue;
     const artist = t.artistFull || t.artist || '';
     const dur    = isFinite(t.duration) && t.duration > 0 ? Math.round(t.duration * 1000) : 0;
-    // Convertir chemin Windows / Unix en URI file:// ; encoder espaces et # (RFC 3986)
-    const uri = 'file:///' + t.path.replace(/\\/g, '/').replace(/^\//, '')
-      .replace(/ /g, '%20').replace(/#/g, '%23');
+    // Convertir chemin Windows / Unix en URI file://
+    const uri = 'file:///' + t.path.replace(/\\/g, '/').replace(/^\//, '');
     lines.push('    <track>');
     lines.push(`      <location>${esc(uri)}</location>`);
     lines.push(`      <title>${esc(t.name)}</title>`);
@@ -113,7 +113,7 @@ export function exportXSPF() {
   a.href = url;
   a.download = plName + '.xspf';
   a.click();
-  setTimeout(() => URL.revokeObjectURL(url), 10000);
+  setTimeout(() => URL.revokeObjectURL(url), CFG.URL_REVOKE_DELAY_MS);
   toast(i18n('t_xspf_exported'), 'success');
 }
 
@@ -210,7 +210,7 @@ export async function importM3U() {
 
       if (!matchedIds.length) { toast(i18n('t_m3u_no_tracks'), 'warning'); return; }
 
-      const plName = file.name.replace(/\.m3u8?$/i, '').replace(/[-_]+/g, ' ').trim().slice(0, 100) || 'Playlist importée';
+      const plName = file.name.replace(/\.m3u8?$/i, '').replace(/[-_]+/g, ' ').trim() || 'Playlist importée';
       // B17 FIX : suffixe aléatoire — 2 imports M3U dans la même milliseconde
       // produiraient le même id 'pl_<ts>' → le 2e put écraserait le 1er en IDB.
       const newPl  = { id: 'pl_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7), name: plName, trackIds: matchedIds };

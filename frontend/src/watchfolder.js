@@ -40,15 +40,6 @@ function _isAudioPath(p) {
   return _AUDIO_EXTS.has(ext);
 }
 
-/** SEC-3 : Valide un chemin de dossier — non vide, sans traversal (..) */
-function _isValidFolderPath(p) {
-  if (!p || typeof p !== 'string') return false;
-  const norm = p.replace(/\\/g, '/');
-  // Interdire path traversal et chemins vides
-  if (norm.includes('../') || norm.includes('/..') || norm === '..') return false;
-  return norm.length > 0;
-}
-
 /**
  * Scan initial d'un dossier avec progress bar.
  * Appelé uniquement par toggleWatchFolder() pour le premier import.

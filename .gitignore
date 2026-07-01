@@ -36,9 +36,6 @@ PATHFINDER-*/
 !.claude/hooks/
 !.claude/settings.json
 
-# Generated CJS shim for tests — rebuilt automatically by pretest (npm run gen:cdaudio-cjs)
-frontend/src/cdaudio_pure.cjs
-
 # Playwright visual-regression run artifacts (baselines under __snapshots__/ are kept)
 test-results/
 playwright-report/
@@ -47,8 +44,3 @@ blob-report/
 
 # Perf benchmarks (current run artifacts, not committed)
 .perf-current.json
-.perf-run*.json
-
-# Generated knowledge-graph output (graphify) + plugin cache
-graphify-out/
-.ecc/

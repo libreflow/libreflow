@@ -53,12 +53,7 @@ pub fn watch_folder_start(app: AppHandle, path: String) -> Result<(), String> {
             let event = match res {
                 Ok(e) => e,
                 Err(e) => {
-                    // Watcher mourant (dossier supprimé, volume éjecté…) :
-                    // prévenir le frontend au lieu de mourir en silence (§14).
-                    log::error!("[watch] watcher error: {:?}", e);
-                    if let Some(win) = app_clone.get_webview_window("main") {
-                        let _ = win.emit("watch-error", e.to_string());
-                    }
+                    eprintln!("[watch] watcher error: {:?}", e);
                     return;
                 }
             };
@@ -104,12 +99,12 @@ pub fn watch_folder_start(app: AppHandle, path: String) -> Result<(), String> {
             if let Some(win) = app_clone.get_webview_window("main") {
                 if is_create {
                     if let Err(e) = win.emit("watch-new-files", &audio_paths) {
-                        log::warn!("[watch] emit watch-new-files failed: {e}");
+                        eprintln!("[watch] emit watch-new-files failed: {e}");
                     }
                 }
                 if is_modify {
                     if let Err(e) = win.emit("watch-modified-files", &audio_paths) {
-                        log::warn!("[watch] emit watch-modified-files failed: {e}");
+                        eprintln!("[watch] emit watch-modified-files failed: {e}");
                     }
                 }
             }

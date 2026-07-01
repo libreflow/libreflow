@@ -11,7 +11,7 @@
 
 import { CFG }                              from './cfg.js';
 import { i18n }                             from './i18n.js';
-import { audio, audioNext, clearCrossfadeTimers } from './player.js';
+import { emit, EVENTS }                     from './bus.js';
 import { radioActive, stopRadioSilent }     from './radio.js';
 import { toast }                                        from './ui.js';
 import { masterGainNode, eqCtx, setMasterGain }        from './eq.js';
@@ -53,14 +53,11 @@ export function setSleepTimer(minutes) {
   _sleepWarned5Min = false;
 
   const indicator = document.getElementById('sleep-indicator');
-  if (indicator) { indicator.style.display = 'flex'; indicator.classList.add('active'); }
+  if (indicator) { indicator.classList.add('active'); }
   document.getElementById('sleep-opt-cancel')?.classList.add('on');
 
   // Clear active state on all option buttons
   document.querySelectorAll('.sleep-opt').forEach(b => b.classList.remove('active'));
-  // M13 (audit bugs visuels 2026-06-11) : surligner la durée choisie — le CSS
-  // .sleep-opt.active existait mais la classe n'était jamais posée.
-  document.querySelector(`.sleep-opt[data-minutes="${minutes}"]`)?.classList.add('active');
 
   _updateSleepCountdown();
   sleepTickTimer = setInterval(_sleepTick, 1000);
@@ -77,7 +74,7 @@ export function setSleepEndOfTrack() {
   sleepFading     = false;
 
   const indicator = document.getElementById('sleep-indicator');
-  if (indicator) { indicator.style.display = 'flex'; indicator.classList.add('active'); }
+  if (indicator) { indicator.classList.add('active'); }
   document.getElementById('sleep-opt-cancel')?.classList.add('on');
 
   const el = document.getElementById('sleep-countdown');
@@ -102,11 +99,9 @@ export function cancelSleepTimer(silent) {
   if (sleepTickTimer) { clearInterval(sleepTickTimer); sleepTickTimer = null; }
   sleepTimerEnd = 0; sleepFading = false; sleepEndOfTrack = false;
   _sleepWarnedMin = false; _sleepWarned5Min = false;
-  // Restore volume to the user's set level (read slider)
+  // Restore volume to the user's set level (read slider — never hardcode = 1)
   const _vel = document.getElementById('vol');
-  // Fallback 1 (comme _maxVol dans _sleepTick) : audio.volume peut déjà être
-  // au niveau fadé — l'utiliser comme cible verrouillerait le volume en bas.
-  const _targetVol = _vel ? parseFloat(_vel.value) : 1;
+  const _targetVol = _vel ? parseFloat(_vel.value) : (document.getElementById('audio')?.volume ?? 1);
   // DSP-5 : restaurer via masterGainNode (graph) ; sinon fallback HTML
   if (masterGainNode && eqCtx) {
     masterGainNode.gain.setTargetAtTime(_targetVol, eqCtx.currentTime, 0.05);
@@ -116,7 +111,7 @@ export function cancelSleepTimer(silent) {
     setMasterGain(_targetVol);
   }
   const indicator = document.getElementById('sleep-indicator');
-  if (indicator) { indicator.style.display = 'none'; indicator.classList.remove('active'); }
+  if (indicator) { indicator.classList.remove('active'); }
   document.getElementById('sleep-opt-cancel')?.classList.remove('on');
   document.getElementById('sleep-menu')?.classList.remove('on');
   if (!silent) toast(i18n('t_sleep_cancel'));
@@ -129,9 +124,8 @@ function _sleepTick() {
     clearInterval(sleepTickTimer); sleepTickTimer = null;
     // BUG FIX: cancel crossfade before pausing — otherwise cfFadeTimer/cfNextTimer
     // keep running in the background after shutdown
-    clearCrossfadeTimers();
-    audio.pause();
-    if (audioNext) { audioNext.pause(); }
+    document.getElementById('audio')?.pause();
+    emit(EVENTS.SLEEP_CROSSFADE_STOP, {});
     if (radioActive) stopRadioSilent(); // prevent auto-resume — variante synchrone, pas de dialog
     cancelSleepTimer(true);
     toast(i18n('t_sleep_done'));
@@ -153,7 +147,7 @@ function _sleepTick() {
     // BUG FIX : annuler tout crossfade en cours dès que le sleep fade démarre.
     // Sans ça, audioNextGain continue de monter (fade-in de la piste suivante)
     // pendant que le sleep tente d'éteindre l'audio — les deux s'opposent.
-    clearCrossfadeTimers();
+    emit(EVENTS.SLEEP_CROSSFADE_STOP, {});
   }
   if (sleepFading) {
     const ratio = Math.max(0, remaining / (CFG.SLEEP_FADE_SECS * 1000));

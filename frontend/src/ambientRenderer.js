@@ -2,27 +2,16 @@
 // Extracted from cinema.js. Used by cinema.js and nowplaying.js.
 
 // ── Animation constants ─────────────────────────────────────────────────────
-const PHI                    = 1.6180339887; // golden ratio — irrational freq multiplier
 const AMOLED_DRIFT_FREQ      = 0.000350;
 const AMOLED_DRIFT_AMP       = 0.04;
 const AMBIENT_DRIFT_FREQ_X   = 0.000524;
 const AMBIENT_DRIFT_FREQ_Y   = 0.000370;
 const AMBIENT_DRIFT_AMP      = 0.06;
-const AMBIENT_DRIFT_PHASE_X  = 1.8;   // 2nd harmonic phase — driftX
-const AMBIENT_DRIFT_PHASE_LX = 1.1;   // 2nd harmonic phase — driftLX
-const AMBIENT_DRIFT_PHASE_RX = 2.3;   // 2nd harmonic phase — driftRX
-const AMBIENT_DRIFT_PHASE_CY = 0.7;   // 2nd harmonic phase — driftCY
-const AMBIENT_DRIFT_FREQ_B1  = 0.000413; // accent layer 1 freq
-const AMBIENT_DRIFT_FREQ_B2  = 0.000478; // accent layer 2 freq
-const AMBIENT_DRIFT_PHASE_B1 = 0.9;
-const AMBIENT_DRIFT_PHASE_B2 = 2.7;
 const NOISE_DITHER_AMPLITUDE = 22;
 const NOISE_OVERLAY_OPACITY  = 0.055;
 
 // ── Module-level caches ─────────────────────────────────────────────────────
 let _noiseCanvas  = null;
-let _noiseData    = null; // pre-allocated ImageData — reused each cycle to avoid per-frame GC
-let _noiseFrame   = 0;
 let _vignetteGrad = null;
 let _vignetteW    = 0;
 let _vignetteH    = 0;
@@ -30,25 +19,6 @@ let _lastCtx      = null; // track ctx changes to invalidate vignette cache
 
 // NOTE: _noiseCanvas, _vignetteGrad, _lastCtx are shared module-level singletons.
 // This is safe because cinema and nowplaying are never rendered simultaneously.
-
-function _regenerateNoise() {
-  const NS = 256;
-  if (!_noiseCanvas) {
-    _noiseCanvas = document.createElement('canvas');
-    _noiseCanvas.width = NS;
-    _noiseCanvas.height = NS;
-  }
-  const nc = _noiseCanvas.getContext('2d');
-  if (!nc) { _noiseCanvas = null; _noiseData = null; return; }
-  if (!_noiseData) _noiseData = nc.createImageData(NS, NS); // allocated once, reused
-  const px = _noiseData.data;
-  for (let i = 0; i < px.length; i += 4) {
-    const v = (Math.random() * 2 - 1) * NOISE_DITHER_AMPLITUDE;
-    px[i] = px[i+1] = px[i+2] = 128 + v;
-    px[i+3] = 255;
-  }
-  nc.putImageData(_noiseData, 0, 0);
-}
 
 /**
  * Render one ambient or amoled frame onto canvas.
@@ -58,20 +28,19 @@ function _regenerateNoise() {
  * @param {'ambient'|'amoled'} mode
  * @param {string}  colorStr      - "r,g,b" — dominant art colour (used by amoled halo)
  * @param {{cT:[r,g,b], cL:[r,g,b], cR:[r,g,b]}|null} ambientColors
- * @param {number} W              - Canvas CSS width in logical pixels (canvas.width / dpr)
- * @param {number} H              - Canvas CSS height in logical pixels (canvas.height / dpr)
- * @precondition The caller must apply `ctx.setTransform(dpr, 0, 0, dpr, 0, 0)` for HiDPI
- *   and pass canvas.width/dpr and canvas.height/dpr as W and H.
+ * @precondition The caller must apply `ctx.setTransform(dpr, 0, 0, dpr, 0, 0)` for HiDPI.
+ *   This function reads window.innerWidth/innerHeight in CSS px — correct only when the
+ *   transform is set. See cinema.js _updateAmbientGradient for reference.
  */
-export function renderAmbientFrame(t, canvas, ctx, mode, colorStr, ambientColors, W, H) {
+export function renderAmbientFrame(t, canvas, ctx, mode, colorStr, ambientColors) {
+  const W = window.innerWidth  || 1280;
+  const H = window.innerHeight || 800;
   if (!ctx) return;
-  if (W === undefined || W <= 0) W = canvas.width  || 1280;
-  if (H === undefined || H <= 0) H = canvas.height || 800;
 
   // M-03 : invalider les caches dépendants du contexte quand celui-ci change
   // (cinema ↔ nowplaying partagent ces singletons). _vignetteGrad est un
   // CanvasGradient lié à son ctx d'origine ; _noiseCanvas est régénéré par cohérence.
-  if (ctx !== _lastCtx) { _vignetteGrad = null; _noiseCanvas = null; _noiseData = null; _lastCtx = ctx; }
+  if (ctx !== _lastCtx) { _vignetteGrad = null; _noiseCanvas = null; _lastCtx = ctx; }
 
   // ── AMOLED : minimal halo, reuses ambient loop ──────────────────────────
   if (mode === 'amoled') {
@@ -90,30 +59,17 @@ export function renderAmbientFrame(t, canvas, ctx, mode, colorStr, ambientColors
 
   if (!ambientColors) return;
 
-  const { cT, cL, cR, cB1 = null, cB2 = null } = ambientColors;
+  const { cT, cL, cR } = ambientColors;
   const [rT, gT, bT] = cT;
   const [rL, gL, bL] = cL;
   const [rR, gR, bR] = cR;
   const rM = (rL + rR) >> 1, gM = (gL + gR) >> 1, bM = (bL + bR) >> 1;
 
-  const driftX  = (Math.sin(t * AMBIENT_DRIFT_FREQ_X) * 0.68 +
-                   Math.sin(t * AMBIENT_DRIFT_FREQ_X * PHI + AMBIENT_DRIFT_PHASE_X) * 0.32) * W * AMBIENT_DRIFT_AMP;
-  const breathR = 1 + (Math.sin(t * AMBIENT_DRIFT_FREQ_Y) * 0.68 +
-                       Math.sin(t * AMBIENT_DRIFT_FREQ_Y * PHI + 0.6) * 0.32) * AMBIENT_DRIFT_AMP;
-  const driftLX = W * (0.10 + (Math.sin(t * 0.000419 + 1.0) * 0.68 +
-                                Math.sin(t * 0.000419 * PHI + AMBIENT_DRIFT_PHASE_LX) * 0.32) * 0.05);
-  const driftRX = W * (0.90 + (Math.sin(t * 0.000449 + 2.1) * 0.68 +
-                                Math.sin(t * 0.000449 * PHI + AMBIENT_DRIFT_PHASE_RX) * 0.32) * 0.05);
-  const driftCY = H * (1.02 + (Math.sin(t * 0.000287 + 0.5) * 0.68 +
-                                Math.sin(t * 0.000287 * PHI + AMBIENT_DRIFT_PHASE_CY) * 0.32) * 0.03);
-  const driftB1X = W * (0.30 + (Math.sin(t * AMBIENT_DRIFT_FREQ_B1 + AMBIENT_DRIFT_PHASE_B1) * 0.68 +
-                                 Math.sin(t * AMBIENT_DRIFT_FREQ_B1 * PHI + 1.5) * 0.32) * 0.08);
-  const driftB1Y = H * (0.45 + (Math.sin(t * AMBIENT_DRIFT_FREQ_B1 * 0.7 + 0.3) * 0.68 +
-                                 Math.sin(t * AMBIENT_DRIFT_FREQ_B1 * 1.2 + 2.0) * 0.32) * 0.06);
-  const driftB2X = W * (0.70 + (Math.sin(t * AMBIENT_DRIFT_FREQ_B2 + AMBIENT_DRIFT_PHASE_B2) * 0.68 +
-                                 Math.sin(t * AMBIENT_DRIFT_FREQ_B2 * PHI + 3.1) * 0.32) * 0.08);
-  const driftB2Y = H * (0.55 + (Math.sin(t * AMBIENT_DRIFT_FREQ_B2 * 0.8 + 1.4) * 0.68 +
-                                 Math.sin(t * AMBIENT_DRIFT_FREQ_B2 * 1.3 + 0.8) * 0.32) * 0.06);
+  const driftX  = Math.sin(t * AMBIENT_DRIFT_FREQ_X) * W * AMBIENT_DRIFT_AMP;
+  const breathR = 1 + Math.sin(t * AMBIENT_DRIFT_FREQ_Y) * AMBIENT_DRIFT_AMP;
+  const driftLX = W * (0.10 + Math.sin(t * 0.000419 + 1.0) * 0.05);
+  const driftRX = W * (0.90 + Math.sin(t * 0.000449 + 2.1) * 0.05);
+  const driftCY = H * (1.02 + Math.sin(t * 0.000287 + 0.5) * 0.03);
 
   ctx.globalAlpha = 1;
   ctx.globalCompositeOperation = 'source-over';
@@ -148,27 +104,22 @@ export function renderAmbientFrame(t, canvas, ctx, mode, colorStr, ambientColors
   g4.addColorStop(1,    'rgba(0,0,0,0)');
   ctx.fillStyle = g4; ctx.fillRect(0, 0, W, H);
 
-  if (cB1) {
-    const [rB1, gB1, bB1] = cB1;
-    const g5 = ctx.createRadialGradient(driftB1X, driftB1Y, 0, driftB1X, driftB1Y, W * 0.38);
-    g5.addColorStop(0,    `rgba(${rB1},${gB1},${bB1},.28)`);
-    g5.addColorStop(0.60, `rgba(${rB1},${gB1},${bB1},.05)`);
-    g5.addColorStop(1,    'rgba(0,0,0,0)');
-    ctx.fillStyle = g5; ctx.fillRect(0, 0, W, H);
-  }
-  if (cB2) {
-    const [rB2, gB2, bB2] = cB2;
-    const g6 = ctx.createRadialGradient(driftB2X, driftB2Y, 0, driftB2X, driftB2Y, W * 0.32);
-    g6.addColorStop(0,    `rgba(${rB2},${gB2},${bB2},.22)`);
-    g6.addColorStop(0.60, `rgba(${rB2},${gB2},${bB2},.04)`);
-    g6.addColorStop(1,    'rgba(0,0,0,0)');
-    ctx.fillStyle = g6; ctx.fillRect(0, 0, W, H);
-  }
-
   // ── Noise dithering — film grain ───────────────────────────────────────
-  _noiseFrame = (_noiseFrame + 1) % 3; // bounded to avoid integer overflow
-  if (_noiseFrame === 0 || !_noiseCanvas) _regenerateNoise();
-  if (!_noiseCanvas) return; // _regenerateNoise failed (context unavailable)
+  if (!_noiseCanvas) {
+    const NS = 256;
+    _noiseCanvas = document.createElement('canvas');
+    _noiseCanvas.width = NS; _noiseCanvas.height = NS;
+    const nc = _noiseCanvas.getContext('2d');
+    if (!nc) { _noiseCanvas = null; return; }
+    const id = nc.createImageData(NS, NS);
+    const px = id.data;
+    for (let i = 0; i < px.length; i += 4) {
+      const v = (Math.random() * 2 - 1) * NOISE_DITHER_AMPLITUDE;
+      px[i] = px[i + 1] = px[i + 2] = 128 + v;
+      px[i + 3] = 255;
+    }
+    nc.putImageData(id, 0, 0);
+  }
   ctx.globalCompositeOperation = 'overlay';
   ctx.globalAlpha = NOISE_OVERLAY_OPACITY;
   ctx.drawImage(_noiseCanvas, 0, 0, W, H);

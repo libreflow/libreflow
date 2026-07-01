@@ -13,22 +13,21 @@
 //   switchPlTab, openSmartPlaylistModal, _setSmartSeed, smartSeedSearch
 //   smartPreview, confirmSmartPlaylist, regenerateSmartPlaylist
 
-import { modalOpen } from './motion.js';
 import { esc } from './utils.js';
 import { i18n } from './i18n.js';
 import { get, notify }  from './store.js'; // Phase 4
 import { playLog } from './playlog.js'; // Bug #1 fix : accès direct, window.__playLogRef__ n'existe pas
-import { emit, EVENTS } from './bus.js';
+import { emit, on, EVENTS } from './bus.js';
 import { _trackIdxMap, trackIdx } from './search.js';
 import { toast }                                        from './ui.js';
-import { setView } from './views.js';
-import { savePlaylists } from './playlist-crud.js';
+import { setPlModalMode, savePlaylists, renderPlNav, setupPlNavDrop, closePlModal } from './playlists.js';
+
+on(EVENTS.SMART_PLAYLIST_SWITCH_TAB, ({ tab }) => switchPlTab(tab));
 
 // ── État interne ──────────────────────────────────────────────
 let _smartSeedId  = null;
 let _smartMode    = 'seed'; // 'seed' | 'rules'
 let _smartRules   = [];     // [{ field, op, value }]
-let _smartPlCreating = false; // re-entry guard — prevents concurrent savePlaylists on double-click
 
 // ── Définitions des champs de règles ─────────────────────────
 
@@ -287,10 +286,7 @@ function _buildPlayCountMap() {
 function _buildRulesTracks() {
   const tracks  = get('tracks');
   const combinator = document.getElementById('spl-combinator')?.value || 'all';
-  const maxSize = Math.min(
-    Math.max(1, parseInt(document.getElementById('spl-rules-size')?.value || '20') || 20),
-    tracks.length
-  );
+  const maxSize = Math.min(parseInt(document.getElementById('spl-rules-size')?.value || '20') || 20, tracks.length);
   const rules   = _smartRules.filter(r => r.value !== '' || r.field === 'liked' || r.field === 'format');
   if (!rules.length) return [];
 
@@ -329,7 +325,7 @@ function _doPreviewRules() {
     listEl.innerHTML = result.slice(0, 8).map((t, i) => `
       <div class="smart-prev-item">
         <span style="font-size:10px;color:var(--t3);min-width:16px;text-align:right">${i + 1}</span>
-        <span class="spn">${esc(t.name||'')}</span>
+        <span class="spn">${esc(t.name)}</span>
         <span class="spa">${esc(t.artist || '')}</span>
       </div>`).join('') +
       (result.length > 8 ? `<div style="padding:5px 10px;font-size:11px;color:var(--t3);text-align:center">+ ${result.length - 8} autre${result.length - 8 > 1 ? 's' : ''}…</div>` : '');
@@ -357,24 +353,17 @@ export function switchPlTab(tab) {
 }
 
 export function openSmartPlaylistModal(seedTrackId) {
-  emit(EVENTS.SET_PL_MODAL_MODE, { mode: 'new' });
+  setPlModalMode('new');
   const tabs = document.querySelector('.pl-modal-tabs');
   if (tabs) tabs.style.display = '';
   switchPlTab('smart');
-  const _plModalBg = document.getElementById('pl-modal-bg');
-  if (_plModalBg) _plModalBg.classList.add('on');
-  const _spmDialog = document.getElementById('pl-modal');
-  if (_spmDialog) modalOpen(_spmDialog);
-  if (_plModalBg) _plModalBg.dataset.pendingTrack = '';
-  if (_plModalBg) _plModalBg.dataset.renamePlId   = '';
-  const _seedSearch = document.getElementById('smart-seed-search');
-  if (_seedSearch) _seedSearch.value = '';
-  const _seedResults = document.getElementById('smart-seed-results');
-  if (_seedResults) _seedResults.style.display = 'none';
-  const _smartPrev = document.getElementById('smart-preview');
-  if (_smartPrev) _smartPrev.style.display = 'none';
-  const _plNameEl = document.getElementById('smart-pl-name');
-  if (_plNameEl) _plNameEl.value = '';
+  document.getElementById('pl-modal-bg').classList.add('on');
+  document.getElementById('pl-modal-bg').dataset.pendingTrack = '';
+  document.getElementById('pl-modal-bg').dataset.renamePlId   = '';
+  document.getElementById('smart-seed-search').value = '';
+  document.getElementById('smart-seed-results').style.display = 'none';
+  document.getElementById('smart-preview').style.display = 'none';
+  document.getElementById('smart-pl-name').value = '';
   _smartSeedId = null;
   _smartRules  = [];
   switchSmartMode('seed');
@@ -383,10 +372,8 @@ export function openSmartPlaylistModal(seedTrackId) {
   const tid = seedTrackId || (curIdx >= 0 && tracks[curIdx] ? tracks[curIdx].id : null);
   if (tid) _setSmartSeed(tid);
   else {
-    const _seedName = document.getElementById('smart-seed-name');
-    if (_seedName) _seedName.textContent = i18n('t_smart_no_seed');
-    const _seedDisplay = document.getElementById('smart-seed-display');
-    if (_seedDisplay) _seedDisplay.classList.remove('has-track');
+    document.getElementById('smart-seed-name').textContent = i18n('t_smart_no_seed');
+    document.getElementById('smart-seed-display').classList.remove('has-track');
   }
 }
 
@@ -425,10 +412,10 @@ export function smartSeedSearch(q) {
   if (!hits.length) { res.style.display = 'none'; return; }
   res.style.display = 'block';
   res.innerHTML = hits.map(t => `
-    <div data-action="set-smart-seed" data-track-id="${esc(t.id)}"
+    <div data-action="set-smart-seed" data-track-id="${t.id}"
       style="display:flex;align-items:center;gap:8px;padding:7px 10px;cursor:pointer;font-size:12px;border-bottom:1px solid var(--bg4)">
       <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" opacity=".4"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
-      <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--t)">${esc(t.name||'')}</span>
+      <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--t)">${esc(t.name)}</span>
       <span style="color:var(--t3);font-size:11px;white-space:nowrap;max-width:90px;overflow:hidden;text-overflow:ellipsis">${esc(t.artist||'')}</span>
     </div>`).join('');
 }
@@ -509,7 +496,7 @@ export function smartPreview() {
     listEl.innerHTML = result.slice(0,8).map((t,i) => `
       <div class="smart-prev-item">
         <span style="font-size:10px;color:var(--t3);min-width:16px;text-align:right">${i+1}</span>
-        <span class="spn">${esc(t.name||'')}</span>
+        <span class="spn">${esc(t.name)}</span>
         <span class="spa">${esc(t.artist||'')}</span>
         ${t.id===_smartSeedId ? '<span class="spi">seed</span>' : ''}
       </div>`).join('') +
@@ -519,36 +506,23 @@ export function smartPreview() {
 }
 
 export async function confirmSmartPlaylist() {
-  if (_smartPlCreating) return;
   const tracks = get('tracks');
   if (_smartMode === 'rules') {
     const result = _buildRulesTracks();
     if (!result.length) { toast(i18n('t_smart_no_match'), 'warning'); return; }
     const name = document.getElementById('spl-rules-name')?.value.trim() || 'Smart Rules';
     const combinator = document.getElementById('spl-combinator')?.value || 'all';
-    const maxSize = Math.max(1, parseInt(document.getElementById('spl-rules-size')?.value || '20') || 20);
+    const maxSize = parseInt(document.getElementById('spl-rules-size')?.value || '20') || 20;
     const criteria = { mode: 'rules', rules: JSON.parse(JSON.stringify(_smartRules)), combinator, size: maxSize };
     // B31 FIX : suffixe aléatoire — 2 smart playlists créées dans la même ms
     // (double-clic « Créer ») produiraient le même id 'pl_<ts>' → collision IDB.
     const pl = { id:'pl_'+Date.now()+'_'+Math.random().toString(36).slice(2,7), name, trackIds:result.map(t=>t.id), smart:true, seedId:null, criteria, createdAt:Date.now() };
-    _smartPlCreating = true;
     get('playlists').push(pl);
     notify('playlists'); // CM-5 FIX: push() in-place → notify() so subscribers see the change
-    try {
-      await savePlaylists();
-    } catch (e) {
-      const _idx = get('playlists').indexOf(pl);
-      if (_idx >= 0) get('playlists').splice(_idx, 1);
-      notify('playlists');
-      console.warn('[smartplaylist] confirmSmartPlaylist (rules) IDB failed:', e);
-      toast(i18n('error_save') || 'Erreur de sauvegarde', 'error');
-      return;
-    } finally {
-      _smartPlCreating = false;
-    }
-    emit(EVENTS.PLAYLIST_CHANGED, {});
-    emit(EVENTS.CLOSE_PL_MODAL, {});
-    setView('playlist', document.getElementById('ni-pl-'+pl.id), pl.id);
+    await savePlaylists();
+    renderPlNav(); setupPlNavDrop();
+    closePlModal();
+    emit(EVENTS.VIEW_REQUEST, { view: 'playlist', btn: document.getElementById('ni-pl-'+pl.id), plId: pl.id });
     toast(i18n('t_smart_pl_created', name, result.length), 'success');
     return;
   }
@@ -557,7 +531,7 @@ export async function confirmSmartPlaylist() {
   const result = _buildSmartTracks();
   if (!result.length) { toast(i18n('t_smart_no_match'), 'warning'); return; }
   const seed = (_trackIdxMap.has(_smartSeedId) ? tracks[_trackIdxMap.get(_smartSeedId)] : undefined);
-  let name = (document.getElementById('smart-pl-name')?.value.trim()) || (seed ? _autoSmartName(seed) : 'Smart Mix');
+  let name = document.getElementById('smart-pl-name').value.trim() || (seed ? _autoSmartName(seed) : 'Smart Mix');
   const criteria = {
     mode:    'seed',
     artist:  !!document.getElementById('crit-artist')?.checked,
@@ -569,29 +543,16 @@ export async function confirmSmartPlaylist() {
   // B31 FIX : suffixe aléatoire — évite la collision d'id en cas de double création
   // dans la même milliseconde (le 2e put écraserait le 1er en IDB).
   const pl = { id:'pl_'+Date.now()+'_'+Math.random().toString(36).slice(2,7), name, trackIds:result.map(t=>t.id), smart:true, seedId:_smartSeedId, criteria, createdAt:Date.now() };
-  _smartPlCreating = true;
   get('playlists').push(pl);
   notify('playlists'); // CM-5 FIX: push() in-place → notify() so subscribers see the change
-  try {
-    await savePlaylists();
-  } catch (e) {
-    const _idx = get('playlists').indexOf(pl);
-    if (_idx >= 0) get('playlists').splice(_idx, 1);
-    notify('playlists');
-    console.warn('[smartplaylist] confirmSmartPlaylist (seed) IDB failed:', e);
-    toast(i18n('error_save') || 'Erreur de sauvegarde', 'error');
-    return;
-  } finally {
-    _smartPlCreating = false;
-  }
-  emit(EVENTS.PLAYLIST_CHANGED, {});
-  emit(EVENTS.CLOSE_PL_MODAL, {});
-  setView('playlist', document.getElementById('ni-pl-'+pl.id), pl.id);
+  await savePlaylists();
+  renderPlNav(); setupPlNavDrop();
+  closePlModal();
+  emit(EVENTS.VIEW_REQUEST, { view: 'playlist', btn: document.getElementById('ni-pl-'+pl.id), plId: pl.id });
   toast(i18n('t_smart_pl_created', name, result.length), 'success');
 }
 
 export async function regenerateSmartPlaylist(plId) {
-  if (_smartPlCreating) return;
   const pl = get('playlists').find(p => p.id === plId);
   if (!pl) return;
   const crit = pl.criteria || { mode: 'seed', artist: true, genre: true, album: false, similar: false, size: 20 };
@@ -619,17 +580,10 @@ export async function regenerateSmartPlaylist(plId) {
       }
     }).slice(0, maxSize);
     if (!matched.length) { toast(i18n('t_smart_no_regen'), 'warning'); _smartMode = 'seed'; return; }
-    const _prevTrackIdsRules = [...pl.trackIds];
     pl.trackIds  = matched.map(t => t.id);
     pl.createdAt = Date.now();
-    _smartPlCreating = true;
-    try { await savePlaylists(); }
-    catch (e) {
-      pl.trackIds = _prevTrackIdsRules; delete pl.createdAt;
-      console.warn('[smartplaylist] regen IDB failed:', e);
-      toast(i18n('error_save') || 'Erreur de sauvegarde', 'error'); _smartMode = 'seed'; return;
-    } finally { _smartPlCreating = false; }
-    emit(EVENTS.PLAYLIST_CHANGED, {});
+    await savePlaylists();
+    renderPlNav();
     if (get('view') === 'playlist' && get('curPlId') === plId) emit(EVENTS.RENDER_LIB, {});
     toast(i18n('t_smart_pl_regen', matched.length), 'success');
     _smartMode = 'seed';
@@ -648,17 +602,10 @@ export async function regenerateSmartPlaylist(plId) {
   if (sizeEl) sizeEl.value = crit.size || 20;
   const result = _buildSmartTracks();
   if (!result.length) { toast(i18n('t_smart_no_regen'), 'warning'); _smartSeedId = null; return; }
-  const _prevTrackIdsSeed = [...pl.trackIds];
   pl.trackIds  = result.map(t => t.id);
   pl.createdAt = Date.now();
-  _smartPlCreating = true;
-  try { await savePlaylists(); }
-  catch (e) {
-    pl.trackIds = _prevTrackIdsSeed; delete pl.createdAt;
-    console.warn('[smartplaylist] regen IDB failed:', e);
-    toast(i18n('error_save') || 'Erreur de sauvegarde', 'error'); _smartSeedId = null; return;
-  } finally { _smartPlCreating = false; }
-  emit(EVENTS.PLAYLIST_CHANGED, {});
+  await savePlaylists();
+  renderPlNav();
   if (get('view') === 'playlist' && get('curPlId') === plId) emit(EVENTS.RENDER_LIB, {});
   toast(i18n('t_smart_pl_regen', result.length), 'success');
   _smartSeedId = null;

@@ -1,4 +1,4 @@
-﻿// LibreFlow — state.js
+// LibreFlow — state.js
 // Mutateurs d'état centralisés : synchronisent la variable locale d'app.js
 // ET le store réactif en un seul appel.
 // Extrait de app.js (ARCH-1 — casser les dépendances circulaires).
@@ -46,12 +46,8 @@ export function setLiked(v)      { set('liked',      v); }
  * @param {object[]} v
  */
 export function setTracks(v) {
-  // ARCH-3 / H-09 : set() notifie les subscribers de façon synchrone.
-  // Pour garantir que tout subscriber voit un _trackIdxMap cohérent, on
-  // adopte le même pattern que pushTracks/removeTrackAt :
-  //   1. Muter tracks[] en place (même référence → set() no-op, pas de notify prématuré)
-  //   2. rebuildTrackIdxMap() — la map est à jour avant toute notification
-  //   3. notify('tracks') explicite — subscribers voient map + tableau cohérents
+  // In-place mutation keeps the same reference → store's same-ref guard skips notify.
+  // rebuildTrackIdxMap() runs BEFORE notify('tracks') so subscribers calling trackIdx() see a consistent map.
   const arr = get('tracks');
   arr.length = 0;
   for (let i = 0; i < v.length; i++) arr[i] = v[i];
@@ -79,8 +75,7 @@ export function setCtxTrackId(v) { set('ctxTrackId', v); }
  * @param {object[]} items — nouvelles pistes à ajouter
  */
 export function pushTracks(items) {
-  const arr = get('tracks');
-  for (let i = 0; i < items.length; i++) arr.push(items[i]);
+  get('tracks').push(...items);
   rebuildTrackIdxMap();
   notify('tracks');
 }
@@ -105,11 +100,9 @@ export function removeTrackAt(idx) {
  * Remplace l'intégralité du tableau tracks[] et rebuild _trackIdxMap.
  * Utilisé par : selection.js (delete sélection + undo).
  *
- * Même pattern que setTracks() : mutation in-place → rebuild → notify.
- * Garantit que _trackIdxMap est cohérent AVANT que les subscribers
- * reçoivent la notification (set() notifie de façon synchrone, donc
- * appeler set() avant rebuildTrackIdxMap() exposerait une map périmée
- * à tout subscriber qui appelle trackIdx() dans son callback).
+ * In-place mutation keeps the same reference → store's same-ref guard skips notify.
+ * rebuildTrackIdxMap() runs BEFORE notify('tracks') so subscribers calling trackIdx()
+ * always see a map consistent with the new array contents.
  *
  * @param {object[]} newArray — nouveau tableau de pistes
  */

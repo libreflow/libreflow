@@ -1,23 +1,7 @@
 // renderer.js — Rendu de la bibliothèque, grilles et helpers HTML
-// Extrait de app.js (Session 144 — Jalon 5).
-//
-// Responsabilités :
-//   - Virtual scroll : virtRenderWindow, virtAttachScroll
-//   - Rendu liste : renderLib
-//   - Stats : updateStats, scheduleStatsUpdate
-//   - Animations : _withVT, scrollToCurrentTrack
-//
-// Fixes inclus :
-//   P6   — Spring animation (el._springRaf, el._springVel, cancelAnimationFrame avant ré-attache)
-//   A11Y-3 — thtml() → role="listitem" tabindex="0" aria-label
-//   FIX-B1 — guard null _plHero avant masquage vhtitle
-//   FIX-B2 — pl-action-bar ancrée après #pl-hero dans le DOM
-//   FIX-B6 — pas de data-pl-id dupliqué sur les cartes grille playlist
-//   FIX-UX4 — card-play-btn sur les cartes playlist
-//   FIX-A1  — role=button + tabindex=0 + aria-label sur cartes grille
 
 import { get, set }                                          from './store.js';
-import { emit, EVENTS }                                      from './bus.js';
+import { emit, on, EVENTS }                                  from './bus.js';
 import { getFiltered, filteredIdx, trackIdx,
          _trackIdxMap, invalidateFilterCache, _coll }        from './search.js';
 import { VIRT, virtBuildRows, virtIdxAtScroll,
@@ -29,65 +13,148 @@ import { prefetchArts, getArtUrl }                           from './artLoader.j
 
 // Imports circulaires — OK en ES modules (appelés à l'exécution, pas à l'init)
 import { playAt, audio }                                     from './player.js';
-import { cancelSearchDebounce }                              from './views.js';
 import { playLog }                                           from './playlog.js';
 import { getImports }                                        from './imports.js';
 
-import { thtml, artPlaceholder, patchActiveTrack,
-         patchPlayState, patchTrackEl }                      from './renderer-track.js';
-import { renderAlbumsGrid, renderArtistsGrid,
-         renderPlaylistsGrid, drillDown,
-         updatePlActionBar, updateBreadcrumb,
-         renderFormatChips, invalidateGridMaps,
-         invalidateGridMapsIfChanged,
-         renderDrillHeader, _getArtistMap,
-         _getAlbumMap }                                      from './renderer-grids.js';
+// Grilles et drill header — split §16 (renderer.js dépassait 800 lignes)
+import { renderAlbumsGrid, renderArtistsGrid, renderPlaylistsGrid,
+         renderDrillHeader, resetGridCaches,
+         getAlbumMap, getArtistMap, updateBreadcrumb }       from './renderer-grids.js';
 
-// ── État interne ──────────────────────────────────────────────────────────────
+export { renderAlbumsGrid, renderArtistsGrid, renderPlaylistsGrid, updateBreadcrumb };
+
 let _statsTimer   = null;    // debounce updateStats
+let _plHero       = null;    // référence au #pl-hero courant (FIX-B1)
+let _activeRowEl  = null;    // I-1: cache du dernier élément .tr.act
 // R-H9 : true tant que #tlist affiche des lignes squelette — le ResizeObserver
 // de virtAttachScroll recalcule alors le nombre de lignes au lieu de re-rendre la liste.
 let _skeletonActive = false;
-// C1 — réutiliser ce tableau entre les frames rAF plutôt qu'en allouer un nouveau à chaque rendu
-let _artBatch = [];
-// C2 — compteur de spring rAF actifs pour éviter querySelectorAll quand il n'y en a aucun
-let _activeSpringRafs = 0;
-// DOM-CACHE : #tlist est un élément permanent — le mettre en cache évite ~4 lookups
-// getElementById par frame de scroll (hot path à 60 Hz). Initialisé au DOMContentLoaded.
-// Invalider en le repassant à null ne s'applique pas ici (l'élément n'est jamais recréé).
-let _listEl = null;
-document.addEventListener('DOMContentLoaded', () => { _listEl = document.getElementById('tlist'); }, { once: true });
+const ART_COLOR_RE = /^rgb\(\s*\d{1,3}\s*,\s*\d{1,3}\s*,\s*\d{1,3}\s*\)$/;
 
-// DOM-CACHE sidebar : les 6 boutons de vue sont permanents. Cacher leurs références élimine
-// 6 getElementById + 1 Object.entries() allocation par déclenchement de updateSidebarCounts().
-// Initialisés au DOMContentLoaded (même listener, ordre garanti).
-let _sidebarBtnAll       = null;
-let _sidebarBtnLiked     = null;
-let _sidebarBtnRecent    = null;
-let _sidebarBtnPlaylists = null;
-let _sidebarBtnArtists   = null;
-let _sidebarBtnAlbums    = null;
-document.addEventListener('DOMContentLoaded', () => {
-  _sidebarBtnAll       = document.getElementById('ni-all');
-  _sidebarBtnLiked     = document.getElementById('ni-liked');
-  _sidebarBtnRecent    = document.getElementById('ni-recent');
-  _sidebarBtnPlaylists = document.getElementById('ni-playlists');
-  _sidebarBtnArtists   = document.getElementById('ni-artists');
-  _sidebarBtnAlbums    = document.getElementById('ni-albums');
-}, { once: true });
+let _tracksSig = ''; // content hash for grid cache invalidation (see renderer-grids.js)
 
 // Restore art-loaded fade-in without inline onload (load events don't bubble → capture phase)
 document.addEventListener('load', (e) => {
   if (e.target?.classList?.contains('art-img')) e.target.classList.add('art-loaded');
 }, true);
 
-// ── Virtual scroll ────────────────────────────────────────────────────────────
+function escapeRegex(s) {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
 
-/** Rend uniquement la fenêtre visible + buffer. */
+// Returns 'empty' when empty (distinct from '' so the first renderLib() always triggers a rebuild).
+function _computeTracksSig(tracks) {
+  if (!tracks.length) return 'empty';
+  return `${tracks.length}:${tracks[0].id}:${tracks[tracks.length - 1].id}`;
+}
+
+// M-2: optional pre-compiled regex (avoids re-creation per call)
+export function hlText(text, query, re) {
+  if (!text) return '';
+  if (!query) return esc(text);
+  // Build per-word alternation regex when no pre-compiled re provided.
+  // Matches "dark side" as /dark|side/ so both words are highlighted even when
+  // they appear in different fields (consistent with multi-term filter logic).
+  const r = re || new RegExp(
+    `(${query.trim().split(/\s+/).filter(Boolean).map(escapeRegex).join('|')})`,
+    'gi'
+  );
+  // Split the raw text around matches using sentinel bytes, then escape each part.
+  return text.replace(r, '\x00$1\x01').split('\x00').map((seg, i) => {
+    if (i === 0) return esc(seg);
+    const parts = seg.split('\x01');
+    return `<mark>${esc(parts[0])}</mark>${esc(parts[1] || '')}`;
+  }).join('');
+}
+
+function _djb2(str) {
+  let h = 5381;
+  for (let i = 0; i < str.length; i++) h = ((h << 5) + h) ^ str.charCodeAt(i);
+  return Math.abs(h);
+}
+
+export function artPlaceholder(t) {
+  const letter = t.name?.[0]?.toUpperCase() || '♪';
+  if (t.artColor && ART_COLOR_RE.test(t.artColor)) {
+    return `<div class="tart-ph" aria-hidden="true" style="background:${esc(t.artColor)}"><span class="tart-init">${extEmoji(t.ext) || letter}</span></div>`;
+  }
+  const seed = t.artist || t.album || t.name || '';
+  const hue  = _djb2(seed) % 360;
+  const bg   = `hsl(${hue},32%,26%)`;
+  const fg   = `hsl(${hue},55%,72%)`;
+  return `<div class="tart-ph" aria-hidden="true" style="background:${bg};color:${fg}"><span class="tart-init">${extEmoji(t.ext) || letter}</span></div>`;
+}
+
+export function makeLikeBtn(t, liked) {
+  liked = liked ?? get('liked');
+  const on  = liked?.has(t.id);
+  // A11Y-06: label dynamique selon l'état (like_label / unlike_label) — annonce correctement l'état au screen reader
+  const lbl = on
+    ? (i18n('unlike_label') || 'Retirer des favoris')
+    : (i18n('like_label')   || 'Ajouter aux favoris');
+  return `<button class="tlk${on ? ' on' : ''}" data-action="likeat" data-track-id="${esc(t.id)}" aria-pressed="${!!on}" aria-label="${esc(lbl)}" tabindex="-1"><svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg></button>`;
+}
+
+export function makeAddBtn(t) {
+  const lbl = i18n('add_to_playlist') || 'Ajouter à une playlist';
+  return `<button class="tr-add-btn" data-action="show-pl-qpop" data-track-id="${esc(t.id)}" title="${esc(lbl)}" aria-label="${esc(lbl)}" tabindex="-1"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></button>`;
+}
+
+export function makeEqHTML(_t) {
+  return '<span class="eq-bars" aria-hidden="true"><span></span><span></span><span></span></span>';
+}
+
+// A11Y-3: role="listitem" tabindex="0" aria-label; P6: classes dynamiques
+export function thtml(t, fi, { active = false, liked = false, likedSet, query = '', isAlbumDetail: _isAlbumDetail, albumDetailSort: _albumDetailSort, hlRe, isTabStop = false, setSize = 0 } = {}) {
+  // Artwork — img avec fade-in (.art-img → .art-loaded au onload) OU placeholder
+  const artInner = t.art
+    ? `<img class="art-img" src="${esc(t.art)}" alt="" aria-hidden="true">`
+    : artPlaceholder(t);
+
+  // M-1: utiliser la valeur pré-calculée si fournie, sinon fallback sur get() (compatibilité standalone)
+  const isAlbumDetail   = _isAlbumDetail   ?? (get('view') === 'album-detail');
+  const albumDetailSort = _albumDetailSort  ?? (isAlbumDetail ? (get('albumDetailSort') || 'track') : null);
+  const trackNum = isAlbumDetail
+    // tri A-Z → numéro séquentiel (position 1-N) ; tri 'track' → numéro de tag (ou position si absent)
+    ? `<div class="tr-num">${albumDetailSort === 'az' ? (fi + 1) : (t.track ?? fi + 1)}</div>`
+    : '';
+
+  const classes  = ['tr', active ? 'act' : '', isAlbumDetail ? 'tr--album-detail' : ''].filter(Boolean).join(' ');
+  const ariaLbl  = [t.name, t.artistFull || t.artist].filter(Boolean).join(' — ');
+  // A11Y-ROVING: roving tabindex — seul le tab stop courant reçoit tabindex="0"
+  const tabIdx   = isTabStop ? '0' : '-1';
+  // A11Y : aria-current="true" sur la piste courante (info non couleur-only) + title sur titres/artistes longs (tooltip troncation)
+  const ariaCur  = active ? ' aria-current="true"' : '';
+
+  // A11Y-16 : aria-setsize/aria-posinset annoncent la position réelle ("X sur Y")
+  // dans la liste virtualisée — équivalent role=list correct (les lignes restent
+  // role="listitem", pas de grille incomplète sans gridcell).
+  return `<div class="${classes}" id="tr-${esc(t.id)}" data-track-id="${esc(t.id)}" data-fi="${fi}"
+  data-action="track-click" role="listitem" tabindex="${tabIdx}" aria-setsize="${setSize}" aria-posinset="${fi + 1}" aria-label="${esc(ariaLbl)}"${ariaCur}
+  draggable="true" data-drag-action="track-drag">
+  ${trackNum}<div class="tart">
+    ${artInner}
+    <button class="tart-hover-play" data-action="play-track" data-track-id="${esc(t.id)}" tabindex="-1" aria-label="${i18n('play') || 'Lire'}">
+      <svg class="icon-play" viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true"><polygon points="5,3 19,12 5,21"/></svg>
+      <svg class="icon-pause" viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true"><rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/></svg>
+    </button>
+  </div>
+  <div class="ti">
+    <div class="tn" title="${esc(t.name || '')}">${hlText(t.name || '', query, hlRe)}</div>
+    <div class="ts" title="${esc(t.artistFull || t.artist || '')}">${hlText(t.artistFull || t.artist || '', query, hlRe)}</div>
+  </div>
+  <div class="ta" title="${esc(t.album || '')}">${esc(t.album || '')}</div>
+  <div class="tr-r">
+    ${makeEqHTML(t)}
+    <span class="tdur">${fmtd(t.duration)}</span>
+    ${makeLikeBtn(t, likedSet)}
+    ${makeAddBtn(t)}
+  </div>
+</div>`;
+}
+
 export function virtRenderWindow(fl) {
-  // DOM-CACHE : utiliser la référence module-scope ; fallback défensif si appel avant DOMContentLoaded.
-  if (!_listEl) _listEl = document.getElementById('tlist');
-  const listEl = _listEl;
+  const listEl = document.getElementById('tlist');
   if (!listEl || !fl) return;
 
   // R-H9 : un rendu réel de la liste sort de l'état skeleton.
@@ -101,10 +168,15 @@ export function virtRenderWindow(fl) {
   const midId = fl[fl.length >> 1]?.id || '';
   const sig = `${fl.length}|${sort}|${query}|${view}|${fl[0]?.id||''}|${midId}|${fl[fl.length-1]?.id||''}`;
   if (VIRT._lastListSig !== sig) {
-    // virtBuildRows sets VIRT._fiToRowIdx and VIRT._hasGroups as derived
-    // projections of the row array — no need to rebuild them here.
     VIRT._rows        = virtBuildRows(fl, { sort, query, view });
     VIRT._lastListSig = sig;
+    // I-2: construire la Map fi→rowIdx pour O(1) lookup dans scrollToCurrentTrack
+    const fiMap = new Map();
+    for (let i = 0; i < VIRT._rows.length; i++) {
+      const r = VIRT._rows[i];
+      if (r.type === 'tr') fiMap.set(r.fi, i);
+    }
+    VIRT._fiToRowIdx = fiMap;
   }
 
   const rows     = VIRT._rows;
@@ -127,9 +199,9 @@ export function virtRenderWindow(fl) {
 
   VIRT._startIdx = startIdx;
   VIRT._endIdx   = endIdx;
-  const tracks  = get('tracks') || [];
+  const tracks  = get('tracks');
   const liked   = get('liked');
-  const curTrack = curIdx >= 0 && tracks.length > curIdx ? tracks[curIdx] : null;
+  const curTrack = curIdx >= 0 ? tracks[curIdx] : null;
 
   const topH    = virtOffsetOf(rows, startIdx);
   const totalH  = virtTotalH(rows);
@@ -138,6 +210,11 @@ export function virtRenderWindow(fl) {
   // M-1: hoist isAlbumDetail + albumDetailSort — évite un get() par ligne dans la boucle
   const isAlbumDetail   = view === 'album-detail';
   const albumDetailSort = isAlbumDetail ? (get('albumDetailSort') || 'track') : null;
+  // M-2: pré-compiler la regex de recherche une seule fois avant la boucle (per-word alternation)
+  const hlRe = query
+    ? new RegExp(`(${query.trim().split(/\s+/).filter(Boolean).map(escapeRegex).join('|')})`, 'gi')
+    : null;
+
   // A11Y-ROVING: déterminer quel fi reçoit tabindex="0"
   // La piste courante (curTrack) est le tab stop si elle est dans la liste filtrée.
   // Sinon, la première ligne de piste visible reçoit tabindex="0".
@@ -150,38 +227,16 @@ export function virtRenderWindow(fl) {
         break;
       }
     }
-    // A11Y-ROVING: si la piste courante est hors de la fenêtre rendue, aucune ligne DOM
-    // ne peut porter son fi — laisser tabStopFi à -1 pour que le premier tr visible
-    // reste focusable (sinon toute la liste devient inaccessible au clavier).
+    // PM-2: Si la piste courante n'est pas dans la fenêtre, utiliser filteredIdx O(1)
+    if (tabStopFi < 0) {
+      tabStopFi = filteredIdx(curTrack);
+    }
   }
   // Si aucune piste courante ou piste courante absente de la liste filtrée :
   // le premier tr rendu reçoit tabindex="0"
   let firstTrFiFound = false;
 
-  // H2 — utiliser un tableau de parties pour éviter les O(n) chaînes intermédiaires
-  const parts = [];
-  // V3 (audit bugs visuels 2026-06-11) : pin du header de groupe courant.
-  // Sticky × virtualisation : dès que le header sortait de la fenêtre rendue
-  // (buffer ±8 dépassé), il était retiré du DOM et l'en-tête collé disparaissait
-  // alors que son groupe occupait encore l'écran. On rend ce header juste
-  // au-dessus de la fenêtre (top spacer réduit de GRP_H — les offsets des rows
-  // suivantes sont inchangés) ; sa position naturelle étant au-dessus du
-  // viewport, position:sticky le colle à top:0.
-  let pinnedGrpIdx = -1;
-  if (VIRT._hasGroups) {
-    for (let i = firstVisible; i >= 0; i--) {
-      if (rows[i].type === 'grp') { if (i < startIdx) pinnedGrpIdx = i; break; }
-    }
-  }
-  if (pinnedGrpIdx >= 0) {
-    parts.push(`<div class="virt-sp" style="height:${Math.max(0, topH - VIRT.GRP_H)}px" aria-hidden="true"></div>`);
-    const pRow  = rows[pinnedGrpIdx];
-    const pHint = pRow.artistHint ? ` <span class="grp-artist">${esc(pRow.artistHint)}</span>` : '';
-    const pCls  = pRow.key.length === 1 ? 'tr-grp tr-grp--alpha' : 'tr-grp';
-    parts.push(`<div class="${pCls}" style="height:${VIRT.GRP_H}px" aria-hidden="true">${esc(pRow.key)}${pHint}</div>`);
-  } else {
-    parts.push(`<div class="virt-sp" style="height:${topH}px" aria-hidden="true"></div>`);
-  }
+  let html = `<div class="virt-sp" style="height:${topH}px" aria-hidden="true"></div>`;
 
   for (let i = startIdx; i < endIdx; i++) {
     const row = rows[i];
@@ -189,7 +244,7 @@ export function virtRenderWindow(fl) {
       let hint = '';
       if (row.artistHint) hint = ` <span class="grp-artist">${esc(row.artistHint)}</span>`;
       const cls = row.key.length === 1 ? 'tr-grp tr-grp--alpha' : 'tr-grp';
-      parts.push(`<div class="${cls}" style="height:${VIRT.GRP_H}px" aria-hidden="true">${esc(row.key)}${hint}</div>`);
+      html += `<div class="${cls}" style="height:${VIRT.GRP_H}px" aria-hidden="true">${esc(row.key)}${hint}</div>`;
     } else {
       const t       = row.track;
       const isActive = curTrack?.id === t.id;
@@ -202,43 +257,31 @@ export function virtRenderWindow(fl) {
         isTabStop = true;
         firstTrFiFound = true;
       }
-      parts.push(thtml(t, row.fi, { active: isActive, liked: isLiked, likedSet: liked, query, isAlbumDetail, albumDetailSort, isTabStop, setSize: fl.length }));
+      html += thtml(t, row.fi, { active: isActive, liked: isLiked, likedSet: liked, query, isAlbumDetail, albumDetailSort, hlRe, isTabStop, setSize: fl.length });
     }
   }
 
-  parts.push(`<div class="virt-sp" style="height:${botH}px" aria-hidden="true"></div>`);
+  html += `<div class="virt-sp" style="height:${botH}px" aria-hidden="true"></div>`;
 
   // P6 : annuler les spring animations en vol avant de remplacer le DOM
-  // C2 — éviter la traversée DOM et l'allocation NodeList quand aucun spring rAF n'est actif
-  // BUG-FIX: ne PAS décrémenter _activeSpringRafs dans la boucle — reset atomique après sweep
-  // complet pour éviter le drift du compteur si un cancel intermédiaire lançait une exception.
   listEl.querySelectorAll('[data-spring-raf]').forEach(el => {
-    const id = parseInt(el.dataset.springRaf, 10);
-    if (!isNaN(id)) cancelAnimationFrame(id);
+    const id = parseInt(el.dataset.springRaf);
+    if (id) cancelAnimationFrame(id);
   });
-  _activeSpringRafs = 0;
 
   // R3-A FIX : sauvegarder la position de scroll avant le remplacement du DOM.
   // innerHTML = reset scrollTop à 0 — l'utilisateur perd sa position à chaque
   // changement de zoom (Ctrl+Wheel). On restaure dans un rAF après la mise en DOM.
-  //
-  // LIMITATION CONNUE (MEDIUM) : full innerHTML replace détruit et recrée ~17 nœuds DOM
-  // (buffer ±8) à chaque frame de scroll, forçant un reflow complet du navigateur.
-  // Alternative future : algorithme de diff de fenêtre (retirer les rows sortis,
-  // ajouter les rows entrants) pour n'écrire que le delta. Non implémenté car le
-  // virtual scroll réduit déjà drastiquement le travail DOM ; à réévaluer si les
-  // benchmarks (npm run bench) montrent une régression > 5 % sur 50k pistes.
-  const _savedScrollTop = scrollTop;
-  listEl.innerHTML = parts.join('');
+  const _savedScrollTop = listEl.scrollTop;
+  listEl.innerHTML = html;
   // I-1: le DOM a été entièrement reconstruit — invalider la référence de ligne active cachée
-  // (managed by renderer-track.js patchActiveTrack)
+  _activeRowEl = null;
   if (_savedScrollTop > 0) {
     requestAnimationFrame(() => { listEl.scrollTop = _savedScrollTop; });
   }
 
   // ARCH-2/PERF-1 : précharger l'artwork des pistes visibles (lazy loading)
-  // C1 — réutiliser le tableau module-scope plutôt qu'en allouer un nouveau à chaque frame
-  _artBatch.length = 0;
+  const _artBatch = [];
   for (let _ai = startIdx; _ai < endIdx; _ai++) {
     const _ar = rows[_ai];
     if (_ar.type === 'tr' && _ar.track._hasArt && !_ar.track.art && !_ar.track.noArt) {
@@ -248,7 +291,6 @@ export function virtRenderWindow(fl) {
   if (_artBatch.length) prefetchArts(_artBatch);
 }
 
-/** Attache le handler de scroll virtual au conteneur de la liste. */
 export function virtAttachScroll(listEl) {
   if (!listEl) return;
   const onScroll = () => {
@@ -292,10 +334,7 @@ export function virtAttachScroll(listEl) {
   }
 }
 
-// ── renderLib ─────────────────────────────────────────────────────────────────
 
-/** Reconstruit la vue liste de la bibliothèque (virtual scroll).
- *  Appelé à chaque changement de tri, filtre ou vue. */
 export function renderLib() {
   const fl = getFiltered();
 
@@ -305,16 +344,19 @@ export function renderLib() {
   // sont invalidées explicitement par leurs callsites (backup, cdaudio,
   // library, player, orphans, selection, tagedit). Un reset systématique
   // forçait un rebuild complet même sur simple changement de tri.
-  // C-1: invalider les caches memoïsés album/artist uniquement si tracks[] a changé.
-  // Délégué à invalidateGridMapsIfChanged() dans renderer-grids.js.
-  const _tracks = get('tracks') || [];
-  invalidateGridMapsIfChanged(_tracks);
+  // C-1: invalider les caches memoïsés album/artist uniquement si tracks[] a changé
+  // Évite un rebuild coûteux à chaque navigation (tri, filtre, drill) sur la même lib.
+  const _tracks   = get('tracks') || [];
+  const _newSig   = _computeTracksSig(_tracks);
+  if (_newSig !== _tracksSig) {
+    _tracksSig = _newSig;
+    resetGridCaches(); // invalide _albumMapCache, _artistMapCache, _artTrackById (renderer-grids.js)
+  }
 
   virtRenderWindow(fl);
 
-  // (Re)attacher le scroll — DOM-CACHE : fallback défensif si _listEl pas encore initialisé.
-  if (!_listEl) _listEl = document.getElementById('tlist');
-  const listEl = _listEl;
+  // (Re)attacher le scroll
+  const listEl = document.getElementById('tlist');
   virtAttachScroll(listEl);
 
   // État vide : afficher un message contextuel quand la liste est vide
@@ -378,21 +420,13 @@ export function renderLib() {
   renderFormatChips();
 }
 
-// ── Skeleton loading ──────────────────────────────────────────────────────────
-
-/** Affiche des lignes squelette pendant le chargement des données. */
-export function _showSkeletonRows() {
-  // DOM-CACHE : fallback défensif si _listEl pas encore initialisé.
-  if (!_listEl) _listEl = document.getElementById('tlist');
-  const listEl = _listEl;
+export function _showSkeletonRows(savedView) {
+  const listEl = document.getElementById('tlist');
   if (!listEl) return;
   // R-H9 : marquer l'état skeleton — le ResizeObserver de virtAttachScroll
   // recalcule le nombre de lignes tant que ce flag est actif.
   _skeletonActive = true;
-  // M9 (audit bugs visuels 2026-06-11) : VIRT.ROW_H (hauteur runtime synchronisée
-  // par setTlistZoom) — la constante statique laissait ~25 % du viewport vide en
-  // zoom compact (skeletons calculés à 48px, rendus à 36px via --tr-h).
-  const count = Math.max(8, Math.ceil((listEl.clientHeight || window.innerHeight) / (VIRT.ROW_H || CFG.VIRT_ROW_H)));
+  const count = Math.max(8, Math.ceil((listEl.clientHeight || window.innerHeight) / CFG.VIRT_ROW_H));
   let html = '';
   for (let i = 0; i < count; i++) {
     html += '<div class="tr tr-skel" aria-hidden="true">'
@@ -404,9 +438,108 @@ export function _showSkeletonRows() {
   listEl.innerHTML = html;
 }
 
-// ── Mises à jour DOM partielles ───────────────────────────────────────────────
 
-/** Joue une piste par son ID. */
+export function drillDown(from, key, displayName) {
+  emit(EVENTS.SEARCH_DEBOUNCE_CANCEL, {}); // annule tout debounce de recherche en cours avant de drill
+  set('drillKey',         key);
+  set('drillFrom',        from);
+  set('drillDisplayName', displayName || key);
+  const viewName = from === 'albums' ? 'album-detail'
+                 : from === 'genres' ? 'genre-detail'
+                 : 'artist-detail';
+  set('view', viewName);
+  invalidateFilterCache();
+  // AUDIT-2026-05-22 (M-06) : les maps album/artist derivent de tracks[], pas du
+  // contexte de filtre. Un drill-down ne modifie pas tracks[] → n'invalider les
+  // caches que si la signature de tracks[] a reellement change (evite un rebuild
+  // couteux des maps a chaque navigation sur une bibliotheque de 50k pistes).
+  const _drillSig = _computeTracksSig(get('tracks') || []);
+  if (_drillSig !== _tracksSig) {
+    _tracksSig = _drillSig;
+    resetGridCaches(); // invalide _albumMapCache, _artistMapCache, _artTrackById (renderer-grids.js)
+  }
+  emit(EVENTS.FILTER_CHANGED, {});
+
+  const ag = document.getElementById('album-grid');
+  const rg = document.getElementById('artist-grid');
+  const pg = document.getElementById('playlist-grid');
+  const gg = document.getElementById('genre-grid');
+  if (ag) ag.style.display = 'none';
+  if (rg) rg.style.display = 'none';
+  if (pg) pg.style.display = 'none';
+  if (gg) gg.style.display = 'none';
+
+  const ca = document.getElementById('content-area');
+  if (ca) ca.dataset.view = 'list';
+
+  const vhtitle = document.getElementById('vhtitle');
+  if (vhtitle) vhtitle.textContent = displayName || key;
+
+  const bc = document.getElementById('breadcrumb');
+  if (bc) bc.style.display = '';
+  updateBreadcrumb();
+
+  const _tl = document.getElementById('tlist');
+  if (_tl) _tl.scrollTop = 0;
+  VIRT._lastScrollTop = null;
+  emit(EVENTS.RENDER_LIB, {});
+}
+
+export function updatePlActionBar() {
+  const curPlId   = get('curPlId');
+  const playlists = get('playlists') || [];
+  const tracks    = get('tracks')    || [];
+
+  const pl = curPlId ? playlists.find(p => p.id === curPlId) : null;
+  if (!pl) {
+    const existing = document.getElementById('pl-action-bar');
+    if (existing) existing.remove();
+    return;
+  }
+
+  const count   = (pl.trackIds || []).length;
+  const plTracks = pl.trackIds.map(id => {
+    const idx = _trackIdxMap.get(id);
+    return idx !== undefined ? tracks[idx] : null;
+  }).filter(Boolean);
+  const totalDur = plTracks.reduce((s, t) => s + (t.duration || 0), 0);
+
+  const plSort = get('plSort') || 'manual';
+  const sorts = [
+    { v: 'manual',   l: i18n('pl_sort_manual')   || 'Manuel' },
+    { v: 'az',       l: i18n('sort_az')           || 'A–Z' },
+    { v: 'za',       l: i18n('sort_za')           || 'Z–A' },
+    { v: 'artist',   l: i18n('sort_artist')       || 'Artiste' },
+    { v: 'album',    l: i18n('sort_album')         || 'Album' },
+    { v: 'duration', l: i18n('pl_sort_duration')  || 'Durée' },
+  ];
+  const sortOptions = sorts.map(s =>
+    `<option value="${s.v}"${plSort === s.v ? ' selected' : ''}>${esc(s.l)}</option>`
+  ).join('');
+
+  const html = `<div id="pl-action-bar" class="pl-action-bar">
+    <span class="pl-bar-count">${count} ${i18n('n_tracks') || 'titres'}${totalDur > 0 ? ' · ' + fmtd(totalDur) : ''}</span>
+    <span class="pl-bar-spacer"></span>
+    <button class="pl-act-btn" data-action="play-pl-from" data-idx="0">▶ ${i18n('pl_play_all') || 'Tout lire'}</button>
+    <button class="pl-act-btn" data-action="shuffle-cur-pl">⇀ ${i18n('pl_shuffle') || 'Aléatoire'}</button>
+    <select class="pl-sort-sel" data-input-action="pl-sort" aria-label="${i18n('sort') || 'Tri'}">${sortOptions}</select>
+    <button class="pl-act-btn icon-btn" data-action="show-cur-pl-menu" aria-label="${i18n('pl_more') || 'Plus'}">•••</button>
+  </div>`;
+
+  // FIX-B2 : insérer après #pl-hero, pas dans un slot pré-existant
+  const hero = document.getElementById('pl-hero');
+  const existing = document.getElementById('pl-action-bar');
+  if (existing) existing.remove();
+  if (hero) {
+    _plHero = hero; // FIX-B1 : mémoriser la référence
+    hero.insertAdjacentHTML('afterend', html);
+  } else {
+    // Fallback : insérer dans content-area
+    const ca = document.getElementById('content-area');
+    if (ca) ca.insertAdjacentHTML('afterbegin', html);
+  }
+}
+
 export function playById(id) {
   if (!id) return;
   const tidx = trackIdx(id);
@@ -418,26 +551,86 @@ export function playById(id) {
   if (fi >= 0) playAt(fi);
 }
 
-// ── Stats ─────────────────────────────────────────────────────────────────────
+export function patchActiveTrack() {
+  const curIdx   = get('curIdx');
+  const tracks   = get('tracks') || [];
+  const curTrack = curIdx >= 0 ? tracks[curIdx] : null;
 
-/** Met à jour les compteurs de la bibliothèque (#lib-stats). */
+  // I-1: retirer .act de la ligne précédente via la référence cachée si elle est encore dans le DOM
+  // A11Y-15 : aria-current="true" doit suivre .act exactement (set au render dans renderTrackRow,
+  // donc on le retire ici lors du déplacement incrémental sinon il reste sur l'ancienne ligne).
+  if (_activeRowEl?.isConnected) {
+    _activeRowEl.classList.remove('act', 'playing-row');
+    _activeRowEl.removeAttribute('aria-current');
+  } else {
+    // Fallback : le DOM a changé depuis la dernière fois — balayage complet
+    document.querySelectorAll('.tr.act, .tr[aria-current="true"]').forEach(el => {
+      el.classList.remove('act', 'playing-row');
+      el.removeAttribute('aria-current');
+    });
+  }
+  _activeRowEl = null;
+
+  if (curTrack) {
+    const el = document.querySelector(`.tr[data-track-id="${CSS.escape(curTrack.id)}"]`);
+    if (el) {
+      el.classList.add('act');
+      el.setAttribute('aria-current', 'true');
+      // I-1: mémoriser la référence pour le prochain appel
+      _activeRowEl = el;
+    }
+  }
+}
+
+export function patchPlayState(playing) {
+  const tlist = document.getElementById('tlist');
+  const qlist = document.getElementById('queue-list');
+  if (tlist) tlist.querySelectorAll('.tr.act').forEach(el => el.classList.toggle('playing-row', playing));
+  if (qlist) qlist.querySelectorAll('.queue-item--loop').forEach(el => el.classList.toggle('playing-row', playing));
+}
+
+export function patchTrackEl(id) {
+  const el = document.querySelector(`.tr[data-track-id="${CSS.escape(id)}"]`);
+  if (!el) return; // hors viewport — ignoré (prochain virtRenderWindow le prendra)
+
+  // B7 FIX : invalider les caches album/artiste APRÈS l'early-return. Avant, un
+  // gros batch loadTagsBg (pistes hors-viewport) vidait les caches à chaque piste
+  // → reconstruction O(n) répétée (comportement O(n²) sur un gros import).
+  // Reste correct : un import change tracks.length → _computeTracksSig change →
+  // renderLib() reconstruit les maps album/artiste de toute façon.
+  _tracksSig = '';
+  resetGridCaches(); // invalide _albumMapCache, _artistMapCache, _artTrackById (renderer-grids.js)
+
+  const idx = trackIdx(id);
+  if (idx < 0) return;
+
+  const tracks = get('tracks');
+  const t      = tracks[idx];
+  if (!t) return;
+
+  const fi    = filteredIdx(t); // recalcul frais — évite un dataset stale
+  const liked = get('liked');
+  const query = get('query') || '';
+  const curIdx = get('curIdx');
+  const isActive = curIdx === idx;
+
+  // A11Y-16 : préserver aria-setsize (taille de la liste filtrée) et le roving
+  // tabstop du nœud remplacé — sinon la ligne re-rendue annonce aria-setsize="0"
+  // et perd son tabindex="0".
+  const isTabStop = el.getAttribute('tabindex') === '0';
+  el.insertAdjacentHTML('beforebegin',
+    thtml(t, fi, { active: isActive, liked: liked?.has(t.id) ?? false, query, setSize: getFiltered().length, isTabStop }));
+  el.remove();
+}
+
 export function updateStats() {
   const tracks = get('tracks') || [];
-  const _btnClearEl = document.getElementById('btn-clear');
-  if (_btnClearEl) _btnClearEl.disabled = (tracks.length === 0);
   const sbEl = document.getElementById('sb-stats');
   if (!sbEl) return;
-  if (tracks.length === 0) {
-    sbEl.innerHTML = `<span class="sb-empty-msg"><svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>${esc(i18n('sb_empty'))}</span>`;
-    return;
-  }
-  // BUG-7 FIX: exclure l'entrée clé-vide (pistes sans tag artiste) du compte sidebar
-  // pour être cohérent avec renderStats() dans stats.js qui fait `if (t.artist)`.
-  const artistCount = _getArtistMap().filter(a => a.key).length;
-  const playCount   = playLog.length;
+  if (tracks.length === 0) return;
+  const artistCount = getArtistMap().length;
   const tracksLbl   = esc(i18n('sb_chip_tracks',  tracks.length));
   const artistsLbl  = esc(i18n('sb_chip_artists', artistCount));
-  const playedLbl   = esc(i18n('sb_chip_played',  playCount));
   sbEl.innerHTML = `
     <span class="sb-stat-chip" aria-label="${tracksLbl}" title="${tracksLbl}">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
@@ -446,45 +639,32 @@ export function updateStats() {
     <span class="sb-stat-chip" aria-label="${artistsLbl}" title="${artistsLbl}">
       <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 20v-1a8 8 0 0 1 16 0v1"/></svg>
       <span class="sb-stat-val" aria-hidden="true">${artistCount.toLocaleString()}</span>
-    </span>
-    <span class="sb-stat-chip" aria-label="${playedLbl}" title="${playedLbl}">
-      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-      <span class="sb-stat-val" aria-hidden="true">${playCount.toLocaleString()}</span>
     </span>`;
 }
 
-/** Planifie une mise à jour des stats après le délai de debounce. */
 export function scheduleStatsUpdate() {
   if (_statsTimer) clearTimeout(_statsTimer);
   _statsTimer = setTimeout(updateStats, CFG.STATS_UPDATE_DELAY);
 }
 
-// ── ERG-P2 : Compteurs par vue dans la sidebar ────────────────────────────────
-/**
- * Met à jour les badges `(N)` à droite des items sidebar fixes :
- *   #ni-all, #ni-liked, #ni-recent, #ni-playlists, #ni-artists, #ni-albums.
- * Réutilise les memo-caches existants (_getArtistMap / _getAlbumMap).
- */
+// Déclenché par i18n.js lors d'un changement de langue — évite le cycle i18n ↔ renderer.
+on(EVENTS.LANG_CHANGED, () => updateStats());
+
 export function updateSidebarCounts() {
   const tracks    = get('tracks')      || [];
-  document.body.classList.toggle('lib-empty', tracks.length === 0);
   const liked     = get('liked');
   const recent    = get('recentPlays') || [];
   const playlists = get('playlists')   || [];
-  // BUG-FIX: remplacer Object.entries(counts) + getElementById par un tableau littéral
-  // de paires [élément caché, compte] — élimine l'allocation Object.entries et les 6
-  // getElementById à chaque appel. Fallback défensif si les caches ne sont pas encore peuplés.
-  const _artistCount = tracks.length ? _getArtistMap().filter(a => a.key).length : 0;
-  const _albumCount  = tracks.length ? _getAlbumMap().length : 0;
-  const _sidebarPairs = [
-    [_sidebarBtnAll       ?? document.getElementById('ni-all'),       tracks.length],
-    [_sidebarBtnLiked     ?? document.getElementById('ni-liked'),     liked ? liked.size : 0],
-    [_sidebarBtnRecent    ?? document.getElementById('ni-recent'),    recent.length],
-    [_sidebarBtnPlaylists ?? document.getElementById('ni-playlists'), playlists.length],
-    [_sidebarBtnArtists   ?? document.getElementById('ni-artists'),   _artistCount],
-    [_sidebarBtnAlbums    ?? document.getElementById('ni-albums'),    _albumCount],
-  ];
-  for (const [btn, n] of _sidebarPairs) {
+  const counts = {
+    'ni-all':       tracks.length,
+    'ni-liked':     liked ? liked.size : 0,
+    'ni-recent':    recent.length,
+    'ni-playlists': playlists.length,
+    'ni-artists':   tracks.length ? getArtistMap().length : 0,
+    'ni-albums':    tracks.length ? getAlbumMap().length  : 0,
+  };
+  for (const [id, n] of Object.entries(counts)) {
+    const btn = document.getElementById(id);
     if (!btn) continue;
     let badge = btn.querySelector('.ni-count');
     if (n > 0) {
@@ -502,9 +682,6 @@ export function updateSidebarCounts() {
   }
 }
 
-// ── View Transition ───────────────────────────────────────────────────────────
-
-/** Exécute `fn` dans une View Transition si disponible, sinon directement. */
 export function _withVT(fn) {
   if (typeof document.startViewTransition === 'function') {
     // startViewTransition() retourne un ViewTransition dont ready et finished
@@ -520,13 +697,22 @@ export function _withVT(fn) {
   }
 }
 
-/* animateViewChange() supprimée (M12, audit bugs visuels 2026-06-11) : morte
-   des deux côtés — aucun call site et aucune règle CSS `.view-in`/@keyframes.
-   La rebrancher = nouvelle feature (spec + keyframes), pas un fix. */
+export function animateViewChange() {
+  const ca = document.getElementById('content-area');
+  if (!ca) return;
+  ca.classList.remove('view-in');
+  // C-4: double-rAF — évite le reflow synchrone forcé; re-query dans l'inner rAF
+  // pour ne pas agir sur un nœud détaché si une transition DOM survient entre les deux ticks
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      const live = document.getElementById('content-area');
+      if (!live) return;
+      live.classList.add('view-in');
+      live.addEventListener('animationend', () => live.classList.remove('view-in'), { once: true });
+    });
+  });
+}
 
-// ── Scroll to current track ───────────────────────────────────────────────────
-
-/** Fait défiler la liste pour centrer la piste en cours de lecture. */
 export function scrollToCurrentTrack() {
   const curIdx = get('curIdx');
   if (curIdx < 0) return;
@@ -546,9 +732,7 @@ export function scrollToCurrentTrack() {
   const rowIdx = VIRT._fiToRowIdx?.get(fi);
   if (rowIdx == null) return;
 
-  // DOM-CACHE : fallback défensif si _listEl pas encore initialisé.
-  if (!_listEl) _listEl = document.getElementById('tlist');
-  const listEl = _listEl;
+  const listEl = document.getElementById('tlist');
   if (!listEl) return;
 
   const offset  = virtOffsetOf(rows, rowIdx);
@@ -567,7 +751,20 @@ export function scrollToCurrentTrack() {
   });
 }
 
-// ── Import history ────────────────────────────────────────────────────────────
+export function renderFormatChips() {
+  const bar = document.getElementById('format-bar');
+  if (!bar) return;
+  const tracks = get('tracks');
+  const formats = [...new Set(tracks.map(t => t.ext).filter(Boolean))].sort();
+  if (formats.length < 2) { bar.innerHTML = ''; return; }
+  const active = get('formatFilter') || '';
+  bar.innerHTML = [
+    `<button class="fmt-chip${!active ? ' active' : ''}" data-action="filter-format" data-fmt="" aria-pressed="${String(!active)}">Tous</button>`,
+    ...formats.map(f =>
+      `<button class="fmt-chip${active === f ? ' active' : ''}" data-action="filter-format" data-fmt="${esc(f)}" aria-pressed="${String(active === f)}">${esc(f)}</button>`
+    ),
+  ].join('');
+}
 
 const _SRC_LABELS = {
   'drag-drop':    'Glisser-déposer',
@@ -576,10 +773,6 @@ const _SRC_LABELS = {
   'manual':       'Manuel',
 };
 
-/**
- * Render import history in #import-history-list (settings panel).
- * Called when the settings Library tab is opened.
- */
 export async function renderImportHistory() {
   const el = document.getElementById('import-history-list');
   if (!el) return;
@@ -597,17 +790,7 @@ export async function renderImportHistory() {
     return `<div class="import-entry">
       <span class="import-date">${esc(dateStr)}</span>
       <span class="import-src">${esc(src)}</span>
-      <span class="import-count">${esc(String(Number(e.count) || 0))} titre${Number(e.count) > 1 ? 's' : ''}</span>
+      <span class="import-count">${e.count} titre${e.count > 1 ? 's' : ''}</span>
     </div>`;
   }).join('');
 }
-
-// ── Barrel re-exports — call sites externes inchangés ────────────────────────
-// (see also renderLib, updateStats, virtRenderWindow etc. exported natively above)
-export { hlText, artPlaceholder, makeLikeBtn, makeAddBtn,
-         thtml, patchActiveTrack, patchPlayState,
-         patchTrackEl }                                      from './renderer-track.js'
-export { renderAlbumsGrid, renderArtistsGrid,
-         renderPlaylistsGrid, drillDown,
-         updatePlActionBar, updateBreadcrumb,
-         renderFormatChips, invalidateGridMaps }             from './renderer-grids.js'

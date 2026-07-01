@@ -19,16 +19,15 @@ import { DB, dget }    from './db.js';
 import { get }         from './store.js';
 import { CFG }         from './cfg.js';
 import { trackIdx }    from './search.js';
-import { updateBar }   from './playerbar.js';
+import { emit, EVENTS } from './bus.js';
 
 // ── Constantes ────────────────────────────────────────────────
 const MAX_CACHE = CFG.MAX_ART_CACHE;   // 60 entrées ≈ 6 MB max
-export const ART_MIME_ALLOWLIST = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/bmp'];
+export const ART_MIME_ALLOWLIST = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/bmp', 'image/tiff'];
 
 // ── Cache LRU ─────────────────────────────────────────────────
 // Map insertion-ordered : le premier élément est le plus ancien (LRU).
-const _cache    = new Map(); // trackId → blob: URL
-const _inflight = new Map(); // trackId → Promise<string|null> (dedup concurrent calls)
+const _cache = new Map(); // trackId → blob: URL
 
 // PERF-CRIT-2 FIX : Set des blob: URLs actuellement référencées par un <img> dans le DOM.
 // Maintenue par _patchArtDOM (add) et revokeArt (delete).
@@ -49,17 +48,12 @@ function _evict() {
   const curIdx = get('curIdx');
   const tracks = get('tracks');
   const curId  = curIdx >= 0 ? tracks[curIdx]?.id : null;
-  // PERF-CRIT-2 FIX : la Set est le fast-path (zéro scan DOM pour les URLs du
-  // chemin liste). FIX pochettes 2026-06-11 : elle ne voit PAS les autres
-  // surfaces (grilles renderer-grids, file queue.js `<img src=t.art>`, drill,
-  // rows re-rendues par thtml quand t.art venait de cacheArt) — révoquer une
-  // de ces URLs cassait l'<img> affichée (pochette qui disparaît). Toute
-  // candidate hors Set est donc confirmée contre le DOM réel avant révocation.
-  // Coût borné : _evict ne tourne qu'à saturation (≥ MAX_CACHE), s'arrête à la
-  // première éviction, et jamais dans la boucle rAF (§10).
+  // PERF-CRIT-2 FIX : utiliser la Set maintenue plutôt que querySelectorAll('img').
   const inDom = _domBlobUrls;
   for (const [id, url] of _cache) {
     if (id === curId || inDom.has(url)) continue;
+    // DOM guard : confirms no visible <img> still references the URL before revoking.
+    // _domBlobUrls only tracks list rows; grids/queue/thtml may reference URLs too.
     if (document.querySelector(`img[src="${url}"]`)) continue;
     _domBlobUrls.delete(url);
     URL.revokeObjectURL(url);
@@ -84,11 +78,6 @@ function _patchArtDOM(t) {
   img.alt       = '';
   img.setAttribute('aria-hidden', 'true');
   img.onload    = () => img.classList.add('art-loaded');
-  img.onerror   = () => { img.style.display = 'none'; _domBlobUrls.delete(t.art); };
-  // ART-2 : retirer l'ancienne blob: URL de la Set avant remplacement pour
-  // éviter qu'une URL orpheline soit considérée comme "en DOM" par _evict().
-  const prevSrc = img.src;
-  if (prevSrc?.startsWith('blob:')) _domBlobUrls.delete(prevSrc);
   img.src       = t.art;
   // PERF-CRIT-2 FIX : enregistrer l'URL dans la Set pour que _evict() sache
   // qu'elle est référencée dans le DOM sans scanner querySelectorAll('img').
@@ -113,11 +102,11 @@ function _patchArtDOM(t) {
  * @param {object} t - Track object (doit avoir _hasArt, noArt, id)
  * @returns {Promise<string|null>} blob: URL ou null si la piste n'a pas d'artwork
  */
-export function getArtUrl(t) {
-  if (!t || !t._hasArt || t.noArt) return Promise.resolve(null);
+export async function getArtUrl(t) {
+  if (!t || !t._hasArt || t.noArt) return null;
 
   // Artwork déjà résolu
-  if (t.art) return Promise.resolve(t.art);
+  if (t.art) return t.art;
 
   // Hit LRU — réutiliser l'URL existante (rafraîchir l'ordre LRU)
   if (_cache.has(t.id)) {
@@ -125,18 +114,9 @@ export function getArtUrl(t) {
     _cache.delete(t.id);
     _cache.set(t.id, cached);           // déplace en fin (= plus récent)
     t.art = cached;
-    return Promise.resolve(cached);
+    return cached;
   }
 
-  // ART-1 : dédupliquer les appels concurrents pour éviter des blob: URLs fantômes.
-  if (_inflight.has(t.id)) return _inflight.get(t.id);
-
-  const p = _fetchFromIdb(t).finally(() => _inflight.delete(t.id));
-  _inflight.set(t.id, p);
-  return p;
-}
-
-async function _fetchFromIdb(t) {
   // Bytes déjà en mémoire (LRU évicté, mais _artBuf non effacé) — recréer sans IDB
   if (t._artBuf) {
     _evict();
@@ -199,7 +179,7 @@ export async function loadArt(t) {
   if (!url) return;
   _patchArtDOM(t);
   // updateBar uniquement quand l'artwork vient d'être résolu (parité avec l'ancien comportement).
-  if (!hadArt && trackIdx(t.id) === get('curIdx')) updateBar();
+  if (!hadArt && trackIdx(t.id) === get('curIdx')) emit(EVENTS.PLAYERBAR_UPDATE, {});
 }
 
 /**
@@ -242,17 +222,18 @@ export function revokeArt(trackId) {
  */
 export function cacheArt(t) {
   if (!t._artBuf) return null;
-  // Si une entrée existe deja (rare : re-scan watch-folder, tag-edit), revoke
-  // pour eviter la fuite avant remplacement — SAUF si l'URL est encore affichée
-  // (FIX pochettes 2026-06-11 : la révoquer cassait l'<img> à l'écran ; on la
-  // laisse vivre, l'orpheline sera revue par _evict une fois sortie du DOM).
+  // Si une entrée existe deja (rare), revoke pour eviter la fuite avant remplacement
   const existing = _cache.get(t.id);
   if (existing) {
-    _cache.delete(t.id);
-    if (!document.querySelector(`img[src="${existing}"]`)) {
-      _domBlobUrls.delete(existing);
+    if (document.querySelector(`img[src="${existing}"]`)) {
+      // Still displayed — tell _evict() about it so it won't revoke it either,
+      // then let the cache entry be replaced; the live URL stays valid until the
+      // next _evict() cycle where the DOM guard will protect it again.
+      _domBlobUrls.add(existing);
+    } else {
       URL.revokeObjectURL(existing);
     }
+    _cache.delete(t.id);
   }
   _evict();
   const url = URL.createObjectURL(new Blob([t._artBuf], { type: t._artMime || 'image/jpeg' }));
@@ -297,21 +278,18 @@ export async function resolveArtBuf(t) {
     t._artMime = mime;
     return { buf: t._artBuf, mime };
   }
-  // Fallback : blob: URL (ne devrait plus arriver post-migration — fetch() banni §15)
-  // PM-6 : le blob: URL peut être révoqué par le LRU avant flushTrackBatch.
-  // Aller directement en IDB sans passer par fetch().
+  // Fallback : blob: URL révoquée ou post-migration — aller directement en IDB (fetch interdit §15)
   if (t.art.startsWith('blob:')) {
-    console.warn('[resolveArtBuf] blob: URL résiduelle détectée (post-migration), tentative IDB:', t.id);
+    t.art = null; // invalider l'URL révoquée pour éviter de retomber ici
     if (t._hasArt && !t.noArt) {
       try {
         const rec = await dget('tracks', t.id);
         if (rec?.artBuf) {
           t._artBuf  = rec.artBuf;
           t._artMime = ART_MIME_ALLOWLIST.includes(rec.artMime) ? rec.artMime : 'image/jpeg';
-          t.art      = null; // invalider l'URL résiduelle pour éviter de retomber ici
           return { buf: t._artBuf, mime: t._artMime };
         }
-      } catch(e) { console.warn('[resolveArtBuf] IDB fallback for blob: URL failed for', t.id, e); }
+      } catch(e) { console.warn('[resolveArtBuf] IDB fallback for blob: failed:', t.id, e); }
     }
     return null;
   }

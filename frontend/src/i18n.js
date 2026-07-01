@@ -1,22 +1,19 @@
 // LibreFlow — Localisation strings
 //
 // LANGS is the single source of truth for all UI text.
-// i18n(key, ...args) lives in app.js because it reads the app-level `lang` var.
-// Import LANGS here when you need direct dict access (e.g. language pickers).
+// Locale strings live in i18n.fr.js and i18n.en.js.
+// i18n(key, ...args) translates a key in the active locale, with FR fallback.
 
 import { emit, EVENTS } from './bus.js';
-import { updateStats } from './renderer.js';
+import { setCrossfade } from './player.js';
 import { get } from './store.js';
-import { fr }  from './i18n.fr.js';
-import { en }  from './i18n.en.js';
 
-export const LANGS = { fr, en }
+import fr from './i18n.fr.js';
+import en from './i18n.en.js';
+
+export const LANGS = { fr, en };
 
 // ── Runtime i18n state ───────────────────────────────────────
-// `lang` est la locale active. initLang() l'initialise depuis la config au
-// démarrage (sans effets de bord). setLang() est réservé aux changements
-// utilisateur (sauvegarde + rafraîchissement de l'UI).
-
 let lang = 'fr';
 
 /** Initialise la locale au démarrage, sans side-effects. Appelé depuis boot(). */
@@ -52,11 +49,8 @@ export function applyLang() {
   };
   const setHtml = (sel, key, isId = false) => {
     const el = isId ? document.getElementById(sel) : document.querySelector(sel);
-    // SECURITY: keys passed to setHtml must be purely static HTML from the i18n bundle.
-    // Never use with keys that interpolate user data (t.name, artist, path, etc.).
     if (el) el.innerHTML = i18n(key);
   };
-  // I18N-3: accept pre-translated value directly — callers already pass i18n() result
   const setAttrEl = (id, attr, val) => {
     const el = document.getElementById(id);
     if (el) el[attr] = val;
@@ -74,8 +68,6 @@ export function applyLang() {
   document.querySelectorAll('[data-i18n]').forEach(el => {
     el.textContent = i18n(el.dataset.i18n);
   });
-  // SECURITY: data-i18n-html keys must be purely static HTML from the i18n bundle.
-  // Never use this attribute with keys that interpolate user data (t.name, artist, path, etc.).
   document.querySelectorAll('[data-i18n-html]').forEach(el => {
     el.innerHTML = i18n(el.dataset.i18nHtml);
   });
@@ -91,15 +83,12 @@ export function applyLang() {
     el.setAttribute('aria-label', i18n(el.dataset.ariaI18n));
   });
 
-  // Stats
-  updateStats();
+  // Stats — renderer écoute LANG_CHANGED et appelle updateStats() lui-même.
+  emit(EVENTS.LANG_CHANGED, {});
 
-  // Sort label + sort button aria-label (boot-time; nextSort() keeps it in sync on cycle)
+  // Sort label
   const SLBLS_I18N = { az: 'sort_az', za: 'sort_za', artist: 'sort_artist', album: 'sort_album', recent: 'sort_recent' };
-  const _sortKey = SLBLS_I18N[get('sort')] || 'sort_az';
-  setText('sort-lbl', _sortKey, true);
-  const _sortBtn = document.getElementById('main-sort-btn');
-  if (_sortBtn) _sortBtn.setAttribute('aria-label', `${i18n('pl_sort_label')}: ${i18n(_sortKey)}`);
+  setText('sort-lbl', SLBLS_I18N[get('sort')] || 'sort_az', true);
 
   // Placeholders & titles
   setAttrEl('srch',     'placeholder', i18n('srch_ph'));
@@ -132,7 +121,6 @@ export function applyLang() {
   });
 
   // Sidebar buttons
-  setBtnText('.btn-scan',  'btn_scan');
   setBtnText('.btn-clear', 'btn_clear');
 
   // Clear modal
@@ -159,8 +147,8 @@ export function applyLang() {
   // Lang toggle highlight
   const lf = document.getElementById('lang-fr');
   const le = document.getElementById('lang-en');
-  if (lf) { lf.classList.toggle('on', lang === 'fr'); lf.setAttribute('aria-pressed', String(lang === 'fr')); }
-  if (le) { le.classList.toggle('on', lang === 'en'); le.setAttribute('aria-pressed', String(lang === 'en')); }
+  if (lf) lf.classList.toggle('on', lang === 'fr');
+  if (le) le.classList.toggle('on', lang === 'en');
 
   // Mode buttons highlight
   const md = document.getElementById('mode-dark-btn');
@@ -172,6 +160,7 @@ export function applyLang() {
   const vlib = document.getElementById('vlib');
   if (vlib && vlib.classList.contains('on')) emit(EVENTS.RENDER_LIB, {});
 
-  // Notify app.js to apply theme + crossfade (I18N-2: removed direct cross-module calls, §6 §9)
-  emit(EVENTS.LANG_CHANGED, {});
+  // Apply theme and crossfade
+  emit(EVENTS.THEME_APPLY_REQUEST, {});
+  setCrossfade(get('crossfadeDur') || 0);
 }

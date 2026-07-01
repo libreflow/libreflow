@@ -53,8 +53,6 @@
  * @property {PlSortKey}        plSort
  * @property {string|null}      ctxTrackId
  * @property {string}           formatFilter
- * @property {string}           tlistZoom
- * @property {boolean}          queuePinned
  */
 
 /** @type {AppState} */
@@ -98,8 +96,6 @@ const _state = {
   // ── Misc ─────────────────────────────────────────────────────────────
   ctxTrackId:        null,      // string | null — track id for context menu
   formatFilter:      '',        // '' = tous, 'MP3'/'FLAC'/etc. = filtre actif
-  tlistZoom:         'normal',  // 'normal' | 'compact' | 'comfortable' — track list zoom level
-  queuePinned:       false,     // boolean — whether the queue panel is pinned open
 };
 
 /** @type {Map<string, Set<Function>>} */
@@ -145,12 +141,7 @@ export function get(key) {
  * @param {AppState[K]} val
  */
 export function set(key, val) {
-  if (_state[key] === val) {
-    if (Array.isArray(val) || val instanceof Set || (val && typeof val === 'object')) {
-      console.warn('[store] set() called with same reference for', key, '— use notify() for in-place mutations');
-    }
-    return;
-  }
+  if (_state[key] === val) return;
   _state[key] = val;
   _notify(key, val);
 }
@@ -177,8 +168,6 @@ export function setBatch(updates) {
     _state[key] = val;
     toNotify.push(key);
   }
-  // WARNING: subscribers notified during setBatch must NOT call set() on other keys in the same batch.
-  // Re-entrant mutations during batch notification cause ordering hazards.
   for (const key of toNotify) _notify(key, _state[key]);
 }
 

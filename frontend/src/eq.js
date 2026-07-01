@@ -1,25 +1,53 @@
 // eq.js — Pipeline Web Audio : EQ 10 bandes, SmartEQ, presets, A/B, courbe
-// Graphe : audio → eqSource → audioOutGain → eqNodes[0..9] → eqAnalyser → eqLimiter → masterGainNode → destination
+//
+// Architecture du graphe (après initEQ()) :
+//   audio (HTMLAudioElement)
+//     → eqSource (MediaElementSource) [singleton via audio._src]
+//     → [rgGainNode (replaygain.js — câblé si initRG() appelé)]
+//     → audioOutGain (GainNode — point d'injection ReplayGain)
+//     → eqNodes[0..9] (BiquadFilterNode × 10)
+//     → eqAnalyser (AnalyserNode)
+//     → eqLimiter (DynamicsCompressorNode — protection écrêtage)
+//     → masterGainNode (GainNode — volume principal)
+//     → destination
+//
+// Exports :
+//   eqCtx, eqSource, eqNodes, eqEnabled, eqOpen, eqAutoMode
+//   eqAnalyser, audioOutGain, masterGainNode
+//   initEQ, ensureEQResumed, initBootEQ
+//   toggleEQ, closeEQ, setEQBand, applyEQPreset, getActiveEqPreset, applyEQGains
+//   setEQAutoMode, toggleEQAutoMode, applyGenreEQ
+//   startSmartEQ, stopSmartEQ, updateSmartEQLoudness, updateSmartEQGenre
+//   loadEQProfiles, getEQProfiles
+//   renderEQBands, filterEQPresets, toggleEQAB
+//   setMasterGain
 
-import { panelOpen, panelClose, set as motionSet } from './motion.js';
 import { get, set } from './store.js';
 import { emit, EVENTS } from './bus.js';
 import { i18n } from './i18n.js';
-import { drawEQCurve } from './eq-curve.js';
 
+// ── Fréquences Bark (10 bandes) ──────────────────────────────────────────────
 const EQ_FREQS = [32, 64, 125, 250, 500, 1000, 2000, 4000, 8000, 16000];
 const EQ_BAND_COUNT = 10;
 
 // ── Noeuds exportés (live bindings) ──────────────────────────────────────────
+/** @type {AudioContext | null} */
 export let eqCtx        = null;
+/** @type {MediaElementAudioSourceNode | null} */
 export let eqSource     = null;
+/** @type {BiquadFilterNode[]} */
 export let eqNodes      = [];
+/** @type {AnalyserNode | null} */
 export let eqAnalyser   = null;
+/** @type {GainNode | null} */
 export let audioOutGain = null;
+/** @type {GainNode | null} */
 export let masterGainNode = null;
 export let eqEnabled    = false;
 export let eqOpen       = false;
 export let eqAutoMode   = false;
+
+// Noeud limiter interne (non exporté)
 let eqLimiter = null;
 
 // ── État boot (avant initEQ()) ────────────────────────────────────────────────
@@ -28,7 +56,13 @@ let _bootEnabled    = false;
 let _bootPreset     = null;
 let _eqInitialized  = false;  // R6 — singleton guard : empêche createMediaElementSource × N
 let _eqInitFailed   = false;  // B30 — true si new AudioContext() a échoué : court-circuite les retries
+// Valeurs cibles (pas les valeurs interpolées des AudioParam live) — source de vérité pour la persistence.
+let _targetGains    = new Array(EQ_BAND_COUNT).fill(0);
 
+/** Retourne une copie des gains cibles actuels (indépendant des ramps AudioParam en cours). */
+export function getEQGains() { return [..._targetGains]; }
+
+// ── Presets ───────────────────────────────────────────────────────────────────
 // Gains en dB pour [32,64,125,250,500,1k,2k,4k,8k,16k]
 const EQ_PRESETS = Object.freeze({
   flat:        [ 0,  0,  0,  0,  0,  0,  0,  0,  0,  0],
@@ -83,13 +117,17 @@ let _activePreset  = 'flat';
 let _abMode        = false;      // true = affiche preset A (flat), false = preset courant
 let _abSavedGains  = null;       // gains sauvegardés avant mode A/B
 let _preBypassGains = null;      // gains sauvegardés avant bypass (power off) — restaurés au ré-enable
-let _currentGains   = null;      // gains intentionnels courants — synchronisés dans _applyGains() avant setTargetAtTime
-let _pendingVol     = null;      // volume mémorisé avant initEQ() (setMasterGain appelé avant l'init)
+
+// ── Profiles utilisateur ──────────────────────────────────────────────────────
 let _eqProfiles = {};
+
+// ── Smart EQ ──────────────────────────────────────────────────────────────────
 let _smartGenre    = '';
 let _smartLoudness = 0;
 
 // ── Boot config (sauvegardé AVANT initEQ()) ───────────────────────────────────
+/** Appelé au boot par app.js AVANT que l'AudioContext existe.
+ *  Stocke la config pour l'appliquer dans initEQ(). */
 export function initBootEQ(gains, enabled, preset) {
   _bootGains   = gains   ?? null;
   _bootEnabled = !!enabled;
@@ -97,15 +135,20 @@ export function initBootEQ(gains, enabled, preset) {
 }
 
 // ── initEQ() — singleton lazy ─────────────────────────────────────────────────
+/** Initialise le pipeline Web Audio. Appel idempotent (singleton).
+ *  N'accepte aucun argument — lit la config via _bootGains / _bootEnabled. */
 export function initEQ() {
-  // B30: _eqInitFailed court-circuite les retries après échec de new AudioContext().
-  if (_eqInitialized || _eqInitFailed) return;
+  // B30 FIX : _eqInitFailed court-circuite les retries — sans ça, un échec de
+  // `new AudioContext()` laisse eqCtx=null sans flag et chaque setEQBand /
+  // applyEQPreset / toggleEQAB re-tente (et re-échoue) indéfiniment.
+  if (_eqInitialized || _eqInitFailed) return;   // R6 — singleton : createMediaElementSource ne doit être appelé qu'une fois
 
   const audio = document.getElementById('audio');
   if (!audio) { console.warn('[eq] <audio> introuvable'); return; }
 
   try {
-    eqCtx = new (window.AudioContext || window.webkitAudioContext)(); // @ts-ignore
+    // @ts-ignore — webkitAudioContext est non-standard (Safari/WebKit) mais présent dans Tauri WebView
+    eqCtx = new (window.AudioContext || window.webkitAudioContext)();
   } catch (e) {
     console.warn('[eq] AudioContext non disponible', e);
     _eqInitFailed = true;
@@ -118,7 +161,7 @@ export function initEQ() {
     }
   };
 
-  // Singleton MediaElementSource
+  // ── Singleton MediaElementSource ──────────────────────────────────────────
   if (!audio._src) {
     eqSource = eqCtx.createMediaElementSource(audio);
     audio._src = eqSource;
@@ -126,10 +169,11 @@ export function initEQ() {
     eqSource = audio._src;
   }
 
+  // ── audioOutGain : point d'injection pour ReplayGain ──────────────────────
   audioOutGain = eqCtx.createGain();
-  audioOutGain.gain.setTargetAtTime(1.0, eqCtx.currentTime, 0.02);
+  audioOutGain.gain.setValueAtTime(1.0, eqCtx.currentTime);
 
-  // 10 biquad filters
+  // ── 10 biquad filters ─────────────────────────────────────────────────────
   eqNodes = EQ_FREQS.map((freq, i) => {
     const f = eqCtx.createBiquadFilter();
     if (i === 0)               f.type = 'lowshelf';
@@ -137,29 +181,31 @@ export function initEQ() {
     else                       f.type = 'peaking';
     f.frequency.setValueAtTime(freq, eqCtx.currentTime);
     f.Q.setValueAtTime(1.4, eqCtx.currentTime);
-    f.gain.setTargetAtTime(0, eqCtx.currentTime, 0.02);
+    f.gain.setValueAtTime(0, eqCtx.currentTime);
     return f;
   });
 
+  // ── AnalyserNode ──────────────────────────────────────────────────────────
   eqAnalyser = eqCtx.createAnalyser();
   eqAnalyser.fftSize = 2048;
   eqAnalyser.smoothingTimeConstant = 0.8;
 
+  // ── Limiter (DynamicsCompressor) ──────────────────────────────────────────
   eqLimiter = eqCtx.createDynamicsCompressor();
-  eqLimiter.threshold.setValueAtTime(-1,    eqCtx.currentTime);
-  eqLimiter.knee.setValueAtTime(0,          eqCtx.currentTime);
-  eqLimiter.ratio.setValueAtTime(20,        eqCtx.currentTime);
-  eqLimiter.attack.setValueAtTime(0.003,    eqCtx.currentTime);
-  eqLimiter.release.setValueAtTime(0.25,    eqCtx.currentTime);
+  eqLimiter.threshold.setValueAtTime(-1,     eqCtx.currentTime);
+  eqLimiter.knee.setValueAtTime(0,           eqCtx.currentTime);
+  eqLimiter.ratio.setValueAtTime(20,         eqCtx.currentTime);
+  eqLimiter.attack.setValueAtTime(0.003,     eqCtx.currentTime);
+  eqLimiter.release.setValueAtTime(0.25,     eqCtx.currentTime);
 
+  // ── masterGainNode ────────────────────────────────────────────────────────
   masterGainNode = eqCtx.createGain();
-  // Volume depuis slider DOM ; _pendingVol prioritaire si setMasterGain appelé avant init
+  // Lire le volume depuis le slider DOM (JAMAIS hardcoder 1.0)
   const _volEl = document.getElementById('vol');
-  const _raw = _pendingVol !== null ? _pendingVol : (_volEl ? parseFloat(_volEl.value) : 1);
-  const _initVol = (isFinite(_raw) && _raw >= 0) ? Math.min(_raw, 1) : 1;
-  masterGainNode.gain.setTargetAtTime(_initVol, eqCtx.currentTime, 0.02);
-  _pendingVol = null;
+  masterGainNode.gain.setValueAtTime(_volEl ? parseFloat(_volEl.value) : 1, eqCtx.currentTime);
 
+  // ── Câblage du graphe ─────────────────────────────────────────────────────
+  // eqSource → audioOutGain → eqNodes[0..9] → eqAnalyser → eqLimiter → masterGainNode → destination
   eqSource.connect(audioOutGain);
   audioOutGain.connect(eqNodes[0]);
   for (let i = 0; i < eqNodes.length - 1; i++) {
@@ -170,34 +216,31 @@ export function initEQ() {
   eqLimiter.connect(masterGainNode);
   masterGainNode.connect(eqCtx.destination);
 
+  // R6 — marquer comme initialisé une fois le graphe entièrement câblé
   _eqInitialized = true;
 
+  // ── Appliquer la config boot ──────────────────────────────────────────────
   if (_bootPreset && EQ_PRESETS[_bootPreset]) {
     _activePreset = _bootPreset;
-    _applyGains(EQ_PRESETS[_bootPreset], true);
+    _applyGains(EQ_PRESETS[_bootPreset]);
   } else if (_bootGains && _bootGains.length === EQ_BAND_COUNT) {
-    _applyGains(Array.from(_bootGains), true);
+    _applyGains(Array.from(_bootGains));
   }
 
   eqEnabled = _bootEnabled;
   if (!eqEnabled) {
-    if (_bootPreset && EQ_PRESETS[_bootPreset]) {
-      _preBypassGains = [...EQ_PRESETS[_bootPreset]];
-    } else if (_bootGains && _bootGains.length === EQ_BAND_COUNT) {
-      _preBypassGains = Array.from(_bootGains);
-    } else {
-      _preBypassGains = new Array(EQ_BAND_COUNT).fill(0);
-    }
-    _applyGains(new Array(EQ_BAND_COUNT).fill(0), true);
+    // Bypass : remettre toutes les bandes à 0
+    _applyGains(new Array(EQ_BAND_COUNT).fill(0));
   }
 
   renderEQBands();
   _drawEQCurve();
-  _attachEqCurveResizeObserver();
+  _attachEqCurveResizeObserver(); // R-M7 : redessine la courbe au resize du wrap
   _syncEQUI();
 }
 
 // ── ensureEQResumed ───────────────────────────────────────────────────────────
+/** Relance l'AudioContext si suspendu ou interrompu (autoplay policy, OS interrupt). */
 export function ensureEQResumed() {
   if (eqCtx && (eqCtx.state === 'suspended' || eqCtx.state === 'interrupted')) {
     eqCtx.resume().catch(e => console.warn('[eq:resume]', e));
@@ -205,17 +248,21 @@ export function ensureEQResumed() {
 }
 
 // ── setMasterGain ─────────────────────────────────────────────────────────────
-export function setMasterGain(v, immediate = false) {
+/** Met à jour le gain principal.
+ *  Si EQ non encore initialisé, met audio.volume comme fallback. */
+export function setMasterGain(v) {
   const val = Math.max(0, Math.min(1, v));
   if (masterGainNode && eqCtx) {
-    const tc = immediate ? 0.002 : 0.01;
-    masterGainNode.gain.setTargetAtTime(val, eqCtx.currentTime, tc);
+    masterGainNode.gain.setTargetAtTime(val, eqCtx.currentTime, 0.01);
   } else {
-    _pendingVol = val;
+    // Fallback avant initEQ() — lire depuis le slider DOM (R1 : jamais hardcoder audio.volume)
+    const _audio = document.getElementById('audio');
+    const _volEl = document.getElementById('vol');
+    if (_audio && _volEl) _audio.volume = parseFloat(_volEl.value);
   }
 }
 
-// ── Focus trap EQ ────────────────────────────────────────────────────────────
+// ── Focus trap EQ (FOCUS-1) ───────────────────────────────────────────────────
 const _EQ_FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
 let _eqFocusTrap = null;
 
@@ -245,7 +292,13 @@ export function toggleEQ() {
   if (!panel) return;
   eqOpen = !eqOpen;
   panel.classList.toggle('open', eqOpen);
+  // Parité avec la file d'attente : pousser #main (padding-right) au lieu de le
+  // recouvrir. La règle CSS #app.panel-eq-open #main existait mais la classe
+  // n'était jamais posée — le panneau EQ chevauchait la bibliothèque.
   document.getElementById('app')?.classList.toggle('panel-eq-open', eqOpen);
+  // A11Y : aria-expanded reflète l'ouverture du panneau ; .active = repère visuel
+  // d'ouverture (cohérent avec #btn-queue). L'état ACTIVÉ de l'EQ vit désormais
+  // sur le bouton power du panneau (.eq-power), plus sur #btn-eq (levée de l'ambiguïté).
   const _eqBtn = document.getElementById('btn-eq');
   if (_eqBtn) {
     _eqBtn.setAttribute('aria-expanded', eqOpen ? 'true' : 'false');
@@ -256,34 +309,33 @@ export function toggleEQ() {
     renderEQBands();
     _drawEQCurve();
     _syncEQUI();
+    // FOCUS-1 FIX : activer le trap quand le panneau est ouvert
     _setupEQFocusTrap(panel);
-    panelOpen(panel);
   }
 }
 
 export function closeEQ() {
   if (!eqOpen) return;
   eqOpen = false;
+  const panel = document.getElementById('eq-panel');
+  if (panel) panel.classList.remove('open');
   const _eqBtn = document.getElementById('btn-eq');
-  _eqBtn?.setAttribute('aria-expanded', 'false');
-  _eqBtn?.classList.remove('active');
-  document.getElementById('app')?.classList.remove('panel-eq-open');
-  const ep = document.getElementById('eq-panel');
-  if (!ep) return;
-  panelClose(ep).then(() => {
-    ep.classList.remove('open');
-    motionSet(ep, { clearProps: 'opacity,transform' });
-  });
+  _eqBtn?.setAttribute('aria-expanded', 'false'); // A11Y
+  _eqBtn?.classList.remove('active');              // repère d'ouverture
+  document.getElementById('app')?.classList.remove('panel-eq-open'); // libère le push de #main
 }
 
 // ── setEQBand ─────────────────────────────────────────────────────────────────
+/** Modifie le gain de la bande `idx` (0-9) à la valeur `db` (en dB). */
 export function setEQBand(idx, db) {
   if (isNaN(db) || !isFinite(db)) return;
   if (!eqCtx) initEQ();
   if (!eqNodes[idx]) return;
   const val = Math.max(-12, Math.min(12, db));
+  _targetGains[idx] = val;
   eqNodes[idx].gain.setTargetAtTime(val, eqCtx.currentTime, 0.01);
-  if (_currentGains?.length === EQ_BAND_COUNT) _currentGains[idx] = val;
+  // Mettre à jour l'affichage du slider. Le libellé visible n'affiche plus « dB »
+  // (l'échelle l'implique, ça évite le retour à la ligne) ; aria-valuetext le garde.
   const num = (val >= 0 ? '+' : '') + val.toFixed(1);
   const slider = document.querySelector(`#eq-bands [data-band="${idx}"]`);
   if (slider) {
@@ -297,6 +349,8 @@ export function setEQBand(idx, db) {
     label.classList.toggle('eq-val--cut',   val < 0);
     label.classList.toggle('eq-val--flat',  val === 0);
   }
+  // Une édition manuelle rend le réglage « personnalisé » : on désélectionne le
+  // preset actif et on met à jour l'indicateur (sinon le footer mentait encore).
   if (_activePreset !== 'custom') {
     _activePreset = 'custom';
     _updatePresetBtns('custom');
@@ -305,22 +359,20 @@ export function setEQBand(idx, db) {
 }
 
 // ── _applyGains ───────────────────────────────────────────────────────────────
-function _applyGains(gains, immediate = false) {
+/** Applique un tableau de 10 gains aux noeuds EQ via setTargetAtTime (§9). */
+function _applyGains(gains) {
   if (!eqCtx || !eqNodes.length) return;
-  const tc = immediate ? 0.002 : 0.02;
-  if (!_currentGains || _currentGains.length !== EQ_BAND_COUNT) {
-    _currentGains = new Array(EQ_BAND_COUNT).fill(0);
-  }
   for (let i = 0; i < EQ_BAND_COUNT; i++) {
-    const val = Number.isFinite(gains[i]) ? gains[i] : 0;
-    _currentGains[i] = val;
-    eqNodes[i].gain.setTargetAtTime(val, eqCtx.currentTime, tc);
+    const val = gains[i] ?? 0;
+    _targetGains[i] = val;
+    eqNodes[i].gain.setTargetAtTime(val, eqCtx.currentTime, 0.02);
   }
 }
 
+// ── Animation spring sliders ──────────────────────────────────────────────────
 let _animFrame = 0;
 
-// Approximation de --spring-soft : cubic-bezier(.34,1.2,.64,1)
+/** Approximation de --spring-soft : cubic-bezier(.34,1.2,.64,1) */
 function _easeSpringSoft(t) {
   if (t <= 0) return 0;
   if (t >= 1) return 1;
@@ -328,6 +380,11 @@ function _easeSpringSoft(t) {
   return 1 - u * u * u * (1 + 2.2 * t);
 }
 
+/**
+ * Anime visuellement les sliders de leur position courante vers targetGains.
+ * Audio : géré en amont via setTargetAtTime (_applyGains).
+ * Visual : rAF 220ms avec spring-soft — ne touche pas au graphe audio.
+ */
 function _animateSlidersTo(targetGains) {
   cancelAnimationFrame(_animFrame);
   const DUR    = 220; // --dur-mid
@@ -352,7 +409,7 @@ function _animateSlidersTo(targetGains) {
       if (slider) slider.value = v;
       if (label) {
         const cls = v > 0.05 ? 'eq-val--boost' : v < -0.05 ? 'eq-val--cut' : 'eq-val--flat';
-        label.textContent = (v >= 0 ? '+' : '') + v.toFixed(1);
+        label.textContent = (v >= 0 ? '+' : '') + v.toFixed(1); // sans « dB » (cf. #11)
         label.className   = `eq-val ${cls}`;
       }
     });
@@ -367,9 +424,11 @@ export function applyEQPreset(presetName) {
   if (!eqCtx) initEQ();
   const gains = EQ_PRESETS[presetName] ?? EQ_PRESETS.flat;
   _activePreset = presetName;
-  _applyGains(gains);
+  _applyGains(gains);              // audio : setTargetAtTime (sans click)
   _updatePresetBtns(presetName);
-  _animateSlidersTo(gains);
+  _animateSlidersTo(gains);        // visuel : spring 220ms
+  // Les gains du preset priment sur une éventuelle sauvegarde de bypass, et on
+  // active sans repasser par _setEQEnabled (qui ré-appliquerait des gains).
   _preBypassGains = null;
   if (!eqEnabled) { eqEnabled = true; _updatePowerBtn(); }
 }
@@ -378,16 +437,14 @@ export function getActiveEqPreset() {
   return _activePreset;
 }
 
-export function getCurrentGains() {
-  return (_currentGains?.length === EQ_BAND_COUNT) ? [..._currentGains] : null;
-}
-
+/** Applique un tableau de 10 gains (en dB) depuis un profil par appareil.
+ *  Active l'EQ si nécessaire et marque le preset comme 'custom'. */
 export function applyEQGains(bands) {
   if (!Array.isArray(bands) || bands.length !== EQ_BAND_COUNT) return;
   if (!eqCtx) initEQ();
   _activePreset = 'custom';
   _applyGains(bands);
-  _updatePresetBtns('custom');
+  _updatePresetBtns('custom'); // aucun preset bouton actif
   _animateSlidersTo(bands);
   _preBypassGains = null;
   if (!eqEnabled) { eqEnabled = true; _updatePowerBtn(); }
@@ -397,16 +454,17 @@ export function applyEQGains(bands) {
 function _setEQEnabled(val) {
   eqEnabled = !!val;
   _updatePowerBtn();
+  // Cohérence visuelle du bypass : .eq-off grise + neutralise les bandes/courbe
+  // (cf. _drawEQCurve qui lit les noeuds aplatis) → ce qu'on voit = ce qu'on entend.
   document.getElementById('eq-panel')?.classList.toggle('eq-off', !eqEnabled);
   const zeros = new Array(EQ_BAND_COUNT).fill(0);
   if (!eqEnabled) {
-    // M5: préférer _currentGains (cible intentionnelle) pour éviter une valeur mid-ramp.
-    _preBypassGains = (_currentGains?.length === EQ_BAND_COUNT)
-      ? [..._currentGains]
-      : (EQ_PRESETS[_activePreset] ? [...EQ_PRESETS[_activePreset]] : null);
+    // Bypass : mémoriser les gains courants (custom inclus) puis aplatir (audio + visuel).
+    _preBypassGains = [..._targetGains];
     _applyGains(zeros);
     _animateSlidersTo(zeros);
   } else if (_preBypassGains) {
+    // Ré-enable : restaurer exactement ce qui était là avant le bypass.
     _applyGains(_preBypassGains);
     _animateSlidersTo(_preBypassGains);
     _preBypassGains = null;
@@ -417,6 +475,7 @@ function _setEQEnabled(val) {
   }
 }
 
+/** Reflète l'état ACTIVÉ/bypass sur le bouton power du panneau (.eq-power). */
 function _updatePowerBtn() {
   const btn = document.querySelector('#eq-panel .eq-power');
   if (!btn) return;
@@ -426,16 +485,24 @@ function _updatePowerBtn() {
   if (lbl) lbl.textContent = i18n(eqEnabled ? 'eq_on' : 'eq_off');
 }
 
-// ── applyGenreEQ / Smart EQ ───────────────────────────────────────────────────
+// ── applyGenreEQ ─────────────────────────────────────────────────────────────
+/** Applique le preset correspondant au genre donné (clé normalisée). */
 export function applyGenreEQ(genre) {
   if (!genre) return;
   const preset = GENRE_TO_PRESET[genre.toLowerCase()] ?? null;
   if (preset) applyEQPreset(preset);
 }
 
+// ── Smart EQ ──────────────────────────────────────────────────────────────────
 let _smartRunning = false;
-export function startSmartEQ() { _smartRunning = true; }
-export function stopSmartEQ()  { _smartRunning = false; }
+
+export function startSmartEQ() {
+  _smartRunning = true;
+}
+
+export function stopSmartEQ() {
+  _smartRunning = false;
+}
 
 export function updateSmartEQGenre(genre) {
   _smartGenre = genre || '';
@@ -446,19 +513,23 @@ export function updateSmartEQGenre(genre) {
 
 export function updateSmartEQLoudness(lufs) {
   _smartLoudness = lufs ?? 0;
+  // Compensation loudness légère (±2 dB max), multipliée par le volume courant du slider
   if (masterGainNode && eqCtx) {
     const target   = -14; // LUFS cible
     const delta    = Math.max(-2, Math.min(2, target - _smartLoudness));
     const compGain = Math.pow(10, delta / 20);
     const _volEl   = document.getElementById('vol');
     const volGain  = _volEl ? Math.max(0, Math.min(1, parseFloat(_volEl.value))) : 1;
-    masterGainNode.gain.setTargetAtTime(Math.min(1, volGain * compGain), eqCtx.currentTime, 0.3);
+    masterGainNode.gain.setTargetAtTime(volGain * compGain, eqCtx.currentTime, 0.3);
   }
 }
 
 // ── setEQAutoMode / toggleEQAutoMode ─────────────────────────────────────────
 export function setEQAutoMode(val) {
   eqAutoMode = !!val;
+  // Refléter l'état AUTO dans l'UI : presets/catégories grisés, bandes en lecture
+  // seule (teinte art-color), bouton AUTO pressé. (Les éléments peuvent ne pas
+  // exister au boot → querySelector null-safe.)
   document.getElementById('eq-presets')?.classList.toggle('eq-presets--disabled', eqAutoMode);
   document.getElementById('eq-cats')?.classList.toggle('eq-cats--disabled', eqAutoMode);
   document.getElementById('eq-bands')?.classList.toggle('eq-bands--auto', eqAutoMode);
@@ -467,13 +538,9 @@ export function setEQAutoMode(val) {
   if (eqAutoMode) {
     startSmartEQ();
     const t = get('tracks')?.[get('curIdx')];
-    if (t?.genre) applyGenreEQ(t.genre);
+    if (t?.genre) applyGenreEQ(t.genre); // applique tout de suite le preset du genre courant
   } else {
     stopSmartEQ();
-    const _vel = document.getElementById('vol');
-    if (masterGainNode && eqCtx && _vel) {
-      masterGainNode.gain.setTargetAtTime(Math.max(0, Math.min(1, parseFloat(_vel.value))), eqCtx.currentTime, 0.05);
-    }
   }
 }
 
@@ -486,18 +553,12 @@ export function toggleEQAB() {
   if (!eqCtx) initEQ();
   _abMode = !_abMode;
   if (_abMode) {
-    // Mode A : sauvegarde gains courants (M5: préférer _currentGains, évite mid-ramp), applique flat.
-    _abSavedGains = (_currentGains?.length === EQ_BAND_COUNT)
-      ? [..._currentGains]
-      : (EQ_PRESETS[_activePreset] ? [...EQ_PRESETS[_activePreset]] : new Array(EQ_BAND_COUNT).fill(0));
-    const flatGains = EQ_PRESETS.flat;
-    _applyGains(flatGains);
-    _animateSlidersTo(flatGains);
+    // Mode A : sauvegarde gains courants, applique flat
+    _abSavedGains = eqNodes.map(n => n.gain.value);
+    _applyGains(EQ_PRESETS.flat);
   } else {
-    if (_abSavedGains) {
-      _applyGains(_abSavedGains);
-      _animateSlidersTo(_abSavedGains);
-    }
+    // Mode B : restaure gains sauvegardés
+    if (_abSavedGains) _applyGains(_abSavedGains);
     _abSavedGains = null;
   }
   const btn = document.querySelector('#eq-panel .eq-ab-btn');
@@ -505,12 +566,14 @@ export function toggleEQAB() {
   _drawEQCurve();
 }
 
-// ── toggleEQEnabled ───────────────────────────────────────────────────────────
+// ── toggleEQEnabled — bypass on/off (bouton power du panneau) ──────────────────
+/** Active/désactive l'EQ (bypass). Sauvegarde/restaure les gains courants. */
 export function toggleEQEnabled() {
   if (!eqCtx) initEQ();
   _setEQEnabled(!eqEnabled);
 }
 
+// ── Profiles utilisateur ──────────────────────────────────────────────────────
 export function loadEQProfiles(profiles) {
   if (profiles && typeof profiles === 'object') {
     _eqProfiles = { ...profiles };
@@ -521,15 +584,19 @@ export function getEQProfiles() {
   return { ..._eqProfiles };
 }
 
-// ── filterEQPresets / renderEQBands ──────────────────────────────────────────
+// ── filterEQPresets (catégorie) ───────────────────────────────────────────────
+/** Filtre les boutons de presets par catégorie. */
 export function filterEQPresets(cat) {
   const container = document.getElementById('eq-presets');
   if (!container) return;
   const btns = container.querySelectorAll('.eq-preset');
   btns.forEach(btn => {
     const bcat = btn.dataset.cat || 'all';
+    // « Tous » montre tout ; une catégorie précise ne montre que SES presets
+    // (on ne réinjecte plus les presets « all » partout → moins de bruit).
     btn.style.display = (cat === 'all' || bcat === cat) ? '' : 'none';
   });
+  // Marquer le bouton de catégorie actif
   const catBtns = document.querySelectorAll('#eq-cats .eq-cat');
   catBtns.forEach(b => {
     b.classList.toggle('active', b.dataset.cat === cat);
@@ -537,22 +604,24 @@ export function filterEQPresets(cat) {
   });
 }
 
+// ── renderEQBands ─────────────────────────────────────────────────────────────
+/** Génère les 10 sliders EQ dans #eq-bands. */
 export function renderEQBands() {
   const container = document.getElementById('eq-bands');
   if (!container) return;
 
   const LABELS = ['32', '64', '125', '250', '500', '1k', '2k', '4k', '8k', '16k'];
-  const gains = _currentGains?.length === EQ_BAND_COUNT
-    ? _currentGains
-    : (eqNodes.length ? eqNodes.map(n => n.gain.value) : new Array(EQ_BAND_COUNT).fill(0));
+  const gains = eqNodes.length
+    ? eqNodes.map(n => n.gain.value)
+    : new Array(EQ_BAND_COUNT).fill(0);
 
   const resetHint = i18n('eq_band_reset_hint');
   let html = '';
   for (let i = 0; i < EQ_BAND_COUNT; i++) {
     const g   = gains[i];
     const v   = g.toFixed(1);
-    const num = (g >= 0 ? '+' : '') + v;
-    const aria = num + ' dB';
+    const num = (g >= 0 ? '+' : '') + v;   // libellé visible — sans « dB » (1 ligne)
+    const aria = num + ' dB';              // aria-valuetext — garde l'unité pour le SR
     const mod = g > 0 ? 'eq-val--boost' : g < 0 ? 'eq-val--cut' : 'eq-val--flat';
     html += `<div class="eq-band">
   <span class="eq-val ${mod}" data-band-label="${i}">${num}</span>
@@ -568,7 +637,7 @@ export function renderEQBands() {
   }
   container.innerHTML = html;
 
-  // double-clic sur slider → reset bande à 0 dB
+  // P4 : double-clic sur slider → reset cette bande à 0 dB avec spring animation
   container._eqDblClick && container.removeEventListener('dblclick', container._eqDblClick);
   container._eqDblClick = (e) => {
     const slider = e.target.closest('.eq-slider');
@@ -576,7 +645,8 @@ export function renderEQBands() {
   };
   container.addEventListener('dblclick', container._eqDblClick);
 
-  // WCAG 2.5.7 : Suppr/Backspace/0 sur slider focalisé réinitialise la bande.
+  // WCAG 2.5.7 + découvrabilité : alternative clavier au double-clic — Suppr /
+  // Retour arrière / 0 sur un slider focalisé réinitialise cette bande à 0 dB.
   container._eqKeyDown && container.removeEventListener('keydown', container._eqKeyDown);
   container._eqKeyDown = (e) => {
     if (e.key !== 'Delete' && e.key !== 'Backspace' && e.key !== '0') return;
@@ -588,21 +658,55 @@ export function renderEQBands() {
   container.addEventListener('keydown', container._eqKeyDown);
 }
 
+/** Réinitialise une bande à 0 dB (audio sans glitch + spring visuel + flash). */
 function _resetBand(idx, slider) {
   if (isNaN(idx) || !eqCtx || !eqNodes[idx]) return;
   eqNodes[idx].gain.setTargetAtTime(0, eqCtx.currentTime, 0.01);
-  if (_currentGains?.length === EQ_BAND_COUNT) _currentGains[idx] = 0;
-  const targetGains = getCurrentGains() ?? eqNodes.map(n => n.gain.value);
+  const targetGains = eqNodes.map(n => n.gain.value);
+  targetGains[idx] = 0;
   _animateSlidersTo(targetGains);
   if (_activePreset !== 'custom') { _activePreset = 'custom'; _updatePresetBtns('custom'); }
   const wrap = slider?.closest('.eq-slider-wrap');
   if (wrap) {
     wrap.classList.remove('eq-band-reset');
-    void wrap.offsetWidth; // force reflow
+    void wrap.offsetWidth; // force reflow pour relancer l'animation
     wrap.classList.add('eq-band-reset');
   }
 }
 
+// ── _getArtRgb — couleur d'accent dynamique depuis --art-color ───────────────
+function _getArtRgb() {
+  const styles = getComputedStyle(document.documentElement);
+  for (const prop of ['--art-color', '--g']) {
+    const raw = styles.getPropertyValue(prop).trim();
+    if (!raw) continue;
+    const m = raw.match(/\d+/g);
+    if (m && m.length >= 3) return [+m[0], +m[1], +m[2]];
+  }
+  return [99, 102, 241]; // fallback indigo
+}
+
+// ── _updateCurveHeight — hauteur adaptative canvas (P1) ──────────────────────
+/**
+ * Active/désactive .eq-curve-active sur #eq-panel selon que les gains sont plats.
+ * Expert flat → 80px  |  Expert actif → 160px  (défini en CSS).
+ */
+function _updateCurveHeight() {
+  const panel = document.getElementById('eq-panel');
+  if (!panel) return;
+  const active = eqNodes.length
+    ? eqNodes.some(n => Math.abs(n.gain.value) > 0.05)
+    : false;
+  panel.classList.toggle('eq-curve-active', active);
+}
+
+// ── _attachEqCurveResizeObserver — R-M7 ──────────────────────────────────────
+/**
+ * Observe #eq-curve-wrap : redessine la courbe quand le wrap change de taille
+ * (resize fenêtre, passage Simple/Expert, panneau qui se réajuste).
+ * Sans ça, le canvas garde le fallback hardcodé 260×116 jusqu'au prochain
+ * événement EQ. Callback debouncé via rAF — aucune allocation dans la boucle.
+ */
 let _eqResizeObserver = null;
 function _attachEqCurveResizeObserver() {
   if (_eqResizeObserver || typeof ResizeObserver === 'undefined') return;
@@ -620,16 +724,110 @@ function _attachEqCurveResizeObserver() {
 }
 
 // ── _drawEQCurve ──────────────────────────────────────────────────────────────
-// Thin wrapper — delegates to eq-curve.js (SIZE-1: extracted to stay under 800 lines)
+/** Dessine la courbe de réponse en fréquence sur le canvas #eq-curve-wrap. */
 function _drawEQCurve() {
-  if (!eqCtx) return;
-  drawEQCurve(_currentGains, eqNodes, EQ_FREQS, EQ_BAND_COUNT);
+  const wrap = document.getElementById('eq-curve-wrap');
+  if (!wrap || !eqCtx) return;
+
+  // Créer le canvas s'il n'existe pas encore
+  let canvas = wrap.querySelector('.eq-curve-canvas');
+  if (!canvas) {
+    canvas = document.createElement('canvas');
+    canvas.className = 'eq-curve-canvas';
+    wrap.appendChild(canvas);
+  }
+
+  const W  = wrap.offsetWidth  || 260;
+  const H  = wrap.offsetHeight || 116;
+  canvas.width  = W;
+  canvas.height = H;
+
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return;
+  ctx.clearRect(0, 0, W, H);
+
+  // Fond transparent (géré par CSS)
+  const gains = eqNodes.length
+    ? eqNodes.map(n => n.gain.value)
+    : new Array(EQ_BAND_COUNT).fill(0);
+
+  // Grille horizontale (0 dB ligne centrale)
+  ctx.strokeStyle = 'rgba(255,255,255,0.08)';
+  ctx.lineWidth   = 1;
+  [-12, -6, 0, 6, 12].forEach(db => {
+    const y = H / 2 - (db / 12) * (H / 2 - 8);
+    ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke();
+  });
+
+  // Courbe EQ interpolée
+  const logMin = Math.log10(20);
+  const logMax = Math.log10(20000);
+  const freqAt = x => Math.pow(10, logMin + (x / W) * (logMax - logMin));
+
+  ctx.beginPath();
+  for (let x = 0; x <= W; x++) {
+    const freq = freqAt(x);
+    let db = 0;
+    for (let i = 0; i < EQ_BAND_COUNT; i++) {
+      // Approx Gaussian bell pour chaque bande
+      const f0     = EQ_FREQS[i];
+      const sigma  = 0.5; // largeur en octaves (log)
+      const dist   = Math.log2(freq / f0);
+      db += gains[i] * Math.exp(-0.5 * (dist / sigma) ** 2);
+    }
+    const y = H / 2 - (db / 12) * (H / 2 - 8);
+    if (x === 0) ctx.moveTo(x, y);
+    else         ctx.lineTo(x, y);
+  }
+
+  // Remplissage gradient sous la courbe — couleur suit --art-color
+  const [ar, ag, ab] = _getArtRgb();
+  const grad = ctx.createLinearGradient(0, 0, 0, H);
+  grad.addColorStop(0,   `rgba(${ar},${ag},${ab},0.35)`);
+  grad.addColorStop(0.5, `rgba(${ar},${ag},${ab},0.12)`);
+  grad.addColorStop(1,   `rgba(${ar},${ag},${ab},0.02)`);
+
+  ctx.strokeStyle = `rgba(${ar},${ag},${ab},0.9)`;
+  ctx.lineWidth   = 1.5;
+  ctx.stroke();
+
+  // Fill
+  ctx.lineTo(W, H); ctx.lineTo(0, H); ctx.closePath();
+  ctx.fillStyle = grad;
+  ctx.fill();
+
+  // Ligne centrale 0 dB (plus visible)
+  ctx.strokeStyle = 'rgba(255,255,255,0.2)';
+  ctx.lineWidth   = 1;
+  ctx.beginPath();
+  ctx.moveTo(0, H / 2); ctx.lineTo(W, H / 2);
+  ctx.stroke();
+
+  _updateCurveHeight(); // P1 — hauteur adaptative selon gains actifs
+
+  // A11Y : alternative textuelle pour SR — résume la courbe (graves/médiums/aigus moyens).
+  // Mise à jour à chaque redraw (drag d'une bande, preset, profil device, etc.).
+  if (!wrap.getAttribute('role')) wrap.setAttribute('role', 'img');
+  const _avg = (a, b) => {
+    let s = 0; for (let i = a; i <= b; i++) s += gains[i] || 0;
+    return s / (b - a + 1);
+  };
+  const _fmt = v => (v >= 0 ? '+' : '') + v.toFixed(1) + ' dB';
+  const bass = _avg(0, 2);   // 32–125 Hz
+  const mids = _avg(3, 6);   // 250–2000 Hz
+  const treb = _avg(7, 9);   // 4 k–16 k Hz
+  wrap.setAttribute(
+    'aria-label',
+    `Courbe EQ : graves ${_fmt(bass)}, médiums ${_fmt(mids)}, aigus ${_fmt(treb)}`
+  );
 }
 
+// ── _updatePresetBtns ─────────────────────────────────────────────────────────
 function _updatePresetBtns(active) {
   document.querySelectorAll('#eq-presets .eq-preset').forEach(btn => {
     btn.classList.toggle('active', btn.dataset.preset === active);
   });
+  // Sync le label preset dans le footer
   const footerLabel = document.getElementById('eq-preset-label');
   if (footerLabel) {
     const activeBtn = document.querySelector(`#eq-presets .eq-preset[data-preset="${active}"]`);
@@ -645,21 +843,24 @@ export function setEQExpert(val) {
   eqExpert = !!val;
   const panel = document.getElementById('eq-panel');
   if (panel) panel.classList.toggle('eq-expert', eqExpert);
+  // P7 : largeur Expert 400px — classe sur #app pour le padding-right de #main
   document.getElementById('app')?.classList.toggle('eq-expert-mode', eqExpert);
   document.querySelectorAll('.eq-mode-btn').forEach(btn => {
     const isExpert = btn.dataset.mode === 'expert';
     btn.classList.toggle('active', isExpert === eqExpert);
     btn.setAttribute('aria-pressed', String(isExpert === eqExpert));
   });
+  // En passant en Expert, s'assurer que les bandes sont rendues
   if (eqExpert) { renderEQBands(); }
-  _drawEQCurve();
+  _drawEQCurve();          // redessine (appelle _updateCurveHeight en fin)
 }
 
-export function toggleEQExpert() { setEQExpert(!eqExpert); }
 
+// ── _syncEQUI ─────────────────────────────────────────────────────────────────
 function _syncEQUI() {
   _updatePresetBtns(_activePreset);
   _updatePowerBtn();
+  // Refléter AUTO si restauré depuis cfg avant l'ouverture du panneau.
   const autoBtn = document.querySelector('#eq-panel .eq-auto-btn');
   if (autoBtn) { autoBtn.setAttribute('aria-pressed', String(eqAutoMode)); autoBtn.classList.toggle('active', eqAutoMode); }
   document.getElementById('eq-presets')?.classList.toggle('eq-presets--disabled', eqAutoMode);
@@ -667,12 +868,16 @@ function _syncEQUI() {
   document.getElementById('eq-bands')?.classList.toggle('eq-bands--auto', eqAutoMode);
 }
 
+// ── Handler input slider (wired via data-input-action="eq-band-input") ────────
+// Exposé sur window pour que handlers.js puisse le brancher si nécessaire
 export function handleEQBandInput(e) {
   const idx = parseInt(e.target.dataset.band, 10);
   if (isNaN(idx)) return;
   setEQBand(idx, parseFloat(e.target.value));
 }
 
+// ── Wiring handlers #eq-bands (délégation locale) ────────────────────────────
+// Les sliders EQ sont régénérés par renderEQBands() → on délègue depuis le conteneur.
 if (typeof document !== 'undefined') {
   document.addEventListener('input', e => {
     if (e.target.closest('#eq-bands') && e.target.dataset.inputAction === 'eq-band-input') {

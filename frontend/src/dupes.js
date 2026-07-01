@@ -31,33 +31,22 @@ function _computeDupeGroups() {
   // l'extension — un meme titre en MP3 et en FLAC est traite comme un doublon,
   // ce qui est le comportement attendu (l'utilisateur veut choisir un format).
   for (const t of tracks) {
-    const namePart = normTag(t.name).toLowerCase().replace(/[^\w\s]/g,'').replace(/\s+/g,' ').trim();
-    // Titre vide (tags pas encore hydratés, nom 100 % symboles) : impossible de
-    // juger un doublon — sinon toutes ces pistes partagent la clé "|artiste"
-    // et forment de faux groupes de doublons.
-    if (!namePart) continue;
-    const key = namePart
+    const key = normTag(t.name).toLowerCase().replace(/[^\w\s]/g,'').replace(/\s+/g,' ').trim()
               + '|' + (t.artist || '').toLowerCase().replace(/[^\w\s]/g,'').replace(/\s+/g,' ').trim();
+    if (!key.replace('|','')) continue;
     if (!map.has(key)) map.set(key, []);
     map.get(key).push(t);
   }
   dupesGroups = [...map.values()].filter(g => g.length > 1);
 }
 
-let _dupesPrevFocus = null;
-
 export function detectDupes() {
-  _dupesPrevFocus = document.activeElement;
   _computeDupeGroups();
   _renderDupes();
-  const _dupesPanel = document.getElementById('dupes-panel');
-  if (!_dupesPanel) return;
-  _dupesPanel.classList.add('open');
-  const firstFocusable = _dupesPanel.querySelector('button, [tabindex="0"]');
-  (firstFocusable || _dupesPanel).focus();
+  const panel = document.getElementById('dupes-panel');
+  if (!panel) return;
+  panel.classList.add('open');
 }
-
-export function getDupesCount() { return dupesGroups.length; }
 
 export function updateDupesBadge() {
   const badge = document.getElementById('dupes-badge');
@@ -71,16 +60,15 @@ export function updateDupesBadge() {
 }
 
 function _renderDupes() {
-  const _dupesList = document.getElementById('dupes-list');
-  if (!_dupesList) return;
+  const el = document.getElementById('dupes-list');
   const delBtn = document.getElementById('dupes-del-all-btn');
   if (!dupesGroups.length) {
-    _dupesList.innerHTML = `<div class="dupes-empty">${i18n('t_no_dupes')}</div>`;
+    el.innerHTML = `<div class="dupes-empty">${i18n('t_no_dupes')}</div>`;
     if (delBtn) delBtn.style.display = 'none';
     return;
   }
   if (delBtn) delBtn.style.display = '';
-  _dupesList.innerHTML = dupesGroups.map((group, gi) => {
+  el.innerHTML = dupesGroups.map((group, gi) => {
     const items = group.map((t, ti) => `
       <div class="dupe-item">
         <div class="dupe-item-name">${esc(t.name)}</div>
@@ -104,11 +92,6 @@ export async function removeDupeTrack(id, gi, ti) {
     i18n('t_delete_btn'), 'danger'
   );
   if (!ok) return;
-  // Re-derive current indices by id after async confirm (rapid double-invoke guard).
-  const _gi = dupesGroups.findIndex(g => g.some(tr => tr.id === id));
-  if (_gi < 0) return;
-  const _ti = dupesGroups[_gi].findIndex(tr => tr.id === id);
-  if (_ti < 0) return;
   // Retirer de la bibliothèque
   const idx = trackIdx(t.id);
   if (idx >= 0) {
@@ -119,16 +102,17 @@ export async function removeDupeTrack(id, gi, ti) {
     // adjustShuffleQAfterDelete + setCurIdx (l'idx est encore valide avant splice).
     adjustShuffleQAfterDelete(idx); // BUG-D2-2 FIX: sync shuffle queue
     get('liked').delete(t.id);
-    notify('liked');
     if (get('curIdx') === idx) { audio.pause(); setCurIdx(-1); }
     else if (get('curIdx') > idx) setCurIdx(get('curIdx') - 1);
     removeTrackAt(idx); // splice + rebuildTrackIdxMap + notify('tracks')
   }
   // Persister la suppression en IDB — sinon la piste réapparaît au redémarrage
   await ddel('tracks', t.id).catch(e => console.warn('[dupes] IDB delete failed:', e));
-  // Mettre à jour le groupe (utiliser les indices re-dérivés)
-  dupesGroups[_gi].splice(_ti, 1);
-  if (dupesGroups[_gi].length < 2) dupesGroups.splice(_gi, 1);
+  // Mettre à jour le groupe
+  if (dupesGroups[gi]) {
+    dupesGroups[gi].splice(ti, 1);
+    if (dupesGroups[gi].length < 2) dupesGroups.splice(gi, 1);
+  }
   _renderDupes();
   updateDupesBadge();
   invalidateFilterCache(); emit(EVENTS.FILTER_CHANGED, {}); emit(EVENTS.RENDER_LIB, {}); updateStats();
@@ -159,20 +143,15 @@ export async function deleteAllDupes() {
 
   // Pré-passe : révoquer les blob URLs + ajuster shuffle queue + curIdx
   // AVANT de splicer (les indices doivent être encore valides).
-  // Capturer curIdx une seule fois avant la boucle — évite l'off-by-one
-  // si la lecture change pendant les suppressions asynchrones.
-  const _capturedCurIdx = get('curIdx');
-  let _adjustedCurIdx = _capturedCurIdx;
   let removed = 0;
   for (const idx of toRemove) {
     if (tracks[idx]?.art?.startsWith?.('blob:')) try { URL.revokeObjectURL(tracks[idx].art); } catch {}
     if (tracks[idx]?.url?.startsWith?.('blob:')) try { URL.revokeObjectURL(tracks[idx].url); } catch {}
     adjustShuffleQAfterDelete(idx);
-    if (_capturedCurIdx === idx) { audio.pause(); _adjustedCurIdx = -1; }
-    else if (_adjustedCurIdx > idx) _adjustedCurIdx--;
+    if (get('curIdx') === idx) { audio.pause(); setCurIdx(-1); }
+    else if (get('curIdx') > idx) setCurIdx(get('curIdx') - 1);
     removed++;
   }
-  if (_adjustedCurIdx !== _capturedCurIdx) setCurIdx(_adjustedCurIdx);
 
   // CLAUDE.md §13 : batch splice + rebuild + notify atomique via state.js
   removeTracksBatch(toRemove);
@@ -183,7 +162,6 @@ export async function deleteAllDupes() {
   // liked migré Set<id> : supprimer directement les IDs supprimés
   const liked = get('liked');
   idsToDelete.forEach(id => liked.delete(id));
-  notify('liked');
   dupesGroups = [];
   _renderDupes();
   updateDupesBadge();
@@ -195,9 +173,10 @@ export async function deleteAllDupes() {
 }
 
 export function closeDupes() {
-  document.getElementById('dupes-panel')?.classList.remove('open');
-  _dupesPrevFocus?.focus();
-  _dupesPrevFocus = null;
+  const panel = document.getElementById('dupes-panel');
+  if (!panel) return;
+  panel.classList.remove('open');
+  document.getElementById('dupes-badge')?.focus();
 }
 
 // ── Auto-compute dupes after library updates ──────────────────────────────────

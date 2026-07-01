@@ -220,31 +220,35 @@ export async function loadTagsBg(t, rustTags = null) {
     // Cover : décodage base64 → ArrayBuffer → blob URL géré par artLoader LRU.
     // Évite les blob URLs hors-cache qui s'accumulent en RAM (50-60 MB en batch).
     if (rustTags.cover_base64) {
-      if (t.art && t.art.startsWith('blob:')) try { URL.revokeObjectURL(t.art); } catch {}
-      const mime = ART_MIME_ALLOWLIST.includes(rustTags.cover_mime) ? rustTags.cover_mime : 'image/jpeg';
-      try {
-        const u8 = Uint8Array.from(atob(rustTags.cover_base64), c => c.charCodeAt(0));
-        t._artBuf  = u8.buffer;
-        t._artMime = mime;
-        t._b64     = null; // invalider tout cache base64 existant
-        t.art      = cacheArt(t);    // ajoute à artLoader LRU + crée blob URL
-        t.noArt    = false;
-        t._hasArt  = true;             // ARCH-2 : marquer comme ayant une artwork
-        changed    = true;
-        // OPT-2 : extractColor fire-and-forget — ne bloque plus le batch critique
-        const artUrl = t.art;
-        extractColor(artUrl).then(color => {
-          if (!_trackIdxMap.has(t.id) || !color) return;
-          t.artColor = color;
-          saveTracks(t);
-        }).catch(e => console.warn('[library:extractColor]', t.id, e));
-      } catch (artE) {
-        console.warn('[loadTagsBg] cover_base64 malformé:', t.id, artE);
-        t.art     = null;
-        t.noArt   = true;
-        t._hasArt = false;
-        changed   = true;
-      }
+      if (rustTags.cover_base64.length > CFG.ART_B64_MAX_CHARS) {
+        console.warn('[library] cover_base64 trop grand, ignoré :', rustTags.cover_base64.length);
+      } else {
+        if (t.art && t.art.startsWith('blob:')) try { URL.revokeObjectURL(t.art); } catch {}
+        const mime = ART_MIME_ALLOWLIST.includes(rustTags.cover_mime) ? rustTags.cover_mime : 'image/jpeg';
+        try {
+          const u8 = Uint8Array.from(atob(rustTags.cover_base64), c => c.charCodeAt(0));
+          t._artBuf  = u8.buffer;
+          t._artMime = mime;
+          t._b64     = null; // invalider tout cache base64 existant
+          t.art      = cacheArt(t);    // ajoute à artLoader LRU + crée blob URL
+          t.noArt    = false;
+          t._hasArt  = true;             // ARCH-2 : marquer comme ayant une artwork
+          changed    = true;
+          // OPT-2 : extractColor fire-and-forget — ne bloque plus le batch critique
+          const artUrl = t.art;
+          extractColor(artUrl).then(color => {
+            if (!_trackIdxMap.has(t.id) || !color) return;
+            t.artColor = color;
+            saveTracks(t);
+          }).catch(e => console.warn('[library:extractColor]', t.id, e));
+        } catch (artE) {
+          console.warn('[loadTagsBg] cover_base64 malformé:', t.id, artE);
+          t.art     = null;
+          t.noArt   = true;
+          t._hasArt = false;
+          changed   = true;
+        }
+      } // end else (size guard)
     } else {
       t.noArt   = true;
       t._hasArt = false; // ARCH-2 : aucune artwork → désactiver le chargement paresseux

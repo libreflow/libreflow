@@ -1,0 +1,19 @@
+{
+  "entry": [
+    "frontend/src/main.js",
+    "frontend/mini.html",
+    "frontend/tests/**/*.cjs",
+    "frontend/tests/visual/**/*.js"
+  ],
+  "project": [
+    "frontend/src/**/*.js",
+    "frontend/public/**/*.js"
+  ],
+  "ignore": [
+    "src-tauri/**",
+    "dist/**",
+    "node_modules/**",
+    ".claude/**"
+  ],
+  "ignoreExportsUsedInFile": true
+}

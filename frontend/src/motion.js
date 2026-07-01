@@ -17,26 +17,20 @@
 //   §20 minimalism > abstraction — surface kept to what we actually use
 //
 // Usage:
-//   import { tween, timeline, set, flip, eases } from './motion.js';
+//   import { tween, timeline, set, eases } from './motion.js';
 //
 //   tween('#pl-art', { opacity: 1, duration: 0.4, ease: eases.PREMIUM });
 //
 //   const tl = timeline({ defaults: { ease: eases.PREMIUM } });
 //   tl.to('#pl-title', { y: 0, opacity: 1, duration: 0.3 })
 //     .to('#pl-artist', { y: 0, opacity: 1, duration: 0.3 }, '-=0.15');
-//
-//   // FLIP — animate layout changes after DOM reorder
-//   const state = flip.getState('.track-row');
-//   reorderRows();                              // mutate DOM
-//   flip.from(state, { duration: 0.45, ease: eases.PREMIUM, stagger: 0.02 });
 
 import { gsap }       from 'gsap';
-import { Flip }       from 'gsap/Flip';
 import { CustomEase } from 'gsap/CustomEase';
 import { CFG }        from './cfg.js';
 
 // Register once at module load — registerPlugin is idempotent and tree-shake safe.
-gsap.registerPlugin(Flip, CustomEase);
+gsap.registerPlugin(CustomEase);
 
 // ── Reduced motion ───────────────────────────────────────────────────────────
 // Respect OS pref. Re-read on each tween call so a runtime change (rare but
@@ -83,17 +77,6 @@ export function tween(target, vars) {
 }
 
 /**
- * Animate `target` from the given props to its current values.
- * @param {gsap.TweenTarget} target
- * @param {gsap.TweenVars}   vars
- * @returns {gsap.core.Tween}
- */
-export function from(target, vars) {
-  if (prefersReducedMotion()) return gsap.set(target, {});
-  return gsap.from(target, vars);
-}
-
-/**
  * Set props instantly (no animation, regardless of reduced-motion).
  * @param {gsap.TweenTarget} target
  * @param {gsap.TweenVars}   vars
@@ -133,32 +116,6 @@ export function kill(target) {
  * @returns {Function} setter(value) → tweene target[prop] vers value
  */
 export const quickTo = (target, prop, vars) => gsap.quickTo(target, prop, vars);
-
-// ── Flip plugin (layout animations) ──────────────────────────────────────────
-// Flip = First/Last/Invert/Play. Capture state, mutate DOM, animate from prior
-// position. Perfect for list reordering, view switches, expand/collapse.
-
-export const flip = Object.freeze({
-  getState: (targets, opts) => Flip.getState(targets, opts),
-  /**
-   * Animate from a previously captured state to current DOM.
-   * Collapses to an instant Flip when reduced-motion is on.
-   */
-  from(state, vars) {
-    if (prefersReducedMotion()) {
-      return Flip.from(state, { ...vars, duration: 0 });
-    }
-    return Flip.from(state, vars);
-  },
-  fit: (targets, opts) => Flip.fit(targets, opts),
-});
-
-// ── Diagnostic surface ───────────────────────────────────────────────────────
-// Exposed for the perf-bundle script and devtools poking, not for app logic.
-export const _meta = Object.freeze({
-  gsapVersion: gsap.version,
-  plugins: ['Flip', 'CustomEase'],
-});
 
 // ── View presets ─────────────────────────────────────────────────────────────
 
@@ -283,14 +240,58 @@ export function staggerIn(items) {
   gsap.from(els, { opacity: 0, duration: 0.20, ease: eases.PREMIUM, stagger: 0.018, clearProps: 'opacity' });
 }
 
+// ── View transition preset ────────────────────────────────────────────────────
+
 /**
- * Stagger-out before a list is replaced.
- * @param {NodeList|Element[]} items
- * @returns {gsap.core.Tween}
+ * Transition between two top-level view panels.
+ *
+ * VT API path  → called inside document.startViewTransition; just swaps .on,
+ *                the browser handles the visual cross-fade.
+ * Fallback path → "exit on top" GSAP cross-fade: old view fades out as an
+ *                absolute overlay while new view fades in from below.
+ *
+ * @param {Element|null} prev  Currently visible .view (may be null on first load)
+ * @param {Element}      next  Target .view to show
  */
-export function staggerOut(items) {
-  const els = Array.from(items).slice(0, STAGGER_CAP);
-  kill(els);
-  if (prefersReducedMotion()) return gsap.set(els, { opacity: 0 });
-  return gsap.to(els, { opacity: 0, duration: 0.12, ease: 'power2.in', stagger: 0.010 });
+export function transitionViews(prev, next) {
+  if (!prev || prev === next) {
+    next.classList.add('on');
+    return;
+  }
+
+  // Kill any in-progress tweens so rapid nav doesn't stack
+  gsap.killTweensOf(prev);
+  gsap.killTweensOf(next);
+
+  // Always show the new view in normal flow first
+  next.classList.add('on');
+
+  if (prefersReducedMotion()) {
+    // Instant swap — no animation
+    prev.classList.remove('on');
+    prev.style.display = '';
+    return;
+  }
+
+  // Anchored to #main (position:relative), not .view (contain:layout ≠ containing block)
+  gsap.set(prev, { position: 'absolute', inset: 0, zIndex: 2, pointerEvents: 'none' });
+
+  // Exit: old view fades out (shorter, quieter)
+  gsap.to(prev, {
+    opacity: 0,
+    duration: 0.15,
+    ease: eases.SNAP,
+    onComplete() {
+      gsap.set(prev, { clearProps: 'position,inset,zIndex,pointerEvents,opacity' });
+      prev.classList.remove('on');
+      prev.style.display = '';
+    },
+  });
+
+  // Enter: new view fades in with upward lift (longer)
+  gsap.fromTo(
+    next,
+    { opacity: 0, y: 8 },
+    { opacity: 1, y: 0, duration: 0.22, ease: eases.PREMIUM, clearProps: 'transform,opacity' }
+  );
 }

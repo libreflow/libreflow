@@ -21,7 +21,7 @@ import { esc }                                              from './utils.js';
 import { i18n }                                            from './i18n.js';
 import { get, set }                                        from './store.js';
 import { emit, on, EVENTS }                                from './bus.js';
-import { _normalizeGenre, _coll, invalidateFilterCache, getFiltered } from './search.js';
+import { _normalizeGenre, _coll, invalidateFilterCache }   from './search.js';
 import { guessGenre }                                      from './tags.js';
 import { saveTracks }                                      from './library.js';
 import { toast }                                           from './ui.js';
@@ -29,8 +29,6 @@ import { updateBreadcrumb, updateStats }                    from './renderer.js'
 
 // ── Cache de signature ────────────────────────────────────────────────────────
 let _genreGridSig = null;
-let _rescanInProgress = false;
-let _genreVersion = 0;
 
 // ── Caches emoji / couleur (évite le scan O(n) répété pour le même genre) ────
 const _emojiCache = new Map();
@@ -44,9 +42,8 @@ export function invalidateGenreGridSig() { _genreGridSig = null; }
 
 // ── Emojis par genre (clé = clé canonique LibreFlow) ─────────────────────────
 const GENRE_EMOJIS = {
-  rap:        '🎤', hip:        '🎤', 'hip-hop':  '🎤', trap:      '🔮',
+  rap:        '🎤', hip:        '🎤', trap:      '🔮',
   phonk:      '💀', drill:      '🔩', afro:      '🥁',
-  'r&b/soul': '🎶',
   electro:    '⚡', electronic: '⚡', dance:     '💃',
   pop:        '🌸', rock:       '🎸', metal:     '🤘',
   punk:       '🔥', jazz:       '🎷', blues:     '🎵',
@@ -62,7 +59,6 @@ const GENRE_EMOJIS = {
 const GENRE_COLORS = {
   rap:        'linear-gradient(135deg, #1a0533 0%, #6b21a8 100%)',
   hip:        'linear-gradient(135deg, #0f172a 0%, #7c3aed 100%)',
-  'hip-hop':  'linear-gradient(135deg, #0f172a 0%, #7c3aed 100%)',
   trap:       'linear-gradient(135deg, #0a000f 0%, #4a044e 100%)',
   phonk:      'linear-gradient(135deg, #0d0010 0%, #7f1d1d 100%)',
   drill:      'linear-gradient(135deg, #080808 0%, #374151 100%)',
@@ -79,7 +75,6 @@ const GENRE_COLORS = {
   soul:       'linear-gradient(135deg, #1a0500 0%, #dc2626 100%)',
   funk:       'linear-gradient(135deg, #1a0a00 0%, #d97706 100%)',
   rnb:        'linear-gradient(135deg, #1a0029 0%, #9333ea 100%)',
-  'r&b/soul': 'linear-gradient(135deg, #1a0029 0%, #9333ea 100%)',
   classical:  'linear-gradient(135deg, #0a1a0a 0%, #16a34a 100%)',
   country:    'linear-gradient(135deg, #1a1000 0%, #ca8a04 100%)',
   folk:       'linear-gradient(135deg, #0f1a0a 0%, #65a30d 100%)',
@@ -97,12 +92,12 @@ const GENRE_COLORS = {
 
 // ── Noms d'affichage canoniques (clé → label affiché sur la card) ─────────────
 const GENRE_DISPLAY_NAMES = {
-  rap:        'Rap',        hip:        'Hip-Hop',    'hip-hop':  'Hip-Hop',   trap:      'Trap',
+  rap:        'Rap',        hip:        'Hip-Hop',    trap:      'Trap',
   phonk:      'Phonk',     drill:      'Drill',       afro:      'Afrobeats',
   electro:    'Electro',   electronic: 'Electronic',  dance:     'Dance',
   pop:        'Pop',        rock:       'Rock',        metal:     'Metal',
   punk:       'Punk',       jazz:       'Jazz',        blues:     'Blues',
-  soul:       'Soul',       funk:       'Funk',        rnb:       'R&B',        'r&b/soul': 'R&B / Soul',
+  soul:       'Soul',       funk:       'Funk',        rnb:       'R&B',
   classical:  'Classical',  country:    'Country',     folk:      'Folk',
   reggae:     'Reggae',     latin:      'Latin',       world:     'World',
   indie:      'Indie',      ambient:    'Ambient',     lofi:      'Lo-Fi',
@@ -184,7 +179,7 @@ export function renderGenresGrid() {
   const query     = get('query');
   const genreSort = get('genreSort');
 
-  const _sig = `${tracks.length}|${genreSort}|${query}|${_genreVersion}`;
+  const _sig = `${tracks.length}|${genreSort}|${query}`;
   const _grid = document.getElementById('genre-grid');
   if (_sig === _genreGridSig && _grid && _grid.children.length > 0) {
     setContentView('genres'); updateBreadcrumb(); return;
@@ -197,18 +192,13 @@ export function renderGenresGrid() {
   if (!grid) {
     grid = document.createElement('div');
     grid.id = 'genre-grid';
-    const _contentArea = document.getElementById('content-area');
-    if (!_contentArea) return;
-    _contentArea.appendChild(grid);
+    document.getElementById('content-area').appendChild(grid);
   }
 
   // Construire la map des genres (enrichie : arts, durée totale, top artiste, variantes)
   // _normalizeGenre() fusionne les variantes : "Rap Français" + "Rap" → même clé "rap"
-  // BUG-6 FIX: quand une recherche est active, compter depuis getFiltered() pour que
-  // le badge sur chaque carte corresponde aux pistes visibles après drill-in.
   const genreMap = new Map();
-  const trackSource = query ? getFiltered() : tracks;
-  for (const t of trackSource) {
+  for (const t of tracks) {
     const g = (t.genre || '').trim();
     if (!g) continue;
     const parts = g.split(/[\/,;|]/).map(p => p.trim()).filter(Boolean);
@@ -271,9 +261,7 @@ export function renderGenresGrid() {
 
     const variantCount = g.variants.size;
     const variantTip   = variantCount > 0
-      // BUG-8 FIX: indiquer le nombre de variantes non affichées dans le tooltip
       ? Array.from(g.variants).slice(0, 4).map(esc).join(', ')
-          + (variantCount > 4 ? ` +${variantCount - 4}` : '')
       : '';
     const variantBadge = variantCount > 0
       ? `<div class="genre-variants-badge" title="${variantTip}">+${variantCount}</div>`
@@ -332,41 +320,32 @@ export function drillGenre(key, displayName) {
 // ══ Rescan genres ══════════════════════════════════════════════════════════════
 
 export async function rescanGenres(force = false, silent = false) {
-  if (_rescanInProgress) return;
-  _rescanInProgress = true;
-  try {
-    const tracks = get('tracks');
-    if (!tracks.length) { if (!silent) toast(i18n('t_genre_lib_empty'), 'warning'); return; }
-    const toProcess = force ? tracks : tracks.filter(t => !t.genre);
-    if (!toProcess.length) { if (!silent) toast(i18n('t_genre_all_done'), 'success'); return; }
-    if (!silent) toast(i18n('t_genre_start', toProcess.length, force));
+  const tracks = get('tracks');
+  if (!tracks.length) { if (!silent) toast(i18n('t_genre_lib_empty'), 'warning'); return; }
+  const toProcess = force ? tracks : tracks.filter(t => !t.genre);
+  if (!toProcess.length) { if (!silent) toast(i18n('t_genre_all_done'), 'success'); return; }
+  if (!silent) toast(i18n('t_genre_start', toProcess.length, force));
 
-    // Passe 1 — heuristique tags (instantané, par chunks pour ne pas bloquer l'UI)
-    // M-11 FIX: accumuler les pistes modifiées et appeler saveTracks() une seule fois
-    // après tous les chunks — évite de réinitialiser le timer debounce à chaque piste.
-    const CHUNK = 200;
-    let countHeuristic = 0;
-    const genreModified = [];
-    for (let i = 0; i < toProcess.length; i += CHUNK) {
-      const end = Math.min(i + CHUNK, toProcess.length);
-      for (let j = i; j < end; j++) {
-        const t = toProcess[j];
-        const guessed = guessGenre(t);
-        if (guessed) { t.genre = guessed; genreModified.push(t); countHeuristic++; }
-      }
-      await new Promise(r => setTimeout(r, 0));
+  // Passe 1 — heuristique tags (instantané, par chunks pour ne pas bloquer l'UI)
+  // M-11 FIX: accumuler les pistes modifiées et appeler saveTracks() une seule fois
+  // après tous les chunks — évite de réinitialiser le timer debounce à chaque piste.
+  const CHUNK = 200;
+  let countHeuristic = 0;
+  const genreModified = [];
+  for (let i = 0; i < toProcess.length; i += CHUNK) {
+    const end = Math.min(i + CHUNK, toProcess.length);
+    for (let j = i; j < end; j++) {
+      const t = toProcess[j];
+      const guessed = guessGenre(t);
+      if (guessed) { t.genre = guessed; genreModified.push(t); countHeuristic++; }
     }
-    for (let _i = 0; _i < genreModified.length; _i += 500) {
-      saveTracks(...genreModified.slice(_i, _i + 500));
-    }
-    _genreVersion++;
-    invalidateFilterCache(); emit(EVENTS.FILTER_CHANGED, {}); emit(EVENTS.RENDER_LIB, {}); updateStats();
+    await new Promise(r => setTimeout(r, 0));
+  }
+  if (genreModified.length) saveTracks(...genreModified);
+  invalidateFilterCache(); emit(EVENTS.FILTER_CHANGED, {}); emit(EVENTS.RENDER_LIB, {}); updateStats();
 
-    if (!silent && countHeuristic > 0) {
-      toast(i18n('t_genre_done', countHeuristic), 'success');
-    }
-  } finally {
-    _rescanInProgress = false;
+  if (!silent && countHeuristic > 0) {
+    toast(i18n('t_genre_done', countHeuristic), 'success');
   }
 }
 

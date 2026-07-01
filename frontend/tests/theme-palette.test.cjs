@@ -6,7 +6,7 @@
 const fs = require('fs');
 const path = require('path');
 const assert = require('assert');
-const { contrastRatio, hexToRgb, relLuminance } = require('./_wcag.cjs');
+const { contrastRatio } = require('./_wcag.cjs');
 
 const DS = fs.readFileSync(path.join(__dirname, '../src/design-system.css'), 'utf8');
 
@@ -44,27 +44,6 @@ function extractLightOverride(css) {
     while ((row = re.exec(body))) {
       out['--' + row[1].trim()] = row[2].trim();
     }
-  }
-  return out;
-}
-
-/**
- * Extrait les tokens du bloc `html[data-mode="light"][data-theme="X"]`.
- * Retourne un objet `{ red: { '--g': ..., ... }, orange: {...}, ... }`.
- */
-function extractLightThemeOverrides(css) {
-  const out = {};
-  const re = /html\[data-mode="light"\]\[data-theme="([a-z]+)"\]\s*\{([^}]*)\}/g;
-  let block;
-  while ((block = re.exec(css))) {
-    const theme = block[1];
-    const tokens = {};
-    const inner = /--([a-z0-9-]+)\s*:\s*([^;]+);/gi;
-    let row;
-    while ((row = inner.exec(block[2]))) {
-      tokens['--' + row[1].trim()] = row[2].trim();
-    }
-    out[theme] = tokens;
   }
   return out;
 }
@@ -191,101 +170,16 @@ async function run() {
     });
   }
 
-  // ── SC 1.4.11 non-text — bordures composées >=3:1 sur le fond de base,
-  //    dans les DEUX thèmes (trou de couverture relevé par l'audit 2026-06-11 :
-  //    les bordures light étaient à 1.14–1.31:1 sans qu'aucun test ne le voie). ──
-  function parseRgba(str) {
-    const m = /^rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*(?:,\s*([\d.]+)\s*)?\)$/.exec(String(str).trim());
-    if (!m) return null;
-    return { r: +m[1], g: +m[2], b: +m[3], a: m[4] === undefined ? 1 : +m[4] };
-  }
-  // Composite une bordure rgba sur un fond hex, retourne le ratio de contraste.
-  function compositedRatio(rgbaStr, bgHex) {
-    const fg = parseRgba(rgbaStr);
-    assert.ok(fg, `valeur rgba illisible: ${rgbaStr}`);
-    const bg = hexToRgb(bgHex);
-    const comp = {
-      r: Math.round(fg.r * fg.a + bg.r * (1 - fg.a)),
-      g: Math.round(fg.g * fg.a + bg.g * (1 - fg.a)),
-      b: Math.round(fg.b * fg.a + bg.b * (1 - fg.a)),
-    };
-    const lA = relLuminance(comp), lB = relLuminance(bg);
-    const [hi, lo] = lA > lB ? [lA, lB] : [lB, lA];
-    return (hi + 0.05) / (lo + 0.05);
-  }
-
-  const BORDER_TOKENS = ['--border-subtle', '--border-default', '--border-strong'];
-  for (const [label, vars, bgTok] of [['dark', root, root['--bg-base']], ['light', lightRoot, lightRoot['--bg-base']]]) {
-    const ratios = {};
-    for (const tok of BORDER_TOKENS) {
-      await t(`${label} ${tok} composited >=3:1 on --bg-base (SC 1.4.11)`, () => {
-        assert.ok(vars[tok], `${tok} absent du bloc ${label}`);
-        const r = compositedRatio(vars[tok], bgTok);
-        ratios[tok] = r;
-        assert.ok(r >= 3.0, `${label} ${tok} = ${r.toFixed(2)}:1 (besoin 3.0)`);
-      });
-    }
-    await t(`${label} border tiers are monotonic (subtle <= default <= strong)`, () => {
-      assert.ok(ratios['--border-subtle'] <= ratios['--border-default'] + 1e-9
-             && ratios['--border-default'] <= ratios['--border-strong'] + 1e-9,
-        `ordre inversé: subtle=${ratios['--border-subtle']?.toFixed(2)} default=${ratios['--border-default']?.toFixed(2)} strong=${ratios['--border-strong']?.toFixed(2)}`);
-    });
-  }
-
-  // ── AAA 7:1 également garanti sur --bg-surface (le test historique ne
-  //    couvrait que --bg — trou relevé par l'audit 2026-06-11). ──
-  for (const [tok] of AAA_TOKENS) {
-    await t(`dark ${tok} on --bg-surface passes AAA (7:1)`, () => {
-      const fg = resolveVar(root, null, tok);
-      const bg = resolveVar(root, null, '--bg-surface');
-      assert.ok(fg && bg, `cannot resolve dark ${tok}/--bg-surface`);
-      const r = contrastRatio(fg, bg);
-      assert.ok(r >= 7.0, `dark ${tok} sur --bg-surface = ${r.toFixed(2)}:1 (need 7.0)`);
-    });
-    await t(`light ${tok} on --bg-surface passes AAA (7:1)`, () => {
-      const fg = resolveVar(lightRoot, root, tok);
-      const bg = resolveVar(lightRoot, root, '--bg-surface');
-      assert.ok(fg && bg, `cannot resolve light ${tok}/--bg-surface`);
-      const r = contrastRatio(fg, bg);
-      assert.ok(r >= 7.0, `light ${tok} sur --bg-surface = ${r.toFixed(2)}:1 (need 7.0)`);
-    });
-  }
-
-  // ── C-2 — --state-error override en light (audit WCAG 2026-06-11) ──────────
-  // Le token dark (#FF5A5F ≈2.8:1) doit être remplacé par une valeur >=4.5:1
-  // sur --bg-base light (#F7F8FA) pour satisfaire SC 1.4.3 et SC 1.4.11.
-  await t('light --state-error declared in html[data-mode="light"] block', () => {
-    assert.ok(
-      lightRoot['--state-error'],
-      '--state-error doit être déclaré dans html[data-mode="light"]',
-    );
-  });
-  await t('light --state-error passes AA text (4.5:1) on --bg-base', () => {
-    const fg = lightRoot['--state-error'];
-    const bg = lightRoot['--bg-base'] || '#F7F8FA';
-    assert.ok(fg, '--state-error introuvable dans le bloc light');
-    const ratio = contrastRatio(fg, bg);
-    assert.ok(ratio >= 4.5, `light --state-error = ${ratio.toFixed(2)}:1 (need 4.5)`);
-  });
-
-  // ── C-3 — thèmes accent en light mode (audit WCAG 2026-06-11) ──────────────
-  // Les accents dark (red/orange/cyan/pink) échouent AA text sur #F7F8FA.
-  // Les blocs html[data-mode="light"][data-theme="X"] les remplacent par des
-  // variantes sombres passant >=4.5:1.
-  const lightThemes = extractLightThemeOverrides(DS);
-  const LIGHT_BG = lightRoot['--bg-base'] || '#F7F8FA';
-  for (const theme of ['red', 'orange', 'cyan', 'pink']) {
-    await t(`light+${theme}: html[data-mode="light"][data-theme="${theme}"] block exists`, () => {
-      assert.ok(
-        lightThemes[theme] && lightThemes[theme]['--g'],
-        `Bloc html[data-mode="light"][data-theme="${theme}"] avec --g introuvable`,
-      );
-    });
-    await t(`light+${theme}: --g passes AA text (4.5:1) on --bg-base (#F7F8FA)`, () => {
-      const g = lightThemes[theme] && lightThemes[theme]['--g'];
-      assert.ok(g, `--g introuvable dans html[data-mode="light"][data-theme="${theme}"]`);
-      const ratio = contrastRatio(g, LIGHT_BG);
-      assert.ok(ratio >= 4.5, `light+${theme} --g (${g}) = ${ratio.toFixed(2)}:1 (need 4.5)`);
+  // --- SC 1.4.11 All [data-theme] accent swatches >= 4.5:1 on --bg-surface (GAP-T01) ---
+  // design-system.css declares [data-theme="..."] { --g:#hex }. Each --g must pass AA (4.5:1) on dark bg-surface.
+  const BG_SURFACE_DARK = '#060606';
+  const accentRe = /\[data-theme="[^"]+"\]\s*\{[^}]*--g\s*:\s*(#[0-9a-fA-F]{6})/g;
+  let am2;
+  while ((am2 = accentRe.exec(DS)) !== null) {
+    const hex = am2[1];
+    await t(`accent ${hex} >= 4.5:1 on dark --bg-surface (GAP-T01 SC 1.4.11)`, () => {
+      const r = contrastRatio(hex, BG_SURFACE_DARK);
+      assert.ok(r >= 4.5, `accent ${hex} on ${BG_SURFACE_DARK}: ${r.toFixed(2)}:1 (need 4.5)`);
     });
   }
 

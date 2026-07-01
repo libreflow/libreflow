@@ -1,6 +1,6 @@
 {
   "productName": "LibreFlow",
-  "version": "1.1.3",
+  "version": "1.1.1",
   "identifier": "com.libreflow.player",
   "build": {
     "beforeDevCommand": "npm run vite -- --port 1420",
@@ -23,14 +23,6 @@
     "longDescription": "LibreFlow est un lecteur audio desktop conçu pour les grandes bibliothèques musicales. EQ 10 bandes, ReplayGain, crossfade, visualiseur, mode cinéma, mini-player.",
     "copyright": "© 2026 Robin Di Berardini",
     "category": "Music",
-    "fileAssociations": [
-      {
-        "ext": ["mp3", "flac", "aac", "m4a", "ogg", "opus", "wav", "wma", "aiff", "ape", "alac"],
-        "name": "Audio",
-        "description": "Fichier audio",
-        "role": "Viewer"
-      }
-    ],
     "windows": {
       "certificateThumbprint": null,
       "digestAlgorithm": "sha256",
@@ -58,19 +50,8 @@
     ]
   },
   "plugins": {
-    "cli": {
-      "description": "LibreFlow — lecteur de musique desktop",
-      "args": [
-        {
-          "name": "file",
-          "index": 1,
-          "takesValue": true,
-          "description": "Fichier audio à lire (association de fichiers)"
-        }
-      ]
-    },
     "updater": {
-      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDgwRTVCMDM3MUQxNjU0NDMKUldSRFZCWWRON0RsZ0FLUmVkYkxJc0tsWnVmSFZDRUxNaDBJKzV3OUVZdmZwbkl2ZVJURzZkbEwK",
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDIyOTMyRDM1REE1ODBDQkUKUldTK0RGamFOUzJUSXBzYURQUnY4blZoRllBRDdZblhyQUVlMXpXTjBGWTJ0eklUOENhV3NtVUkK",
       "endpoints": [
         "https://github.com/libreflow/libreflow/releases/latest/download/latest.json"
       ]

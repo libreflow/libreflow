@@ -5,13 +5,13 @@
 // Le canal passe par les deux sources (main + crossfade) car l'analyser est en fin
 // de chaîne EQ, avant la destination.
 //
-// API publique (ESM named exports) :
-//   initViz()              — à appeler une fois après initEQ()
-//   startViz()             — démarrer le rendu rAF (au play)
-//   stopViz()              — arrêter le rendu + effacer (au pause/stop)
-//   updateVizColor(color)  — mettre à jour la couleur (artColor → string rgb/hex)
-//   setVizMode(mode)       — 'bars' | 'oscilloscope' | 'circle'
-//   getVizMode()           — retourner le mode courant
+// API publique (window.*) :
+//   window.initViz()              — à appeler une fois après initEQ()
+//   window.startViz()             — démarrer le rendu rAF (au play)
+//   window.stopViz()              — arrêter le rendu + effacer (au pause/stop)
+//   window.updateVizColor(color)  — mettre à jour la couleur (artColor → string rgb/hex)
+//   window.setVizMode(mode)       — 'bars' | 'oscilloscope' | 'circle'
+//   window.getVizMode()           — retourner le mode courant
 
 import { eqAnalyser, eqCtx } from './eq.js';
 import { audio }               from './player.js';
@@ -104,7 +104,7 @@ export function initViz() {
   // Déconnecter l'éventuel observer précédent avant d'en créer un nouveau
   if (_resizeObs) { _resizeObs.disconnect(); _resizeObs = null; }
   _resizeObs = new ResizeObserver(_resizeCanvas);
-  _resizeObs.observe(canvas.parentElement ?? canvas);
+  _resizeObs.observe(canvas.parentElement);
   // Différer le premier resize — offsetWidth peut être 0 avant le premier layout
   requestAnimationFrame(_resizeCanvas);
   // Si viz désactivé par défaut, masquer le canvas immédiatement
@@ -116,14 +116,9 @@ function _resizeCanvas() {
   const pl   = canvas.parentElement;
   if (!pl) return;
   const dpr  = window.devicePixelRatio || 1;
-  const w = pl.offsetWidth * dpr, h = pl.offsetHeight * dpr;
-  // L12 (audit bugs visuels 2026-06-11) : ne pas réassigner width/height à
-  // l'identique — chaque assignation efface le backing store (la trail de
-  // l'oscillo était coupée 1 frame à chaque tir du RO).
-  if (canvas.width === w && canvas.height === h && _dpr === dpr) return;
   _dpr = dpr;
-  canvas.width  = w;
-  canvas.height = h;
+  canvas.width  = pl.offsetWidth  * dpr;
+  canvas.height = pl.offsetHeight * dpr;
   // Les styles width/height sont gérés par CSS (width:100%; height:100%)
   // Invalider le gradient mis en cache après redimensionnement
   _grad = null;
@@ -193,7 +188,7 @@ export function startViz() {
   if (!smoothed  || smoothed.length  !== bins) smoothed  = new Float32Array(bins);
   if (!_vizData  || _vizData.length  !== bins) _vizData  = new Uint8Array(bins);
   running = true;
-  if (eqCtx && eqCtx.state === 'suspended') eqCtx.resume().catch(e => console.warn('[viz:resume]', e));
+  if (eqCtx && eqCtx.state === 'suspended') eqCtx.resume();
   _startEngine();
 }
 
@@ -288,10 +283,6 @@ function _draw() {
   if (vizMode === 'oscilloscope') return;
   // Vérifier eqAnalyser AVANT de planifier le prochain frame — évite une boucle infinie si l'analyser disparaît
   if (!eqAnalyser) { running = false; return; }
-
-  // V7 (audit bugs visuels 2026-06-11) : DPR changé sans resize CSS
-  // (fenêtre déplacée entre écrans de DPI différents) → re-rasteriser.
-  if ((window.devicePixelRatio || 1) !== _dpr) _resizeCanvas();
 
   // FIX : skip si le canvas n'est pas encore rendu (dimensions nulles) — évite le reschedule
   // infini quand le composant est invisible ou pas encore mis en page.
@@ -436,5 +427,7 @@ function _drawCircle(bins, w, h) {
   canvasCtx.fill();
 }
 
-// All public symbols are exported as named ESM exports above.
-// Global window.* assignment removed (VIZ-3) — callers must import from './viz.js'.
+/* ── Exports window.* ─────────────────────────────────────── */
+// setVizMode / getVizMode sont intentionnellement absents ici :
+// app.js les importe et les ré-exporte sur window — un seul point d'export.
+Object.assign(window, { initViz, startViz, stopViz, updateVizColor, setVizEnabled, getVizEnabled });

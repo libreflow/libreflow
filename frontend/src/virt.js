@@ -3,9 +3,6 @@
 
 // P3 FIX : Intl.Collator caché pour les tris de groupes
 const _cmp = new Intl.Collator('fr', { sensitivity: 'base', ignorePunctuation: true }).compare;
-// BUG-FIX [MEDIUM] : Map pré-allouée au scope module pour éviter N allocations `{}` dans virtBuildRows()
-// (une par album lors du tri 'album'). Vidée avec .clear() entre chaque groupe → zéro allocation temporaire.
-const _artistCountMap = new Map();
 // LibreFlow — Virtual scroll engine
 //
 // Renders only the rows visible in the viewport + VIRT_BUFFER rows on each side.
@@ -62,7 +59,7 @@ const VIRT = {
     }
     if (rowIdx == null) return;
 
-    const offset  = this._offsets?.[rowIdx] ?? rowIdx * this.ROW_H;
+    const offset  = (this._offsets != null && this._offsets[rowIdx] != null) ? this._offsets[rowIdx] : rowIdx * this.ROW_H;
     const rowH    = this.ROW_H;
     const viewH   = listEl.clientHeight;
     const scrollT = listEl.scrollTop;
@@ -100,15 +97,9 @@ function virtBuildRows(fl, { sort = 'az', query = '', view = 'all' } = {}) {
       // Pour le tri album : inclure l'artiste majoritaire du groupe comme indice visuel
       let artistHint = '';
       if (sort === 'album' && grps.get(k).length) {
-        // Reuse module-scope Map (no per-group allocation); find majority artist in one pass
-        _artistCountMap.clear();
-        for (const t of grps.get(k)) {
-          const a = t.artist || '';
-          _artistCountMap.set(a, (_artistCountMap.get(a) || 0) + 1);
-        }
-        let maxA = '', maxC = 0;
-        for (const [a, c] of _artistCountMap) { if (c > maxC) { maxC = c; maxA = a; } }
-        artistHint = maxA;
+        const artistCounts = {};
+        grps.get(k).forEach(t => { const a = t.artist||''; artistCounts[a] = (artistCounts[a]||0) + 1; });
+        artistHint = Object.entries(artistCounts).sort((a,b)=>b[1]-a[1])[0]?.[0] || '';
       }
       rows.push({ type:'grp', key: k, artistHint });
       grps.get(k).forEach(t => { rows.push({ type:'tr', track: t, fi: fi++ }); });
@@ -123,38 +114,14 @@ function virtBuildRows(fl, { sort = 'az', query = '', view = 'all' } = {}) {
   }
   VIRT._offsets = offsets;
   VIRT._totalH  = offsets[rows.length];
-  // Rebuild _fiToRowIdx so scrollToIdx never falls back to O(n) linear scan,
-  // even when called before the first virtRenderWindow() (e.g. boot restore).
-  // Also record whether any group rows exist so virtRenderWindow can skip the
-  // pin-header scan entirely for flat (ungrouped) lists — avoids a second O(n)
-  // traversal that was previously done inline in virtRenderWindow.
-  const fiMap = new Map();
-  let hasGroups = false;
-  for (let i = 0; i < rows.length; i++) {
-    if (rows[i].type === 'tr') fiMap.set(rows[i].fi, i);
-    else hasGroups = true;
-  }
-  VIRT._fiToRowIdx = fiMap;
-  VIRT._hasGroups  = hasGroups;
   return rows;
 }
 
 // O(1) grâce au prefix-sum
 /** @param {VirtRow[]} rows @returns {number} */
 function virtTotalH(rows)         { return VIRT._totalH; }
-/**
- * Pixel offset of the row at `idx` in the prefix-sum array.
- * Returns 0 for index 0 (first row, offset genuinely 0).
- * Returns 0 and does NOT scroll when `idx` is out of bounds (guard prevents
- * conflating "first element" with "invalid index" — BUG-PASSE2-1 fix).
- * @param {VirtRow[]} rows
- * @param {number} idx
- * @returns {number}
- */
-function virtOffsetOf(rows, idx) {
-  if (idx < 0 || idx > rows.length) return 0;
-  return VIRT._offsets[idx] ?? 0;
-}
+/** @param {VirtRow[]} rows @param {number} idx @returns {number} */
+function virtOffsetOf(rows, idx)  { return VIRT._offsets[idx] || 0; }
 
 /**
  * Binary-search the index of the first row visible at the given scroll position.

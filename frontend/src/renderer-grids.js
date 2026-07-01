@@ -1,57 +1,61 @@
-// renderer-grids.js — Grilles albums/artistes/playlists, drill-down, breadcrumb
-// Extrait de renderer.js.
+// renderer-grids.js — Grilles Albums / Artistes / Playlists + drill header
+//
+// Extrait de renderer.js (Session split — taille >800 lignes §16).
+// Responsabilités :
+//   - Caches memo album/artiste (_getAlbumMap, _getArtistMap)
+//   - Hydratation paresseuse des artworks (IntersectionObserver)
+//   - Drill header (album-detail / artist-detail)
+//   - Grilles : renderAlbumsGrid, renderArtistsGrid, renderPlaylistsGrid
+//   - updateBreadcrumb
+//
+// Aucun import depuis renderer.js — évite la dépendance circulaire.
 
-import { get, set }                                          from './store.js';
-import { emit, EVENTS }                                      from './bus.js';
-import { _trackIdxMap, invalidateFilterCache, _coll }        from './search.js';
-import { VIRT }                                              from './virt.js';
-import { esc }                                                from './utils.js';
-import { updatePlActionBar, updateBreadcrumb }              from './renderer-playlist-bar.js';
-import { i18n }                                              from './i18n.js';
-import { getArtUrl }                                         from './artLoader.js';
-import { hlText }                                            from './renderer-track.js';
-import { cancelSearchDebounce }                              from './views.js';
+import { get }                     from './store.js';
+import { i18n }                    from './i18n.js';
+import { esc }                     from './utils.js';
+import { getArtUrl }               from './artLoader.js';
+import { _trackIdxMap, _coll }     from './search.js';
 
-// ── État interne (caches grilles) ─────────────────────────────────────────────
-let _albumMapCache    = null;
-let _artistMapCache   = null;
-let _formatChipsCache = null; // { sig: string, formats: string[] } — invalidated with tracks[]
-let _tracksSig        = ''; // content hash for selective map invalidation
-// R5-B FIX : un IntersectionObserver par grille (Albums / Artistes) au lieu d'un unique
-// partagé. L'ancien code déconnectait l'observer Albums quand la grille Artistes en créait
-// un nouveau, laissant des placeholders non-hydratés dans la grille Albums si les deux
-// grilles étaient rendues dans la même session.
-const _gridArtObservers = new Map(); // gridEl → IntersectionObserver
+// ── État interne ──────────────────────────────────────────────────────────────
 
-// ── Private helpers ───────────────────────────────────────────────────────────
+let _albumMapCache  = null;
+let _artistMapCache = null;
 
-/** Cheap change-tracking signature for tracks[].
- *  Detects adds, removes, and full clears without iterating the whole array.
- *  Returns 'empty' when the array is empty (distinct from the initial '' value
- *  so the very first renderLib() always triggers a rebuild). */
-function _computeTracksSig(tracks) {
-  if (!tracks.length) return 'empty';
-  return `${tracks.length}:${tracks[0].id}:${tracks[tracks.length - 1].id}`;
+// trackId → piste représentative (carte grille / drill header)
+const _artTrackById = new Map();
+
+// gridEl → IntersectionObserver — un par grille pour éviter les déconnexions croisées
+const _gridArtObservers = new Map();
+
+// ── Helpers privés ────────────────────────────────────────────────────────────
+
+function _escapeRegex(s) {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/** Wraps matching parts of `text` with <mark> for search highlighting. */
+function hlText(text, query, re) {
+  if (!text) return '';
+  if (!query) return esc(text);
+  const r = re || new RegExp(
+    `(${query.trim().split(/\s+/).filter(Boolean).map(_escapeRegex).join('|')})`,
+    'gi'
+  );
+  return text.replace(r, '\x00$1\x01').split('\x00').map((seg, i) => {
+    if (i === 0) return esc(seg);
+    const parts = seg.split('\x01');
+    return `<mark>${esc(parts[0])}</mark>${esc(parts[1] || '')}`;
+  }).join('');
 }
 
 /**
- * Hydrate les placeholders [data-art-tid] d'un conteneur : résout l'artwork via
- * getArtUrl() et remplace le placeholder par un <img>.
- * @param {Element|null} rootEl
- * @param {{observe?: boolean}} [opts] - observe:true → ne charge que les cartes proches du viewport
+ * Hydrate les placeholders [data-art-tid] d'un conteneur.
+ * observe:true → IntersectionObserver (artwork chargé seulement au survol du viewport).
  */
 function _hydrateArtPlaceholders(rootEl, { observe = false } = {}) {
   if (!rootEl) return;
   const hydrate = (ph) => {
-    // GRID-ART-1 FIX : utiliser _trackIdxMap (toujours cohérente avec tracks[]) au lieu
-    // de _artTrackById (Map privée qui peut être effacée par invalidateGridMapsIfChanged
-    // pendant qu'un IntersectionObserver est en vol) — évite les pochettes définitivement
-    // manquantes quand un import/watch-folder change la signature de tracks[] entre le
-    // rendu de la grille et le premier callback de l'observer.
-    const tid = ph.getAttribute('data-art-tid');
-    const idx = _trackIdxMap.get(tid);
-    const tracks = get('tracks') || [];
-    const t = idx !== undefined ? tracks[idx] : null;
+    const t = _artTrackById.get(ph.getAttribute('data-art-tid'));
     if (!t) return;
     getArtUrl(t).then(url => {
       if (!url || !ph.isConnected) return;
@@ -59,21 +63,12 @@ function _hydrateArtPlaceholders(rootEl, { observe = false } = {}) {
       img.alt = '';
       img.setAttribute('aria-hidden', 'true');
       if (ph.dataset.artImgClass) img.className = ph.dataset.artImgClass;
-      img.onerror = () => {
-        if (!img.isConnected) return;
-        const fb = document.createElement('div');
-        fb.className = ph.className || 'card-art-ph';
-        fb.setAttribute('aria-hidden', 'true');
-        fb.textContent = ph.textContent || '';
-        img.replaceWith(fb);
-      };
       img.src = url;
       ph.replaceWith(img);
-    }).catch((e) => console.warn('[getArtUrl]', tid, e));
+    }).catch(e => console.warn('[getArtUrl]', t?.id, e));
   };
   const phs = rootEl.querySelectorAll('[data-art-tid]');
   if (observe && 'IntersectionObserver' in window) {
-    // R5-B FIX : déconnecter l'observer existant POUR CE rootEl uniquement
     const prev = _gridArtObservers.get(rootEl);
     if (prev) prev.disconnect();
     const obs = new IntersectionObserver((entries, observer) => {
@@ -90,34 +85,12 @@ function _hydrateArtPlaceholders(rootEl, { observe = false } = {}) {
   }
 }
 
-/**
- * Attache un listener d'erreur (capture) sur un conteneur de grille.
- * Remplace toute <img> cassée par un placeholder SVG-moins visuel.
- */
-function _attachGridArtFallback(grid) {
-  grid.addEventListener('error', e => {
-    const img = e.target;
-    if (img.tagName !== 'IMG' || !img.isConnected) return;
-    const card = img.closest('.card');
-    const isArtist = card?.classList.contains('card-artist');
-    const fb = document.createElement('div');
-    fb.setAttribute('aria-hidden', 'true');
-    if (isArtist) {
-      fb.className = 'card-art-ph card-art-circle';
-      fb.textContent = card.querySelector('.card-name')?.textContent?.[0]?.toUpperCase() || '?';
-    } else {
-      fb.className = 'card-art-ph';
-      fb.textContent = '💿';
-    }
-    img.replaceWith(fb);
-  }, true /* capture — error ne bulle pas */);
-}
+// ── Caches memo ───────────────────────────────────────────────────────────────
 
-/** Construit la liste des entrées album depuis tracks[]. */
-export function _getAlbumMap() {
-  // C-1: retourner le cache si disponible
+/** Construit la liste des entrées album depuis tracks[].
+ *  Chaque entrée porte _artistSet pour la détection multi-artistes. */
+function _getAlbumMap() {
   if (_albumMapCache) return _albumMapCache;
-
   const tracks = get('tracks') || [];
   const map = new Map();
   for (const t of tracks) {
@@ -126,64 +99,60 @@ export function _getAlbumMap() {
       map.set(key, {
         key,
         displayName:   key,
-        artistSet:     new Set(),
-        artist:        '',
+        artist:        t.artist || '',
         art:           null,
         artTrack:      null,
         count:         0,
         totalDuration: 0,
-        year:          null,
+        year:          (t.year && t.year !== 1970) ? t.year : null,
+        _artistSet:    new Set(),
       });
     }
     const a = map.get(key);
     a.count++;
     a.totalDuration += t.duration || 0;
-    if (t.artist) a.artistSet.add(t.artist);
     if (t.art && !a.art) a.art = t.art;
-    // C1 — piste représentative pour l'hydratation paresseuse du drill header.
-    if (!a.artTrack && t._hasArt && !t.noArt) { a.artTrack = t; }
-    // AC5 (audit cards 2026-06-11) : année déterministe = min des années valides
-    // (avant : première rencontrée — arbitraire selon l'ordre du scan).
-    // 1970 reste traité en sentinelle epoch-0 (à régler à l'import, pas ici).
-    if (t.year && t.year !== 1970 && (!a.year || t.year < a.year)) a.year = t.year;
+    if (!a.artTrack && t._hasArt && !t.noArt) { a.artTrack = t; _artTrackById.set(t.id, t); }
+    if (t.year && t.year !== 1970 && !a.year) a.year = t.year;
+    if (t.artist) a._artistSet.add(t.artist);
   }
   _albumMapCache = [...map.values()];
-  // AC4 (audit cards 2026-06-11) : réconciliation artiste — avant, l'artiste de
-  // la PREMIÈRE piste rencontrée était figé (arbitraire et instable pour les
-  // compilations). Un seul artiste → affiché ; plusieurs → '' + isMulti
-  // (rendu « Multi-artistes ») ; artistsLc sert à la recherche et au drill.
-  for (const a of _albumMapCache) {
-    a.isMulti   = a.artistSet.size > 1;
-    a.artist    = a.artistSet.size === 1 ? a.artistSet.values().next().value : '';
-    a.artistsLc = a.artistSet.size ? [...a.artistSet].join('\n').toLowerCase() : '';
-  }
   return _albumMapCache;
 }
 
 /** Construit la liste des entrées artiste depuis tracks[]. */
-export function _getArtistMap() {
-  // C-1: retourner le cache si disponible
+function _getArtistMap() {
   if (_artistMapCache) return _artistMapCache;
-
   const tracks = get('tracks') || [];
   const map = new Map();
   for (const t of tracks) {
     const key = t.artist || '';
     if (!map.has(key)) {
-      map.set(key, { key, displayName: key, art: null, artTrack: null, count: 0, albumCount: new Set() });
+      map.set(key, { key, displayName: key, art: null, artTrack: null, count: 0 });
     }
     const a = map.get(key);
     a.count++;
-    // BUG-5 FIX: n'ajouter que les noms d'album non-vides — undefined/''/null gonflaient
-    // le Set d'un bucket fantôme et faisaient afficher "2 albums" au lieu de "1".
-    if (t.album) a.albumCount.add(t.album);
     if (t.art && !a.art) a.art = t.art;
-    // C1 — piste représentative pour l'hydratation paresseuse du drill header.
-    if (!a.artTrack && t._hasArt && !t.noArt) { a.artTrack = t; }
+    if (!a.artTrack && t._hasArt && !t.noArt) { a.artTrack = t; _artTrackById.set(t.id, t); }
   }
   _artistMapCache = [...map.values()];
   return _artistMapCache;
 }
+
+// ── API publique — caches ─────────────────────────────────────────────────────
+
+/** Invalide les caches album/artiste et la Map artwork. Appelé depuis renderer.js. */
+export function resetGridCaches() {
+  _albumMapCache  = null;
+  _artistMapCache = null;
+  _artTrackById.clear();
+}
+
+/** Accès public à la liste des albums (memoïsée). */
+export function getAlbumMap() { return _getAlbumMap(); }
+
+/** Accès public à la liste des artistes (memoïsée). */
+export function getArtistMap() { return _getArtistMap(); }
 
 // ── Drill header ──────────────────────────────────────────────────────────────
 
@@ -202,6 +171,7 @@ function _removeDrillHeader() {
   document.getElementById('drill-header')?.remove();
 }
 
+/** Construit ou met à jour le drill header (album-detail / artist-detail). */
 export function renderDrillHeader(view, key) {
   if (view === 'album-detail') {
     const albums = _getAlbumMap();
@@ -216,6 +186,8 @@ export function renderDrillHeader(view, key) {
         : `<div class="dh-art dh-art-ph"></div>`;
     const mins      = Math.floor((entry.totalDuration || 0) / 60);
     const artistKey = entry.artist || '';
+    const playLbl   = esc(i18n('pl_play_all'));
+    const shufLbl   = esc(i18n('pl_shuffle'));
 
     el.className = 'drill-header';
     el.innerHTML = `
@@ -227,19 +199,17 @@ export function renderDrillHeader(view, key) {
             ? `<button class="dh-artist-link" data-action="dh-drill-artist"
                  data-artist-key="${esc(artistKey)}"
                  data-artist-name="${esc(entry.artist)}">${esc(entry.artist)}</button>`
-            : entry.isMulti ? `<span>${esc(i18n('multi_artists'))}</span>` : ''}
-          ${entry.year ? `<span>${entry.year}</span>` : ''}
-          <span>${entry.count} ${i18n('n_tracks', entry.count)}</span>
+            : ''}
+          ${entry.year ? `<span>${esc(String(entry.year))}</span>` : ''}
+          <span>${i18n('track_count', entry.count)}</span>
           ${mins > 0 ? `<span>${i18n('dur_min', mins)}</span>` : ''}
         </div>
         <div class="dh-actions">
-          <!-- A11Y-13: aria-label sur les boutons icône-texte du drill header.
-               AC6 : libellés via i18n (étaient hardcodés FR). -->
-          <button class="dh-btn dh-play" data-action="dh-play-all" aria-label="${esc(i18n('pl_play_all'))}"><span aria-hidden="true">▶</span> ${esc(i18n('pl_play_all'))}</button>
-          <button class="dh-btn dh-shuf" data-action="dh-shuffle-all" aria-label="${esc(i18n('pl_shuffle'))}"><span aria-hidden="true">⤮</span> ${esc(i18n('pl_shuffle'))}</button>
+          <button class="dh-btn dh-play" data-action="dh-play-all" aria-label="${playLbl}"><span aria-hidden="true">▶</span> ${playLbl}</button>
+          <button class="dh-btn dh-shuf" data-action="dh-shuffle-all" aria-label="${shufLbl}"><span aria-hidden="true">⤮</span> ${shufLbl}</button>
         </div>
       </div>`;
-    _hydrateArtPlaceholders(el);   // C1 — artwork paresseux du drill header
+    _hydrateArtPlaceholders(el);
     return;
   }
 
@@ -249,16 +219,10 @@ export function renderDrillHeader(view, key) {
     if (!entry) { _removeDrillHeader(); return; }
 
     const keyLc = key.toLowerCase();
-    // BUG-1 FIX: calcul du total AVANT slice(0,20) — les artistes avec >20 albums
-    // affichaient "20 albums" au lieu du vrai total.
-    // AC4 : matcher TOUS les artistes de l'album — une compilation apparaît
-    // désormais chez chacun de ses artistes ; clé vide = bucket « sans artiste ».
-    const allArtistAlbums = _getAlbumMap()
-      .filter(a => keyLc
-        ? a.artistsLc.split('\n').includes(keyLc)
-        : a.artistSet.size === 0)
-      .sort((a, b) => (b.year || 0) - (a.year || 0));
-    const albums = allArtistAlbums.slice(0, 20);
+    const albums = _getAlbumMap()
+      .filter(a => (a.artist || '').toLowerCase() === keyLc)
+      .sort((a, b) => (b.year || 0) - (a.year || 0))
+      .slice(0, 20);
 
     const el   = _getOrCreateDrillHeader();
     const artH = entry.art
@@ -277,9 +241,12 @@ export function renderDrillHeader(view, key) {
                 data-album-key="${esc(a.key)}" data-album-name="${esc(a.displayName)}">
         ${cardArt}
         <div class="dh-mini-name">${esc(a.displayName)}</div>
-        ${a.year ? `<div class="dh-mini-year">${a.year}</div>` : ''}
+        ${a.year ? `<div class="dh-mini-year">${esc(String(a.year))}</div>` : ''}
       </button>`;
     }).join('');
+
+    const playLbl = esc(i18n('pl_play_all'));
+    const shufLbl = esc(i18n('pl_shuffle'));
 
     el.className = 'drill-header drill-header--artist';
     el.innerHTML = `
@@ -287,14 +254,12 @@ export function renderDrillHeader(view, key) {
       <div class="dh-meta">
         <div class="dh-name">${esc(entry.displayName)}</div>
         <div class="dh-sub">
-          <span>${allArtistAlbums.length} ${i18n('n_albums', allArtistAlbums.length)}</span>
-          <span>${entry.count} ${i18n('n_tracks', entry.count)}</span>
+          <span>${i18n('n_albums', albums.length)}</span>
+          <span>${i18n('track_count', entry.count)}</span>
         </div>
         <div class="dh-actions">
-          <!-- A11Y-13: aria-label sur les boutons icône-texte du drill header.
-               AC6 : libellés via i18n (étaient hardcodés FR). -->
-          <button class="dh-btn dh-play" data-action="dh-play-all" aria-label="${esc(i18n('pl_play_all'))}"><span aria-hidden="true">▶</span> ${esc(i18n('pl_play_all'))}</button>
-          <button class="dh-btn dh-shuf" data-action="dh-shuffle-all" aria-label="${esc(i18n('pl_shuffle'))}"><span aria-hidden="true">⤮</span> ${esc(i18n('pl_shuffle'))}</button>
+          <button class="dh-btn dh-play" data-action="dh-play-all" aria-label="${playLbl}"><span aria-hidden="true">▶</span> ${playLbl}</button>
+          <button class="dh-btn dh-shuf" data-action="dh-shuffle-all" aria-label="${shufLbl}"><span aria-hidden="true">⤮</span> ${shufLbl}</button>
         </div>
       </div>
       ${albums.length > 0 ? `
@@ -302,55 +267,27 @@ export function renderDrillHeader(view, key) {
           <div class="dh-albums-title">Albums</div>
           <div class="dh-albums-mini">${albumCards}</div>
         </div>` : ''}`;
-    _hydrateArtPlaceholders(el);   // C1 — artwork paresseux du drill header
+    _hydrateArtPlaceholders(el);
     return;
   }
 
-  // Toutes les autres vues : supprimer le header si présent
   _removeDrillHeader();
-}
-
-// ── invalidateGridMaps ────────────────────────────────────────────────────────
-
-/**
- * Invalide les caches mémoïsés album/artiste sans toucher à _tracksSig.
- * À appeler après une édition de tags utilisateur (tagedit.js) pour que les
- * grilles albums/artistes et le drill header reflètent immédiatement les nouveaux
- * noms — même si tracks[] n'a pas changé de longueur.
- * Distinct du reset de _tracksSig (qui lui déclencherait un rebuild complet du
- * virtual scroll, non nécessaire ici).
- */
-export function invalidateGridMaps() {
-  _albumMapCache    = null;
-  _artistMapCache   = null;
-  _formatChipsCache = null;
-}
-
-/**
- * Invalide les caches mémoïsés album/artiste uniquement si tracks[] a changé.
- * C-1: évite un rebuild coûteux à chaque navigation (tri, filtre, drill) sur la même lib.
- * À appeler depuis renderLib() dans renderer.js.
- * @param {Array} tracks - tracks[] courant (get('tracks') || [])
- */
-export function invalidateGridMapsIfChanged(tracks) {
-  const newSig = _computeTracksSig(tracks);
-  if (newSig !== _tracksSig) {
-    _tracksSig        = newSig;
-    _albumMapCache    = null;
-    _artistMapCache   = null;
-    _formatChipsCache = null;
-  }
 }
 
 // ── renderAlbumsGrid ──────────────────────────────────────────────────────────
 
-/** Rendu de la grille Albums. */
+/** Rendu de la grille Albums.
+ *
+ * AC2 : fallback nom via i18n('sans_album') — plus de clé fantôme 'unknown_album'.
+ * AC3 : artiste dans aria-label via esc(' — ' + a.artist) (§13).
+ * AC4 : détection isMulti → sub jamais vide (multi_artists / unknown_artist).
+ * AC6 : libellés boutons et pluriels via i18n — plus de hardcode FR.
+ */
 export function renderAlbumsGrid() {
   const tracks    = get('tracks') || [];
   const albumSort = get('albumSort') || 'name';
   const query     = get('query') || '';
 
-  // Rendre le conteneur visible
   let grid = document.getElementById('album-grid');
   if (!grid) {
     grid = document.createElement('div');
@@ -361,43 +298,30 @@ export function renderAlbumsGrid() {
   }
   grid.style.display = '';
 
-  // Masquer les autres grilles
   const rg = document.getElementById('artist-grid');
   const pg = document.getElementById('playlist-grid');
   if (rg) rg.style.display = 'none';
   if (pg) pg.style.display = 'none';
 
-  // PERF-H1 FIX : réutiliser _getAlbumMap() (memoïsée) plutôt que de reconstruire
-  // la map depuis tracks[] à chaque navigation dans la grille Albums.
-  // _getAlbumMap() invalide son cache quand tracks[] change (via _computeTracksSig).
   const queryLc = query ? query.toLowerCase() : '';
   let albums = _getAlbumMap();
-  // Filtrage par requête : appliquer en post-filtre sur le résultat caché
   if (queryLc) {
-    // AC4 : artistsLc couvre TOUS les artistes de l'album (compilations incluses)
     albums = albums.filter(a =>
       (a.key || '').toLowerCase().includes(queryLc) ||
-      a.artistsLc.includes(queryLc)
+      (a.artist || '').toLowerCase().includes(queryLc)
     );
   }
-  // Adapter les noms de champs pour la couche de rendu (displayName→name, art→artUrl, totalDuration→totalDur)
-  // On crée une vue légère (pas de copie profonde — les valeurs sont scalaires ou refs partagées).
-  // GRID-ART-2 FIX : a.art est un snapshot capturé au build du cache (peut être null si l'artwork
-  // n'était pas encore résolu à ce moment). a.artTrack.art est la valeur LIVE sur l'objet piste
-  // (mis à jour par getArtUrl dès la première hydratation). Le fallback évite un aller-retour
-  // placeholder→observer→hydratation quand l'artwork est déjà en mémoire.
   albums = albums.map(a => ({
-    name:    a.key,
-    artist:  a.artist,
-    isMulti: a.isMulti,
-    artUrl:  a.art || a.artTrack?.art || null,
-    artTrack: a.artTrack,
-    count:   a.count,
-    totalDur: a.totalDuration,
-    year:    a.year,
+    name:       a.key,
+    artist:     a.artist,
+    artUrl:     a.art,
+    artTrack:   a.artTrack,
+    count:      a.count,
+    totalDur:   a.totalDuration,
+    year:       a.year,
+    _artistSet: a._artistSet,
   }));
 
-  // Tri
   if (albumSort === 'count')    albums.sort((a, b) => b.count - a.count);
   else if (albumSort === 'duration') albums.sort((a, b) => b.totalDur - a.totalDur);
   else if (albumSort === 'year') albums.sort((a, b) => (b.year || 0) - (a.year || 0));
@@ -405,49 +329,40 @@ export function renderAlbumsGrid() {
 
   if (!albums.length) {
     const isLibEmpty = !tracks.length && !query;
-    const _alb = `<svg viewBox="0 0 24 24" fill="none" style="fill:none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="2.5" width="19" height="19" rx="3"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.5"/></svg>`;
+    const ico = `<svg viewBox="0 0 24 24" fill="none" style="fill:none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="2.5" width="19" height="19" rx="3"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.5"/></svg>`;
     grid.innerHTML = isLibEmpty
-      ? `<div class="grid-empty"><div class="empty-ico">${_alb}</div><div class="empty-h">${esc(i18n('empty_lib_h'))}</div><div class="empty-s">${esc(i18n('empty_lib_s'))}</div></div>`
-      : `<div class="grid-empty"><div class="empty-ico">${_alb}</div><div class="empty-h">${esc(i18n('empty_search_h'))}</div><div class="empty-s">${esc(i18n('empty_search_s'))}</div></div>`;
+      ? `<div class="grid-empty"><div class="empty-ico">${ico}</div><div class="empty-h">${esc(i18n('empty_lib_h'))}</div><div class="empty-s">${esc(i18n('empty_lib_s'))}</div></div>`
+      : `<div class="grid-empty"><div class="empty-ico">${ico}</div><div class="empty-h">${esc(i18n('empty_search_h'))}</div><div class="empty-s">${esc(i18n('empty_search_s'))}</div></div>`;
     return;
   }
 
   grid.innerHTML = albums.map(a => {
+    // AC4 : isMulti → sous-titre jamais vide
+    const isMulti   = a._artistSet && a._artistSet.size > 1;
+    const artistSub = isMulti ? i18n('multi_artists') : (a.artist || i18n('unknown_artist'));
+    const meta = a.year ? `<span class="card-year">${esc(String(a.year))}</span>` : '';
     const artHtml = a.artUrl
       ? `<img src="${esc(a.artUrl)}" alt="" aria-hidden="true">`
       : a.artTrack
         ? `<div class="card-art-ph" aria-hidden="true" data-art-tid="${esc(a.artTrack.id)}">💿</div>`
         : `<div class="card-art-ph" aria-hidden="true">💿</div>`;
-    // AC2 : 'sans_album' existe dans les 2 dictionnaires ('unknown_album' n'a
-    // jamais existé — la clé brute s'affichait). AC4 : fallback artiste systé-
-    // matique → le sub n'est jamais vide, hauteur de card uniforme.
-    const cardName  = a.name || i18n('sans_album');
-    const subArtist = a.artist
-      ? hlText(a.artist)
-      : esc(i18n(a.isMulti ? 'multi_artists' : 'unknown_artist'));
-    // AC7 : durée visible quand le tri 'duration' est actif (sinon ordre illisible).
-    const durMeta = albumSort === 'duration' && a.totalDur
-      ? ` · ${i18n('dur_min', Math.round(a.totalDur / 60))}` : '';
-    // AC3 : artiste échappé dans l'aria-label (tag lofty arbitraire — §13).
-    // AC5/AC6 : année hors du span ellipsé (plus éjectable par un artiste long),
-    // séparateur « · » textuel unifié.
+    // AC3 : esc(' — ' + a.artist) pour éviter tout split sur les entités HTML (§13)
     return `<div class="card" role="button" tabindex="0"
       data-action="drill-album" data-key="${esc(a.name)}" data-name="${esc(a.name)}"
       data-from="albums" data-display="${esc(a.name)}"
-      aria-label="${esc(cardName)}${a.artist ? esc(' — ' + a.artist) : ''}">
+      aria-label="${esc(a.name || i18n('sans_album'))}${a.artist ? esc(' — ' + a.artist) : ''}">
       <div class="card-art">${artHtml}
         <button class="card-play-btn" data-action="play-card" tabindex="-1" aria-hidden="true"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><polygon points="5,3 19,12 5,21"/></svg></button>
       </div>
       <div class="card-info">
-        <span class="card-name">${hlText(cardName)}</span>
-        <span class="card-sub">${subArtist}</span>
-        <span class="card-ct">${a.year ? `${a.year} · ` : ''}${a.count} ${i18n('n_tracks', a.count)}${durMeta}</span>
+        <span class="card-name">${hlText(a.name || i18n('sans_album'), query)}</span>
+        <span class="card-sub">${esc(artistSub)}${meta}</span>
+        <span class="card-ct">${a.count} ${i18n('n_tracks')}</span>
       </div>
     </div>`;
   }).join('');
 
-  _attachGridArtFallback(grid);
-  _hydrateArtPlaceholders(grid, { observe: true });   // C1 — artwork paresseux des cartes
+  _hydrateArtPlaceholders(grid, { observe: true });
   updateBreadcrumb();
 }
 
@@ -475,63 +390,57 @@ export function renderArtistsGrid() {
   if (pg) pg.style.display = 'none';
 
   const queryLc = query ? query.toLowerCase() : '';
-  let artists;
-  if (!queryLc) {
-    artists = _getArtistMap().slice();
-  } else {
-    const artistMap = new Map();
-    for (const t of tracks) {
-      const key = t.artist || '';
-      if (!key.toLowerCase().includes(queryLc) &&
-          !(t.name || '').toLowerCase().includes(queryLc)) continue;
-      if (!artistMap.has(key)) {
-        artistMap.set(key, { key, displayName: key, art: null, artTrack: null, count: 0, albumCount: new Set() });
-      }
-      const a = artistMap.get(key);
-      a.count++;
-      if (t.album) a.albumCount.add(t.album);
-      if (!a.art && t.art) a.art = t.art;
-      if (!a.artTrack && t._hasArt && !t.noArt) { a.artTrack = t; }
+  const artistMap = new Map();
+  for (const t of tracks) {
+    const key = t.artist || '';
+    if (queryLc && !key.toLowerCase().includes(queryLc) &&
+        !(t.name || '').toLowerCase().includes(queryLc)) continue;
+    if (!artistMap.has(key)) {
+      artistMap.set(key, { name: key, artUrl: null, artTrack: null, count: 0, albumCount: new Set() });
     }
-    artists = [...artistMap.values()];
+    const a = artistMap.get(key);
+    a.count++;
+    a.albumCount.add(t.album);
+    if (!a.artUrl && t.art) a.artUrl = t.art;
+    if (!a.artTrack && t._hasArt && !t.noArt) { a.artTrack = t; _artTrackById.set(t.id, t); }
   }
+
+  let artists = [...artistMap.values()];
   if (artistSort === 'count') artists.sort((a, b) => b.count - a.count);
-  else artists.sort((a, b) => _coll.compare(a.displayName || '', b.displayName || ''));
+  else artists.sort((a, b) => _coll.compare(a.name || '', b.name || ''));
 
   if (!artists.length) {
     const isLibEmpty = !tracks.length && !query;
-    const _art = `<svg viewBox="0 0 24 24" fill="none" style="fill:none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>`;
+    const ico = `<svg viewBox="0 0 24 24" fill="none" style="fill:none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>`;
     grid.innerHTML = isLibEmpty
-      ? `<div class="grid-empty"><div class="empty-ico">${_art}</div><div class="empty-h">${esc(i18n('empty_lib_h'))}</div><div class="empty-s">${esc(i18n('empty_lib_s'))}</div></div>`
-      : `<div class="grid-empty"><div class="empty-ico">${_art}</div><div class="empty-h">${esc(i18n('empty_search_h'))}</div><div class="empty-s">${esc(i18n('empty_search_s'))}</div></div>`;
+      ? `<div class="grid-empty"><div class="empty-ico">${ico}</div><div class="empty-h">${esc(i18n('empty_lib_h'))}</div><div class="empty-s">${esc(i18n('empty_lib_s'))}</div></div>`
+      : `<div class="grid-empty"><div class="empty-ico">${ico}</div><div class="empty-h">${esc(i18n('empty_search_h'))}</div><div class="empty-s">${esc(i18n('empty_search_s'))}</div></div>`;
     return;
   }
 
   grid.innerHTML = artists.map(a => {
-    // GRID-ART-2 FIX : même fallback live que renderAlbumsGrid — utiliser a.artTrack.art si a.art est stale/null.
-    const resolvedArt = a.art || a.artTrack?.art || null;
-    const artHtml = resolvedArt
-      ? `<img src="${esc(resolvedArt)}" alt="" aria-hidden="true">`
-      : a.artTrack
-        ? `<div class="card-art-ph card-art-circle" aria-hidden="true" data-art-tid="${esc(a.artTrack.id)}">${esc(a.displayName?.[0]?.toUpperCase() || '?')}</div>`
-        : `<div class="card-art-ph card-art-circle" aria-hidden="true">${esc(a.displayName?.[0]?.toUpperCase() || '?')}</div>`;
     const nbAlbums = a.albumCount.size;
+    const artHtml  = a.artUrl
+      ? `<img src="${esc(a.artUrl)}" alt="" aria-hidden="true">`
+      : a.artTrack
+        ? `<div class="card-art-ph card-art-circle" aria-hidden="true" data-art-tid="${esc(a.artTrack.id)}">${esc(a.name?.[0]?.toUpperCase() || '?')}</div>`
+        : `<div class="card-art-ph card-art-circle" aria-hidden="true">${esc(a.name?.[0]?.toUpperCase() || '?')}</div>`;
+    const albumSub = nbAlbums > 1 ? ` · ${i18n('n_albums', nbAlbums)}` : '';
     return `<div class="card card-artist" role="button" tabindex="0"
-      data-action="drill-artist" data-key="${esc(a.displayName)}" data-name="${esc(a.displayName)}"
-      data-from="artists" data-display="${esc(a.displayName)}"
-      aria-label="${esc(a.displayName)}">
+      data-action="drill-artist" data-key="${esc(a.name)}" data-name="${esc(a.name)}"
+      data-from="artists" data-display="${esc(a.name)}"
+      aria-label="${esc(a.name)}">
       <div class="card-art card-art-round">${artHtml}
         <button class="card-play-btn" data-action="play-card" tabindex="-1" aria-hidden="true"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><polygon points="5,3 19,12 5,21"/></svg></button>
       </div>
       <div class="card-info">
-        <span class="card-name">${hlText(a.displayName || '?')}</span>
-        <span class="card-sub">${a.count} ${i18n('n_tracks', a.count)}${nbAlbums > 1 ? ` · ${nbAlbums} ${i18n('n_albums', nbAlbums)}` : ''}</span>
+        <span class="card-name">${hlText(a.name || '?', query)}</span>
+        <span class="card-sub">${a.count} ${i18n('n_tracks')}${albumSub}</span>
       </div>
     </div>`;
   }).join('');
 
-  _attachGridArtFallback(grid);
-  _hydrateArtPlaceholders(grid, { observe: true });   // C1 — artwork paresseux des cartes
+  _hydrateArtPlaceholders(grid, { observe: true });
   updateBreadcrumb();
 }
 
@@ -540,7 +449,6 @@ export function renderArtistsGrid() {
 /** Rendu de la grille Playlists (vue "playlists"). */
 export function renderPlaylistsGrid() {
   const playlists = get('playlists') || [];
-  const tracks    = get('tracks')    || [];
   const query     = get('query')     || '';
 
   let grid = document.getElementById('playlist-grid');
@@ -558,23 +466,22 @@ export function renderPlaylistsGrid() {
   if (ag) ag.style.display = 'none';
   if (rg) rg.style.display = 'none';
 
-  const queryLc = query ? query.toLowerCase() : '';
+  const queryLc  = query ? query.toLowerCase() : '';
   const filtered = queryLc
     ? playlists.filter(p => (p.name || '').toLowerCase().includes(queryLc))
     : playlists;
 
   if (!filtered.length) {
-    const _pl = `<svg viewBox="0 0 24 24" fill="none" style="fill:none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="6" x2="14" y2="6"/><line x1="3" y1="12" x2="14" y2="12"/><line x1="3" y1="18" x2="10" y2="18"/><polygon points="17 10 23 14 17 18"/></svg>`;
-    grid.innerHTML = `<div class="pl-grid-empty"><div class="empty-ico">${_pl}</div>`
+    const ico = `<svg viewBox="0 0 24 24" fill="none" style="fill:none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="6" x2="14" y2="6"/><line x1="3" y1="12" x2="14" y2="12"/><line x1="3" y1="18" x2="10" y2="18"/><polygon points="17 10 23 14 17 18"/></svg>`;
+    grid.innerHTML = `<div class="pl-grid-empty"><div class="empty-ico">${ico}</div>`
       + `<div class="empty-h">${esc(i18n('pl_empty'))}</div>`
       + `<div class="empty-s">${esc(i18n('pl_empty_s'))}</div></div>`;
     return;
   }
 
-  // I-4: utilise _trackIdxMap (déjà disponible en module) au lieu d'allouer une nouvelle Map
-  // FIX-B6 : data-pl-id n'est placé QU'UNE FOIS (sur le div.card root, pas sur le bouton interne)
+  const tracks = get('tracks') || [];
+  // FIX-B6 : data-pl-id uniquement sur le div.card root
   grid.innerHTML = filtered.map(pl => {
-    // Mosaïque 4 arts
     const plTracks = (pl.trackIds || []).slice(0, 4)
       .map(id => tracks[_trackIdxMap.get(id)])
       .filter(Boolean);
@@ -590,24 +497,21 @@ export function renderPlaylistsGrid() {
       artHtml = `<div class="card-art-ph" aria-hidden="true">🎵</div>`;
     }
 
-    const smartBadge = pl.smart ? `<span class="smart-badge" title="${esc(i18n('smart_playlist') || 'Smart')}">✦</span>` : '';
+    const smartBadge = pl.smart ? `<span class="smart-badge" title="${esc(i18n('pl_smart_lbl'))}">✦</span>` : '';
     const pinBadge   = pl.pinned ? `<span class="pin-badge" aria-hidden="true">📌</span>` : '';
-    // BUG-2 FIX: ne compter que les IDs qui existent dans la bibliothèque actuelle —
-    // les IDs orphelins (pistes supprimées) gonflaient le count affiché.
-    const count = (pl.trackIds || []).filter(id => _trackIdxMap.has(id)).length;
+    const count = (pl.trackIds || []).length;
 
-    // FIX-A1 : role=button + tabindex=0 + aria-label
     return `<div class="card" role="button" tabindex="0"
       data-action="set-view" data-view="playlist" data-pl-id="${esc(pl.id)}"
-      aria-label="${esc(pl.name || i18n('pl_untitled') || 'Playlist')}">
+      aria-label="${esc(pl.name || '?')}">
       <div class="card-art">
         ${artHtml}
         ${smartBadge}${pinBadge}
         <button class="card-play-btn" data-action="play-pl-direct" data-pl-id="${esc(pl.id)}" tabindex="-1" aria-hidden="true"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><polygon points="5,3 19,12 5,21"/></svg></button>
       </div>
       <div class="card-info">
-        <span class="card-name">${hlText(pl.name || '?')}</span>
-        <span class="card-sub">${count} ${i18n('n_tracks', count)}</span>
+        <span class="card-name">${hlText(pl.name || '?', query)}</span>
+        <span class="card-sub">${count} ${i18n('n_tracks')}</span>
       </div>
     </div>`;
   }).join('');
@@ -615,92 +519,53 @@ export function renderPlaylistsGrid() {
   updateBreadcrumb();
 }
 
-// ── drillDown ─────────────────────────────────────────────────────────────────
+// ── updateBreadcrumb ──────────────────────────────────────────────────────────
 
-/** Navigue vers la vue détail d'un album ou artiste.
- *  @param {string} key         - Clé de filtre (nom album/artiste exact)
- *  @param {string} from        - 'albums' | 'artists'
- *  @param {string} displayName - Nom d'affichage (propre, avec casse d'origine) */
-export function drillDown(from, key, displayName) {
-  cancelSearchDebounce(); // annule tout debounce de recherche en cours avant de drill
-  set('drillKey',         key);
-  set('drillFrom',        from);
-  set('drillDisplayName', displayName || key);
-  const viewName = from === 'albums' ? 'album-detail'
-                 : from === 'genres' ? 'genre-detail'
-                 : 'artist-detail';
-  set('view', viewName);
-  invalidateFilterCache();
-  // AUDIT-2026-05-22 (M-06) : les maps album/artist derivent de tracks[], pas du
-  // contexte de filtre. Un drill-down ne modifie pas tracks[] → n'invalider les
-  // caches que si la signature de tracks[] a reellement change (evite un rebuild
-  // couteux des maps a chaque navigation sur une bibliotheque de 50k pistes).
-  const _drillSig = _computeTracksSig(get('tracks') || []);
-  if (_drillSig !== _tracksSig) {
-    _tracksSig        = _drillSig;
-    _albumMapCache    = null;
-    _artistMapCache   = null;
-    _formatChipsCache = null;
-  }
-  emit(EVENTS.FILTER_CHANGED, {});
-
-  // Masquer les grilles, basculer en vue liste
-  const ag = document.getElementById('album-grid');
-  const rg = document.getElementById('artist-grid');
-  const pg = document.getElementById('playlist-grid');
-  const gg = document.getElementById('genre-grid');
-  if (ag) ag.style.display = 'none';
-  if (rg) rg.style.display = 'none';
-  if (pg) pg.style.display = 'none';
-  if (gg) gg.style.display = 'none';
-
-  // Définir data-view='list' sur content-area
-  const ca = document.getElementById('content-area');
-  if (ca) ca.dataset.view = 'list';
-
-  // Titre de la vue
-  const vhtitle = document.getElementById('vhtitle');
-  if (vhtitle) vhtitle.textContent = displayName || key;
-
-  // Breadcrumb
+/** Met à jour le fil d'Ariane selon l'état de drill-down courant. */
+export function updateBreadcrumb() {
   const bc = document.getElementById('breadcrumb');
-  if (bc) bc.style.display = '';
-  updateBreadcrumb();
+  if (!bc) return;
 
-  const _tl = document.getElementById('tlist');
-  if (_tl) _tl.scrollTop = 0;
-  VIRT._lastScrollTop = null;
-  emit(EVENTS.RENDER_LIB, {});
-}
+  const view         = get('view')             || 'all';
+  const drillKey     = get('drillKey')         || '';
+  const drillFrom    = get('drillFrom')        || '';
+  const drillDisplay = get('drillDisplayName') || drillKey;
+  const curPlId      = get('curPlId');
+  const playlists    = get('playlists') || [];
 
-// ── renderFormatChips ─────────────────────────────────────────────────────────
+  const isDrill = drillKey || (view === 'playlist' && curPlId) ||
+    ['album-detail', 'artist-detail', 'genre-detail'].includes(view);
 
-/**
- * Render format filter chips in #format-bar.
- * Shows bar only when 2+ distinct formats exist in the library.
- * Called from renderLib() and after FILTER_CHANGED events.
- */
-export function renderFormatChips() {
-  const bar = document.getElementById('format-bar');
-  if (!bar) return;
-  const tracks = get('tracks') || [];
-  // Compute once per tracks[] state — formats change only on import/removal, never on filter/sort.
-  const sig = _computeTracksSig(tracks);
-  let formats;
-  if (_formatChipsCache && _formatChipsCache.sig === sig) {
-    formats = _formatChipsCache.formats;
-  } else {
-    formats = [...new Set(tracks.map(t => t.ext).filter(Boolean))].sort();
-    if (formats.length >= 2) _formatChipsCache = { sig, formats };
+  if (!isDrill) {
+    bc.style.display = 'none';
+    bc.innerHTML = '';
+    return;
   }
-  if (formats.length < 2) { bar.innerHTML = ''; return; }
-  const active = get('formatFilter') || '';
-  bar.innerHTML = [
-    `<button class="fmt-chip${!active ? ' active' : ''}" data-action="filter-format" data-fmt="" aria-pressed="${String(!active)}">Tous</button>`,
-    ...formats.map(f =>
-      `<button class="fmt-chip${active === f ? ' active' : ''}" data-action="filter-format" data-fmt="${esc(f)}" aria-pressed="${String(active === f)}">${esc(f)}</button>`
-    ),
-  ].join('');
-}
 
-export { updatePlActionBar, updateBreadcrumb } from './renderer-playlist-bar.js';
+  bc.style.display = '';
+
+  const fromLabels = {
+    albums:    i18n('lib_albums')    || 'Albums',
+    artists:   i18n('lib_artists')  || 'Artistes',
+    genres:    'Genres',
+    playlists: i18n('nav_playlists') || 'Playlists',
+  };
+
+  let items = [];
+  if (drillFrom) {
+    items.push({ label: fromLabels[drillFrom] || drillFrom, action: `setView('${drillFrom}')` });
+    items.push({ label: drillDisplay, current: true });
+  } else if (view === 'playlist' && curPlId) {
+    const pl = playlists.find(p => p.id === curPlId);
+    items.push({ label: fromLabels.playlists, action: "setView('playlists')" });
+    items.push({ label: pl?.name || '?', current: true });
+  }
+
+  bc.innerHTML = items.map((item, i) => {
+    if (item.current) {
+      return `<span class="bc-cur" aria-current="page">${esc(item.label)}</span>`;
+    }
+    return `<button class="bc-link" data-action="bc-navigate" data-bc-idx="${i}">${esc(item.label)}</button>
+            <span class="bc-sep" aria-hidden="true">›</span>`;
+  }).join('');
+}
