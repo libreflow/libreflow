@@ -10,6 +10,7 @@
 
 import { eqAnalyser }                                   from './eq.js';
 import { tween, kill as motionKill, eases, prefersReducedMotion } from './motion.js';
+import { createBeatDetector }                           from './cinema-beat.js';
 
 // ── Vagues — pré-allocation module scope ────────────────────
 // Zéro allocation dans le hot path RAF (CLAUDE.md §10).
@@ -19,7 +20,8 @@ let _waveBuf        = null;          // Uint8Array(frequencyBinCount) — donné
 let _waveSmoothed   = null;          // Float32Array — basses fréquences lissées
 const _wavePhases   = new Float32Array(_WAVE_LAYERS); // phases de chaque couche
 let _waveEnergy     = 0;             // énergie basse freq lissée 0-1
-let _waveBeatLast   = 0;             // performance.now() du dernier beat vagues
+// Beat vagues : détecteur partagé, baseline EMA externe (_waveEnergy). Constantes inchangées.
+const _waveBeat     = createBeatDetector({ history: 0, threshold: 1.55, cooldownMs: 650 });
 const _waveBeatObj  = { v: 0 };      // GSAP tween target — boost amplitude au beat
 let _waveBeatTw     = null;          // handle GSAP courant
 const _waveGrads        = new Array(_WAVE_LAYERS).fill(null); // CanvasGradient de remplissage par couche
@@ -48,7 +50,8 @@ let _starsReady     = false;
 let _starBuf        = null;          // Uint8Array — données FFT étoiles
 let _starHiFBuf     = null;          // Float32Array — hautes fréquences lissées
 let _starBassSmooth = 0;             // énergie basse lissée → beat étoile filante
-let _starBeatLast   = 0;
+// Beat étoiles : détecteur partagé, baseline EMA externe (_starBassSmooth). Constantes inchangées.
+const _starBeat     = createBeatDetector({ history: 0, threshold: 1.55, cooldownMs: 720 });
 const _SHOOT_MAX    = 3;
 // Étoiles filantes — objets plain tweenés par GSAP, lus dans le RAF
 const _shootPool    = Array.from({ length: _SHOOT_MAX }, () => ({ prog: 0, alpha: 0, x0: 0, y0: 0, x1: 0.3, y1: 0.1 }));
@@ -110,10 +113,11 @@ export function drawWavesFrame(ctx, w, h, cinArtRGBCur, isPlaying) {
   rawEnergy /= bassEnd * 255;
   _waveEnergy = _waveEnergy * 0.90 + rawEnergy * 0.10;
 
-  // Détection beat → GSAP tween boost amplitude (A11Y SC 2.3.3 : pas de tween sous reduced-motion)
+  // Détection beat → GSAP tween boost amplitude (A11Y SC 2.3.3 : pas de tween sous reduced-motion).
+  // Le détecteur porte le cooldown + le dernier-beat ; short-circuit reduced-motion → pas de sample
+  // (le timestamp n'avance pas), comportement identique à l'ancien &&-chain.
   const nowMs = performance.now();
-  if (rawEnergy > _waveEnergy * 1.55 && nowMs - _waveBeatLast > 650 && !prefersReducedMotion()) {
-    _waveBeatLast = nowMs;
+  if (!prefersReducedMotion() && _waveBeat.sample(rawEnergy, nowMs, _waveEnergy)) {
     motionKill(_waveBeatObj);
     _waveBeatObj.v = 1;
     _waveBeatTw = tween(_waveBeatObj, {
@@ -265,8 +269,8 @@ export function drawStarfieldFrame(ctx, w, h, cinArtRGBCur, ambientT) {
 
   const nowMs = performance.now();
   // A11Y SC 2.3.3 : pas d'étoile filante (tween GSAP) sous reduced-motion.
-  if (bassE > _starBassSmooth * 1.55 && nowMs - _starBeatLast > 720 && !prefersReducedMotion()) {
-    _starBeatLast = nowMs;
+  // Détecteur partagé (baseline EMA externe) ; short-circuit reduced-motion → pas de sample.
+  if (!prefersReducedMotion() && _starBeat.sample(bassE, nowMs, _starBassSmooth)) {
     _launchShootingStar();
   }
 

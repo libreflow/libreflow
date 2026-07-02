@@ -6,8 +6,10 @@
 //   cinemaBg, CINEMA_BG_MODES, CINEMA_BG_LABELS
 //   initCinemaBg, setCinemaBg, syncCinemaBgSettings, cycleCinemaBg, applyCinemaBg, updateCinemaBgBtn
 //   initCinemaBgModule
-//   _cinArtRGBCur, _cinArtRGBTarget, _LERP_K, getArtColorStr, setArtColorStr
+//   getArtColorStr, setArtColorStr, snapArtColor, stepArtColorLerp
 //   updateCinArtColor, updateCinArtRGBFromTrack
+//   NB : l'état couleur (_cinArtRGBCur/_cinArtRGBTarget/_LERP_K) est PRIVÉ (Task 3) —
+//        muté uniquement ici via snapArtColor()/stepArtColorLerp(), jamais par référence.
 //   startAmbientAnim, stopAmbientAnim, resetAmbientColors, updateAmbientGradient, updateCachedWinSize
 
 import { i18n }                               from './i18n.js';
@@ -43,13 +45,60 @@ const AMBIENT_CROSSFADE_MS = 1400;  // durée du cross-fade ambient
 
 // ── Couleur dominante de la pochette ────────────────────────
 // (même principe que _vizRGB dans viz.js — évite la lecture async artColor dans le loop rAF)
-let          _cinArtRGB       = '255,255,255'; // couleur courante (interpolée) — privée
-export const _cinArtRGBTarget = [255, 255, 255]; // couleur cible — exportée par référence
-export const _cinArtRGBCur    = [255, 255, 255]; // couleur affichée (LERP) — exportée par référence
-export const _LERP_K          = 0.06;            // vitesse de transition (~16 frames → 50% done)
+let   _cinArtRGB       = '255,255,255'; // fallback statique courant (chaîne "r,g,b") — privé
+const _cinArtRGBTarget = [255, 255, 255]; // couleur cible — PRIVÉ (Task 3)
+const _cinArtRGBCur    = [255, 255, 255]; // couleur affichée (LERP) — PRIVÉ (Task 3)
+const _LERP_K          = 0.06;            // vitesse de transition (~16 frames → 50% done)
 
 export function getArtColorStr() { return _cinArtRGB; }
 export function setArtColorStr(str) { _cinArtRGB = str; }
+
+// PERF : cache de la string "r,g,b" de la couleur LERP courante — reconstruite
+// seulement quand les composantes arrondies ont changé depuis la frame précédente
+// (zéro allocation en régime stable, couleur convergée). Migré depuis cinema-viz.js
+// (Task 3) pour garder l'état couleur privé à ce module.
+let _lerpRLast = -1, _lerpGLast = -1, _lerpBLast = -1;
+let _lerpRGBCache = '0,0,0';
+
+/**
+ * Snap immédiat de la couleur affichée vers la cible — appelé par cinema.js au
+ * changement de piste (évite le fondu depuis la couleur de la piste précédente).
+ */
+export function snapArtColor() {
+  _cinArtRGBCur[0] = _cinArtRGBTarget[0];
+  _cinArtRGBCur[1] = _cinArtRGBTarget[1];
+  _cinArtRGBCur[2] = _cinArtRGBTarget[2];
+}
+
+/**
+ * Avance le LERP d'une frame vers la cible et retourne la string "r,g,b" courante.
+ * Appelé par la boucle rAF de cinema-viz.js. Zéro allocation en régime stable :
+ * la string n'est reconstruite que si une composante arrondie a changé.
+ * @returns {string} couleur courante interpolée, format "r,g,b"
+ */
+export function stepArtColorLerp() {
+  // Convergence guard : snap quand tous les canaux sont à < 0.5 de la cible —
+  // stoppe le calcul LERP à chaque frame en régime permanent.
+  if (Math.abs(_cinArtRGBCur[0] - _cinArtRGBTarget[0]) < 0.5 &&
+      Math.abs(_cinArtRGBCur[1] - _cinArtRGBTarget[1]) < 0.5 &&
+      Math.abs(_cinArtRGBCur[2] - _cinArtRGBTarget[2]) < 0.5) {
+    _cinArtRGBCur[0] = _cinArtRGBTarget[0];
+    _cinArtRGBCur[1] = _cinArtRGBTarget[1];
+    _cinArtRGBCur[2] = _cinArtRGBTarget[2];
+  } else {
+    _cinArtRGBCur[0] += (_cinArtRGBTarget[0] - _cinArtRGBCur[0]) * _LERP_K;
+    _cinArtRGBCur[1] += (_cinArtRGBTarget[1] - _cinArtRGBCur[1]) * _LERP_K;
+    _cinArtRGBCur[2] += (_cinArtRGBTarget[2] - _cinArtRGBCur[2]) * _LERP_K;
+  }
+  const rR = Math.round(_cinArtRGBCur[0]);
+  const rG = Math.round(_cinArtRGBCur[1]);
+  const rB = Math.round(_cinArtRGBCur[2]);
+  if (rR !== _lerpRLast || rG !== _lerpGLast || rB !== _lerpBLast) {
+    _lerpRLast = rR; _lerpGLast = rG; _lerpBLast = rB;
+    _lerpRGBCache = `${rR},${rG},${rB}`;
+  }
+  return _lerpRGBCache;
+}
 
 // ── Ambient animation state ──────────────────────────────────
 let _ambientAnimRaf = null;   // RAF handle for continuous breathing loop
@@ -370,7 +419,7 @@ export function updateCinArtColor(hex) {
 /**
  * Met à jour _cinArtRGB depuis artColor de la piste, avec fallback sur --art-color CSS.
  * Même principe que updateVizColor() dans viz.js.
- * Mute _cinArtRGBTarget in-place (const array exporté par référence).
+ * Mute _cinArtRGBTarget in-place (array privé — consommé via stepArtColorLerp/snapArtColor).
  * Retourne la chaîne _cinArtRGB courante pour que cinema.js puisse l'utiliser.
  */
 export function updateCinArtRGBFromTrack(t) {

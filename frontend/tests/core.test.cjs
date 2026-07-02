@@ -2037,10 +2037,15 @@ section('components/lf-toast-stack.logic.js -- import-smoke');
     const cinLines = read('frontend/src/cinema.js').split('\n').length;
     const vizLines = read('frontend/src/cinema-viz.js').split('\n').length;
     const bgLines  = read('frontend/src/cinema-bg.js').split('\n').length;
+    const beatLines   = read('frontend/src/cinema-beat.js').split('\n').length;
+    const renderLines = read('frontend/src/cinema-render.js').split('\n').length;
 
     assert(cinLines < 800, `cinema.js < 800 lignes (actual: ${cinLines})`);
     assert(vizLines < 500, `cinema-viz.js < 500 lignes (actual: ${vizLines})`);
-    assert(bgLines  < 400, `cinema-bg.js < 400 lignes (actual: ${bgLines})`);
+    // Task 3 : cinema-bg.js gagne snapArtColor()/stepArtColorLerp() (état couleur privé) — cap 400→470.
+    assert(bgLines  < 470, `cinema-bg.js < 470 lignes (actual: ${bgLines})`);
+    assert(beatLines   < 200, `cinema-beat.js < 200 lignes (actual: ${beatLines})`);
+    assert(renderLines < 400, `cinema-render.js < 400 lignes (actual: ${renderLines})`);
 
     const vizSrc = read('frontend/src/cinema-viz.js');
     const bgSrc  = read('frontend/src/cinema-bg.js');
@@ -2062,6 +2067,95 @@ section('components/lf-toast-stack.logic.js -- import-smoke');
     assert(/export function updateCinema/.test(cinSrc),     "cinema.js exporte toujours updateCinema");
   } catch (e) {
     console.error('  KO  cinema split crashed:', e.message);
+    _ko++;
+  }
+
+  // =============================================================================
+  // Task 3 — santé du code : beat partagé (cinema-beat.js), état couleur privé
+  // (cinema-bg.js), split des fonctions géantes (updateCinema). Refactor pur.
+  // Logique beat reproduite inline (style maison — pas d'import ESM) + scans.
+  // =============================================================================
+  try {
+    const fs = require('fs'), path = require('path');
+    const root = path.join(__dirname, '../..');
+    const read = f => fs.readFileSync(path.join(root, f), 'utf8');
+
+    section('cinema Task 3 -- beat partagé + état couleur privé + split');
+
+    const beatSrc   = read('frontend/src/cinema-beat.js');
+    const cinVizSrc = read('frontend/src/cinema-viz.js');
+    const canvasSrc = read('frontend/src/cinema-canvas.js');
+    const bgSrc     = read('frontend/src/cinema-bg.js');
+    const cinSrc    = read('frontend/src/cinema.js');
+
+    // (a) cinema-beat.js existe, <200 lignes, exporte la factory createBeatDetector
+    assert(beatSrc.split('\n').length < 200, 'cinema-beat.js < 200 lignes');
+    assert(/export function createBeatDetector/.test(beatSrc),
+      'cinema-beat.js exporte la factory createBeatDetector');
+
+    // (a bis) logique beat reproduite inline — énergie > moyenne×seuil, cooldown, historique borné
+    function createBeatDetector({ history = 0, threshold, cooldownMs }) {
+      const buf = history > 0 ? new Float32Array(history) : null;
+      let idx = 0, sum = 0, lastBeat = 0;
+      return {
+        sample(energy, nowMs, baseline) {
+          let avg;
+          if (buf) {
+            const slot = idx % history;
+            sum -= buf[slot]; buf[slot] = energy; sum += energy; idx++;
+            if (idx < history) return false;                    // warm-up
+            if (idx % history === 0) { sum = 0; for (let i = 0; i < history; i++) sum += buf[i]; }
+            avg = sum / history;
+          } else { avg = baseline; }
+          if (energy > avg * threshold && nowMs - lastBeat > cooldownMs) { lastBeat = nowMs; return true; }
+          return false;
+        },
+      };
+    }
+    const d1 = createBeatDetector({ history: 4, threshold: 1.35, cooldownMs: 0 });
+    let warm = false;
+    for (let i = 0; i < 3; i++) if (d1.sample(1000, i)) warm = true;
+    assert(warm === false, 'beat: aucun beat pendant le warm-up (buffer non plein)');
+    const d2 = createBeatDetector({ history: 4, threshold: 1.35, cooldownMs: 100 });
+    for (let i = 0; i < 4; i++) d2.sample(10, i);               // remplir l'historique (moyenne basse)
+    assert(d2.sample(1000, 1000) === true, 'beat: pic d\'énergie > moyenne×seuil → beat');
+    assert(d2.sample(1000, 1050) === false, 'beat: cooldown supprime un beat trop rapproché');
+    const d3 = createBeatDetector({ history: 4, threshold: 1.5, cooldownMs: 0 });
+    for (let i = 0; i < 8; i++) d3.sample(500, i);              // moyenne stabilisée == énergie
+    assert(d3.sample(500, 100) === false, 'beat: énergie == moyenne → pas de beat (historique borné)');
+    // Mode baseline externe (history=0) — vagues/étoiles (EMA fournie par l'appelant)
+    const d4 = createBeatDetector({ history: 0, threshold: 1.55, cooldownMs: 650 });
+    assert(d4.sample(200, 1000, 100) === true, 'beat: mode baseline externe (EMA) → beat si energy > baseline×seuil');
+    assert(d4.sample(200, 1100, 100) === false, 'beat: mode baseline externe respecte le cooldown');
+    assert(d4.sample(200, 2000, 100) === true, 'beat: mode baseline externe → nouveau beat une fois le cooldown écoulé');
+
+    // (b) viz + canvas n'ont plus leur propre boucle historique — ils importent cinema-beat.js
+    assert(/from '.\/cinema-beat.js'/.test(cinVizSrc), 'cinema-viz.js importe cinema-beat.js');
+    assert(/createBeatDetector/.test(cinVizSrc),       'cinema-viz.js utilise createBeatDetector');
+    assert(!/_beatHistorySum/.test(cinVizSrc),
+      'cinema-viz.js ne réimplémente plus le running-sum de beat (déplacé dans cinema-beat.js)');
+    assert(/from '.\/cinema-beat.js'/.test(canvasSrc), 'cinema-canvas.js importe cinema-beat.js');
+    assert(/createBeatDetector/.test(canvasSrc),       'cinema-canvas.js utilise createBeatDetector');
+
+    // (c) cinema-bg.js : état couleur privé — plus d'arrays exportés par référence
+    assert(!/export const _cinArtRGBCur/.test(bgSrc),     'cinema-bg.js n\'exporte plus _cinArtRGBCur (array par réf)');
+    assert(!/export const _cinArtRGBTarget/.test(bgSrc),  'cinema-bg.js n\'exporte plus _cinArtRGBTarget (array par réf)');
+    assert(/export function snapArtColor/.test(bgSrc),    'cinema-bg.js exporte snapArtColor()');
+    assert(/export function stepArtColorLerp/.test(bgSrc),'cinema-bg.js exporte stepArtColorLerp()');
+    assert(/export function getArtColorStr/.test(bgSrc),  'cinema-bg.js conserve getArtColorStr()');
+    assert(!/_cinArtRGBCur/.test(cinVizSrc),
+      'cinema-viz.js n\'accède plus à _cinArtRGBCur (passe par stepArtColorLerp)');
+    assert(!/_cinArtRGBCur/.test(cinSrc),
+      'cinema.js n\'accède plus à _cinArtRGBCur (passe par snapArtColor)');
+
+    // (e) updateCinema devient un orchestrateur court (<= 50 lignes) — finding 131 lignes
+    const uc = cinSrc.split('\n');
+    const s = uc.findIndex(l => /^export function updateCinema\(/.test(l));
+    let e2 = s + 1; while (e2 < uc.length && !/^\}/.test(uc[e2])) e2++;
+    assert(s >= 0 && (e2 - s + 1) <= 50,
+      `cinema.js : updateCinema = ${s >= 0 ? e2 - s + 1 : '?'} lignes (<= 50, orchestrateur court)`);
+  } catch (e) {
+    console.error('  KO  cinema Task 3 crashed:', e.message);
     _ko++;
   }
 
@@ -2120,8 +2214,11 @@ section('components/lf-toast-stack.logic.js -- import-smoke');
     // (e) zéro allocation : les strings couleur par frame doivent être mises en cache,
     // pas reconstruites inconditionnellement à chaque frame (cinema-viz.js:201,240,273 ;
     // cinema-canvas.js:117,260-264).
-    assert(/_lerpRGBCache/.test(cinVizSrc),
-      'cinema-viz.js : _lerpRGB mis en cache (rebuild seulement si les composantes arrondies changent)');
+    // Task 3 : le cache de la string _lerpRGB a migré dans stepArtColorLerp() (cinema-bg.js).
+    assert(/_lerpRGBCache/.test(bgSrc),
+      'cinema-bg.js : stepArtColorLerp() met en cache la string couleur (rebuild seulement si composantes arrondies changent)');
+    assert(/stepArtColorLerp/.test(cinVizSrc),
+      'cinema-viz.js : LERP couleur délégué à stepArtColorLerp (cinema-bg.js)');
     assert(/_glowFillCache/.test(cinVizSrc),
       'cinema-viz.js : rgb(${_lerpRGB}) (glow/ligne centrale) mis en cache');
     assert(/_stdFillCache/.test(cinVizSrc),
