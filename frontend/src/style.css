@@ -5156,6 +5156,50 @@ html[data-mode="light"] .eq-slider::-moz-range-track { background: var(--bg6); }
   min-width: 3.5ch; font-variant-numeric: tabular-nums; font-weight: 500;
 }
 
+/* ── Thumb + tooltip de scrub (Task 5) ───────────────────────
+   Le thumb est un sibling de .cinema-fill (pas un enfant) : positionné par
+   `left: %` en JS -- évite la distorsion en ellipse qu'un enfant hériterait
+   du transform: scaleX() du fill. Masqué par défaut, révélé au hover/focus/
+   .ctrl-on (même logique de visibilité que les autres contrôles cinéma). */
+.cinema-pbar-thumb {
+  position: absolute; top: 50%; left: 0;
+  width: var(--icon-xs); height: var(--icon-xs);
+  border-radius: 50%;
+  background: var(--c-white);
+  box-shadow: var(--shadow-thumb);
+  transform: translate(-50%, -50%) scale(0);
+  opacity: 0;
+  pointer-events: none;
+  transition: transform var(--motion-fast) var(--ease-spring-soft), opacity var(--motion-fast) ease;
+}
+.cinema-pbar:hover .cinema-pbar-thumb,
+.cinema-pbar:focus-visible .cinema-pbar-thumb,
+#cinema-overlay.ctrl-on .cinema-pbar-thumb {
+  transform: translate(-50%, -50%) scale(1);
+  opacity: 1;
+}
+.cinema-seek-tip {
+  position: absolute;
+  bottom: calc(100% + var(--sp-2h));
+  left: 0; /* valeur initiale -- écrasée par cinema-seek.js (clampée aux bords viewport) */
+  transform: translateX(-50%);
+  background: rgba(0,0,0,.55);
+  backdrop-filter: blur(var(--blur-8));
+  -webkit-backdrop-filter: blur(var(--blur-8));
+  border: var(--border-w-sm) solid rgba(255,255,255,.14);
+  color: var(--cin-text-hi);
+  font-size: var(--fs-xs); font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  padding: var(--sp-1q) var(--sp-1d);
+  border-radius: var(--r-lg);
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity var(--motion-fast) ease;
+  z-index: var(--z-tooltip);
+}
+.cinema-seek-tip.show { opacity: 1; }
+
 /* ── Contrôles cinéma ─────────────────────────────────────── */
 .cinema-controls {
   margin-top: var(--sp-3); display: flex; align-items: center; gap: var(--sp-2);
@@ -5273,6 +5317,18 @@ html[data-mode="light"] .cinema-title  { color: var(--text-primary); }
 html[data-mode="light"] .cinema-artist { color: var(--text-secondary); }
 html[data-mode="light"] .cinema-album  { color: var(--text-muted); }
 html[data-mode="light"] .cinema-time   { color: var(--text-muted); }
+
+/* Light cinema — thumb/tooltip de scrub (Task 5) : mêmes tokens texte/surface
+   que .cinema-corner-btn pour rester cohérent avec le reste du chrome cinéma. */
+html[data-mode="light"] .cinema-pbar-thumb {
+  background: var(--text-primary);
+  box-shadow: var(--shadow-sm);
+}
+html[data-mode="light"] .cinema-seek-tip {
+  background: rgba(255, 255, 255, 0.85);
+  border-color: rgba(0, 0, 0, 0.1);
+  color: var(--text-primary);
+}
 
 html[data-mode="light"] .cinema-corner-btn {
   background: rgba(255, 255, 255, 0.55);

@@ -1,8 +1,8 @@
 // LibreFlow — cinema-render.js
 // Helpers de rendu du mode Cinéma extraits de updateCinema() (cinema.js) pour
 // garder l'orchestrateur court (< 50 lignes, CLAUDE.md §16) et cinema.js < 800 lignes.
-// Intra-cluster cinéma : importe cinema-bg.js / cinema-viz.js (câblage explicite,
-// même discipline que le reste du cluster ; ne réimporte pas cinema.js → pas de cycle).
+// Intra-cluster cinéma : importe cinema-bg.js / cinema-viz.js / cinema-seek.js (câblage
+// explicite, même discipline que le reste du cluster ; ne réimporte pas cinema.js → pas de cycle).
 //
 // Exports :
 //   renderCinColor(t, trackChanged)  — couleur dominante + fond + reduced-motion
@@ -14,6 +14,7 @@ import { audio }                                from './player.js';
 import { updateCinArtRGBFromTrack, snapArtColor, startAmbientAnim } from './cinema-bg.js';
 import { startCinemaViz }                       from './cinema-viz.js';
 import { prefersReducedMotion }                 from './motion.js';
+import { isSeekDragging }                       from './cinema-seek.js';
 
 /**
  * Couleur dominante de la pochette pour le visualiseur + teinte CSS.
@@ -58,10 +59,13 @@ export function syncCinVolumeUI(vol) {
 
 /** Barre de progression + temps courant/total (chemin updateCinema, pas le 60fps). */
 export function syncCinProgress() {
-  const fill = document.getElementById('cinema-fill');
-  const tc   = document.getElementById('cinema-tc');
-  const td   = document.getElementById('cinema-td');
-  if (fill && audio.duration) fill.style.transform = 'scaleX(' + (audio.currentTime / audio.duration) + ')';
+  if (isSeekDragging()) return; // Task 5 — ne pas écraser le fill/thumb pendant un drag manuel
+  const fill  = document.getElementById('cinema-fill');
+  const thumb = document.getElementById('cinema-pbar-thumb');
+  const tc    = document.getElementById('cinema-tc');
+  const td    = document.getElementById('cinema-td');
+  if (fill  && audio.duration) fill.style.transform = 'scaleX(' + (audio.currentTime / audio.duration) + ')';
+  if (thumb && audio.duration) thumb.style.left = (audio.currentTime / audio.duration * 100) + '%';
   if (tc)  tc.textContent = fmt(audio.currentTime);
   if (td)  td.textContent = audio.duration ? fmt(audio.duration) : '–:––';
 }

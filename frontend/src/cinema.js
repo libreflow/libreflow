@@ -4,6 +4,7 @@
 //
 // Dépendances :
 //   import  : cinema-render.js (helpers de rendu extraits de updateCinema)
+//   import  : cinema-seek.js (scrubbing complet de la pbar, Task 5 — injection de deps)
 //   import  : saveCfg (cfgsave.js), updateVolSlider (playerbar.js)
 //   window  : audio, curIdx, tracks, liked, shuffle, repeat, getFiltered (getters), toast
 //
@@ -33,6 +34,7 @@ import { cinemaBg, CINEMA_BG_MODES, CINEMA_BG_LABELS, applyCinemaBg, setCinemaBg
          updateCachedWinSize } from './cinema-bg.js';
 import { startCinemaViz, stopCinemaViz, initCinemaVizModule } from './cinema-viz.js';
 import { renderCinColor, syncCinVolumeUI, syncCinProgress } from './cinema-render.js';
+import { initCinemaSeek, isSeekDragging, resetCinemaSeek } from './cinema-seek.js';
 
 export { cinemaBg, CINEMA_BG_MODES, CINEMA_BG_LABELS, applyCinemaBg, setCinemaBg, cycleCinemaBg,
          syncCinemaBgSettings, updateCinemaBgBtn, initCinemaBg, updateCinArtColor };
@@ -52,6 +54,7 @@ let _cinemaLastFocus = null;
 // DOM cache (peuplé dans openCinema, vidé dans closeCinema)
 // Utilisé par updateCinemaProgress() pour les mises à jour timeupdate à 60 fps.
 let _cinFill    = null;
+let _cinThumb   = null; // Task 5 — thumb de scrub (sibling de _cinFill, position en %)
 let _cinTc      = null;
 let _cinTd      = null;
 let _cinPbar    = null;
@@ -268,10 +271,11 @@ export function openCinema() {
   const tbtCinema = document.getElementById('tbt-cinema');
   if (tbtCinema) { tbtCinema.classList.add('on'); tbtCinema.setAttribute('aria-pressed', 'true'); }
   // Mettre en cache les refs cinéma pour updateCinemaProgress (timeupdate à 60 fps)
-  _cinFill = document.getElementById('cinema-fill');
-  _cinTc   = document.getElementById('cinema-tc');
-  _cinTd   = document.getElementById('cinema-td');
-  _cinPbar = document.getElementById('cinema-pbar');
+  _cinFill  = document.getElementById('cinema-fill');
+  _cinThumb = document.getElementById('cinema-pbar-thumb');
+  _cinTc    = document.getElementById('cinema-tc');
+  _cinTd    = document.getElementById('cinema-td');
+  _cinPbar  = document.getElementById('cinema-pbar');
   // Synchroniser le slider volume avec l'état courant de l'audio
   const volSlider = document.getElementById('cinema-vol');
   if (volSlider) volSlider.value = _readVol();
@@ -394,7 +398,8 @@ export function closeCinema() {
   motionSet('#cinema-info, #cinema-title, #cinema-artist, #cinema-pbar, #cinema-tc, #cinema-td, #cinema-controls > *, #cinema-clock',
     { clearProps: 'transform,opacity,visibility,display' });
   // Libérer les refs cachées
-  _cinFill = _cinTc = _cinTd = _cinPbar = null;
+  _cinFill = _cinThumb = _cinTc = _cinTd = _cinPbar = null;
+  resetCinemaSeek(); // Task 5 — coupe un drag en cours + masque la tooltip (fermeture mid-scrub)
   _lastCinArt = null; // reset pour forcer le swap à la prochaine ouverture
   _lastCinIdx = -1;   // reset pour détecter le changement de piste à la prochaine ouverture
   // A11Y A.8 — restore focus to the element that was focused before cinema opened
@@ -613,7 +618,9 @@ initCinemaVizModule({ getCinemaOpen: () => cinemaOpen });
  */
 export function updateCinemaProgress(p, cur, dur) {
   if (!cinemaOpen) return;
-  if (_cinFill) _cinFill.style.transform = 'scaleX(' + p + ')';
+  if (isSeekDragging()) return; // Task 5 — drag en cours : cinema-seek.js pilote déjà fill/thumb/temps/aria
+  if (_cinFill)  _cinFill.style.transform = 'scaleX(' + p + ')';
+  if (_cinThumb) _cinThumb.style.left = (p * 100) + '%';
   if (_cinTc)   _cinTc.textContent = cur;
   if (_cinTd)   _cinTd.textContent = dur;
   if (_cinPbar) {
@@ -752,15 +759,15 @@ document.addEventListener('visibilitychange', () => {
   }
 });
 
-// ── Barre de progression cinéma (click pour seek) ───────────
+// ── Barre de progression cinéma — scrubbing complet (Task 5) ─
+// Toute la logique de drag/hover/clavier vit dans cinema-seek.js ; câblage unique ici.
 document.addEventListener('DOMContentLoaded', function() {
-  const cpbar = document.getElementById('cinema-pbar');
-  if (cpbar) {
-    cpbar.addEventListener('click', function(e) {
-      // audio imported from player.js — null-check : audio peut être null avant l'init du player (Task 3)
-      if (!audio || !audio.duration) return;
-      const r = cpbar.getBoundingClientRect();
-      audio.currentTime = ((e.clientX - r.left) / r.width) * audio.duration;
-    });
-  }
+  initCinemaSeek({
+    audio,
+    pbar:    document.getElementById('cinema-pbar'),
+    fill:    document.getElementById('cinema-fill'),
+    thumb:   document.getElementById('cinema-pbar-thumb'),
+    timeEl:  document.getElementById('cinema-tc'),
+    tooltip: document.getElementById('cinema-seek-tip'),
+  });
 });

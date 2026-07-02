@@ -1826,6 +1826,49 @@ section('organize.js -- B-2 saveTracks batches, rebuildTrackIdxMap before notify
 }());
 
 // =============================================================================
+// cinema-seek.js -- seekPosFromPointer / formatSeekTime (pure logic, Task 5 TDD)
+// Logique dupliquée inline (house style) -- cf. frontend/src/cinema-seek.js
+// =============================================================================
+section('cinema-seek.js -- seekPosFromPointer / formatSeekTime (pure logic)');
+
+(function () {
+  function seekPosFromPointer(clientX, rectLeft, rectWidth, duration) {
+    if (!duration || !isFinite(duration) || duration <= 0) return null;
+    if (!rectWidth || rectWidth <= 0) return null;
+    const ratio = Math.max(0, Math.min(1, (clientX - rectLeft) / rectWidth));
+    return ratio * duration;
+  }
+  function formatSeekTime(s) {
+    if (s == null || !isFinite(s) || s < 0) return '–:––';
+    const total = Math.floor(s);
+    const m  = Math.floor(total / 60);
+    const ss = total % 60;
+    return `${m}:${String(ss).padStart(2, '0')}`;
+  }
+
+  // seekPosFromPointer -- bords
+  assert(seekPosFromPointer(50, 100, 200, 180) === 0,   'seekPosFromPointer: x < left -> 0 (clamp bas)');
+  assert(seekPosFromPointer(400, 100, 200, 180) === 180, 'seekPosFromPointer: x > right -> duration (clamp haut)');
+  assert(seekPosFromPointer(200, 100, 200, 180) === 90,  'seekPosFromPointer: milieu exact -> duration/2');
+  assert(seekPosFromPointer(100, 100, 200, 180) === 0,   'seekPosFromPointer: x == left -> 0 exact');
+  assert(seekPosFromPointer(300, 100, 200, 180) === 180, 'seekPosFromPointer: x == right -> duration exact');
+  assert(seekPosFromPointer(200, 100, 200, 0)         === null, 'seekPosFromPointer: duration 0 -> null');
+  assert(seekPosFromPointer(200, 100, 200, NaN)       === null, 'seekPosFromPointer: duration NaN -> null');
+  assert(seekPosFromPointer(200, 100, 200, undefined) === null, 'seekPosFromPointer: duration undefined -> null');
+  assert(seekPosFromPointer(200, 100, 0, 180)         === null, 'seekPosFromPointer: rectWidth 0 -> null (division par zéro)');
+
+  // formatSeekTime
+  assert(formatSeekTime(0)         === '0:00',  'formatSeekTime: 0s -> 0:00');
+  assert(formatSeekTime(59)        === '0:59',  'formatSeekTime: 59s -> 0:59');
+  assert(formatSeekTime(90)        === '1:30',  'formatSeekTime: 90s -> 1:30');
+  assert(formatSeekTime(3661)      === '61:01', 'formatSeekTime: 3661s -> 61:01 (M:SS, cohérent avec cinema-tc/td)');
+  assert(formatSeekTime(NaN)       === '–:––', 'formatSeekTime: NaN -> –:––');
+  assert(formatSeekTime(null)      === '–:––', 'formatSeekTime: null -> –:––');
+  assert(formatSeekTime(undefined) === '–:––', 'formatSeekTime: undefined -> –:––');
+  assert(formatSeekTime(-1)        === '–:––', 'formatSeekTime: négatif -> –:––');
+}());
+
+// =============================================================================
 // N. artcolor.js — _kmeansColors (k-means++ clustering, pure function)
 // =============================================================================
 section('artcolor.js -- _kmeansColors');
@@ -2034,11 +2077,12 @@ section('components/lf-toast-stack.logic.js -- import-smoke');
 
     section('cinema split — line count + public surface');
 
-    const cinLines = read('frontend/src/cinema.js').split('\n').length;
-    const vizLines = read('frontend/src/cinema-viz.js').split('\n').length;
-    const bgLines  = read('frontend/src/cinema-bg.js').split('\n').length;
+    const cinLines  = read('frontend/src/cinema.js').split('\n').length;
+    const vizLines  = read('frontend/src/cinema-viz.js').split('\n').length;
+    const bgLines   = read('frontend/src/cinema-bg.js').split('\n').length;
     const beatLines   = read('frontend/src/cinema-beat.js').split('\n').length;
     const renderLines = read('frontend/src/cinema-render.js').split('\n').length;
+    const seekLines   = read('frontend/src/cinema-seek.js').split('\n').length;
 
     assert(cinLines < 800, `cinema.js < 800 lignes (actual: ${cinLines})`);
     assert(vizLines < 500, `cinema-viz.js < 500 lignes (actual: ${vizLines})`);
@@ -2046,10 +2090,14 @@ section('components/lf-toast-stack.logic.js -- import-smoke');
     assert(bgLines  < 470, `cinema-bg.js < 470 lignes (actual: ${bgLines})`);
     assert(beatLines   < 200, `cinema-beat.js < 200 lignes (actual: ${beatLines})`);
     assert(renderLines < 400, `cinema-render.js < 400 lignes (actual: ${renderLines})`);
+    // Task 5 : cinema-seek.js — scrubbing complet de la pbar (drag/hover/clavier), <300 lignes.
+    assert(seekLines   < 300, `cinema-seek.js < 300 lignes (actual: ${seekLines})`);
 
-    const vizSrc = read('frontend/src/cinema-viz.js');
-    const bgSrc  = read('frontend/src/cinema-bg.js');
-    const cinSrc = read('frontend/src/cinema.js');
+    const vizSrc  = read('frontend/src/cinema-viz.js');
+    const bgSrc   = read('frontend/src/cinema-bg.js');
+    const cinSrc  = read('frontend/src/cinema.js');
+    const seekSrc = read('frontend/src/cinema-seek.js');
+    const renderSrc = read('frontend/src/cinema-render.js');
 
     assert(/export function startCinemaViz/.test(vizSrc),      'cinema-viz.js exports startCinemaViz');
     assert(/export function stopCinemaViz/.test(vizSrc),       'cinema-viz.js exports stopCinemaViz');
@@ -2060,8 +2108,20 @@ section('components/lf-toast-stack.logic.js -- import-smoke');
     assert(/export function applyCinemaBg/.test(bgSrc),      'cinema-bg.js exports applyCinemaBg');
     assert(/export function initCinemaBgModule/.test(bgSrc), 'cinema-bg.js exports initCinemaBgModule');
 
+    // Task 5 — cinema-seek.js : surface publique + zéro import cross-feature (player.js/eq.js).
+    assert(/export function seekPosFromPointer/.test(seekSrc), 'cinema-seek.js exports seekPosFromPointer');
+    assert(/export function formatSeekTime/.test(seekSrc),     'cinema-seek.js exports formatSeekTime');
+    assert(/export function isSeekDragging/.test(seekSrc),     'cinema-seek.js exports isSeekDragging');
+    assert(/export function initCinemaSeek/.test(seekSrc),     'cinema-seek.js exports initCinemaSeek');
+    assert(/export function resetCinemaSeek/.test(seekSrc),    'cinema-seek.js exports resetCinemaSeek');
+    assert(!/from '\.\/player\.js'/.test(seekSrc) && !/from '\.\/eq\.js'/.test(seekSrc),
+      'cinema-seek.js n\'importe pas player.js/eq.js (DI uniquement, CLAUDE.md §6)');
+
     assert(/from '.\/cinema-viz.js'/.test(cinSrc),         "cinema.js importe depuis cinema-viz.js");
     assert(/from '.\/cinema-bg.js'/.test(cinSrc),          "cinema.js importe depuis cinema-bg.js");
+    assert(/from '.\/cinema-seek.js'/.test(cinSrc),        "cinema.js importe depuis cinema-seek.js");
+    assert(/initCinemaSeek\(/.test(cinSrc),                "cinema.js appelle initCinemaSeek()");
+    assert(/from '.\/cinema-seek.js'/.test(renderSrc),     "cinema-render.js importe isSeekDragging depuis cinema-seek.js");
     assert(/export \{[\s\S]*?cinemaBg/.test(cinSrc),       "cinema.js re-exporte cinemaBg");
     assert(/export let cinemaOpen/.test(cinSrc),            "cinema.js exporte toujours cinemaOpen");
     assert(/export function updateCinema/.test(cinSrc),     "cinema.js exporte toujours updateCinema");
