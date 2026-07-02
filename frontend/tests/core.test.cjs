@@ -2544,6 +2544,15 @@ section('components/lf-toast-stack.logic.js -- import-smoke');
       'style.css: .cin-txt-swap-in utilise var(--ease-spring-soft)');
     assert(/@media\s*\(prefers-reduced-motion:\s*reduce\)\s*\{[^}]*\.cin-txt-swap/.test(CSS),
       'style.css: reduced-motion neutralise .cin-txt-swap-out/-in (remplacement sec)');
+    // (a-fix, review) : le swap-in retire les DEUX classes texte (miroir de artWrap) —
+    // sans retrait de cin-txt-swap-in, un rapid-skip interrompant un in en vol laisse la
+    // classe en place et le re-add ne redémarre jamais l'animation (texte qui saute sec).
+    assert(/classList\.remove\(\s*'cin-txt-swap-out'\s*,\s*'cin-txt-swap-in'\s*\)/.test(CIN_RENDER),
+      "cinema-render.js: beginCinSwapIn retire cin-txt-swap-out ET cin-txt-swap-in (restart d'animation garanti)");
+    // (a-fix, review) : le début du swap-out retire une cin-txt-swap-in en vol — déclarée
+    // après l'out dans style.css (spécificité égale), elle gagnerait la cascade sinon.
+    assert(/classList\.remove\(\s*'cin-txt-swap-in'\s*\)[\s\S]{0,80}classList\.add\(\s*'cin-txt-swap-out'\s*\)/.test(CIN),
+      "cinema.js: le swap-out retire une cin-txt-swap-in en vol avant de poser cin-txt-swap-out");
 
     // (b) le cluster cinéma référence img.decode() — skeleton/fallback pochette (Step 4).
     // Vit dans cinema-render.js (stateless, cf. applyCinText/decodeArtImage/beginCinSwapIn) :

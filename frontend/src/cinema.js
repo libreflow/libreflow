@@ -565,9 +565,11 @@ function _renderCinArt(art, trackChanged, t, title, artist) {
   _lastCinArt = art; // préempter : évite le re-déclenchement si updateCinema rappelé pendant la transition
 
   if (hadArt && artWrap) {
-    // Animation sortante (120ms) puis entrante — transition bi-directionnelle, texte inclus
+    // Animation sortante (120ms) puis entrante — transition bi-directionnelle, texte inclus.
+    // Retirer une cin-txt-swap-in en vol AVANT de poser l'out : déclarée après l'out dans
+    // style.css (spécificité égale), elle gagnerait la cascade et annulerait l'animation.
     artWrap.classList.add('cin-swap-out');
-    _cinTxtEls().forEach(el => el.classList.add('cin-txt-swap-out'));
+    _cinTxtEls().forEach(el => { el.classList.remove('cin-txt-swap-in'); el.classList.add('cin-txt-swap-out'); });
     _cinSwapOutTimer = setTimeout(() => _cinSwapIn(art, t, title, artist, artWrap, img, em), CIN_SWAP_OUT_MS);
   } else {
     // Premier chargement : pas d'animation sortante, swap immédiat

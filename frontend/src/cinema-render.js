@@ -122,7 +122,11 @@ export function beginCinSwapIn(artWrap, img, em, t, title, artist, art) {
   const txtEls = ['cinema-title', 'cinema-artist', 'cinema-album']
     .map(id => document.getElementById(id)).filter(Boolean);
   applyCinText(t, title, artist);
-  txtEls.forEach(el => el.classList.remove('cin-txt-swap-out'));
+  // Retrait des DEUX classes — miroir du traitement artWrap ci-dessous. Sans le retrait de
+  // cin-txt-swap-in : un rapid-skip qui interrompt un swap-in en vol laisserait la classe
+  // en place, et un classList.add() du même nom au rAF suivant ne redémarre JAMAIS
+  // l'animation CSS (il faut une frame sans la classe) → texte qui saute sans animation.
+  txtEls.forEach(el => el.classList.remove('cin-txt-swap-out', 'cin-txt-swap-in'));
   decodeArtImage(img, em, art);
   if (artWrap) {
     artWrap.classList.remove('cin-swap-out', 'cin-swap');
