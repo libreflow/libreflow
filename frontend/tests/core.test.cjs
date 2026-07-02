@@ -2066,6 +2066,85 @@ section('components/lf-toast-stack.logic.js -- import-smoke');
   }
 
   // =============================================================================
+  // cinema perf — boucles rAF, allocations, fuites GSAP (audit perf 2026-07-02)
+  // P1 : viz.js (player bar) rend sous l'overlay cinéma — doit se suspendre.
+  // P2 : viz.js sans garde document.hidden.
+  // P4 : tweens GSAP _waveBeatTw/_shootTweens jamais tués (fuite cinema-canvas.js).
+  // P3 : window.innerWidth/innerHeight relu chaque frame dans cinema-bg.js.
+  // Allocations de strings couleur par frame : cinema-viz.js / cinema-canvas.js.
+  // =============================================================================
+  {
+    const fs   = require('fs');
+    const path = require('path');
+    const root = path.join(__dirname, '../..');
+    const read = f => fs.readFileSync(path.join(root, f), 'utf8');
+
+    section('cinema perf -- boucles rAF, allocations, fuites GSAP');
+
+    const vizSrc    = read('frontend/src/viz.js');
+    const cinSrc    = read('frontend/src/cinema.js');
+    const canvasSrc = read('frontend/src/cinema-canvas.js');
+    const cinVizSrc = read('frontend/src/cinema-viz.js');
+    const bgSrc     = read('frontend/src/cinema-bg.js');
+
+    // (a) viz.js : garde document.hidden dans la boucle de rendu _draw()
+    const drawBody = /function _draw\(\)[\s\S]*?\n\/\* ── Mode bars/.exec(vizSrc)?.[0] || '';
+    assert(drawBody.length > 0, 'viz.js : fonction _draw() trouvée');
+    assert(/document\.hidden/.test(drawBody),
+      'viz.js : _draw() contient une garde document.hidden (P2 fix)');
+
+    // (b) viz.js exporte suspendViz/resumeViz
+    assert(/export function suspendViz/.test(vizSrc), 'viz.js exporte suspendViz()');
+    assert(/export function resumeViz/.test(vizSrc),  'viz.js exporte resumeViz()');
+
+    // (c) cinema.js câble la suspension à l'ouverture/fermeture (openCinema/closeCinema)
+    const openBody  = /export function openCinema\(\)[\s\S]*?\n\}\n/.exec(cinSrc)?.[0]  || '';
+    const closeBody = /export function closeCinema\(\)[\s\S]*?\n\}\n/.exec(cinSrc)?.[0] || '';
+    assert(openBody.length  > 0, 'cinema.js : openCinema() trouvée');
+    assert(closeBody.length > 0, 'cinema.js : closeCinema() trouvée');
+    assert(/_suspendViz\(\)/.test(openBody),
+      'openCinema() suspend le viz player-bar (P1 fix)');
+    assert(/_resumeViz\(\)/.test(closeBody),
+      'closeCinema() reprend le viz player-bar');
+    assert(/export function initCinemaVizSuspend/.test(cinSrc),
+      'cinema.js expose un point de câblage pour suspendViz/resumeViz (pas d\'import direct viz.js)');
+
+    // (d) cinema-canvas.js exporte un kill des tweens GSAP, appelé dans le chemin de fermeture
+    assert(/export function killCanvasTweens/.test(canvasSrc),
+      'cinema-canvas.js exporte killCanvasTweens() (P4 fix)');
+    assert(/motionKill\(_waveBeatObj\)/.test(canvasSrc) && /motionKill\(_shootPool\[i\]\)/.test(canvasSrc),
+      'killCanvasTweens() tue _waveBeatTw et tous les _shootTweens via motionKill');
+    assert(/killCanvasTweens\(\)/.test(bgSrc),
+      'cinema-bg.js appelle killCanvasTweens() dans le chemin de fermeture (_stopAmbientAnim → closeCinema)');
+
+    // (e) zéro allocation : les strings couleur par frame doivent être mises en cache,
+    // pas reconstruites inconditionnellement à chaque frame (cinema-viz.js:201,240,273 ;
+    // cinema-canvas.js:117,260-264).
+    assert(/_lerpRGBCache/.test(cinVizSrc),
+      'cinema-viz.js : _lerpRGB mis en cache (rebuild seulement si les composantes arrondies changent)');
+    assert(/_glowFillCache/.test(cinVizSrc),
+      'cinema-viz.js : rgb(${_lerpRGB}) (glow/ligne centrale) mis en cache');
+    assert(/_stdFillCache/.test(cinVizSrc),
+      'cinema-viz.js : rgb(${_lerpRGB}) du mode standard mis en cache');
+    assert(/_waveLerpRGBCache/.test(canvasSrc),
+      'cinema-canvas.js : lerpRGB de drawWavesFrame mis en cache');
+    assert(/_starFillCache/.test(canvasSrc) && /_starGlowFillCache/.test(canvasSrc),
+      'cinema-canvas.js : starFill/glowFill de drawStarfieldFrame mis en cache');
+    assert(/_starBgFillCache/.test(canvasSrc),
+      'cinema-canvas.js : fond teinté de drawStarfieldFrame mis en cache');
+
+    // (bonus P3) cinema-bg.js : innerWidth/innerHeight mis en cache, boucle RAF ne relit pas le DOM
+    const loopBody = /function loop\(now\)[\s\S]*?\n  \}\n/.exec(bgSrc)?.[0] || '';
+    assert(loopBody.length > 0, 'cinema-bg.js : boucle RAF loop() trouvée');
+    assert(!/window\.innerWidth|window\.innerHeight/.test(loopBody),
+      'cinema-bg.js : la boucle RAF ne lit plus window.innerWidth/innerHeight (P3 fix)');
+    assert(/export function updateCachedWinSize/.test(bgSrc),
+      'cinema-bg.js exporte updateCachedWinSize() (mise à jour par le handler resize de cinema.js)');
+    assert(/updateCachedWinSize\(\)/.test(read('frontend/src/cinema.js')),
+      'cinema.js appelle updateCachedWinSize() dans son handler resize');
+  }
+
+  // =============================================================================
   // app.js — régression pochette : .playing-row après changement de piste
   // PLAY_STATE (qui pose .playing-row) est émis pendant audio.play(), AVANT
   // TRACK_CHANGE (qui déplace .act). patchActiveTrack() strippe .playing-row de

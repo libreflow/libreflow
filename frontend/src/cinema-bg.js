@@ -11,6 +11,7 @@
 //   getArtColorStr, setArtColorStr
 //   updateCinArtColor, updateCinArtRGBFromTrack
 //   startAmbientAnim, stopAmbientAnim, resetAmbientColors, updateAmbientGradient
+//   updateCachedWinSize
 
 import { i18n }                               from './i18n.js';
 import { get, set }                           from './store.js';
@@ -18,7 +19,7 @@ import { saveCfg }                            from './cfgsave.js';
 import { toast }                              from './ui.js';
 import { rgbToHsl, hslToRgb, boostSat, sampleArtColors } from './artcolor.js';
 import { renderAmbientFrame }                 from './ambientRenderer.js';
-import { drawWavesFrame, drawStarfieldFrame, initStarfield } from './cinema-canvas.js';
+import { drawWavesFrame, drawStarfieldFrame, initStarfield, killCanvasTweens } from './cinema-canvas.js';
 
 // ── Modes d'arrière-plan ─────────────────────────────────────
 export let cinemaBg       = 'ambient'; // default mode
@@ -61,6 +62,12 @@ let _frameCount     = 0;      // frame counter for ambient 30fps cap
 let _ambientGen     = 0;      // génération courante — incrémentée à chaque _stopAmbientAnim() pour invalider les loops orphelins
 let _cinBgCtx       = null;   // cache du contexte 2D de #cinema-bg (évite getContext() par frame)
 let _starsInited    = false;  // flag pour éviter double _initStarfield
+
+// P3 fix : cache innerWidth/innerHeight — évite un getter DOM par frame RAF (maj par le
+// handler resize de cinema.js et par _updateAmbientGradient() ci-dessous).
+let _winW = (typeof window !== 'undefined' && window.innerWidth)  || 1280;
+let _winH = (typeof window !== 'undefined' && window.innerHeight) || 800;
+export function updateCachedWinSize() { _winW = window.innerWidth || 1280; _winH = window.innerHeight || 800; }
 
 // ── Callback pour accéder à l'état de cinema.js sans créer de cycle d'import ──
 let _getCinemaOpen   = () => false;
@@ -170,6 +177,9 @@ function _stopAmbientAnim() {
   _ambientGen++; // invalider tous les loops RAF orphelins
   if (_ambientAnimRaf) { cancelAnimationFrame(_ambientAnimRaf); _ambientAnimRaf = null; }
   _ambientCross = null;
+  // P4 fix : tue les tweens GSAP waves/starfield en vol (évite la fuite mémoire à la
+  // fermeture du cinéma ou au changement de mode — cf. killCanvasTweens en tête de fichier).
+  killCanvasTweens();
 }
 
 /** Start the continuous breathing animation RAF loop. No-op if already running. */
@@ -203,7 +213,7 @@ function _startAmbientAnim() {
       const _dpr = window.devicePixelRatio || 1;
       _cinBgCtx.setTransform(_dpr, 0, 0, _dpr, 0, 0);
     }
-    const _cW = window.innerWidth || 1280, _cH = window.innerHeight || 800;
+    const _cW = _winW, _cH = _winH; // P3 fix — lecture du cache, plus de getter DOM par frame
     if (cinemaBg === 'waves') {
       drawWavesFrame(_cinBgCtx, _cW, _cH, _cinArtRGBCur, _getIsPlaying());
     } else if (cinemaBg === 'starfield') {
@@ -235,8 +245,9 @@ function _updateAmbientGradient() {
   if (!canvas || !canvas.getContext) return;
 
   const dpr = window.devicePixelRatio || 1;
-  const W   = window.innerWidth  || 1280;
-  const H   = window.innerHeight || 800;
+  updateCachedWinSize(); // P3 fix — rafraîchit le cache lu par la boucle RAF ambient
+  const W   = _winW;
+  const H   = _winH;
   // FIX HiDPI : le backing store doit être en pixels physiques.
   // Sans ça, le canvas est rendu en pixels CSS 1:1 → flou sur écrans 2×.
   const PW  = Math.round(W * dpr);

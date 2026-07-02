@@ -27,6 +27,10 @@ let canvas, canvasCtx;
 let raf         = null;
 let running     = false;
 let smoothed    = null;   // Float32Array lissé entre frames
+// PERF (P1 fix) : suspendu quand le mode cinéma est ouvert — la player bar est masquée
+// sous l'overlay cinéma, la rendre est un gaspillage GPU/CPU. Le rAF reste vivant
+// (pattern cinema-viz.js:166) pour permettre un resumeViz() instantané à la fermeture.
+let _vizSuspended = false;
 // PERF : Uint8Array pré-alloué — évite new Uint8Array(128) à chaque frame (7680 bytes/s de GC)
 let _vizData    = null;
 let _premiumOsc = null;   // instance oscilloscope premium (lazy) — possède son propre rAF + RO
@@ -206,6 +210,22 @@ export function stopViz() {
   }
 }
 
+/** Suspend le rendu (mode cinéma ouvert — P1 fix) sans arrêter le rAF ni l'analyser.
+ *  Le canvas garde son dernier contenu affiché jusqu'à resumeViz()/stopViz(). */
+export function suspendViz() {
+  _vizSuspended = true;
+}
+
+/** Reprend le rendu suspendu par suspendViz() et force un redraw immédiat
+ *  (n'attend pas le prochain tick rAF naturel — évite un frame de contenu périmé). */
+export function resumeViz() {
+  _vizSuspended = false;
+  if (running && canvas && eqAnalyser) {
+    if (raf) { cancelAnimationFrame(raf); raf = null; }
+    _draw();
+  }
+}
+
 /** Met à jour la couleur des barres.
  *  @param {string|null} color — chaîne CSS rgb(...) ou null pour fallback accent */
 export function updateVizColor(color) {
@@ -281,6 +301,9 @@ function _draw() {
   if (!running) return;
   // Garde défensive : si on est en oscilloscope, le moteur premium possède le canvas
   if (vizMode === 'oscilloscope') return;
+  // P1+P2 fix : suspendu (mode cinéma ouvert) ou onglet caché → sauter le rendu mais
+  // garder le rAF vivant (pattern cinema-viz.js:166) pour un resume instantané.
+  if (_vizSuspended || document.hidden) { raf = requestAnimationFrame(_draw); return; }
   // Vérifier eqAnalyser AVANT de planifier le prochain frame — évite une boucle infinie si l'analyser disparaît
   if (!eqAnalyser) { running = false; return; }
 

@@ -17,7 +17,7 @@ import { CFG, SORTS, SLBLS, SPEEDS, SPEED_LBLS } from './cfg.js';
 import { openDB, tx, dget, dall, dput, ddel, DB, getStorageEstimate } from './db.js';
 import { readTags, extractColor, GENRE_ARTISTS, GENRE_KEYWORDS, guessGenre } from './tags.js';
 import { LANGS, i18n, initLang, getLang, applyLang, setLang } from './i18n.js';
-import { cinemaOpen, cinemaBg, initCinemaBg, toggleCinema, openCinema, closeCinema, updateCinema, updateCinemaProgress, setCinemaBg, cycleCinemaBg, applyCinemaBg, syncCinemaBgSettings, updateCinemaBgBtn, toggleCinemaFullscreen, CINEMA_BG_MODES, CINEMA_BG_LABELS, updateCinArtColor } from './cinema.js';
+import { cinemaOpen, cinemaBg, initCinemaBg, toggleCinema, openCinema, closeCinema, updateCinema, updateCinemaProgress, setCinemaBg, cycleCinemaBg, applyCinemaBg, syncCinemaBgSettings, updateCinemaBgBtn, toggleCinemaFullscreen, CINEMA_BG_MODES, CINEMA_BG_LABELS, updateCinArtColor, initCinemaVizSuspend } from './cinema.js';
 import { queueOpen, toggleQueue, closeQueue, renderQueue, playQueueItem, clearQueueOverride, addToQueueNext, addToQueueEnd, refreshQueueBadge, getQueueState, restoreQueueState } from './queue.js';
 import { exportM3U, importM3U } from './m3u.js';
 import { VIRT } from './virt.js';
@@ -26,7 +26,7 @@ import { eqCtx, eqSource, eqNodes, eqEnabled, eqOpen, initEQ, ensureEQResumed, t
 import { initDeviceEQ }                                from './eqdevice.js';
 import { initDevices }                                 from './devices.js';
 import { cleanupCdCache }                              from './cdaudio.js';
-import { initViz, startViz, stopViz, updateVizColor, setVizMode, getVizMode, setVizEnabled, getVizEnabled } from './viz.js';
+import { initViz, startViz, stopViz, updateVizColor, setVizMode, getVizMode, setVizEnabled, getVizEnabled, suspendViz, resumeViz } from './viz.js';
 import { sleepFading, setSleepFading, sleepEndOfTrack, toggleSleepMenu, setSleepTimer, setSleepEndOfTrack, setSleepCustom, cancelSleepTimer } from './sleep.js';
 import { esc, fmt, fmtd, extEmoji, normTag, mainArtist, validYear } from './utils.js';
 import { radioActive, startRadio, stopRadio, resetRadio, radioRefillQueue, toggleRadio, ctxStartRadio, radioRegenerateFromCurrent, radioSaveAsPlaylist, getRadioQueue, renderRadioView, openRadioView, syncRadioLibBar, getRadioSeedId, initRadioSeedId, initRadioPlCallbacks } from './radio.js';
@@ -112,6 +112,9 @@ import { setAriaValueText }                                    from './a11y.js';
 
 // CLAUDE.md §6: câbler les fonctions playlists dans radio.js via app.js (pas d'import direct)
 initRadioPlCallbacks({ savePlaylists: savePlaylistsNow, renderPlNav, setupPlNavDrop });
+// CLAUDE.md §6: câbler la suspension du viz player-bar dans cinema.js via app.js
+// (openCinema/closeCinema suspendent/reprennent viz.js sans import direct — P1 fix)
+initCinemaVizSuspend({ suspendViz, resumeViz });
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 

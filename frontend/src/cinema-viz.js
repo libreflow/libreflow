@@ -21,6 +21,16 @@ let _artWrapCache = null; // cache DOM .cinema-art-wrap — module scope pour re
 // ── Vol-vis canvas (ambient sur la barre de volume) ─────────
 let _volVisCtx = null, _volVisW = 0, _volVisH = 0;
 
+// ── PERF : caches de strings couleur — zéro allocation par frame ────────────
+// _lerpRGB (et les fillStyle/rgb(...) qui en dérivent) ne sont reconstruits que
+// lorsque les composantes RGB arrondies ont réellement changé depuis la frame
+// précédente (§ audit perf cinema — cinema-viz.js:201,240,273).
+let _lerpRLast = -1, _lerpGLast = -1, _lerpBLast = -1;
+let _lerpRGBCache = '0,0,0';
+let _glowFillCache = 'rgb(0,0,0)';   // mode spectrum : glow + ligne centrale
+let _stdFillRGB    = '';             // mode standard : cache de rgb(${_lerpRGB})
+let _stdFillCache  = 'rgb(0,0,0)';
+
 let _getCinemaOpen = () => false;
 
 /**
@@ -198,7 +208,16 @@ function _startViz() {
       _cinArtRGBCur[1] += (_cinArtRGBTarget[1] - _cinArtRGBCur[1]) * _LERP_K;
       _cinArtRGBCur[2] += (_cinArtRGBTarget[2] - _cinArtRGBCur[2]) * _LERP_K;
     }
-    const _lerpRGB = `${Math.round(_cinArtRGBCur[0])},${Math.round(_cinArtRGBCur[1])},${Math.round(_cinArtRGBCur[2])}`;
+    // PERF : le template literal n'est reconstruit que si les composantes arrondies
+    // ont changé — en régime stable (couleur convergée), zéro allocation par frame.
+    const _rR = Math.round(_cinArtRGBCur[0]);
+    const _rG = Math.round(_cinArtRGBCur[1]);
+    const _rB = Math.round(_cinArtRGBCur[2]);
+    if (_rR !== _lerpRLast || _rG !== _lerpGLast || _rB !== _lerpBLast) {
+      _lerpRLast = _rR; _lerpGLast = _rG; _lerpBLast = _rB;
+      _lerpRGBCache = `${_rR},${_rG},${_rB}`;
+    }
+    const _lerpRGB = _lerpRGBCache;
 
     _detectBeat(data, _lerpRGB);
     _drawVolVis(data, _lerpRGB);
@@ -234,10 +253,13 @@ function _startViz() {
         _specGradBot.addColorStop(0,    `rgba(${_lerpRGB},0.08)`);
         _specGradBot.addColorStop(0.35, `rgba(${_lerpRGB},0.5)`);
         _specGradBot.addColorStop(1,    `rgba(${_lerpRGB},1)`);
+        // PERF : rgb() glow/ligne centrale — reconstruit seulement avec les gradients
+        // (même clé d'invalidation _lerpRGB/_specGradMidY) au lieu de chaque frame.
+        _glowFillCache = `rgb(${_lerpRGB})`;
       }
 
-      // Set glow fillStyle once before the loop — rgb() with no alpha (globalAlpha handles per-bar opacity)
-      const _glowFill = `rgb(${_lerpRGB})`;
+      // Glow fillStyle mis en cache — rgb() sans alpha (globalAlpha gère l'opacité par barre)
+      const _glowFill = _glowFillCache;
       for (let i = 0; i < barCount; i++) {
         const t   = i / barCount;
         const bin = Math.round(Math.pow(2, logMin + t * (logMax - logMin)));
@@ -268,9 +290,9 @@ function _startViz() {
         }
       }
       ctx.globalAlpha = 1; // assure l'état propre après la boucle
-      // Ligne centrale subtile
+      // Ligne centrale subtile — réutilise le cache glow (même couleur)
       ctx.globalAlpha = 0.12;
-      ctx.fillStyle = `rgb(${_lerpRGB})`;
+      ctx.fillStyle = _glowFillCache;
       ctx.fillRect(0, midY - 1, w, 2);
       ctx.globalAlpha = 1;
 
@@ -280,7 +302,9 @@ function _startViz() {
       const bw = w / barCount;
       const totalBins = analyser.frequencyBinCount;
       const logMin = Math.log2(1), logMax = Math.log2(totalBins * 0.65);
-      ctx.fillStyle = `rgb(${_lerpRGB})`; // set once — no per-bar string alloc (globalAlpha handles per-bar opacity)
+      // PERF : rgb() mis en cache — reconstruit seulement si _lerpRGB a changé (pas par frame)
+      if (_lerpRGB !== _stdFillRGB) { _stdFillRGB = _lerpRGB; _stdFillCache = `rgb(${_lerpRGB})`; }
+      ctx.fillStyle = _stdFillCache; // set once — no per-bar string alloc (globalAlpha handles per-bar opacity)
       for (let i = 0; i < barCount; i++) {
         const t   = i / barCount;
         const bin = Math.round(Math.pow(2, logMin + t * (logMax - logMin)));

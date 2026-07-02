@@ -13,6 +13,7 @@
 //   setCinemaBg, cycleCinemaBg, applyCinemaBg, syncCinemaBgSettings, updateCinemaBgBtn
 //   toggleCinemaFullscreen, toggleCinemaRadio
 //   CINEMA_BG_MODES, CINEMA_BG_LABELS
+//   initCinemaVizSuspend (câblage viz.js suspendViz/resumeViz — appelé une fois depuis app.js)
 
 import { fmt }                               from './utils.js';
 import { eqCtx, eqAnalyser, masterGainNode, setMasterGain } from './eq.js'; // réutiliser le graphe EQ existant
@@ -30,7 +31,8 @@ import { cinemaBg, CINEMA_BG_MODES, CINEMA_BG_LABELS, applyCinemaBg, setCinemaBg
          syncCinemaBgSettings, updateCinemaBgBtn, initCinemaBg, initCinemaBgModule,
          updateCinArtColor, updateCinArtRGBFromTrack, getArtColorStr,
          _cinArtRGBCur, _cinArtRGBTarget, _LERP_K,
-         startAmbientAnim, stopAmbientAnim, resetAmbientColors, updateAmbientGradient } from './cinema-bg.js';
+         startAmbientAnim, stopAmbientAnim, resetAmbientColors, updateAmbientGradient,
+         updateCachedWinSize } from './cinema-bg.js';
 import { startCinemaViz, stopCinemaViz, initCinemaVizModule } from './cinema-viz.js';
 
 export { cinemaBg, CINEMA_BG_MODES, CINEMA_BG_LABELS, applyCinemaBg, setCinemaBg, cycleCinemaBg,
@@ -73,6 +75,18 @@ let _cinSwapInTimer  = null;
 // (évite que deux séquences se superposent si l'utilisateur toggle vite).
 let _openTl = null;
 
+// ── Suspension du viz player-bar pendant le mode cinéma (P1 fix) ────────────
+// Callbacks injectés depuis app.js (pattern initRadioPlCallbacks) — évite un
+// import direct cinema.js → viz.js pour rester découplé (CLAUDE.md §6).
+let _suspendViz = () => {};
+let _resumeViz  = () => {};
+
+/** À appeler une seule fois depuis app.js après l'import de viz.js. */
+export function initCinemaVizSuspend({ suspendViz, resumeViz }) {
+  _suspendViz = suspendViz || (() => {});
+  _resumeViz  = resumeViz  || (() => {});
+}
+
 // ── Constantes ──────────────────────────────────────────────
 // Modes, labels, AMBIENT_CROSSFADE_MS → cinema-bg.js
 const CINEMA_CONTROLS_HIDE_MS  = 3000;  // délai avant masquage des contrôles
@@ -89,6 +103,7 @@ const CLOCK_TICK_MS            = 1000;  // intervalle de mise à jour de l'horlo
 // ── Resize handler — redessine blur/ambient si dimensions changent ──
 let _resizeTimer = null;
 window.addEventListener('resize', () => {
+  updateCachedWinSize(); // P3 fix — tient le cache innerWidth/innerHeight à jour pour la boucle RAF ambient
   if (!cinemaOpen) return;
   clearTimeout(_resizeTimer);
   _resizeTimer = setTimeout(() => {
@@ -263,6 +278,7 @@ export function openCinema() {
   updateCinema();
   _startClock();
   startCinemaViz();
+  _suspendViz(); // P1 fix — le viz player-bar est masqué sous l'overlay, rendu inutile
   // Animation d'entrée : scale 0.88 → 1 + fade-in
   const artWrap = document.querySelector('.cinema-art-wrap');
   if (artWrap) {
@@ -385,6 +401,7 @@ export function closeCinema() {
   resetAmbientColors();
   _stopClock();
   stopCinemaViz();
+  _resumeViz(); // reprendre le viz player-bar maintenant que l'overlay cinéma est fermé
   // Quitter le plein écran si actif
   if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
 }

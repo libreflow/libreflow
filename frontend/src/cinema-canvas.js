@@ -6,6 +6,7 @@
 //   drawWavesFrame(ctx, w, h, cinArtRGBCur)
 //   drawStarfieldFrame(ctx, w, h, cinArtRGBCur, ambientT)
 //   initStarfield()
+//   killCanvasTweens()
 
 import { eqAnalyser }                                   from './eq.js';
 import { tween, kill as motionKill, eases }             from './motion.js';
@@ -30,6 +31,10 @@ let _waveBgGrad    = null;
 let _waveBgGradRGB = '';
 let _waveBgGradW   = 0;
 let _waveBgGradH   = 0;
+// PERF : cache du template literal lerpRGB — reconstruit seulement si les composantes
+// arrondies ont changé depuis la frame précédente (audit perf cinema — cinema-canvas.js:117).
+let _waveLerpRLast = -1, _waveLerpGLast = -1, _waveLerpBLast = -1;
+let _waveLerpRGBCache = '0,0,0';
 
 // ── Étoiles — pré-allocation module scope ───────────────────
 const _STAR_COUNT   = 180;
@@ -49,6 +54,13 @@ const _SHOOT_MAX    = 3;
 const _shootPool    = Array.from({ length: _SHOOT_MAX }, () => ({ prog: 0, alpha: 0, x0: 0, y0: 0, x1: 0.3, y1: 0.1 }));
 const _shootTweens  = new Array(_SHOOT_MAX).fill(null);
 let _shootNext      = 0;
+// PERF : caches de strings couleur du ciel étoilé — reconstruits seulement si les
+// composantes RGB arrondies changent (audit perf cinema — cinema-canvas.js:260-264).
+let _starLerpRLast = -1, _starLerpGLast = -1, _starLerpBLast = -1;
+let _starFillCache = 'rgb(255,255,255)';      // étoiles (art + boost)
+let _starGlowFillCache = 'rgb(255,255,255)';  // halo des étoiles brillantes
+let _starBgTintLast = -1;
+let _starBgFillCache = 'rgba(0,0,0,0.96)';    // fond teinté
 
 // ── Initialisation étoiles ───────────────────────────────────
 
@@ -114,7 +126,12 @@ export function drawWavesFrame(ctx, w, h, cinArtRGBCur, isPlaying) {
   const r = Math.round(cinArtRGBCur[0]);
   const g = Math.round(cinArtRGBCur[1]);
   const b = Math.round(cinArtRGBCur[2]);
-  const lerpRGB = `${r},${g},${b}`;
+  // PERF : reconstruit uniquement si r/g/b ont changé — zéro allocation en régime stable.
+  if (r !== _waveLerpRLast || g !== _waveLerpGLast || b !== _waveLerpBLast) {
+    _waveLerpRLast = r; _waveLerpGLast = g; _waveLerpBLast = b;
+    _waveLerpRGBCache = `${r},${g},${b}`;
+  }
+  const lerpRGB = _waveLerpRGBCache;
 
   // ── Fond : noir profond + halo atmosphérique teinté par la pochette ──────────
   ctx.fillStyle = '#000';
@@ -256,12 +273,23 @@ export function drawStarfieldFrame(ctx, w, h, cinArtRGBCur, ambientT) {
   const r = Math.round(cinArtRGBCur[0]);
   const g = Math.round(cinArtRGBCur[1]);
   const b = Math.round(cinArtRGBCur[2]);
-  const sr = Math.min(255, r + 90), sg = Math.min(255, g + 90), sb = Math.min(255, b + 90);
-  const starFill = `rgb(${sr},${sg},${sb})`;
-  const glowFill = `rgb(${r},${g},${b})`;
+  // PERF : starFill/glowFill reconstruits uniquement si r/g/b ont changé.
+  if (r !== _starLerpRLast || g !== _starLerpGLast || b !== _starLerpBLast) {
+    _starLerpRLast = r; _starLerpGLast = g; _starLerpBLast = b;
+    const sr = Math.min(255, r + 90), sg = Math.min(255, g + 90), sb = Math.min(255, b + 90);
+    _starFillCache     = `rgb(${sr},${sg},${sb})`;
+    _starGlowFillCache = `rgb(${r},${g},${b})`;
+  }
+  const starFill = _starFillCache;
+  const glowFill = _starGlowFillCache;
 
-  // Fond : noir profond avec légère teinte de l'art
-  ctx.fillStyle = `rgba(0,0,${Math.round(b * 0.08)},0.96)`;
+  // Fond : noir profond avec légère teinte de l'art — cache clé sur la teinte arrondie
+  const bTint = Math.round(b * 0.08);
+  if (bTint !== _starBgTintLast) {
+    _starBgTintLast = bTint;
+    _starBgFillCache = `rgba(0,0,${bTint},0.96)`;
+  }
+  ctx.fillStyle = _starBgFillCache;
   ctx.fillRect(0, 0, w, h);
 
   const t = ambientT * 0.001; // secondes
@@ -352,4 +380,22 @@ function _launchShootingStar() {
     ease: eases.PREMIUM,
     onComplete() { _shootTweens[idx] = null; star.alpha = 0; },
   });
+}
+
+/**
+ * P4 fix : tue tous les tweens GSAP du mode Vagues/Étoiles (fuite mémoire —
+ * les tweens en vol n'étaient jamais annulés à la fermeture du mode cinéma).
+ * Appelée depuis cinema-bg.js (_stopAmbientAnim → closeCinema/changement de mode).
+ */
+export function killCanvasTweens() {
+  motionKill(_waveBeatObj);
+  _waveBeatTw = null;
+  _waveBeatObj.v = 0;
+  for (let i = 0; i < _SHOOT_MAX; i++) {
+    if (_shootTweens[i]) {
+      motionKill(_shootPool[i]);
+      _shootTweens[i] = null;
+    }
+    _shootPool[i].alpha = 0;
+  }
 }
