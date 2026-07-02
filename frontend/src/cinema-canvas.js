@@ -9,7 +9,7 @@
 //   killCanvasTweens()
 
 import { eqAnalyser }                                   from './eq.js';
-import { tween, kill as motionKill, eases }             from './motion.js';
+import { tween, kill as motionKill, eases, prefersReducedMotion } from './motion.js';
 
 // ── Vagues — pré-allocation module scope ────────────────────
 // Zéro allocation dans le hot path RAF (CLAUDE.md §10).
@@ -110,9 +110,9 @@ export function drawWavesFrame(ctx, w, h, cinArtRGBCur, isPlaying) {
   rawEnergy /= bassEnd * 255;
   _waveEnergy = _waveEnergy * 0.90 + rawEnergy * 0.10;
 
-  // Détection beat → GSAP tween boost amplitude
+  // Détection beat → GSAP tween boost amplitude (A11Y SC 2.3.3 : pas de tween sous reduced-motion)
   const nowMs = performance.now();
-  if (rawEnergy > _waveEnergy * 1.55 && nowMs - _waveBeatLast > 650) {
+  if (rawEnergy > _waveEnergy * 1.55 && nowMs - _waveBeatLast > 650 && !prefersReducedMotion()) {
     _waveBeatLast = nowMs;
     motionKill(_waveBeatObj);
     _waveBeatObj.v = 1;
@@ -152,8 +152,8 @@ export function drawWavesFrame(ctx, w, h, cinArtRGBCur, isPlaying) {
   ctx.fillRect(0, 0, w, h);
   ctx.globalAlpha = 1;
 
-  // Avancer les phases — figées en pause, animées à la lecture.
-  if (isPlaying) {
+  // Avancer les phases — figées en pause ou sous reduced-motion (A11Y SC 2.3.3), animées à la lecture.
+  if (isPlaying && !prefersReducedMotion()) {
     for (let l = 0; l < _WAVE_LAYERS; l++) {
       _wavePhases[l] += (0.006 + l * 0.0025 + _waveEnergy * 0.018) * boostMult;
     }
@@ -264,7 +264,8 @@ export function drawStarfieldFrame(ctx, w, h, cinArtRGBCur, ambientT) {
   _starBassSmooth = _starBassSmooth * 0.88 + bassE * 0.12;
 
   const nowMs = performance.now();
-  if (bassE > _starBassSmooth * 1.55 && nowMs - _starBeatLast > 720) {
+  // A11Y SC 2.3.3 : pas d'étoile filante (tween GSAP) sous reduced-motion.
+  if (bassE > _starBassSmooth * 1.55 && nowMs - _starBeatLast > 720 && !prefersReducedMotion()) {
     _starBeatLast = nowMs;
     _launchShootingStar();
   }

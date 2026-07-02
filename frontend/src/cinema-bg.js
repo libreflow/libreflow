@@ -4,14 +4,11 @@
 //
 // Exports publics :
 //   cinemaBg, CINEMA_BG_MODES, CINEMA_BG_LABELS
-//   initCinemaBg, setCinemaBg, syncCinemaBgSettings, cycleCinemaBg, applyCinemaBg
-//   updateCinemaBgBtn
+//   initCinemaBg, setCinemaBg, syncCinemaBgSettings, cycleCinemaBg, applyCinemaBg, updateCinemaBgBtn
 //   initCinemaBgModule
-//   _cinArtRGBCur, _cinArtRGBTarget, _LERP_K
-//   getArtColorStr, setArtColorStr
+//   _cinArtRGBCur, _cinArtRGBTarget, _LERP_K, getArtColorStr, setArtColorStr
 //   updateCinArtColor, updateCinArtRGBFromTrack
-//   startAmbientAnim, stopAmbientAnim, resetAmbientColors, updateAmbientGradient
-//   updateCachedWinSize
+//   startAmbientAnim, stopAmbientAnim, resetAmbientColors, updateAmbientGradient, updateCachedWinSize
 
 import { i18n }                               from './i18n.js';
 import { get, set }                           from './store.js';
@@ -20,6 +17,7 @@ import { toast }                              from './ui.js';
 import { rgbToHsl, hslToRgb, boostSat, sampleArtColors } from './artcolor.js';
 import { renderAmbientFrame }                 from './ambientRenderer.js';
 import { drawWavesFrame, drawStarfieldFrame, initStarfield, killCanvasTweens } from './cinema-canvas.js';
+import { prefersReducedMotion }               from './motion.js';
 
 // ── Modes d'arrière-plan ─────────────────────────────────────
 export let cinemaBg       = 'ambient'; // default mode
@@ -63,8 +61,7 @@ let _ambientGen     = 0;      // génération courante — incrémentée à chaq
 let _cinBgCtx       = null;   // cache du contexte 2D de #cinema-bg (évite getContext() par frame)
 let _starsInited    = false;  // flag pour éviter double _initStarfield
 
-// P3 fix : cache innerWidth/innerHeight — évite un getter DOM par frame RAF (maj par le
-// handler resize de cinema.js et par _updateAmbientGradient() ci-dessous).
+// P3 fix : cache innerWidth/innerHeight — évite un getter DOM par frame RAF.
 let _winW = (typeof window !== 'undefined' && window.innerWidth)  || 1280;
 let _winH = (typeof window !== 'undefined' && window.innerHeight) || 800;
 export function updateCachedWinSize() { _winW = window.innerWidth || 1280; _winH = window.innerHeight || 800; }
@@ -74,10 +71,7 @@ let _getCinemaOpen   = () => false;
 let _doUpdateCinema  = () => {};
 let _getIsPlaying    = () => true;  // défaut : considéré en lecture
 
-/**
- * Doit être appelé une seule fois depuis cinema.js après l'initialisation du module.
- * Fournit un accès à cinemaOpen, updateCinema() et isPlaying() sans cycle d'import.
- */
+// Appelé une seule fois depuis cinema.js : accès à cinemaOpen/updateCinema/isPlaying sans cycle d'import.
 export function initCinemaBgModule({ getCinemaOpen, onUpdateCinema, getIsPlaying }) {
   _getCinemaOpen  = getCinemaOpen;
   _doUpdateCinema = onUpdateCinema || (() => {});
@@ -125,12 +119,8 @@ export function applyCinemaBg() {
   CINEMA_BG_MODES.forEach(m => overlay.classList.remove('bg-' + m));
   overlay.classList.add('bg-' + cinemaBg);
   updateCinemaBgBtn();
-  // Synchroniser la pochette dans cinema-bg si disponible
-  // Bug 6 fix : plImg.src est TOUJOURS truthy (retourne l'URL absolue de la page si vide)
-  //             → utiliser getAttribute('src') qui retourne null si l'attribut est absent
   const cinBg = document.getElementById('cinema-bg');
-  // Arrêter l'animation breathing avant tout switch de mode
-  _stopAmbientAnim();
+  _stopAmbientAnim(); // arrêter l'animation breathing avant tout switch de mode
   _ambientColors = null;
   // Vider le canvas immédiatement à chaque switch (évite interférence entre modes)
   if (cinBg?.getContext) {
@@ -139,8 +129,7 @@ export function applyCinemaBg() {
   }
   // ambient/amoled : gradient/halo. waves/starfield : rendu canvas propre avec RAF.
   if (cinemaBg === 'ambient' || cinemaBg === 'amoled' || cinemaBg === 'waves' || cinemaBg === 'starfield') _updateAmbientGradient();
-  // Bug #9 fix : rafraîchir l'UI cinéma (pochette, infos piste, contrôles) après chaque
-  // switch de mode — sans ça la pochette flou reste stale après cycleCinemaBg().
+  // Bug #9 fix : rafraîchir l'UI cinéma après chaque switch de mode (pochette flou stale sinon).
   if (_getCinemaOpen()) _doUpdateCinema();
 }
 
@@ -182,9 +171,35 @@ function _stopAmbientAnim() {
   killCanvasTweens();
 }
 
+// Dessine une frame du mode courant sur _cinBgCtx — factorisé entre loop() et la frame statique.
+function _drawBgFrame(isPlaying) {
+  if (cinemaBg === 'waves') {
+    drawWavesFrame(_cinBgCtx, _winW, _winH, _cinArtRGBCur, isPlaying);
+  } else if (cinemaBg === 'starfield') {
+    drawStarfieldFrame(_cinBgCtx, _winW, _winH, _cinArtRGBCur, _ambientT);
+  } else {
+    renderAmbientFrame(_ambientT, _cinBgCtx.canvas, _cinBgCtx, cinemaBg, _cinArtRGB, _ambientColors);
+  }
+}
+
+// A11Y SC 2.3.3 : peint UNE frame statique sur #cinema-bg, sans planifier de rAF.
+function _renderAmbientStatic() {
+  const canvas = document.getElementById('cinema-bg');
+  if (!canvas) return;
+  if (!_cinBgCtx || _cinBgCtx.canvas !== canvas) {
+    _cinBgCtx = canvas.getContext('2d');
+    if (!_cinBgCtx) return;
+    const _dpr = window.devicePixelRatio || 1;
+    _cinBgCtx.setTransform(_dpr, 0, 0, _dpr, 0, 0);
+  }
+  _drawBgFrame(false); // isPlaying=false → phases figées
+}
+
 /** Start the continuous breathing animation RAF loop. No-op if already running. */
 function _startAmbientAnim() {
   if (_ambientAnimRaf) return;
+  // A11Y SC 2.3.3 : sous reduced-motion, une seule frame statique — jamais de rAF.
+  if (prefersReducedMotion()) { _renderAmbientStatic(); return; }
   const myGen = _ambientGen; // capturer le token de génération courante
   let last = performance.now();
   function loop(now) {
@@ -213,27 +228,18 @@ function _startAmbientAnim() {
       const _dpr = window.devicePixelRatio || 1;
       _cinBgCtx.setTransform(_dpr, 0, 0, _dpr, 0, 0);
     }
-    const _cW = _winW, _cH = _winH; // P3 fix — lecture du cache, plus de getter DOM par frame
-    if (cinemaBg === 'waves') {
-      drawWavesFrame(_cinBgCtx, _cW, _cH, _cinArtRGBCur, _getIsPlaying());
-    } else if (cinemaBg === 'starfield') {
-      drawStarfieldFrame(_cinBgCtx, _cW, _cH, _cinArtRGBCur, _ambientT);
-    } else {
-      // ambient / amoled
-      renderAmbientFrame(_ambientT, canvas, _cinBgCtx, cinemaBg, _cinArtRGB, _ambientColors);
-      // ── Cross-fade overlay — draw old snapshot fading out ────────
-      if (_ambientCross) {
-        const { snapshot, start, dur } = _ambientCross;
-        const p    = Math.min(1, (now - start) / dur);
-        // easeInOutQuad : transition symétrique qui passe vite au milieu (50/50 blend)
-        // et ralentit aux extrêmes → moins de "boue" chromatique lors du cross-fade.
-        const ease = p < 0.5 ? 2 * p * p : 1 - Math.pow(-2 * p + 2, 2) / 2;
-        // FIX HiDPI : ctx est transformé en CSS px → dessiner le snapshot aux dimensions CSS.
-        _cinBgCtx.globalAlpha = 1 - ease;
-        _cinBgCtx.drawImage(snapshot, 0, 0, _cW, _cH);
-        _cinBgCtx.globalAlpha = 1;
-        if (p >= 1) _ambientCross = null;
-      }
+    // P3 fix — _winW/_winH lus depuis le cache, plus de getter DOM par frame
+    _drawBgFrame(_getIsPlaying());
+    // ── Cross-fade overlay (ambient/amoled only) — draw old snapshot fading out ──
+    if (cinemaBg !== 'waves' && cinemaBg !== 'starfield' && _ambientCross) {
+      const { snapshot, start, dur } = _ambientCross;
+      const p    = Math.min(1, (now - start) / dur);
+      // easeInOutQuad : transition symétrique, ralentit aux extrêmes (moins de "boue" chromatique)
+      const ease = p < 0.5 ? 2 * p * p : 1 - Math.pow(-2 * p + 2, 2) / 2;
+      _cinBgCtx.globalAlpha = 1 - ease;
+      _cinBgCtx.drawImage(snapshot, 0, 0, _winW, _winH); // FIX HiDPI : ctx transformé en CSS px
+      _cinBgCtx.globalAlpha = 1;
+      if (p >= 1) _ambientCross = null;
     }
     _ambientAnimRaf = requestAnimationFrame(loop);
   }
@@ -248,15 +254,11 @@ function _updateAmbientGradient() {
   updateCachedWinSize(); // P3 fix — rafraîchit le cache lu par la boucle RAF ambient
   const W   = _winW;
   const H   = _winH;
-  // FIX HiDPI : le backing store doit être en pixels physiques.
-  // Sans ça, le canvas est rendu en pixels CSS 1:1 → flou sur écrans 2×.
+  // FIX HiDPI : backing store en pixels physiques (sinon flou sur écrans 2×).
   const PW  = Math.round(W * dpr);
   const PH  = Math.round(H * dpr);
 
-  // Mode AMOLED : halo coloré simple, animé via le même loop RAF qu'ambient.
-  // Il n'a pas besoin de _ambientColors (utilise _cinArtRGB directement).
-  // FIX : la garde `if (cinemaBg !== 'ambient') return` empêchait _startAmbientAnim()
-  // d'être appelée → canvas vide en mode AMOLED. On isole le cas AMOLED ici.
+  // Mode AMOLED : halo coloré simple (utilise _cinArtRGB directement, pas de _ambientColors).
   if (cinemaBg === 'amoled') {
     _stopAmbientAnim();
     canvas.width  = PW;

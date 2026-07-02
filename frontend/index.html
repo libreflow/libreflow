@@ -1318,6 +1318,8 @@
 
 <!-- CINEMA MODE -->
 <div id="cinema-overlay" role="dialog" aria-modal="true" aria-label="Mode cinéma" data-i18n-aria="aria_cinema_overlay" tabindex="-1">
+  <!-- A11Y A7 : annonce le changement de piste aux lecteurs d'écran (polie — pas de spam par tick) -->
+  <div id="cinema-announce" class="sr-only" aria-live="polite"></div>
   <canvas class="cinema-bg" id="cinema-bg"></canvas>
 
   <!-- Canvas visualiseur audio (full-width, fond, z=1) -->
@@ -1370,7 +1372,7 @@
     <span class="cinema-time" id="cinema-td">–:––</span>
   </div>
   <div class="cinema-controls" id="cinema-controls">
-    <button class="cbtn" data-action="toggle-shuffle" id="cinema-shuf" title="" data-i18n-title="pc_shuffle" data-i18n-aria="aria_shuffle" aria-label="Lecture aléatoire">
+    <button class="cbtn" data-action="toggle-shuffle" id="cinema-shuf" title="" data-i18n-title="pc_shuffle" data-i18n-aria="aria_shuffle" aria-label="Lecture aléatoire" aria-pressed="false">
       <svg viewBox="0 0 24 24">
         <path d="M4 5h3a6 6 0 0 1 5.5 3.6"/>
         <path d="M4 19h3a6 6 0 0 0 5.5-3.6"/>
@@ -1390,7 +1392,7 @@
     <button class="cbtn" data-action="next" title="" data-i18n-title="pc_next" data-i18n-aria="aria_next" aria-label="Titre suivant">
       <svg viewBox="0 0 24 24"><polygon points="5 4 15 12 5 20" fill="currentColor" stroke="none"/><line x1="19" y1="5" x2="19" y2="19"/></svg>
     </button>
-    <button class="cbtn" data-action="toggle-repeat" id="cinema-rep" title="" data-i18n-title="pc_repeat" data-i18n-aria="aria_repeat" aria-label="Mode répétition">
+    <button class="cbtn" data-action="toggle-repeat" id="cinema-rep" title="" data-i18n-title="pc_repeat" data-i18n-aria="aria_repeat" aria-label="Mode répétition" aria-pressed="false">
       <svg viewBox="0 0 24 24"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>
     </button>
     <button class="cbtn cbtn-like" data-action="toggle-like" id="cinema-lk" title="" data-i18n-title="t_cinema_like" data-i18n-aria="aria_like" aria-label="Ajouter aux favoris" aria-pressed="false">

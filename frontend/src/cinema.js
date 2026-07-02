@@ -26,7 +26,7 @@ import { toast }                                        from './ui.js';
 import { saveCfg }                   from './cfgsave.js';
 import { rgbToHsl, hslToRgb, boostSat, regionAvg, sampleArtColors } from './artcolor.js';
 import { emit, on, EVENTS }          from './bus.js';
-import { timeline, tween, set as motionSet, kill as motionKill, eases } from './motion.js';
+import { timeline, tween, set as motionSet, kill as motionKill, eases, prefersReducedMotion } from './motion.js';
 import { cinemaBg, CINEMA_BG_MODES, CINEMA_BG_LABELS, applyCinemaBg, setCinemaBg, cycleCinemaBg,
          syncCinemaBgSettings, updateCinemaBgBtn, initCinemaBg, initCinemaBgModule,
          updateCinArtColor, updateCinArtRGBFromTrack, getArtColorStr,
@@ -294,6 +294,8 @@ export function openCinema() {
   overlay.addEventListener('click',     _onCinemaMouseMove);
   overlay.removeEventListener('wheel',     _onCinWheel);
   overlay.addEventListener('wheel',     _onCinWheel, { passive: false });
+  overlay.removeEventListener('focusin',   _onCinemaFocusIn);
+  overlay.addEventListener('focusin',   _onCinemaFocusIn);
   document.removeEventListener('keydown',  _onCinKey);
   document.addEventListener('keydown',  _onCinKey);
   document.removeEventListener('keydown', _onCinemaTrapKey);
@@ -375,6 +377,7 @@ export function closeCinema() {
   overlay.removeEventListener('mousemove', _onCinemaMouseMove);
   overlay.removeEventListener('click',     _onCinemaMouseMove);
   overlay.removeEventListener('wheel',     _onCinWheel);
+  overlay.removeEventListener('focusin',   _onCinemaFocusIn);
   document.removeEventListener('keydown',  _onCinKey);
   document.removeEventListener('keydown',  _onCinemaTrapKey);
   _aw?.removeEventListener('dblclick', _onArtDblClick);
@@ -418,10 +421,26 @@ function _showControls() {
 
 function _hideControls() {
   const overlay = document.getElementById('cinema-overlay');
-  if (overlay) overlay.classList.remove('ctrl-on');
+  if (!overlay) return;
+  // A11Y A9 — ne pas masquer les contrôles sous le focus clavier : si l'élément actif
+  // est un contrôle focalisable À L'INTÉRIEUR de l'overlay (autre que l'overlay
+  // lui-même, qui porte tabindex="-1" pour le focus initial), réarmer le timer au lieu
+  // de masquer — sinon un utilisateur clavier perd le contrôle qu'il vient de focaliser.
+  const active = document.activeElement;
+  if (active && active !== overlay && overlay.contains(active)) {
+    cinemaHideTimer = setTimeout(_hideControls, CINEMA_CONTROLS_HIDE_MS);
+    return;
+  }
+  overlay.classList.remove('ctrl-on');
 }
 
 function _onCinemaMouseMove() {
+  _showControls();
+}
+
+// A11Y A9 — focusin bubbling couvre Shift+Tab entrant depuis l'extérieur de l'overlay
+// (le trap key handler ne voit que les Tab pressés pendant que l'overlay a déjà le focus).
+function _onCinemaFocusIn() {
   _showControls();
 }
 
@@ -481,6 +500,12 @@ export function updateCinema() {
     const parts = _artRgb.split(',').map(Number);
     _cinArtRGBCur[0] = parts[0]; _cinArtRGBCur[1] = parts[1]; _cinArtRGBCur[2] = parts[2];
   }
+  // A11Y A4/A5 : sous reduced-motion, les boucles rAF (ambient/waves/starfield, viz spectre)
+  // ne se replanifient plus après leur frame statique — on force ici un redessin avec l'état
+  // (couleur) à jour. Ce point d'appel est atteint sur les 3 déclencheurs requis (changement
+  // de piste, resize, changement de mode de fond — tous invoquent updateCinema()) ; les appels
+  // supplémentaires (play/pause, volume) sont inoffensifs (redessin ponctuel, pas de coût continu).
+  if (prefersReducedMotion()) { startCinemaViz(); startAmbientAnim(); }
   // Propager --cin-rgb → teinte CSS du sous-titre artiste et album
   document.getElementById('cinema-overlay')?.style.setProperty('--cin-rgb', _artRgb);
 
@@ -492,6 +517,12 @@ export function updateCinema() {
 
   if (elT) elT.textContent = title;
   if (elA) elA.textContent = artist;
+  // A11Y A7 : annoncer le changement de piste (polie) — jamais à chaque tick de progression,
+  // updateCinemaProgress() (60fps) est un chemin séparé qui ne touche pas cinema-announce.
+  if (_trackChanged) {
+    const announceEl = document.getElementById('cinema-announce');
+    if (announceEl) announceEl.textContent = `${title} — ${artist}`;
+  }
   // Ligne album + année — absente si données manquantes (masquée via display:none)
   const elAlb = document.getElementById('cinema-album');
   if (elAlb) {
@@ -550,12 +581,24 @@ export function updateCinema() {
   if (ipause) ipause.style.display = playing ? 'block' : 'none';
 
   // Sync états shuffle / repeat / like / radio
-  document.getElementById('cinema-shuf')?.classList.toggle('on', get('shuffle'));
+  // A11Y A1/A2 : aria-pressed reflète .on partout, pas seulement la classe visuelle
+  // (imite le pattern déjà correct de #cinema-radio ci-dessous).
+  const _cinShuf = document.getElementById('cinema-shuf');
+  const _shufOn  = get('shuffle');
+  _cinShuf?.classList.toggle('on', _shufOn);
+  _cinShuf?.setAttribute('aria-pressed', _shufOn ? 'true' : 'false');
+
   const _cinRep = document.getElementById('cinema-rep');
-  _cinRep?.classList.toggle('on',      get('repeat') !== 'none');
+  const _repOn  = get('repeat') !== 'none';
+  _cinRep?.classList.toggle('on',      _repOn);
   _cinRep?.classList.toggle('rep-one', get('repeat') === 'one');
+  _cinRep?.setAttribute('aria-pressed', _repOn ? 'true' : 'false');
+
   const isLiked = curIdx >= 0 && get('liked').has(get('tracks')?.[curIdx]?.id); // Phase 4
-  document.getElementById('cinema-lk')?.classList.toggle('on', isLiked);
+  const _cinLk = document.getElementById('cinema-lk');
+  _cinLk?.classList.toggle('on', isLiked);
+  _cinLk?.setAttribute('aria-pressed', isLiked ? 'true' : 'false');
+
   document.getElementById('cinema-radio')?.classList.toggle('on', !!radioActive);
   document.getElementById('cinema-radio')?.setAttribute('aria-pressed', radioActive ? 'true' : 'false');
 

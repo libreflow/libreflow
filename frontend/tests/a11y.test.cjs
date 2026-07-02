@@ -298,6 +298,68 @@ async function run() {
     assert.ok(re.test(HTML), '#bte-cover-preview (role=button) missing aria-label or aria-labelledby');
   });
 
+  // ═══════════════════════════════════════════════════════════════════════
+  // Task 2 — cinema overhaul a11y : aria-pressed, aria-live, reduced-motion
+  // canvas, auto-hide clavier (audit 2026-07-02).
+  // ═══════════════════════════════════════════════════════════════════════
+
+  // --- A1/A2 : shuffle/repeat/like exposent aria-pressed (pattern #cinema-radio) ---
+  await t('#cinema-shuf/#cinema-rep/#cinema-lk declare aria-pressed (A1/A2)', () => {
+    for (const id of ['cinema-shuf', 'cinema-rep', 'cinema-lk']) {
+      const tag = openTagById(HTML, id);
+      assert.ok(tag, `#${id} introuvable dans index.html`);
+      assert.ok(/\saria-pressed="(true|false)"/.test(tag), `#${id} doit déclarer aria-pressed`);
+    }
+  });
+
+  await t('cinema.js syncs aria-pressed for shuffle/repeat/like (A1/A2)', () => {
+    const cj = readRepoFile('frontend/src/cinema.js');
+    for (const id of ['cinema-shuf', 'cinema-rep', 'cinema-lk']) {
+      const idx = cj.indexOf(`'${id}'`);
+      assert.ok(idx !== -1, `getElementById('${id}') introuvable dans cinema.js`);
+      const windowText = cj.slice(idx, idx + 400);
+      assert.ok(/setAttribute\(\s*'aria-pressed'/.test(windowText),
+        `cinema.js doit appeler setAttribute('aria-pressed', …) près de '${id}' (imiter #cinema-radio:543)`);
+    }
+  });
+
+  // --- A7 : région aria-live pour l'annonce de changement de piste ---------
+  await t('#cinema-announce aria-live="polite" region exists in cinema overlay (A7)', () => {
+    const tag = openTagById(HTML, 'cinema-announce');
+    assert.ok(tag, '#cinema-announce introuvable dans index.html');
+    assert.ok(/aria-live="polite"/.test(tag), '#cinema-announce doit être aria-live="polite"');
+    assert.ok(/class="[^"]*\bsr-only\b/.test(tag), '#cinema-announce doit utiliser la classe .sr-only existante');
+  });
+
+  await t('updateCinema announces track change via #cinema-announce (A7)', () => {
+    const cj = readRepoFile('frontend/src/cinema.js');
+    assert.ok(/cinema-announce/.test(cj),
+      'cinema.js doit référencer #cinema-announce pour pousser le textContent au changement de piste');
+  });
+
+  // --- A4/A5 : canvas cinéma respectent prefers-reduced-motion -------------
+  await t('cinema-bg.js/cinema-viz.js/cinema-canvas.js reference prefersReducedMotion (A4/A5)', () => {
+    for (const rel of ['frontend/src/cinema-bg.js', 'frontend/src/cinema-viz.js', 'frontend/src/cinema-canvas.js']) {
+      const src = readRepoFile(rel);
+      assert.ok(/prefersReducedMotion/.test(src), `${rel} doit référencer prefersReducedMotion (motion.js)`);
+    }
+  });
+
+  await t('.cinema-bg animation neutralized under reduced motion (A4)', () => {
+    const re = /@media\s*\(prefers-reduced-motion:\s*reduce\)\s*\{\s*\.cinema-art-wrap\s*\{[^}]*\}\s*\.cinema-bg\s*\{[^}]*animation\s*:\s*none[^}]*\}\s*\}/;
+    assert.ok(re.test(SS),
+      'le bloc reduced-motion cinéma existant doit être étendu pour neutraliser .cinema-bg (breathe 8s)');
+  });
+
+  // --- A9 : l'auto-hide des contrôles respecte le focus clavier -------------
+  await t('cinema.js auto-hide checks activeElement before hiding controls (A9)', () => {
+    const cj = readRepoFile('frontend/src/cinema.js');
+    const m = /function _hideControls\(\)\s*\{[\s\S]*?\n\}/.exec(cj);
+    assert.ok(m, '_hideControls() introuvable dans cinema.js');
+    assert.ok(/activeElement/.test(m[0]),
+      '_hideControls() doit vérifier document.activeElement avant de masquer les contrôles (A9)');
+  });
+
   if (fail) { console.log(`\nA11Y FAIL: ${fail}/${pass + fail}`); process.exit(1); }
   console.log(`\nA11Y OK: ${pass}/${pass}`);
 }

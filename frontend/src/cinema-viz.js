@@ -9,6 +9,7 @@
 
 import { eqCtx, eqAnalyser }                              from './eq.js';
 import { cinemaBg, _cinArtRGBCur, _cinArtRGBTarget, _LERP_K } from './cinema-bg.js';
+import { prefersReducedMotion }                           from './motion.js';
 
 // ── Constante locale ─────────────────────────────────────────
 const BEAT_PULSE_MS = 620;  // durée du pulse visuel sur beat
@@ -225,7 +226,8 @@ function _startViz() {
     // Modes avec visualiseur intégré sur cinema-bg : ne pas dessiner les barres sur cinema-viz.
     // Le canvas est clearRect'd chaque frame → propre lors du retour en mode barres.
     if (cinemaBg === 'waves' || cinemaBg === 'starfield' || cinemaBg === 'amoled') {
-      _cinVizRaf = requestAnimationFrame(draw);
+      // A11Y SC 2.3.3 : frame statique sous reduced-motion — pas de replanification rAF.
+      if (!prefersReducedMotion()) _cinVizRaf = requestAnimationFrame(draw);
       return;
     }
 
@@ -327,7 +329,8 @@ function _startViz() {
       }
       ctx.globalAlpha = 1; // restore after loop
     }
-    _cinVizRaf = requestAnimationFrame(draw);
+    // A11Y SC 2.3.3 : frame statique sous reduced-motion — pas de replanification rAF.
+    if (!prefersReducedMotion()) _cinVizRaf = requestAnimationFrame(draw);
   }
 
   if (_cinVizRaf) cancelAnimationFrame(_cinVizRaf);

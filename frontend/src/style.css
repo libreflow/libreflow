@@ -5005,6 +5005,9 @@ html[data-mode="light"] .eq-slider::-moz-range-track { background: var(--bg6); }
   .cinema-art-wrap {
     animation: none !important;
   }
+  .cinema-bg {
+    animation: none !important;
+  }
 }
 .cinema-art-wrap:hover { filter: brightness(1.06); }
 
