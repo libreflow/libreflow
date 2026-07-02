@@ -2413,6 +2413,49 @@ section('components/lf-toast-stack.logic.js -- import-smoke');
     assert(r3.remaining === null, 'consumeFirstExplicit: remaining null après stale purge');
   }());
 
+  // =============================================================================
+  // design-system.css -- cohérence tokens cinéma JS<->CSS (Task 4 design system)
+  // =============================================================================
+  section('design-system.css -- cinema tokens JS<->CSS coherence');
+
+  (function () {
+    const fs   = require('fs');
+    const path = require('path');
+    const DS  = fs.readFileSync(path.join(__dirname, '..', 'src', 'design-system.css'), 'utf8');
+    const CIN = fs.readFileSync(path.join(__dirname, '..', 'src', 'cinema.js'), 'utf8');
+    const VIZ = fs.readFileSync(path.join(__dirname, '..', 'src', 'cinema-viz.js'), 'utf8');
+
+    function cssTokenMs(name) {
+      const m = new RegExp(`--${name}\\s*:\\s*(\\d+)ms`).exec(DS);
+      return m ? parseInt(m[1], 10) : null;
+    }
+    function jsConst(src, name) {
+      const m = new RegExp(`${name}\\s*=\\s*(\\d+)`).exec(src);
+      return m ? parseInt(m[1], 10) : null;
+    }
+
+    const durSwapOut = cssTokenMs('dur-cin-swap-out');
+    const durSwapIn  = cssTokenMs('dur-cin-swap-in');
+    const durBeat     = cssTokenMs('dur-cin-beat');
+    const jsSwapOut  = jsConst(CIN, 'CIN_SWAP_OUT_MS');
+    const jsSwapIn   = jsConst(CIN, 'CIN_SWAP_IN_MS');
+    const jsBeat      = jsConst(VIZ, 'BEAT_PULSE_MS');
+
+    assert(durSwapOut !== null, '--dur-cin-swap-out defined in design-system.css');
+    assert(durSwapIn  !== null, '--dur-cin-swap-in defined in design-system.css');
+    assert(durBeat    !== null, '--dur-cin-beat defined in design-system.css');
+    assert(jsSwapOut  !== null, 'CIN_SWAP_OUT_MS found in cinema.js');
+    assert(jsSwapIn   !== null, 'CIN_SWAP_IN_MS found in cinema.js');
+    assert(jsBeat     !== null, 'BEAT_PULSE_MS found in cinema-viz.js');
+
+    assert(durSwapOut === jsSwapOut,
+      `--dur-cin-swap-out (${durSwapOut}ms) === CIN_SWAP_OUT_MS (${jsSwapOut}ms)`);
+    assert(durSwapIn === jsSwapIn,
+      `--dur-cin-swap-in (${durSwapIn}ms) === CIN_SWAP_IN_MS (${jsSwapIn}ms) -- fixes the 320/440 swap desync`);
+    assert(durBeat === jsBeat,
+      `--dur-cin-beat (${durBeat}ms) === BEAT_PULSE_MS (${jsBeat}ms) -- unifies the 600/620 beat desync`);
+  }());
+
   // -- Résultat -----------------------------------------------------------
   console.log('\n═══════════════════════════════════════════════════════════');
   console.log(`  Total : ${_ok + _ko}   OK: ${_ok}   KO: ${_ko}`);

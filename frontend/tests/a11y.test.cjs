@@ -194,6 +194,31 @@ async function run() {
       'style.css doit couper les animations sous prefers-reduced-motion');
   });
 
+  // --- WCAG 2.4.13 Focus Appearance (AAA) — cinema focus ring token unification
+  // (Task 4 design-system): the dark-cinema focus ring box-shadow was duplicated
+  // literally 4x (.cinema-corner-btn, .cbtn, .cinema-pbar, .cinema-vol-slider).
+  // It must now resolve through a single --cin-focus-ring token.
+  function extractCinemaSection(css) {
+    const start = css.indexOf('#cinema-overlay {');
+    const end   = css.indexOf('/* ═══ PANNEAUX OVERLAY', start);
+    if (start === -1 || end === -1) throw new Error('cinema CSS section boundaries not found in style.css');
+    return css.slice(start, end);
+  }
+  await t('cinema focus ring uses a single --cin-focus-ring token, not a repeated literal (SC 2.4.13)', () => {
+    const cinemaCss = extractCinemaSection(SS);
+    const literalRing = /box-shadow:\s*0 0 0 2px rgba\(255,255,255,\.8\),\s*0 0 0 4px rgba\(0,0,0,\.25\)/g;
+    const literalOcc = (cinemaCss.match(literalRing) || []).length;
+    assert.strictEqual(literalOcc, 0,
+      `cinema focus ring literal repeated ${literalOcc}x in style.css cinema section — should use var(--cin-focus-ring)`);
+
+    assert.ok(/--cin-focus-ring\s*:\s*0 0 0 2px rgba\(255,255,255,\.8\),\s*0 0 0 4px rgba\(0,0,0,\.25\)/.test(DS),
+      '--cin-focus-ring not defined in design-system.css with the expected dual-tone value');
+
+    const tokenUsage = (cinemaCss.match(/box-shadow:\s*var\(--cin-focus-ring\)/g) || []).length;
+    assert.ok(tokenUsage >= 4,
+      `expected >=4 usages of var(--cin-focus-ring) in the cinema CSS section, found ${tokenUsage}`);
+  });
+
   // --- SC 1.3.1 Info & Relationships — landmarks de navigation/recherche -----
   await t('document declares main + search + navigation landmarks (SC 1.3.1)', () => {
     assert.ok(/role="main"/.test(HTML),       'landmark role="main" manquant');

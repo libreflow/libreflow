@@ -987,6 +987,34 @@ html[data-mode="light"] {
   --shadow-cin-beat-0:   0 0 70px 24px var(--beat-color, rgba(255,255,255,.22));
   --shadow-cin-beat-ext: 0 0 120px 48px color-mix(in srgb, var(--beat-color, rgba(255,255,255,.22)) 40%, transparent);
   --shadow-cin-pbar:     0 0 10px rgba(255,255,255,.55);                         /* cinema pbar fill hover glow */
+
+  /* ── Cinema mode — durées, easings, focus ring, opacités blanches (Task 4) ──
+     Unifie JS<->CSS : --dur-cin-swap-out/-in reflètent CIN_SWAP_OUT_MS/CIN_SWAP_IN_MS
+     (cinema.js) ; --dur-cin-beat reflète BEAT_PULSE_MS (cinema-viz.js). Testé par
+     core.test.cjs (cohérence) et a11y.test.cjs (focus ring token, cooldown flash). */
+  --dur-cin-swap-out:   120ms;  /* pochette sortante — == CIN_SWAP_OUT_MS */
+  --dur-cin-swap-in:    440ms;  /* pochette entrante — == CIN_SWAP_IN_MS (fix désync 320↔440) */
+  --dur-cin-beat:       620ms;  /* pulse beat — == BEAT_PULSE_MS (fix désync 600↔620) */
+  --dur-cin-breathe:    6s;     /* respiration pochette idle */
+  --dur-cin-bg-breathe: 8s;     /* respiration fond ambient */
+  --dur-cin-float:      9s;     /* flottement pochette idle */
+  --dur-cin-glow:       5s;     /* respiration glow coloré pochette */
+
+  --ease-spring-soft:   cubic-bezier(.34,1.2,.64,1);  /* swap pochette / cinema-art-wrap */
+  --ease-spring-softer: cubic-bezier(.34,1.3,.64,1);  /* cinema-info / cinema-prog / cinema-controls */
+  --ease-kenburns:      cubic-bezier(.4,0,.6,1);      /* Ken Burns pochette (4 variantes) */
+  --ease-beat:          cubic-bezier(.22,1,.36,1);    /* beat-pulse / heart-burst */
+
+  --cin-focus-ring: 0 0 0 2px rgba(255,255,255,.8), 0 0 0 4px rgba(0,0,0,.25); /* anneau focus cinéma (dark) */
+
+  /* Échelle d'opacités blanches cinéma — usages répétés uniquement */
+  --cin-text-hi:       rgba(255,255,255,.95);  /* cinema-title */
+  --cin-text-mid:      rgba(255,255,255,.72);  /* cinema-artist */
+  --cin-text-dim:      rgba(255,255,255,.42);  /* cinema-album */
+  --cin-surface:       rgba(255,255,255,.06);  /* cinema-next background */
+  --cin-surface-hover: rgba(255,255,255,.10);  /* cinema-corner-btn background */
+  --cin-hairline:      rgba(255,255,255,.08);  /* cinema-corner-btn border / art-img outline */
+
   --shadow-player-ring:  0 -1px 0 rgba(var(--g-rgb),.15);                       /* player bar top accent line */
   --shadow-inset-hi:     none;
   --shadow-eq-curve:     none;

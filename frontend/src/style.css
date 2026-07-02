@@ -4765,7 +4765,7 @@ html[data-mode="light"] .eq-slider::-moz-range-track { background: var(--bg6); }
 #cinema-overlay.bg-ambient .cinema-bg {
   opacity: 1;
   /* Respiration douce — animation sur le canvas rendu */
-  animation: cinema-ambient-breathe 8s ease-in-out infinite;
+  animation: cinema-ambient-breathe var(--dur-cin-bg-breathe) ease-in-out infinite;
 }
 /* PERF FIX : suppression du filter sur canvas — force le GPU à créer un
    stacking context isolé (compositing layer) à chaque frame → coûteux.
@@ -4870,21 +4870,21 @@ html[data-mode="light"] .eq-slider::-moz-range-track { background: var(--bg6); }
 }
 /* Float + glow simultanés (mode idle, pas de beat) */
 #cinema-overlay.active:not(.ctrl-on) .cinema-art-wrap:not(.beat) {
-  animation: cinema-float 9s cubic-bezier(.45,.05,.55,.95) infinite,
-             cinema-art-glow 5s ease-in-out infinite;
+  animation: cinema-float var(--dur-cin-float) cubic-bezier(.45,.05,.55,.95) infinite,
+             cinema-art-glow var(--dur-cin-glow) ease-in-out infinite;
 }
 /* Glow seul quand les contrôles sont visibles (float stoppé) */
 #cinema-overlay.ctrl-on .cinema-art-wrap.cin-enter:not(.beat) {
-  animation: cinema-art-glow 5s ease-in-out infinite;
+  animation: cinema-art-glow var(--dur-cin-glow) ease-in-out infinite;
 }
 
 /* ── Piste suivante (bottom-right, avec les contrôles) ──── */
 .cinema-next {
   position: absolute; bottom: var(--sp-8); right: var(--sp-8); z-index: 5;
-  background: rgba(255,255,255,.06);
+  background: var(--cin-surface);
   backdrop-filter: blur(var(--blur-18)) saturate(1.3);
   -webkit-backdrop-filter: blur(var(--blur-18)) saturate(1.3);
-  border: var(--border-w-sm) solid rgba(255,255,255,.08);
+  border: var(--border-w-sm) solid var(--cin-hairline);
   border-radius: var(--r3); padding: var(--sp-3) var(--sp-4);
   opacity: 0; transform: translateY(var(--sp-1h));
   transition: opacity var(--dur-overlay) ease, transform var(--dur-overlay) var(--spring-soft);
@@ -4911,7 +4911,7 @@ html[data-mode="light"] .eq-slider::-moz-range-track { background: var(--bg6); }
 /* ── Boutons de coin (close + bg + fs) ────────────────────── */
 .cinema-corner-btn {
   position: absolute; z-index: 10;
-  background: rgba(255,255,255,.10); border: none;
+  background: var(--cin-surface-hover); border: none;
   width: var(--btn-h-lg); height: var(--btn-h-lg); border-radius: 50%;
   display: flex; align-items: center; justify-content: center;
   color: rgba(255,255,255,.55); cursor: pointer;
@@ -4928,7 +4928,7 @@ html[data-mode="light"] .eq-slider::-moz-range-track { background: var(--bg6); }
 }
 .cinema-corner-btn:hover { background: rgba(255,255,255,.2); color: var(--text-on-accent); transform: scale(1.08); }
 .cinema-corner-btn:active { transform: scale(0.95); }
-.cinema-corner-btn:focus-visible { outline: none; box-shadow: 0 0 0 2px rgba(255,255,255,.8), 0 0 0 4px rgba(0,0,0,.25); }
+.cinema-corner-btn:focus-visible { outline: none; box-shadow: var(--cin-focus-ring); }
 .cinema-corner-btn svg   { width: var(--icon-lg); height: var(--icon-lg); }
 .cinema-close  { top: var(--cinema-corner-top); right: var(--cinema-corner-x); }
 .cinema-close svg { stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; width: var(--icon-md); height: var(--icon-md); }
@@ -4940,7 +4940,7 @@ html[data-mode="light"] .eq-slider::-moz-range-track { background: var(--bg6); }
 .cinema-info {
   opacity: 0;
   transform: translateY(var(--sp-3h));
-  transition: opacity var(--dur-overlay) ease, transform var(--dur-cinema) cubic-bezier(.34,1.3,.64,1);
+  transition: opacity var(--dur-overlay) ease, transform var(--dur-cinema) var(--ease-spring-softer);
   pointer-events: none;
 }
 
@@ -4965,7 +4965,7 @@ html[data-mode="light"] .eq-slider::-moz-range-track { background: var(--bg6); }
   border-radius: var(--r-4xl); overflow: hidden;
   background: var(--c-black); /* fond noir — évite artefact blanc aux coins lors du compositing GPU */
   box-shadow: none;
-  transition: transform 500ms cubic-bezier(.34,1.2,.64,1), opacity 480ms ease;
+  transition: transform 500ms var(--ease-spring-soft), opacity 480ms ease;
   z-index: 2;
   flex-shrink: 0;
   /* état initial hors cinéma — sera animé à l'ouverture */
@@ -4983,7 +4983,9 @@ html[data-mode="light"] .eq-slider::-moz-range-track { background: var(--bg6); }
   100% { opacity: 1; transform: scale(1); }
 }
 .cinema-art-wrap.cin-swap {
-  animation: cinema-art-swap var(--dur-cinema) cubic-bezier(.34,1.2,.64,1) forwards;
+  /* B4-DESYNC : durée alignée sur CIN_SWAP_IN_MS (cinema.js) via --dur-cin-swap-in —
+     auparavant var(--dur-cinema) (320ms) contre 440ms côté JS (retrait de la classe). */
+  animation: cinema-art-swap var(--dur-cin-swap-in) var(--ease-spring-soft) forwards;
 }
 /* Animation sortante avant le swap — l'ancienne pochette s'efface légèrement vers le haut */
 @keyframes cinema-art-swap-out {
@@ -4991,7 +4993,7 @@ html[data-mode="light"] .eq-slider::-moz-range-track { background: var(--bg6); }
   100% { opacity: 0; transform: scale(1.03); }
 }
 .cinema-art-wrap.cin-swap-out {
-  animation: cinema-art-swap-out var(--dur-micro) ease-in forwards;
+  animation: cinema-art-swap-out var(--dur-cin-swap-out) ease-in forwards;
 }
 /* ── Cinema art breathing (B4-M10) ──────────────────────────────────────── */
 @keyframes cinema-art-breathe {
@@ -4999,7 +5001,7 @@ html[data-mode="light"] .eq-slider::-moz-range-track { background: var(--bg6); }
   50%      { transform: scale(1.012); }
 }
 .cinema-art-wrap:not(.cin-swap):not(.cin-swap-out):not(.beat) {
-  animation: cinema-art-breathe 6s ease-in-out infinite;
+  animation: cinema-art-breathe var(--dur-cin-breathe) ease-in-out infinite;
 }
 @media (prefers-reduced-motion: reduce) {
   .cinema-art-wrap {
@@ -5039,7 +5041,9 @@ html[data-mode="light"] .eq-slider::-moz-range-track { background: var(--bg6); }
                                               var(--shadow-cin-art); }
 }
 .cinema-art-wrap.beat {
-  animation: cinema-beat-pulse 600ms cubic-bezier(.22,1,.36,1) forwards !important;
+  /* B4-DESYNC : durée alignée sur BEAT_PULSE_MS (cinema-viz.js) via --dur-cin-beat —
+     auparavant 600ms littéral contre 620ms côté JS. */
+  animation: cinema-beat-pulse var(--dur-cin-beat) var(--ease-beat) forwards !important;
 }
 /* ── Ken Burns — 4 variantes directionnelles SANS translate ──────────────────
    Principe : transform-origin variable par variante = zoom ancré dans un coin
@@ -5052,10 +5056,10 @@ html[data-mode="light"] .eq-slider::-moz-range-track { background: var(--bg6); }
 @keyframes cin-kb-3 { from { transform: scale(1);    } to { transform: scale(1.10); } }
 
 /* transform-origin = point d'ancrage du zoom → direction du panoramique perçu */
-#cinema-art-img.cin-kb-0 { animation: cin-kb-0 30s cubic-bezier(.4,0,.6,1) forwards; transform-origin: 62% 62%; }
-#cinema-art-img.cin-kb-1 { animation: cin-kb-1 28s cubic-bezier(.4,0,.6,1) forwards; transform-origin: 38% 38%; }
-#cinema-art-img.cin-kb-2 { animation: cin-kb-2 32s cubic-bezier(.4,0,.6,1) forwards; transform-origin: 60% 40%; }
-#cinema-art-img.cin-kb-3 { animation: cin-kb-3 26s cubic-bezier(.4,0,.6,1) forwards; transform-origin: 40% 60%; }
+#cinema-art-img.cin-kb-0 { animation: cin-kb-0 30s var(--ease-kenburns) forwards; transform-origin: 62% 62%; }
+#cinema-art-img.cin-kb-1 { animation: cin-kb-1 28s var(--ease-kenburns) forwards; transform-origin: 38% 38%; }
+#cinema-art-img.cin-kb-2 { animation: cin-kb-2 32s var(--ease-kenburns) forwards; transform-origin: 60% 40%; }
+#cinema-art-img.cin-kb-3 { animation: cin-kb-3 26s var(--ease-kenburns) forwards; transform-origin: 40% 60%; }
 
 /* A11Y SC 2.3.1 / 2.2.2 — reduced-motion : neutraliser le flash beat et le Ken
    Burns. Placé APRÈS leurs définitions car .cinema-art-wrap.beat (0,2,0 !important)
@@ -5067,7 +5071,7 @@ html[data-mode="light"] .eq-slider::-moz-range-track { background: var(--bg6); }
   #cinema-art-img[class*="cin-kb-"] { animation: none !important; transform: none !important; }
 }
 
-#cinema-art-img  { position: relative; z-index: 1; width: 100%; height: 100%; object-fit: contain; display: block; border-radius: inherit; outline: 1px solid rgba(255,255,255,.08); outline-offset: -1px; }
+#cinema-art-img  { position: relative; z-index: 1; width: 100%; height: 100%; object-fit: contain; display: block; border-radius: inherit; outline: 1px solid var(--cin-hairline); outline-offset: -1px; }
 #cinema-art-em   { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: var(--fs-hero); background: var(--c-1a); }
 
 /* ── Heart burst (double-click like) ─────────────────────── */
@@ -5084,7 +5088,7 @@ html[data-mode="light"] .eq-slider::-moz-range-track { background: var(--bg6); }
   pointer-events: none;
   z-index: 10;
   filter: drop-shadow(var(--dropshadow-heart));
-  animation: cin-heart-burst var(--dur-reveal) cubic-bezier(.22,1,.36,1) forwards;
+  animation: cin-heart-burst var(--dur-reveal) var(--ease-beat) forwards;
 }
 
 /* ── Infos titre ──────────────────────────────────────────── */
@@ -5094,7 +5098,7 @@ html[data-mode="light"] .eq-slider::-moz-range-track { background: var(--bg6); }
   z-index: 2;
 }
 .cinema-title {
-  font-size: var(--fs-vw-cin-title); font-weight: 700; color: rgba(255,255,255,.95);
+  font-size: var(--fs-vw-cin-title); font-weight: 700; color: var(--cin-text-hi);
   display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2;
   overflow: hidden; text-wrap: balance;
   letter-spacing: var(--ls-hero); line-height: var(--lh-relaxed);
@@ -5104,14 +5108,14 @@ html[data-mode="light"] .eq-slider::-moz-range-track { background: var(--bg6); }
 .cinema-artist {
   font-size: var(--fs-vw-cin-art);
   /* Blanc fixe — évite que --cin-rgb (= --g dynColor) rende le texte illisible sur fond sombre */
-  color: rgba(255,255,255,.72);
+  color: var(--cin-text-mid);
   margin-top: var(--sp-1d); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   font-weight: 400; letter-spacing: var(--ls-tight);
   text-shadow: 0 1px 8px rgba(0, 0, 0, 0.40);
 }
 .cinema-album {
   font-size: var(--fs-vw-cin-alb);
-  color: rgba(255,255,255,.42);
+  color: var(--cin-text-dim);
   margin-top: var(--sp-1p); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   font-weight: 500; letter-spacing: var(--ls-wide); text-transform: uppercase;
   text-shadow: 0 1px 6px rgba(0, 0, 0, 0.55);
@@ -5125,7 +5129,7 @@ html[data-mode="light"] .eq-slider::-moz-range-track { background: var(--bg6); }
   opacity: 0;
   transform: translateY(var(--sp-3h));
   pointer-events: none;
-  transition: opacity var(--dur-overlay) ease, transform var(--dur-cinema) cubic-bezier(.34,1.3,.64,1);
+  transition: opacity var(--dur-overlay) ease, transform var(--dur-cinema) var(--ease-spring-softer);
 }
 .cinema-pbar {
   flex: 1; height: var(--track-h-md);
@@ -5138,7 +5142,7 @@ html[data-mode="light"] .eq-slider::-moz-range-track { background: var(--bg6); }
 }
 .cinema-pbar:hover { height: var(--cinema-pbar-hover-h); }
 .cinema-pbar:hover .cinema-fill { box-shadow: var(--shadow-cin-pbar); }
-.cinema-pbar:focus-visible { outline: none; box-shadow: 0 0 0 2px rgba(255,255,255,.8), 0 0 0 4px rgba(0,0,0,.25); border-radius: var(--r-xs); }
+.cinema-pbar:focus-visible { outline: none; box-shadow: var(--cin-focus-ring); border-radius: var(--r-xs); }
 .cinema-fill {
   height: 100%; border-radius: var(--r-xs);
   background: rgba(255,255,255,.88); width: 100%;
@@ -5166,7 +5170,7 @@ html[data-mode="light"] .eq-slider::-moz-range-track { background: var(--bg6); }
   opacity: 0;
   transform: translateY(var(--sp-5));
   pointer-events: none;
-  transition: opacity 380ms ease, transform 440ms cubic-bezier(.34,1.3,.64,1);
+  transition: opacity 380ms ease, transform 440ms var(--ease-spring-softer);
 }
 .cbtn {
   background: transparent; border: none;
@@ -5178,7 +5182,7 @@ html[data-mode="light"] .eq-slider::-moz-range-track { background: var(--bg6); }
 }
 .cbtn:hover    { background: rgba(255,255,255,.1); color: var(--text-on-accent); transform: scale(1.12); }
 .cbtn:active   { transform: scale(.93); }
-.cbtn:focus-visible { outline: none; box-shadow: 0 0 0 2px rgba(255,255,255,.8), 0 0 0 4px rgba(0,0,0,.25); }
+.cbtn:focus-visible { outline: none; box-shadow: var(--cin-focus-ring); }
 .cbtn.on       { color: var(--g); }
 .cbtn svg      { width: var(--icon-xl); height: var(--icon-xl); fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; pointer-events: none; }
 .cbtn.on svg   { stroke: currentColor; }
@@ -5238,7 +5242,7 @@ html[data-mode="light"] .eq-slider::-moz-range-track { background: var(--bg6); }
 }
 .cinema-vol-slider:hover { height: var(--cinema-vol-hover-h); }
 /* A11Y-SLIDER-3 — focus clavier cinéma (fond semi-opaque blanc, pas de --g qui serait trop contrasté) */
-.cinema-vol-slider:focus-visible { box-shadow: 0 0 0 2px rgba(255,255,255,.8), 0 0 0 4px rgba(0,0,0,.25); }
+.cinema-vol-slider:focus-visible { box-shadow: var(--cin-focus-ring); }
 .cinema-vol-slider::-webkit-slider-thumb {
   -webkit-appearance: none; appearance: none;
   width: var(--icon-sm); height: var(--icon-sm); border-radius: 50%;
