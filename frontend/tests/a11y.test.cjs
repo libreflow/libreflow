@@ -333,8 +333,17 @@ async function run() {
 
   await t('updateCinema announces track change via #cinema-announce (A7)', () => {
     const cj = readRepoFile('frontend/src/cinema.js');
-    assert.ok(/cinema-announce/.test(cj),
-      'cinema.js doit référencer #cinema-announce pour pousser le textContent au changement de piste');
+    // L'écriture textContent sur #cinema-announce doit être GATÉE par _trackChanged —
+    // le regex exige `if (_trackChanged) { … getElementById('cinema-announce') … textContent = … }`
+    // dans un même bloc. Échoue si l'annonce est câblée inconditionnellement.
+    const gated = /if\s*\(\s*_trackChanged\s*\)\s*\{[^{}]*getElementById\(\s*'cinema-announce'\s*\)[^{}]*textContent\s*=/;
+    assert.ok(gated.test(cj),
+      "l'écriture #cinema-announce.textContent doit être conditionnée par _trackChanged (pas d'annonce par tick)");
+    // Garde inverse : updateCinemaProgress (chemin 60fps) ne doit jamais toucher cinema-announce.
+    const prog = /export function updateCinemaProgress\([\s\S]*?\n\}/.exec(cj);
+    assert.ok(prog, 'updateCinemaProgress introuvable');
+    assert.ok(!/cinema-announce/.test(prog[0]),
+      'updateCinemaProgress (60fps) ne doit pas écrire dans #cinema-announce');
   });
 
   // --- A4/A5 : canvas cinéma respectent prefers-reduced-motion -------------
@@ -352,12 +361,21 @@ async function run() {
   });
 
   // --- A9 : l'auto-hide des contrôles respecte le focus clavier -------------
-  await t('cinema.js auto-hide checks activeElement before hiding controls (A9)', () => {
+  // Le check doit distinguer focus CLAVIER (:focus-visible) du focus résiduel de clic
+  // souris (activeElement reste posé sur un <button> cliqué sous Chromium/WebView2) —
+  // sinon les contrôles sont épinglés en permanence pour les utilisateurs souris.
+  await t('cinema.js auto-hide defers only for keyboard focus (:focus-visible) (A9)', () => {
     const cj = readRepoFile('frontend/src/cinema.js');
     const m = /function _hideControls\(\)\s*\{[\s\S]*?\n\}/.exec(cj);
     assert.ok(m, '_hideControls() introuvable dans cinema.js');
-    assert.ok(/activeElement/.test(m[0]),
-      '_hideControls() doit vérifier document.activeElement avant de masquer les contrôles (A9)');
+    assert.ok(/_isKeyboardFocusInOverlay/.test(m[0]),
+      '_hideControls() doit passer par le check focus clavier avant de masquer (A9)');
+    const h = /function _isKeyboardFocusInOverlay\([\s\S]*?\n\}/.exec(cj);
+    assert.ok(h, '_isKeyboardFocusInOverlay() introuvable dans cinema.js');
+    assert.ok(/activeElement/.test(h[0]),
+      'le check A9 doit lire document.activeElement');
+    assert.ok(/:focus-visible/.test(h[0]),
+      "le check A9 doit exiger :focus-visible — sans ça, un clic souris sur un bouton épingle les contrôles pour toujours");
   });
 
   if (fail) { console.log(`\nA11Y FAIL: ${fail}/${pass + fail}`); process.exit(1); }

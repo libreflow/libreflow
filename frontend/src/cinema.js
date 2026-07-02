@@ -419,15 +419,23 @@ function _showControls() {
   cinemaHideTimer = setTimeout(_hideControls, CINEMA_CONTROLS_HIDE_MS);
 }
 
+// A9 : vrai si le focus est CLAVIER (:focus-visible). Un clic souris sur un <button>
+// le laisse activeElement indéfiniment sous Chromium/WebView2, mais :focus-visible
+// reste false pour un focus souris — c'est exactement la distinction voulue :
+// différer le masquage pour Tab, jamais épingler les contrôles pour la souris.
+function _isKeyboardFocusInOverlay(overlay) {
+  const active = document.activeElement;
+  if (!active || active === overlay || !overlay.contains(active)) return false;
+  try { return active.matches(':focus-visible'); } catch { return false; }
+}
+
 function _hideControls() {
   const overlay = document.getElementById('cinema-overlay');
   if (!overlay) return;
   // A11Y A9 — ne pas masquer les contrôles sous le focus clavier : si l'élément actif
-  // est un contrôle focalisable À L'INTÉRIEUR de l'overlay (autre que l'overlay
-  // lui-même, qui porte tabindex="-1" pour le focus initial), réarmer le timer au lieu
+  // dans l'overlay est focalisé au clavier (:focus-visible), réarmer le timer au lieu
   // de masquer — sinon un utilisateur clavier perd le contrôle qu'il vient de focaliser.
-  const active = document.activeElement;
-  if (active && active !== overlay && overlay.contains(active)) {
+  if (_isKeyboardFocusInOverlay(overlay)) {
     cinemaHideTimer = setTimeout(_hideControls, CINEMA_CONTROLS_HIDE_MS);
     return;
   }
