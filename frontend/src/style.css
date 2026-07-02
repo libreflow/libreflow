@@ -332,7 +332,6 @@ html[data-mode="light"] #sb           { background:var(--bg2); border-right:var(
 html[data-mode="light"] #main         { background:var(--bg); }
 html[data-mode="light"] .vh           { background:var(--bg2); border-bottom:var(--border-w-sm) solid var(--bg5); }
 html[data-mode="light"] #vlib .vh    { border-bottom: none; }
-html[data-mode="light"] .sb-foot      { border-top:var(--border-w-sm) solid var(--bg5); background:var(--bg2); }
 
 /* ── Player bar + Sidebar — désactiver glassmorphism ── */
 html[data-mode="light"] #pl {
@@ -396,9 +395,9 @@ html[data-mode="light"] .ni.on::before { background:var(--g); }
 html[data-mode="light"] .ni.on svg    { opacity:1; color:var(--g); }
 /* Icônes nav inactives — opacity 0.55 trop faible sur fond clair */
 html[data-mode="light"] .ni svg       { opacity: 0.72; }
-html[data-mode="light"] .pl-nav-item  { color:var(--t2); }
-html[data-mode="light"] .pl-nav-item:hover { background:var(--bg4); }
-html[data-mode="light"] .pl-nav-item.on { background:var(--gd); color:var(--t); border-left: 2px solid var(--g); padding-left: calc(var(--sp-3) - 2px); }
+/* AUDIT-2026-07-01 M8 : règles .pl-nav-item supprimées — la classe n'existe
+   nulle part (les items playlist sont .ni-pl et portent aussi .ni : les règles
+   light .ni / .ni.on ci-dessus les couvrent déjà). */
 
 /* ── Recherche ── */
 html[data-mode="light"] .srch         { background:var(--bg4); border-color:var(--bg5); }
@@ -445,7 +444,6 @@ html[data-mode="light"] .tlk.on svg   { stroke:var(--g); fill:var(--g); }
 
 /* ── En-tête vue (vhtitle) ── */
 html[data-mode="light"] #vhtitle      { color:var(--t); }
-html[data-mode="light"] .sb-stats     { color:var(--t3); }
 
 /* ── Breadcrumb ── */
 html[data-mode="light"] .breadcrumb   { background:var(--bg2); border-bottom:var(--border-w-sm) solid var(--sep); }
@@ -609,8 +607,6 @@ html[data-mode="light"] ::-webkit-scrollbar-thumb { background:rgba(0,0,0,.18); 
 html[data-mode="light"] ::-webkit-scrollbar-thumb:hover { background:rgba(0,0,0,.28); }
 
 /* ── Contraste & accessibilité light mode ── */
-/* Labels de section sidebar (BIBLIOTHÈQUE, EXPLORER…) — 10px/700, contraste insuffisant avec t3 */
-html[data-mode="light"] .sb-section-lbl { color: rgba(0,0,0,.64); }
 /* Descriptions feature cards welcome screen — 11px sur blanc, t3 = 5.4:1 (AA-compliant) */
 html[data-mode="light"] .wf-d           { color: var(--t3); }
 /* Boutons droit du player (file d'attente, vitesse…) */
@@ -863,7 +859,26 @@ button { cursor: pointer; }
   background: var(--bg1);
   border-right: var(--border-w-sm) solid var(--border-1);
   display: flex; flex-direction: column; overflow: hidden;
+  position: relative; /* QUALITÉ-1 : ancre de la poignée #sb-resize */
 }
+
+/* ── QUALITÉ-1 : poignée de redimensionnement ─────────────────
+   Bande de 6px sur le bord intérieur ; invisible au repos, teinte accent au
+   survol/drag, remplie + halo contraste au focus clavier (SC 2.4.13). */
+#sb-resize {
+  position: absolute; top: 0; right: 0; bottom: 0;
+  width: 6px; cursor: col-resize;
+  background: transparent;
+  transition: background var(--dur-fast) ease;
+}
+#sb-resize:hover,
+body.sb-resizing #sb-resize { background: rgba(var(--g-rgb), .30); }
+#sb-resize:focus-visible {
+  outline: none;
+  background: var(--g);
+  box-shadow: 0 0 0 2px var(--focus-ring-contrast);
+}
+body.sb-resizing { cursor: col-resize; user-select: none; }
 /* ── Inline search toggle in view header ── */
 .vh-srch-toggle {
   display: flex;
@@ -912,29 +927,6 @@ button { cursor: pointer; }
 .clear-filters-btn:focus-visible { outline: var(--focus-ring); outline-offset: var(--focus-offset); }
 .clear-filters-btn svg { flex-shrink: 0; }
 
-.sb-stats {
-  display: flex;
-  align-items: center;
-  gap: var(--sp-4);
-  padding-bottom: var(--sp-2);
-}
-.sb-stats:empty { display: none; }
-.sb-stat-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--sp-1);
-  font-size: var(--fs-xs);
-  color: var(--t3);
-}
-.sb-stat-chip svg {
-  width: 10px;
-  height: 10px;
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 2;
-  stroke-linecap: round;
-  flex-shrink: 0;
-}
 .sb-stat-val {
   font-variant-numeric: tabular-nums;
 }
@@ -972,35 +964,12 @@ button { cursor: pointer; }
   width: var(--sp-micro); height: var(--icon-xl);
   background: var(--g); border-radius: 0 var(--r-xs) var(--r-xs) 0;
 }
-.ni svg    { width: var(--icon-lg); height: var(--icon-lg); fill: currentColor; flex-shrink: 0; opacity: .80; transition: opacity var(--dur-fast) ease, color var(--dur-fast) ease; }
+/* AUDIT-2026-07-01 M2 : ne pas forcer fill — le CSS battait le fill="none" des
+   icônes stroke (cœur Favoris rempli en permanence, hack inline sur #ni-recent). */
+.ni svg    { width: var(--icon-lg); height: var(--icon-lg); flex-shrink: 0; opacity: .80; transition: opacity var(--dur-fast) ease, color var(--dur-fast) ease; }
 .ni:hover svg { opacity: .9; }
 .ni.on svg { opacity: 1; color: var(--g); }
 
-/* ERG-P2 : badge compteur sur items sidebar fixes (#ni-all, #ni-liked, etc.) */
-.ni .ni-count {
-  display      : inline-flex;
-  align-items  : center;
-  justify-content: center;
-  min-width    : 20px;
-  height       : 18px;
-  padding      : 0 var(--sp-1h);
-  border-radius: var(--radius-pill);
-  background   : var(--accent-subtle, rgba(var(--g-rgb), 0.18));
-  color        : var(--g);
-  font-size    : var(--fs-xs);
-  font-weight  : var(--fw-semibold, 600);
-  font-variant-numeric: tabular-nums;
-  line-height  : 1;
-  margin-left  : auto;
-  flex-shrink  : 0;
-}
-.ni:hover .ni-count {
-  background: rgba(var(--g-rgb), 0.28);
-}
-.ni.on .ni-count {
-  background: var(--g);
-  color     : var(--text-on-accent);
-}
 
 /* ── More popover ────────────────────────────────────────── */
 .sb-more-pop {
@@ -1040,9 +1009,13 @@ button { cursor: pointer; }
   transition: background var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease);
 }
 .sb-more-item:hover { background: var(--bg4); color: var(--t); border-radius: var(--r-sm); }
+/* AUDIT-2026-07-01 C6 : var(--focus-ring) est un shorthand outline (« 2px solid … »),
+   pas une couleur — l'injecter dans box-shadow invalidait toute la déclaration et,
+   avec outline:none, supprimait l'anneau de focus (SC 2.4.7). Anneau inset valide
+   double-ton : accent var(--g) + halo contraste. */
 .sb-more-item:focus-visible {
   outline: none;
-  box-shadow: inset 0 0 0 2px var(--focus-ring);
+  box-shadow: inset 0 0 0 2px var(--g), inset 0 0 0 5px var(--focus-ring-contrast);
 }
 .sb-more-item svg { width: var(--icon-sm); height: var(--icon-sm); flex-shrink: 0; }
 .sb-more-item[aria-pressed="true"] { color: var(--g); }
@@ -1059,47 +1032,8 @@ button { cursor: pointer; }
   padding: var(--sp-2) var(--sp-3);
   font-size: var(--fs-sm);
 }
-.sb-foot-spacer { flex: 1; }
-
-.sb-foot { position: relative; padding: var(--sp-3) var(--sp-2); flex-shrink: 0; border-top: var(--border-w-sm) solid var(--sep); }
-
-.sb-foot-icons {
-  display: flex;
-  align-items: center;
-  gap: var(--sp-1);
-  padding-top: var(--sp-1);
-}
-
-.sb-foot-icon-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: max(24px, var(--target-min));
-  height: max(24px, var(--target-min));
-  border-radius: var(--r);
-  color: var(--t3);
-  background: transparent;
-  border: none;
-  cursor: pointer;
-  transition: background var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease);
-  -webkit-app-region: no-drag;
-}
-
-.sb-foot-icon-btn:hover { background: var(--bg4); color: var(--t); }
-.sb-foot-icon-btn:focus-visible {
-  outline: var(--focus-ring);
-  outline-offset: var(--focus-offset);
-  box-shadow: 0 0 0 var(--border-w-lg) var(--focus-ring-contrast);
-}
-.sb-foot-icon-btn svg {
-  width: var(--icon-sm);
-  height: var(--icon-sm);
-  stroke: currentColor;
-  fill: none;
-  stroke-width: 1.7;
-  stroke-linecap: round;
-}
-.sb-foot-icon-btn.on { color: var(--g); }
+/* AUDIT-2026-07-01 M8 : cluster .sb-foot* supprimé — aucun élément .sb-foot
+   n'existe (le footer sidebar a été remplacé par #sb-more-pop dans la titlebar). */
 
 /* Bouton sidebar — Scanner un dossier */
 .btn-scan {
@@ -2355,21 +2289,8 @@ html[data-mode="light"] .empty-cta {
 #cinema-rep.rep-one::after { background: rgba(0,0,0,.75); }
 .pc svg[fill="none"] { fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 
-/* Badge "live" Radio sur le bouton ni-radio de la sidebar */
-#ni-radio { position: relative; }
-.ni-radio-live {
-  position: absolute; top: var(--sp-1d); right: var(--sp-1d);
-  width: var(--icon-dot); height: var(--icon-dot); border-radius: 50%;
-  background: var(--g);
-  box-shadow: var(--shadow-pulse-start);
-  animation: radio-pulse var(--anim-pulse) ease-out infinite;
-  pointer-events: none;
-}
-@keyframes radio-pulse {
-  0%   { box-shadow: var(--shadow-pulse-start); }
-  70%  { box-shadow: var(--shadow-pulse-mid);   }
-  100% { box-shadow: var(--shadow-pulse-zero);  }
-}
+/* AUDIT-2026-07-01 M8 : #ni-radio / .ni-radio-live supprimés — le bouton
+   n'existe pas dans le DOM (la radio se pilote via l'onglet lib + cinéma). */
 
 .pcplay {
   width: var(--icon-40); height: var(--icon-40); border-radius: 50%;
@@ -2603,7 +2524,7 @@ html[data-mode="light"] .empty-cta {
 }
 
 /* ═══ SLEEP TIMER ════════════════════════════════════════════ */
-/* Déplacé dans .sb-foot-icons — toujours visible comme icon-button,
+/* Vit dans #sb-more-pop (titlebar) — toujours visible comme icon-button,
    pill activée uniquement quand .active (minuterie en cours). */
 #sleep-indicator {
   display: flex; align-items: center; justify-content: center; gap: var(--sp-nano);
@@ -2672,8 +2593,6 @@ html[data-mode="light"] .empty-cta {
 /* Light mode */
 html[data-mode="light"] .sleep-custom-inp { background: var(--bg4); border-color: var(--bg5); color: var(--t); }
 html[data-mode="light"] .sleep-custom-inp:focus { border-color: var(--g); background:var(--bg2); }
-.ni-radio svg { color: var(--g); }
-.ni-radio.on  { background: linear-gradient(135deg, var(--accent-subtle), transparent); border: var(--border-w-sm) solid var(--accent-mid); color: var(--g); }
 
 /* ── Éditeur de tags inline ───────────────────────────────── */
 .tr.editing { background: var(--bg3) !important; outline: var(--border-w-md) solid var(--g); border-radius: var(--r2); z-index: 2; position: relative; }
@@ -3264,7 +3183,7 @@ html[data-mode="light"] .bte-cover-clear    { background: var(--bg3); border-col
 .ni-pl:hover .pl-icon  { background: var(--bg5); }
 .ni-pl.on .pl-icon     { background: var(--g); transform: scale(1.06); box-shadow: var(--shadow-pl-icon); }
 /* Smart playlist icon */
-.ni-pl.smart .pl-icon  { background: linear-gradient(135deg, rgba(245,158,11,.18), rgba(245,158,11,.06)); border: var(--border-w-sm) solid rgba(245,158,11,.25); }
+.ni-pl.smart .pl-icon  { background: linear-gradient(135deg, rgba(var(--amber-rgb),.18), rgba(var(--amber-rgb),.06)); border: var(--border-w-sm) solid rgba(var(--amber-rgb),.25); }
 .ni-pl.smart .pl-icon svg { stroke: var(--amber); }
 .ni-pl.smart.on .pl-icon  { background: var(--g); border-color: transparent; }
 .ni-pl.smart.on .pl-icon svg { stroke: var(--text-on-accent); }
@@ -3294,15 +3213,30 @@ html[data-mode="light"] .bte-cover-clear    { background: var(--bg3); border-col
 .ni-pl:hover .pl-count { color: var(--t2); }
 .ni-pl.on .pl-count    { color: var(--g); font-weight: 600; }
 /* Bouton lecture directe */
-.ni-pl .pl-play { background: transparent; border: none; color: transparent; width: var(--icon-2xl); height: var(--icon-2xl); min-width: var(--icon-2xl); padding: 0; display: flex; align-items: center; justify-content: center; border-radius: var(--r-sm); flex-shrink: 0; margin-left: var(--sp-micro); cursor: pointer; transition: background var(--ease), color var(--ease); }
-.ni-pl:hover .pl-play { color: var(--t3); }
-.ni-pl .pl-play:hover  { background: rgba(var(--g-rgb),.15); color: var(--g) !important; }
-.ni-pl .pl-play:focus-visible { outline: var(--focus-ring); outline-offset: var(--sp-nano); color: var(--t3); }
+/* AUDIT-2026-07-01 C5 : ▶/⋯ promus en vrais <button> ; plancher 24px (SC 2.5.8).
+   REWORK-4 (2026-07-02) : groupés dans un overlay .pl-actions (absolu, invisible
+   et non cliquable au repos) — la ligne rend ~55px au nom de playlist ; révélé au
+   survol ET au focus clavier (:focus-within), le compteur s'efface en échange. */
+.ni-pl .pl-actions {
+  position: absolute; right: var(--sp-1); top: 50%; transform: translateY(-50%);
+  display: flex; align-items: center; gap: var(--sp-micro);
+  opacity: 0; pointer-events: none;
+  transition: opacity var(--dur-fast) ease;
+}
+.ni-pl:hover .pl-actions,
+.ni-pl:focus-within .pl-actions { opacity: 1; pointer-events: auto; }
+.ni-pl .pl-count { transition: opacity var(--dur-fast) ease; }
+.ni-pl:hover .pl-count,
+.ni-pl:focus-within .pl-count { opacity: 0; }
+.ni-pl .pl-play { background: transparent; border: none; color: var(--t3); min-width: var(--target-min); min-height: var(--target-min); padding: 0; display: flex; align-items: center; justify-content: center; border-radius: var(--r-sm); flex-shrink: 0; cursor: pointer; transition: background var(--ease), color var(--ease); }
+.ni-pl .pl-play:hover  { background: rgba(var(--g-rgb),.15); color: var(--g); }
+.ni-pl .pl-play:focus-visible { outline: var(--focus-ring); outline-offset: var(--sp-nano); }
+/* Centrage optique : le triangle penche visuellement à gauche dans sa boîte */
+.ni-pl .pl-play svg    { margin-left: 1px; }
 /* Bouton options ⋯ (remplace renommer + supprimer) */
-.ni-pl .pl-more { background: transparent; border: none; color: transparent; width: var(--icon-2xl); height: var(--icon-2xl); min-width: var(--icon-2xl); padding: 0; display: flex; align-items: center; justify-content: center; border-radius: var(--r-sm); flex-shrink: 0; margin-left: var(--sp-micro); cursor: pointer; transition: background var(--ease), color var(--ease); }
-.ni-pl:hover .pl-more { color: var(--t3); }
-.ni-pl .pl-more:hover  { background: var(--bg4); color: var(--t) !important; }
-.ni-pl .pl-more:focus-visible { outline: var(--focus-ring); outline-offset: var(--sp-nano); color: var(--t3); }
+.ni-pl .pl-more { background: transparent; border: none; color: var(--t3); min-width: var(--target-min); min-height: var(--target-min); padding: 0; display: flex; align-items: center; justify-content: center; border-radius: var(--r-sm); flex-shrink: 0; cursor: pointer; transition: background var(--ease), color var(--ease); }
+.ni-pl .pl-more:hover  { background: var(--bg4); color: var(--t); }
+.ni-pl .pl-more:focus-visible { outline: var(--focus-ring); outline-offset: var(--sp-nano); }
 .ni-pl .pl-more svg    { width: var(--icon-sm); height: var(--icon-sm); fill: currentColor; }
 
 /* Bouton ⋯ dans le hero playlist */
@@ -3330,7 +3264,7 @@ html[data-mode="light"] .bte-cover-clear    { background: var(--bg3); border-col
 
 /* Context menu smart playlist item */
 .ctx-item.smart { color: var(--amber); }
-.ctx-item.smart:hover { background: rgba(245,158,11,.1); }
+.ctx-item.smart:hover { background: rgba(var(--amber-rgb),.1); }
 
 /* ── En-têtes de sections sidebar (Épinglées / Récentes / Toutes) ── */
 .pl-nav-section-h {
@@ -3357,9 +3291,13 @@ html[data-mode="light"] .bte-cover-clear    { background: var(--bg3); border-col
 }
 .pl-nav-empty-btn:hover { background: var(--bg4); color: var(--t); border-color: var(--bg6); }
 
-/* ── Badge épingle (étoile) sur les playlists épinglées ── */
+/* ── Badge épingle (étoile) sur les playlists épinglées ──
+   REWORK-4 : en surimpression du coin de l'icône (5e signal de ligne en moins). */
+.ni-pl .pl-icon { position: relative; }
 .pl-pin-badge {
-  color: var(--g); opacity: .65; flex-shrink: 0;
+  position: absolute; top: calc(-1 * var(--sp-micro)); right: calc(-1 * var(--sp-micro));
+  color: var(--g); background: var(--bg1);
+  border-radius: 50%; padding: var(--sp-nano);
   transition: opacity var(--ease);
 }
 .ni-pl:hover .pl-pin-badge { opacity: 1; }
@@ -3458,7 +3396,9 @@ html[data-mode="light"] .bte-cover-clear    { background: var(--bg3); border-col
 .ctx-item--danger      { color: var(--red); }
 .ctx-item--danger:hover { background: rgba(var(--red-rgb),.1); }
 .ctx-item--sub         { position: relative; }
-.ctx-item--sub:hover .ctx-submenu { display: block; }
+/* AUDIT-2026-07-01 C3 : le sous-menu s'ouvre aussi au focus clavier (SC 2.1.1) */
+.ctx-item--sub:hover .ctx-submenu,
+.ctx-item--sub:focus-within .ctx-submenu { display: block; }
 .ctx-kbd {
   margin-left: auto;
   font-size: var(--fs-2xs);
@@ -3485,30 +3425,8 @@ html[data-mode="light"] .bte-cover-clear    { background: var(--bg3); border-col
 .ctx-submenu-lbl      { font-size: var(--fs-xs); font-weight: 600; color: var(--t3); letter-spacing: var(--ls-caps); text-transform: uppercase; padding: var(--sp-2) var(--sp-3) var(--sp-1); }
 
 /* ═══ PLAYLISTS SIDEBAR ══════════════════════════════════════ */
-.sb-section-lbl {
-  padding: var(--sp-3h) var(--sp-3) var(--sp-1);
-  font-size: var(--fs-xs); font-weight: 700;
-  color: var(--t3); letter-spacing: var(--ls-caps); text-transform: uppercase;
-  display: flex; align-items: center; justify-content: space-between;
-  margin-top: var(--sp-3);  /* breathing between sections, like Spotify */
-}
-/* Première section : pas de marge supérieure */
-.sb-nav .sb-section-lbl:first-child { margin-top: 0; padding-top: var(--sp-1h); }
-/* Séparateur discret entre groupes nav (ex: avant Statistiques) */
-.sb-sep {
-  height: var(--sep-h);
-  background: var(--sep);
-  margin: var(--sp-1h) var(--sp-3);
-  opacity: .45;
-}
-.sb-section-lbl button {
-  background: none; border: none; color: var(--t3);
-  width: var(--icon-3xl); height: var(--icon-3xl); cursor: pointer;
-  display: flex; align-items: center; justify-content: center;
-  border-radius: var(--r-md); transition: background var(--ease), color var(--ease);
-}
-.sb-section-lbl button:hover { background: var(--bg3); color: var(--t); }
-.sb-section-lbl button svg   { width: var(--icon-sm); height: var(--icon-sm); fill: currentColor; }
+/* AUDIT-2026-07-01 M8 : .sb-section-lbl / .sb-sep supprimés — aucun usage DOM/JS
+   (les en-têtes de section réels sont .sb-lib-title et .pl-nav-section-h). */
 
 /* ── Onglets bibliothèque (Tous / Artistes / Albums / Radio) ── */
 .lib-tabs {
@@ -3545,9 +3463,10 @@ html[data-mode="light"] .bte-cover-clear    { background: var(--bg3); border-col
 .lib-tab:hover { color: var(--t); }
 .lib-tab.on   { color: var(--t); font-weight: 600; }
 .lib-tab.on::after { transform: scaleX(1); }
+/* AUDIT-2026-07-01 C6 : même bug shorthand-dans-box-shadow que .sb-more-item */
 .lib-tab:focus-visible {
   outline: none;
-  box-shadow: inset 0 0 0 2px var(--focus-ring);
+  box-shadow: inset 0 0 0 2px var(--g), inset 0 0 0 5px var(--focus-ring-contrast);
 }
 
 /* ── Header "Ma bibliothèque" + bouton scanner ──────────────── */
@@ -3569,10 +3488,16 @@ html[data-mode="light"] .bte-cover-clear    { background: var(--bg3); border-col
   flex-shrink: 0;
 }
 .sb-lib-add:hover  { background: var(--bg3); color: var(--t); }
-.sb-lib-add:focus-visible {
-  outline: none;
-  box-shadow: 0 0 0 2px var(--focus-ring-contrast), 0 0 0 4px var(--focus-ring);
-}
+/* REWORK-2 : en-tête de section PLAYLISTS (mêmes fondations que .sb-lib-header) */
+.sb-pl-header { margin-top: var(--sp-3); }
+.sb-pl-header-actions { display: flex; align-items: center; gap: var(--sp-1); }
+/* Bouton grille actif quand la vue playlists est ouverte (marqué par _svMarkNav) */
+.sb-lib-add.on { color: var(--g); background: rgba(var(--g-rgb), .12); }
+/* AUDIT-2026-07-01 C6 : la règle :focus-visible locale injectait var(--focus-ring)
+   (shorthand outline) dans box-shadow → déclaration invalide + outline:none =
+   aucun indicateur. Supprimée : l'anneau global :focus-visible (double-ton)
+   s'applique. SC 2.5.8 : cible portée au plancher 24px via --target-min. */
+.sb-lib-add { min-width: var(--target-min); min-height: var(--target-min); }
 .sb-lib-add svg { width: var(--icon-sm); height: var(--icon-sm); }
 
 /* ── Séparateur visuel entre bibliothèque et parcourir ───────── */
@@ -4769,15 +4694,6 @@ html[data-mode="light"] .eq-slider::-moz-range-track { background: var(--bg6); }
 .rg-bar      { flex: 1; height: var(--track-h-md); background: var(--bg5); border-radius: var(--r-xs); overflow: hidden; }
 .rg-bar-fill { height: 100%; background: var(--g); border-radius: var(--r-xs); transition: width var(--dur-slow) ease; }
 
-/* ═══ DOSSIER SURVEILLÉ ══════════════════════════════════════ */
-.watch-indicator { display: none !important; }
-.watch-dot {
-  width: 6px; height: 6px; border-radius: 50%;
-  background: var(--g); flex-shrink: 0;
-  animation: pulse 2s infinite;
-}
-@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: .3; } }
-
 /* ═══ MODE CINÉMA ════════════════════════════════════════════ */
 /* ═══ MODE CINÉMA ════════════════════════════════════════════ */
 #cinema-overlay {
@@ -5872,9 +5788,6 @@ html[data-mode="light"] .tn { color: var(--t); font-weight: 500; }
 
 /* Scan counter : Syne → fusionné dans .sn principal */
 
-/* Sidebar stats : espacement amélioré */
-.sb-stats { letter-spacing: var(--ls-slight); }
-
 /* Card sub — cohérence avec .ts */
 .card-sub { letter-spacing: var(--ls-slight); }
 
@@ -5910,10 +5823,8 @@ html[data-mode="light"] .tn { color: var(--t); font-weight: 500; }
 /* 2. Modal backdrop — animation d'entrée (cohérence avec shortcuts/dupes qui ont déjà modalBgIn) */
 #modal-bg.on, #pl-modal-bg.on { animation: overlayIn var(--dur-card) var(--smooth) forwards; }
 
-/* 3. Nav active indicator — pas de glow, flat */
-.ni.on::before {
-  box-shadow: none;
-}
+/* AUDIT-2026-07-01 M8 : « 3. Nav active indicator » supprimé — no-op (la règle
+   de base .ni.on::before ne pose aucun box-shadow à annuler). */
 
 /* 4a. Bouton play/pause — pulse doux quand la lecture est en cours */
 @keyframes playGlow {
@@ -6366,7 +6277,7 @@ html[data-mode="light"] .rv-start-btn  { background: var(--g); }
 /* ── Compact (<720px) — sidebar icon-only ─────────────────────────── */
 /* T8 : les règles player bar (#pl grid, .pl-art, .vol, #btn-speed,
    .pl-n, .pl-a) migrées vers @container playerbar ci-dessus.
-   #sleep-indicator et #tbt-cinema désormais dans .sb-foot-icons (sidebar).
+   #sleep-indicator et #tbt-cinema vivent dans #sb-more-pop (titlebar).
    Seules les règles sidebar + sort-btn restent ici. */
 @media (max-width: 719px) { /* = --bp-compact — sidebar passe en icon-only + overflow visible pour tooltips, non-containerisable (règle :root + sidebar positionnée fixed) */
   :root { --sb: var(--sb-sm); }
@@ -6375,12 +6286,11 @@ html[data-mode="light"] .rv-start-btn  { background: var(--g); }
   #sb { overflow: visible; z-index: var(--z-sticky); }
 
   /* Cacher les éléments textuels de la sidebar */
-  .sb-stats,
-  .sb-search,
-  .sb-section-lbl,
   .sb-lib-title,
-  .pl-list-nav,
-  .watch-indicator { display: none; }
+  .pl-list-nav { display: none; }
+
+  /* QUALITÉ-1 : largeur pilotée par --sb-sm en compact — pas de resize manuel */
+  #sb-resize { display: none; }
 
   /* Header scanner : centré, pas de marge haut */
   .sb-lib-header { justify-content: center; padding: var(--sp-2) var(--sp-1h); margin-top: 0; }
@@ -6435,12 +6345,6 @@ html[data-mode="light"] .rv-start-btn  { background: var(--g); }
      (text node) est masqué via font-size:0, seule l'icône SVG reste. */
   .sort-btn { font-size: 0; gap: 0; padding: var(--sp-1h) var(--sp-1h); }
   .sort-btn svg { width: var(--icon-xs); height: var(--icon-xs); }
-
-  /* Footer icon buttons — slightly larger tap area in compact mode */
-  .sb-foot-icon-btn {
-    width: max(32px, var(--target-min));
-    height: max(32px, var(--target-min));
-  }
 
   /* Reduced motion */
   @media (prefers-reduced-motion: reduce) {
@@ -6538,35 +6442,22 @@ html[data-platform="mobile"] .ni.on::before {
 
 /* Hide secondary nav destinations on mobile */
 html[data-platform="mobile"] #ni-recent,
-html[data-platform="mobile"] #ni-radio,
-html[data-platform="mobile"] #ni-stats,
-html[data-platform="mobile"] .sb-sep,
-html[data-platform="mobile"] .sb-section-lbl,
 html[data-platform="mobile"] .sb-lib-header,
-html[data-platform="mobile"] .pl-list-nav,
-html[data-platform="mobile"] .sb-search,
-html[data-platform="mobile"] .watch-indicator,
-html[data-platform="mobile"] .sb-stats { display: none; }
+html[data-platform="mobile"] .pl-list-nav { display: none; }
 
-/* Footer: row of icon buttons pushed to the right end of the nav bar */
-html[data-platform="mobile"] .sb-foot {
-  flex-direction: row;
-  align-items: center;
-  justify-content: flex-end;
-  padding: 0 var(--sp-2h);
-  gap: var(--sp-1);
-  border-top: none;
-  flex-shrink: 0;
-}
+/* REWORK-2 : l'accès Playlists mobile passait par #ni-playlists (supprimé) —
+   le bouton grille de l'en-tête devient la destination (44px touch target).
+   Titre et bouton + (création) restent cachés sur mobile. */
+html[data-platform="mobile"] .sb-pl-header { display: flex; padding: 0; margin: 0; }
+html[data-platform="mobile"] .sb-pl-header .sb-lib-title,
+html[data-platform="mobile"] .sb-pl-header [data-action="new-playlist"] { display: none; }
+html[data-platform="mobile"] .sb-pl-header .sb-lib-add { min-width: 44px; min-height: 44px; }
+html[data-platform="mobile"] #sb-resize { display: none; }
 
+/* AUDIT-2026-07-01 M8 : blocs mobile .sb-foot / .sb-foot-icon-btn supprimés
+   (aucun élément .sb-foot dans le DOM). */
 /* Hide scan button in mobile (no folder picker on mobile Tauri) */
 html[data-platform="mobile"] .btn-scan { display: none; }
-
-/* Footer icon buttons — ensure 44×44 touch target on mobile */
-html[data-platform="mobile"] .sb-foot-icon-btn {
-  width: max(44px, var(--target-min));
-  height: max(44px, var(--target-min));
-}
 
 /* Titlebar drag region + window controls hidden on mobile (Tauri mobile has none) */
 html[data-platform="mobile"] .tb-drag-spacer,
@@ -6597,14 +6488,16 @@ html[data-platform="mobile"] .ni:hover {
 }
 
 /* 2. Navigation — dégradé directionnel au hover ─────────────────
-   Remplace `background: var(--sep)` par un gradient avec teinte
-   accentuée sur le bord gauche : directionnalité + énergie.
+   Surcharge le `background: var(--row-hover)` de base par un gradient
+   avec teinte accentuée sur le bord gauche : directionnalité + énergie.
+   AUDIT-2026-07-01 M5 : le stop 60% retombe sur var(--row-hover) (avant :
+   var(--sep), un token de BORDURE — changer --row-hover n'avait plus d'effet).
    NB : `html[data-mode="light"] .ni:hover` garde sa valeur plate. */
 .ni:hover {
   background: linear-gradient(
     90deg,
     rgba(var(--g-rgb), .10) 0%,
-    var(--sep) 60%
+    var(--row-hover) 60%
   );
 }
 
@@ -6758,10 +6651,13 @@ html[data-platform="mobile"] .ni:hover {
 }
 
 /* ── NP fullscreen : sidebar masquée ──────────────────────────────────────── */
-#app.np-full {
+/* AUDIT-2026-07-01 M1 : #app.np-full mélangeait id et classe sur le même
+   élément (interdit §13). La classe seule suffit (posée sur #app par
+   nowplaying.js ; aucune autre surface ne l'utilise). */
+.np-full {
   --sb: 0px;
 }
-#app.np-full #sb {
+.np-full #sb {
   overflow: hidden;
   pointer-events: none;
 }

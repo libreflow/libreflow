@@ -17,7 +17,6 @@ import { VIRT }                                                   from './virt.j
 import { audio, adjustShuffleQAfterDelete }                       from './player.js';
 import { toast, toastWithAction, esc }                            from './ui.js';
 import { setCurIdx, removeTracksBatch }                           from './state.js';
-import { updateStats }                                            from './renderer.js';
 import { saveTrackNow }                                           from './library.js';
 import { CFG }                                                    from './cfg.js';
 
@@ -230,7 +229,6 @@ async function _deleteOrphans(orphanTracks) {
   emit(EVENTS.FILTER_CHANGED, {});
   VIRT._lastListSig = '';
   emit(EVENTS.RENDER_LIB, {});
-  updateStats();
 
   const n = idsToDelete.length;
   toast(

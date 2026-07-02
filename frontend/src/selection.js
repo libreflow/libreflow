@@ -3,7 +3,7 @@
 // Extrait de app.js.
 //
 // Remaining window.* : toast, toastWithAction, savePlaylists, renderPlNav, renderLib,
-//   updateStats, invalidateFilter, openNewPlaylistModal.
+//   invalidateFilter, openNewPlaylistModal.
 //
 // Exports publics :
 //   selection     (live Set — lu par renderTrackRow dans app.js)
@@ -28,7 +28,6 @@ import { toast, toastWithAction }                                        from '.
 import { saveCfg }                        from './cfgsave.js';
 import { setCurIdx, setTracks, setLiked, replaceTracks } from './state.js';
 import { updateBar }                       from './playerbar.js';
-import { updateStats } from './renderer.js';
 import { savePlaylists, renderPlNav, openNewPlaylistModal } from './playlists.js';
 // Playlists demande l'effacement de la sélection — évite le cycle playlists.js ↔ selection.js.
 on(EVENTS.SELECTION_CLEAR, () => clearSelection());
@@ -269,7 +268,7 @@ export function selRemove() {
     for (const id of ids) ddel('tracks', id).catch(e => console.warn('[selection] IDB delete failed:', e));
   }, UNDO_MS);
 
-  invalidateFilterCache(); emit(EVENTS.FILTER_CHANGED, {}); clearSelection(); emit(EVENTS.RENDER_LIB, {}); updateStats();
+  invalidateFilterCache(); emit(EVENTS.FILTER_CHANGED, {}); clearSelection(); emit(EVENTS.RENDER_LIB, {});
 
   // Annulation partagée entre le bouton du toast et le raccourci clavier Ctrl+Z.
   // Idempotente : le guard `undone` empêche un double-undo si les deux se déclenchent.
@@ -281,7 +280,7 @@ export function selRemove() {
     replaceTracks(oldTracks); // ARCH-3 : set + rebuildTrackIdxMap atomique (undo)
     setLiked(oldLiked);
     resetShuffleQ();
-    invalidateFilterCache(); emit(EVENTS.FILTER_CHANGED, {}); emit(EVENTS.RENDER_LIB, {}); updateStats();
+    invalidateFilterCache(); emit(EVENTS.FILTER_CHANGED, {}); emit(EVENTS.RENDER_LIB, {});
     toast(i18n('t_sel_undo_delete'), 'info');
   };
 

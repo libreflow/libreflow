@@ -54,8 +54,6 @@ export const EVENTS = Object.freeze({
   TAGS_READY:       'library:tags',      // { track }
   // Search / filter
   FILTER_CHANGED:   'search:filtered',   // { list }
-  // Playlists
-  PLAYLIST_CHANGED: 'playlist:changed',  // { playlists }
   // UI
   VIEW_CHANGE:      'ui:view',           // { view }
   THEME_CHANGE:     'ui:theme',          // { theme }

@@ -9,7 +9,6 @@ export const CFG = Object.freeze({
   CFG_SAVE_DEBOUNCE:       800,   // ms — debounce sur saveCfg()
   SEARCH_DEBOUNCE:          90,   // ms — debounce sur la barre de recherche
   PLAYLOG_FLUSH_DELAY:    3000,   // ms — délai avant flush du play log vers IDB
-  STATS_UPDATE_DELAY:     1500,   // ms — délai debounce pour updateStats()
   RADIO_QUEUE_SIZE:         30,   // pistes précalculées dans la file radio
   RADIO_REFILL_THRESHOLD:    8,   // refill quand < n pistes restantes
   RG_MAX_FILE_BYTES:  31457280,   // 30 MB — taille max fichier pour analyse ReplayGain

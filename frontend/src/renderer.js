@@ -19,11 +19,10 @@ import { getImports }                                        from './imports.js'
 // Grilles et drill header — split §16 (renderer.js dépassait 800 lignes)
 import { renderAlbumsGrid, renderArtistsGrid, renderPlaylistsGrid,
          renderDrillHeader, resetGridCaches,
-         getAlbumMap, getArtistMap, updateBreadcrumb }       from './renderer-grids.js';
+         updateBreadcrumb }                                  from './renderer-grids.js';
 
 export { renderAlbumsGrid, renderArtistsGrid, renderPlaylistsGrid, updateBreadcrumb };
 
-let _statsTimer   = null;    // debounce updateStats
 let _plHero       = null;    // référence au #pl-hero courant (FIX-B1)
 let _activeRowEl  = null;    // I-1: cache du dernier élément .tr.act
 // R-H9 : true tant que #tlist affiche des lignes squelette — le ResizeObserver
@@ -416,7 +415,6 @@ export function renderLib() {
   // innerHTML wipes any prior .playing-row → restore from audio state.
   patchPlayState(!audio.paused);
 
-  scheduleStatsUpdate();
   renderFormatChips();
 }
 
@@ -623,64 +621,9 @@ export function patchTrackEl(id) {
   el.remove();
 }
 
-export function updateStats() {
-  const tracks = get('tracks') || [];
-  const sbEl = document.getElementById('sb-stats');
-  if (!sbEl) return;
-  if (tracks.length === 0) return;
-  const artistCount = getArtistMap().length;
-  const tracksLbl   = esc(i18n('sb_chip_tracks',  tracks.length));
-  const artistsLbl  = esc(i18n('sb_chip_artists', artistCount));
-  sbEl.innerHTML = `
-    <span class="sb-stat-chip" aria-label="${tracksLbl}" title="${tracksLbl}">
-      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
-      <span class="sb-stat-val" aria-hidden="true">${tracks.length.toLocaleString()}</span>
-    </span>
-    <span class="sb-stat-chip" aria-label="${artistsLbl}" title="${artistsLbl}">
-      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 20v-1a8 8 0 0 1 16 0v1"/></svg>
-      <span class="sb-stat-val" aria-hidden="true">${artistCount.toLocaleString()}</span>
-    </span>`;
-}
-
-export function scheduleStatsUpdate() {
-  if (_statsTimer) clearTimeout(_statsTimer);
-  _statsTimer = setTimeout(updateStats, CFG.STATS_UPDATE_DELAY);
-}
-
-// Déclenché par i18n.js lors d'un changement de langue — évite le cycle i18n ↔ renderer.
-on(EVENTS.LANG_CHANGED, () => updateStats());
-
-export function updateSidebarCounts() {
-  const tracks    = get('tracks')      || [];
-  const liked     = get('liked');
-  const recent    = get('recentPlays') || [];
-  const playlists = get('playlists')   || [];
-  const counts = {
-    'ni-all':       tracks.length,
-    'ni-liked':     liked ? liked.size : 0,
-    'ni-recent':    recent.length,
-    'ni-playlists': playlists.length,
-    'ni-artists':   tracks.length ? getArtistMap().length : 0,
-    'ni-albums':    tracks.length ? getAlbumMap().length  : 0,
-  };
-  for (const [id, n] of Object.entries(counts)) {
-    const btn = document.getElementById(id);
-    if (!btn) continue;
-    let badge = btn.querySelector('.ni-count');
-    if (n > 0) {
-      const text = n.toLocaleString();
-      if (!badge) {
-        badge = document.createElement('span');
-        badge.className = 'ni-count';
-        badge.setAttribute('aria-hidden', 'true');
-        btn.appendChild(badge);
-      }
-      if (badge.textContent !== text) badge.textContent = text;
-    } else if (badge) {
-      badge.remove();
-    }
-  }
-}
+// REWORK-5 (2026-07-02) : machinerie du footer stats et des pilules de
+// compteurs nav supprimée — ces éléments n'existent plus
+// (métriques dans la vue Statistiques, état de surveillance dans Paramètres).
 
 export function _withVT(fn) {
   if (typeof document.startViewTransition === 'function') {

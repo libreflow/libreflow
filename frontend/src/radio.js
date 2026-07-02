@@ -408,7 +408,6 @@ export async function radioRefillQueue() {
 // ── Sync boutons radio (cinéma + sidebar nav) ─────────────────
 function _syncRadioButtons(active) {
   const cinBtn  = document.getElementById('cinema-radio');
-  const navBtn  = document.getElementById('ni-radio');
   if (cinBtn) {
     cinBtn.classList.toggle('on', active);
     cinBtn.setAttribute('aria-pressed', String(active));
@@ -418,19 +417,8 @@ function _syncRadioButtons(active) {
     cinBtn.title = cinLbl;
     cinBtn.setAttribute('aria-label', cinLbl);
   }
-  // Badge "live" sur le bouton Radio de la sidebar quand la radio tourne
-  if (navBtn) {
-    let badge = navBtn.querySelector('.ni-radio-live');
-    if (active) {
-      if (!badge) {
-        badge = document.createElement('span');
-        badge.className = 'ni-radio-live';
-        navBtn.appendChild(badge);
-      }
-    } else {
-      badge?.remove();
-    }
-  }
+  // AUDIT-2026-07-01 M8 : badge « live » #ni-radio supprimé — le bouton n'a
+  // jamais existé dans le DOM (code mort null-guardé, CSS associé purgé).
   // Bannière dans la vue bibliothèque principale
   _syncRadioLibBar(active);
 }
@@ -567,7 +555,9 @@ export async function radioSaveAsPlaylist() {
     i18n('radio_pl_saved', name, ids.length),
     'success',
     i18n('radio_pl_see') || 'Voir →',
-    () => emit(EVENTS.VIEW_REQUEST, { view: 'playlist', btn: document.getElementById('ni-playlists'), plId: pl.id }),
+    // AUDIT-2026-07-01 M5 : cibler la ligne ni-pl-<id> (comme tous les autres
+    // émetteurs) — #ni-playlists provoquait un double marquage .on/aria-current.
+    () => emit(EVENTS.VIEW_REQUEST, { view: 'playlist', btn: document.getElementById('ni-pl-' + pl.id), plId: pl.id }),
     6000
   );
 }
@@ -765,9 +755,10 @@ export async function openRadioView(btn) {
     emit(EVENTS.CINEMA_RADIO_TOGGLE, {}); return;
   }
 
-  // Bug #8 fix : ignorer le `btn` passé (peut être un bouton bannière ou n'importe quel élément
-  // cliqué). setView() attend l'item nav #ni-radio pour activer la bonne entrée de sidebar.
-  const niBtn = document.getElementById('ni-radio');
+  // Bug #8 fix : ignorer le `btn` passé (peut être un bouton bannière ou n'importe
+  // quel élément cliqué). AUDIT-2026-07-01 M8 : #ni-radio n'existe pas — 'radio'
+  // est une vue bibliothèque, setView() active #ni-all + l'onglet lib lui-même.
+  const niBtn = null;
 
   if (!radioActive) {
     const curIdx = get('curIdx');

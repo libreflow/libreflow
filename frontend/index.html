@@ -102,10 +102,12 @@
     <!-- ── Header Ma bibliothèque + scanner ── -->
     <div class="sb-lib-header">
       <span class="sb-lib-title" data-i18n="sb_group_lib">Ma bibliothèque</span>
+      <!-- REWORK-2 : icône dossier+ (cohérente avec le welcome screen) — le simple «+»
+           était ambigu face au «+» de création de playlist de la section PLAYLISTS. -->
       <button class="sb-lib-add" data-action="open-folder"
               aria-label="Scanner un dossier" data-i18n-aria="sb_scan_folder"
               title="Scanner un dossier" data-i18n-title="sb_scan_folder">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/><line x1="12" y1="11" x2="12" y2="17"/><line x1="9" y1="14" x2="15" y2="14"/></svg>
       </button>
     </div>
 
@@ -118,22 +120,39 @@
       <span data-i18n="nav_liked">Favoris</span>
     </button>
     <button class="ni" id="ni-recent" data-action="set-view" data-view="recent">
-      <svg viewBox="0 0 24 24" fill="none" style="fill:none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="16.5" y1="13.5" x2="12" y2="13"/></svg>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="16.5" y1="13.5" x2="12" y2="13"/></svg>
       <span data-i18n="nav_recent">Récents</span>
     </button>
-    <button class="ni" id="ni-playlists" data-action="set-view" data-view="playlists">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="6" x2="14" y2="6"/><line x1="3" y1="12" x2="14" y2="12"/><line x1="3" y1="18" x2="10" y2="18"/><polygon points="17 10 23 14 17 18"/></svg>
-      <span data-i18n="nav_playlists">Playlists</span>
-    </button>
+    <!-- REWORK-2 : l'item nav « Playlists » (vue grille) doublonnait la liste juste
+         en dessous. Remplacé par un en-tête de section portant les deux actions :
+         + (créer) et grille (parcourir). Hiérarchie : MA BIBLIOTHÈQUE = vues,
+         PLAYLISTS = collections. -->
+    <div class="sb-lib-header sb-pl-header">
+      <span class="sb-lib-title" data-i18n="nav_playlists">Playlists</span>
+      <div class="sb-pl-header-actions">
+        <button class="sb-lib-add" data-action="new-playlist"
+                aria-label="Nouvelle playlist" data-i18n-aria="sb_new_pl"
+                title="Nouvelle playlist" data-i18n-title="sb_new_pl">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        </button>
+        <button class="sb-lib-add sb-nav-btn" data-action="set-view" data-view="playlists"
+                aria-label="Parcourir les playlists" data-i18n-aria="sb_pl_grid"
+                title="Parcourir les playlists" data-i18n-title="sb_pl_grid">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+        </button>
+      </div>
+    </div>
     <div id="pl-list-nav" class="pl-list-nav"></div>
 
 
   </nav>
-  <div id="watch-indicator" style="display:none" class="watch-indicator">
-    <div class="watch-dot"></div>
-    <span id="watch-label">Dossier surveillé</span>
-  </div>
-  <div class="sb-stats" id="sb-stats" aria-live="polite" aria-atomic="true" style="display:none"></div>
+  <!-- REWORK-5 (2026-07-02) : plus de footer — l'état de surveillance vit dans
+       Paramètres > Bibliothèque, les métriques dans la vue Statistiques. -->
+  <!-- QUALITÉ-1 : poignée de redimensionnement — drag (Pointer Events), ←/→,
+       Home/End, double-clic = reset. Logique dans sbresize.js. -->
+  <div id="sb-resize" role="separator" aria-orientation="vertical" tabindex="0"
+       aria-label="Redimensionner la barre latérale" data-i18n-aria="sb_resize"
+       aria-controls="sb" aria-valuemin="200" aria-valuemax="420" aria-valuenow="260"></div>
 </div>
 
 <!-- MAIN -->

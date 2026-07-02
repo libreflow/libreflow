@@ -5,19 +5,15 @@
  * ═══════════════════════════════════════════════════════════════════════ */
 
 
-/* ── SIDEBAR — labels de section ─────────────────────────────────────── */
+/* ── SIDEBAR ─────────────────────────────────────────────────────────── */
+/* AUDIT-2026-07-01 :
+   - .sb-section-lbl supprimé (sélecteur mort — aucun usage DOM/JS ; dupliquait
+     style.css avec un 0.07em littéral et --t4 sous-contraste).
+   - .ni { color: var(--t3) } supprimé : --t3 mesure ≈6,8:1 sur --bg1 (la sidebar
+     n'est pas sur --bg-base) — sous l'engagement AAA 7:1 (SC 1.4.6, CLAUDE.md §2.9).
+     Les labels nav restent sur --t2 (style.css). Les icônes (non-texte, seuil 3:1)
+     gardent l'atténuation --t3. */
 
-.sb-section-lbl {
-  font-size: var(--fs-xs);
-  color: var(--t4);
-  font-weight: 700;
-  letter-spacing: 0.07em;
-}
-
-
-/* ── SIDEBAR — items inactifs légèrement atténués (style Spotify) ────── */
-
-.ni     { color: var(--t3); }
 .ni svg { color: var(--t3); }
 
 

@@ -24,7 +24,7 @@ import { get, set }                                   from './store.js'; // Phas
 import { toast, toastWithAction }                                        from './ui.js';
 import { setCurIdx, removeTrackAt } from './state.js';
 import { updateBar } from './playerbar.js';
-import { updateStats, scheduleStatsUpdate, patchTrackEl } from './renderer.js';
+import { patchTrackEl } from './renderer.js';
 import { setReplayGain } from './replaygain.js';
 
 // ── Helpers locaux ────────────────────────────────────────────────────────────
@@ -56,10 +56,6 @@ let _currentWriteTx    = null;       // FIX FREEZE : transaction IDB active — 
  */
 export async function loadTagsAndDurations(newTracks) {
   const DUR_CONCURRENCY = CFG.TAG_LOAD_CONCURRENCY; // OPT-4 : CFG au lieu de 4 hardcodé
-  const _tagsLoadingId  = `tags-loading-${Date.now()}-${Math.random().toString(36).slice(2, 5)}`;
-  const _sbStats = document.getElementById('sb-stats');
-  if (_sbStats) _sbStats.insertAdjacentHTML('beforeend',
-    ` <span id="${_tagsLoadingId}" style="opacity:.5;font-size:10px">· chargement…</span>`);
   let _skippedCount = 0;
 
   async function loadOne(t) {
@@ -123,8 +119,6 @@ export async function loadTagsAndDurations(newTracks) {
   if (_skippedCount > 0) {
     toast(i18n('t_short_tracks_skipped', _skippedCount), 'warning');
   }
-  document.getElementById(_tagsLoadingId)?.remove();
-  scheduleStatsUpdate();
 
   // RG-PROMPT : proposer d'activer ReplayGain si ≥ 3 pistes non analysées
   const _unanalyzed = newTracks.filter(t => t.rgGain === undefined || t.rgGain === null).length;
@@ -262,7 +256,6 @@ export async function loadTagsBg(t, rustTags = null) {
     if (changed) { delete t._trigrams; }
     if (changed) patchTrackEl(t.id);
     if (trackIdx(t.id) === get('curIdx')) updateBar();
-    if (changed) scheduleStatsUpdate();
   } catch(e) {
     console.warn('[loadTagsBg]', e);
     t.metaDone = true;

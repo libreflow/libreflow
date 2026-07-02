@@ -467,9 +467,20 @@ export function renderPlaylistsGrid() {
   if (rg) rg.style.display = 'none';
 
   const queryLc  = query ? query.toLowerCase() : '';
-  const filtered = queryLc
+  let filtered = queryLc
     ? playlists.filter(p => (p.name || '').toLowerCase().includes(queryLc))
     : playlists;
+
+  // REWORK-1 : tri de la grille (remplace la section « Récentes » de la sidebar).
+  // Tri stable : les items hors classement gardent l'ordre manuel du tableau.
+  const plGridSort = get('plGridSort') || 'manual';
+  if (plGridSort === 'az') {
+    filtered = [...filtered].sort((a, b) => (a.name || '').localeCompare(b.name || '', undefined, { sensitivity: 'base' }));
+  } else if (plGridSort === 'recent') {
+    const rank = new Map((get('recentPls') || []).map((id, i) => [id, i]));
+    filtered = [...filtered].sort((a, b) =>
+      (rank.has(a.id) ? rank.get(a.id) : Infinity) - (rank.has(b.id) ? rank.get(b.id) : Infinity));
+  }
 
   if (!filtered.length) {
     const ico = `<svg viewBox="0 0 24 24" fill="none" style="fill:none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="6" x2="14" y2="6"/><line x1="3" y1="12" x2="14" y2="12"/><line x1="3" y1="18" x2="10" y2="18"/><polygon points="17 10 23 14 17 18"/></svg>`;
@@ -502,7 +513,7 @@ export function renderPlaylistsGrid() {
     const count = (pl.trackIds || []).length;
 
     return `<div class="card" role="button" tabindex="0"
-      data-action="set-view" data-view="playlist" data-pl-id="${esc(pl.id)}"
+      data-action="set-view" data-view="playlist" data-pl-id="${esc(pl.id)}" data-ni-id="ni-pl-${esc(pl.id)}"
       aria-label="${esc(pl.name || '?')}">
       <div class="card-art">
         ${artHtml}

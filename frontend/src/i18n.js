@@ -83,7 +83,6 @@ export function applyLang() {
     el.setAttribute('aria-label', i18n(el.dataset.ariaI18n));
   });
 
-  // Stats — renderer écoute LANG_CHANGED et appelle updateStats() lui-même.
   emit(EVENTS.LANG_CHANGED, {});
 
   // Sort label

@@ -90,13 +90,13 @@ import { _showSkeletonRows,
          drillDown, updatePlActionBar, updateBreadcrumb,
          makeLikeBtn, makeAddBtn, makeEqHTML, artPlaceholder, hlText, thtml,
          playById, patchActiveTrack, patchPlayState, patchTrackEl,
-         scheduleStatsUpdate, updateStats, updateSidebarCounts,
          _withVT, animateViewChange, scrollToCurrentTrack } from './renderer.js';
 // ── allplayerui.js (ARCH-1) ──────────────────────────────────────────────────
 import { _allPlayerUI } from './allplayerui.js';
 import { showCtxMenu, closeCtxMenu, ctxToggleLike, ctxDeleteTrack, ctxEditTags, ctxGoToArtist, ctxGoToAlbum, ctxNewPlaylist, ctxRemoveFromPlaylist, ctxSmartPlaylist, ctxPlayNext, ctxAddToQueueEnd, ctxCopyInfo } from './ctxmenu.js';
 import { initDrop } from './dropin.js';
 import { initKeyNav } from './keynav.js';
+import { initSbResize } from './sbresize.js';
 import { initShortcuts } from './shortcuts.js';
 import { setTlistZoom, initTlistZoomWheel } from './tlistZoom.js';
 import { confirmClear, closeModal } from './modal.js';
@@ -204,10 +204,12 @@ on(EVENTS.FILTER_CHANGED, () => { renderLib(); updateClearFiltersBtn(); });
 // LIBRARY_UPDATED : enable/disable taskbar thumbnail buttons based on track count
 on(EVENTS.LIBRARY_UPDATED, ({ tracks }) => {
   invoke('taskbar_set_has_tracks', { hasTracks: tracks.length > 0 }).catch(e => { console.warn('[taskbar] taskbar_set_has_tracks failed:', e); });
-  updateSidebarCounts();
 });
-// ERG-P2 : RENDER_LIB couvre toggle like / playlog update / suppressions → re-calcul léger
-on(EVENTS.RENDER_LIB, () => updateSidebarCounts());
+// REWORK-5 : les pilules de compteurs en nav ont été supprimées.
+// VIEW_REQUEST : navigation demandée par un satellite (playlists, radio, queue,
+// smartplaylist) — seul app.js a le droit d'appeler setView (§6). Le listener
+// avait été perdu au merge a11y (8e70a17) : 14 émissions étaient des no-op.
+on(EVENTS.VIEW_REQUEST, ({ view: v, btn, plId }) => setView(v, btn || undefined, plId));
 
 // ══ Boot ═══════════════════════════════════════
 
@@ -373,6 +375,8 @@ async function boot() {
     if (cfg.artistSort      && ['name','count'].includes(cfg.artistSort))              { artistSort      = cfg.artistSort;      set('artistSort',      artistSort); }
     if (cfg.genreSort       && ['count','name'].includes(cfg.genreSort))               { genreSort       = cfg.genreSort;       set('genreSort',       genreSort); }
     if (cfg.albumDetailSort && ['track','az'].includes(cfg.albumDetailSort))           { albumDetailSort = cfg.albumDetailSort; set('albumDetailSort', albumDetailSort); }
+    if (cfg.plGridSort      && ['manual','az','recent'].includes(cfg.plGridSort))      { set('plGridSort', cfg.plGridSort); }
+    if (Number.isFinite(cfg.sbWidth) && cfg.sbWidth >= 200 && cfg.sbWidth <= 420)      { set('sbWidth', cfg.sbWidth); }
     // EQ : sera appliqué après initEQ() (les nodes n'existent pas encore)
     initBootEQ(cfg.eqGains, cfg.eqEnabled, cfg.eqPreset);
     setBootVizState(cfg.vizMode, cfg.vizEnabled === false);
@@ -496,7 +500,6 @@ async function boot() {
     )];
     _assetDirs.forEach(dir => invoke('allow_asset_dir', { path: dir }).catch(e => console.warn('[app:allow_asset_dir]', dir, e)));
     // Reconstruire liked par IDs si disponible (robuste aux réordres)
-    updateStats();
     renderLib();
     // UX-3 : masquer le spinner de boot après le premier rendu de la bibliothèque
     const _bootSpinner = document.getElementById('boot-spinner');
@@ -534,7 +537,6 @@ async function boot() {
         dismissSpinner();
         const loaded = _retryList.filter(t => t.art).length;
         if (loaded) toast(i18n('t_artwork_retry_done', loaded), 'success');
-        scheduleStatsUpdate();
       }, 3000); // 3s après boot pour ne pas concurrencer le rendu initial
     }
 
@@ -777,6 +779,7 @@ waitForTauri(() => {
   initMiniOverlayDrag(); // Drag du mini-player overlay in-page
   initRipple(); // Ripple feedback sur boutons et lignes
   initKeyNav({ reorderTrack: movePlaylistTrack }); // A11Y: roving tabindex arrow-key nav + Alt+↑/↓ reorder (SC 2.5.7)
+  initSbResize(); // QUALITÉ-1 : sidebar redimensionnable (largeur restaurée depuis cfg.sbWidth)
 
   // Commandes depuis le mini-player (fenêtre séparée)
   // BUG FIX F6 : stocker l'unlistener mini-cmd avec les autres (voir boot())
@@ -952,8 +955,6 @@ export async function clearLibrary() {
   const _srchClr = document.getElementById('srch-clear');
   if (_srchClr) _srchClr.style.display = 'none';
   document.getElementById('srch-badge')?.remove();
-  // Stats sidebar
-  document.getElementById('sb-stats').innerHTML  = '';
   const _btnClear = document.getElementById('btn-clear');
   if (_btnClear) _btnClear.disabled = true;
   // Vider IndexedDB

@@ -20,7 +20,6 @@ import { toast }                                      from './ui.js';
 import { get, set, notify }                          from './store.js';
 import { rebuildTrackIdxMap, invalidateFilterCache } from './search.js';
 import { VIRT }                                      from './virt.js';
-import { updateStats }                               from './renderer.js';
 
 // Version du format .libreflow (incrémentée si schéma incompatible)
 const BACKUP_FORMAT_VERSION = 1;
@@ -152,7 +151,6 @@ export async function importBackup() {
       if (VIRT) VIRT._lastListSig = '';
       notify('tracks');
     }
-    updateStats();
 
     // ── Playlists : merge par id ──────────────────────────────────────────────
     const currentPlaylists = get('playlists') ?? [];

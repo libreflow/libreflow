@@ -2,7 +2,7 @@
 // Détection et suppression de doublons dans la bibliothèque.
 // Extrait de app.js.
 //
-// Remaining window.* : confirmAction, invalidateFilter, renderLib, updateStats, toast (app.js).
+// Remaining window.* : confirmAction, invalidateFilter, renderLib, toast (app.js).
 //
 // Exports publics :
 //   detectDupes, removeDupeTrack, deleteAllDupes, closeDupes
@@ -16,7 +16,6 @@ import { trackIdx, _trackIdxMap, rebuildTrackIdxMap, invalidateFilterCache } fro
 import { audio, adjustShuffleQAfterDelete }           from './player.js';
 import { toast, confirmAction }                                        from './ui.js';
 import { setCurIdx, removeTrackAt, removeTracksBatch } from './state.js';
-import { updateStats } from './renderer.js';
 
 // ── État interne ──────────────────────────────────────────────
 let dupesGroups = [];
@@ -115,7 +114,7 @@ export async function removeDupeTrack(id, gi, ti) {
   }
   _renderDupes();
   updateDupesBadge();
-  invalidateFilterCache(); emit(EVENTS.FILTER_CHANGED, {}); emit(EVENTS.RENDER_LIB, {}); updateStats();
+  invalidateFilterCache(); emit(EVENTS.FILTER_CHANGED, {}); emit(EVENTS.RENDER_LIB, {});
 }
 
 export async function deleteAllDupes() {
@@ -165,7 +164,7 @@ export async function deleteAllDupes() {
   dupesGroups = [];
   _renderDupes();
   updateDupesBadge();
-  invalidateFilterCache(); emit(EVENTS.FILTER_CHANGED, {}); emit(EVENTS.RENDER_LIB, {}); updateStats();
+  invalidateFilterCache(); emit(EVENTS.FILTER_CHANGED, {}); emit(EVENTS.RENDER_LIB, {});
   toast(i18n('t_dupes_deleted', removed), 'success');
   } finally {
     if (_btn) { _btn.disabled = false; if (_btn.dataset.lbl != null) { _btn.textContent = _btn.dataset.lbl; delete _btn.dataset.lbl; } }

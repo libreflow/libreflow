@@ -8,7 +8,7 @@
 //   import  : CFG                     (cfg.js)
 //   import  : i18n                    (i18n.js)
 //   import  : VIRT                    (virt.js)
-//   window  : tracks, toast, saveCfg, updateStats, renderLib,
+//   window  : tracks, toast, saveCfg, renderLib,
 //             loadTagsBg — rebuildTrackIdxMap encapsulated by pushTracks() (state.js)
 //
 // Exports publics :
@@ -26,7 +26,6 @@ import { invalidateFilterCache } from './search.js';
 import { toast }                          from './ui.js';
 import { setView, showView }              from './views.js';
 import { loadTagsBg, loadTagsAndDurations } from './library.js';
-import { updateStats }                    from './renderer.js';
 import { pushTracks }                     from './state.js';
 import { isSafePath }                     from './utils.js';
 import { logImport }                                   from './imports.js';
@@ -113,7 +112,6 @@ async function _doInitialScan(files) {
     invalidateFilterCache();
     emit(EVENTS.FILTER_CHANGED, {});
     VIRT._lastListSig = '';
-    updateStats();
     setView('all', document.getElementById('ni-all'));
     loadTagsAndDurations(newTracks);
     if (newTracks.length) logImport('folder-scan', newTracks.map(t => t.path));
@@ -343,13 +341,17 @@ export function updateWatchUI() {
     if (indicator)   indicator.style.display = 'flex';
     const shortName = watchPath.split('\\').pop() || watchPath.split('/').pop() || watchPath;
     const watchLabel = document.getElementById('watch-label');
-    if (watchLabel)  watchLabel.textContent = shortName;
+    // AUDIT-2026-07-01 L1 : contenu dynamique → retirer data-i18n pour que le
+    // changement de langue n'écrase pas le nom du dossier (même pattern que pathDisplay).
+    if (watchLabel)  { watchLabel.removeAttribute('data-i18n'); watchLabel.textContent = shortName; }
     if (pathDisplay) { pathDisplay.removeAttribute('data-i18n'); pathDisplay.textContent = watchPath; }
     if (chk)         chk.checked = _watchActive;
     if (changeBtn)   changeBtn.dataset.action = 'change-watch-folder';
     if (changeLbl) { changeLbl.dataset.i18n = 'set_watch_change_btn'; changeLbl.textContent = i18n('set_watch_change_btn'); }
   } else {
     if (indicator)   indicator.style.display = 'none';
+    const watchLabelOff = document.getElementById('watch-label');
+    if (watchLabelOff) { watchLabelOff.dataset.i18n = 'watch_label_default'; watchLabelOff.textContent = i18n('watch_label_default'); }
     if (pathDisplay) { pathDisplay.dataset.i18n = 'set_no_folder'; pathDisplay.textContent = i18n('set_no_folder'); }
     if (chk)         chk.checked = false;
     if (changeBtn)   changeBtn.dataset.action = 'settings-open-folder';
@@ -445,7 +447,6 @@ async function _doImportPaths(paths) {
     // évitant la fenêtre d'incohérence _trackIdxMap pendant la boucle (CLAUDE.md §2).
     pushTracks(newTracks);
     if (VIRT) VIRT._lastListSig = '';
-    updateStats();
     const niAll = document.getElementById('ni-all');
     setView('all', niAll ?? null);
     logImport('folder-scan', newPaths);

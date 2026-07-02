@@ -409,174 +409,208 @@ export function setView(v, btn, plId) {
     VIRT._lastWindowSig = '';
     VIRT._lastScrollTop = null;
 
-    document.querySelectorAll('.ni, .sb-nav-btn').forEach(b => {
-      b.classList.remove('on');
-      b.removeAttribute('aria-current');
-    });
-    // Library sub-views keep #ni-all active in sidebar; tabs handle sub-view distinction
-    const _LIB_VIEWS = ['all', 'artists', 'albums', 'radio'];
-    if (_LIB_VIEWS.includes(v)) {
-      const _niAll = document.getElementById('ni-all');
-      if (_niAll) { _niAll.classList.add('on'); _niAll.setAttribute('aria-current', 'page'); }
-    }
-    if (btn && !btn.classList.contains('lib-tab')) {
-      btn.classList.add('on'); btn.setAttribute('aria-current', 'page');
-    }
-    // Sync lib-tab underline indicators
-    document.querySelectorAll('.lib-tab').forEach(t => { t.classList.remove('on'); t.setAttribute('aria-selected', 'false'); });
-    if (_LIB_VIEWS.includes(v)) {
-      const _tab = document.querySelector(`.lib-tab[data-view="${v}"]`);
-      if (_tab) { _tab.classList.add('on'); _tab.setAttribute('aria-selected', 'true'); }
-    }
-
-    // Reset grid/list visibility
-    const ag = document.getElementById('album-grid');
-    const rg = document.getElementById('artist-grid');
-    const pg = document.getElementById('playlist-grid');
-    if (ag) ag.style.display = 'none';
-    if (rg) rg.style.display = 'none';
-    if (pg) pg.style.display = 'none';
-
-    // 'grid' masque #tlist pour les vues en grille (albums/artistes/playlists)
-    const _GRID_VIEWS = ['albums', 'artists', 'playlists'];
-    setContentView(v === 'genres' ? 'genres' : _GRID_VIEWS.includes(v) ? 'grid' : 'list');
-
-    const bc = document.getElementById('breadcrumb');
-    if (bc) bc.style.display = 'none';
-
-    // Titre de vue
-    const playlists = get('playlists') || [];
-    const pl = playlists.find(p => p.id === plId);
-    const lbl = {
-      all: i18n('lib_all'), liked: i18n('lib_liked'), artists: i18n('lib_artists'),
-      albums: i18n('lib_albums'), genres: i18n('lib_genres'), recent: i18n('lib_recent'),
-      playlist: pl ? pl.name : i18n('pl_new'), radio: i18n('lib_radio'),
-      playlists: i18n('nav_playlists'),
-    };
-    const vhtitleEl = document.getElementById('vhtitle');
-    if (vhtitleEl) vhtitleEl.textContent = lbl[v] || i18n('sb_group_lib');
-
-    // Boutons de tri contextuels
-    const albumSortBtn = document.getElementById('album-sort-btn');
-    const mainSortBtn  = document.getElementById('main-sort-btn');
-    const NO_MAIN_SORT = ['albums', 'artists', 'genres', 'stats', 'recent', 'playlist', 'radio', 'playlists', 'album-detail', 'artist-detail', 'genre-detail'];
-    if (mainSortBtn) mainSortBtn.style.display = NO_MAIN_SORT.includes(v) ? 'none' : '';
-    if (albumSortBtn) albumSortBtn.style.display = (v === 'albums') ? '' : 'none';
-
-    // M-14 : boutons de tri créés paresseusement (artist/genre/album-detail/pl-new/pl-smart).
-    // Le pattern `if (!getElementById(id))` est lui-même la garde d'idempotence : chaque
-    // bouton n'est créé — et donc .onclick câblé — qu'une seule fois. Les appels suivants
-    // ne font que toggler `display`. Aucun double-câblage possible tant que l'id reste unique.
-    let artistSortBtn = document.getElementById('artist-sort-btn');
-    if (!artistSortBtn) {
-      artistSortBtn = document.createElement('button');
-      artistSortBtn.id = 'artist-sort-btn';
-      artistSortBtn.className = 'sort-btn';
-      artistSortBtn.addEventListener('click', nextArtistSort);
-      mainSortBtn?.parentNode?.insertBefore(artistSortBtn, mainSortBtn.nextSibling);
-    }
-    artistSortBtn.title = i18n('sort_btn_artists');
-    artistSortBtn.style.display = (v === 'artists') ? '' : 'none';
-    artistSortBtn.textContent = i18n(get('artistSort') === 'count' ? 'sort_count_lbl' : 'sort_az');
-
-    let genreSortBtn = document.getElementById('genre-sort-btn');
-    if (!genreSortBtn) {
-      genreSortBtn = document.createElement('button');
-      genreSortBtn.id = 'genre-sort-btn';
-      genreSortBtn.className = 'sort-btn';
-      genreSortBtn.addEventListener('click', nextGenreSort);
-      mainSortBtn?.parentNode?.insertBefore(genreSortBtn, mainSortBtn.nextSibling);
-    }
-    genreSortBtn.title = i18n('sort_btn_genres');
-    genreSortBtn.style.display = (v === 'genres') ? '' : 'none';
-    genreSortBtn.textContent = i18n(get('genreSort') === 'name' ? 'sort_az' : 'sort_count_lbl');
-
-    let albumDetailSortBtn = document.getElementById('album-detail-sort-btn');
-    if (!albumDetailSortBtn) {
-      albumDetailSortBtn = document.createElement('button');
-      albumDetailSortBtn.id = 'album-detail-sort-btn';
-      albumDetailSortBtn.className = 'sort-btn';
-      albumDetailSortBtn.addEventListener('click', () => {
-        const cur = get('albumDetailSort') || 'track';
-        const next = cur === 'track' ? 'az' : 'track';
-        set('albumDetailSort', next);
-        albumDetailSortBtn.title = i18n(next === 'track' ? 'sort_btn_track_num' : 'sort_btn_az_ttl');
-        albumDetailSortBtn.querySelector('span').textContent = next === 'track' ? i18n('sort_by_track_lbl') : i18n('sort_az');
-        invalidateFilter(); VIRT._lastListSig = ''; renderLib(); saveCfg();
-      });
-      albumDetailSortBtn.innerHTML = `<span>${i18n('sort_by_track_lbl')}</span>`;
-      albumDetailSortBtn.title = i18n('sort_btn_track_num');
-      mainSortBtn?.parentNode?.insertBefore(albumDetailSortBtn, mainSortBtn);
-    }
-    albumDetailSortBtn.style.display = (v === 'album-detail') ? '' : 'none';
-    if (v === 'album-detail') {
-      const ads = get('albumDetailSort') || 'track';
-      albumDetailSortBtn.querySelector('span').textContent = ads === 'track' ? i18n('sort_by_track_lbl') : i18n('sort_az');
-    }
-
-    let plNewBtn = document.getElementById('pl-new-btn');
-    if (!plNewBtn) {
-      plNewBtn = document.createElement('button');
-      plNewBtn.id = 'pl-new-btn';
-      plNewBtn.className = 'sort-btn';
-      plNewBtn.title = i18n('sb_new_pl') || 'Nouvelle playlist';
-      plNewBtn.addEventListener('click', openNewPlaylistModal);
-      plNewBtn.innerHTML = '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>';
-      mainSortBtn?.parentNode?.insertBefore(plNewBtn, mainSortBtn.nextSibling);
-    }
-    let plSmartBtn = document.getElementById('pl-smart-btn');
-    if (!plSmartBtn) {
-      plSmartBtn = document.createElement('button');
-      plSmartBtn.id = 'pl-smart-btn';
-      plSmartBtn.className = 'sort-btn';
-      plSmartBtn.title = i18n('sb_smart_pl') || 'Playlist intelligente';
-      plSmartBtn.addEventListener('click', openSmartPlaylistModal);
-      plSmartBtn.innerHTML = '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>';
-      mainSortBtn?.parentNode?.insertBefore(plSmartBtn, plNewBtn);
-    }
-    plSmartBtn.style.display = (v === 'playlists') ? '' : 'none';
-    plNewBtn.style.display   = (v === 'playlists') ? '' : 'none';
-
-    // Dispatch vers la vue
-    const tracks = get('tracks') || [];
-    // INP FIX : renders de grilles différés → le pointer event se termine < 20ms,
-    // le browser peint immédiatement, le contenu arrive dans la task suivante (~0ms après).
-    if (v === 'albums')    { syncRadioLibBar(); _showViewRaw('lib'); saveCfg(); _deferGridRender(renderAlbumsGrid);    return; }
-    if (v === 'artists')   { syncRadioLibBar(); _showViewRaw('lib'); saveCfg(); _deferGridRender(renderArtistsGrid);   return; }
-    if (v === 'genres')    { syncRadioLibBar(); _showViewRaw('lib'); saveCfg(); _deferGridRender(renderGenresGrid);    return; }
-    if (v === 'playlists') { syncRadioLibBar(); _showViewRaw('lib'); saveCfg(); _deferGridRender(renderPlaylistsGrid); return; }
-    if (v === 'stats') {
-      _setSrchDisabled(true);
-      _showViewRaw('stats');
-      renderStats(tracks, _trackIdxMap);
-      saveCfg(); return;
-    }
-    if (v === 'radio') {
-      _setSrchDisabled(true);
-      // renderRadioView() va rebuilder innerHTML → invalider le cache DOM
-      clearRvProgFill();
-      _showViewRaw('radio'); renderRadioView(); saveCfg(); return;
-    }
-    _setSrchDisabled(false);
-    syncRadioLibBar();
-    const _tl = document.getElementById('tlist');
-    if (_tl) _tl.scrollTop = 0;
-    _showViewRaw('lib'); renderLib();
-    // Playlist hero + barre d'action (play / shuffle / ••• → supprimer)
-    if (v === 'playlist') {
-      const _fl  = getFiltered();
-      const _pls = get('playlists') || [];
-      const _pl  = _pls.find(p => p.id === (plId || get('curPlId')));
-      renderPlHero(_pl, _fl);
-      updatePlActionBar();
-    } else {
-      // Nettoyer les éléments propres à la vue playlist quand on la quitte
-      document.getElementById('pl-action-bar')?.remove();
-      document.getElementById('pl-col-header')?.remove();
-      if (document.getElementById('pl-hero')) renderPlHero(null);
-    }
-    saveCfg();
+    _svMarkNav(v, btn);
+    _svResetChrome(v, plId);
+    _svSyncSortButtons(v);
+    _svDispatchView(v, plId);
   }); // fin _withVT
+}
+
+// ── setView helpers (AUDIT-2026-07-01 L6 : extraction <50 lignes, §16) ────────
+
+/** Marque l'item sidebar + l'onglet lib actifs (classe .on + aria-current/selected). */
+function _svMarkNav(v, btn) {
+  document.querySelectorAll('.ni, .sb-nav-btn').forEach(b => {
+    b.classList.remove('on');
+    b.removeAttribute('aria-current');
+  });
+  // Library sub-views keep #ni-all active in sidebar; tabs handle sub-view distinction
+  const _LIB_VIEWS = ['all', 'artists', 'albums', 'radio'];
+  if (_LIB_VIEWS.includes(v)) {
+    const _niAll = document.getElementById('ni-all');
+    if (_niAll) { _niAll.classList.add('on'); _niAll.setAttribute('aria-current', 'page'); }
+  }
+  if (btn && !btn.classList.contains('lib-tab')) {
+    btn.classList.add('on'); btn.setAttribute('aria-current', 'page');
+  }
+  // Sync lib-tab underline indicators
+  document.querySelectorAll('.lib-tab').forEach(t => { t.classList.remove('on'); t.setAttribute('aria-selected', 'false'); });
+  if (_LIB_VIEWS.includes(v)) {
+    const _tab = document.querySelector(`.lib-tab[data-view="${v}"]`);
+    if (_tab) { _tab.classList.add('on'); _tab.setAttribute('aria-selected', 'true'); }
+  }
+}
+
+/** Reset grilles/breadcrumb + mode contenu + titre de vue. */
+function _svResetChrome(v, plId) {
+  const ag = document.getElementById('album-grid');
+  const rg = document.getElementById('artist-grid');
+  const pg = document.getElementById('playlist-grid');
+  if (ag) ag.style.display = 'none';
+  if (rg) rg.style.display = 'none';
+  if (pg) pg.style.display = 'none';
+
+  // 'grid' masque #tlist pour les vues en grille (albums/artistes/playlists)
+  const _GRID_VIEWS = ['albums', 'artists', 'playlists'];
+  setContentView(v === 'genres' ? 'genres' : _GRID_VIEWS.includes(v) ? 'grid' : 'list');
+
+  const bc = document.getElementById('breadcrumb');
+  if (bc) bc.style.display = 'none';
+
+  // Titre de vue
+  const playlists = get('playlists') || [];
+  const pl = playlists.find(p => p.id === plId);
+  const lbl = {
+    all: i18n('lib_all'), liked: i18n('lib_liked'), artists: i18n('lib_artists'),
+    albums: i18n('lib_albums'), genres: i18n('lib_genres'), recent: i18n('lib_recent'),
+    playlist: pl ? pl.name : i18n('pl_new'), radio: i18n('lib_radio'),
+    playlists: i18n('nav_playlists'),
+  };
+  const vhtitleEl = document.getElementById('vhtitle');
+  if (vhtitleEl) vhtitleEl.textContent = lbl[v] || i18n('sb_group_lib');
+}
+
+/**
+ * M-14 : bouton de tri créé paresseusement. Le pattern `if (!getElementById)`
+ * reste la garde d'idempotence : le listener n'est câblé qu'à la création.
+ */
+function _svLazyBtn(id, init) {
+  let b = document.getElementById(id);
+  if (!b) {
+    b = document.createElement('button');
+    b.id = id;
+    b.className = 'sort-btn';
+    init(b);
+  }
+  return b;
+}
+
+/** Visibilité + libellés des boutons de tri contextuels de la barre de vue. */
+function _svSyncSortButtons(v) {
+  const albumSortBtn = document.getElementById('album-sort-btn');
+  const mainSortBtn  = document.getElementById('main-sort-btn');
+  const NO_MAIN_SORT = ['albums', 'artists', 'genres', 'stats', 'recent', 'playlist', 'radio', 'playlists', 'album-detail', 'artist-detail', 'genre-detail'];
+  if (mainSortBtn) mainSortBtn.style.display = NO_MAIN_SORT.includes(v) ? 'none' : '';
+  if (albumSortBtn) albumSortBtn.style.display = (v === 'albums') ? '' : 'none';
+
+  const artistSortBtn = _svLazyBtn('artist-sort-btn', b => {
+    b.addEventListener('click', nextArtistSort);
+    mainSortBtn?.parentNode?.insertBefore(b, mainSortBtn.nextSibling);
+  });
+  artistSortBtn.title = i18n('sort_btn_artists');
+  artistSortBtn.style.display = (v === 'artists') ? '' : 'none';
+  artistSortBtn.textContent = i18n(get('artistSort') === 'count' ? 'sort_count_lbl' : 'sort_az');
+
+  const genreSortBtn = _svLazyBtn('genre-sort-btn', b => {
+    b.addEventListener('click', nextGenreSort);
+    mainSortBtn?.parentNode?.insertBefore(b, mainSortBtn.nextSibling);
+  });
+  genreSortBtn.title = i18n('sort_btn_genres');
+  genreSortBtn.style.display = (v === 'genres') ? '' : 'none';
+  genreSortBtn.textContent = i18n(get('genreSort') === 'name' ? 'sort_az' : 'sort_count_lbl');
+
+  _svSyncDetailPlBtns(v, mainSortBtn);
+}
+
+/** Boutons album-detail + nouvelle playlist / smart playlist. */
+function _svSyncDetailPlBtns(v, mainSortBtn) {
+  const albumDetailSortBtn = _svLazyBtn('album-detail-sort-btn', b => {
+    b.addEventListener('click', () => {
+      const cur = get('albumDetailSort') || 'track';
+      const next = cur === 'track' ? 'az' : 'track';
+      set('albumDetailSort', next);
+      b.title = i18n(next === 'track' ? 'sort_btn_track_num' : 'sort_btn_az_ttl');
+      b.querySelector('span').textContent = next === 'track' ? i18n('sort_by_track_lbl') : i18n('sort_az');
+      invalidateFilter(); VIRT._lastListSig = ''; renderLib(); saveCfg();
+    });
+    b.innerHTML = `<span>${i18n('sort_by_track_lbl')}</span>`;
+    b.title = i18n('sort_btn_track_num');
+    mainSortBtn?.parentNode?.insertBefore(b, mainSortBtn);
+  });
+  albumDetailSortBtn.style.display = (v === 'album-detail') ? '' : 'none';
+  if (v === 'album-detail') {
+    const ads = get('albumDetailSort') || 'track';
+    albumDetailSortBtn.querySelector('span').textContent = ads === 'track' ? i18n('sort_by_track_lbl') : i18n('sort_az');
+  }
+
+  const plNewBtn = _svLazyBtn('pl-new-btn', b => {
+    b.title = i18n('sb_new_pl') || 'Nouvelle playlist';
+    b.addEventListener('click', openNewPlaylistModal);
+    b.innerHTML = '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>';
+    mainSortBtn?.parentNode?.insertBefore(b, mainSortBtn.nextSibling);
+  });
+  const plSmartBtn = _svLazyBtn('pl-smart-btn', b => {
+    b.title = i18n('sb_smart_pl') || 'Playlist intelligente';
+    b.addEventListener('click', openSmartPlaylistModal);
+    b.innerHTML = '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>';
+    mainSortBtn?.parentNode?.insertBefore(b, plNewBtn);
+  });
+  plSmartBtn.style.display = (v === 'playlists') ? '' : 'none';
+  plNewBtn.style.display   = (v === 'playlists') ? '' : 'none';
+  _svSyncPlGridSortBtn(v, mainSortBtn, plSmartBtn);
+}
+
+/** REWORK-1 : tri de la grille playlists (manuel → A-Z → récentes), persisté. */
+function _svSyncPlGridSortBtn(v, mainSortBtn, anchorBtn) {
+  const LBL = mode => mode === 'az' ? i18n('sort_az')
+    : mode === 'recent' ? i18n('pl_sort_recent')
+    : i18n('pl_sort_manual');
+  const btn = _svLazyBtn('pl-grid-sort-btn', b => {
+    b.title = i18n('sort_btn_playlists');
+    b.addEventListener('click', () => {
+      const order = ['manual', 'az', 'recent'];
+      const next = order[(order.indexOf(get('plGridSort') || 'manual') + 1) % order.length];
+      set('plGridSort', next);
+      b.textContent = LBL(next);
+      renderPlaylistsGrid();
+      saveCfg();
+    });
+    mainSortBtn?.parentNode?.insertBefore(b, anchorBtn);
+  });
+  btn.textContent = LBL(get('plGridSort') || 'manual');
+  btn.style.display = (v === 'playlists') ? '' : 'none';
+}
+
+/** Dispatch final vers la vue demandée (grilles différées, stats, radio, liste). */
+function _svDispatchView(v, plId) {
+  const tracks = get('tracks') || [];
+  // INP FIX : renders de grilles différés → le pointer event se termine < 20ms,
+  // le browser peint immédiatement, le contenu arrive dans la task suivante (~0ms après).
+  if (v === 'albums')    { syncRadioLibBar(); _showViewRaw('lib'); saveCfg(); _deferGridRender(renderAlbumsGrid);    return; }
+  if (v === 'artists')   { syncRadioLibBar(); _showViewRaw('lib'); saveCfg(); _deferGridRender(renderArtistsGrid);   return; }
+  if (v === 'genres')    { syncRadioLibBar(); _showViewRaw('lib'); saveCfg(); _deferGridRender(renderGenresGrid);    return; }
+  if (v === 'playlists') { syncRadioLibBar(); _showViewRaw('lib'); saveCfg(); _deferGridRender(renderPlaylistsGrid); return; }
+  if (v === 'stats') {
+    _setSrchDisabled(true);
+    _showViewRaw('stats');
+    renderStats(tracks, _trackIdxMap);
+    saveCfg(); return;
+  }
+  if (v === 'radio') {
+    _setSrchDisabled(true);
+    // renderRadioView() va rebuilder innerHTML → invalider le cache DOM
+    clearRvProgFill();
+    _showViewRaw('radio'); renderRadioView(); saveCfg(); return;
+  }
+  _setSrchDisabled(false);
+  syncRadioLibBar();
+  const _tl = document.getElementById('tlist');
+  if (_tl) _tl.scrollTop = 0;
+  _showViewRaw('lib'); renderLib();
+  // Playlist hero + barre d'action (play / shuffle / ••• → supprimer)
+  if (v === 'playlist') {
+    const _fl  = getFiltered();
+    const _pls = get('playlists') || [];
+    const _pl  = _pls.find(p => p.id === (plId || get('curPlId')));
+    renderPlHero(_pl, _fl);
+    updatePlActionBar();
+  } else {
+    // Nettoyer les éléments propres à la vue playlist quand on la quitte
+    document.getElementById('pl-action-bar')?.remove();
+    document.getElementById('pl-col-header')?.remove();
+    if (document.getElementById('pl-hero')) renderPlHero(null);
+  }
+  saveCfg();
 }
 
 // ── Stats navigation helpers (moved from app.js — ARCH-1) ────────────────────

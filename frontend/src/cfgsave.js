@@ -89,6 +89,8 @@ async function _doSaveCfg() {
     const artistSort    = get('artistSort') ?? 'name';
     const genreSort     = get('genreSort') ?? 'count';
     const albumDetailSort = get('albumDetailSort') ?? 'track';
+    const plGridSort    = get('plGridSort') ?? 'manual';
+    const sbWidth       = get('sbWidth') ?? null;
     const curPlId       = get('curPlId') ?? null;
     const drillKey      = get('drillKey') ?? '';
     const drillFrom     = get('drillFrom') ?? '';
@@ -129,7 +131,7 @@ async function _doSaveCfg() {
       crossfadeDur, displayMode: getDisplayMode(), rgEnabled, rgTargetLUFS,
       playbackSpeed, cinemaBg: get('cinemaBg') ?? 'ambient',
       npBg: get('npBg') ?? 'blur',
-      shuffle, repeat, albumSort, artistSort, genreSort, albumDetailSort,
+      shuffle, repeat, albumSort, artistSort, genreSort, albumDetailSort, plGridSort, sbWidth,
       eqEnabled, eqExpert,
       eqGains: getEQGains(),
       eqPreset: getActiveEqPreset(),

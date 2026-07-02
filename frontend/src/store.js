@@ -50,6 +50,8 @@
  * @property {string|null}      curPlId
  * @property {PlaylistFolder[]} plFolders
  * @property {string[]}         recentPls
+ * @property {'manual'|'az'|'recent'} plGridSort
+ * @property {number|null}      sbWidth
  * @property {PlSortKey}        plSort
  * @property {string|null}      ctxTrackId
  * @property {string}           formatFilter
@@ -91,6 +93,8 @@ const _state = {
   curPlId:           null,      // string | null — currently viewed playlist id
   plFolders:         [],        // { id, name, collapsed, order }[]
   recentPls:         [],        // string[] — playlist IDs, most recent first (max 5)
+  plGridSort:        'manual',  // 'manual' | 'az' | 'recent' — tri de la grille playlists (REWORK-1)
+  sbWidth:           null,      // number | null — largeur sidebar custom (null = token --sidebar-width)
   plSort:            'manual',  // 'manual' | 'az' | 'za' | 'artist' | 'album' | 'duration'
 
   // ── Misc ─────────────────────────────────────────────────────────────

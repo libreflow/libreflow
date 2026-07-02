@@ -2019,6 +2019,9 @@ section('components/lf-toast-stack.logic.js -- import-smoke');
   // Token single-source guard (§17)
   await require('./token-source.test.cjs').run();
 
+  // Sidebar audit guardrails (2026-07-01)
+  await require('./sidebar.test.cjs').run();
+
   // =============================================================================
   // cinema split — vérification statique (lignes + exports publics)
   // cinema-viz.js / cinema-bg.js removed in 804181a (dead-module sweep);
