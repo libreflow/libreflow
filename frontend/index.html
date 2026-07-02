@@ -1345,6 +1345,24 @@
     </div>
   </div>
 
+  <!-- Hint shuffle (Task 6) — remplace le panneau ci-dessus quand aucune piste suivante
+       n'est prévisible (shuffle actif, sans file explicite ni radio). Même position/style
+       que #cinema-next (classe .cinema-next partagée) — .cin-has-next bascule laquelle
+       des deux est visible (jamais les deux en même temps). -->
+  <div id="cinema-shuffle-hint" class="cinema-next cinema-shuffle-hint">
+    <div class="cn-body cn-body--hint">
+      <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true">
+        <path d="M4 5h3a6 6 0 0 1 5.5 3.6"/>
+        <path d="M4 19h3a6 6 0 0 0 5.5-3.6"/>
+        <polyline points="16 3 20 7 16 11"/>
+        <polyline points="16 13 20 17 16 21"/>
+        <path d="M20 7h-3a6 6 0 0 0-5 2.7"/>
+        <path d="M20 17h-3a6 6 0 0 1-5-2.7"/>
+      </svg>
+      <span data-i18n="cinema_shuffle_on">Lecture aléatoire</span>
+    </div>
+  </div>
+
   <!-- Boutons de coin -->
   <button id="cinema-bg-btn" class="cinema-corner-btn" data-action="cycle-cinema-bg" title="" data-i18n-title="t_cinema_bg" data-i18n-aria="aria_cinema_bg" aria-label="Changer l'arrière-plan du cinéma">
     <!-- icône dynamique selon le mode — mis à jour par updateCinemaBgBtn() -->

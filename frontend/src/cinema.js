@@ -19,8 +19,7 @@
 import { eqCtx, eqAnalyser, masterGainNode, setMasterGain } from './eq.js'; // réutiliser le graphe EQ existant
 import { i18n }                               from './i18n.js';
 import { get, set }                           from './store.js';
-import { getFiltered, filteredIdx }            from './search.js';
-import { audio, toggleLike, next, prev }      from './player.js';
+import { audio, toggleLike, next, prev, getNextIdx, hasExplicitQueueNext } from './player.js';
 import { radioActive, stopRadio, startRadio, getRadioQueue } from './radio.js';
 import { toast }                                        from './ui.js';
 import { saveCfg }                   from './cfgsave.js';
@@ -33,7 +32,7 @@ import { cinemaBg, CINEMA_BG_MODES, CINEMA_BG_LABELS, applyCinemaBg, setCinemaBg
          startAmbientAnim, stopAmbientAnim, resetAmbientColors, updateAmbientGradient,
          updateCachedWinSize } from './cinema-bg.js';
 import { startCinemaViz, stopCinemaViz, initCinemaVizModule } from './cinema-viz.js';
-import { renderCinColor, syncCinVolumeUI, syncCinProgress } from './cinema-render.js';
+import { renderCinColor, syncCinVolumeUI, syncCinProgress, applyCinText, beginCinSwapIn, renderCinNextPanel } from './cinema-render.js';
 import { initCinemaSeek, isSeekDragging, resetCinemaSeek } from './cinema-seek.js';
 
 export { cinemaBg, CINEMA_BG_MODES, CINEMA_BG_LABELS, applyCinemaBg, setCinemaBg, cycleCinemaBg,
@@ -379,6 +378,10 @@ export function closeCinema() {
   // Cache unique — évite 2 querySelector distincts sur la même requête
   const _aw = document.querySelector('.cinema-art-wrap');
   _aw?.classList.remove('cin-enter', 'cin-swap-out', 'cin-swap');
+  // Task 6 : purger les classes de swap texte — sinon une fermeture mid-animation (Escape
+  // pendant un changement de piste) laisse le titre/artiste à opacity:0 (cin-txt-swap-out
+  // est `forwards`) à la prochaine ouverture, avant le premier changement de piste.
+  _cinTxtEls().forEach(el => el.classList.remove('cin-txt-swap-out', 'cin-txt-swap-in'));
   overlay.removeEventListener('mousemove', _onCinemaMouseMove);
   overlay.removeEventListener('click',     _onCinemaMouseMove);
   overlay.removeEventListener('wheel',     _onCinWheel);
@@ -500,82 +503,92 @@ export function updateCinema() {
   const _trackChanged = curIdx !== _lastCinIdx;
   _lastCinIdx = curIdx;
 
-  renderCinColor(t, _trackChanged);              // canvas clear + couleur + snap + reduced-motion + --cin-rgb
-  _renderCinMeta(t, title, artist, _trackChanged); // titre/artiste + annonce a11y + album
-  _renderCinArt(art);                             // pochette + animation de swap + Ken Burns
+  renderCinColor(t, _trackChanged);                    // canvas clear + couleur + snap + reduced-motion + --cin-rgb
+  _renderCinMeta(title, artist, _trackChanged);         // annonce a11y (immédiate, découplée du swap visuel)
+  _renderCinArt(art, _trackChanged, t, title, artist);  // pochette + texte : swap synchronisé, Ken Burns
   _syncCinButtons(curIdx);                        // play/pause + shuffle/repeat/like/radio (aria-pressed)
-  _updateNextTrack();                             // panneau piste suivante
+  _updateNextTrack();                             // panneau piste suivante / hint shuffle
   syncCinVolumeUI(_readVol());                    // slider volume + icônes
   syncCinProgress();                              // barre de progression + temps
 }
 
-// ── Métadonnées texte (titre / artiste / annonce a11y / album) ──
-function _renderCinMeta(t, title, artist, _trackChanged) {
-  const elT = document.getElementById('cinema-title');
-  const elA = document.getElementById('cinema-artist');
-  if (elT) elT.textContent = title;
-  if (elA) elA.textContent = artist;
+// ── Métadonnées : annonce a11y (immédiate, indépendante du swap visuel du texte) ──
+function _renderCinMeta(title, artist, _trackChanged) {
   // A11Y A7 : annoncer le changement de piste (poli) — jamais à chaque tick de progression,
   // updateCinemaProgress() (60fps) est un chemin séparé qui ne touche pas cinema-announce.
+  // Ne doit pas attendre l'animation de swap texte (Task 6) : un lecteur d'écran est informé
+  // sans délai même si le rendu visuel du titre/artiste est différé de CIN_SWAP_OUT_MS.
   if (_trackChanged) {
     const announceEl = document.getElementById('cinema-announce');
     if (announceEl) announceEl.textContent = `${title} — ${artist}`;
   }
-  // Ligne album + année — absente si données manquantes (masquée via display:none)
-  const elAlb = document.getElementById('cinema-album');
-  if (elAlb) {
-    const parts = [t?.album, t?.year ? `(${t.year})` : null].filter(Boolean);
-    elAlb.textContent = parts.join(' ');
-    elAlb.style.display = parts.length ? '' : 'none';
-  }
 }
 
-// ── Pochette : fond flou, animation de swap bi-directionnelle, Ken Burns ──
-function _renderCinArt(art) {
+/** Éléments texte cinéma (titre/artiste/album) — requêtés à chaque appel (DOM stable, coût négligeable). */
+function _cinTxtEls() {
+  return ['cinema-title', 'cinema-artist', 'cinema-album'].map(id => document.getElementById(id)).filter(Boolean);
+}
+
+// ── Pochette + texte : fond flou, swap synchronisé bi-directionnel, Ken Burns, skeleton ──
+// Texte et pochette partagent les MÊMES timers (_cinSwapOutTimer/_cinSwapInTimer) — zéro
+// horloge séparée (Task 6). L'écriture DOM (texte/décodage image) est déléguée à
+// cinema-render.js (stateless) ; seule l'orchestration des timers reste ici.
+function _renderCinArt(art, trackChanged, t, title, artist) {
   const img = document.getElementById('cinema-art-img');
   const em  = document.getElementById('cinema-art-em');
-  if (art) {
-    if (em) em.style.display = 'none';
-    const artWrap = document.querySelector('.cinema-art-wrap');
-    // Fond flou pour pochettes non carrées — custom property lue par ::before
-    // (plus fiable que style.backgroundImage + background-image:inherit dans WebView2)
-    if (artWrap) artWrap.style.setProperty('--cin-bg-url', `url("${art}")`);
-
-    if (art !== _lastCinArt) {
-      const hadArt = _lastCinArt !== null;
-      _lastCinArt = art; // préempter : évite le re-déclenchement si updateCinema rappelé pendant la transition
-
-      // Fonction de swap-in partagée entre premier chargement et changement de piste
-      const _doSwapIn = () => {
-        if (!cinemaOpen) return;
-        if (img) { img.src = art; img.style.display = 'block'; }
-        if (artWrap) {
-          artWrap.classList.remove('cin-swap-out', 'cin-swap');
-          requestAnimationFrame(() => artWrap.classList.add('cin-swap'));
-          _cinSwapInTimer = setTimeout(() => artWrap.classList.remove('cin-swap'), CIN_SWAP_IN_MS);
-        }
-        _startKenBurns(); // nouvelle piste → nouvelle direction Ken Burns
-        if (cinemaBg === 'ambient' || cinemaBg === 'amoled') updateAmbientGradient();
-      };
-
-      if (hadArt && artWrap) {
-        // Animation sortante (120ms) puis entrante — transition bi-directionnelle
-        artWrap.classList.add('cin-swap-out');
-        _cinSwapOutTimer = setTimeout(_doSwapIn, CIN_SWAP_OUT_MS);
-      } else {
-        // Premier chargement : pas d'animation sortante, swap immédiat
-        _doSwapIn();
-      }
-    } else {
-      // Même pochette (play/pause, volume…) — juste s'assurer que l'image est visible
-      if (img) { img.src = art; img.style.display = 'block'; }
-    }
-  } else {
-    if (img) img.style.display = 'none';
+  if (!art) {
+    if (img) { img.style.display = 'none'; img.style.opacity = ''; }
     if (em)  { em.style.display = 'flex'; em.innerHTML = '<svg viewBox="0 0 24 24" width="48" height="48" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" opacity=".3"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>'; }
     document.querySelector('.cinema-art-wrap')?.style.removeProperty('--cin-bg-url');
     _lastCinArt = null;
+    if (trackChanged) applyCinText(t, title, artist);
+    return;
   }
+  if (em) em.style.display = 'none';
+  const artWrap = document.querySelector('.cinema-art-wrap');
+  // Fond flou pour pochettes non carrées — custom property lue par ::before
+  // (plus fiable que style.backgroundImage + background-image:inherit dans WebView2)
+  if (artWrap) artWrap.style.setProperty('--cin-bg-url', `url("${art}")`);
+
+  if (art === _lastCinArt) {
+    // Même pochette (play/pause, volume…) — texte à jour si la piste a changé sans que
+    // l'art ne diffère (cas rare : pochette identique entre deux pistes, pas d'animation)
+    if (trackChanged) applyCinText(t, title, artist);
+    if (img) { img.src = art; img.style.display = 'block'; }
+    return;
+  }
+
+  // Rapid skip (next/next/next) : annuler tout swap en vol — évite texte/pochette périmés.
+  clearTimeout(_cinSwapOutTimer); _cinSwapOutTimer = null;
+  clearTimeout(_cinSwapInTimer);  _cinSwapInTimer  = null;
+  const hadArt = _lastCinArt !== null;
+  _lastCinArt = art; // préempter : évite le re-déclenchement si updateCinema rappelé pendant la transition
+
+  if (hadArt && artWrap) {
+    // Animation sortante (120ms) puis entrante — transition bi-directionnelle, texte inclus
+    artWrap.classList.add('cin-swap-out');
+    _cinTxtEls().forEach(el => el.classList.add('cin-txt-swap-out'));
+    _cinSwapOutTimer = setTimeout(() => _cinSwapIn(art, t, title, artist, artWrap, img, em), CIN_SWAP_OUT_MS);
+  } else {
+    // Premier chargement : pas d'animation sortante, swap immédiat
+    _cinSwapIn(art, t, title, artist, artWrap, img, em);
+  }
+}
+
+// ── Swap-in partagé : premier chargement (pas d'out) et changement de piste (après l'out) ──
+// Contenu + classes d'entrée posés par cinema-render.js (beginCinSwapIn, stateless) ; seul
+// le nettoyage CIN_SWAP_IN_MS reste ici, sur le timer existant _cinSwapInTimer.
+function _cinSwapIn(art, t, title, artist, artWrap, img, em) {
+  if (!cinemaOpen) return;
+  const txtEls = beginCinSwapIn(artWrap, img, em, t, title, artist, art);
+  if (artWrap) {
+    _cinSwapInTimer = setTimeout(() => {
+      artWrap.classList.remove('cin-swap');
+      txtEls.forEach(el => el.classList.remove('cin-txt-swap-in'));
+    }, CIN_SWAP_IN_MS);
+  }
+  _startKenBurns(); // nouvelle piste → nouvelle direction Ken Burns
+  if (cinemaBg === 'ambient' || cinemaBg === 'amoled') updateAmbientGradient();
 }
 
 // ── Synchro boutons/états : play/pause + shuffle/repeat/like/radio (aria-pressed A1/A2) ──
@@ -585,6 +598,9 @@ function _syncCinButtons(curIdx) {
   const ipause = document.getElementById('cinema-ico-pause');
   if (iplay)  iplay.style.display  = playing ? 'none'  : 'block';
   if (ipause) ipause.style.display = playing ? 'block' : 'none';
+  // Task 6 : geler les animations idle (Ken Burns/float/glow/breathe/ambient) en pause —
+  // basculée ici, là où l'état play/pause est déjà lu depuis audio.paused.
+  document.getElementById('cinema-overlay')?.classList.toggle('is-paused', !playing);
 
   // A11Y A1/A2 : aria-pressed reflète .on partout, pas seulement la classe visuelle
   // (imite le pattern déjà correct de #cinema-radio ci-dessous).
@@ -699,57 +715,48 @@ function _stopClock() {
 // ── Piste suivante ───────────────────────────────────────────
 // ═══════════════════════════════════════════════════════════
 
+// Priorité identique à player.js/getNextIdx() (explicite > radio > shuffle > séquentiel) —
+// le panneau affiche la piste RÉELLEMENT prévue par next(), sauf en shuffle pur (aucune file
+// explicite) où deviner gâcherait la surprise : un hint discret la remplace (Task 6, Step 5).
 function _updateNextTrack() {
   const panel = document.getElementById('cinema-next');
+  const hint  = document.getElementById('cinema-shuffle-hint');
   if (!panel) return;
   const tracks  = get('tracks'); // Phase 4 — store alimenté depuis Jalon 3
   const curIdx  = get('curIdx');
   const shuffle = get('shuffle');
 
-  // En mode radio : piste suivante = tête de file radio
-  if (radioActive && getRadioQueue) {
-    const rq = getRadioQueue();
-    const nt = rq && rq.length ? rq[0] : null;
-    if (!nt) { panel.classList.remove('cin-has-next'); return; }
-    panel.classList.add('cin-has-next');
-    const titleEl  = document.getElementById('cinema-next-title');
-    const artistEl = document.getElementById('cinema-next-artist');
-    const imgEl    = document.getElementById('cinema-next-img');
-    if (titleEl)  titleEl.textContent  = nt.name || '–';
-    if (artistEl) artistEl.textContent = nt.artistFull || nt.artist || '–';
-    if (imgEl) { if (nt.art) { imgEl.src = nt.art; imgEl.style.display = 'block'; } else imgEl.style.display = 'none'; }
+  if (!tracks || curIdx < 0) {
+    panel.classList.remove('cin-has-next');
+    hint?.classList.remove('cin-has-next');
     return;
   }
 
-  // En mode aléatoire on ne peut pas prédire la piste suivante
-  if (shuffle || !tracks || curIdx < 0) {
-    panel.classList.remove('cin-has-next'); return;
+  // File explicite : priorité 1 — même ordre que player.js/next(), avant radio ET shuffle
+  // (un "lire ensuite" manuel doit gagner même quand la radio est aussi active).
+  if (hasExplicitQueueNext()) {
+    const ni = getNextIdx(); // vérifie l'explicite en premier — renvoie forcément cet item ici
+    renderCinNextPanel(panel, hint, ni >= 0 ? tracks[ni] : null, shuffle);
+    return;
   }
 
-  // Chercher dans la liste filtrée si disponible, sinon tracks bruts
-  let nt = null;
-  const filtered = getFiltered();
-  if (filtered && filtered.length) {
-    const curTrack = tracks[curIdx];
-    const posInFiltered = filteredIdx(curTrack); // O(1) via posMap
-    nt = posInFiltered >= 0 && posInFiltered + 1 < filtered.length ? filtered[posInFiltered + 1] : null;
-  } else {
-    nt = curIdx + 1 < tracks.length ? tracks[curIdx + 1] : null;
+  // Radio : la tête de la file radio est la piste réelle suivante — prioritaire sur le shuffle
+  if (radioActive && getRadioQueue) {
+    const rq = getRadioQueue();
+    renderCinNextPanel(panel, hint, rq && rq.length ? rq[0] : null, false);
+    return;
   }
 
-  if (!nt) { panel.classList.remove('cin-has-next'); return; }
-  panel.classList.add('cin-has-next');
-
-  const titleEl  = document.getElementById('cinema-next-title');
-  const artistEl = document.getElementById('cinema-next-artist');
-  const imgEl    = document.getElementById('cinema-next-img');
-
-  if (titleEl)  titleEl.textContent  = nt.name || '–';
-  if (artistEl) artistEl.textContent = nt.artistFull || nt.artist || '–';
-  if (imgEl) {
-    if (nt.art) { imgEl.src = nt.art; imgEl.style.display = 'block'; }
-    else          imgEl.style.display = 'none';
+  // Shuffle actif (sans file explicite ni radio) : aucune piste prévisible → hint discret
+  if (shuffle) {
+    panel.classList.remove('cin-has-next');
+    hint?.classList.add('cin-has-next');
+    return;
   }
+
+  // Lecture séquentielle / repeat-all : piste réelle via getNextIdx()
+  const ni = getNextIdx();
+  renderCinNextPanel(panel, hint, ni >= 0 ? tracks[ni] : null, shuffle);
 }
 
 // ── Visibilité onglet — relancer le loop ambient si l'onglet redevient visible ──

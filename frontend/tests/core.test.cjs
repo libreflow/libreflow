@@ -2517,6 +2517,50 @@ section('components/lf-toast-stack.logic.js -- import-smoke');
       `--dur-cin-beat (${durBeat}ms) === BEAT_PULSE_MS (${jsBeat}ms) -- unifies the 600/620 beat desync`);
   }());
 
+  // =============================================================================
+  // Task 6 — transitions de piste (texte), état pause, skeleton pochette (TDD)
+  // Step 1 : scans statiques (RED avant implémentation).
+  // =============================================================================
+  section('cinema Task 6 -- text swap sync + pause state + skeleton/fallback + shuffle hint');
+
+  (function () {
+    const fs   = require('fs');
+    const path = require('path');
+    const root = path.join(__dirname, '../..');
+    const read = f => fs.readFileSync(path.join(root, f), 'utf8');
+
+    const CSS = read('frontend/src/style.css');
+    const CIN = read('frontend/src/cinema.js');
+    const CIN_RENDER = read('frontend/src/cinema-render.js');
+    const FR  = read('frontend/src/i18n.fr.js');
+    const EN  = read('frontend/src/i18n.en.js');
+
+    // (a) .cin-txt-swap-out/-in présentes avec durées tokenisées (pas de ms littéral)
+    assert(/\.cin-txt-swap-out\s*\{[^}]*var\(--dur-cin-swap-out\)/.test(CSS),
+      'style.css: .cin-txt-swap-out utilise var(--dur-cin-swap-out) (durée tokenisée, == pochette sortante)');
+    assert(/\.cin-txt-swap-in\s*\{[^}]*var\(--dur-cin-swap-in\)/.test(CSS),
+      'style.css: .cin-txt-swap-in utilise var(--dur-cin-swap-in) (durée tokenisée, == pochette entrante)');
+    assert(/\.cin-txt-swap-in\s*\{[^}]*var\(--ease-spring-soft\)/.test(CSS),
+      'style.css: .cin-txt-swap-in utilise var(--ease-spring-soft)');
+    assert(/@media\s*\(prefers-reduced-motion:\s*reduce\)\s*\{[^}]*\.cin-txt-swap/.test(CSS),
+      'style.css: reduced-motion neutralise .cin-txt-swap-out/-in (remplacement sec)');
+
+    // (b) le cluster cinéma référence img.decode() — skeleton/fallback pochette (Step 4).
+    // Vit dans cinema-render.js (stateless, cf. applyCinText/decodeArtImage/beginCinSwapIn) :
+    // cinema.js reste sous 800 lignes (§16) — cinema.js orchestre seulement les timers.
+    assert(/img\.decode\(\)/.test(CIN + CIN_RENDER),
+      'cinema.js/cinema-render.js référence img.decode() (fondu/fallback décodage pochette)');
+
+    // (c) overlay bascule une classe pause + CSS gèle les animations idle sous cette classe
+    assert(/is-paused/.test(CIN), "cinema.js bascule la classe 'is-paused' sur l'overlay");
+    assert(/\.is-paused[^{]*\{[^}]*animation-play-state\s*:\s*paused/.test(CSS),
+      'style.css: animation-play-state: paused sous .is-paused (Ken Burns/float/glow/breathe/ambient gelés)');
+
+    // (d) clés i18n cinema_shuffle_on présentes fr + en (Step 5 — hint shuffle)
+    assert(/cinema_shuffle_on\s*:/.test(FR), "i18n.fr.js: clé cinema_shuffle_on présente");
+    assert(/cinema_shuffle_on\s*:/.test(EN), "i18n.en.js: clé cinema_shuffle_on présente");
+  }());
+
   // -- Résultat -----------------------------------------------------------
   console.log('\n═══════════════════════════════════════════════════════════');
   console.log(`  Total : ${_ok + _ko}   OK: ${_ok}   KO: ${_ko}`);

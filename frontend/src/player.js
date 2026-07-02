@@ -279,6 +279,11 @@ export function setIcon(playing) {
   const cp = document.getElementById('cinema-ico-pause');
   if (ci) ci.style.display = playing ? 'none'  : 'block';
   if (cp) cp.style.display = playing ? 'block' : 'none';
+  // Task 6 : geler les animations idle pochette/fond en pause — setIcon() est le seul
+  // point appelé sur CHAQUE événement 'play'/'pause' natif (media keys, bouton cinéma,
+  // sleep timer…), contrairement à updateCinema()/_syncCinButtons (cinema.js) qui ne
+  // tournent qu'à l'ouverture du cinéma ou au changement de piste.
+  document.getElementById('cinema-overlay')?.classList.toggle('is-paused', !playing);
   document.querySelector('.pcplay')?.classList.toggle('playing', playing);
   document.querySelector('.pcplay')?.setAttribute('aria-pressed', String(playing));
   document.querySelector('.sb-dot')?.classList.toggle('playing', playing);
@@ -1108,6 +1113,16 @@ export function getNextIdx() {
   if (repeat === 'all' && fl.length > 0) return trackIdx(fl[0]);
   return -1;
 }
+
+/**
+ * Task 6 — vrai si la file explicite (queue.js, "lire ensuite") a un item prêt à jouer.
+ * Façade réexposée par player.js : cinema.js n'importe jamais queue.js directement
+ * (CLAUDE.md §6, modules feature-à-feature) — il passe par ce module dont il dépend déjà.
+ * Sert à ne pas masquer la piste suivante sous le hint shuffle du panneau cinéma quand
+ * un "lire ensuite" manuel est planifié malgré le shuffle actif.
+ * @returns {boolean}
+ */
+export function hasExplicitQueueNext() { return !!peekFirstExplicit(); }
 
 /**
  * Vide la file de shuffle (appelé par dupes.js / selection.js après suppression).

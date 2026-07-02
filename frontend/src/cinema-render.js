@@ -8,6 +8,8 @@
 //   renderCinColor(t, trackChanged)  — couleur dominante + fond + reduced-motion
 //   syncCinVolumeUI(vol)             — slider volume + icônes muet/bas/haut
 //   syncCinProgress()                — barre de progression + temps (chemin updateCinema)
+//   applyCinText(t, title, artist)   — écrit titre/artiste/album (Task 6, stateless)
+//   decodeArtImage(img, em, art)     — skeleton/fondu/fallback décodage pochette (Task 6, stateless)
 
 import { fmt }                                  from './utils.js';
 import { audio }                                from './player.js';
@@ -68,4 +70,91 @@ export function syncCinProgress() {
   if (thumb && audio.duration) thumb.style.left = (audio.currentTime / audio.duration * 100) + '%';
   if (tc)  tc.textContent = fmt(audio.currentTime);
   if (td)  td.textContent = audio.duration ? fmt(audio.duration) : '–:––';
+}
+
+/**
+ * Écrit titre/artiste/album dans le DOM — texte brut uniquement (jamais innerHTML, §13).
+ * Stateless : ne touche à aucun état privé de cinema.js (pas de timer, pas de _lastCinArt) —
+ * appelée par cinema.js au bon moment de la séquence de swap (Task 6).
+ */
+export function applyCinText(t, title, artist) {
+  const elT   = document.getElementById('cinema-title');
+  const elA   = document.getElementById('cinema-artist');
+  const elAlb = document.getElementById('cinema-album');
+  if (elT) elT.textContent = title;
+  if (elA) elA.textContent = artist;
+  if (elAlb) {
+    const parts = [t?.album, t?.year ? `(${t.year})` : null].filter(Boolean);
+    elAlb.textContent = parts.join(' ');
+    elAlb.style.display = parts.length ? '' : 'none';
+  }
+}
+
+/**
+ * Applique `art` à `img` avec un fondu d'entrée une fois le décodage terminé (Task 6) —
+ * évite le flash d'image vide/à-moitié-peinte. Le skeleton visible pendant le décodage
+ * est purement CSS (gradient --cin-rgb sur .cinema-art-wrap, cf. style.css) : rien à
+ * faire ici pour l'afficher, seulement à cacher l'image tant qu'elle n'est pas prête.
+ * En cas d'échec de décodage (fichier corrompu / format non supporté) : repli sur
+ * l'icône #cinema-art-em plutôt qu'une image cassée — jamais de rejet non géré.
+ */
+export function decodeArtImage(img, em, art) {
+  if (!img) return;
+  img.style.opacity = '0'; // masqué pendant le décodage — le skeleton reste visible dessous
+  img.src = art;
+  img.style.display = 'block';
+  img.decode().then(() => {
+    if (img.src === art) img.style.opacity = ''; // fondu d'entrée via la transition CSS de #cinema-art-img
+  }).catch(() => {
+    if (img.src !== art) return; // dépassé par une piste plus récente entre-temps
+    img.style.display = 'none';
+    if (em) em.style.display = 'flex';
+  });
+}
+
+/**
+ * Applique le contenu (texte + image) au moment du swap-in et démarre les classes CSS
+ * d'entrée. Ne gère PAS le minuteur de nettoyage (CIN_SWAP_IN_MS) — cinema.js reste seul
+ * propriétaire de _cinSwapInTimer (Task 6, réutilise le timer existant, pas de 2ème horloge).
+ * @returns {HTMLElement[]} txtEls — pour que l'appelant retire 'cin-txt-swap-in' plus tard.
+ */
+export function beginCinSwapIn(artWrap, img, em, t, title, artist, art) {
+  const txtEls = ['cinema-title', 'cinema-artist', 'cinema-album']
+    .map(id => document.getElementById(id)).filter(Boolean);
+  applyCinText(t, title, artist);
+  txtEls.forEach(el => el.classList.remove('cin-txt-swap-out'));
+  decodeArtImage(img, em, art);
+  if (artWrap) {
+    artWrap.classList.remove('cin-swap-out', 'cin-swap');
+    requestAnimationFrame(() => {
+      artWrap.classList.add('cin-swap');
+      txtEls.forEach(el => el.classList.add('cin-txt-swap-in'));
+    });
+  }
+  return txtEls;
+}
+
+/**
+ * Affiche le panneau "Suivant" pour `nt`, ou retombe sur le hint shuffle si `shuffle` et
+ * `nt` absent (Task 6, Step 5). Stateless — la priorité (explicite > radio > shuffle >
+ * séquentiel) est arbitrée par l'appelant (cinema.js/_updateNextTrack), qui fournit déjà
+ * la bonne piste `nt` (ou null).
+ */
+export function renderCinNextPanel(panel, hint, nt, shuffle) {
+  if (!nt) {
+    panel.classList.remove('cin-has-next');
+    hint?.classList.toggle('cin-has-next', !!shuffle);
+    return;
+  }
+  hint?.classList.remove('cin-has-next');
+  panel.classList.add('cin-has-next');
+  const titleEl  = document.getElementById('cinema-next-title');
+  const artistEl = document.getElementById('cinema-next-artist');
+  const imgEl    = document.getElementById('cinema-next-img');
+  if (titleEl)  titleEl.textContent  = nt.name || '–';
+  if (artistEl) artistEl.textContent = nt.artistFull || nt.artist || '–';
+  if (imgEl) {
+    if (nt.art) { imgEl.src = nt.art; imgEl.style.display = 'block'; }
+    else          imgEl.style.display = 'none';
+  }
 }

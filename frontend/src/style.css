@@ -4750,7 +4750,7 @@ html[data-mode="light"] .eq-slider::-moz-range-track { background: var(--bg6); }
   inset: 0;
   width: 100%; height: 100%;
   z-index: 0;
-  transition: opacity var(--dur-reveal) ease;
+  transition: opacity var(--dur-reveal) ease, filter var(--dur-cinema) ease;
   opacity: 0;
 }
 /* ── Modes de fond ─────────────────────────────────────────────────────────
@@ -4908,6 +4908,13 @@ html[data-mode="light"] .eq-slider::-moz-range-track { background: var(--bg6); }
 .cn-title  { font-size: var(--fs-md); font-weight: 600; color: rgba(255,255,255,.88); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .cn-artist { font-size: var(--fs-sm); color: rgba(255,255,255,.65); margin-top: var(--sp-1q); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
+/* ── Hint shuffle (Task 6) — même panneau/style que .cinema-next, contenu différent ── */
+.cn-body--hint {
+  color: rgba(255,255,255,.75);
+  font-size: var(--fs-sm); font-weight: 600;
+}
+.cn-body--hint svg { flex-shrink: 0; opacity: .75; }
+
 /* ── Boutons de coin (close + bg + fs) ────────────────────── */
 .cinema-corner-btn {
   position: absolute; z-index: 10;
@@ -4963,7 +4970,10 @@ html[data-mode="light"] .eq-slider::-moz-range-track { background: var(--bg6); }
   position: relative;
   width: min(46vh, 46vw, var(--art-cinema-max)); height: min(46vh, 46vw, var(--art-cinema-max));
   border-radius: var(--r-4xl); overflow: hidden;
-  background: var(--c-black); /* fond noir — évite artefact blanc aux coins lors du compositing GPU */
+  /* Skeleton/fallback (Task 6) : gradient dérivé de --cin-rgb au lieu d'un aplat noir —
+     visible pendant le décodage de la pochette (img masqué) et quand il n'y a aucune
+     pochette (#cinema-art-em). --cin-rgb propagé par renderCinColor() (cinema-render.js). */
+  background: radial-gradient(circle at 35% 32%, rgba(var(--cin-rgb, 60,60,72), .32), var(--c-black) 74%);
   box-shadow: none;
   transition: transform 500ms var(--ease-spring-soft), opacity 480ms ease;
   z-index: 2;
@@ -5071,7 +5081,22 @@ html[data-mode="light"] .eq-slider::-moz-range-track { background: var(--bg6); }
   #cinema-art-img[class*="cin-kb-"] { animation: none !important; transform: none !important; }
 }
 
-#cinema-art-img  { position: relative; z-index: 1; width: 100%; height: 100%; object-fit: contain; display: block; border-radius: inherit; outline: 1px solid var(--cin-hairline); outline-offset: -1px; }
+/* ── État pause (Task 6) — geler les animations idle pochette/fond ──────────
+   Basculée sur #cinema-overlay là où l'icône play/pause est déjà synchronisée
+   (_syncCinButtons, cinema.js). !important : mêmes specificités que les règles
+   d'animation idle ci-dessus (déjà en !important pour .beat) — pattern existant.
+   Les fonds canvas (viz/ambient RAF) gèlent déjà via isPlaying (cinema-bg.js) —
+   on ne touche pas à ce chemin ici, seulement les animations CSS déclaratives. */
+#cinema-overlay.is-paused .cinema-art-wrap,
+#cinema-overlay.is-paused #cinema-art-img,
+#cinema-overlay.is-paused .cinema-bg {
+  animation-play-state: paused !important;
+}
+#cinema-overlay.is-paused .cinema-bg {
+  filter: saturate(.7);
+}
+
+#cinema-art-img  { position: relative; z-index: 1; width: 100%; height: 100%; object-fit: contain; display: block; border-radius: inherit; outline: 1px solid var(--cin-hairline); outline-offset: -1px; transition: opacity var(--dur-cinema) ease; }
 #cinema-art-em   { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: var(--fs-hero); background: var(--c-1a); }
 
 /* ── Heart burst (double-click like) ─────────────────────── */
@@ -5119,6 +5144,18 @@ html[data-mode="light"] .eq-slider::-moz-range-track { background: var(--bg6); }
   margin-top: var(--sp-1p); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   font-weight: 500; letter-spacing: var(--ls-wide); text-transform: uppercase;
   text-shadow: 0 1px 6px rgba(0, 0, 0, 0.55);
+}
+
+/* ── Swap texte synchronisé avec la pochette (Task 6) ────────────────────
+   Mêmes durées/timers que la pochette (--dur-cin-swap-out/-in, pilotés par
+   _cinSwapOutTimer/_cinSwapInTimer dans cinema.js) — pas d'horloge séparée,
+   zéro dérive possible entre texte et pochette. */
+@keyframes cin-txt-swap-out { 0% { opacity: 1; transform: translateY(0); } 100% { opacity: 0; transform: translateY(-6px); } }
+@keyframes cin-txt-swap-in  { 0% { opacity: 0; transform: translateY(10px); } 100% { opacity: 1; transform: translateY(0); } }
+.cin-txt-swap-out { animation: cin-txt-swap-out var(--dur-cin-swap-out) ease-in forwards; }
+.cin-txt-swap-in  { animation: cin-txt-swap-in  var(--dur-cin-swap-in) var(--ease-spring-soft) forwards; }
+@media (prefers-reduced-motion: reduce) {
+  .cin-txt-swap-out, .cin-txt-swap-in { animation: none !important; }
 }
 
 /* ── Barre de progression cinéma ──────────────────────────── */

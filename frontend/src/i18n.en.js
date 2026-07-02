@@ -649,6 +649,7 @@ export default {
   t_sel_undo_hint:       'Ctrl+Z to undo',
   t_cin_fs_enter:        'Fullscreen [F]',
   t_cin_fs_exit:         'Exit fullscreen [F]',
+  cinema_shuffle_on:     'Shuffle on',
   stats_overview:        'Overview',
   stats_total_plays:     'Total plays',
   stats_listen_time:     'Listening time',

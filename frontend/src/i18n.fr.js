@@ -649,6 +649,7 @@ export default {
   t_sel_undo_hint:       'Ctrl+Z pour annuler',
   t_cin_fs_enter:        'Plein écran [F]',
   t_cin_fs_exit:         'Quitter le plein écran [F]',
+  cinema_shuffle_on:     'Lecture aléatoire',
   stats_overview:        'Vue d\'ensemble',
   stats_total_plays:     'Écoutes totales',
   stats_listen_time:     'Temps d\'écoute',
