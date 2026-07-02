@@ -1839,7 +1839,7 @@ section('cinema-seek.js -- seekPosFromPointer / formatSeekTime (pure logic)');
     return ratio * duration;
   }
   function formatSeekTime(s) {
-    if (s == null || !isFinite(s) || s < 0) return '–:––';
+    if (!s || !isFinite(s) || s < 0) return '–:––'; // !s : 0/null/undefined/NaN — parité exacte avec fmt() (utils.js)
     const total = Math.floor(s);
     const m  = Math.floor(total / 60);
     const ss = total % 60;
@@ -1857,8 +1857,9 @@ section('cinema-seek.js -- seekPosFromPointer / formatSeekTime (pure logic)');
   assert(seekPosFromPointer(200, 100, 200, undefined) === null, 'seekPosFromPointer: duration undefined -> null');
   assert(seekPosFromPointer(200, 100, 0, 180)         === null, 'seekPosFromPointer: rectWidth 0 -> null (division par zéro)');
 
-  // formatSeekTime
-  assert(formatSeekTime(0)         === '0:00',  'formatSeekTime: 0s -> 0:00');
+  // formatSeekTime — parité EXACTE avec fmt() (utils.js) : 0 est falsy → '–:––'
+  // (évite le flicker au début de piste : drag/Home écrit la même chose que le tick timeupdate)
+  assert(formatSeekTime(0)         === '–:––', 'formatSeekTime: 0s -> –:–– (parité fmt: !s)');
   assert(formatSeekTime(59)        === '0:59',  'formatSeekTime: 59s -> 0:59');
   assert(formatSeekTime(90)        === '1:30',  'formatSeekTime: 90s -> 1:30');
   assert(formatSeekTime(3661)      === '61:01', 'formatSeekTime: 3661s -> 61:01 (M:SS, cohérent avec cinema-tc/td)');

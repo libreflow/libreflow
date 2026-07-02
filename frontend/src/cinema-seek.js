@@ -7,6 +7,16 @@
 //   - clavier (pbar focalisée) -> Home/End/PageUp/PageDown (les ←/→ ±5s globaux
 //     restent gérés par _onCinKey dans cinema.js -- non dupliqués ici)
 //
+// Robustesse pointeur (fix post-review) :
+//   - Pendant un drag actif, move/up/cancel sont écoutés sur `window` (attachés au
+//     pointerdown, retirés à la fin du drag -- aucun listener permanent). Ainsi
+//     setPointerCapture devient une optimisation, pas une exigence de correction :
+//     si la capture échoue et que le pointeur sort de la pbar, le pointerup arrive
+//     quand même et isSeekDragging() ne reste jamais bloqué à true.
+//   - Chaque handler de drag compare e.pointerId à celui du pointerdown initial --
+//     un second doigt/stylet touchant la pbar ne peut ni commiter ni tronquer le
+//     drag d'un autre pointeur.
+//
 // Injection de dépendances via initCinemaSeek({ audio, pbar, fill, thumb, timeEl, tooltip })
 // -- aucun import de player.js/eq.js ici ; cinema.js fournit les refs (CLAUDE.md §6, zéro
 // import cross-feature). `audio` reste la seule ref lue/écrite (currentTime -- pas un
@@ -40,9 +50,9 @@ export function seekPosFromPointer(clientX, rectLeft, rectWidth, duration) {
   return ratio * duration;
 }
 
-/** Formatte des secondes en M:SS (identique à fmt() de utils.js -- "–:––" si invalide). */
+/** Formatte des secondes en M:SS -- parité EXACTE avec fmt() (utils.js) : 0 est falsy → '–:––'. */
 export function formatSeekTime(s) {
-  if (s == null || !isFinite(s) || s < 0) return '–:––';
+  if (!s || !isFinite(s) || s < 0) return '–:––'; // !s : 0/null/undefined/NaN — parité exacte avec fmt() (utils.js)
   const total = Math.floor(s);
   const m  = Math.floor(total / 60);
   const ss = total % 60;
@@ -100,44 +110,62 @@ function _seekFromEvent(e) {
   return seekPosFromPointer(e.clientX, r.left, r.width, audio?.duration);
 }
 
+// ── Listeners de drag — attachés à window au pointerdown, retirés à la fin ──
+// Sur window (et non la pbar) pour que le drag survive à une capture échouée :
+// le pointerup arrive toujours, isSeekDragging() ne peut pas rester bloqué.
+
+function _bindDragListeners() {
+  window.addEventListener('pointermove',   _onDragMove);
+  window.addEventListener('pointerup',     _onDragUp);
+  window.addEventListener('pointercancel', _onDragCancel);
+  window.addEventListener('blur',          _onWindowBlur);
+}
+
+function _unbindDragListeners() {
+  window.removeEventListener('pointermove',   _onDragMove);
+  window.removeEventListener('pointerup',     _onDragUp);
+  window.removeEventListener('pointercancel', _onDragCancel);
+  window.removeEventListener('blur',          _onWindowBlur);
+}
+
+function _stopDragging() {
+  const pbar = _deps?.pbar;
+  if (pbar && _pointerId != null) {
+    try { pbar.releasePointerCapture(_pointerId); } catch { /* capture jamais acquise ou déjà relâchée -- rien à libérer */ }
+  }
+  _unbindDragListeners();
+  _dragging  = false;
+  _pointerId = null;
+  _hideTooltip();
+}
+
 function _onPointerDown(e) {
+  if (_dragging) return; // un drag est déjà en cours (autre pointeur) -- ignorer
   const { pbar, audio } = _deps;
   const sec = _seekFromEvent(e);
   if (sec == null) return; // pas de durée valide -- rien à scrubber
   e.preventDefault();
   _dragging  = true;
   _pointerId = e.pointerId;
-  try { pbar.setPointerCapture(e.pointerId); } catch { /* capture indisponible -- drag reste fonctionnel */ }
+  // Capture = optimisation (routage direct des events) ; la correction du drag repose
+  // sur les listeners window ci-dessus, pas sur elle (CLAUDE.md §14 : signal documenté).
+  try { pbar.setPointerCapture(e.pointerId); }
+  catch (err) { console.warn('[cinema-seek] setPointerCapture failed', err); }
+  _bindDragListeners();
   _applyLive(sec, audio.duration);
   _showTooltipAt(e.clientX, sec);
 }
 
-function _onPointerMove(e) {
-  const { audio } = _deps;
+function _onDragMove(e) {
+  if (e.pointerId !== _pointerId) return; // second pointeur -- ne pas détourner le drag
   const sec = _seekFromEvent(e);
-  if (_dragging) {
-    if (sec == null) return;
-    _applyLive(sec, audio.duration);
-    _showTooltipAt(e.clientX, sec);
-    return;
-  }
-  // Survol sans drag -- tooltip seule, pas de mise à jour du fill/temps/aria.
-  if (sec == null) { _hideTooltip(); return; }
+  if (sec == null) return;
+  _applyLive(sec, _deps.audio.duration);
   _showTooltipAt(e.clientX, sec);
 }
 
-function _stopDragging() {
-  const pbar = _deps?.pbar;
-  if (pbar && _pointerId != null) {
-    try { pbar.releasePointerCapture(_pointerId); } catch { /* déjà relâchée */ }
-  }
-  _dragging  = false;
-  _pointerId = null;
-  _hideTooltip();
-}
-
-function _onPointerUp(e) {
-  if (!_dragging) return;
+function _onDragUp(e) {
+  if (e.pointerId !== _pointerId) return; // second pointeur -- ne pas commiter/tronquer
   const sec = _seekFromEvent(e);
   if (sec != null) _commit(sec); // commit au relâchement ET au clic simple (pointerdown+up sans move)
   _stopDragging();
@@ -145,12 +173,23 @@ function _onPointerUp(e) {
 
 /** pointercancel (geste OS interrompu) -- pas de commit, juste sortir du drag proprement.
  *  Le prochain tick timeupdate (isSeekDragging() redevenu false) resynchronise le fill. */
-function _onPointerCancel() { _stopDragging(); }
-
-function _onPointerLeave() { if (!_dragging) _hideTooltip(); }
+function _onDragCancel(e) {
+  if (e.pointerId !== _pointerId) return;
+  _stopDragging();
+}
 
 /** Fenêtre perd le focus pendant un drag (glisser hors WebView) -- même traitement que cancel. */
-function _onWindowBlur() { if (_dragging) _stopDragging(); }
+function _onWindowBlur() { _stopDragging(); }
+
+/** Survol sans drag -- tooltip seule (le drag est géré par les listeners window). */
+function _onHoverMove(e) {
+  if (_dragging) return;
+  const sec = _seekFromEvent(e);
+  if (sec == null) { _hideTooltip(); return; }
+  _showTooltipAt(e.clientX, sec);
+}
+
+function _onPointerLeave() { if (!_dragging) _hideTooltip(); }
 
 function _onKeyDown(e) {
   const { audio } = _deps;
@@ -169,31 +208,25 @@ function _onKeyDown(e) {
 }
 
 /** Câblage des listeners -- appelé une fois au chargement (remplace l'ancien handler
- *  DOMContentLoaded basique). Idempotent : removeEventListener avant chaque add. */
+ *  DOMContentLoaded basique). Idempotent : removeEventListener avant chaque add.
+ *  Seuls pointerdown/hover/leave/keydown vivent en permanence sur la pbar ; les
+ *  listeners de drag (move/up/cancel/blur) sont scoped à chaque drag sur window. */
 export function initCinemaSeek(deps) {
   _deps = deps;
   const { pbar } = deps;
   if (!pbar) return;
-  pbar.removeEventListener('pointerdown',   _onPointerDown);
-  pbar.addEventListener('pointerdown',      _onPointerDown);
-  pbar.removeEventListener('pointermove',   _onPointerMove);
-  pbar.addEventListener('pointermove',      _onPointerMove);
-  pbar.removeEventListener('pointerup',     _onPointerUp);
-  pbar.addEventListener('pointerup',        _onPointerUp);
-  pbar.removeEventListener('pointercancel', _onPointerCancel);
-  pbar.addEventListener('pointercancel',    _onPointerCancel);
-  pbar.removeEventListener('pointerleave',  _onPointerLeave);
-  pbar.addEventListener('pointerleave',     _onPointerLeave);
-  pbar.removeEventListener('keydown',       _onKeyDown);
-  pbar.addEventListener('keydown',          _onKeyDown);
-  window.removeEventListener('blur',        _onWindowBlur);
-  window.addEventListener('blur',           _onWindowBlur);
+  pbar.removeEventListener('pointerdown',  _onPointerDown);
+  pbar.addEventListener('pointerdown',     _onPointerDown);
+  pbar.removeEventListener('pointermove',  _onHoverMove);
+  pbar.addEventListener('pointermove',     _onHoverMove);
+  pbar.removeEventListener('pointerleave', _onPointerLeave);
+  pbar.addEventListener('pointerleave',    _onPointerLeave);
+  pbar.removeEventListener('keydown',      _onKeyDown);
+  pbar.addEventListener('keydown',         _onKeyDown);
 }
 
-/** closeCinema() -- coupe un drag en cours + masque la tooltip (évite un fantôme si le
- *  mode cinéma se ferme pendant un scrub). */
+/** closeCinema() -- coupe un drag en cours (listeners window compris) + masque la
+ *  tooltip (évite un fantôme si le mode cinéma se ferme pendant un scrub). */
 export function resetCinemaSeek() {
-  _dragging  = false;
-  _pointerId = null;
-  _hideTooltip();
+  _stopDragging();
 }
