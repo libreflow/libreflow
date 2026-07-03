@@ -252,7 +252,7 @@ function _drawBgFrame(isPlaying) {
   } else if (cinemaBg === 'starfield') {
     drawStarfieldFrame(_cinBgCtx, _winW, _winH, _cinArtRGBCur, _ambientT);
   } else {
-    renderAmbientFrame(_ambientT, _cinBgCtx.canvas, _cinBgCtx, cinemaBg, _cinArtRGB, _ambientColors);
+    renderAmbientFrame(_ambientT, _cinBgCtx.canvas, _cinBgCtx, cinemaBg, _cinArtRGB, _ambientColors, _winW, _winH);
   }
 }
 

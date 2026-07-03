@@ -92,7 +92,7 @@ function _stopNpAnim() {
   if (_npAnimRaf) { cancelAnimationFrame(_npAnimRaf); _npAnimRaf = null; }
 }
 
-function _startNpAnim(canvas, ctx) {
+function _startNpAnim(canvas, ctx, W, H) {
   const myGen = _npAnimGen;
   let last = performance.now();
   function loop(now) {
@@ -109,7 +109,8 @@ function _startNpAnim(canvas, ctx) {
     }
     _npAnimT += now - last;
     last = now;
-    renderAmbientFrame(_npAnimT, canvas, ctx, _npBgMode, _npArtRGB, _npColors);
+    // Task 13 : W/H cachés à l'ouverture (plus de getter DOM par frame dans le renderer)
+    renderAmbientFrame(_npAnimT, canvas, ctx, _npBgMode, _npArtRGB, _npColors, W, H);
     _npAnimRaf = requestAnimationFrame(loop);
   }
   _npAnimRaf = requestAnimationFrame(loop);
@@ -131,14 +132,16 @@ function _applyNpBg() {
   const canvas = document.getElementById('vnp-canvas');
   if (!canvas) return;
   const dpr = window.devicePixelRatio || 1;
-  canvas.width  = Math.round((window.innerWidth  || 1280) * dpr);
-  canvas.height = Math.round((window.innerHeight || 800)  * dpr);
+  const W = window.innerWidth  || 1280;
+  const H = window.innerHeight || 800;
+  canvas.width  = Math.round(W * dpr);
+  canvas.height = Math.round(H * dpr);
   const ctx = canvas.getContext('2d');
   if (!ctx) return;
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
   _npFrameCnt = 0;
-  _startNpAnim(canvas, ctx);
+  _startNpAnim(canvas, ctx, W, H);
 }
 
 export function cycleNpBg() {

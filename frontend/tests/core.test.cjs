@@ -3146,6 +3146,43 @@ section('components/lf-toast-stack.logic.js -- import-smoke');
     assert(wavesLines < 200, `cinema-waves.js < 200 lignes (actual: ${wavesLines})`);
   }());
 
+  // =============================================================================
+  // Task 13 — Ambient/AMOLED : zéro allocation par frame (§10, audit findings #7/#8)
+  // =============================================================================
+  section('Task 13 -- ambient/amoled zéro allocation par frame');
+
+  (function () {
+    const fs   = require('fs');
+    const path = require('path');
+    const root = path.join(__dirname, '../..');
+    const read = f => fs.readFileSync(path.join(root, f), 'utf8');
+    const AMB = read('frontend/src/ambientRenderer.js');
+
+    // (a) plus de getter DOM par frame — W/H sont des paramètres
+    assert(!/window\.innerWidth|window\.innerHeight/.test(AMB),
+      'ambientRenderer.js ne lit plus window.innerWidth/innerHeight (W/H en paramètres)');
+    assert(/export function renderAmbientFrame\(t, canvas, ctx, mode, colorStr, ambientColors, W, H\)/.test(AMB),
+      'renderAmbientFrame: signature étendue (…, W, H)');
+
+    // (b) gradients cachés derrière une clé d'invalidation ; le drift/respiration
+    // passe par le transform (translate/scale) — AUCUN createRadialGradient dans le
+    // corps par-frame de renderAmbientFrame (tous dans des helpers gated).
+    const frameBody = /export function renderAmbientFrame[\s\S]*?\n\}/.exec(AMB);
+    assert(!!frameBody, 'renderAmbientFrame trouvé');
+    assert(frameBody && !/createRadialGradient/.test(frameBody[0]),
+      'renderAmbientFrame: zéro createRadialGradient dans le corps par-frame (§10)');
+    assert(/ctx\.translate\(/.test(AMB) && /ctx\.scale\(/.test(AMB),
+      'ambientRenderer.js: drift/respiration via ctx.translate/scale (gradients construits à l\'origine)');
+
+    // (c) les deux appelants passent leurs dimensions cachées
+    const BG2 = read('frontend/src/cinema-bg.js');
+    assert(/renderAmbientFrame\([^)]*_winW,\s*_winH\)/.test(BG2),
+      'cinema-bg.js passe _winW/_winH à renderAmbientFrame');
+    const NP = read('frontend/src/nowplaying.js');
+    assert(/renderAmbientFrame\([^)]*,\s*W,\s*H\)/.test(NP),
+      'nowplaying.js passe W/H à renderAmbientFrame');
+  }());
+
   // -- Résultat -----------------------------------------------------------
   console.log('\n═══════════════════════════════════════════════════════════');
   console.log(`  Total : ${_ok + _ko}   OK: ${_ok}   KO: ${_ko}`);
