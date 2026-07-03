@@ -18,6 +18,7 @@ import { openDB, tx, dget, dall, dput, ddel, DB, getStorageEstimate } from './db
 import { readTags, extractColor, GENRE_ARTISTS, GENRE_KEYWORDS, guessGenre } from './tags.js';
 import { LANGS, i18n, initLang, getLang, applyLang, setLang } from './i18n.js';
 import { cinemaOpen, cinemaBg, initCinemaBg, toggleCinema, openCinema, closeCinema, updateCinema, updateCinemaProgress, setCinemaBg, cycleCinemaBg, applyCinemaBg, syncCinemaBgSettings, updateCinemaBgBtn, toggleCinemaFullscreen, CINEMA_BG_MODES, CINEMA_BG_LABELS, updateCinArtColor, initCinemaVizSuspend } from './cinema.js';
+import { syncCinVolumeUI } from './cinema-render.js'; // Task 7 fix : chemin volume mini-player → état mute cinéma cohérent
 import { queueOpen, toggleQueue, closeQueue, renderQueue, playQueueItem, clearQueueOverride, addToQueueNext, addToQueueEnd, refreshQueueBadge, getQueueState, restoreQueueState } from './queue.js';
 import { exportM3U, importM3U } from './m3u.js';
 import { VIRT } from './virt.js';
@@ -795,9 +796,13 @@ waitForTauri(() => {
     else if (cmd === 'toggle-shuffle') toggleShuffle();
     else if (cmd === 'toggle-repeat')  toggleRepeat();
     else if (cmd === 'go-home')        goHome();
-    else if (cmd === 'volume-down') { const _c=masterGainNode?masterGainNode.gain.value:parseFloat(document.getElementById('vol')?.value??'1'); const v=Math.max(0,_c-0.05); setMasterGain(v); const vel=document.getElementById('vol'); if(vel){vel.value=v; updateVolSlider(vel); setAriaValueText(vel, _v => `${Math.round(_v * 100)} pour cent`, v);} saveCfg(); _allPlayerUI(); }
-    else if (cmd === 'volume-up')   { const _c=masterGainNode?masterGainNode.gain.value:parseFloat(document.getElementById('vol')?.value??'1'); const v=Math.min(1,_c+0.05); setMasterGain(v); const vel=document.getElementById('vol'); if(vel){vel.value=v; updateVolSlider(vel); setAriaValueText(vel, _v => `${Math.round(_v * 100)} pour cent`, v);} saveCfg(); _allPlayerUI(); }
-    else if (cmd === 'volume-set' && data != null) { const v=Math.max(0,Math.min(1,data)); setMasterGain(v); const vel=document.getElementById('vol'); if(vel){vel.value=v; updateVolSlider(vel); setAriaValueText(vel, _v => `${Math.round(_v * 100)} pour cent`, v);} saveCfg(); _allPlayerUI(); } // QW-10
+    // Task 7 fix : `if(cinemaOpen) syncCinVolumeUI(v)` — _allPlayerUI() ne touche que le
+    // mini-player/overlay, jamais le cinéma ; sans ce sync, un changement de volume depuis
+    // la fenêtre mini-player laisserait le bouton mute cinéma (aria-pressed/icône X) périmé.
+    // syncCinVolumeUI dérive l'état muet du volume réel (v==0 ⟺ muet) — cohérent partout.
+    else if (cmd === 'volume-down') { const _c=masterGainNode?masterGainNode.gain.value:parseFloat(document.getElementById('vol')?.value??'1'); const v=Math.max(0,_c-0.05); setMasterGain(v); const vel=document.getElementById('vol'); if(vel){vel.value=v; updateVolSlider(vel); setAriaValueText(vel, _v => `${Math.round(_v * 100)} pour cent`, v);} saveCfg(); _allPlayerUI(); if(cinemaOpen) syncCinVolumeUI(v); }
+    else if (cmd === 'volume-up')   { const _c=masterGainNode?masterGainNode.gain.value:parseFloat(document.getElementById('vol')?.value??'1'); const v=Math.min(1,_c+0.05); setMasterGain(v); const vel=document.getElementById('vol'); if(vel){vel.value=v; updateVolSlider(vel); setAriaValueText(vel, _v => `${Math.round(_v * 100)} pour cent`, v);} saveCfg(); _allPlayerUI(); if(cinemaOpen) syncCinVolumeUI(v); }
+    else if (cmd === 'volume-set' && data != null) { const v=Math.max(0,Math.min(1,data)); setMasterGain(v); const vel=document.getElementById('vol'); if(vel){vel.value=v; updateVolSlider(vel); setAriaValueText(vel, _v => `${Math.round(_v * 100)} pour cent`, v);} saveCfg(); _allPlayerUI(); if(cinemaOpen) syncCinVolumeUI(v); } // QW-10
     else if (cmd === 'seek' && data != null && audio.duration) {
       audio.currentTime = data * audio.duration;
       resetMiniProgressThrottle(); // le prochain timeupdate passe immédiatement

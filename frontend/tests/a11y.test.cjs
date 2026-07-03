@@ -460,6 +460,20 @@ async function run() {
       `du texte utilise la --cin-rgb brute (non garantie 4.5:1) : ${colorRules.slice(0, 2).join(' | ')}`);
   });
 
+  // --- Task 7 fix (review) : le chemin volume mini-player rafraîchit l'état mute cinéma ---
+  // _allPlayerUI() ne touche que mini-player/overlay ; chaque handler volume-* du canal
+  // mini-cmd doit donc appeler syncCinVolumeUI (état muet dérivé du volume réel) — sinon
+  // aria-pressed/icône X du bouton mute cinéma restent périmés (SC 4.1.2 state desync).
+  await t('mini-cmd volume handlers refresh cinema mute state via syncCinVolumeUI (Task 7)', () => {
+    const aj = readRepoFile('frontend/src/app.js');
+    for (const cmd of ['volume-down', 'volume-up', 'volume-set']) {
+      const line = aj.split('\n').find(l => l.includes(`cmd === '${cmd}'`));
+      assert.ok(line, `handler mini-cmd '${cmd}' introuvable dans app.js`);
+      assert.ok(/syncCinVolumeUI\(/.test(line),
+        `le handler mini-cmd '${cmd}' doit appeler syncCinVolumeUI (cinéma ouvert) — _allPlayerUI() n'atteint pas le cinéma`);
+    }
+  });
+
   if (fail) { console.log(`\nA11Y FAIL: ${fail}/${pass + fail}`); process.exit(1); }
   console.log(`\nA11Y OK: ${pass}/${pass}`);
 }
