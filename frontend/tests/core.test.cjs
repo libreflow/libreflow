@@ -2133,7 +2133,9 @@ section('components/lf-toast-stack.logic.js -- import-smoke');
     assert(cinLines < 800, `cinema.js < 800 lignes (actual: ${cinLines})`);
     assert(vizLines < 500, `cinema-viz.js < 500 lignes (actual: ${vizLines})`);
     // Task 3 : cinema-bg.js gagne snapArtColor()/stepArtColorLerp() (état couleur privé) — cap 400→470.
-    assert(bgLines  < 470, `cinema-bg.js < 470 lignes (actual: ${bgLines})`);
+    // Task 8 : cross-fade de bascule de mode (MODE_CROSSFADE_MS, _snapshotModeCanvas) — cap 470→480
+    // (+25 lignes réelles : constante, helper snapshot, câblage applyCinemaBg, commentaires).
+    assert(bgLines  < 480, `cinema-bg.js < 480 lignes (actual: ${bgLines})`);
     assert(beatLines   < 200, `cinema-beat.js < 200 lignes (actual: ${beatLines})`);
     assert(renderLines < 400, `cinema-render.js < 400 lignes (actual: ${renderLines})`);
     // Task 5 : cinema-seek.js — scrubbing complet de la pbar (drag/hover/clavier), <300 lignes.
@@ -2345,6 +2347,73 @@ section('components/lf-toast-stack.logic.js -- import-smoke');
       'cinema-bg.js exporte updateCachedWinSize() (mise à jour par le handler resize de cinema.js)');
     assert(/updateCachedWinSize\(\)/.test(read('frontend/src/cinema.js')),
       'cinema.js appelle updateCachedWinSize() dans son handler resize');
+  }
+
+  // =============================================================================
+  // cinema Task 8 — cross-fade entre modes (touche B), cap amoled 30fps, responsive.
+  // UX audit : bascule de fond = cut sec ; amoled tourne à 60fps sans raison ;
+  // insets de coin en px fixes ; un seul breakpoint 600px ; chevauchements possibles
+  // sur petites hauteurs (horloge/next qui se superposent à la pill de contrôles).
+  // =============================================================================
+  {
+    const fs = require('fs'), path = require('path');
+    const root = path.join(__dirname, '../..');
+    const read = f => fs.readFileSync(path.join(root, f), 'utf8');
+
+    section('cinema Task 8 -- cross-fade modes + cap amoled + responsive');
+
+    const bgSrc = read('frontend/src/cinema-bg.js');
+    const dsSrc = read('frontend/src/design-system.css');
+    const ssSrc = read('frontend/src/style.css');
+
+    // (a) constante MODE_CROSSFADE_MS (house pattern comme AMBIENT_CROSSFADE_MS) +
+    // applyCinemaBg() déclenche le mécanisme de cross-fade à la bascule de mode.
+    assert(/MODE_CROSSFADE_MS\s*=\s*600/.test(bgSrc),
+      'cinema-bg.js déclare la constante MODE_CROSSFADE_MS = 600');
+    const applyBody = /export function applyCinemaBg\(\)[\s\S]*?\n\}\n/.exec(bgSrc)?.[0] || '';
+    assert(applyBody.length > 0, 'cinema-bg.js : applyCinemaBg() trouvée');
+    assert(/MODE_CROSSFADE_MS/.test(applyBody),
+      'applyCinemaBg() déclenche le cross-fade de bascule de mode (réutilise MODE_CROSSFADE_MS)');
+    assert(/prefersReducedMotion\(\)/.test(bgSrc) &&
+      new RegExp('prefersReducedMotion' ).test(bgSrc),
+      'cinema-bg.js : bascule de mode sèche sous reduced-motion (pas de snapshot cross-fade)');
+
+    // (b) amoled soumis au même cap 30fps que les autres modes — l'exemption a disparu
+    // de la condition de frame-skip de la boucle rAF.
+    const loopBody = /function loop\(now\)[\s\S]*?\n  \}\n/.exec(bgSrc)?.[0] || '';
+    assert(loopBody.length > 0, 'cinema-bg.js : boucle RAF loop() trouvée');
+    assert(/_frameCount\+\+ % 2/.test(loopBody),
+      'loop() applique le frame-skip du cap 30fps');
+    assert(!/cinemaBg\s*!==\s*['"]amoled['"]\s*&&\s*_frameCount/.test(loopBody),
+      'amoled ne bénéficie plus d\'une exemption au cap 30fps (Task 8, ex cinema-bg.js:190-193)');
+
+    // (c) design-system.css : tokens de coin/horloge cinéma en clamp() (plus de px fixes)
+    for (const tok of ['--cinema-corner-top', '--cinema-corner-x', '--cinema-clock-inset']) {
+      assert(new RegExp(`${tok}\\s*:\\s*clamp\\(`).test(dsSrc),
+        `design-system.css : ${tok} utilise clamp()`);
+    }
+
+    // (d) breakpoint ≥1600px : --art-cinema-max agrandi (design-system.css, override sanctionné)
+    assert(/@media\s*\(min-width:\s*1600px\)[\s\S]*?--art-cinema-max:\s*520px/.test(dsSrc),
+      'design-system.css : @media (min-width:1600px) porte --art-cinema-max: 520px');
+
+    // (e) style.css : anti-chevauchement sur petites hauteurs (horloge + next masqués)
+    const shortHeightBlock = /@media\s*\(max-height:\s*640px\)\s*\{[\s\S]*?\n\}/.exec(ssSrc)?.[0] || '';
+    assert(shortHeightBlock.length > 0, 'style.css : @media (max-height: 640px) trouvé');
+    assert(/#cinema-clock/.test(shortHeightBlock) && /#cinema-next/.test(shortHeightBlock),
+      'style.css : @media (max-height: 640px) masque #cinema-clock et #cinema-next');
+
+    // (f) breakpoint intermédiaire 601-1023px : pill compacte, volume conservé, vol-vis masqué
+    const midBlock = /@media\s*\(min-width:\s*601px\)\s*and\s*\(max-width:\s*1023px\)\s*\{[\s\S]*?\n\}/.exec(ssSrc)?.[0] || '';
+    assert(midBlock.length > 0, 'style.css : @media (min-width:601px) and (max-width:1023px) trouvé');
+    assert(!/\.cinema-vol-wrap\s*\{[^}]*display:\s*none/.test(midBlock),
+      'breakpoint intermédiaire : le volume reste visible (.cinema-vol-wrap non masqué)');
+    assert(/#cinema-vol-vis\s*\{[^}]*display:\s*none/.test(midBlock),
+      'breakpoint intermédiaire : #cinema-vol-vis masqué (visualiseur ambient dans le volume)');
+
+    // (g) le breakpoint 600px existant n'est pas cassé par le nouveau breakpoint intermédiaire
+    assert(/@media\s*\(max-width:\s*600px\)/.test(ssSrc),
+      'style.css : le breakpoint @media (max-width: 600px) existant est toujours présent');
   }
 
   // =============================================================================

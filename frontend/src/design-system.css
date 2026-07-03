@@ -656,10 +656,11 @@ html[data-mode="light"] {
   --pl-art-col:         72px;   /* colonne artwork dans grille playlist modale */
   --tr-r-w:            124px;   /* section droite rangée track (dur + controls) */
   --cinema-vol-w:       80px;   /* curseur volume cinéma */
-  --cinema-corner-top:  20px;   /* inset top boutons coin cinéma */
-  --cinema-corner-x:    24px;   /* inset horizontal principal coin cinéma */
+  /* Task 8 : insets responsives (clamp) — s'adaptent au viewport au lieu de px fixes. */
+  --cinema-corner-top:  clamp(16px, 2vh, 32px);   /* inset top boutons coin cinéma */
+  --cinema-corner-x:    clamp(20px, 2.5vw, 48px); /* inset horizontal principal coin cinéma */
   --cinema-fs-right:    72px;   /* inset right bouton fullscreen cinéma */
-  --cinema-clock-inset: 52px;   /* position horloge idle + panneau next */
+  --cinema-clock-inset: clamp(40px, 5vh, 80px);   /* position horloge idle + panneau next */
   --sleep-menu-right:   80px;   /* offset droit du menu sleep */
 
   /* Focus — accessibilité clavier */
@@ -1029,7 +1030,7 @@ html[data-mode="light"] {
   --sp-3q:              var(--space-3);   /* 13 → 12 (harmonisation) */
 
   /* Dimensions cinéma & artwork */
-  --art-cinema-max:     420px;  /* taille max pochette cinéma (min(46vh,46vw,N)) */
+  --art-cinema-max:     420px;  /* taille max pochette cinéma (min(46vh,46vw,N)) — 520px ≥1600px, cf. @media plus bas */
 
   /* Grilles stats & heatmap */
   --artist-month-col-min: 90px; /* min colonne nom artiste (stats month) */
@@ -1108,6 +1109,12 @@ html[data-mode="light"] {
 [data-theme="orange"] { --g:#f97316; --g-rgb:249,115,22;  --gd:rgba(249,115,22,.14);  --gg:rgba(249,115,22,.28); }
 [data-theme="pink"]   { --g:#ec4899; --g-rgb:236,72,153;  --gd:rgba(236,72,153,.14);  --gg:rgba(236,72,153,.28); }
 [data-theme="cyan"]   { --g:#22d3ee; --g-rgb:34,211,238;  --gd:rgba(34,211,238,.14);  --gg:rgba(34,211,238,.28); }
+
+/* Task 8 — responsive : grands écrans ≥1600px, pochette cinéma agrandie.
+   Override sanctionné (token-source.test.cjs) : petit bloc :root{} dans un @media. */
+@media (min-width: 1600px) {
+  :root { --art-cinema-max: 520px; }
+}
 
 /* Respect des préférences utilisateur — anti-motion */
 @media (prefers-reduced-motion: reduce) {

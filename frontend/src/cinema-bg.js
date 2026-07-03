@@ -41,7 +41,8 @@ const CINEMA_BG_ICONS = {
 };
 
 // ── Constantes d'animation ───────────────────────────────────
-const AMBIENT_CROSSFADE_MS = 1400;  // durée du cross-fade ambient
+const AMBIENT_CROSSFADE_MS = 1400;  // durée du cross-fade ambient (recolorisation piste)
+const MODE_CROSSFADE_MS    = 600;   // durée du cross-fade à la bascule de mode (touche B)
 
 // ── Couleur dominante de la pochette ────────────────────────
 // (même principe que _vizRGB dans viz.js — évite la lecture async artColor dans le loop rAF)
@@ -169,6 +170,9 @@ export function applyCinemaBg() {
   overlay.classList.add('bg-' + cinemaBg);
   updateCinemaBgBtn();
   const cinBg = document.getElementById('cinema-bg');
+  // Task 8 : snapshot de l'ancien mode AVANT tout switch — sert de base au cross-fade
+  // MODE_CROSSFADE_MS ci-dessous. Sous reduced-motion : pas de snapshot → bascule sèche (SC 2.3.3).
+  const modeSnapshot = _snapshotModeCanvas(cinBg);
   _stopAmbientAnim(); // arrêter l'animation breathing avant tout switch de mode
   _ambientColors = null;
   // Vider le canvas immédiatement à chaque switch (évite interférence entre modes)
@@ -178,8 +182,25 @@ export function applyCinemaBg() {
   }
   // ambient/amoled : gradient/halo. waves/starfield : rendu canvas propre avec RAF.
   if (cinemaBg === 'ambient' || cinemaBg === 'amoled' || cinemaBg === 'waves' || cinemaBg === 'starfield') _updateAmbientGradient();
+  // Cross-fade de bascule de mode : fondu depuis le snapshot vers le nouveau mode (MODE_CROSSFADE_MS).
+  // Appelé APRÈS _updateAmbientGradient() : celui-ci peut ré-appeler _stopAmbientAnim() en interne
+  // (qui remet _ambientCross à null) — poser le cross ici garantit qu'il survit au switch.
+  if (modeSnapshot) _ambientCross = { snapshot: modeSnapshot, start: performance.now(), dur: MODE_CROSSFADE_MS };
   // Bug #9 fix : rafraîchir l'UI cinéma après chaque switch de mode (pochette flou stale sinon).
   if (_getCinemaOpen()) _doUpdateCinema();
+}
+
+// Snapshot du canvas #cinema-bg courant (avant switch de mode) pour le cross-fade
+// MODE_CROSSFADE_MS. Retourne null sous reduced-motion (bascule sèche) ou si le canvas
+// n'a encore rien dessiné (premier applyCinemaBg — rien à faire fondre).
+function _snapshotModeCanvas(cinBg) {
+  if (prefersReducedMotion() || !cinBg?.getContext || !cinBg.width || !cinBg.height) return null;
+  const snap = document.createElement('canvas');
+  snap.width = cinBg.width; snap.height = cinBg.height;
+  const snapCtx = snap.getContext('2d');
+  if (!snapCtx) return null;
+  snapCtx.drawImage(cinBg, 0, 0);
+  return snap;
 }
 
 export function updateCinemaBgBtn() {
@@ -260,8 +281,10 @@ function _startAmbientAnim() {
       _ambientAnimRaf = null;
       return;
     }
-    // 30fps cap pour ambient, waves et starfield — skip odd frames to halve GPU load
-    if (cinemaBg !== 'amoled' && _frameCount++ % 2 !== 0) {
+    // 30fps cap pour tous les modes (ambient/amoled/waves/starfield) — skip odd frames
+    // to halve GPU load. Task 8 : amoled n'a plus d'exemption (halo très lent → 30fps
+    // reste visuellement fluide, aucune raison de tourner à 60fps).
+    if (_frameCount++ % 2 !== 0) {
       _ambientAnimRaf = requestAnimationFrame(loop);
       return;
     }
@@ -279,8 +302,10 @@ function _startAmbientAnim() {
     }
     // P3 fix — _winW/_winH lus depuis le cache, plus de getter DOM par frame
     _drawBgFrame(_getIsPlaying());
-    // ── Cross-fade overlay (ambient/amoled only) — draw old snapshot fading out ──
-    if (cinemaBg !== 'waves' && cinemaBg !== 'starfield' && _ambientCross) {
+    // ── Cross-fade overlay — draw old snapshot fading out over the new mode's frame.
+    // Task 8 : plus de restriction par mode — le cross-fade de bascule (MODE_CROSSFADE_MS)
+    // doit fonctionner vers/depuis waves et starfield, pas seulement ambient/amoled.
+    if (_ambientCross) {
       const { snapshot, start, dur } = _ambientCross;
       const p    = Math.min(1, (now - start) / dur);
       // easeInOutQuad : transition symétrique, ralentit aux extrêmes (moins de "boue" chromatique)

@@ -5468,6 +5468,25 @@ html[data-mode="light"] #cinema-overlay::after {
   .cinema-next     { display: none; }
 }
 
+/* ── Cinema responsive — breakpoint intermédiaire (tablette/petit desktop) ──
+   Pill un cran plus compacte qu'en plein format, mais le volume reste utilisable
+   (contrairement à <600px) : seul le visualiseur ambient intégré à la piste de
+   volume (#cinema-vol-vis) est masqué pour désencombrer la pill. */
+@media (min-width: 601px) and (max-width: 1023px) {
+  .cinema-controls { gap: var(--sp-1h); padding: var(--sp-1h) var(--sp-3); }
+  #cinema-vol-vis  { display: none; }
+}
+
+/* ── Cinema responsive — anti-chevauchement sur petites hauteurs ──
+   Sous 640px de hauteur, l'horloge idle (bottom-left) et le panneau "suivant"
+   (bottom-right) peuvent chevaucher la pill de contrôles (bottom-center) ou le
+   texte titre/artiste. Les deux sont purement informatifs → masqués sans perte
+   fonctionnelle (la pill de contrôles reste toujours visible/accessible). */
+@media (max-height: 640px) {
+  #cinema-clock,
+  #cinema-next { display: none; }
+}
+
 /* ═══ PANNEAUX OVERLAY (raccourcis + doublons) ═══════════════ */
 #shortcuts-panel, #dupes-panel {
   position: fixed; inset: 0; z-index: calc(var(--z-dropdown) + 100);
