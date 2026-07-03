@@ -1331,10 +1331,12 @@
     <div id="cinema-clock-date" class="ck-date"></div>
   </div>
 
-  <!-- Piste suivante (bottom-right, avec les contrôles) -->
-  <!-- Pas d'attribut hidden : la visibilité est gérée via .cin-has-next + opacity CSS
-       (display:none casse les transitions opacity) -->
-  <div id="cinema-next" class="cinema-next">
+  <!-- Piste suivante (bottom-right, avec les contrôles) — Task 9 : bouton dépliant le
+       panneau file d'attente (#cinema-queue-panel). Pas d'attribut hidden sur ce
+       bouton : la visibilité est gérée via .cin-has-next + opacity CSS (display:none
+       casse les transitions opacity) ; renderCinNextPanel() bascule aussi .disabled
+       pour éviter un focus fantôme quand aucune piste suivante n'est prévisible. -->
+  <button type="button" id="cinema-next" class="cinema-next" aria-expanded="false" aria-controls="cinema-queue-panel" aria-label="Afficher la file d'attente" data-i18n-aria="aria_cinema_queue_toggle">
     <div class="cn-label">Suivant</div>
     <div class="cn-body">
       <img id="cinema-next-img" class="cn-img" alt="">
@@ -1343,6 +1345,14 @@
         <div id="cinema-next-artist" class="cn-artist">–</div>
       </div>
     </div>
+  </button>
+
+  <!-- Panneau file d'attente dépliable (Task 9) — ancré au-dessus de #cinema-next.
+       Rangées injectées par cinema-queue.js (textContent uniquement, §13). -->
+  <div id="cinema-queue-panel" class="cinema-queue-panel" hidden>
+    <div class="cqp-header" data-i18n="cinema_queue_title">À suivre</div>
+    <div id="cinema-queue-list" class="cqp-list"></div>
+    <div class="cqp-empty" data-i18n="cinema_queue_empty" hidden>Aucune piste prévue</div>
   </div>
 
   <!-- Hint shuffle (Task 6) — remplace le panneau ci-dessus quand aucune piste suivante

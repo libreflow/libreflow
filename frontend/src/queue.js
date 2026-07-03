@@ -11,6 +11,7 @@
 //   removeFromQueue, clearExplicitQueue
 //   addToQueueNext, addToQueueEnd, playQueueItem
 //   initQueueDrag (Task 4)
+//   peekFirstExplicit, consumeFirstExplicit, peekExplicitQueue (Task 9)
 
 import { esc, extEmoji, fmtd, moveByOne }  from './utils.js';
 import { CFG }                            from './cfg.js';
@@ -691,6 +692,17 @@ export function addToQueueEnd(trackId) {
 export function peekFirstExplicit() {
   const ex = _buildExplicitQueue(); // filtre déjà les IDs invalides
   return ex.length ? ex[0] : null;
+}
+
+/**
+ * Retourne la file explicite ENTIÈRE (Track[], IDs déjà validés via _trackIdxMap) —
+ * lecture seule, ne consomme rien. Miroir de peekFirstExplicit() mais pour la liste
+ * complète : utilisé par le panneau file d'attente du mode cinéma (cinema-render.js/
+ * cinema-queue.js, Task 9) qui a besoin de plus d'un item pour construire son aperçu.
+ * @returns {object[]}
+ */
+export function peekExplicitQueue() {
+  return _buildExplicitQueue();
 }
 
 /**

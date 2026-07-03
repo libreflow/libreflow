@@ -12,18 +12,27 @@
 //   decodeArtImage(img, em, art)     — skeleton/fondu/fallback décodage pochette (Task 6, stateless)
 //   toggleCinemaMute()               — mute cliquable #cinema-vol-icon (Task 7 — vit ici
 //                                      et non dans cinema.js, resté sous le cap 800 lignes)
+//   getCinemaQueueUpcoming()         — Task 9 : agrège search.js/queue.js/radio.js pour
+//                                      buildUpcoming() (cinema-queue.js, fonction pure)
+//   playCinemaQueueTrack(t)          — Task 9 : lecture depuis une rangée du panneau
 
 import { fmt }                                  from './utils.js';
-import { audio }                                from './player.js';
+import { audio, playAt }                        from './player.js';
 import { i18n }                                 from './i18n.js';
 import { setMasterGain }                        from './eq.js';
 import { saveCfg }                              from './cfgsave.js';
+import { get }                                  from './store.js';
+import { CFG }                                  from './cfg.js';
+import { getFiltered, filteredIdx }             from './search.js';
+import { peekExplicitQueue, removeFromQueue }   from './queue.js';
+import { radioActive, getRadioQueue }           from './radio.js';
 import { emit, EVENTS }                         from './bus.js';
 import { updateCinArtRGBFromTrack, snapArtColor, startAmbientAnim } from './cinema-bg.js';
 import { startCinemaViz }                       from './cinema-viz.js';
 import { prefersReducedMotion }                 from './motion.js';
 import { isSeekDragging }                       from './cinema-seek.js';
 import { ensureContrastOnDark }                 from './artcolor.js';
+import { buildUpcoming }                        from './cinema-queue.js';
 
 // Task 7 — ratio AA (4.5:1) exigé pour --cin-rgb-ui contre le fond quasi-noir du cinéma.
 const CIN_UI_MIN_CONTRAST = 4.5;
@@ -222,11 +231,13 @@ export function beginCinSwapIn(artWrap, img, em, t, title, artist, art) {
 export function renderCinNextPanel(panel, hint, nt, shuffle) {
   if (!nt) {
     panel.classList.remove('cin-has-next');
+    panel.disabled = true; // Task 9 — #cinema-next est un <button> : pas de focus fantôme sans piste prévisible
     hint?.classList.toggle('cin-has-next', !!shuffle);
     return;
   }
   hint?.classList.remove('cin-has-next');
   panel.classList.add('cin-has-next');
+  panel.disabled = false; // Task 9
   const titleEl  = document.getElementById('cinema-next-title');
   const artistEl = document.getElementById('cinema-next-artist');
   const imgEl    = document.getElementById('cinema-next-img');
@@ -236,4 +247,47 @@ export function renderCinNextPanel(panel, hint, nt, shuffle) {
     if (nt.art) { imgEl.src = nt.art; imgEl.style.display = 'block'; }
     else          imgEl.style.display = 'none';
   }
+}
+
+/**
+ * Task 9 — construit la liste des ≤ CFG.CINEMA_QUEUE_LIMIT prochaines pistes pour le
+ * panneau file d'attente cinéma : même source de vérité que _updateNextTrack()
+ * (cinema.js) et buildUpcoming() (cinema-queue.js, fonction pure qui porte la priorité
+ * explicite > radio > shuffle-hint > séquentiel). Cette fonction ne fait que rassembler
+ * les entrées depuis search.js/queue.js/radio.js — cross-feature autorisé ici (comme
+ * dans cinema.js déjà : import player.js/radio.js — CLAUDE.md §6), à la différence de
+ * cinema-queue.js qui reste zéro-import (DI pure).
+ * @returns {object[]}
+ */
+export function getCinemaQueueUpcoming() {
+  const tracks   = get('tracks');
+  const curIdx   = get('curIdx');
+  if (!tracks) return []; // garde défensive (même pattern que _updateNextTrack, cinema.js)
+  const curTrack = curIdx >= 0 ? tracks[curIdx] : null;
+  const filtered = getFiltered();
+  return buildUpcoming({
+    explicitQueue:  peekExplicitQueue(),
+    filtered,
+    curFilteredIdx: curTrack ? filteredIdx(curTrack) : -1,
+    shuffle:        get('shuffle'),
+    radioActive,
+    radioQueue:     radioActive ? getRadioQueue() : [],
+    limit:          CFG.CINEMA_QUEUE_LIMIT,
+  });
+}
+
+/**
+ * Task 9 — joue une piste choisie dans le panneau file d'attente cinéma. Même
+ * sémantique que playQueueItem() (queue.js) : keepQueue:true (ne vide pas le reste de
+ * la file explicite, seulement cette piste) + retrait de CETTE seule piste si elle y
+ * était. No-op silencieux si la piste a disparu entre le rendu du panneau et le clic
+ * (supprimée de la bibliothèque ou sortie de la vue filtrée).
+ * @param {object} t
+ */
+export function playCinemaQueueTrack(t) {
+  if (!t) return;
+  const fi = filteredIdx(t);
+  if (fi < 0) return;
+  removeFromQueue(t.id);
+  playAt(fi, { keepQueue: true });
 }

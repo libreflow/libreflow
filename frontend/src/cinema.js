@@ -33,8 +33,10 @@ import { cinemaBg, CINEMA_BG_MODES, CINEMA_BG_LABELS, applyCinemaBg, setCinemaBg
          startAmbientAnim, stopAmbientAnim, resetAmbientColors, updateAmbientGradient,
          updateCachedWinSize } from './cinema-bg.js';
 import { startCinemaViz, stopCinemaViz, initCinemaVizModule } from './cinema-viz.js';
-import { renderCinColor, syncCinVolumeUI, syncCinProgress, applyCinText, beginCinSwapIn, renderCinNextPanel } from './cinema-render.js';
+import { renderCinColor, syncCinVolumeUI, syncCinProgress, applyCinText, beginCinSwapIn, renderCinNextPanel,
+         getCinemaQueueUpcoming, playCinemaQueueTrack } from './cinema-render.js';
 import { initCinemaSeek, isSeekDragging, resetCinemaSeek } from './cinema-seek.js';
+import { initCinemaQueue, refreshCinemaQueuePanel, closeCinemaQueuePanel } from './cinema-queue.js';
 
 export { cinemaBg, CINEMA_BG_MODES, CINEMA_BG_LABELS, applyCinemaBg, setCinemaBg, cycleCinemaBg,
          syncCinemaBgSettings, updateCinemaBgBtn, initCinemaBg, updateCinArtColor };
@@ -404,6 +406,7 @@ export function closeCinema() {
   // Libérer les refs cachées
   _cinFill = _cinThumb = _cinTc = _cinTd = _cinPbar = null;
   resetCinemaSeek(); // Task 5 — coupe un drag en cours + masque la tooltip (fermeture mid-scrub)
+  closeCinemaQueuePanel(); // Task 9 — pas d'état orphelin (aria-expanded/listener) si le cinéma se ferme panneau ouvert
   _lastCinArt = null; // reset pour forcer le swap à la prochaine ouverture
   _lastCinIdx = -1;   // reset pour détecter le changement de piste à la prochaine ouverture
   // A11Y A.8 — restore focus to the element that was focused before cinema opened
@@ -509,6 +512,7 @@ export function updateCinema() {
   _renderCinArt(art, _trackChanged, t, title, artist);  // pochette + texte : swap synchronisé, Ken Burns
   _syncCinButtons(curIdx);                        // play/pause + shuffle/repeat/like/radio (aria-pressed)
   _updateNextTrack();                             // panneau piste suivante / hint shuffle
+  refreshCinemaQueuePanel();                      // Task 9 — re-rend le panneau file d'attente s'il est ouvert
   syncCinVolumeUI(_readVol());                    // slider volume + icônes
   syncCinProgress();                              // barre de progression + temps
 }
@@ -779,5 +783,13 @@ document.addEventListener('DOMContentLoaded', function() {
     thumb:   document.getElementById('cinema-pbar-thumb'),
     timeEl:  document.getElementById('cinema-tc'),
     tooltip: document.getElementById('cinema-seek-tip'),
+  });
+  // Task 9 — panneau file d'attente : getUpcoming/onPlayTrack fournis par cinema-render.js
+  // (déjà câblé sur search.js/queue.js/radio.js — cinema-queue.js reste zéro-import, §6).
+  initCinemaQueue({
+    getUpcoming: getCinemaQueueUpcoming,
+    onPlayTrack: playCinemaQueueTrack,
+    panel:       document.getElementById('cinema-queue-panel'),
+    trigger:     document.getElementById('cinema-next'),
   });
 });

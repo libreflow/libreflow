@@ -1870,6 +1870,97 @@ section('cinema-seek.js -- seekPosFromPointer / formatSeekTime (pure logic)');
 }());
 
 // =============================================================================
+// cinema-queue.js -- buildUpcoming (pure logic, Task 9 TDD)
+// Logique dupliquée inline (house style) -- cf. frontend/src/cinema-queue.js
+// Priorité IDENTIQUE à cinema.js/_updateNextTrack() : explicite > radio > shuffle-hint
+// (vide) > séquentiel.
+// =============================================================================
+section('cinema-queue.js -- buildUpcoming (pure logic)');
+
+(function () {
+  function buildUpcoming({
+    explicitQueue  = [],
+    filtered       = [],
+    curFilteredIdx = -1,
+    shuffle        = false,
+    radioActive    = false,
+    radioQueue     = [],
+    limit          = 8,
+  } = {}) {
+    if (limit <= 0) return [];
+    const filteredIds   = new Set(filtered.map(t => t.id));
+    const validExplicit = explicitQueue.filter(t => t && filteredIds.has(t.id));
+    if (validExplicit.length) {
+      const out = validExplicit.slice(0, limit);
+      if (out.length < limit) {
+        const seen = new Set(out.map(t => t.id));
+        for (let i = curFilteredIdx + 1; i < filtered.length && out.length < limit; i++) {
+          if (!seen.has(filtered[i].id)) out.push(filtered[i]);
+        }
+      }
+      return out;
+    }
+    if (radioActive) return radioQueue.slice(0, limit);
+    if (shuffle) return [];
+    return filtered.slice(curFilteredIdx + 1, curFilteredIdx + 1 + limit);
+  }
+
+  const mk  = (id) => ({ id, name: 'T' + id, artist: 'A' + id });
+  const ids = (arr) => JSON.stringify(arr.map(t => t.id));
+  const fl8 = [mk(1), mk(2), mk(3), mk(4), mk(5), mk(6), mk(7), mk(8)];
+
+  // ── Bords : tout vide / limit ────────────────────────────────────────────
+  assert(ids(buildUpcoming()) === '[]', 'buildUpcoming(): appel sans arguments -> []');
+  assert(ids(buildUpcoming({})) === '[]', 'buildUpcoming({}): tout vide -> []');
+  assert(ids(buildUpcoming({ filtered: fl8, curFilteredIdx: -1, limit: 0 })) === '[]',
+    'limit 0 -> [] (même avec des pistes disponibles)');
+  assert(buildUpcoming({ filtered: fl8, curFilteredIdx: -1, limit: 3 }).length === 3,
+    'limit 3 -> exactement 3 pistes (séquentiel)');
+
+  // ── Séquentiel standard + fin de liste (pas de wrap — repeat n'est pas un paramètre) ──
+  assert(ids(buildUpcoming({ filtered: fl8, curFilteredIdx: -1 })) === '[1,2,3,4,5,6,7,8]',
+    'curFilteredIdx -1 (pas de piste courante) -> liste filtrée complète');
+  assert(ids(buildUpcoming({ filtered: fl8, curFilteredIdx: 2 })) === '[4,5,6,7,8]',
+    'séquentiel : suite de filtered depuis curFilteredIdx+1');
+  assert(ids(buildUpcoming({ filtered: fl8, curFilteredIdx: 6 })) === '[8]',
+    'fin de liste : une seule piste restante, pas de wrap');
+  assert(ids(buildUpcoming({ filtered: fl8, curFilteredIdx: 7 })) === '[]',
+    'fin de liste exacte (dernière piste) -> [] (pas de wrap)');
+
+  // ── File explicite : priorité 1, IDs stale ignorés, complétée par le séquentiel ──
+  assert(ids(buildUpcoming({ explicitQueue: [mk(5), mk(2)], filtered: fl8, curFilteredIdx: 0, limit: 8 })) === '[5,2,3,4,6,7,8]',
+    'file explicite en tête (ordre préservé) + suite séquentielle dédupliquée (2 déjà en tête, sauté dans le séquentiel)');
+  assert(ids(buildUpcoming({ explicitQueue: [mk(99), mk(3), null, mk(2)], filtered: fl8, curFilteredIdx: 0, limit: 4 })) === '[3,2,4,5]',
+    'IDs stale (99 absent de filtered, null) ignorés silencieusement -- ordre des entrées valides préservé');
+  assert(ids(buildUpcoming({ explicitQueue: [mk(99), null], filtered: fl8, curFilteredIdx: 1 })) === '[3,4,5,6,7,8]',
+    'file explicite 100% stale (IDs absents/null) -> ignorée entièrement, retombe sur le séquentiel');
+  assert(ids(buildUpcoming({ explicitQueue: [mk(99)], filtered: fl8, curFilteredIdx: 1, radioActive: true, radioQueue: [mk(7)] })) === '[7]',
+    'file explicite 100% stale + radio active -> retombe sur la radio (le fallback saute uniquement la branche explicite vide)');
+  assert(ids(buildUpcoming({ explicitQueue: [mk(1), mk(2), mk(3)], filtered: fl8, curFilteredIdx: 0, limit: 2 })) === '[1,2]',
+    'limit < taille file explicite -> tronque la file explicite elle-même, pas de séquentiel ajouté');
+
+  // ── Radio active (sans file explicite) : tête de la file radio, PAS de complément ──
+  assert(ids(buildUpcoming({ filtered: fl8, curFilteredIdx: 0, radioActive: true, radioQueue: [mk(50), mk(51), mk(52)], limit: 8 })) === '[50,51,52]',
+    'radio active : uniquement la file radio, aucun complément séquentiel (radioRefillQueue génère la suite dynamiquement)');
+  assert(ids(buildUpcoming({ filtered: fl8, curFilteredIdx: 0, radioActive: true, radioQueue: [mk(50)], limit: 8 })) === '[50]',
+    'radio queue plus courte que limit -> retourne ce qui est disponible, pas de padding');
+  assert(ids(buildUpcoming({ filtered: fl8, curFilteredIdx: 0, radioActive: true, radioQueue: [mk(50), mk(51), mk(52)], limit: 2 })) === '[50,51]',
+    'radio queue plus longue que limit -> tronquée à limit');
+  assert(ids(buildUpcoming({ filtered: fl8, curFilteredIdx: 0, radioActive: true, shuffle: true, radioQueue: [mk(50)] })) === '[50]',
+    'radio active a priorité sur le hint shuffle (radio vérifiée avant shuffle)');
+
+  // ── Shuffle actif sans file explicite ni radio -> imprévisible, [] (hint T6) ────
+  assert(ids(buildUpcoming({ filtered: fl8, curFilteredIdx: 0, shuffle: true })) === '[]',
+    'shuffle actif, pas de file explicite, radio inactive -> [] (le panneau affiche le hint)');
+  assert(ids(buildUpcoming({ filtered: [], curFilteredIdx: -1, shuffle: true })) === '[]',
+    'shuffle actif + bibliothèque filtrée vide -> [] (pas de crash)');
+
+  // ── Priorité explicite > radio (l'explicite gagne même si la radio est active) ──
+  assert(ids(buildUpcoming({ explicitQueue: [mk(4)], filtered: fl8, curFilteredIdx: 0, radioActive: true, radioQueue: [mk(50)], limit: 3 })) === '[4,2,3]',
+    'file explicite non vide -> priorité absolue sur radioActive (même ordre que _updateNextTrack: hasExplicitQueueNext() avant radioActive)');
+}());
+
+// =============================================================================
 // N. artcolor.js — _kmeansColors (k-means++ clustering, pure function)
 // =============================================================================
 section('artcolor.js -- _kmeansColors');
@@ -2037,6 +2128,27 @@ section('components/lf-toast-stack.logic.js -- import-smoke');
     _ko++;
   }
 
+  // cinema-queue.js — buildUpcoming (import réel — vérifie l'absence de drift avec la
+  // copie inline ci-dessus, house style) + exports du câblage (Task 9)
+  section('cinema-queue.js -- buildUpcoming (import réel)');
+  try {
+    const mod = await import('../src/cinema-queue.js');
+    assert(typeof mod.buildUpcoming === 'function',            'real module: buildUpcoming exported');
+    assert(typeof mod.initCinemaQueue === 'function',          'real module: initCinemaQueue exported');
+    assert(typeof mod.refreshCinemaQueuePanel === 'function',  'real module: refreshCinemaQueuePanel exported');
+    assert(typeof mod.closeCinemaQueuePanel === 'function',    'real module: closeCinemaQueuePanel exported');
+    const mk = (id) => ({ id, name: 'T' + id, artist: 'A' + id });
+    const fl = [mk(1), mk(2), mk(3)];
+    const seq = mod.buildUpcoming({ filtered: fl, curFilteredIdx: 0 });
+    assert(seq.length === 2 && seq[0].id === 2 && seq[1].id === 3,
+      'real module: buildUpcoming séquentiel identique à la copie inline');
+    assert(mod.buildUpcoming({ filtered: fl, curFilteredIdx: 0, shuffle: true }).length === 0,
+      'real module: buildUpcoming shuffle sans file explicite -> []');
+  } catch (e) {
+    console.error('  KO  cinema-queue.js import-smoke crashed:', e.message);
+    _ko++;
+  }
+
   // Plugins single-instance / cli — helpers de résolution de fichier (import réel)
   section('utils.js -- normalizePathKey / extractAudioFileArg (import réel)');
   try {
@@ -2129,6 +2241,7 @@ section('components/lf-toast-stack.logic.js -- import-smoke');
     const beatLines   = read('frontend/src/cinema-beat.js').split('\n').length;
     const renderLines = read('frontend/src/cinema-render.js').split('\n').length;
     const seekLines   = read('frontend/src/cinema-seek.js').split('\n').length;
+    const queueLines  = read('frontend/src/cinema-queue.js').split('\n').length;
 
     assert(cinLines < 800, `cinema.js < 800 lignes (actual: ${cinLines})`);
     assert(vizLines < 500, `cinema-viz.js < 500 lignes (actual: ${vizLines})`);
@@ -2137,15 +2250,19 @@ section('components/lf-toast-stack.logic.js -- import-smoke');
     // (+25 lignes réelles : constante, helper snapshot, câblage applyCinemaBg, commentaires).
     assert(bgLines  < 480, `cinema-bg.js < 480 lignes (actual: ${bgLines})`);
     assert(beatLines   < 200, `cinema-beat.js < 200 lignes (actual: ${beatLines})`);
+    // Task 9 : getCinemaQueueUpcoming()/playCinemaQueueTrack() ajoutés — reste < 400.
     assert(renderLines < 400, `cinema-render.js < 400 lignes (actual: ${renderLines})`);
     // Task 5 : cinema-seek.js — scrubbing complet de la pbar (drag/hover/clavier), <300 lignes.
     assert(seekLines   < 300, `cinema-seek.js < 300 lignes (actual: ${seekLines})`);
+    // Task 9 : cinema-queue.js — panneau file d'attente dépliable, <300 lignes.
+    assert(queueLines  < 300, `cinema-queue.js < 300 lignes (actual: ${queueLines})`);
 
     const vizSrc  = read('frontend/src/cinema-viz.js');
     const bgSrc   = read('frontend/src/cinema-bg.js');
     const cinSrc  = read('frontend/src/cinema.js');
     const seekSrc = read('frontend/src/cinema-seek.js');
     const renderSrc = read('frontend/src/cinema-render.js');
+    const queueSrc  = read('frontend/src/cinema-queue.js');
 
     assert(/export function startCinemaViz/.test(vizSrc),      'cinema-viz.js exports startCinemaViz');
     assert(/export function stopCinemaViz/.test(vizSrc),       'cinema-viz.js exports stopCinemaViz');
@@ -2173,6 +2290,24 @@ section('components/lf-toast-stack.logic.js -- import-smoke');
     assert(/export \{[\s\S]*?cinemaBg/.test(cinSrc),       "cinema.js re-exporte cinemaBg");
     assert(/export let cinemaOpen/.test(cinSrc),            "cinema.js exporte toujours cinemaOpen");
     assert(/export function updateCinema/.test(cinSrc),     "cinema.js exporte toujours updateCinema");
+
+    // Task 9 — cinema-queue.js : surface publique + zéro import cross-feature (DI pure,
+    // même discipline que cinema-seek.js : ni player/queue/search/radio/i18n/store).
+    assert(/export function buildUpcoming/.test(queueSrc),           'cinema-queue.js exports buildUpcoming');
+    assert(/export function initCinemaQueue/.test(queueSrc),         'cinema-queue.js exports initCinemaQueue');
+    assert(/export function refreshCinemaQueuePanel/.test(queueSrc), 'cinema-queue.js exports refreshCinemaQueuePanel');
+    assert(/export function closeCinemaQueuePanel/.test(queueSrc),   'cinema-queue.js exports closeCinemaQueuePanel');
+    assert(!/from '\.\/(player|queue|search|radio|i18n|store|cfg)\.js'/.test(queueSrc),
+      "cinema-queue.js n'importe aucun module cross-feature (DI uniquement, CLAUDE.md §6)");
+
+    assert(/from '.\/cinema-render.js'/.test(cinSrc) && /getCinemaQueueUpcoming/.test(cinSrc),
+      "cinema.js importe getCinemaQueueUpcoming depuis cinema-render.js");
+    assert(/from '.\/cinema-queue.js'/.test(cinSrc),       "cinema.js importe depuis cinema-queue.js");
+    assert(/initCinemaQueue\(/.test(cinSrc),               "cinema.js appelle initCinemaQueue()");
+    assert(/closeCinemaQueuePanel\(\)/.test(cinSrc),       "cinema.js appelle closeCinemaQueuePanel() dans closeCinema()");
+    assert(/refreshCinemaQueuePanel\(\)/.test(cinSrc),     "cinema.js appelle refreshCinemaQueuePanel() dans updateCinema()");
+    assert(/from '\.\/cinema-queue\.js'/.test(renderSrc) && /buildUpcoming/.test(renderSrc),
+      "cinema-render.js importe buildUpcoming depuis cinema-queue.js");
   } catch (e) {
     console.error('  KO  cinema split crashed:', e.message);
     _ko++;

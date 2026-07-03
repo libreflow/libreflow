@@ -639,6 +639,8 @@ html[data-mode="light"] {
   --modal-orphan-max:  540px;   /* max-width modale orphelins étendue */
   --cn-next-max:       270px;   /* max-width panneau cinema next */
   --cn-next-min:       180px;   /* min-width panneau cinema next */
+  --cqp-max-h:         320px;   /* max-height panneau file d'attente cinéma (Task 9) */
+  --cqp-trigger-gap:    88px;   /* écart panneau file d'attente ↔ #cinema-next (Task 9) */
 
   /* Dimensions d'alignement UI — labels & valeurs */
   --cfg-val-min:        30px;   /* min-width valeur config slider */

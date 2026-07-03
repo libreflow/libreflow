@@ -474,6 +474,57 @@ async function run() {
     }
   });
 
+  // ═══════════════════════════════════════════════════════════════════════
+  // Task 9 — panneau file d'attente dépliable : aria-expanded/aria-controls sur le
+  // déclencheur, rangées = boutons avec nom accessible, Échap ne ferme pas le cinéma.
+  // ═══════════════════════════════════════════════════════════════════════
+
+  await t('#cinema-next trigger is a <button> with aria-expanded/aria-controls (Task 9)', () => {
+    const tag = openTagById(HTML, 'cinema-next');
+    assert.ok(tag, '#cinema-next introuvable dans index.html');
+    assert.ok(/^<button\b/.test(tag), '#cinema-next doit être un <button> (déclencheur du panneau file d\'attente)');
+    assert.ok(/\saria-expanded="(true|false)"/.test(tag), '#cinema-next doit déclarer aria-expanded');
+    assert.ok(/\saria-controls="cinema-queue-panel"/.test(tag), '#cinema-next doit pointer aria-controls="cinema-queue-panel"');
+    assert.ok(/\saria-label="[^"]+"/.test(tag) && /data-i18n-aria="[^"]+"/.test(tag),
+      '#cinema-next doit porter un aria-label i18n (nom accessible stable du déclencheur)');
+  });
+
+  await t('#cinema-queue-panel exists and is hidden by default (Task 9)', () => {
+    const tag = openTagById(HTML, 'cinema-queue-panel');
+    assert.ok(tag, '#cinema-queue-panel introuvable dans index.html');
+    assert.ok(/\shidden(\s|>)/.test(tag), '#cinema-queue-panel doit être hidden par défaut');
+  });
+
+  await t('cinema-queue.js renders rows as real <button> elements with an accessible name (Task 9)', () => {
+    const cq = readRepoFile('frontend/src/cinema-queue.js');
+    assert.ok(/createElement\(\s*'button'\s*\)/.test(cq),
+      'cinema-queue.js doit créer les rangées via document.createElement(\'button\')');
+    assert.ok(/setAttribute\(\s*'aria-label'/.test(cq),
+      'chaque rangée doit porter un aria-label (titre + artiste)');
+    assert.ok(!/\.innerHTML\s*=/.test(cq),
+      'cinema-queue.js ne doit jamais écrire via innerHTML (§13) — textContent/createElement uniquement');
+  });
+
+  await t('cinema-queue.js Escape closes only the panel, never the cinema overlay (Task 9)', () => {
+    const cq = readRepoFile('frontend/src/cinema-queue.js');
+    const m = /function _onPanelKey\([\s\S]*?\n\}/.exec(cq);
+    assert.ok(m, '_onPanelKey() introuvable dans cinema-queue.js');
+    const escBlock = /if\s*\(\s*e\.key\s*===\s*'Escape'\s*\)\s*\{[\s\S]*?\}/.exec(m[0]);
+    assert.ok(escBlock, 'bloc Escape introuvable dans _onPanelKey()');
+    assert.ok(/stopPropagation\(\)/.test(escBlock[0]),
+      'Escape doit appeler stopPropagation() — sinon _onCinKey (cinema.js) referme tout le mode cinéma / quitte le plein écran');
+    assert.ok(/_closePanel\(/.test(escBlock[0]),
+      'Escape doit fermer UNIQUEMENT le panneau (_closePanel), pas le cinéma');
+  });
+
+  await t('cinema-queue.js rows meet the >=24px target size (SC 2.5.8, Task 9)', () => {
+    const ss = SS;
+    const m = /\.cqp-row\s*\{[^}]*\}/.exec(ss);
+    assert.ok(m, 'règle .cqp-row introuvable dans style.css');
+    assert.ok(/min-width\s*:\s*var\(--target-min\)/.test(m[0]) && /min-height\s*:\s*var\(--target-min\)/.test(m[0]),
+      '.cqp-row doit déclarer min-width/min-height: var(--target-min)');
+  });
+
   if (fail) { console.log(`\nA11Y FAIL: ${fail}/${pass + fail}`); process.exit(1); }
   console.log(`\nA11Y OK: ${pass}/${pass}`);
 }

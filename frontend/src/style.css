@@ -4897,6 +4897,12 @@ html[data-mode="light"] .eq-slider::-moz-range-track { background: var(--bg6); }
   opacity: 1; transform: none; pointer-events: all;
   transition-delay: var(--dur);
 }
+/* Task 9 — un panneau file d'attente OUVERT épingle son déclencheur visible : l'auto-hide
+   (.ctrl-on retiré après 3s d'inactivité, Task 2) ne doit pas faire disparaître #cinema-next
+   tant que #cinema-queue-panel reste ouvert au-dessus. Court-circuite la garde .ctrl-on. */
+.cinema-next.cqp-trigger-pinned {
+  opacity: 1; transform: none; pointer-events: all;
+}
 .cn-label {
   font-size: var(--fs-xs); color: rgba(255,255,255,.52);
   text-transform: uppercase; letter-spacing: var(--ls-cinema);
@@ -4914,6 +4920,53 @@ html[data-mode="light"] .eq-slider::-moz-range-track { background: var(--bg6); }
   font-size: var(--fs-sm); font-weight: 600;
 }
 .cn-body--hint svg { flex-shrink: 0; opacity: .75; }
+
+/* ── #cinema-next est un <button> (Task 9) — reset chrome UA, garde le style .cinema-next ── */
+#cinema-next {
+  cursor: pointer; text-align: left; font: inherit; color: inherit;
+  -webkit-appearance: none; appearance: none;
+}
+#cinema-next:focus-visible { box-shadow: var(--cin-focus-ring); outline: none; }
+
+/* ── Panneau file d'attente dépliable (Task 9) — ancré au-dessus de #cinema-next,
+     même glass que .cinema-next ; translateY+fade tokenisés (--motion-base). ──── */
+.cinema-queue-panel {
+  position: absolute; bottom: calc(var(--sp-8) + var(--cqp-trigger-gap)); right: var(--sp-8);
+  z-index: 6;
+  width: var(--cn-next-max); max-height: var(--cqp-max-h); overflow-y: auto;
+  background: var(--cin-surface);
+  backdrop-filter: blur(var(--blur-18)) saturate(1.3);
+  -webkit-backdrop-filter: blur(var(--blur-18)) saturate(1.3);
+  border: var(--border-w-sm) solid var(--cin-hairline);
+  border-radius: var(--r3); padding: var(--sp-2);
+  opacity: 0; transform: translateY(var(--sp-1h)); pointer-events: none;
+  transition: opacity var(--motion-base) ease, transform var(--motion-base) var(--ease-spring-soft);
+}
+.cinema-queue-panel.cqp-open { opacity: 1; transform: none; pointer-events: all; }
+@media (prefers-reduced-motion: reduce) {
+  .cinema-queue-panel { transition: none; }
+}
+.cqp-header {
+  font-size: var(--fs-xs); color: rgba(255,255,255,.52);
+  text-transform: uppercase; letter-spacing: var(--ls-cinema);
+  margin-bottom: var(--sp-1h); font-weight: 600; padding: 0 var(--sp-1h);
+}
+.cqp-list { display: flex; flex-direction: column; gap: var(--sp-1); }
+.cqp-list[hidden] { display: none; } /* [hidden] seul serait battu par le display:flex ci-dessus (CSS auteur > UA) */
+.cqp-row {
+  display: block; width: 100%; min-width: var(--target-min); min-height: var(--target-min);
+  background: none; border: none; border-radius: var(--r-sm);
+  padding: var(--sp-1h); cursor: pointer; text-align: left; font: inherit; color: inherit;
+  -webkit-appearance: none; appearance: none;
+  transition: background var(--motion-fast) ease;
+}
+.cqp-row:hover { background: var(--cin-surface-hover); }
+.cqp-row:focus-visible { box-shadow: var(--cin-focus-ring); outline: none; }
+.cqp-img--empty { background: var(--cin-surface-hover); }
+.cqp-empty {
+  font-size: var(--fs-sm); color: rgba(255,255,255,.65);
+  padding: var(--sp-3) var(--sp-1h); text-align: center;
+}
 
 /* ── Boutons de coin (close + bg + fs) ────────────────────── */
 .cinema-corner-btn {
@@ -5446,6 +5499,23 @@ html[data-mode="light"] .cn-artist {
   color: var(--text-secondary);
 }
 
+/* Task 9 — panneau file d'attente : mêmes overrides light que .cinema-next
+   (.cn-title/.cn-artist ci-dessus s'appliquent déjà aux rangées, réutilisées telles quelles). */
+html[data-mode="light"] .cinema-queue-panel {
+  background: rgba(0, 0, 0, 0.08);
+  backdrop-filter: blur(var(--blur-8));
+  -webkit-backdrop-filter: blur(var(--blur-8));
+  border: var(--border-w-sm) solid rgba(0, 0, 0, 0.12);
+}
+html[data-mode="light"] .cqp-header,
+html[data-mode="light"] .cqp-empty {
+  color: var(--text-secondary);
+}
+html[data-mode="light"] .cqp-row:hover,
+html[data-mode="light"] .cqp-img--empty {
+  background: rgba(0, 0, 0, 0.06);
+}
+
 /* Light mode : vignette et scrim inversés (clairs, pas sombres) */
 html[data-mode="light"] #cinema-overlay::before {
   background: radial-gradient(ellipse 90% 90% at 50% 50%,
@@ -5465,7 +5535,8 @@ html[data-mode="light"] #cinema-overlay::after {
   .cinema-vol-sep,
   .cinema-vol-wrap { display: none; }
   /* Panneau "suivant" masqué sur écrans étroits — évite le chevauchement avec la pill de contrôles */
-  .cinema-next     { display: none; }
+  .cinema-next,
+  .cinema-queue-panel { display: none; } /* Task 9 — le panneau file d'attente suit son déclencheur */
 }
 
 /* ── Cinema responsive — breakpoint intermédiaire (tablette/petit desktop) ──
@@ -5484,7 +5555,8 @@ html[data-mode="light"] #cinema-overlay::after {
    fonctionnelle (la pill de contrôles reste toujours visible/accessible). */
 @media (max-height: 640px) {
   #cinema-clock,
-  #cinema-next { display: none; }
+  #cinema-next,
+  #cinema-queue-panel { display: none; } /* Task 9 — le panneau suit son déclencheur */
 }
 
 /* ═══ PANNEAUX OVERLAY (raccourcis + doublons) ═══════════════ */
