@@ -3036,8 +3036,11 @@ section('components/lf-toast-stack.logic.js -- import-smoke');
     // GPU résident hors cinéma), et libéré sous reduced-motion (animations coupées).
     assert(/#cinema-overlay\.active\s+\.cinema-art-wrap\s*\{[^}]*will-change\s*:\s*transform/.test(CSS),
       'style.css: will-change: transform sur .cinema-art-wrap, scopé #cinema-overlay.active');
-    assert(/html\[data-motion="reduce"\]\s+\.cinema-art-wrap\s*\{[^}]*will-change\s*:\s*auto/.test(CSS),
-      'style.css: will-change libéré (auto) sur .cinema-art-wrap sous html[data-motion="reduce"]');
+    // Fix revue : le sélecteur de libération DOIT contenir l'ID #cinema-overlay —
+    // sans lui (0,2,1) il perd au cascade contre la promotion (1,2,0) et le layer
+    // GPU reste résident sous reduced-motion (présence seule = test tautologique).
+    assert(/html\[data-motion="reduce"\]\s+#cinema-overlay\s+\.cinema-art-wrap\s*\{[^}]*will-change\s*:\s*auto/.test(CSS),
+      'style.css: will-change libéré (auto) sous reduce via un sélecteur à ID (bat la promotion 1,2,0 au cascade)');
   }());
 
   // -- Résultat -----------------------------------------------------------

@@ -5059,11 +5059,15 @@ html[data-motion="reduce"] .cinema-queue-panel { transition: none; }
 #cinema-overlay.active .cinema-art-wrap { will-change: transform; }
 html[data-motion="reduce"] .cinema-art-wrap {
   animation: none !important;
-  will-change: auto; /* Task 11 : animations coupées → libérer le layer GPU */
 }
 html[data-motion="reduce"] .cinema-bg {
   animation: none !important;
 }
+/* Task 11 (fix revue) : animations coupées → libérer le layer GPU de la pochette.
+   L'ID est requis pour battre la promotion `#cinema-overlay.active .cinema-art-wrap`
+   (1,2,0) au cascade — sans lui la règle reduce (0,2,1) perdait et le layer restait
+   résident. */
+html[data-motion="reduce"] #cinema-overlay .cinema-art-wrap { will-change: auto; }
 .cinema-art-wrap:hover { filter: brightness(1.06); }
 
 /* Fond flou pour pochettes non carrées — évite les barres noires (letterbox).
