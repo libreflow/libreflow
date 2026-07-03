@@ -11,11 +11,17 @@
 import { eqAnalyser }                                   from './eq.js';
 import { tween, kill as motionKill, eases, prefersReducedMotion } from './motion.js';
 import { createBeatDetector }                           from './cinema-beat.js';
+import { waveLayerGeom, waveLayerPalette, computeBandEnergies } from './cinema-waves.js';
 
 // ── Vagues — pré-allocation module scope ────────────────────
 // Zéro allocation dans le hot path RAF (CLAUDE.md §10).
 const _WAVE_LAYERS  = 7;
 const _WAVE_STEPS   = 150;          // segments par couche (qualité / perf)
+// Task 12 : géométrie de profondeur cohérente (l=0 arrière/haut, l=6 avant/bas) —
+// calculée une fois au chargement (cinema-waves.js, pur et testé).
+const _WAVE_GEOM    = Array.from({ length: _WAVE_LAYERS }, (_, l) => waveLayerGeom(l, _WAVE_LAYERS));
+const _waveBands    = new Float32Array(_WAVE_LAYERS); // énergies par bande (0 = basses), EMA in-place
+const _waveY        = new Float32Array(_WAVE_STEPS + 1); // buffer y partagé remplissage/crête (1 seule passe sin)
 let _waveBuf        = null;          // Uint8Array(frequencyBinCount) — données FFT
 let _waveSmoothed   = null;          // Float32Array — basses fréquences lissées
 const _wavePhases   = new Float32Array(_WAVE_LAYERS); // phases de chaque couche
@@ -82,28 +88,24 @@ export function initStarfield() {
 
 // ── Mode Vagues ──────────────────────────────────────────────
 
-/**
- * Rendu mode Vagues sur #cinema-bg.
- * Appelé depuis la boucle RAF de _startAmbientAnim à 30fps.
- * Zéro allocation en régime stable (gradients cachés par couleur + hauteur).
- * @param {CanvasRenderingContext2D} ctx
- * @param {number} w  largeur CSS px
- * @param {number} h  hauteur CSS px
- * @param {number[]} cinArtRGBCur  tableau [r, g, b] de la couleur LERP courante
- * @param {boolean} isPlaying  true si de l'audio est en cours de lecture
- */
-export function drawWavesFrame(ctx, w, h, cinArtRGBCur, isPlaying) {
-  if (!eqAnalyser) return;
-
+// Lit le FFT (si analyser dispo) : bandes par couche + énergie globale + beat.
+// Sans analyser (cinéma ouvert avant toute lecture) : décroissance douce vers 0 —
+// les vagues restent dessinées, plus d'écran noir (Task 12, finding #6).
+function _updateWaveAudio() {
+  if (!eqAnalyser) {
+    _waveEnergy *= 0.95;
+    for (let k = 0; k < _WAVE_LAYERS; k++) _waveBands[k] *= 0.95;
+    return;
+  }
   // Allocation unique — réallocation seulement si l'analyser change de taille (rare)
   if (!_waveBuf || _waveBuf.length !== eqAnalyser.frequencyBinCount) {
     _waveBuf      = new Uint8Array(eqAnalyser.frequencyBinCount);
     _waveSmoothed = new Float32Array(Math.max(1, Math.floor(eqAnalyser.frequencyBinCount * 0.12)));
   }
-
   eqAnalyser.getByteFrequencyData(_waveBuf);
-
-  // Lissage basses fréquences → énergie d'amplitude
+  // Task 12 : énergies par bande log-espacées (0 = basses) — chaque couche a la sienne.
+  computeBandEnergies(_waveBuf, _waveBands, 0.30);
+  // Énergie basse globale lissée — halo de fond + baseline du beat (inchangé).
   const bassEnd = _waveSmoothed.length;
   for (let i = 0; i < bassEnd; i++) {
     _waveSmoothed[i] = _waveSmoothed[i] * 0.82 + _waveBuf[i] * 0.18;
@@ -112,10 +114,7 @@ export function drawWavesFrame(ctx, w, h, cinArtRGBCur, isPlaying) {
   for (let i = 0; i < bassEnd; i++) rawEnergy += _waveSmoothed[i];
   rawEnergy /= bassEnd * 255;
   _waveEnergy = _waveEnergy * 0.90 + rawEnergy * 0.10;
-
   // Détection beat → GSAP tween boost amplitude (A11Y SC 2.3.3 : pas de tween sous reduced-motion).
-  // Le détecteur porte le cooldown + le dernier-beat ; short-circuit reduced-motion → pas de sample
-  // (le timestamp n'avance pas), comportement identique à l'ancien &&-chain.
   const nowMs = performance.now();
   if (!prefersReducedMotion() && _waveBeat.sample(rawEnergy, nowMs, _waveEnergy)) {
     motionKill(_waveBeatObj);
@@ -125,7 +124,81 @@ export function drawWavesFrame(ctx, w, h, cinArtRGBCur, isPlaying) {
       onComplete() { _waveBeatTw = null; },
     });
   }
+}
 
+// Reconstruit palette par couche + gradients + styles de crête — invalidé seulement
+// quand (couleur LERP, hauteur) changent. Task 12 : chaque couche a SA couleur
+// (hue-shift ±14°, rampe de luminance arrière→avant, plancher pochettes sombres) —
+// fini le monochrome à alpha variable (finding #2/#3).
+function _rebuildWaveStyles(ctx, h, lerpRGB, r, g, b) {
+  _waveGradRGB = lerpRGB; _waveGradH = h;
+  const pal = waveLayerPalette(r, g, b, _WAVE_LAYERS);
+  for (let l = 0; l < _WAVE_LAYERS; l++) {
+    const geo = _WAVE_GEOM[l];
+    const [lr, lg, lb] = pal[l];
+    const yBase = h * geo.yBase;
+    const a0    = geo.fillAlpha;
+    const grad  = ctx.createLinearGradient(0, yBase - h * 0.12, 0, h);
+    grad.addColorStop(0,    `rgba(${lr},${lg},${lb},${a0.toFixed(2)})`);
+    grad.addColorStop(0.38, `rgba(${lr},${lg},${lb},${(a0 * 0.52).toFixed(2)})`);
+    grad.addColorStop(0.72, `rgba(${lr},${lg},${lb},${(a0 * 0.15).toFixed(2)})`);
+    grad.addColorStop(1,    'rgba(0,0,0,0)');
+    _waveGrads[l] = grad;
+    // Crête : version éclaircie de la couleur DE LA COUCHE (effet brillant cohérent)
+    const crR = Math.min(255, lr + 70), crG = Math.min(255, lg + 70), crB = Math.min(255, lb + 70);
+    _waveCrestStrokes[l] = `rgba(${crR},${crG},${crB},${geo.crestAlpha.toFixed(2)})`;
+  }
+}
+
+// Dessine une couche : les y sont calculés UNE fois dans _waveY (4 harmoniques),
+// puis rejoués pour le remplissage ET la crête — sin divisé par 2 (finding #5).
+function _drawWaveLayer(ctx, w, h, l, boostMult) {
+  const geo   = _WAVE_GEOM[l];
+  const yBase = h * geo.yBase;
+  // Mapping bande→couche : AVANT (l=6) ← basses (bande 0), arrière ← aigus.
+  const band      = _waveBands[_WAVE_LAYERS - 1 - l];
+  const amplitude = (geo.ampBase + band * geo.ampEnergy + _waveEnergy * 0.03) * h * boostMult;
+  const ph = _wavePhases[l];
+  // 4 harmoniques distinctes par couche — formes plus organiques, moins répétitives
+  const f1 = 2.1 + l * 0.9, f2 = 1.4 + l * 0.55, f3 = 5.3 + l * 0.4, f4 = 3.7 - l * 0.15;
+  for (let s = 0; s <= _WAVE_STEPS; s++) {
+    const nx = s / _WAVE_STEPS;
+    _waveY[s] = yBase
+      + Math.sin(nx * Math.PI * f1 + ph)        * amplitude
+      + Math.sin(nx * Math.PI * f2 + ph * 1.3)  * amplitude * 0.42
+      + Math.sin(nx * Math.PI * f3 + ph * 0.55) * amplitude * 0.16
+      + Math.sin(nx * Math.PI * f4 + ph * 0.77) * amplitude * 0.09;
+  }
+  // Remplissage
+  ctx.beginPath();
+  ctx.moveTo(0, _waveY[0]);
+  for (let s = 1; s <= _WAVE_STEPS; s++) ctx.lineTo((s / _WAVE_STEPS) * w, _waveY[s]);
+  ctx.lineTo(w, h); ctx.lineTo(0, h); ctx.closePath();
+  ctx.fillStyle = _waveGrads[l];
+  ctx.fill();
+  // Crête lumineuse — même courbe, rejouée depuis le buffer
+  ctx.beginPath();
+  ctx.moveTo(0, _waveY[0]);
+  for (let s = 1; s <= _WAVE_STEPS; s++) ctx.lineTo((s / _WAVE_STEPS) * w, _waveY[s]);
+  ctx.strokeStyle = _waveCrestStrokes[l];
+  ctx.lineWidth   = geo.lineWidth;
+  ctx.stroke();
+}
+
+/**
+ * Rendu mode Vagues sur #cinema-bg.
+ * Appelé depuis la boucle RAF de _startAmbientAnim (60fps focalisé / 30fps sinon).
+ * Zéro allocation en régime stable (gradients/palette cachés par couleur + hauteur,
+ * buffers pré-alloués). Task 12 : profondeur cohérente (avant = bas, ample,
+ * lumineux), palette ambient par couche, dynamique par bande de fréquences.
+ * @param {CanvasRenderingContext2D} ctx
+ * @param {number} w  largeur CSS px
+ * @param {number} h  hauteur CSS px
+ * @param {number[]} cinArtRGBCur  tableau [r, g, b] de la couleur LERP courante
+ * @param {boolean} isPlaying  true si de l'audio est en cours de lecture
+ */
+export function drawWavesFrame(ctx, w, h, cinArtRGBCur, isPlaying) {
+  _updateWaveAudio();
   const boostMult = 1 + _waveBeatObj.v * 0.65;
   const r = Math.round(cinArtRGBCur[0]);
   const g = Math.round(cinArtRGBCur[1]);
@@ -140,8 +213,6 @@ export function drawWavesFrame(ctx, w, h, cinArtRGBCur, isPlaying) {
   // ── Fond : noir profond + halo atmosphérique teinté par la pochette ──────────
   ctx.fillStyle = '#000';
   ctx.fillRect(0, 0, w, h);
-
-  // Gradient radial centré légèrement haut — invalidé si couleur ou dimensions changent
   if (lerpRGB !== _waveBgGradRGB || w !== _waveBgGradW || h !== _waveBgGradH) {
     _waveBgGradRGB = lerpRGB; _waveBgGradW = w; _waveBgGradH = h;
     const rx = w * 0.5, ry = h * 0.38, rad = Math.max(w, h) * 0.72;
@@ -156,77 +227,57 @@ export function drawWavesFrame(ctx, w, h, cinArtRGBCur, isPlaying) {
   ctx.fillRect(0, 0, w, h);
   ctx.globalAlpha = 1;
 
-  // Avancer les phases — figées en pause ou sous reduced-motion (A11Y SC 2.3.3), animées à la lecture.
+  // Phases par couche — vitesse pilotée par SA bande (avant = basses → houle
+  // marquée ; arrière = aigus → frémissement). Figées en pause / reduced-motion.
   if (isPlaying && !prefersReducedMotion()) {
     for (let l = 0; l < _WAVE_LAYERS; l++) {
-      _wavePhases[l] += (0.006 + l * 0.0025 + _waveEnergy * 0.018) * boostMult;
+      const band = _waveBands[_WAVE_LAYERS - 1 - l];
+      _wavePhases[l] += (0.005 + l * 0.0018 + band * 0.020) * boostMult;
     }
   }
 
-  // Gradients de remplissage + styles de crête — cache invalidé si couleur LERP ou hauteur change
-  if (lerpRGB !== _waveGradRGB || h !== _waveGradH) {
-    _waveGradRGB = lerpRGB; _waveGradH = h;
-    // Couleur crête : version éclaircie de la couleur art pour un effet brillant
-    const crR = Math.min(255, r + 70), crG = Math.min(255, g + 70), crB = Math.min(255, b + 70);
-    for (let l = 0; l < _WAVE_LAYERS; l++) {
-      // Couches arrière plus denses (profondeur), couches avant plus légères/transparentes
-      const alpha0 = 0.12 + (l / (_WAVE_LAYERS - 1)) * 0.26;
-      const yBase  = h * (0.25 + l * 0.10);
-      const grad   = ctx.createLinearGradient(0, yBase - h * 0.12, 0, h);
-      grad.addColorStop(0,    `rgba(${lerpRGB},${alpha0.toFixed(2)})`);
-      grad.addColorStop(0.38, `rgba(${lerpRGB},${(alpha0 * 0.52).toFixed(2)})`);
-      grad.addColorStop(0.72, `rgba(${lerpRGB},${(alpha0 * 0.15).toFixed(2)})`);
-      grad.addColorStop(1,    'rgba(0,0,0,0)');
-      _waveGrads[l] = grad;
-      // Crête : plus lumineuse sur les vagues avant-plan (petit l = avant)
-      const crAlpha = 0.18 + ((_WAVE_LAYERS - 1 - l) / (_WAVE_LAYERS - 1)) * 0.55;
-      _waveCrestStrokes[l] = `rgba(${crR},${crG},${crB},${crAlpha.toFixed(2)})`;
-    }
-  }
+  if (lerpRGB !== _waveGradRGB || h !== _waveGradH) _rebuildWaveStyles(ctx, h, lerpRGB, r, g, b);
 
-  // Dessin des couches de vagues — arrière → avant
-  for (let l = _WAVE_LAYERS - 1; l >= 0; l--) {
-    const yBase     = h * (0.25 + l * 0.10);
-    const amplitude = (0.038 + l * 0.022 + _waveEnergy * 0.22) * h * boostMult;
-    const ph        = _wavePhases[l];
-    // 4 harmoniques distinctes par couche — formes plus organiques, moins répétitives
-    const f1 = 2.1 + l * 0.9, f2 = 1.4 + l * 0.55, f3 = 5.3 + l * 0.4, f4 = 3.7 - l * 0.15;
-
-    // ── Remplissage de la vague ──
-    ctx.beginPath();
-    for (let s = 0; s <= _WAVE_STEPS; s++) {
-      const nx = s / _WAVE_STEPS;
-      const y  = yBase
-        + Math.sin(nx * Math.PI * f1 + ph)        * amplitude
-        + Math.sin(nx * Math.PI * f2 + ph * 1.3)  * amplitude * 0.42
-        + Math.sin(nx * Math.PI * f3 + ph * 0.55) * amplitude * 0.16
-        + Math.sin(nx * Math.PI * f4 + ph * 0.77) * amplitude * 0.09;
-      if (s === 0) ctx.moveTo(nx * w, y);
-      else         ctx.lineTo(nx * w, y);
-    }
-    ctx.lineTo(w, h); ctx.lineTo(0, h); ctx.closePath();
-    ctx.fillStyle = _waveGrads[l];
-    ctx.fill();
-
-    // ── Crête lumineuse — trait brillant sur le bord supérieur de la vague ──
-    ctx.beginPath();
-    for (let s = 0; s <= _WAVE_STEPS; s++) {
-      const nx = s / _WAVE_STEPS;
-      const y  = yBase
-        + Math.sin(nx * Math.PI * f1 + ph)        * amplitude
-        + Math.sin(nx * Math.PI * f2 + ph * 1.3)  * amplitude * 0.42
-        + Math.sin(nx * Math.PI * f3 + ph * 0.55) * amplitude * 0.16
-        + Math.sin(nx * Math.PI * f4 + ph * 0.77) * amplitude * 0.09;
-      if (s === 0) ctx.moveTo(nx * w, y);
-      else         ctx.lineTo(nx * w, y);
-    }
-    ctx.strokeStyle = _waveCrestStrokes[l];
-    ctx.lineWidth   = Math.max(0.7, 2.2 - l * 0.22);  // 2.2px avant → 0.7px arrière
-    ctx.stroke();
-  }
+  // Dessin arrière → avant : l=0 (haut, lointain) d'abord, l=6 (bas, proche) par-dessus.
+  for (let l = 0; l < _WAVE_LAYERS; l++) _drawWaveLayer(ctx, w, h, l, boostMult);
 }
 
 // ── Mode Ciel étoilé ─────────────────────────────────────────
+
+// Lit le FFT étoiles (si analyser dispo) : scintillement (aigus) + beat basses →
+// étoile filante. Sans analyser : énergie 0 — ciel statique dessiné quand même,
+// plus d'écran noir (Task 12, finding #6). Retourne hiEnergy 0-1.
+function _updateStarAudio() {
+  if (!eqAnalyser) { _starBassSmooth *= 0.95; return 0; }
+  // Allocation unique — réallocation seulement si l'analyser change de taille
+  if (!_starBuf || _starBuf.length !== eqAnalyser.frequencyBinCount) {
+    _starBuf    = new Uint8Array(eqAnalyser.frequencyBinCount);
+    _starHiFBuf = new Float32Array(Math.max(1, Math.floor(eqAnalyser.frequencyBinCount * 0.3)));
+  }
+  eqAnalyser.getByteFrequencyData(_starBuf);
+  // Hautes fréquences → intensité de scintillement
+  const hiStart = Math.floor(_starBuf.length * 0.55);
+  const hiBins  = _starHiFBuf.length;
+  let hiEnergy  = 0;
+  for (let i = 0; i < hiBins; i++) {
+    const v = _starBuf[Math.min(hiStart + i, _starBuf.length - 1)];
+    _starHiFBuf[i] = _starHiFBuf[i] * 0.78 + v * 0.22;
+    hiEnergy += _starHiFBuf[i];
+  }
+  hiEnergy /= hiBins * 255;
+  // Basses fréquences → beat → étoile filante
+  let bassE = 0;
+  const bassEnd = Math.max(1, Math.floor(_starBuf.length * 0.10));
+  for (let i = 0; i < bassEnd; i++) bassE += _starBuf[i];
+  bassE /= bassEnd * 255;
+  _starBassSmooth = _starBassSmooth * 0.88 + bassE * 0.12;
+  const nowMs = performance.now();
+  // A11Y SC 2.3.3 : pas d'étoile filante (tween GSAP) sous reduced-motion.
+  if (!prefersReducedMotion() && _starBeat.sample(bassE, nowMs, _starBassSmooth)) {
+    _launchShootingStar();
+  }
+  return hiEnergy;
+}
 
 /**
  * Rendu mode Ciel étoilé sur #cinema-bg.
@@ -239,40 +290,8 @@ export function drawWavesFrame(ctx, w, h, cinArtRGBCur, isPlaying) {
  * @param {number} ambientT  temps d'animation en ms (depuis _ambientT de cinema-bg.js)
  */
 export function drawStarfieldFrame(ctx, w, h, cinArtRGBCur, ambientT) {
-  if (!_starsReady || !eqAnalyser) return;
-
-  // Allocation unique — réallocation seulement si l'analyser change de taille
-  if (!_starBuf || _starBuf.length !== eqAnalyser.frequencyBinCount) {
-    _starBuf    = new Uint8Array(eqAnalyser.frequencyBinCount);
-    _starHiFBuf = new Float32Array(Math.max(1, Math.floor(eqAnalyser.frequencyBinCount * 0.3)));
-  }
-
-  eqAnalyser.getByteFrequencyData(_starBuf);
-
-  // Hautes fréquences → intensité de scintillement
-  const hiStart = Math.floor(_starBuf.length * 0.55);
-  const hiBins  = _starHiFBuf.length;
-  let hiEnergy  = 0;
-  for (let i = 0; i < hiBins; i++) {
-    const v = _starBuf[Math.min(hiStart + i, _starBuf.length - 1)];
-    _starHiFBuf[i] = _starHiFBuf[i] * 0.78 + v * 0.22;
-    hiEnergy += _starHiFBuf[i];
-  }
-  hiEnergy /= hiBins * 255;
-
-  // Basses fréquences → beat → étoile filante
-  let bassE = 0;
-  const bassEnd = Math.max(1, Math.floor(_starBuf.length * 0.10));
-  for (let i = 0; i < bassEnd; i++) bassE += _starBuf[i];
-  bassE /= bassEnd * 255;
-  _starBassSmooth = _starBassSmooth * 0.88 + bassE * 0.12;
-
-  const nowMs = performance.now();
-  // A11Y SC 2.3.3 : pas d'étoile filante (tween GSAP) sous reduced-motion.
-  // Détecteur partagé (baseline EMA externe) ; short-circuit reduced-motion → pas de sample.
-  if (!prefersReducedMotion() && _starBeat.sample(bassE, nowMs, _starBassSmooth)) {
-    _launchShootingStar();
-  }
+  if (!_starsReady) return;
+  const hiEnergy = _updateStarAudio();
 
   // Couleur dominante — étoiles légèrement éclairées par l'art
   const r = Math.round(cinArtRGBCur[0]);

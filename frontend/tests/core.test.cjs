@@ -3043,6 +3043,109 @@ section('components/lf-toast-stack.logic.js -- import-smoke');
       'style.css: will-change libéré (auto) sous reduce via un sélecteur à ID (bat la promotion 1,2,0 au cascade)');
   }());
 
+  // =============================================================================
+  // Task 12 — Vagues : refonte qualité (profondeur cohérente, palette ambient,
+  // dynamique par bande de fréquences). Module pur cinema-waves.js.
+  // =============================================================================
+  section('Task 12 -- cinema-waves.js (profondeur, palette, bandes)');
+
+  await (async function () {
+    const { waveLayerGeom, waveLayerPalette, computeBandEnergies } =
+      await import('../src/cinema-waves.js');
+    const LAYERS = 7;
+
+    // (a) waveLayerGeom — modèle de profondeur COHÉRENT : l=0 arrière (haut, plat,
+    // discret), l=6 avant (bas, ample, lumineux). Monotonicité stricte des champs.
+    const geoms = Array.from({ length: LAYERS }, (_, l) => waveLayerGeom(l, LAYERS));
+    for (let l = 1; l < LAYERS; l++) {
+      assert(geoms[l].yBase      > geoms[l - 1].yBase,      `geom: yBase croissant vers l'avant (l=${l})`);
+      assert(geoms[l].ampBase    > geoms[l - 1].ampBase,    `geom: amplitude croissante vers l'avant (l=${l})`);
+      assert(geoms[l].fillAlpha  > geoms[l - 1].fillAlpha,  `geom: remplissage plus dense vers l'avant (l=${l})`);
+      assert(geoms[l].crestAlpha > geoms[l - 1].crestAlpha, `geom: crête plus lumineuse vers l'avant (l=${l})`);
+      assert(geoms[l].lineWidth  > geoms[l - 1].lineWidth,  `geom: crête plus épaisse vers l'avant (l=${l})`);
+    }
+    assert(geoms[0].yBase >= 0.2 && geoms[LAYERS - 1].yBase <= 0.95,
+      'geom: bandes yBase dans l\'écran (arrière ≥0.2h, avant ≤0.95h)');
+    assert(geoms[LAYERS - 1].crestAlpha <= 1 && geoms[LAYERS - 1].fillAlpha <= 1,
+      'geom: alphas ≤ 1');
+
+    // (b) waveLayerPalette — palette par couche : luminance croissante arrière→avant,
+    // plancher pour pochettes sombres, teintes distinctes (hue-shift progressif).
+    const lum = ([r, g, b]) => 0.2126 * r + 0.7152 * g + 0.0722 * b; // approx suffisante pour l'ordre
+    const palDark = waveLayerPalette(30, 30, 30, LAYERS);
+    assert(palDark.length === LAYERS, 'palette: une couleur par couche');
+    for (let l = 1; l < LAYERS; l++) {
+      assert(lum(palDark[l]) > lum(palDark[l - 1]),
+        `palette: luminance croissante vers l'avant (l=${l}, art sombre)`);
+    }
+    assert(lum(palDark[LAYERS - 1]) >= 90,
+      'palette: plancher de luminance — la vague AVANT reste lisible sur fond noir avec un art gris sombre (30,30,30)');
+    const palSat = waveLayerPalette(200, 40, 60, LAYERS);
+    for (let l = 1; l < LAYERS; l++) {
+      assert(lum(palSat[l]) > lum(palSat[l - 1]),
+        `palette: luminance croissante vers l'avant (l=${l}, art saturé)`);
+    }
+    // hue-shift : la teinte arrière et la teinte avant diffèrent sensiblement
+    const hueOf = ([r, g, b]) => {
+      const mx = Math.max(r, g, b), mn = Math.min(r, g, b), d = mx - mn;
+      if (!d) return 0;
+      let h;
+      if (mx === r)      h = ((g - b) / d) % 6;
+      else if (mx === g) h = (b - r) / d + 2;
+      else               h = (r - g) / d + 4;
+      return (h * 60 + 360) % 360;
+    };
+    const hueDiff = Math.abs(hueOf(palSat[0]) - hueOf(palSat[LAYERS - 1]));
+    const hueDist = Math.min(hueDiff, 360 - hueDiff);
+    assert(hueDist >= 15, `palette: hue-shift arrière↔avant ≥ 15° (actual: ${hueDist.toFixed(1)}°)`);
+
+    // (c) computeBandEnergies — bandes log-espacées, EMA in-place (zéro allocation).
+    const buf = new Uint8Array(1024);
+    const out = new Float32Array(LAYERS);
+    const ret = computeBandEnergies(buf, out, 1);
+    assert(ret === out, 'bandes: retourne le même Float32Array (zéro allocation)');
+    for (let k = 0; k < LAYERS; k++) assert(out[k] === 0, `bandes: silence → 0 (k=${k})`);
+    // Impulsion basses : seuls les premiers bins pleins → bande 0 dominante
+    buf.fill(0); buf[0] = buf[1] = 255;
+    out.fill(0);
+    computeBandEnergies(buf, out, 1);
+    assert(out[0] > 0.4, `bandes: impulsion basses → bande 0 dominante (actual: ${out[0].toFixed(2)})`);
+    assert(out[LAYERS - 1] < 0.05, 'bandes: impulsion basses → bande aiguë quasi nulle');
+    // Aigus : bins hauts pleins → dernière bande dominante
+    buf.fill(0);
+    for (let i = 300; i < 700; i++) buf[i] = 255;
+    out.fill(0);
+    computeBandEnergies(buf, out, 1);
+    assert(out[LAYERS - 1] > out[0], 'bandes: énergie aiguë → dernière bande > bande 0');
+    // EMA : smooth 0.5 converge en deux passes vers 0.75×cible
+    buf.fill(255);
+    out.fill(0);
+    computeBandEnergies(buf, out, 0.5);
+    const after1 = out[0];
+    computeBandEnergies(buf, out, 0.5);
+    assert(after1 > 0.4 && after1 < 0.6, `bandes: EMA passe 1 ≈ 0.5 (actual: ${after1.toFixed(2)})`);
+    assert(out[0] > 0.7 && out[0] < 0.8, `bandes: EMA passe 2 ≈ 0.75 (actual: ${out[0].toFixed(2)})`);
+
+    // (d) scans d'intégration — cinema-canvas consomme le module pur ; fallback sans
+    // analyser (plus d'écran noir avant la première lecture) ; buffer y partagé
+    // remplissage/crête (sin calculé une seule fois par couche).
+    const fs   = require('fs');
+    const path = require('path');
+    const root = path.join(__dirname, '../..');
+    const CANVAS = fs.readFileSync(path.join(root, 'frontend/src/cinema-canvas.js'), 'utf8');
+    assert(/from\s+'\.\/cinema-waves\.js'/.test(CANVAS),
+      'cinema-canvas.js importe cinema-waves.js (géométrie/palette/bandes pures)');
+    assert(/computeBandEnergies\(/.test(CANVAS),
+      'cinema-canvas.js: amplitude/vitesse par couche pilotées par bande de fréquence');
+    const wavesBody = /export function drawWavesFrame[\s\S]*?\n\}/.exec(CANVAS);
+    assert(wavesBody && !/if\s*\(\s*!eqAnalyser\s*\)\s*return/.test(wavesBody[0]),
+      'drawWavesFrame: plus de return à vide sans analyser (fallback statique, pas d\'écran noir)');
+    assert(/_waveY\b/.test(CANVAS),
+      'cinema-canvas.js: buffer y partagé pré-alloué (remplissage + crête sans double calcul sin)');
+    const wavesLines = fs.readFileSync(path.join(root, 'frontend/src/cinema-waves.js'), 'utf8').split('\n').length;
+    assert(wavesLines < 200, `cinema-waves.js < 200 lignes (actual: ${wavesLines})`);
+  }());
+
   // -- Résultat -----------------------------------------------------------
   console.log('\n═══════════════════════════════════════════════════════════');
   console.log(`  Total : ${_ok + _ko}   OK: ${_ok}   KO: ${_ko}`);
