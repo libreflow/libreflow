@@ -256,12 +256,12 @@ Audit chiffré : la mer occupe 0.30h-0.86h (intrusion zone pochette dès le sile
 
 Suite de l'audit 2026-07-04 : (1) le spectre musical est incliné (~−6 dB/octave) → sans gain adaptatif, les bandes aiguës (vagues arrière) restent quasi immobiles ; (2) crêtes nues — pas d'écume au beat ; (3) espace vide entre l'horizon (0.58h) et le contenu ; (4) segments linéaires (150 lineTo).
 
-- [ ] **Step 1 (TDD): AGC pur** — `agcNormalize(bands, peaks, out, decay, floor)` dans cinema-waves.js : normalise chaque bande par son pic glissant (mutation in-place, zéro allocation) ; plancher anti-bruit (pic < floor → 0). Tests : silence → 0, bande au pic → 1, décroissance du pic, sortie ≤ 1, retour = `out`. RED.
-- [ ] **Step 2: câblage AGC** — cinema-canvas : `_wavePeaks`/`_waveBandsNorm` pré-alloués ; couches pilotées par les bandes NORMALISÉES (amplitude + vitesse de phase) — les 7 vagues vivent quel que soit le mixage.
-- [ ] **Step 3: écume au beat** — pool pré-alloué (`_FOAM_MAX` glints), spawn dans la branche beat existante (déjà gated reduced-motion), glints blancs qui chevauchent la crête (y recalculé via `waveY` — ils surfent la vague), fondu ~0.5s, zéro allocation par frame.
-- [ ] **Step 4: reflet d'horizon** — gradient spéculaire discret sous la ligne d'horizon (couleur couche arrière éclaircie), caché avec les styles (clé couleur+h), fillRect borné à la bande (un gradient linéaire étend son stop-0 au-dessus — ne pas teinter la zone contenu).
-- [ ] **Step 5: courbes lissées** — `_WAVE_STEPS` 150→96 + tracé quadratique par points milieux (`_traceWavePath` partagé fill/crête) : plus lisse ET ~36 % de sin en moins.
-- [ ] **Step 6:** suites vertes ; bench ; commit.
+- [x] **Step 1 (TDD): AGC pur** — `agcNormalize(bands, peaks, out, decay, floor)` dans cinema-waves.js : normalise chaque bande par son pic glissant (mutation in-place, zéro allocation) ; plancher anti-bruit (pic < floor → 0). Tests : silence → 0, bande au pic → 1, décroissance du pic, sortie ≤ 1, retour = `out`. RED.
+- [x] **Step 2: câblage AGC** — cinema-canvas : `_wavePeaks`/`_waveBandsNorm` pré-alloués ; couches pilotées par les bandes NORMALISÉES (amplitude + vitesse de phase) — les 7 vagues vivent quel que soit le mixage.
+- [x] **Step 3: écume au beat** — pool pré-alloué (`_FOAM_MAX` glints), spawn dans la branche beat existante (déjà gated reduced-motion), glints blancs qui chevauchent la crête (y recalculé via `waveY` — ils surfent la vague), fondu ~0.5s, zéro allocation par frame.
+- [x] **Step 4: reflet d'horizon** — gradient spéculaire discret sous la ligne d'horizon (couleur couche arrière éclaircie), caché avec les styles (clé couleur+h), fillRect borné à la bande (un gradient linéaire étend son stop-0 au-dessus — ne pas teinter la zone contenu).
+- [x] **Step 5: courbes lissées** — `_WAVE_STEPS` 150→96 + tracé quadratique par points milieux (`_traceWavePath` partagé fill/crête) : plus lisse ET ~36 % de sin en moins.
+- [x] **Step 6:** suites vertes ; bench ; commit.
 
 ---
 

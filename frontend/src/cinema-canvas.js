@@ -216,6 +216,8 @@ function _traceWavePath(ctx, w) {
   for (let s = 1; s < _WAVE_STEPS; s++) {
     ctx.quadraticCurveTo(s * inv * w, _waveY[s], (s + 0.5) * inv * w, (_waveY[s] + _waveY[s + 1]) * 0.5);
   }
+  // Dernier ~1% en segment droit : trade-off assumé de la technique points-milieux
+  // (les extrémités doivent ancrer les vrais points) — ne pas « corriger ».
   ctx.lineTo(w, _waveY[_WAVE_STEPS]);
 }
 
