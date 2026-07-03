@@ -10,25 +10,61 @@
 
 import { rgbToHsl, hslToRgb } from './artcolor.js';
 
+// Boost d'amplitude maximal au beat (Task 16) — contenu : le punch visuel du beat
+// est porté par le halo de fond et les crêtes, pas par un gonflement des vagues.
+// Exporté pour que l'invariant pire-cas (crête avant sous l'horizon) soit testable.
+export const WAVE_BEAT_BOOST_MAX = 1.25;
+
 /**
- * Géométrie d'une couche de vague, normalisée.
+ * Géométrie d'une couche de vague, normalisée (Task 16 : mer bornée au bas de
+ * l'écran — la zone pochette/titre occupe ~0.20h-0.65h, l'horizon est à 0.58h).
+ * Invariant pire-cas garanti par construction (testé) :
+ *   yBase_avant − (ampBase+ampEnergy)_avant × WAVE_BEAT_BOOST_MAX ≥ horizon + 0.10h
+ * → même bande saturée + beat, la vague avant ne monte jamais sur l'horizon.
  * @param {number} l       index de couche, 0 = arrière … layers-1 = avant
  * @param {number} layers  nombre total de couches
- * @returns {{yBase:number, ampBase:number, ampEnergy:number,
+ * @returns {{yBase:number, ampBase:number, ampEnergy:number, freq:number,
  *            fillAlpha:number, crestAlpha:number, lineWidth:number}}
- *   yBase/ampBase/ampEnergy en fraction de la hauteur canvas ; alphas 0-1 ;
+ *   yBase/ampBase/ampEnergy en fraction de la hauteur canvas (ampBase+ampEnergy =
+ *   excursion max réelle, cf. waveY normalisée) ; freq sans unité ; alphas 0-1 ;
  *   lineWidth en px CSS.
  */
 export function waveLayerGeom(l, layers) {
   const t = layers > 1 ? l / (layers - 1) : 1; // 0 = arrière, 1 = avant
   return {
-    yBase:      0.30 + t * 0.56,   // 0.30h (horizon) → 0.86h (premier plan)
-    ampBase:    0.018 + t * 0.052, // houle de base — plate au loin, ample devant
-    ampEnergy:  0.045 + t * 0.115, // gain appliqué à l'énergie de bande
+    yBase:      0.58 + t * 0.30,   // 0.58h (horizon) → 0.88h (premier plan)
+    ampBase:    0.012 + t * 0.030, // houle de base — plate au loin, ample devant
+    ampEnergy:  0.022 + t * 0.066, // gain appliqué à l'énergie de bande
+    // Perspective naturelle : houle LARGE devant (freq basse), frémissement fin
+    // au loin (freq haute) — le flip de profondeur T12 avait laissé l'inverse.
+    freq:       3.8 - t * 2.0,     // 3.8 arrière → 1.8 avant
     fillAlpha:  0.10 + t * 0.24,   // remplissage léger arrière → dense avant
     crestAlpha: 0.14 + t * 0.60,   // crête discrète arrière → brillante avant
     lineWidth:  0.7 + t * 1.6,     // 0.7px arrière → 2.3px avant
   };
+}
+
+// Harmoniques de waveY — poids NORMALISÉS (somme = 1) : `amp` est l'excursion
+// maximale réelle, plus de facteur caché ×1.67 comme dans l'ancien modèle.
+const _W1 = 0.62, _W2 = 0.26, _W3 = 0.08, _W4 = 0.04;
+
+/**
+ * Déplacement vertical d'une vague au point nx ∈ [0,1] — 4 harmoniques
+ * (fondamentale + houle lente + clapot + médium) désynchronisées en phase.
+ * |waveY| ≤ amp par construction (poids sommant à 1, testé sur grille).
+ * @param {number} nx    position horizontale normalisée 0-1
+ * @param {number} ph    phase de la couche (radians, avance dans le rAF)
+ * @param {number} freq  fréquence de base de la couche (waveLayerGeom().freq)
+ * @param {number} amp   excursion maximale (px ou fraction de h — unité libre)
+ * @returns {number} déplacement signé, |retour| ≤ amp
+ */
+export function waveY(nx, ph, freq, amp) {
+  return amp * (
+    Math.sin(nx * Math.PI * freq + ph)              * _W1 +
+    Math.sin(nx * Math.PI * freq * 0.62 + ph * 1.3) * _W2 +
+    Math.sin(nx * Math.PI * freq * 2.4 + ph * 0.55) * _W3 +
+    Math.sin(nx * Math.PI * freq * 1.7 + ph * 0.77) * _W4
+  );
 }
 
 /**

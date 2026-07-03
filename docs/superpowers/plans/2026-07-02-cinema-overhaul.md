@@ -239,6 +239,17 @@ Audit utilisateur : « les vagues doivent être 7 vagues de bonne qualité, dyna
 - [x] **Step 3: fade spectrum** — `applyCinemaBg` (bascule VERS spectrum, hors reduced-motion) pose une classe `viz-fade-in` sur `#cinema-viz` (animation opacity tokenisée `--dur-cinema`, retirée sur `animationend`) — remplace le cut sec documenté en Task 11.
 - [x] **Step 4:** suites vertes ; commit.
 
+### Task 16: Vagues — cohérence visuelle position/taille (audit chiffré 2026-07-04)
+
+**Files:** Modify: `frontend/src/cinema-waves.js`, `frontend/src/cinema-canvas.js`, `frontend/tests/core.test.cjs`
+
+Audit chiffré : la mer occupe 0.30h-0.86h (intrusion zone pochette dès le silence) ; excursions jusqu'à ±0.59h vs espacement 0.093h (étagement détruit dès que la musique joue) ; énergie comptée 3× (bande + scalaire global + boost beat 1.65) ; facteur harmonique caché ×1.67 ; progression des longueurs d'onde inversée depuis le flip de profondeur T12 (avant = clapot serré au lieu de houle large).
+
+- [ ] **Step 1 (TDD): invariants numériques purs** — (a) `waveLayerGeom` : `yBase` ∈ [0.55, 0.92] (mer sous la zone contenu), espacement uniforme, nouveau champ `freq` STRICTEMENT décroissant vers l'avant (arrière ≈ 3.8 → avant ≈ 1.8, perspective naturelle) ; (b) nouvelle fonction pure `waveY(nx, ph, freq, amp)` — harmoniques à poids normalisés (somme = 1) : `|waveY| ≤ amp` sur une grille (nx, ph) ; (c) export `WAVE_BEAT_BOOST_MAX` (1.25) et invariant pire-cas : `yBase_avant − (ampBase+ampEnergy)_avant × WAVE_BEAT_BOOST_MAX ≥ horizon + 0.10h` (jamais de crête au-dessus de l'horizon, jamais d'intrusion contenu) ; (d) scans : `_drawWaveLayer` consomme `waveY`/`geo.freq`, plus de terme `_waveEnergy` dans l'amplitude (triple comptage retiré), boost beat dérivé de `WAVE_BEAT_BOOST_MAX`. RED.
+- [ ] **Step 2: cinema-waves.js** — geom rebudgeté (`yBase 0.58+0.30t`, `ampBase 0.012+0.030t`, `ampEnergy 0.022+0.066t`, `freq 3.8−2.0t`) ; `waveY` avec poids [0.62, 0.26, 0.08, 0.04] et multiplicateurs de fréquence [1, 0.62, 2.4, 1.7].
+- [ ] **Step 3: cinema-canvas.js** — `_drawWaveLayer` : `amp = (ampBase + bande×ampEnergy) × h × boost` (terme énergie globale supprimé — le halo de fond le garde), courbe via `waveY` ; `boostMult = 1 + v × (WAVE_BEAT_BOOST_MAX − 1)`.
+- [ ] **Step 4:** suites vertes ; bench ; commit.
+
 ---
 
 ## Vérification finale (après toutes les tâches)

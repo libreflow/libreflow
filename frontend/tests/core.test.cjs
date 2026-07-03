@@ -3258,6 +3258,69 @@ section('components/lf-toast-stack.logic.js -- import-smoke');
       'style.css: viz-fade-in neutralisé sous html[data-motion="reduce"]');
   }());
 
+  // =============================================================================
+  // Task 16 — Vagues : cohérence visuelle position/taille (audit chiffré 2026-07-04).
+  // Invariants NUMÉRIQUES purs — pas des scans : mer sous la zone contenu,
+  // excursion bornée par construction, perspective des longueurs d'onde à l'endroit.
+  // =============================================================================
+  section('Task 16 -- vagues: position/taille bornées (invariants numériques)');
+
+  await (async function () {
+    const { waveLayerGeom, waveY, WAVE_BEAT_BOOST_MAX } =
+      await import('../src/cinema-waves.js');
+    const LAYERS = 7;
+    const geoms = Array.from({ length: LAYERS }, (_, l) => waveLayerGeom(l, LAYERS));
+
+    // (a) position : la mer vit dans la bande basse de l'écran (la zone
+    // pochette/titre occupe ~0.20h-0.65h) ; espacement uniforme entre couches.
+    assert(geoms[0].yBase >= 0.55, `horizon (l=0) sous la zone contenu (yBase=${geoms[0].yBase.toFixed(2)}h ≥ 0.55h)`);
+    assert(geoms[LAYERS - 1].yBase <= 0.92, `premier plan (l=6) dans l'écran (yBase=${geoms[LAYERS - 1].yBase.toFixed(2)}h ≤ 0.92h)`);
+    const spacing0 = geoms[1].yBase - geoms[0].yBase;
+    for (let l = 2; l < LAYERS; l++) {
+      const sp = geoms[l].yBase - geoms[l - 1].yBase;
+      assert(Math.abs(sp - spacing0) < 1e-9, `espacement uniforme entre couches (l=${l})`);
+    }
+
+    // (b) perspective des longueurs d'onde À L'ENDROIT : fréquence STRICTEMENT
+    // décroissante vers l'avant — houle large devant, frémissement fin au loin
+    // (le flip de profondeur T12 avait laissé la progression inversée).
+    for (let l = 1; l < LAYERS; l++) {
+      assert(geoms[l].freq < geoms[l - 1].freq, `freq décroissante vers l'avant (l=${l}: ${geoms[l].freq} < ${geoms[l - 1].freq})`);
+    }
+
+    // (c) waveY : harmoniques à poids NORMALISÉS (somme = 1) — amp est
+    // l'excursion maximale réelle, plus de facteur caché ×1.67.
+    for (let pi = 0; pi <= 12; pi++) {
+      const ph = pi * 1.07;
+      for (let s = 0; s <= 40; s++) {
+        const y = waveY(s / 40, ph, 2.6, 1);
+        assert(Math.abs(y) <= 1 + 1e-9, `|waveY| ≤ amp (nx=${(s / 40).toFixed(2)}, ph=${ph.toFixed(2)}, y=${y.toFixed(3)})`);
+      }
+    }
+
+    // (d) invariant PIRE CAS : bande saturée + beat max → la crête de la vague
+    // AVANT reste sous l'horizon avec 0.10h de marge. L'étagement arrière/avant
+    // survit donc à n'importe quelle musique (l'ancien modèle montait à 0.27h).
+    assert(WAVE_BEAT_BOOST_MAX <= 1.3, `boost beat contenu (${WAVE_BEAT_BOOST_MAX} ≤ 1.3 — le punch visuel reste porté par le halo/crête)`);
+    const front = geoms[LAYERS - 1];
+    const worstCrest = front.yBase - (front.ampBase + front.ampEnergy) * WAVE_BEAT_BOOST_MAX;
+    assert(worstCrest >= geoms[0].yBase + 0.10,
+      `crête avant pire-cas (${worstCrest.toFixed(3)}h) ≥ horizon + 0.10h (${(geoms[0].yBase + 0.10).toFixed(2)}h)`);
+
+    // (e) scans d'intégration : _drawWaveLayer consomme waveY + geo.freq ; le
+    // terme d'énergie globale est retiré de l'amplitude (triple comptage) ; le
+    // boost beat dérive de WAVE_BEAT_BOOST_MAX (plus de 1.65 littéral).
+    const fs   = require('fs');
+    const path = require('path');
+    const root = path.join(__dirname, '../..');
+    const CANVAS = fs.readFileSync(path.join(root, 'frontend/src/cinema-canvas.js'), 'utf8');
+    assert(/waveY\(/.test(CANVAS), 'cinema-canvas.js: courbe des couches via waveY() (harmoniques normalisées)');
+    assert(/geo\.freq/.test(CANVAS), 'cinema-canvas.js: fréquence par couche depuis geo.freq');
+    assert(/WAVE_BEAT_BOOST_MAX/.test(CANVAS), 'cinema-canvas.js: boost beat dérivé de WAVE_BEAT_BOOST_MAX');
+    assert(!/_waveBeatObj\.v \* 0\.65/.test(CANVAS), 'cinema-canvas.js: plus de boost beat 1.65 littéral');
+    assert(!/_waveEnergy \* 0\.03/.test(CANVAS), 'cinema-canvas.js: plus de terme énergie globale dans l\'amplitude (triple comptage retiré)');
+  }());
+
   // -- Résultat -----------------------------------------------------------
   console.log('\n═══════════════════════════════════════════════════════════');
   console.log(`  Total : ${_ok + _ko}   OK: ${_ok}   KO: ${_ko}`);

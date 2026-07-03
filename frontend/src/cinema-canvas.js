@@ -11,7 +11,7 @@
 import { eqAnalyser }                                   from './eq.js';
 import { tween, kill as motionKill, eases, prefersReducedMotion } from './motion.js';
 import { createBeatDetector }                           from './cinema-beat.js';
-import { waveLayerGeom, waveLayerPalette, computeBandEnergies } from './cinema-waves.js';
+import { waveLayerGeom, waveLayerPalette, computeBandEnergies, waveY, WAVE_BEAT_BOOST_MAX } from './cinema-waves.js';
 
 // ── Vagues — pré-allocation module scope ────────────────────
 // Zéro allocation dans le hot path RAF (CLAUDE.md §10).
@@ -156,18 +156,13 @@ function _drawWaveLayer(ctx, w, h, l, boostMult) {
   const geo   = _WAVE_GEOM[l];
   const yBase = h * geo.yBase;
   // Mapping bande→couche : AVANT (l=6) ← basses (bande 0), arrière ← aigus.
+  // Task 16 : plus de terme _waveEnergy (triple comptage) — l'excursion max est
+  // (ampBase + ampEnergy) × WAVE_BEAT_BOOST_MAX, bornée sous l'horizon (testé).
   const band      = _waveBands[_WAVE_LAYERS - 1 - l];
-  const amplitude = (geo.ampBase + band * geo.ampEnergy + _waveEnergy * 0.03) * h * boostMult;
+  const amplitude = (geo.ampBase + band * geo.ampEnergy) * h * boostMult;
   const ph = _wavePhases[l];
-  // 4 harmoniques distinctes par couche — formes plus organiques, moins répétitives
-  const f1 = 2.1 + l * 0.9, f2 = 1.4 + l * 0.55, f3 = 5.3 + l * 0.4, f4 = 3.7 - l * 0.15;
   for (let s = 0; s <= _WAVE_STEPS; s++) {
-    const nx = s / _WAVE_STEPS;
-    _waveY[s] = yBase
-      + Math.sin(nx * Math.PI * f1 + ph)        * amplitude
-      + Math.sin(nx * Math.PI * f2 + ph * 1.3)  * amplitude * 0.42
-      + Math.sin(nx * Math.PI * f3 + ph * 0.55) * amplitude * 0.16
-      + Math.sin(nx * Math.PI * f4 + ph * 0.77) * amplitude * 0.09;
+    _waveY[s] = yBase + waveY(s / _WAVE_STEPS, ph, geo.freq, amplitude);
   }
   // Remplissage
   ctx.beginPath();
@@ -199,7 +194,7 @@ function _drawWaveLayer(ctx, w, h, l, boostMult) {
  */
 export function drawWavesFrame(ctx, w, h, cinArtRGBCur, isPlaying) {
   _updateWaveAudio();
-  const boostMult = 1 + _waveBeatObj.v * 0.65;
+  const boostMult = 1 + _waveBeatObj.v * (WAVE_BEAT_BOOST_MAX - 1);
   const r = Math.round(cinArtRGBCur[0]);
   const g = Math.round(cinArtRGBCur[1]);
   const b = Math.round(cinArtRGBCur[2]);
