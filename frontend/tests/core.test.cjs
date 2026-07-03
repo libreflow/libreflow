@@ -3183,6 +3183,34 @@ section('components/lf-toast-stack.logic.js -- import-smoke');
       'nowplaying.js passe W/H à renderAmbientFrame');
   }());
 
+  // =============================================================================
+  // Task 14 — Cohérence : gel en pause pour tous les fonds + teinte starfield
+  // 3 canaux (audit findings #9/#10)
+  // =============================================================================
+  section('Task 14 -- gel en pause + teinte starfield 3 canaux');
+
+  (function () {
+    const fs   = require('fs');
+    const path = require('path');
+    const root = path.join(__dirname, '../..');
+    const read = f => fs.readFileSync(path.join(root, f), 'utf8');
+
+    // (a) l'accumulation du temps d'animation est conditionnée à la lecture —
+    // en pause, ambient (drift), amoled (halo) et starfield (scintillement)
+    // gèlent comme les vagues (qui passent déjà par isPlaying).
+    const BG3 = read('frontend/src/cinema-bg.js');
+    assert(/if\s*\(\s*_getIsPlaying\(\)\s*\)\s*_ambientT\s*\+=\s*now\s*-\s*last/.test(BG3),
+      'cinema-bg.js: _ambientT n\'avance que si _getIsPlaying() (gel en pause pour les 4 modes canvas)');
+
+    // (b) le fond starfield est teinté depuis les 3 canaux de la couleur d'art
+    // (plus de rgba(0,0,<bleu seul>) — un album rouge teintait un ciel noir pur).
+    const CANVAS2 = read('frontend/src/cinema-canvas.js');
+    assert(!/rgba\(0,0,\$\{/.test(CANVAS2),
+      'cinema-canvas.js: plus de teinte starfield mono-canal bleu');
+    assert(/_starBgFillCache\s*=\s*`rgba\(\$\{[^}]+\},\$\{[^}]+\},\$\{[^}]+\},/.test(CANVAS2),
+      'cinema-canvas.js: fond starfield teinté sur les 3 canaux (r,g,b) de la couleur d\'art');
+  }());
+
   // -- Résultat -----------------------------------------------------------
   console.log('\n═══════════════════════════════════════════════════════════');
   console.log(`  Total : ${_ok + _ko}   OK: ${_ok}   KO: ${_ko}`);

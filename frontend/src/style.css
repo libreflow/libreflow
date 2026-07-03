@@ -5130,8 +5130,8 @@ html[data-motion="reduce"] #cinema-art-img[class*="cin-kb-"] { animation: none !
    Basculée sur #cinema-overlay là où l'icône play/pause est déjà synchronisée
    (_syncCinButtons, cinema.js). !important : mêmes specificités que les règles
    d'animation idle ci-dessus (déjà en !important pour .beat) — pattern existant.
-   Les fonds canvas (viz/ambient RAF) gèlent déjà via isPlaying (cinema-bg.js) —
-   on ne touche pas à ce chemin ici, seulement les animations CSS déclaratives. */
+   Les fonds canvas gèlent en pause côté JS (Task 14 : _ambientT conditionné à
+   _getIsPlaying() dans cinema-bg.js, les 4 modes) — ici, seulement le CSS. */
 #cinema-overlay.is-paused .cinema-art-wrap,
 #cinema-overlay.is-paused #cinema-art-img,
 #cinema-overlay.is-paused .cinema-bg {

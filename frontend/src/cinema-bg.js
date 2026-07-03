@@ -170,12 +170,11 @@ export function applyCinemaBg() {
   overlay.classList.add('bg-' + cinemaBg);
   updateCinemaBgBtn();
   const cinBg = document.getElementById('cinema-bg');
-  // Task 8 : snapshot de l'ancien mode AVANT tout switch — sert de base au cross-fade
-  // MODE_CROSSFADE_MS ci-dessous. Sous reduced-motion : pas de snapshot → bascule sèche (SC 2.3.3).
-  // Task 11 : pas de snapshot VERS spectrum — la boucle rAF ambient ne tourne pas dans
-  // ce mode (rendu par cinema-viz sur son propre canvas) : le snapshot plein écran
-  // (multi-Mo) ne serait jamais consommé ni libéré. Bascule sèche vers spectrum ;
-  // DEPUIS spectrum, le fondu part du canvas vidé (noir) — comportement déjà voulu.
+  // Task 8 : snapshot de l'ancien mode AVANT tout switch — base du cross-fade
+  // MODE_CROSSFADE_MS. Sous reduced-motion : pas de snapshot → bascule sèche (SC 2.3.3).
+  // Task 11 : pas de snapshot VERS spectrum — la boucle rAF ambient n'y tourne pas
+  // (rendu par cinema-viz) : le snapshot plein écran ne serait jamais consommé ni
+  // libéré. Bascule sèche ; DEPUIS spectrum, fondu depuis le canvas vidé — voulu.
   const modeSnapshot = cinemaBg === 'spectrum' ? null : _snapshotModeCanvas(cinBg);
   _stopAmbientAnim(); // arrêter l'animation breathing avant tout switch de mode
   _ambientColors = null;
@@ -294,7 +293,8 @@ function _startAmbientAnim() {
       _ambientAnimRaf = requestAnimationFrame(loop);
       return;
     }
-    _ambientT += now - last;
+    // Task 14 : gel en pause (ambient/amoled/starfield) ; les cross-fades (performance.now) se terminent — voulu.
+    if (_getIsPlaying()) _ambientT += now - last;
     last = now;
     const canvas = document.getElementById('cinema-bg');
     if (!canvas) { _ambientAnimRaf = null; return; }

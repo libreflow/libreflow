@@ -307,11 +307,16 @@ export function drawStarfieldFrame(ctx, w, h, cinArtRGBCur, ambientT) {
   const starFill = _starFillCache;
   const glowFill = _starGlowFillCache;
 
-  // Fond : noir profond avec légère teinte de l'art — cache clé sur la teinte arrondie
-  const bTint = Math.round(b * 0.08);
-  if (bTint !== _starBgTintLast) {
-    _starBgTintLast = bTint;
-    _starBgFillCache = `rgba(0,0,${bTint},0.96)`;
+  // Fond : noir profond teinté par la couleur d'art — les 3 canaux (Task 14 :
+  // l'ancien code ne teintait que le bleu → ciel noir pur pour un album rouge).
+  // Cache clé sur la somme des composantes arrondies (invalidation fiable et cheap).
+  const rTint = Math.round(r * 0.045);
+  const gTint = Math.round(g * 0.045);
+  const bTint = Math.round(b * 0.10);
+  const tintKey = rTint * 66049 + gTint * 257 + bTint; // clé compacte sans collision (<257 par canal)
+  if (tintKey !== _starBgTintLast) {
+    _starBgTintLast = tintKey;
+    _starBgFillCache = `rgba(${rTint},${gTint},${bTint},0.96)`;
   }
   ctx.fillStyle = _starBgFillCache;
   ctx.fillRect(0, 0, w, h);
