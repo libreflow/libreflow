@@ -3126,6 +3126,14 @@ section('components/lf-toast-stack.logic.js -- import-smoke');
     computeBandEnergies(buf, out, 0.5);
     assert(after1 > 0.4 && after1 < 0.6, `bandes: EMA passe 1 ≈ 0.5 (actual: ${after1.toFixed(2)})`);
     assert(out[0] > 0.7 && out[0] < 0.8, `bandes: EMA passe 2 ≈ 0.75 (actual: ${out[0].toFixed(2)})`);
+    // Bornes défensives (fix revue) : buffer plus court que bands+1 → jamais de NaN
+    // (l'ancien code lisait hors du buffer → undefined → NaN silencieux).
+    const tiny = new Uint8Array(4).fill(255);
+    out.fill(0);
+    computeBandEnergies(tiny, out, 1);
+    for (let k = 0; k < LAYERS; k++) {
+      assert(Number.isFinite(out[k]), `bandes: buffer minuscule (4 bins, 7 bandes) → pas de NaN (k=${k})`);
+    }
 
     // (d) scans d'intégration — cinema-canvas consomme le module pur ; fallback sans
     // analyser (plus d'écran noir avant la première lecture) ; buffer y partagé

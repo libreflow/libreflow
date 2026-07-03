@@ -73,11 +73,13 @@ export function computeBandEnergies(fftBuf, out, smooth = 0.35) {
   const bands  = out.length;
   const usable = Math.max(bands + 1, Math.floor(fftBuf.length * 0.72));
   for (let k = 0; k < bands; k++) {
-    const start = k === 0 ? 0 : Math.floor(Math.pow(usable, k / bands));
-    const end   = Math.max(start + 1, Math.floor(Math.pow(usable, (k + 1) / bands)));
+    // Bornes défensives (fix revue) : un buffer plus court que bands+1 ferait
+    // déborder end → lecture undefined → NaN. Bande hors buffer → énergie 0.
+    const start = Math.min(fftBuf.length, k === 0 ? 0 : Math.floor(Math.pow(usable, k / bands)));
+    const end   = Math.min(fftBuf.length, Math.max(start + 1, Math.floor(Math.pow(usable, (k + 1) / bands))));
     let sum = 0;
     for (let i = start; i < end; i++) sum += fftBuf[i];
-    const e = sum / ((end - start) * 255);
+    const e = end > start ? sum / ((end - start) * 255) : 0;
     out[k] += (e - out[k]) * smooth;
   }
   return out;

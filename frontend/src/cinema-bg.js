@@ -196,14 +196,16 @@ export function applyCinemaBg() {
   if (_getCinemaOpen()) _doUpdateCinema();
 }
 
-// Rejoue l'animation .viz-fade-in sur #cinema-viz (retirée sur animationend).
+// Rejoue l'animation .viz-fade-in sur #cinema-viz. La classe RESTE posée : sans
+// fill-mode elle est inerte une fois l'animation finie, et retrait + reflow + ajout
+// suffisent à la rejouer — aucun listener animationend (fix revue : une bascule
+// interrompue fire animationcancel, pas animationend → le {once} fuyait).
 function _vizFadeIn() {
   const viz = document.getElementById('cinema-viz');
   if (!viz) return;
   viz.classList.remove('viz-fade-in');
   void viz.offsetWidth; // reflow — permet de rejouer l'animation
   viz.classList.add('viz-fade-in');
-  viz.addEventListener('animationend', () => viz.classList.remove('viz-fade-in'), { once: true });
 }
 
 // Snapshot du canvas #cinema-bg courant (avant switch de mode) pour le cross-fade
