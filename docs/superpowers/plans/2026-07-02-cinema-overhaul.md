@@ -172,6 +172,31 @@ UX cible : le panneau « Suivant » (bas-droite) devient cliquable (bouton, `ari
 
 ---
 
+### Task 10: Réglage d'animations in-app (Système / Complètes / Réduites, défaut Complètes)
+
+**Files:** Modify: `frontend/src/motion.js`, `frontend/src/app.js`, `frontend/src/settings.js`, `frontend/src/style.css`, `frontend/src/design-system.css` (si blocs concernés), `frontend/src/i18n.fr.js`, `frontend/src/i18n.en.js`, `frontend/tests/core.test.cjs`, `frontend/tests/a11y.test.cjs`
+
+**Contexte / bug produit :** sous Windows avec « Effets d'animation » désactivé (cas de l'utilisateur : `MinAnimate=0`), WebView2 rapporte `prefers-reduced-motion: reduce` → depuis la Task 2, TOUT le cinéma est figé (frame statique canvas, Ken Burns/float/breathe coupés, GSAP en set() instantané). Décision utilisateur : réglage in-app à 3 états, **défaut `full`** (lecteur musical visuel mono-utilisateur ; l'option Réduites conserve la conformité WCAG via contrôle explicite).
+
+- [ ] **Step 1 (TDD):** tests — (a) core: table de vérité de la préférence effective (pure) : `full`→false, `reduce`→true, `system`→OS ; défaut `full` ; (b) scan : `motion.js` exporte `setMotionPref` et `prefersReducedMotion` consulte la préférence app AVANT le media query ; (c) scan : plus AUCUN bloc `@media (prefers-reduced-motion` dans style.css (remplacés par `html[data-motion="reduce"]`) ; (d) scan : app.js pose `data-motion` sur `<html>` au boot et écoute le changement du media query ; (e) i18n fr+en parité des nouvelles clés ; (f) a11y : le select du réglage a un label accessible. RED.
+- [ ] **Step 2: motion.js** — variable module `_motionPref` (`'full'` par défaut) + export `setMotionPref(pref)` (valide `'system'|'full'|'reduce'`). `prefersReducedMotion()` : `'reduce'`→true, `'full'`→false, `'system'`→`_rmQuery.matches`. AUCUN nouvel import dans motion.js (app.js pousse la valeur — zéro risque de cycle).
+- [ ] **Step 3: app.js (boot + réactivité)** — lit la clé cfg `motionPref` (défaut `'full'`), appelle `setMotionPref`, pose `document.documentElement.dataset.motion = effectif ? 'reduce' : 'full'`. Écoute `_rmQuery` `change` (exposer un hook depuis motion.js, ex. `onMotionPrefChange(cb)` ou l'ajout du listener dans app.js via un export du query) : recalcul de l'effectif → maj `data-motion` + si cinéma ouvert, relancer/arrêter les boucles (`applyCinemaBg()` + refresh viz — réutiliser le chemin existant de changement de mode). Même recalcul quand le réglage change depuis settings.
+- [ ] **Step 4: CSS** — remplacer TOUS les blocs `@media (prefers-reduced-motion: reduce)` de style.css par un scoping `html[data-motion="reduce"]` équivalent (sweep global, pas seulement cinéma — le réglage est app-wide). Vérifier design-system.css.
+- [ ] **Step 5: settings.js** — contrôle « Animations » (select ou segmenté, pattern existant du panneau réglages) : Système / Complètes / Réduites ; écrit `motionPref` en cfg (debounced via saveCfg), applique immédiatement (Step 3 recalcul). i18n : `settings_motion` (fr « Animations », en "Animations"), `motion_system` (« Système »/"System"), `motion_full` (« Complètes »/"Full"), `motion_reduce` (« Réduites »/"Reduced").
+- [ ] **Step 6:** suites complètes vertes ; commit.
+
+### Task 11: Défrizz — fluidité 60fps en cinéma actif, cross-fade spectrum, compositing
+
+**Files:** Modify: `frontend/src/cinema-bg.js`, `frontend/src/style.css`, `frontend/tests/core.test.cjs`
+
+- [ ] **Step 1 (TDD):** scans — (a) la condition de frame-skip de cinema-bg.js dépend de l'état focus/visibilité (pas un cap 30fps inconditionnel) ; (b) le chemin cross-fade de mode gère spectrum (snapshot consommé ou libéré, jamais retenu) ; (c) `will-change` présent sur les éléments animés en continu du cinéma (art-wrap) et NULLE PART ailleurs en ajout non justifié. RED.
+- [ ] **Step 2: 60fps en cinéma actif** — dans la boucle de cinema-bg.js : cap 30fps (skip 1/2) UNIQUEMENT quand `document.hasFocus()` est false ; fenêtre focalisée → 60fps pour tous les modes (le viz player-bar est suspendu sous l'overlay depuis T1, le budget est là). L'accumulation temporelle (`_ambientT += now-last`) garantit déjà une vitesse d'animation identique.
+- [ ] **Step 3: cross-fade spectrum** — bascule VERS spectrum : consommer le snapshot via un fondu CSS/canvas court OU le libérer immédiatement (`_ambientCross = null`) — jamais de rétention multi-Mo pendant tout le mode spectrum. Bascule DEPUIS spectrum : snapshot d'un canvas vide toléré (fondu depuis noir, déjà le cas).
+- [ ] **Step 4: compositing** — `will-change: transform` sur `.cinema-art-wrap` (Ken Burns + float en continu) ; vérifier que toutes les animations cinéma restent transform/opacity-only (aucune propriété layout animée) ; retirer tout `will-change` superflu ajouté.
+- [ ] **Step 5:** suites vertes ; `npm run bench` non régressé ; commit.
+
+---
+
 ## Vérification finale (après toutes les tâches)
 
 - `npm test` — toutes suites vertes (core + les .cjs individuels : a11y, token-source, theme-palette, sidebar)
