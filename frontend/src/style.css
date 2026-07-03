@@ -4819,6 +4819,13 @@ html[data-motion="reduce"] .eq-slider::-moz-range-thumb { transition: none; }
   -webkit-mask-image: linear-gradient(to bottom, rgba(0,0,0,1) 0%, rgba(0,0,0,0.6) 85%, rgba(0,0,0,0) 100%);
   mask-image: linear-gradient(to bottom, rgba(0,0,0,1) 0%, rgba(0,0,0,0.6) 85%, rgba(0,0,0,0) 100%);
 }
+/* Task 15 : fade d'entrée du viz à la bascule VERS spectrum — remplace le cut sec
+   (aucun snapshot de cross-fade pour ce mode, cf. cinema-bg.js Task 11). Animé via
+   filter:opacity() et NON opacity : .bg-spectrum .cinema-viz force opacity:1
+   !important (pour battre l'inline JS), ce qui écraserait des keyframes opacity. */
+@keyframes cin-viz-fade-in { from { filter: opacity(0); } to { filter: opacity(1); } }
+.cinema-viz.viz-fade-in { animation: cin-viz-fade-in var(--dur-cinema) ease; }
+html[data-motion="reduce"] .cinema-viz.viz-fade-in { animation: none !important; }
 
 /* ── Horloge idle (bottom-left, inversement de ctrl-on) ─── */
 #cinema-clock {

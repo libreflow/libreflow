@@ -2274,7 +2274,8 @@ section('components/lf-toast-stack.logic.js -- import-smoke');
     // Task 3 : cinema-bg.js gagne snapArtColor()/stepArtColorLerp() (état couleur privé) — cap 400→470.
     // Task 8 : cross-fade de bascule de mode (MODE_CROSSFADE_MS, _snapshotModeCanvas) — cap 470→480
     // (+25 lignes réelles : constante, helper snapshot, câblage applyCinemaBg, commentaires).
-    assert(bgLines  < 480, `cinema-bg.js < 480 lignes (actual: ${bgLines})`);
+    // Task 15 : fade d'entrée spectrum (_vizFadeIn + câblage) + gardes Tasks 11/14 — cap 480→495.
+    assert(bgLines  < 495, `cinema-bg.js < 495 lignes (actual: ${bgLines})`);
     assert(beatLines   < 200, `cinema-beat.js < 200 lignes (actual: ${beatLines})`);
     // Task 9 : getCinemaQueueUpcoming()/playCinemaQueueTrack() ajoutés — reste < 400.
     assert(renderLines < 400, `cinema-render.js < 400 lignes (actual: ${renderLines})`);
@@ -3209,6 +3210,44 @@ section('components/lf-toast-stack.logic.js -- import-smoke');
       'cinema-canvas.js: plus de teinte starfield mono-canal bleu');
     assert(/_starBgFillCache\s*=\s*`rgba\(\$\{[^}]+\},\$\{[^}]+\},\$\{[^}]+\},/.test(CANVAS2),
       'cinema-canvas.js: fond starfield teinté sur les 3 canaux (r,g,b) de la couleur d\'art');
+  }());
+
+  // =============================================================================
+  // Task 15 — Spectrum : mapping log monotone (plus de barres jumelles dans les
+  // graves) + fade d'entrée du viz à la bascule (audit findings #11/#12)
+  // =============================================================================
+  section('Task 15 -- spectrum: bins monotones + fade d\'entrée');
+
+  (function () {
+    const fs   = require('fs');
+    const path = require('path');
+    const root = path.join(__dirname, '../..');
+    const read = f => fs.readFileSync(path.join(root, f), 'utf8');
+
+    // (a) les 3 renderers de barres (spectrum, standard, vol-vis) passent par le
+    // helper de bins strictement croissants — le mapping log arrondi faisait
+    // pointer les premières barres sur les mêmes bins 1-2 (colonnes jumelles).
+    const VIZ = read('frontend/src/cinema-viz.js');
+    assert(/function _monotonicBin\(/.test(VIZ),
+      'cinema-viz.js: helper _monotonicBin défini');
+    const uses = (VIZ.match(/_monotonicBin\(/g) || []).length;
+    assert(uses >= 4, `cinema-viz.js: _monotonicBin utilisé par les 3 renderers de barres (def + 3 usages, actual: ${uses})`);
+
+    // (b) bascule VERS spectrum : fade d'entrée du canvas viz (remplace le cut sec
+    // documenté en Task 11), tokenisé, inerte sous reduced-motion.
+    const BG4 = read('frontend/src/cinema-bg.js');
+    assert(/viz-fade-in/.test(BG4) && /cinemaBg\s*===\s*'spectrum'/.test(BG4),
+      'cinema-bg.js: bascule vers spectrum → classe viz-fade-in sur #cinema-viz');
+    const CSS2 = read('frontend/src/style.css');
+    assert(/\.cinema-viz\.viz-fade-in\s*\{[^}]*animation[^}]*var\(--dur-/.test(CSS2),
+      'style.css: animation viz-fade-in tokenisée (--dur-*)');
+    // filter:opacity() et non opacity — .bg-spectrum .cinema-viz force opacity:1
+    // !important, qui écraserait des keyframes opacity (les animations perdent
+    // contre !important dans la cascade).
+    assert(/@keyframes cin-viz-fade-in[^}]*filter\s*:\s*opacity/.test(CSS2),
+      'style.css: keyframes viz-fade-in animent filter:opacity() (opacity est verrouillée en !important)');
+    assert(/html\[data-motion="reduce"\]\s+\.cinema-viz\.viz-fade-in\s*\{[^}]*animation\s*:\s*none/.test(CSS2),
+      'style.css: viz-fade-in neutralisé sous html[data-motion="reduce"]');
   }());
 
   // -- Résultat -----------------------------------------------------------

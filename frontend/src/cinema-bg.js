@@ -189,8 +189,21 @@ export function applyCinemaBg() {
   // Appelé APRÈS _updateAmbientGradient() : celui-ci peut ré-appeler _stopAmbientAnim() en interne
   // (qui remet _ambientCross à null) — poser le cross ici garantit qu'il survit au switch.
   if (modeSnapshot) _ambientCross = { snapshot: modeSnapshot, start: performance.now(), dur: MODE_CROSSFADE_MS };
+  // Task 15 : bascule VERS spectrum sans snapshot (cf. supra) → fade d'entrée CSS
+  // du canvas viz à la place du cut sec. Inerte sous reduced-motion (CSS + garde).
+  if (cinemaBg === 'spectrum' && !prefersReducedMotion()) _vizFadeIn();
   // Bug #9 fix : rafraîchir l'UI cinéma après chaque switch de mode (pochette flou stale sinon).
   if (_getCinemaOpen()) _doUpdateCinema();
+}
+
+// Rejoue l'animation .viz-fade-in sur #cinema-viz (retirée sur animationend).
+function _vizFadeIn() {
+  const viz = document.getElementById('cinema-viz');
+  if (!viz) return;
+  viz.classList.remove('viz-fade-in');
+  void viz.offsetWidth; // reflow — permet de rejouer l'animation
+  viz.classList.add('viz-fade-in');
+  viz.addEventListener('animationend', () => viz.classList.remove('viz-fade-in'), { once: true });
 }
 
 // Snapshot du canvas #cinema-bg courant (avant switch de mode) pour le cross-fade

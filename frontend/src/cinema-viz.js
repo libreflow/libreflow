@@ -50,6 +50,14 @@ export function stopCinemaViz()  { _stopViz(); }
 
 // ── Implémentation interne ───────────────────────────────────
 
+// Task 15 : mapping log → bin STRICTEMENT croissant. L'arrondi de 2^(t·range)
+// faisait pointer les premières barres des graves sur les mêmes bins 1-2
+// (colonnes jumelles identiques). Cap à maxBin (jamais atteint en pratique :
+// barCount << bins utilisables).
+function _monotonicBin(rawBin, lastBin, maxBin) {
+  return Math.min(Math.max(rawBin, lastBin + 1), maxBin);
+}
+
 // Dessine un mini-visualiseur de fréquences sur le canvas de la barre de volume.
 // Appelé à chaque frame draw() — le canvas est très petit donc perf négligeable.
 function _drawVolVis(data, lerpRGB) {
@@ -74,10 +82,12 @@ function _drawVolVis(data, lerpRGB) {
   const totalBins = data.length;
   const logMin = Math.log2(1), logMax = Math.log2(totalBins * 0.55);
   _volVisCtx.fillStyle = `rgb(${lerpRGB})`;
+  let lastBin = 0;
   for (let i = 0; i < barCount; i++) {
     const t   = i / barCount;
-    const bin = Math.round(Math.pow(2, logMin + t * (logMax - logMin)));
-    const v   = data[Math.min(bin, totalBins - 1)] / 255;
+    const bin = _monotonicBin(Math.round(Math.pow(2, logMin + t * (logMax - logMin))), lastBin, totalBins - 1);
+    lastBin   = bin;
+    const v   = data[bin] / 255;
     const bh  = Math.max(1, v * h * 0.82);
     _volVisCtx.globalAlpha = 0.07 + v * 0.30;
     _volVisCtx.fillRect(i * bw + 0.5, h - bh, Math.max(1, bw - 1), bh);
@@ -113,10 +123,12 @@ function _drawSpectrumBars(ctx, data, w, h, analyser, lerpRGB, sg) {
   const logMin = Math.log2(1), logMax = Math.log2(totalBins * 0.72);
   if (lerpRGB !== sg.rgb || midY !== sg.midY) _buildSpectrumGradients(ctx, h, midY, lerpRGB, sg);
   const _glowFill = _glowFillCache; // rgb() sans alpha (globalAlpha gère l'opacité par barre)
+  let lastBin = 0;
   for (let i = 0; i < barCount; i++) {
     const t   = i / barCount;
-    const bin = Math.round(Math.pow(2, logMin + t * (logMax - logMin)));
-    const v   = data[Math.min(bin, totalBins - 1)] / 255;
+    const bin = _monotonicBin(Math.round(Math.pow(2, logMin + t * (logMax - logMin))), lastBin, totalBins - 1);
+    lastBin   = bin;
+    const v   = data[bin] / 255;
     const bh  = Math.max(2, v * midY * 0.94);
     const a   = 0.08 + v * 0.75;
     const x   = i * bw + 1, bww = Math.max(1, bw - 2);
@@ -157,10 +169,12 @@ function _drawStandardBars(ctx, data, w, h, analyser, lerpRGB) {
   // PERF : rgb() mis en cache — reconstruit seulement si _lerpRGB a changé (pas par frame)
   if (lerpRGB !== _stdFillRGB) { _stdFillRGB = lerpRGB; _stdFillCache = `rgb(${lerpRGB})`; }
   ctx.fillStyle = _stdFillCache; // set once — no per-bar string alloc (globalAlpha handles per-bar opacity)
+  let lastBin = 0;
   for (let i = 0; i < barCount; i++) {
     const t   = i / barCount;
-    const bin = Math.round(Math.pow(2, logMin + t * (logMax - logMin)));
-    const v   = data[Math.min(bin, totalBins - 1)] / 255;
+    const bin = _monotonicBin(Math.round(Math.pow(2, logMin + t * (logMax - logMin))), lastBin, totalBins - 1);
+    lastBin   = bin;
+    const v   = data[bin] / 255;
     const bh  = Math.max(2, v * h * 0.45);
     const a   = 0.07 + v * 0.38;
     ctx.globalAlpha = a;
