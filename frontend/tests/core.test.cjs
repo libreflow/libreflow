@@ -2557,6 +2557,16 @@ section('components/lf-toast-stack.logic.js -- import-smoke');
       'cinema-bg.js exporte updateCachedWinSize() (mise à jour par le handler resize de cinema.js)');
     assert(/updateCachedWinSize\(\)/.test(read('frontend/src/cinema.js')),
       'cinema.js appelle updateCachedWinSize() dans son handler resize');
+
+    // (f) Task 1 : suspendViz stoppe aussi l'oscilloscope premium (rAF autonome)
+    const suspendBody = /export function suspendViz\(\)[\s\S]*?\n\}/.exec(vizSrc)?.[0] || '';
+    const resumeBody  = /export function resumeViz\(\)[\s\S]*?\n\}/.exec(vizSrc)?.[0] || '';
+    assert(suspendBody.length > 0, 'viz.js : suspendViz() trouvée');
+    assert(resumeBody.length > 0,  'viz.js : resumeViz() trouvée');
+    assert(/_premiumOsc/.test(suspendBody) && /\.stop\(\)/.test(suspendBody),
+      'suspendViz() stoppe _premiumOsc.stop() (P-H3 fix: oscilloscope premium a son propre rAF)');
+    assert(/vizMode\s*===\s*['"]oscilloscope['"]/.test(resumeBody) && /_ensurePremiumOsc/.test(resumeBody) && /\.start\(\)/.test(resumeBody),
+      'resumeViz() redémarre l\'oscilloscope premium conditionnellement (vizMode === "oscilloscope")');
   }
 
   // =============================================================================

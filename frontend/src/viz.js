@@ -214,16 +214,18 @@ export function stopViz() {
  *  Le canvas garde son dernier contenu affiché jusqu'à resumeViz()/stopViz(). */
 export function suspendViz() {
   _vizSuspended = true;
+  // P-H3 fix : l'oscilloscope premium a son propre rAF — le stopper aussi.
+  if (_premiumOsc) _premiumOsc.stop();
 }
 
 /** Reprend le rendu suspendu par suspendViz() et force un redraw immédiat
  *  (n'attend pas le prochain tick rAF naturel — évite un frame de contenu périmé). */
 export function resumeViz() {
   _vizSuspended = false;
-  if (running && canvas && eqAnalyser) {
-    if (raf) { cancelAnimationFrame(raf); raf = null; }
-    _draw();
-  }
+  if (!running || !canvas || !eqAnalyser) return;
+  if (vizMode === 'oscilloscope') { _ensurePremiumOsc()?.start(); return; }
+  if (raf) { cancelAnimationFrame(raf); raf = null; }
+  _draw();
 }
 
 /** Met à jour la couleur des barres.
