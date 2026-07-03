@@ -138,7 +138,11 @@ function _rebuildWaveStyles(ctx, h, lerpRGB, r, g, b) {
     const [lr, lg, lb] = pal[l];
     const yBase = h * geo.yBase;
     const a0    = geo.fillAlpha;
-    const grad  = ctx.createLinearGradient(0, yBase - h * 0.12, 0, h);
+    // Task 16 (fix revue) : le gradient démarre à l'excursion MAX de la couche
+    // ((ampBase+ampEnergy)×boost max) — la crête ne peut jamais dépasser le stop-0
+    // (l'ancien offset fixe 0.12h laissait un aplat au sommet au pire cas).
+    const gradTop = yBase - (geo.ampBase + geo.ampEnergy) * WAVE_BEAT_BOOST_MAX * h;
+    const grad  = ctx.createLinearGradient(0, gradTop, 0, h);
     grad.addColorStop(0,    `rgba(${lr},${lg},${lb},${a0.toFixed(2)})`);
     grad.addColorStop(0.38, `rgba(${lr},${lg},${lb},${(a0 * 0.52).toFixed(2)})`);
     grad.addColorStop(0.72, `rgba(${lr},${lg},${lb},${(a0 * 0.15).toFixed(2)})`);

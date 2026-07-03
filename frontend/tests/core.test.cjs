@@ -3319,6 +3319,10 @@ section('components/lf-toast-stack.logic.js -- import-smoke');
     assert(/WAVE_BEAT_BOOST_MAX/.test(CANVAS), 'cinema-canvas.js: boost beat dérivé de WAVE_BEAT_BOOST_MAX');
     assert(!/_waveBeatObj\.v \* 0\.65/.test(CANVAS), 'cinema-canvas.js: plus de boost beat 1.65 littéral');
     assert(!/_waveEnergy \* 0\.03/.test(CANVAS), 'cinema-canvas.js: plus de terme énergie globale dans l\'amplitude (triple comptage retiré)');
+    // Fix revue : le gradient de remplissage démarre à l'excursion max de la
+    // couche — la crête ne peut jamais dépasser le stop-0 (aplat au sommet sinon).
+    assert(/yBase\s*-\s*\(geo\.ampBase\s*\+\s*geo\.ampEnergy\)\s*\*\s*WAVE_BEAT_BOOST_MAX/.test(CANVAS),
+      'cinema-canvas.js: départ du gradient = excursion max de la couche (couvre le pire cas par construction)');
   }());
 
   // -- Résultat -----------------------------------------------------------
