@@ -2340,6 +2340,54 @@ section('components/lf-toast-stack.logic.js -- import-smoke');
   }
 
   // =============================================================================
+  // Post-review (final whole-branch findings 1/3/4) — scans bon marché, house style.
+  // =============================================================================
+  try {
+    const fs = require('fs'), path = require('path');
+    const root = path.join(__dirname, '../..');
+    const read = f => fs.readFileSync(path.join(root, f), 'utf8');
+
+    section('cinema post-review -- findings 1/3/4');
+
+    const cinSrc    = read('frontend/src/cinema.js');
+    const renderSrc = read('frontend/src/cinema-render.js');
+    const playerSrc = read('frontend/src/player.js');
+    const queueQSrc = read('frontend/src/cinema-queue.js');
+
+    // Finding 1 — les branches shuffle et !tracks/curIdx<0 de _updateNextTrack ne doivent
+    // plus manipuler .cin-has-next à la main (seul renderCinNextPanel(panel, hint, ...) le
+    // fait) : sinon #cinema-next reste focalisable (pas de .disabled) sous shuffle/no-track.
+    const nextBody = /function _updateNextTrack\(\)\s*\{[\s\S]*?\n\}\n/.exec(cinSrc)?.[0] || '';
+    assert(nextBody.length > 0, 'cinema.js : _updateNextTrack() trouvée');
+    assert(!/panel\.classList\.(remove|add)\('cin-has-next'\)/.test(nextBody),
+      'cinema.js : _updateNextTrack() ne manipule plus panel.classList directement (route via renderCinNextPanel)');
+    assert((nextBody.match(/renderCinNextPanel\(panel, hint, null, shuffle\)/g) || []).length === 2,
+      'cinema.js : les branches shuffle ET !tracks/curIdx<0 appellent renderCinNextPanel(…, null, shuffle) — #cinema-next reste disabled (Finding 1)');
+
+    // Finding 3 — le cluster cinéma ne réimporte jamais queue.js directement (façade
+    // player.js) : cinema-render.js doit importer peekExplicitQueue/removeFromQueue
+    // depuis player.js, et player.js doit les réexporter.
+    assert(!/from '\.\/queue\.js'/.test(renderSrc),
+      "cinema-render.js n'importe plus queue.js directement (Finding 3)");
+    assert(/peekExplicitQueue[\s\S]*?from '\.\/player\.js'/.test(renderSrc) &&
+      /removeFromQueue/.test(renderSrc),
+      'cinema-render.js importe peekExplicitQueue/removeFromQueue depuis player.js');
+    assert(/export \{ peekExplicitQueue, removeFromQueue \}/.test(playerSrc),
+      'player.js réexporte peekExplicitQueue/removeFromQueue (façade queue.js, §6)');
+
+    // Finding 4 — quand le panneau ouvert se vide alors qu'une rangée était focalisée,
+    // le focus ne doit jamais retomber silencieusement sur <body> (fuite du Tab-trap
+    // overlay) : bascule vers le déclencheur focalisable, sinon ferme le panneau.
+    const renderBody = /function _render\(\)\s*\{[\s\S]*?\n\}\n/.exec(queueQSrc)?.[0] || '';
+    assert(renderBody.length > 0, 'cinema-queue.js : _render() trouvée');
+    assert(/_isTriggerFocusable/.test(renderBody) && /_closePanel\(\)/.test(renderBody),
+      'cinema-queue.js : _render() gère le cas liste-vidée-focus-perdu (trigger focalisable sinon _closePanel)');
+  } catch (e) {
+    console.error('  KO  cinema post-review scans crashed:', e.message);
+    _ko++;
+  }
+
+  // =============================================================================
   // Task 3 — santé du code : beat partagé (cinema-beat.js), état couleur privé
   // (cinema-bg.js), split des fonctions géantes (updateCinema). Refactor pur.
   // Logique beat reproduite inline (style maison — pas d'import ESM) + scans.
@@ -2535,9 +2583,15 @@ section('components/lf-toast-stack.logic.js -- import-smoke');
     assert(applyBody.length > 0, 'cinema-bg.js : applyCinemaBg() trouvée');
     assert(/MODE_CROSSFADE_MS/.test(applyBody),
       'applyCinemaBg() déclenche le cross-fade de bascule de mode (réutilise MODE_CROSSFADE_MS)');
-    assert(/prefersReducedMotion\(\)/.test(bgSrc) &&
-      new RegExp('prefersReducedMotion' ).test(bgSrc),
-      'cinema-bg.js : bascule de mode sèche sous reduced-motion (pas de snapshot cross-fade)');
+    // Fix post-review (Finding 5) — l'ancienne assertion testait prefersReducedMotion()
+    // deux fois contre le fichier ENTIER (conjoints identiques, passe trivialement même
+    // si le dry-cut disparaît). On isole le corps de _snapshotModeCanvas (la garde qui
+    // fait réellement la bascule sèche) et on vérifie qu'il appelle prefersReducedMotion()
+    // ET retourne bien `null` dans le même garde — la garantie de dry-cut elle-même.
+    const snapshotBody = /function _snapshotModeCanvas\([^)]*\)\s*\{[\s\S]*?\n\}\n/.exec(bgSrc)?.[0] || '';
+    assert(snapshotBody.length > 0, 'cinema-bg.js : _snapshotModeCanvas() trouvée');
+    assert(/if\s*\([^)]*prefersReducedMotion\(\)[^)]*\)\s*return null;/.test(snapshotBody),
+      'cinema-bg.js : _snapshotModeCanvas() retourne null sous reduced-motion (dry-cut garanti, pas de snapshot cross-fade)');
 
     // (b) amoled soumis au même cap 30fps que les autres modes — l'exemption a disparu
     // de la condition de frame-skip de la boucle rAF.

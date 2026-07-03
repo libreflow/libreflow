@@ -737,8 +737,7 @@ function _updateNextTrack() {
   const shuffle = get('shuffle');
 
   if (!tracks || curIdx < 0) {
-    panel.classList.remove('cin-has-next');
-    hint?.classList.remove('cin-has-next');
+    renderCinNextPanel(panel, hint, null, shuffle);
     return;
   }
 
@@ -759,8 +758,7 @@ function _updateNextTrack() {
 
   // Shuffle actif (sans file explicite ni radio) : aucune piste prévisible → hint discret
   if (shuffle) {
-    panel.classList.remove('cin-has-next');
-    hint?.classList.add('cin-has-next');
+    renderCinNextPanel(panel, hint, null, shuffle);
     return;
   }
 

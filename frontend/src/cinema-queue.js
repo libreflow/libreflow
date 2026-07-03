@@ -158,9 +158,23 @@ function _render() {
   if (empty) empty.hidden = _rows.length > 0;
   list.hidden = _rows.length === 0;
 
-  if (_open && prevFocusedIdx >= 0 && _rows.length) {
-    _rows[Math.min(prevFocusedIdx, _rows.length - 1)].focus();
-  }
+  if (!_open || prevFocusedIdx < 0) return;
+  if (_rows.length) { _rows[Math.min(prevFocusedIdx, _rows.length - 1)].focus(); return; }
+  // Finding 4 — liste vidée (piste en file lancée) alors qu'une rangée avait le focus :
+  // celle-ci vient d'être retirée du DOM → activeElement retomberait sur <body>, ce qui
+  // laisse le Tab-trap overlay (cinema.js) fuir hors du modal. Retombe sur le déclencheur
+  // s'il reste focalisable (visible + non disabled, cf. Finding 1), sinon ferme le panneau.
+  if (_isTriggerFocusable(_deps.trigger)) _deps.trigger.focus();
+  else _closePanel();
+}
+
+/** Vrai si `trigger` peut recevoir le focus (même filtre de visibilité que le Tab-trap
+ *  overlay, cinema.js) — un #cinema-next disabled/masqué (pas de piste prévisible) ne
+ *  doit pas hériter du focus perdu par le panneau. */
+function _isTriggerFocusable(t) {
+  if (!t || t.disabled) return false;
+  const r = t.getBoundingClientRect();
+  return r.width > 0 && r.height > 0;
 }
 
 /** Re-rend le panneau s'il est ouvert — appelé par cinema.js/updateCinema() à chaque tick. */

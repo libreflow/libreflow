@@ -39,7 +39,8 @@ import { updateMiniProgress }                     from './miniplayer.js';
 import { updateMiniOverlayProgress } from './minioverlay.js';
 import { clearQueueOverride, queueOpen,
          renderQueue,
-         peekFirstExplicit, consumeFirstExplicit } from './queue.js';
+         peekFirstExplicit, consumeFirstExplicit,
+         peekExplicitQueue, removeFromQueue }      from './queue.js';
 import { updateCinemaProgress }                   from './cinema.js';
 import { CFG, SPEEDS, SPEED_LBLS }                from './cfg.js';
 import { getFiltered, filteredIdx, trackIdx, _trackIdxMap, invalidateFilterCache } from './search.js';
@@ -1123,6 +1124,10 @@ export function getNextIdx() {
  * @returns {boolean}
  */
 export function hasExplicitQueueNext() { return !!peekFirstExplicit(); }
+
+// Finding 3 (post-review) — réexportées pour cinema-render.js (panneau file d'attente),
+// même façade anti-queue.js-direct que hasExplicitQueueNext ci-dessus (§6).
+export { peekExplicitQueue, removeFromQueue };
 
 /**
  * Vide la file de shuffle (appelé par dupes.js / selection.js après suppression).

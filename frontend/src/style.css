@@ -5499,6 +5499,13 @@ html[data-mode="light"] .cn-artist {
   color: var(--text-secondary);
 }
 
+/* Finding 2 (post-review) — .cn-body--hint est blanc-fixe (rgba(255,255,255,.75)) sans
+   override light → illisible sur le fond clair de .cinema-next ci-dessus. currentColor
+   fait aussi passer l'icône (stroke="currentColor", index.html) au même ton. */
+html[data-mode="light"] .cn-body--hint {
+  color: var(--text-secondary);
+}
+
 /* Task 9 — panneau file d'attente : mêmes overrides light que .cinema-next
    (.cn-title/.cn-artist ci-dessus s'appliquent déjà aux rangées, réutilisées telles quelles). */
 html[data-mode="light"] .cinema-queue-panel {

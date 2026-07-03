@@ -12,19 +12,19 @@
 //   decodeArtImage(img, em, art)     — skeleton/fondu/fallback décodage pochette (Task 6, stateless)
 //   toggleCinemaMute()               — mute cliquable #cinema-vol-icon (Task 7 — vit ici
 //                                      et non dans cinema.js, resté sous le cap 800 lignes)
-//   getCinemaQueueUpcoming()         — Task 9 : agrège search.js/queue.js/radio.js pour
-//                                      buildUpcoming() (cinema-queue.js, fonction pure)
+//   getCinemaQueueUpcoming()         — Task 9 : agrège search.js/player.js(façade queue.js)/
+//                                      radio.js pour buildUpcoming() (cinema-queue.js, fonction pure)
 //   playCinemaQueueTrack(t)          — Task 9 : lecture depuis une rangée du panneau
 
 import { fmt }                                  from './utils.js';
-import { audio, playAt }                        from './player.js';
+import { audio, playAt,
+         peekExplicitQueue, removeFromQueue }   from './player.js';
 import { i18n }                                 from './i18n.js';
 import { setMasterGain }                        from './eq.js';
 import { saveCfg }                              from './cfgsave.js';
 import { get }                                  from './store.js';
 import { CFG }                                  from './cfg.js';
 import { getFiltered, filteredIdx }             from './search.js';
-import { peekExplicitQueue, removeFromQueue }   from './queue.js';
 import { radioActive, getRadioQueue }           from './radio.js';
 import { emit, EVENTS }                         from './bus.js';
 import { updateCinArtRGBFromTrack, snapArtColor, startAmbientAnim } from './cinema-bg.js';
@@ -254,8 +254,9 @@ export function renderCinNextPanel(panel, hint, nt, shuffle) {
  * panneau file d'attente cinéma : même source de vérité que _updateNextTrack()
  * (cinema.js) et buildUpcoming() (cinema-queue.js, fonction pure qui porte la priorité
  * explicite > radio > shuffle-hint > séquentiel). Cette fonction ne fait que rassembler
- * les entrées depuis search.js/queue.js/radio.js — cross-feature autorisé ici (comme
- * dans cinema.js déjà : import player.js/radio.js — CLAUDE.md §6), à la différence de
+ * les entrées depuis search.js/radio.js + la file explicite via la façade player.js
+ * (peekExplicitQueue/removeFromQueue réexportées, Finding 3 post-review — le cluster
+ * cinéma ne réimporte jamais queue.js directement, CLAUDE.md §6), à la différence de
  * cinema-queue.js qui reste zéro-import (DI pure).
  * @returns {object[]}
  */
