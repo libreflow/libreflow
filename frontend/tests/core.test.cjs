@@ -3325,6 +3325,58 @@ section('components/lf-toast-stack.logic.js -- import-smoke');
       'cinema-canvas.js: départ du gradient = excursion max de la couche (couvre le pire cas par construction)');
   }());
 
+  // =============================================================================
+  // Task 17 — Vagues : finitions premium (AGC par bande, écume au beat, reflet
+  // d'horizon, courbes lissées)
+  // =============================================================================
+  section('Task 17 -- vagues premium (AGC, écume, reflet, courbes)');
+
+  await (async function () {
+    const { agcNormalize } = await import('../src/cinema-waves.js');
+
+    // (a) AGC pur — normalisation par pic glissant, zéro allocation.
+    const bands = new Float32Array(7);
+    const peaks = new Float32Array(7);
+    const out   = new Float32Array(7);
+    assert(agcNormalize(bands, peaks, out) === out, 'agc: retourne le même Float32Array out (zéro allocation)');
+    for (let k = 0; k < 7; k++) assert(out[k] === 0, `agc: silence → 0 (k=${k})`);
+    // Bande au pic → 1 (une bande faible en absolu devient pleinement visible)
+    bands.fill(0.08);
+    agcNormalize(bands, peaks, out);
+    for (let k = 0; k < 7; k++) assert(out[k] === 1, `agc: bande à son pic → 1 (k=${k}, out=${out[k]})`);
+    // Plancher anti-bruit : pic sous floor → 0 (pas d'amplification du silence)
+    const b2 = new Float32Array([0.02]), p2 = new Float32Array(1), o2 = new Float32Array(1);
+    agcNormalize(b2, p2, o2, 0.995, 0.04);
+    assert(o2[0] === 0, `agc: pic (0.02) < floor (0.04) → 0 (pas de bruit amplifié, out=${o2[0]})`);
+    // Décroissance du pic : après un pic fort, une bande moyenne remonte vers 1
+    const b3 = new Float32Array([1]), p3 = new Float32Array(1), o3 = new Float32Array(1);
+    agcNormalize(b3, p3, o3, 0.9);
+    b3[0] = 0.5;
+    for (let i = 0; i < 60; i++) agcNormalize(b3, p3, o3, 0.9);
+    assert(o3[0] > 0.95, `agc: le pic décroît (decay) → une bande moyenne redevient pleine (out=${o3[0].toFixed(3)})`);
+    assert(o3[0] <= 1, 'agc: sortie toujours ≤ 1');
+
+    // (b) scans d'intégration cinema-canvas.js
+    const fs   = require('fs');
+    const path = require('path');
+    const root = path.join(__dirname, '../..');
+    const CANVAS = fs.readFileSync(path.join(root, 'frontend/src/cinema-canvas.js'), 'utf8');
+    // AGC câblé : les couches consomment les bandes NORMALISÉES
+    assert(/agcNormalize\(/.test(CANVAS), 'cinema-canvas.js: agcNormalize câblé après computeBandEnergies');
+    assert(/_waveBandsNorm\[/.test(CANVAS), 'cinema-canvas.js: les couches lisent les bandes normalisées (AGC)');
+    // Écume : pool pré-alloué, spawn dans la branche beat (déjà gated reduced-motion)
+    assert(/_FOAM_MAX/.test(CANVAS) && /_foamPool/.test(CANVAS),
+      'cinema-canvas.js: pool d\'écume pré-alloué (zéro allocation par frame)');
+    assert(/_waveBeat\.sample\([\s\S]{0,400}_spawnFoam\(/.test(CANVAS),
+      'cinema-canvas.js: écume spawnée dans la branche beat (héritée du gate reduced-motion)');
+    // Reflet d'horizon : gradient caché + fillRect borné à la bande sous l'horizon
+    assert(/_waveHorizonGrad/.test(CANVAS),
+      'cinema-canvas.js: reflet d\'horizon caché avec les styles (clé couleur+h)');
+    // Courbes : tracé quadratique partagé fill/crête
+    assert(/quadraticCurveTo\(/.test(CANVAS), 'cinema-canvas.js: chemin de vague lissé (quadratiques points milieux)');
+    assert(/function _traceWavePath\(/.test(CANVAS), 'cinema-canvas.js: tracé partagé remplissage/crête (_traceWavePath)');
+  }());
+
   // -- Résultat -----------------------------------------------------------
   console.log('\n═══════════════════════════════════════════════════════════');
   console.log(`  Total : ${_ok + _ko}   OK: ${_ok}   KO: ${_ko}`);

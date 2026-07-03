@@ -105,6 +105,26 @@ export function waveLayerPalette(r, g, b, layers) {
  * @param {number}       smooth  coefficient EMA 0-1 (1 = pas de lissage)
  * @returns {Float32Array} le même `out`
  */
+/**
+ * AGC par bande (Task 17) : normalise chaque bande par son PIC GLISSANT.
+ * Le spectre musical est incliné (~−6 dB/octave) — sans AGC, les bandes aiguës
+ * (qui pilotent les vagues arrière) restent quasi immobiles quel que soit le
+ * morceau. Mutation in-place (peaks + out), zéro allocation.
+ * @param {Float32Array} bands  énergies brutes 0-1 (computeBandEnergies)
+ * @param {Float32Array} peaks  pics glissants par bande, mutés in-place
+ * @param {Float32Array} out    sorties normalisées 0-1, mutées in-place
+ * @param {number} decay  décroissance du pic par appel (0.995 ≈ demi-vie 2.3s à 60fps)
+ * @param {number} floor  pic minimal — en dessous, sortie 0 (pas d'amplification du bruit)
+ * @returns {Float32Array} le même `out`
+ */
+export function agcNormalize(bands, peaks, out, decay = 0.995, floor = 0.04) {
+  for (let k = 0; k < bands.length; k++) {
+    peaks[k] = Math.max(bands[k], peaks[k] * decay);
+    out[k] = peaks[k] > floor ? Math.min(1, bands[k] / peaks[k]) : 0;
+  }
+  return out;
+}
+
 export function computeBandEnergies(fftBuf, out, smooth = 0.35) {
   const bands  = out.length;
   const usable = Math.max(bands + 1, Math.floor(fftBuf.length * 0.72));

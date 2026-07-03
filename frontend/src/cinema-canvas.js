@@ -11,17 +11,27 @@
 import { eqAnalyser }                                   from './eq.js';
 import { tween, kill as motionKill, eases, prefersReducedMotion } from './motion.js';
 import { createBeatDetector }                           from './cinema-beat.js';
-import { waveLayerGeom, waveLayerPalette, computeBandEnergies, waveY, WAVE_BEAT_BOOST_MAX } from './cinema-waves.js';
+import { waveLayerGeom, waveLayerPalette, computeBandEnergies, agcNormalize, waveY, WAVE_BEAT_BOOST_MAX } from './cinema-waves.js';
 
 // ── Vagues — pré-allocation module scope ────────────────────
 // Zéro allocation dans le hot path RAF (CLAUDE.md §10).
 const _WAVE_LAYERS  = 7;
-const _WAVE_STEPS   = 150;          // segments par couche (qualité / perf)
+// Task 17 : 150→96 segments — le tracé quadratique par points milieux lisse mieux
+// que 150 segments droits, pour ~36 % de sin en moins.
+const _WAVE_STEPS   = 96;
 // Task 12 : géométrie de profondeur cohérente (l=0 arrière/haut, l=6 avant/bas) —
 // calculée une fois au chargement (cinema-waves.js, pur et testé).
 const _WAVE_GEOM    = Array.from({ length: _WAVE_LAYERS }, (_, l) => waveLayerGeom(l, _WAVE_LAYERS));
-const _waveBands    = new Float32Array(_WAVE_LAYERS); // énergies par bande (0 = basses), EMA in-place
+const _waveBands     = new Float32Array(_WAVE_LAYERS); // énergies par bande (0 = basses), EMA in-place
+const _wavePeaks     = new Float32Array(_WAVE_LAYERS); // pics glissants AGC (Task 17)
+const _waveBandsNorm = new Float32Array(_WAVE_LAYERS); // bandes normalisées 0-1 — pilotent les couches
 const _waveY        = new Float32Array(_WAVE_STEPS + 1); // buffer y partagé remplissage/crête (1 seule passe sin)
+let _waveHorizonGrad = null; // reflet spéculaire sous l'horizon — cache (couleur, h)
+// Task 17 : écume au beat — pool pré-alloué (zéro allocation par frame), les
+// glints surfent la crête (y recalculé via waveY à chaque frame).
+const _FOAM_MAX  = 12;
+const _foamPool  = Array.from({ length: _FOAM_MAX }, () => ({ life: 0, nx: 0, layer: 0, size: 1 }));
+let _foamNext    = 0;
 let _waveBuf        = null;          // Uint8Array(frequencyBinCount) — données FFT
 let _waveSmoothed   = null;          // Float32Array — basses fréquences lissées
 const _wavePhases   = new Float32Array(_WAVE_LAYERS); // phases de chaque couche
@@ -94,7 +104,7 @@ export function initStarfield() {
 function _updateWaveAudio() {
   if (!eqAnalyser) {
     _waveEnergy *= 0.95;
-    for (let k = 0; k < _WAVE_LAYERS; k++) _waveBands[k] *= 0.95;
+    for (let k = 0; k < _WAVE_LAYERS; k++) { _waveBands[k] *= 0.95; _waveBandsNorm[k] *= 0.95; }
     return;
   }
   // Allocation unique — réallocation seulement si l'analyser change de taille (rare)
@@ -105,6 +115,9 @@ function _updateWaveAudio() {
   eqAnalyser.getByteFrequencyData(_waveBuf);
   // Task 12 : énergies par bande log-espacées (0 = basses) — chaque couche a la sienne.
   computeBandEnergies(_waveBuf, _waveBands, 0.30);
+  // Task 17 : AGC — normalise chaque bande par son pic glissant. Sans ça, le tilt
+  // spectral (~−6 dB/octave) laisse les vagues arrière (aigus) quasi immobiles.
+  agcNormalize(_waveBands, _wavePeaks, _waveBandsNorm);
   // Énergie basse globale lissée — halo de fond + baseline du beat (inchangé).
   const bassEnd = _waveSmoothed.length;
   for (let i = 0; i < bassEnd; i++) {
@@ -123,7 +136,40 @@ function _updateWaveAudio() {
       v: 0, duration: 0.55, ease: eases.PREMIUM,
       onComplete() { _waveBeatTw = null; },
     });
+    _spawnFoam(); // Task 17 : écume sur les crêtes avant — hérite du gate reduced-motion
   }
+}
+
+// Réveille 4 glints d'écume sur les 2 couches avant (round-robin dans le pool).
+function _spawnFoam() {
+  for (let n = 0; n < 4; n++) {
+    const f = _foamPool[_foamNext];
+    _foamNext = (_foamNext + 1) % _FOAM_MAX;
+    f.life  = 1;
+    f.nx    = 0.08 + Math.random() * 0.84;
+    f.layer = _WAVE_LAYERS - 1 - (n & 1); // alterne les 2 couches de premier plan
+    f.size  = 1.2 + Math.random() * 1.6;
+  }
+}
+
+// Dessine l'écume active — y recalculé via waveY : les glints SURFENT la crête.
+// Fondu ~0.5s à 60fps (décrément fixe — pas de dt transmis à la frame).
+function _drawFoam(ctx, w, h, boostMult) {
+  ctx.fillStyle = '#fff';
+  for (let i = 0; i < _FOAM_MAX; i++) {
+    const f = _foamPool[i];
+    if (f.life <= 0.01) continue;
+    const geo  = _WAVE_GEOM[f.layer];
+    const band = _waveBandsNorm[_WAVE_LAYERS - 1 - f.layer];
+    const amp  = (geo.ampBase + band * geo.ampEnergy) * h * boostMult;
+    const y    = h * geo.yBase + waveY(f.nx, _wavePhases[f.layer], geo.freq, amp);
+    ctx.globalAlpha = f.life * 0.8;
+    ctx.beginPath();
+    ctx.arc(f.nx * w, y - f.size, f.size * f.life + 0.4, 0, Math.PI * 2);
+    ctx.fill();
+    f.life -= 0.035;
+  }
+  ctx.globalAlpha = 1;
 }
 
 // Reconstruit palette par couche + gradients + styles de crête — invalidé seulement
@@ -152,6 +198,25 @@ function _rebuildWaveStyles(ctx, h, lerpRGB, r, g, b) {
     const crR = Math.min(255, lr + 70), crG = Math.min(255, lg + 70), crB = Math.min(255, lb + 70);
     _waveCrestStrokes[l] = `rgba(${crR},${crG},${crB},${geo.crestAlpha.toFixed(2)})`;
   }
+  // Task 17 : reflet spéculaire sous l'horizon — vend la lecture « mer » et habille
+  // l'espace sous le contenu. Couleur de la couche ARRIÈRE éclaircie, très discret.
+  const [hr, hg, hb] = pal[0];
+  const yHor = h * _WAVE_GEOM[0].yBase;
+  _waveHorizonGrad = ctx.createLinearGradient(0, yHor, 0, yHor + h * 0.11);
+  _waveHorizonGrad.addColorStop(0,    `rgba(${Math.min(255, hr + 60)},${Math.min(255, hg + 60)},${Math.min(255, hb + 60)},0.14)`);
+  _waveHorizonGrad.addColorStop(0.25, `rgba(${hr},${hg},${hb},0.06)`);
+  _waveHorizonGrad.addColorStop(1,    'rgba(0,0,0,0)');
+}
+
+// Trace le chemin lissé de la couche depuis _waveY — quadratiques par points
+// milieux (Task 17), partagé entre le remplissage et la crête.
+function _traceWavePath(ctx, w) {
+  const inv = 1 / _WAVE_STEPS;
+  ctx.moveTo(0, _waveY[0]);
+  for (let s = 1; s < _WAVE_STEPS; s++) {
+    ctx.quadraticCurveTo(s * inv * w, _waveY[s], (s + 0.5) * inv * w, (_waveY[s] + _waveY[s + 1]) * 0.5);
+  }
+  ctx.lineTo(w, _waveY[_WAVE_STEPS]);
 }
 
 // Dessine une couche : les y sont calculés UNE fois dans _waveY (4 harmoniques),
@@ -162,23 +227,22 @@ function _drawWaveLayer(ctx, w, h, l, boostMult) {
   // Mapping bande→couche : AVANT (l=6) ← basses (bande 0), arrière ← aigus.
   // Task 16 : plus de terme _waveEnergy (triple comptage) — l'excursion max est
   // (ampBase + ampEnergy) × WAVE_BEAT_BOOST_MAX, bornée sous l'horizon (testé).
-  const band      = _waveBands[_WAVE_LAYERS - 1 - l];
+  // Task 17 : bandes NORMALISÉES (AGC) — chaque couche vit quel que soit le mixage.
+  const band      = _waveBandsNorm[_WAVE_LAYERS - 1 - l];
   const amplitude = (geo.ampBase + band * geo.ampEnergy) * h * boostMult;
   const ph = _wavePhases[l];
   for (let s = 0; s <= _WAVE_STEPS; s++) {
     _waveY[s] = yBase + waveY(s / _WAVE_STEPS, ph, geo.freq, amplitude);
   }
-  // Remplissage
+  // Remplissage — chemin lissé partagé (Task 17)
   ctx.beginPath();
-  ctx.moveTo(0, _waveY[0]);
-  for (let s = 1; s <= _WAVE_STEPS; s++) ctx.lineTo((s / _WAVE_STEPS) * w, _waveY[s]);
+  _traceWavePath(ctx, w);
   ctx.lineTo(w, h); ctx.lineTo(0, h); ctx.closePath();
   ctx.fillStyle = _waveGrads[l];
   ctx.fill();
   // Crête lumineuse — même courbe, rejouée depuis le buffer
   ctx.beginPath();
-  ctx.moveTo(0, _waveY[0]);
-  for (let s = 1; s <= _WAVE_STEPS; s++) ctx.lineTo((s / _WAVE_STEPS) * w, _waveY[s]);
+  _traceWavePath(ctx, w);
   ctx.strokeStyle = _waveCrestStrokes[l];
   ctx.lineWidth   = geo.lineWidth;
   ctx.stroke();
@@ -226,19 +290,28 @@ export function drawWavesFrame(ctx, w, h, cinArtRGBCur, isPlaying) {
   ctx.fillRect(0, 0, w, h);
   ctx.globalAlpha = 1;
 
-  // Phases par couche — vitesse pilotée par SA bande (avant = basses → houle
-  // marquée ; arrière = aigus → frémissement). Figées en pause / reduced-motion.
+  // Phases par couche — vitesse pilotée par SA bande normalisée (avant = basses →
+  // houle marquée ; arrière = aigus → frémissement). Figées en pause / reduced-motion.
   if (isPlaying && !prefersReducedMotion()) {
     for (let l = 0; l < _WAVE_LAYERS; l++) {
-      const band = _waveBands[_WAVE_LAYERS - 1 - l];
+      const band = _waveBandsNorm[_WAVE_LAYERS - 1 - l];
       _wavePhases[l] += (0.005 + l * 0.0018 + band * 0.020) * boostMult;
     }
   }
 
   if (lerpRGB !== _waveGradRGB || h !== _waveGradH) _rebuildWaveStyles(ctx, h, lerpRGB, r, g, b);
 
+  // Reflet d'horizon (Task 17) — fillRect BORNÉ à la bande : un gradient linéaire
+  // étend son stop-0 au-delà de son départ, un rect plein teinterait la zone contenu.
+  const yHor = h * _WAVE_GEOM[0].yBase;
+  ctx.fillStyle = _waveHorizonGrad;
+  ctx.fillRect(0, yHor, w, h * 0.11);
+
   // Dessin arrière → avant : l=0 (haut, lointain) d'abord, l=6 (bas, proche) par-dessus.
   for (let l = 0; l < _WAVE_LAYERS; l++) _drawWaveLayer(ctx, w, h, l, boostMult);
+
+  // Écume au beat (Task 17) — par-dessus les crêtes.
+  _drawFoam(ctx, w, h, boostMult);
 }
 
 // ── Mode Ciel étoilé ─────────────────────────────────────────
