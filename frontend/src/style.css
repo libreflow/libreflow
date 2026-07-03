@@ -721,22 +721,22 @@ button { cursor: pointer; }
 }
 
 /* ── Mouvement réduit ────────────────────────────────────── */
-@media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after {
-    animation-duration: .01ms !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: .01ms !important;
-  }
-  .skel-line { animation: none !important; }
-  /* Conserver l'état visuel hover/active mais sans le mouvement transform */
-  .tr:hover, .tr:active,
-  .card:hover, .card:active,
-  .ni:active,
-  .pc:hover, .pc:active,
-  .pcplay:hover, .pcplay:active,
-  .sort-btn:active,
-  .fmt-chip:active { transform: none !important; }
+/* Task 10 : scoping html[data-motion="reduce"] (réglage in-app) remplace l'ancienne
+   media query OS prefers-reduced-motion — défaut app 'full' ignore l'OS, cf. motion.js. */
+html[data-motion="reduce"] *, html[data-motion="reduce"] *::before, html[data-motion="reduce"] *::after {
+  animation-duration: .01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: .01ms !important;
 }
+html[data-motion="reduce"] .skel-line { animation: none !important; }
+/* Conserver l'état visuel hover/active mais sans le mouvement transform */
+html[data-motion="reduce"] .tr:hover, html[data-motion="reduce"] .tr:active,
+html[data-motion="reduce"] .card:hover, html[data-motion="reduce"] .card:active,
+html[data-motion="reduce"] .ni:active,
+html[data-motion="reduce"] .pc:hover, html[data-motion="reduce"] .pc:active,
+html[data-motion="reduce"] .pcplay:hover, html[data-motion="reduce"] .pcplay:active,
+html[data-motion="reduce"] .sort-btn:active,
+html[data-motion="reduce"] .fmt-chip:active { transform: none !important; }
 
 /* ═══ ART BLUR BACKGROUND ════════════════════════════════════ */
 /* Fond plein écran à base de la pochette — style Apple Music  */
@@ -1462,9 +1462,7 @@ html[data-mode="light"] mark.srch-hl { background: rgba(var(--g-rgb), .22); }
 .tr.act.playing-row .tdur    { display: none; }
 
 /* Mouvement réduit : barres statiques, pas d'animation */
-@media (prefers-reduced-motion: reduce) {
-  .eq-bars span { animation: none; height: 8px; }
-}
+html[data-motion="reduce"] .eq-bars span { animation: none; height: 8px; }
 
 /* Bouton like — visible seulement au hover ou si actif */
 .tlk {
@@ -1886,9 +1884,7 @@ html[data-mode="light"] mark.srch-hl { background: rgba(var(--g-rgb), .22); }
   0%, 100% { opacity: 0.06; transform: scale(1); }
   50%       { opacity: 0.14; transform: scale(1.06); }
 }
-@media (prefers-reduced-motion: reduce) {
-  .empty-ico::before, .empty-ico::after { animation: none; opacity: 0; }
-}
+html[data-motion="reduce"] .empty-ico::before, html[data-motion="reduce"] .empty-ico::after { animation: none; opacity: 0; }
 .empty-h   { font-size: var(--fs-lg); font-weight: 700; color: var(--t2); text-wrap: balance; }
 .empty-s   { font-size: var(--fs-caption); color: var(--t3); line-height: var(--lh-airy); max-width: var(--text-empty-max); text-wrap: pretty; }
 .empty-cta {
@@ -1957,9 +1953,7 @@ html[data-mode="light"] .empty-cta {
   0%, 100% { transform: translateY(0) scale(1); }
   50%       { transform: translateY(calc(-1 * var(--sp-4h))) scale(1.04); }
 }
-@media (prefers-reduced-motion: reduce) {
-  #vw::before, #vw::after { animation: none; }
-}
+html[data-motion="reduce"] #vw::before, html[data-motion="reduce"] #vw::after { animation: none; }
 
 /* Logo — shown as transparent PNG, no badge */
 /* Logo + titre en ligne — brand header */
@@ -2903,9 +2897,7 @@ html[data-mode="light"] .orphan-item { border-bottom-color: var(--bg5); }
 .orphan-item.orphan-relocated .orphan-relocate-btn {
   color: var(--g); border-color: transparent; background: transparent;
 }
-@media (prefers-reduced-motion: reduce) {
-  .orphan-relocate-btn { transition: none; }
-}
+html[data-motion="reduce"] .orphan-relocate-btn { transition: none; }
 
 /* ── Batch tag edit modal ── */
 /* FIX : pattern visibility+opacity (comme #confirm-modal-bg) pour un fade-in animé.
@@ -3562,10 +3554,8 @@ html[data-mode="light"] .bte-cover-clear    { background: var(--bg3); border-col
   from { opacity: 1; transform: translateY(0); }
   to   { opacity: 0; transform: translateY(calc(-1 * var(--sp-2))); }
 }
-@media (prefers-reduced-motion: reduce) {
-  #pl-hero.on      { animation: none; }
-  #pl-hero.leaving { animation: none; display: none; }
-}
+html[data-motion="reduce"] #pl-hero.on      { animation: none; }
+html[data-motion="reduce"] #pl-hero.leaving { animation: none; display: none; }
 
 .pl-hero-cover {
   position: relative;
@@ -4677,15 +4667,13 @@ html[data-mode="light"] .eq-scale { color: var(--t3); }
 html[data-mode="light"] .eq-slider::-webkit-slider-runnable-track,
 html[data-mode="light"] .eq-slider::-moz-range-track { background: var(--bg6); }
 
-@media (prefers-reduced-motion: reduce) {
-  .eq-footer-reset-icon { transition: none; }
-  .eq-bands--auto .eq-slider-wrap,
-  .eq-bands:not(.eq-bands--auto) .eq-slider-wrap { transition: none; }
-  .eq-presets--disabled .eq-preset,
-  .eq-cats--disabled .eq-cat { transition: none; }
-  .eq-slider::-webkit-slider-thumb,
-  .eq-slider::-moz-range-thumb { transition: none; }
-}
+html[data-motion="reduce"] .eq-footer-reset-icon { transition: none; }
+html[data-motion="reduce"] .eq-bands--auto .eq-slider-wrap,
+html[data-motion="reduce"] .eq-bands:not(.eq-bands--auto) .eq-slider-wrap { transition: none; }
+html[data-motion="reduce"] .eq-presets--disabled .eq-preset,
+html[data-motion="reduce"] .eq-cats--disabled .eq-cat { transition: none; }
+html[data-motion="reduce"] .eq-slider::-webkit-slider-thumb,
+html[data-motion="reduce"] .eq-slider::-moz-range-thumb { transition: none; }
 
 /* ═══ REPLAY GAIN ════════════════════════════════════════════ */
 .rg-row      { display: flex; align-items: center; gap: var(--sp-2h); padding: var(--sp-2h) var(--sp-4); border-bottom: var(--border-w-sm) solid var(--sep); font-size: var(--fs-caption); }
@@ -4943,9 +4931,7 @@ html[data-mode="light"] .eq-slider::-moz-range-track { background: var(--bg6); }
   transition: opacity var(--motion-base) ease, transform var(--motion-base) var(--ease-spring-soft);
 }
 .cinema-queue-panel.cqp-open { opacity: 1; transform: none; pointer-events: all; }
-@media (prefers-reduced-motion: reduce) {
-  .cinema-queue-panel { transition: none; }
-}
+html[data-motion="reduce"] .cinema-queue-panel { transition: none; }
 .cqp-header {
   font-size: var(--fs-xs); color: rgba(255,255,255,.52);
   text-transform: uppercase; letter-spacing: var(--ls-cinema);
@@ -5066,13 +5052,11 @@ html[data-mode="light"] .eq-slider::-moz-range-track { background: var(--bg6); }
 .cinema-art-wrap:not(.cin-swap):not(.cin-swap-out):not(.beat) {
   animation: cinema-art-breathe var(--dur-cin-breathe) ease-in-out infinite;
 }
-@media (prefers-reduced-motion: reduce) {
-  .cinema-art-wrap {
-    animation: none !important;
-  }
-  .cinema-bg {
-    animation: none !important;
-  }
+html[data-motion="reduce"] .cinema-art-wrap {
+  animation: none !important;
+}
+html[data-motion="reduce"] .cinema-bg {
+  animation: none !important;
 }
 .cinema-art-wrap:hover { filter: brightness(1.06); }
 
@@ -5129,10 +5113,8 @@ html[data-mode="light"] .eq-slider::-moz-range-track { background: var(--bg6); }
    et le shorthand `animation … forwards` battaient le kill-switch global
    (* { animation-duration:0 !important }) par spécificité — laissant le flash
    jouer et l'image figée à scale(1.10). */
-@media (prefers-reduced-motion: reduce) {
-  .cinema-art-wrap.beat             { animation: none !important; }
-  #cinema-art-img[class*="cin-kb-"] { animation: none !important; transform: none !important; }
-}
+html[data-motion="reduce"] .cinema-art-wrap.beat             { animation: none !important; }
+html[data-motion="reduce"] #cinema-art-img[class*="cin-kb-"] { animation: none !important; transform: none !important; }
 
 /* ── État pause (Task 6) — geler les animations idle pochette/fond ──────────
    Basculée sur #cinema-overlay là où l'icône play/pause est déjà synchronisée
@@ -5209,9 +5191,7 @@ html[data-mode="light"] .eq-slider::-moz-range-track { background: var(--bg6); }
 @keyframes cin-txt-swap-in  { 0% { opacity: 0; transform: translateY(10px); } 100% { opacity: 1; transform: translateY(0); } }
 .cin-txt-swap-out { animation: cin-txt-swap-out var(--dur-cin-swap-out) ease-in forwards; }
 .cin-txt-swap-in  { animation: cin-txt-swap-in  var(--dur-cin-swap-in) var(--ease-spring-soft) forwards; }
-@media (prefers-reduced-motion: reduce) {
-  .cin-txt-swap-out, .cin-txt-swap-in { animation: none !important; }
-}
+html[data-motion="reduce"] .cin-txt-swap-out, html[data-motion="reduce"] .cin-txt-swap-in { animation: none !important; }
 
 /* ── Barre de progression cinéma ──────────────────────────── */
 .cinema-prog {
@@ -6580,9 +6560,7 @@ html[data-mode="light"] .rv-start-btn  { background: var(--g); }
   .sort-btn svg { width: var(--icon-xs); height: var(--icon-xs); }
 
   /* Reduced motion */
-  @media (prefers-reduced-motion: reduce) {
-    .ni > span { transition: none; }
-  }
+  html[data-motion="reduce"] .ni > span { transition: none; }
 }
 
 /* ── Mobile (data-platform="mobile") — bottom navigation bar ─────────────── */
@@ -6757,13 +6735,11 @@ html[data-platform="mobile"] .ni:hover {
 }
 
 /* ── Respect des préférences de mouvement ──────────────────────── */
-@media (prefers-reduced-motion: reduce) {
-  .tr::before                    { transition: background var(--dur-fast) ease; }
-  .genre-name                    { transition: none; }
-  .genre-card:hover .genre-name  { transform: none; }
-  .card-play-btn { transition: none; }
-  .card { transition: background var(--dur-fast) ease, border-color var(--dur-fast) ease; }
-}
+html[data-motion="reduce"] .tr::before                    { transition: background var(--dur-fast) ease; }
+html[data-motion="reduce"] .genre-name                    { transition: none; }
+html[data-motion="reduce"] .genre-card:hover .genre-name  { transform: none; }
+html[data-motion="reduce"] .card-play-btn { transition: none; }
+html[data-motion="reduce"] .card { transition: background var(--dur-fast) ease, border-color var(--dur-fast) ease; }
 
 /* ── Now Playing View (#vnp) ──────────────────────────────────────────────── */
 
@@ -7262,9 +7238,7 @@ html[data-platform="mobile"] .ni:hover {
 #main.view-fade {
   animation: view-fade-in var(--motion-base, 200ms) var(--ease-standard) both;
 }
-@media (prefers-reduced-motion: reduce) {
-  #main.view-fade { animation: none; }
-}
+html[data-motion="reduce"] #main.view-fade { animation: none; }
 
 /* ── EQ slider thumb focus glow (B4-M3) ─────────────────────────────────── */
 .cf-slider:focus-visible::-webkit-slider-thumb,

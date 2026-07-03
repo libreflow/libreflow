@@ -1118,10 +1118,10 @@ html[data-mode="light"] {
   :root { --art-cinema-max: 520px; }
 }
 
-/* Respect des préférences utilisateur — anti-motion */
-@media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after {
-    animation-duration  : 0ms !important;
-    transition-duration : 0ms !important;
-  }
+/* Respect des préférences utilisateur — anti-motion.
+   Task 10 : scoping html[data-motion="reduce"] (réglage in-app, défaut 'full')
+   remplace l'ancienne media query OS prefers-reduced-motion — voir motion.js. */
+html[data-motion="reduce"] *, html[data-motion="reduce"] *::before, html[data-motion="reduce"] *::after {
+  animation-duration  : 0ms !important;
+  transition-duration : 0ms !important;
 }

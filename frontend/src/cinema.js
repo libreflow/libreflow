@@ -39,7 +39,8 @@ import { initCinemaSeek, isSeekDragging, resetCinemaSeek } from './cinema-seek.j
 import { initCinemaQueue, refreshCinemaQueuePanel, closeCinemaQueuePanel } from './cinema-queue.js';
 
 export { cinemaBg, CINEMA_BG_MODES, CINEMA_BG_LABELS, applyCinemaBg, setCinemaBg, cycleCinemaBg,
-         syncCinemaBgSettings, updateCinemaBgBtn, initCinemaBg, updateCinArtColor };
+         syncCinemaBgSettings, updateCinemaBgBtn, initCinemaBg, updateCinArtColor,
+         startCinemaViz }; // Task 10 : app.js relance le viz spectre au retour 'full' (cinéma ouvert)
 
 // Radio demande le toggle cinéma — évite le cycle d'import cinema.js ↔ radio.js.
 on(EVENTS.CINEMA_RADIO_TOGGLE, () => { if (cinemaOpen) toggleCinemaRadio(); });

@@ -2871,8 +2871,8 @@ section('components/lf-toast-stack.logic.js -- import-smoke');
       'style.css: .cin-txt-swap-in utilise var(--dur-cin-swap-in) (durée tokenisée, == pochette entrante)');
     assert(/\.cin-txt-swap-in\s*\{[^}]*var\(--ease-spring-soft\)/.test(CSS),
       'style.css: .cin-txt-swap-in utilise var(--ease-spring-soft)');
-    assert(/@media\s*\(prefers-reduced-motion:\s*reduce\)\s*\{[^}]*\.cin-txt-swap/.test(CSS),
-      'style.css: reduced-motion neutralise .cin-txt-swap-out/-in (remplacement sec)');
+    assert(/html\[data-motion="reduce"\][^{]*\.cin-txt-swap/.test(CSS),
+      'style.css: html[data-motion="reduce"] neutralise .cin-txt-swap-out/-in (remplacement sec, Task 10)');
     // (a-fix, review) : le swap-in retire les DEUX classes texte (miroir de artWrap) —
     // sans retrait de cin-txt-swap-in, un rapid-skip interrompant un in en vol laisse la
     // classe en place et le re-add ne redémarre jamais l'animation (texte qui saute sec).
@@ -2897,6 +2897,85 @@ section('components/lf-toast-stack.logic.js -- import-smoke');
     // (d) clés i18n cinema_shuffle_on présentes fr + en (Step 5 — hint shuffle)
     assert(/cinema_shuffle_on\s*:/.test(FR), "i18n.fr.js: clé cinema_shuffle_on présente");
     assert(/cinema_shuffle_on\s*:/.test(EN), "i18n.en.js: clé cinema_shuffle_on présente");
+  }());
+
+  // =============================================================================
+  // Task 10 — Réglage d'animations in-app (Système/Complètes/Réduites, défaut Complètes)
+  // Step 1 (TDD) : truth-table pure + scans statiques.
+  // =============================================================================
+  section('Task 10 -- in-app motion setting (Système/Complètes/Réduites)');
+
+  (function () {
+    // (a) table de vérité de la préférence effective (pure, sans DOM — mirror de
+    // prefersReducedMotion() dans motion.js). full -> false, reduce -> true,
+    // system -> consulte l'OS. Défaut app : 'full'.
+    function _effectiveReducedMotion(pref, osReduce) {
+      if (pref === 'reduce') return true;
+      if (pref === 'full')   return false;
+      return !!osReduce; // 'system'
+    }
+    assert(_effectiveReducedMotion('full', true)    === false, "pref='full' ignore l'OS (true)");
+    assert(_effectiveReducedMotion('full', false)   === false, "pref='full' ignore l'OS (false)");
+    assert(_effectiveReducedMotion('reduce', true)  === true,  "pref='reduce' force true, OS=true");
+    assert(_effectiveReducedMotion('reduce', false) === true,  "pref='reduce' force true, OS=false");
+    assert(_effectiveReducedMotion('system', true)  === true,  "pref='system' suit l'OS (true)");
+    assert(_effectiveReducedMotion('system', false) === false, "pref='system' suit l'OS (false)");
+    const DEFAULT_MOTION_PREF = 'full';
+    assert(DEFAULT_MOTION_PREF === 'full', "défaut app : motionPref = 'full' (profil vierge, sans clé cfg)");
+
+    const fs   = require('fs');
+    const path = require('path');
+    const root = path.join(__dirname, '../..');
+    const read = f => fs.readFileSync(path.join(root, f), 'utf8');
+
+    const MOTION = read('frontend/src/motion.js');
+    const APP    = read('frontend/src/app.js');
+    const CSS    = read('frontend/src/style.css');
+    const DS     = read('frontend/src/design-system.css');
+    const FR     = read('frontend/src/i18n.fr.js');
+    const EN     = read('frontend/src/i18n.en.js');
+
+    // (b) motion.js exporte setMotionPref ; prefersReducedMotion() consulte la
+    // préférence app (_motionPref) AVANT le media query OS (_rmQuery).
+    assert(/export\s+function\s+setMotionPref\s*\(/.test(MOTION),
+      'motion.js exporte setMotionPref(pref)');
+    const prBody = /export function prefersReducedMotion\(\)\s*\{[\s\S]*?\n\}/.exec(MOTION);
+    assert(!!prBody, 'motion.js: prefersReducedMotion() trouvée (corps de fonction extrait pour scan)');
+    if (prBody) {
+      const idxMotionPref = prBody[0].indexOf('_motionPref');
+      const idxRmQuery    = prBody[0].indexOf('_rmQuery');
+      assert(idxMotionPref !== -1 && idxRmQuery !== -1 && idxMotionPref < idxRmQuery,
+        'prefersReducedMotion() consulte _motionPref AVANT _rmQuery (préférence app prioritaire sur le media query OS)');
+    }
+
+    // (c) plus aucun bloc @media (prefers-reduced-motion dans style.css/design-system.css
+    // (remplacés par le scoping html[data-motion="reduce"], app-wide).
+    assert((CSS.match(/@media\s*\(prefers-reduced-motion/g) || []).length === 0,
+      'style.css ne contient plus aucun @media (prefers-reduced-motion (remplacé par html[data-motion="reduce"])');
+    assert((DS.match(/@media\s*\(prefers-reduced-motion/g) || []).length === 0,
+      'design-system.css ne contient plus aucun @media (prefers-reduced-motion');
+    assert(/html\[data-motion="reduce"\]/.test(CSS), 'style.css utilise le scoping html[data-motion="reduce"]');
+
+    // (d) app.js pose data-motion sur <html> au boot (via applyMotionAttr, motion.js) et
+    // écoute le changement du media query OS (onMotionPrefChange, mode 'system').
+    assert(/dataset\.motion\s*=/.test(MOTION),
+      'motion.js: applyMotionAttr() pose document.documentElement.dataset.motion');
+    assert(/applyMotionAttr\(\)/.test(APP), 'app.js appelle applyMotionAttr() au boot');
+    assert(/setMotionPref\(/.test(APP), 'app.js appelle setMotionPref() au boot (lecture cfg.motionPref)');
+    assert(/onMotionPrefChange\(/.test(APP),
+      "app.js s'abonne à onMotionPrefChange() (recalcul quand l'OS change en mode 'system')");
+
+    // (e) parité i18n fr/en des nouvelles clés
+    for (const k of ['settings_motion', 'motion_system', 'motion_full', 'motion_reduce']) {
+      assert(new RegExp(`${k}\\s*:`).test(FR), `i18n.fr.js: clé ${k} présente`);
+      assert(new RegExp(`${k}\\s*:`).test(EN), `i18n.en.js: clé ${k} présente`);
+    }
+
+    // Anti flash-of-frozen-motion : <html> porte data-motion="full" statiquement dans
+    // index.html (avant 1er paint), défaut app 'full' — corrigé après lecture cfg si besoin.
+    const HTML = read('frontend/index.html');
+    assert(/<html[^>]*\sdata-motion="full"/.test(HTML),
+      'index.html: <html data-motion="full"> posé statiquement (avant 1er paint, défaut motionPref)');
   }());
 
   // -- Résultat -----------------------------------------------------------

@@ -188,10 +188,11 @@ async function run() {
     assert.ok(parseInt(m[1], 10) >= 334,
       `BEAT_COOLDOWN ${m[1]}ms < 334ms → risque de >3 flashs/s (SC 2.3.1)`);
   });
-  await t('global prefers-reduced-motion kill-switch present (SC 2.3.3)', () => {
-    assert.ok(/@media\s*\(prefers-reduced-motion:\s*reduce\)[^}]*\{[^}]*\*[^}]*\{[^}]*animation-duration/s.test(SS)
-      || /prefers-reduced-motion:\s*reduce/.test(SS),
-      'style.css doit couper les animations sous prefers-reduced-motion');
+  await t('global reduced-motion kill-switch present (SC 2.3.3, Task 10: data-motion scoping)', () => {
+    assert.ok(/html\[data-motion="reduce"\][^{]*\*[^{]*\{[^}]*animation-duration/s.test(SS),
+      'style.css doit couper les animations sous html[data-motion="reduce"]');
+    assert.strictEqual((SS.match(/@media\s*\(prefers-reduced-motion:\s*reduce\)/g) || []).length, 0,
+      'style.css ne doit plus contenir de bloc @media (prefers-reduced-motion — remplacé par html[data-motion="reduce"] (Task 10)');
   });
 
   // --- WCAG 2.4.13 Focus Appearance (AAA) — cinema focus ring token unification
@@ -254,6 +255,7 @@ async function run() {
     'cf-slider',          // A11Y-H1 : curseur de fondu enchaîné
     'smart-size', 'smart-pl-name',                    // A11Y-H2 : panneau similarité
     'spl-combinator', 'spl-rules-size', 'spl-rules-name', // A11Y-H2 : panneau règles
+    'set-motion-pref',    // Task 10 : réglage Système/Complètes/Réduites
   ]) {
     await t(`#${id} declares an accessible name (SC 4.1.2/3.3.2)`, () => {
       const tag = openTagById(HTML, id);
@@ -379,10 +381,10 @@ async function run() {
     }
   });
 
-  await t('.cinema-bg animation neutralized under reduced motion (A4)', () => {
-    const re = /@media\s*\(prefers-reduced-motion:\s*reduce\)\s*\{\s*\.cinema-art-wrap\s*\{[^}]*\}\s*\.cinema-bg\s*\{[^}]*animation\s*:\s*none[^}]*\}\s*\}/;
+  await t('.cinema-bg animation neutralized under reduced motion (A4, Task 10: data-motion scoping)', () => {
+    const re = /html\[data-motion="reduce"\]\s*\.cinema-art-wrap\s*\{[^}]*\}\s*html\[data-motion="reduce"\]\s*\.cinema-bg\s*\{[^}]*animation\s*:\s*none[^}]*\}/;
     assert.ok(re.test(SS),
-      'le bloc reduced-motion cinéma existant doit être étendu pour neutraliser .cinema-bg (breathe 8s)');
+      'le bloc html[data-motion="reduce"] cinéma doit neutraliser .cinema-art-wrap ET .cinema-bg (breathe 8s)');
   });
 
   // --- A9 : l'auto-hide des contrôles respecte le focus clavier -------------

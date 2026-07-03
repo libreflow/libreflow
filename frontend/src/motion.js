@@ -39,9 +39,53 @@ const _rmQuery = typeof window !== 'undefined' && typeof window.matchMedia === '
   ? window.matchMedia('(prefers-reduced-motion: reduce)')
   : null;
 
+// Task 10 : réglage in-app à 3 états (Système/Complètes/Réduites), défaut 'full'.
+// Bug produit : sous Windows avec "Effets d'animation" désactivé, WebView2 rapporte
+// prefers-reduced-motion:reduce en permanence → tout le mode cinéma figeait sans
+// que l'utilisateur ait rien demandé. 'full' ignore désormais l'OS par défaut ;
+// 'system' restaure l'ancien comportement (consulte _rmQuery) ; 'reduce' force la
+// conformité WCAG même si l'OS ne la demande pas. Poussé depuis app.js — AUCUN
+// nouvel import ici (motion.js est importé par la quasi-totalité des modules —
+// risque de cycle si on importait cfg.js/store.js en retour).
+let _motionPref = 'full';
+
+/**
+ * Pousse la préférence d'animation applicative. Appelé depuis app.js (boot +
+ * changement de réglage). Valeurs invalides ignorées (garde anti-corruption cfg).
+ * @param {'system'|'full'|'reduce'} pref
+ */
+export function setMotionPref(pref) {
+  if (pref !== 'system' && pref !== 'full' && pref !== 'reduce') {
+    console.warn('[motion] motionPref inconnu ignoré:', pref);
+    return;
+  }
+  _motionPref = pref;
+}
+
 /** @returns {boolean} */
 export function prefersReducedMotion() {
-  return !!(_rmQuery && _rmQuery.matches);
+  if (_motionPref === 'reduce') return true;
+  if (_motionPref === 'full')   return false;
+  return !!(_rmQuery && _rmQuery.matches); // 'system' — consulte l'OS
+}
+
+/**
+ * S'abonne aux changements OS de prefers-reduced-motion (pertinent seulement en
+ * mode 'system' — app.js recalcule l'attribut data-motion + les boucles cinéma
+ * à chaque déclenchement). No-op si matchMedia indisponible (tests Node/SSR).
+ * @param {() => void} cb
+ * @returns {() => void} désabonnement
+ */
+export function onMotionPrefChange(cb) {
+  if (!_rmQuery) return () => {};
+  _rmQuery.addEventListener('change', cb);
+  return () => _rmQuery.removeEventListener('change', cb);
+}
+
+/** Reflète la préférence effective sur <html data-motion="full|reduce">. */
+export function applyMotionAttr() {
+  if (typeof document === 'undefined') return;
+  document.documentElement.dataset.motion = prefersReducedMotion() ? 'reduce' : 'full';
 }
 
 // ── Named eases ──────────────────────────────────────────────────────────────

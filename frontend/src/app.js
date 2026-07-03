@@ -12,12 +12,12 @@ import { emit, on, EVENTS }                                from './bus.js';
 import { get, set, notify, subscribe, setBatch }           from './store.js';
 // Side-effect import: registers GSAP core + Flip + CustomEase once at boot.
 // Consumers import named primitives from './motion.js' as needed.
-import './motion.js';
+import { setMotionPref, onMotionPrefChange, applyMotionAttr } from './motion.js'; // Task 10
 import { CFG, SORTS, SLBLS, SPEEDS, SPEED_LBLS } from './cfg.js';
 import { openDB, tx, dget, dall, dput, ddel, DB, getStorageEstimate } from './db.js';
 import { readTags, extractColor, GENRE_ARTISTS, GENRE_KEYWORDS, guessGenre } from './tags.js';
 import { LANGS, i18n, initLang, getLang, applyLang, setLang } from './i18n.js';
-import { cinemaOpen, cinemaBg, initCinemaBg, toggleCinema, openCinema, closeCinema, updateCinema, updateCinemaProgress, setCinemaBg, cycleCinemaBg, applyCinemaBg, syncCinemaBgSettings, updateCinemaBgBtn, toggleCinemaFullscreen, CINEMA_BG_MODES, CINEMA_BG_LABELS, updateCinArtColor, initCinemaVizSuspend } from './cinema.js';
+import { cinemaOpen, cinemaBg, initCinemaBg, toggleCinema, openCinema, closeCinema, updateCinema, updateCinemaProgress, setCinemaBg, cycleCinemaBg, applyCinemaBg, syncCinemaBgSettings, updateCinemaBgBtn, toggleCinemaFullscreen, CINEMA_BG_MODES, CINEMA_BG_LABELS, updateCinArtColor, initCinemaVizSuspend, startCinemaViz } from './cinema.js';
 import { syncCinVolumeUI } from './cinema-render.js'; // Task 7 fix : chemin volume mini-player → état mute cinéma cohérent
 import { queueOpen, toggleQueue, closeQueue, renderQueue, playQueueItem, clearQueueOverride, addToQueueNext, addToQueueEnd, refreshQueueBadge, getQueueState, restoreQueueState } from './queue.js';
 import { exportM3U, importM3U } from './m3u.js';
@@ -214,6 +214,17 @@ on(EVENTS.LIBRARY_UPDATED, ({ tracks }) => {
 // smartplaylist) — seul app.js a le droit d'appeler setView (§6). Le listener
 // avait été perdu au merge a11y (8e70a17) : 14 émissions étaient des no-op.
 on(EVENTS.VIEW_REQUEST, ({ view: v, btn, plId }) => setView(v, btn || undefined, plId));
+
+// Task 10 — préférence d'animation : recalcule data-motion + relance les boucles
+// canvas cinéma (applyCinemaBg + startCinemaViz, cf. Task 2) si le mode cinéma est
+// ouvert. Déclenché par un changement de réglage (settings.js, via le bus — évite
+// un import cross-module) OU par l'OS en mode 'system' (onMotionPrefChange, motion.js).
+function _refreshMotion() {
+  applyMotionAttr();
+  if (cinemaOpen) { applyCinemaBg(); startCinemaViz(); }
+}
+on(EVENTS.MOTION_PREF_CHANGED, ({ pref }) => { setMotionPref(pref); _refreshMotion(); });
+onMotionPrefChange(_refreshMotion);
 
 // ══ Boot ═══════════════════════════════════════
 
@@ -425,6 +436,12 @@ async function boot() {
   }
   // Zoom liste de pistes — appliquer AVANT le premier rendu (tlistZoom.js)
   setTlistZoom((cfg && cfg.tlistZoom) || 'normal');
+  // Task 10 — préférence d'animation : <html data-motion="full"> déjà posé statiquement
+  // dans index.html (avant 1er paint, défaut 'full') ; on corrige ici si cfg dit autre chose.
+  const motionPref = (cfg && cfg.motionPref) || 'full';
+  set('motionPref', motionPref);
+  setMotionPref(motionPref);
+  applyMotionAttr();
   // Ctrl/Cmd + molette → cycle le niveau de zoom sur #tlist (throttle 150ms).
   initTlistZoomWheel();
   // PERF : charger playlists, playlog et tracks EN PARALLÈLE (était séquentiel → 3× plus lent)

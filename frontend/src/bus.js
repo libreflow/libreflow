@@ -87,4 +87,6 @@ export const EVENTS = Object.freeze({
   PLAYERBAR_UPDATE:           'player:bar_update',         // {}
   // Sleep
   SLEEP_CROSSFADE_STOP:       'sleep:crossfade_stop',      // {}
+  // Motion (Task 10) — settings.js → app.js (évite settings.js → cinema.js direct)
+  MOTION_PREF_CHANGED:        'motion:pref_changed',       // { pref: 'system'|'full'|'reduce' }
 });

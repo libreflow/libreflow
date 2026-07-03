@@ -190,6 +190,8 @@ export function openSettings() {
   $id('lang-en')?.classList.toggle('on', getLang() === 'en');
   // Sync zoom radios
   _syncTlistZoomRadios();
+  // Sync réglage animations (Task 10)
+  _syncMotionPrefSelect();
   // Sync dynColor checkbox
   _syncDynColorChk();
   syncCinemaBgSettings();
@@ -271,6 +273,9 @@ export function initSettingsListeners() {
       if (e.target.checked) setTlistZoom(e.target.value);
     }, { signal });
   });
+  // Animations (Task 10)
+  const motionSel = $select('set-motion-pref');
+  if (motionSel) motionSel.addEventListener('change', e => setMotionPrefSetting(e.target.value), { signal });
   return () => ac.abort();
 }
 
@@ -305,6 +310,28 @@ export function setTheme(t) {
   });
   _allPlayerUI();
   saveCfg();
+}
+
+// ══ ANIMATIONS (Task 10) ═════════════════════════════════════════════════════
+// Réglage in-app Système/Complètes/Réduites — la logique effective (setMotionPref,
+// data-motion, relance des boucles cinéma) vit dans app.js (§6 — wiring sanctionné).
+// settings.js persiste seulement le choix et émet la demande via le bus (évite un
+// nouvel import cross-module settings.js → cinema.js).
+const _MOTION_PREFS = ['system', 'full', 'reduce'];
+
+export function setMotionPrefSetting(pref) {
+  if (!_MOTION_PREFS.includes(pref)) {
+    console.warn('[settings] motionPref inconnu ignoré:', pref);
+    return;
+  }
+  set('motionPref', pref);
+  saveCfg();
+  emit(EVENTS.MOTION_PREF_CHANGED, { pref });
+}
+
+function _syncMotionPrefSelect() {
+  const sel = $select('set-motion-pref');
+  if (sel) sel.value = get('motionPref') || 'full';
 }
 
 function _syncTlistZoomRadios() {
