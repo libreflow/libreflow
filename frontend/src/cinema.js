@@ -221,9 +221,12 @@ function _onCinemaTrapKey(e) {
 
   if (e.key === 'Tab') {
     _showControls(); // A11Y : rendre les contrôles visibles lors de la navigation clavier
-    const focusables = overlay.querySelectorAll(
+    // Task 9 fix — filtre de visibilité (même pattern que le trap de queue.js) : sans lui,
+    // un élément display:none (ex: rangée cachée du panneau file d'attente) peut devenir
+    // first/last ; le Tab natif le saute, le wrap ne fire jamais → le focus s'échappe du modal.
+    const focusables = [...overlay.querySelectorAll(
       'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
-    );
+    )].filter(el => { const r = el.getBoundingClientRect(); return r.width > 0 && r.height > 0; });
     if (!focusables.length) { e.preventDefault(); return; }
     const first  = focusables[0];
     const last   = focusables[focusables.length - 1];

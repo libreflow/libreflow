@@ -272,6 +272,10 @@ export function getCinemaQueueUpcoming() {
     shuffle:        get('shuffle'),
     radioActive,
     radioQueue:     radioActive ? getRadioQueue() : [],
+    // repeat==='all' → wrap séquentiel (parité getNextIdx()/player.js qui boucle sur
+    // filtered[0] — sinon le déclencheur "Suivant" et le panneau ouvert se contredisent
+    // en fin de liste). Même source que _syncCinButtons (cinema.js) : get('repeat').
+    repeatAll:      get('repeat') === 'all',
     limit:          CFG.CINEMA_QUEUE_LIMIT,
   });
 }

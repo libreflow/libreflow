@@ -1885,6 +1885,7 @@ section('cinema-queue.js -- buildUpcoming (pure logic)');
     shuffle        = false,
     radioActive    = false,
     radioQueue     = [],
+    repeatAll      = false,
     limit          = 8,
   } = {}) {
     if (limit <= 0) return [];
@@ -1892,17 +1893,24 @@ section('cinema-queue.js -- buildUpcoming (pure logic)');
     const validExplicit = explicitQueue.filter(t => t && filteredIds.has(t.id));
     if (validExplicit.length) {
       const out = validExplicit.slice(0, limit);
-      if (out.length < limit) {
-        const seen = new Set(out.map(t => t.id));
-        for (let i = curFilteredIdx + 1; i < filtered.length && out.length < limit; i++) {
-          if (!seen.has(filtered[i].id)) out.push(filtered[i]);
-        }
-      }
+      _fillSequential(out, filtered, curFilteredIdx, repeatAll, limit);
       return out;
     }
     if (radioActive) return radioQueue.slice(0, limit);
     if (shuffle) return [];
-    return filtered.slice(curFilteredIdx + 1, curFilteredIdx + 1 + limit);
+    const out = [];
+    _fillSequential(out, filtered, curFilteredIdx, repeatAll, limit);
+    return out;
+  }
+  function _fillSequential(out, filtered, curFilteredIdx, repeatAll, limit) {
+    const seen = new Set(out.map(t => t.id));
+    for (let i = curFilteredIdx + 1; i < filtered.length && out.length < limit; i++) {
+      if (!seen.has(filtered[i].id)) { out.push(filtered[i]); seen.add(filtered[i].id); }
+    }
+    if (!repeatAll) return;
+    for (let i = 0; i < curFilteredIdx && out.length < limit; i++) {
+      if (!seen.has(filtered[i].id)) { out.push(filtered[i]); seen.add(filtered[i].id); }
+    }
   }
 
   const mk  = (id) => ({ id, name: 'T' + id, artist: 'A' + id });
@@ -1958,6 +1966,21 @@ section('cinema-queue.js -- buildUpcoming (pure logic)');
   // ── Priorité explicite > radio (l'explicite gagne même si la radio est active) ──
   assert(ids(buildUpcoming({ explicitQueue: [mk(4)], filtered: fl8, curFilteredIdx: 0, radioActive: true, radioQueue: [mk(50)], limit: 3 })) === '[4,2,3]',
     'file explicite non vide -> priorité absolue sur radioActive (même ordre que _updateNextTrack: hasExplicitQueueNext() avant radioActive)');
+
+  // ── repeat='all' : wrap séquentiel (fix post-review — parité avec getNextIdx qui
+  //    boucle sur filtered[0] quand repeat==='all', player.js) ──────────────────────
+  assert(ids(buildUpcoming({ filtered: fl8, curFilteredIdx: 7, repeatAll: true })) === '[1,2,3,4,5,6,7]',
+    'repeat-all en fin de liste -> wrap vers le début, piste courante EXCLUE, un seul cycle');
+  assert(ids(buildUpcoming({ filtered: fl8, curFilteredIdx: 5, repeatAll: true, limit: 4 })) === '[7,8,1,2]',
+    'repeat-all mi-liste -> suite séquentielle puis wrap, tronqué à limit');
+  assert(ids(buildUpcoming({ filtered: [mk(1)], curFilteredIdx: 0, repeatAll: true })) === '[]',
+    'repeat-all avec une seule piste -> [] (jamais d\'auto-inclusion de la piste courante)');
+  assert(ids(buildUpcoming({ filtered: fl8, curFilteredIdx: 7, repeatAll: false })) === '[]',
+    'repeat off : fin de liste reste [] (comportement inchangé)');
+  assert(ids(buildUpcoming({ explicitQueue: [mk(8)], filtered: fl8, curFilteredIdx: 6, repeatAll: true, limit: 4 })) === '[8,1,2,3]',
+    'repeat-all + file explicite : le remplissage séquentiel wrappe aussi (dédupliqué, courante exclue)');
+  assert(ids(buildUpcoming({ filtered: fl8, curFilteredIdx: 0, shuffle: true, repeatAll: true })) === '[]',
+    'repeat-all ne réactive pas le séquentiel sous shuffle (hint conservé)');
 }());
 
 // =============================================================================
@@ -2144,6 +2167,9 @@ section('components/lf-toast-stack.logic.js -- import-smoke');
       'real module: buildUpcoming séquentiel identique à la copie inline');
     assert(mod.buildUpcoming({ filtered: fl, curFilteredIdx: 0, shuffle: true }).length === 0,
       'real module: buildUpcoming shuffle sans file explicite -> []');
+    const wrap = mod.buildUpcoming({ filtered: fl, curFilteredIdx: 2, repeatAll: true });
+    assert(wrap.length === 2 && wrap[0].id === 1 && wrap[1].id === 2,
+      'real module: buildUpcoming repeat-all wrappe en fin de liste (courante exclue)');
   } catch (e) {
     console.error('  KO  cinema-queue.js import-smoke crashed:', e.message);
     _ko++;

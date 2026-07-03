@@ -36,12 +36,15 @@ let _rows  = [];    // boutons de rangée actuellement rendus (navigation flèch
  *      complément séquentiel (radioRefillQueue() génère la suite dynamiquement, imprévisible).
  *   3. Shuffle actif (sans file explicite ni radio) : imprévisible → [] (le panneau
  *      affiche le hint shuffle existant, Task 6).
- *   4. Séquentiel standard : suite de `filtered` depuis curFilteredIdx+1 (pas de wrap —
- *      `repeat` n'est pas un paramètre de cette fonction pure).
+ *   4. Séquentiel standard : suite de `filtered` depuis curFilteredIdx+1 ; si
+ *      `repeatAll` (repeat==='all' — même source de vérité que getNextIdx()/player.js,
+ *      qui boucle sur filtered[0]) le remplissage wrappe vers le début — piste
+ *      courante exclue, un seul cycle complet maximum (fix post-review Task 9).
  * Fonction PURE — aucun accès DOM/store, testable en isolation (core.test.cjs).
  * @param {{
  *   explicitQueue?: object[], filtered?: object[], curFilteredIdx?: number,
- *   shuffle?: boolean, radioActive?: boolean, radioQueue?: object[], limit?: number
+ *   shuffle?: boolean, radioActive?: boolean, radioQueue?: object[],
+ *   repeatAll?: boolean, limit?: number
  * }} [opts]
  * @returns {object[]}
  */
@@ -52,6 +55,7 @@ export function buildUpcoming({
   shuffle        = false,
   radioActive    = false,
   radioQueue     = [],
+  repeatAll      = false,
   limit          = 8,
 } = {}) {
   if (limit <= 0) return [];
@@ -63,19 +67,30 @@ export function buildUpcoming({
 
   if (validExplicit.length) {
     const out = validExplicit.slice(0, limit);
-    if (out.length < limit) {
-      const seen = new Set(out.map(t => t.id));
-      for (let i = curFilteredIdx + 1; i < filtered.length && out.length < limit; i++) {
-        if (!seen.has(filtered[i].id)) out.push(filtered[i]);
-      }
-    }
+    _fillSequential(out, filtered, curFilteredIdx, repeatAll, limit);
     return out;
   }
 
   if (radioActive) return radioQueue.slice(0, limit);
   if (shuffle) return [];
 
-  return filtered.slice(curFilteredIdx + 1, curFilteredIdx + 1 + limit);
+  const out = [];
+  _fillSequential(out, filtered, curFilteredIdx, repeatAll, limit);
+  return out;
+}
+
+/** Remplissage séquentiel partagé (branche explicite + branche séquentielle pure) :
+ *  suite de `filtered` depuis curFilteredIdx+1, dédupliquée contre `out`, puis wrap
+ *  vers le début si `repeatAll` — piste courante (curFilteredIdx) exclue, un cycle max. */
+function _fillSequential(out, filtered, curFilteredIdx, repeatAll, limit) {
+  const seen = new Set(out.map(t => t.id));
+  for (let i = curFilteredIdx + 1; i < filtered.length && out.length < limit; i++) {
+    if (!seen.has(filtered[i].id)) { out.push(filtered[i]); seen.add(filtered[i].id); }
+  }
+  if (!repeatAll) return;
+  for (let i = 0; i < curFilteredIdx && out.length < limit; i++) {
+    if (!seen.has(filtered[i].id)) { out.push(filtered[i]); seen.add(filtered[i].id); }
+  }
 }
 
 // ── Rendu (textContent uniquement — jamais innerHTML avec des tags, §13) ─────
@@ -222,6 +237,14 @@ function _closePanel({ restoreFocus = true } = {}) {
   const { panel, trigger } = _deps;
   panel.classList.remove('cqp-open');
   panel.hidden = true;
+  // Fix post-review (CRITIQUE) : purger les rangées à la fermeture. Des .cqp-row
+  // fantômes (display:none via [hidden] ancêtre) resteraient sinon dans le DOM et
+  // fausseraient le calcul first/last du Tab-trap overlay (_onCinemaTrapKey,
+  // cinema.js) — la boucle de focus ne wrappe plus et le focus S'ÉCHAPPE du modal
+  // (invariant WCAG focus-trap, CLAUDE.md §2). Verrouillé par un scan a11y.test.cjs.
+  const list = panel.querySelector('.cqp-list');
+  if (list) _clearList(list);
+  _rows = [];
   trigger.setAttribute('aria-expanded', 'false');
   trigger.classList.remove('cqp-trigger-pinned');
   if (restoreFocus && typeof trigger.focus === 'function') trigger.focus();

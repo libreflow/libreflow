@@ -525,6 +525,29 @@ async function run() {
       '.cqp-row doit déclarer min-width/min-height: var(--target-min)');
   });
 
+  // Fix post-review Task 9 (CRITIQUE) : des .cqp-row fantômes (dans le DOM mais
+  // display:none via [hidden] ancêtre) après fermeture du panneau faussent le calcul
+  // first/last du Tab-trap overlay — le wrap ne fire jamais et le focus S'ÉCHAPPE du
+  // modal cinéma. Double verrou : (1) le chemin de fermeture purge la liste,
+  // (2) le trap filtre les éléments invisibles (robuste à tout futur cas caché).
+  await t('cinema-queue.js close path clears the row list — no ghost focusables (Task 9 fix)', () => {
+    const cq = readRepoFile('frontend/src/cinema-queue.js');
+    const m = /function _closePanel\([\s\S]*?\n\}/.exec(cq);
+    assert.ok(m, '_closePanel() introuvable dans cinema-queue.js');
+    assert.ok(/_clearList\(/.test(m[0]),
+      '_closePanel() doit purger la liste (_clearList) — des .cqp-row fantômes cassent le wrap du Tab-trap overlay');
+    assert.ok(/_rows\s*=\s*\[\]/.test(m[0]),
+      '_closePanel() doit réinitialiser _rows (pas de refs vers des boutons détachés)');
+  });
+
+  await t('cinema.js Tab-trap filters invisible focusables (Task 9 fix)', () => {
+    const cj = readRepoFile('frontend/src/cinema.js');
+    const m = /function _onCinemaTrapKey\([\s\S]*?\n\}/.exec(cj);
+    assert.ok(m, '_onCinemaTrapKey() introuvable dans cinema.js');
+    assert.ok(/getBoundingClientRect\(\)/.test(m[0]) && /width\s*>\s*0/.test(m[0]),
+      "_onCinemaTrapKey doit filtrer les éléments invisibles (getBoundingClientRect, pattern queue.js) — sinon un focusable display:none devient first/last, le Tab natif le saute et le focus s'échappe du modal");
+  });
+
   if (fail) { console.log(`\nA11Y FAIL: ${fail}/${pass + fail}`); process.exit(1); }
   console.log(`\nA11Y OK: ${pass}/${pass}`);
 }
