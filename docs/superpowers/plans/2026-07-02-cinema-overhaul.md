@@ -197,6 +197,50 @@ UX cible : le panneau « Suivant » (bas-droite) devient cliquable (bouton, `ari
 
 ---
 
+## Addendum 2 (2026-07-03) — Qualité des fonds cinéma (audit)
+
+Audit utilisateur : « les vagues doivent être 7 vagues de bonne qualité, dynamiques, en ambientUI ». Findings #1-12 de l'audit du 2026-07-03 (profondeur vagues inversée, monochrome, dynamique en bloc, allocations rAF ambient, gel pause incohérent, teinte starfield mono-canal, barres graves dupliquées).
+
+### Task 12: Vagues — refonte qualité (profondeur, palette ambient, dynamique par bande)
+
+**Files:** Create: `frontend/src/cinema-waves.js` (pur, <200 lignes, testé par import ESM) ; Modify: `frontend/src/cinema-canvas.js`, `frontend/tests/core.test.cjs`
+
+- [ ] **Step 1 (TDD): module pur `cinema-waves.js`** — trois fonctions pures, tests par `await import()` (pattern moveByOne/ensureContrastOnDark) :
+  (a) `waveLayerGeom(l, layers)` → `{ yBase, ampBase, fillAlpha, crestAlpha, lineWidth }` normalisés — modèle de profondeur COHÉRENT : `l=0` = arrière (haut ~0.30h, amplitude min, crête faible/fine, remplissage léger), `l=layers-1` = avant (bas ~0.86h, amplitude max, crête lumineuse/épaisse, remplissage dense). Tests : monotonicité stricte des 5 champs sur l ∈ [0,6].
+  (b) `waveLayerPalette(r, g, b, layers)` → array de `[r,g,b]` par couche : hue-shift progressif (≈ ±14°/couche, cohérent avec `_buildAmbientColors` ±38/−32), saturation boostée (`boostSat`), rampe de luminance arrière→avant, PLANCHER de luminance pour pochettes sombres (art gris 30,30,30 → couche avant lisible). Tests : longueur, luminance croissante vers l'avant, plancher sur entrée sombre, teintes distinctes entre couches.
+  (c) `computeBandEnergies(fftBuf, out, smooth)` → énergies par bande log-espacées (out.length bandes, basses→index 0), EMA lissée dans `out` (zéro allocation). Tests : silence → 0 partout, impulsion basses → bande 0 dominante, lissage EMA effectif. RED.
+- [ ] **Step 2: consommer dans `drawWavesFrame`** — géométrie par couche depuis `waveLayerGeom` (cachée module-scope), palette par couche cachée (clé lerpRGB), énergies par bande dans un `Float32Array(7)` pré-alloué : couche AVANT pilotée par les basses, arrière par les aigus (amplitude ET vitesse de phase par couche). Buffer `Float32Array(_WAVE_STEPS+1)` partagé : les `y` calculés UNE fois par couche, rejoués pour le remplissage et la crête (sin divisé par 2). Gradients/crêtes recalculés seulement sur invalidation (clé couleur+h, comme aujourd'hui).
+- [ ] **Step 3: fallback sans analyser** — `!eqAnalyser` ne retourne plus à vide : énergies à 0, vagues statiques dessinées quand même (plus d'écran noir cinéma-avant-lecture). Idem starfield (scintillement à énergie 0).
+- [ ] **Step 4:** scans (cinema-canvas.js importe cinema-waves.js ; « cinema split » mis à jour avec le cap du nouveau fichier) ; suites vertes ; `npm run bench` ; commit.
+
+### Task 13: Ambient/AMOLED — zéro allocation par frame (§10)
+
+**Files:** Modify: `frontend/src/ambientRenderer.js`, `frontend/src/cinema-bg.js`, `frontend/src/nowplaying.js`, `frontend/tests/core.test.cjs`
+
+- [ ] **Step 1 (TDD): scans** — (a) `ambientRenderer.js` ne lit plus `window.innerWidth/innerHeight` (W/H paramètres) ; (b) les `createRadialGradient` du chemin par-frame sont derrière une clé d'invalidation (couleur/W/H), le drift passe par `ctx.translate`/`scale` ; (c) les deux appelants (cinema-bg, nowplaying) passent W/H. RED.
+- [ ] **Step 2: gradients cachés + transform** — les 4 gradients ambient (g1-g4) + halo amoled créés à l'origine (0,0) avec rayon fixe, cachés keyed (couleurs, W, H) ; par frame : `ctx.save()` → `translate(cx,cy)` (+ `scale(k,k)` pour la respiration de g1) → `fillRect` en coordonnées locales (rect = écran transformé inverse) → `restore()`. Zéro `createRadialGradient`/string par frame en régime stable.
+- [ ] **Step 3: signature** — `renderAmbientFrame(t, canvas, ctx, mode, colorStr, ambientColors, W, H)` ; cinema-bg passe `_winW/_winH`, nowplaying son propre cache.
+- [ ] **Step 4:** suites vertes ; bench ; commit.
+
+### Task 14: Cohérence — gel en pause pour tous les fonds + teinte starfield 3 canaux
+
+**Files:** Modify: `frontend/src/cinema-bg.js`, `frontend/src/cinema-canvas.js`, `frontend/src/style.css` (commentaire), `frontend/tests/core.test.cjs`
+
+- [ ] **Step 1 (TDD): scans** — (a) l'accumulation `_ambientT += now - last` est conditionnée à `_getIsPlaying()` (gel ambient/amoled/starfield en pause — waves déjà gelées via isPlaying) ; (b) le fond starfield teinte les 3 canaux depuis la couleur d'art (plus de `rgba(0,0,` mono-canal bleu). RED.
+- [ ] **Step 2:** implémentation + corriger le commentaire style.css (« les fonds canvas gèlent via isPlaying » — désormais vrai pour les 4 modes). Les cross-fades (start/dur sur `performance.now()`) continuent de se terminer pendant la pause — voulu.
+- [ ] **Step 3:** suites vertes ; commit.
+
+### Task 15: Spectrum — mapping log monotone + fade d'entrée
+
+**Files:** Modify: `frontend/src/cinema-viz.js`, `frontend/src/cinema-bg.js`, `frontend/src/style.css`, `frontend/src/design-system.css` (si token), `frontend/tests/core.test.cjs`
+
+- [ ] **Step 1 (TDD):** (a) scan : les mappings log des 3 renderers de barres (`_drawSpectrumBars`, `_drawStandardBars`, `_drawVolVis`) forcent des bins strictement croissants (plus de barres jumelles dans les graves) ; (b) scan : bascule vers spectrum → classe de fade d'entrée sur `#cinema-viz`, animation tokenisée, inerte sous `html[data-motion="reduce"]`. RED.
+- [ ] **Step 2: bins monotones** — `bin = Math.max(prevBin + 1, bin)` (cap `totalBins-1`) dans les trois boucles de barres.
+- [ ] **Step 3: fade spectrum** — `applyCinemaBg` (bascule VERS spectrum, hors reduced-motion) pose une classe `viz-fade-in` sur `#cinema-viz` (animation opacity tokenisée `--dur-cinema`, retirée sur `animationend`) — remplace le cut sec documenté en Task 11.
+- [ ] **Step 4:** suites vertes ; commit.
+
+---
+
 ## Vérification finale (après toutes les tâches)
 
 - `npm test` — toutes suites vertes (core + les .cjs individuels : a11y, token-source, theme-palette, sidebar)
