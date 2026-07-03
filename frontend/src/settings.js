@@ -326,6 +326,10 @@ export function setMotionPrefSetting(pref) {
   }
   set('motionPref', pref);
   saveCfg();
+  // Mirror localStorage synchrone — lu par public/boot-motion.js AVANT le premier
+  // paint au prochain boot (la cfg IDB est async, trop tard pour l'attribut initial).
+  // Même pattern que les mirrors lf-mode/lf-theme de boot-theme.js. Cfg = source de vérité.
+  try { localStorage.setItem('lf-motion', pref); } catch (e) { console.warn('[settings] mirror lf-motion non écrit:', e); }
   emit(EVENTS.MOTION_PREF_CHANGED, { pref });
 }
 

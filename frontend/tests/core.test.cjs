@@ -2976,6 +2976,28 @@ section('components/lf-toast-stack.logic.js -- import-smoke');
     const HTML = read('frontend/index.html');
     assert(/<html[^>]*\sdata-motion="full"/.test(HTML),
       'index.html: <html data-motion="full"> posé statiquement (avant 1er paint, défaut motionPref)');
+
+    // Fix post-review — anti flash d'animations NON réduites au boot : la cfg IDB est
+    // async, donc un mirror localStorage synchrone (lf-motion) est lu par un script
+    // classique render-blocking AVANT le premier paint (pattern boot-theme.js ;
+    // CSP script-src 'self' interdit l'inline → fichier dans public/).
+    const BOOT = read('frontend/public/boot-motion.js');
+    assert(/localStorage\.getItem\(\s*'lf-motion'\s*\)/.test(BOOT),
+      'boot-motion.js lit le mirror localStorage lf-motion');
+    assert(/matchMedia\(\s*'\(prefers-reduced-motion:\s*reduce\)'\s*\)/.test(BOOT),
+      "boot-motion.js consulte matchMedia (cas pref='system')");
+    assert(/data-motion/.test(BOOT) && /try\s*\{/.test(BOOT),
+      'boot-motion.js pose data-motion, protégé par try/catch (localStorage peut throw)');
+    const headEnd = HTML.indexOf('</head>');
+    const bootRef = HTML.indexOf('src="/boot-motion.js"');
+    assert(bootRef !== -1 && headEnd !== -1 && bootRef < headEnd,
+      'index.html charge /boot-motion.js dans <head> (render-blocking, avant <body>)');
+    // Le chemin d'écriture du réglage ET le boot (cfg = source de vérité) tiennent le mirror à jour.
+    const SET = read('frontend/src/settings.js');
+    assert(/localStorage\.setItem\(\s*'lf-motion'/.test(SET),
+      'settings.js: setMotionPrefSetting écrit le mirror lf-motion');
+    assert(/localStorage\.setItem\(\s*'lf-motion'/.test(APP),
+      'app.js: le boot ré-écrit le mirror lf-motion depuis la cfg (cfg gagne, seed des profils existants)');
   }());
 
   // -- Résultat -----------------------------------------------------------

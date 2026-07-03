@@ -12,6 +12,11 @@
        data-mode/data-theme depuis les mirrors localStorage AVANT le premier
        paint (la cfg IDB est async). CSP script-src 'self' → pas d'inline. -->
   <script src="/boot-theme.js"></script>
+  <!-- Task 10 : pose data-motion (mirror localStorage lf-motion, défaut 'full')
+       AVANT le premier paint — évite le flash d'animations non réduites pour un
+       profil 'reduce'/'system' pendant la lecture async de la cfg IDB.
+       CSP script-src 'self' → pas d'inline, d'où le fichier dans public/. -->
+  <script src="/boot-motion.js"></script>
   <script type="module" src="/src/main.js"></script>
 </head>
 <body>

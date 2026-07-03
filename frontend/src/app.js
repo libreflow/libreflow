@@ -436,12 +436,15 @@ async function boot() {
   }
   // Zoom liste de pistes — appliquer AVANT le premier rendu (tlistZoom.js)
   setTlistZoom((cfg && cfg.tlistZoom) || 'normal');
-  // Task 10 — préférence d'animation : <html data-motion="full"> déjà posé statiquement
-  // dans index.html (avant 1er paint, défaut 'full') ; on corrige ici si cfg dit autre chose.
+  // Task 10 — préférence d'animation : data-motion déjà posé avant le 1er paint par
+  // public/boot-motion.js (mirror localStorage lf-motion, fallback statique "full") ;
+  // la cfg IDB reste la source de vérité — on corrige ici attribut ET mirror si divergents
+  // (couvre aussi les profils existants d'avant l'introduction du mirror).
   const motionPref = (cfg && cfg.motionPref) || 'full';
   set('motionPref', motionPref);
   setMotionPref(motionPref);
   applyMotionAttr();
+  try { localStorage.setItem('lf-motion', motionPref); } catch (e) { console.warn('[boot] mirror lf-motion non écrit:', e); }
   // Ctrl/Cmd + molette → cycle le niveau de zoom sur #tlist (throttle 150ms).
   initTlistZoomWheel();
   // PERF : charger playlists, playlog et tracks EN PARALLÈLE (était séquentiel → 3× plus lent)
