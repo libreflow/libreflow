@@ -172,7 +172,11 @@ export function applyCinemaBg() {
   const cinBg = document.getElementById('cinema-bg');
   // Task 8 : snapshot de l'ancien mode AVANT tout switch — sert de base au cross-fade
   // MODE_CROSSFADE_MS ci-dessous. Sous reduced-motion : pas de snapshot → bascule sèche (SC 2.3.3).
-  const modeSnapshot = _snapshotModeCanvas(cinBg);
+  // Task 11 : pas de snapshot VERS spectrum — la boucle rAF ambient ne tourne pas dans
+  // ce mode (rendu par cinema-viz sur son propre canvas) : le snapshot plein écran
+  // (multi-Mo) ne serait jamais consommé ni libéré. Bascule sèche vers spectrum ;
+  // DEPUIS spectrum, le fondu part du canvas vidé (noir) — comportement déjà voulu.
+  const modeSnapshot = cinemaBg === 'spectrum' ? null : _snapshotModeCanvas(cinBg);
   _stopAmbientAnim(); // arrêter l'animation breathing avant tout switch de mode
   _ambientColors = null;
   // Vider le canvas immédiatement à chaque switch (évite interférence entre modes)
@@ -281,10 +285,12 @@ function _startAmbientAnim() {
       _ambientAnimRaf = null;
       return;
     }
-    // 30fps cap pour tous les modes (ambient/amoled/waves/starfield) — skip odd frames
-    // to halve GPU load. Task 8 : amoled n'a plus d'exemption (halo très lent → 30fps
-    // reste visuellement fluide, aucune raison de tourner à 60fps).
-    if (_frameCount++ % 2 !== 0) {
+    // Task 11 (défrizz) : cap 30fps (skip 1 frame/2) UNIQUEMENT quand la fenêtre n'a
+    // pas le focus — fenêtre focalisée → 60fps pour tous les modes (le viz de la
+    // player-bar est suspendu sous l'overlay depuis T1, le budget GPU est disponible).
+    // L'accumulation temporelle (_ambientT += now - last) garantit une vitesse
+    // d'animation identique quel que soit le framerate effectif.
+    if (!document.hasFocus() && _frameCount++ % 2 !== 0) {
       _ambientAnimRaf = requestAnimationFrame(loop);
       return;
     }

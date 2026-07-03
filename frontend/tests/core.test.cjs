@@ -3000,6 +3000,46 @@ section('components/lf-toast-stack.logic.js -- import-smoke');
       'app.js: le boot ré-écrit le mirror lf-motion depuis la cfg (cfg gagne, seed des profils existants)');
   }());
 
+  // =============================================================================
+  // Task 11 — Défrizz : 60fps en cinéma focalisé, cross-fade spectrum, compositing
+  // Step 1 (TDD) : scans statiques.
+  // =============================================================================
+  section('Task 11 -- défrizz (60fps focus, snapshot spectrum, will-change)');
+
+  (function () {
+    const fs   = require('fs');
+    const path = require('path');
+    const root = path.join(__dirname, '../..');
+    const read = f => fs.readFileSync(path.join(root, f), 'utf8');
+    const BG  = read('frontend/src/cinema-bg.js');
+    const CSS = read('frontend/src/style.css');
+
+    // (a) le frame-skip 30fps de la boucle rAF dépend du focus fenêtre — fenêtre
+    // focalisée → 60fps pour tous les modes (le viz player-bar est suspendu sous
+    // l'overlay depuis T1). Plus de cap inconditionnel.
+    assert(/!document\.hasFocus\(\)\s*&&\s*_frameCount\+\+\s*%\s*2/.test(BG),
+      'cinema-bg.js: skip 1 frame/2 conditionné à !document.hasFocus() (fenêtre focalisée → 60fps)');
+    assert(!/if\s*\(\s*_frameCount\+\+\s*%\s*2\s*!==\s*0\s*\)/.test(BG),
+      'cinema-bg.js: plus de cap 30fps inconditionnel dans la boucle rAF');
+
+    // (b) bascule VERS spectrum : le snapshot de cross-fade de mode n'est jamais
+    // retenu — la boucle rAF ambient ne tourne pas dans ce mode (rendu par
+    // cinema-viz sur son propre canvas), donc un snapshot plein écran (multi-Mo)
+    // ne serait jamais consommé ni libéré. Bascule sèche vers spectrum.
+    const snapAssign = /const\s+modeSnapshot\s*=([^;]+);/.exec(BG);
+    assert(!!snapAssign, 'cinema-bg.js: assignation modeSnapshot trouvée (applyCinemaBg)');
+    assert(snapAssign && /spectrum/.test(snapAssign[1]),
+      "cinema-bg.js: snapshot de bascule court-circuité vers 'spectrum' (jamais retenu)");
+
+    // (c) compositing : will-change: transform sur la pochette animée en continu
+    // (float + breathe + Ken Burns enfant), scopé à l'overlay actif (pas de layer
+    // GPU résident hors cinéma), et libéré sous reduced-motion (animations coupées).
+    assert(/#cinema-overlay\.active\s+\.cinema-art-wrap\s*\{[^}]*will-change\s*:\s*transform/.test(CSS),
+      'style.css: will-change: transform sur .cinema-art-wrap, scopé #cinema-overlay.active');
+    assert(/html\[data-motion="reduce"\]\s+\.cinema-art-wrap\s*\{[^}]*will-change\s*:\s*auto/.test(CSS),
+      'style.css: will-change libéré (auto) sur .cinema-art-wrap sous html[data-motion="reduce"]');
+  }());
+
   // -- Résultat -----------------------------------------------------------
   console.log('\n═══════════════════════════════════════════════════════════');
   console.log(`  Total : ${_ok + _ko}   OK: ${_ok}   KO: ${_ko}`);

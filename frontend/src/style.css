@@ -5052,8 +5052,14 @@ html[data-motion="reduce"] .cinema-queue-panel { transition: none; }
 .cinema-art-wrap:not(.cin-swap):not(.cin-swap-out):not(.beat) {
   animation: cinema-art-breathe var(--dur-cin-breathe) ease-in-out infinite;
 }
+/* Task 11 (défrizz) : la pochette anime transform en continu (float + breathe, Ken
+   Burns sur l'img enfant) — promotion GPU explicite pour éviter les re-rasterisations
+   par frame. Scopé à l'overlay actif : aucun layer résident hors cinéma (même pattern
+   que .cinema-fill plus bas). */
+#cinema-overlay.active .cinema-art-wrap { will-change: transform; }
 html[data-motion="reduce"] .cinema-art-wrap {
   animation: none !important;
+  will-change: auto; /* Task 11 : animations coupées → libérer le layer GPU */
 }
 html[data-motion="reduce"] .cinema-bg {
   animation: none !important;
