@@ -46,6 +46,45 @@ export function boostSat(r, g, b, sFactor = 1.5, lMin = 0.12) {
   return hslToRgb(h, s, l);
 }
 
+/** Relative luminance of an RGB colour, per WCAG 2.1 (same formula as frontend/tests/_wcag.cjs). */
+function _relLuminance(r, g, b) {
+  const f = c => { const s = c / 255; return s <= 0.03928 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4); };
+  return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b);
+}
+
+/** Contrast ratio of an RGB colour against pure black (#000, luminance 0). */
+function _contrastVsBlack(r, g, b) {
+  return (_relLuminance(r, g, b) + 0.05) / 0.05;
+}
+
+/**
+ * Lightens [r,g,b] linearly toward white until its contrast ratio against pure
+ * black (#000 — the cinema backdrop is near-black, so black is the conservative
+ * reference) reaches at least minRatio. Same relative-luminance math as
+ * frontend/tests/_wcag.cjs (contrastRatio).
+ *
+ * Idempotent: a colour already at/above minRatio is returned unchanged (bit-
+ * identical), so re-applying the guard to an already-guarded colour is a no-op.
+ * Bounded bisection (24 steps toward white, which is always >= any valid
+ * minRatio <= 21:1) — always converges, never loops, regardless of input.
+ *
+ * @param {number[]} rgb - [r, g, b], each 0-255
+ * @param {number} minRatio - target contrast ratio, e.g. 4.5
+ * @returns {number[]} [r, g, b], each 0-255, contrast-safe against #000
+ */
+export function ensureContrastOnDark([r, g, b], minRatio) {
+  if (_contrastVsBlack(r, g, b) >= minRatio) return [r, g, b];
+  const lerp = (c, t) => c + (255 - c) * t;
+  let lo = 0, hi = 1; // hi=1 (pure white, ratio 21:1) satisfies any minRatio <= 21
+  for (let i = 0; i < 24; i++) {
+    const mid = (lo + hi) / 2;
+    if (_contrastVsBlack(lerp(r, mid), lerp(g, mid), lerp(b, mid)) >= minRatio) hi = mid; else lo = mid;
+  }
+  // Math.ceil (not round): always rounds toward white, so the integer result's
+  // contrast is >= the continuous bisection value — never undershoots minRatio.
+  return [r, g, b].map((c, i) => Math.min(255, Math.ceil(lerp(c, hi))));
+}
+
 /** Average RGB of a canvas region */
 export function regionAvg(tc, x, y, w, h) {
   const d = tc.getImageData(x | 0, y | 0, w | 0, h | 0).data;

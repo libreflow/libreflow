@@ -5140,7 +5140,9 @@ html[data-mode="light"] .eq-slider::-moz-range-track { background: var(--bg6); }
 }
 .cinema-album {
   font-size: var(--fs-vw-cin-alb);
-  color: var(--cin-text-dim);
+  /* Task 7 — teinté par la pochette : --cin-rgb-ui est déjà garanti >=4.5:1 vs noir
+     (ensureContrastOnDark, artcolor.js), donc sûr ici (contrairement à --cin-rgb brute). */
+  color: rgb(var(--cin-rgb-ui, 255,255,255));
   margin-top: var(--sp-1p); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   font-weight: 500; letter-spacing: var(--ls-wide); text-transform: uppercase;
   text-shadow: 0 1px 6px rgba(0, 0, 0, 0.55);
@@ -5178,14 +5180,15 @@ html[data-mode="light"] .eq-slider::-moz-range-track { background: var(--bg6); }
   content: ''; position: absolute; inset: -8px 0;
 }
 .cinema-pbar:hover { height: var(--cinema-pbar-hover-h); }
-.cinema-pbar:hover .cinema-fill { box-shadow: var(--shadow-cin-pbar); }
+/* Task 7 — le fill se teinte au hover (repos = blanc neutre, cf. .cinema-fill ci-dessous) */
+.cinema-pbar:hover .cinema-fill { background: rgb(var(--cin-rgb-ui, 255,255,255)); box-shadow: var(--shadow-cin-pbar); }
 .cinema-pbar:focus-visible { outline: none; box-shadow: var(--cin-focus-ring); border-radius: var(--r-xs); }
 .cinema-fill {
   height: 100%; border-radius: var(--r-xs);
   background: rgba(255,255,255,.88); width: 100%;
   transform: scaleX(0); transform-origin: left center;
   pointer-events: none;
-  transition: box-shadow var(--dur-mid) var(--smooth);
+  transition: box-shadow var(--dur-mid) var(--smooth), background var(--dur-mid) var(--smooth);
 }
 #cinema-overlay.active .cinema-fill { will-change: transform; }
 .cinema-time {
@@ -5202,7 +5205,8 @@ html[data-mode="light"] .eq-slider::-moz-range-track { background: var(--bg6); }
   position: absolute; top: 50%; left: 0;
   width: var(--icon-xs); height: var(--icon-xs);
   border-radius: 50%;
-  background: var(--c-white);
+  /* Task 7 — teinté par la pochette (light mode : override plus bas, garde var(--text-primary)) */
+  background: rgb(var(--cin-rgb-ui, 255,255,255));
   box-shadow: var(--shadow-thumb);
   transform: translate(-50%, -50%) scale(0);
   opacity: 0;
@@ -5264,13 +5268,19 @@ html[data-mode="light"] .eq-slider::-moz-range-track { background: var(--bg6); }
 .cbtn:hover    { background: rgba(255,255,255,.1); color: var(--text-on-accent); transform: scale(1.12); }
 .cbtn:active   { transform: scale(.93); }
 .cbtn:focus-visible { outline: none; box-shadow: var(--cin-focus-ring); }
-.cbtn.on       { color: var(--g); }
+/* Task 7 — cohésion chromatique : les états actifs suivent la couleur de la pochette
+   (--cin-rgb-ui, garde-fou contraste AA 4.5:1 vs noir — cf. artcolor.js) au lieu de
+   l'accent de thème figé --g. #cinema-rep (badge) et .cbtn-radio gardent leur propre
+   override plus bas (radio reste sur --g, cf. keyframe radio-pulse-cbtn inchangée). */
+.cbtn.on       { color: rgb(var(--cin-rgb-ui, 255,255,255)); filter: drop-shadow(0 0 4px rgba(var(--cin-rgb-ui, 255,255,255), .45)); }
 .cbtn svg      { width: var(--icon-xl); height: var(--icon-xl); fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; pointer-events: none; }
 .cbtn.on svg   { stroke: currentColor; }
 .cbtn-like svg { fill: none; }
 .cbtn-like.on svg { fill: currentColor; }
 .cbtn-radio svg { fill: none; stroke: currentColor; }
 .cbtn-radio.on  { color: var(--g); animation: radio-pulse-cbtn var(--anim-shim) ease-out infinite; }
+/* Badge repeat-one : override cinéma seul (#pc-rep du player principal garde --g, cf. plus haut) */
+#cinema-rep.rep-one::after { color: rgb(var(--cin-rgb-ui, 255,255,255)); }
 @keyframes radio-pulse-cbtn {
   0%,100% { filter: none; }
   50%     { filter: drop-shadow(0 0 8px rgba(var(--g-rgb),.7)); }
@@ -5294,10 +5304,23 @@ html[data-mode="light"] .eq-slider::-moz-range-track { background: var(--bg6); }
   display: flex; align-items: center; gap: var(--sp-1d);
   padding: 0 var(--sp-1h);
 }
+/* Task 7 — #cinema-vol-icon est un vrai <button> (mute cliquable) : la cible tactile
+   respecte le plancher 24px (SC 2.5.8) même si l'icône visuelle reste plus petite. */
+.cinema-vol-icon-btn {
+  background: none; border: none; padding: 0; margin: 0;
+  display: flex; align-items: center; justify-content: center;
+  min-width: var(--target-min); min-height: var(--target-min);
+  border-radius: var(--r-sm);
+  flex-shrink: 0;
+  cursor: pointer;
+  color: rgba(255,255,255,.55);
+  transition: color var(--dur-fast) ease;
+}
+.cinema-vol-icon-btn:hover { color: var(--text-on-accent); }
+.cinema-vol-icon-btn:focus-visible { outline: none; box-shadow: var(--cin-focus-ring); }
 .cinema-vol-icon {
   width: var(--icon-lg); height: var(--icon-lg); flex-shrink: 0;
-  color: rgba(255,255,255,.55);
-  pointer-events: none;
+  pointer-events: none; /* le clic résout toujours sur le <button> parent */
 }
 /* ── Ambient visualiseur intégré à la barre de volume ─────── */
 .cinema-vol-bar {
@@ -5324,10 +5347,12 @@ html[data-mode="light"] .eq-slider::-moz-range-track { background: var(--bg6); }
 .cinema-vol-slider:hover { height: var(--cinema-vol-hover-h); }
 /* A11Y-SLIDER-3 — focus clavier cinéma (fond semi-opaque blanc, pas de --g qui serait trop contrasté) */
 .cinema-vol-slider:focus-visible { box-shadow: var(--cin-focus-ring); }
+/* Task 7 — accent du slider volume teinté par la pochette (--cin-rgb-ui, contraste
+   garanti >=4.5:1 vs noir — cf. artcolor.js) au lieu du blanc/accent figé. */
 .cinema-vol-slider::-webkit-slider-thumb {
   -webkit-appearance: none; appearance: none;
   width: var(--icon-sm); height: var(--icon-sm); border-radius: 50%;
-  background: var(--c-white);
+  background: rgb(var(--cin-rgb-ui, 255,255,255));
   box-shadow: var(--shadow-cin-vol);
   cursor: pointer;
   transition: transform var(--dur-fast) var(--spring);
@@ -5335,7 +5360,7 @@ html[data-mode="light"] .eq-slider::-moz-range-track { background: var(--bg6); }
 .cinema-vol-slider:hover::-webkit-slider-thumb { transform: scale(1.2); }
 .cinema-vol-slider::-moz-range-thumb {
   width: var(--icon-sm); height: var(--icon-sm); border-radius: 50%; border: none;
-  background: var(--c-white); cursor: pointer;
+  background: rgb(var(--cin-rgb-ui, 255,255,255)); cursor: pointer;
   transition: transform var(--dur-fast) var(--spring);
 }
 .cinema-vol-slider:hover::-moz-range-thumb { transform: scale(1.2); }
@@ -5384,9 +5409,19 @@ html[data-mode="light"] .cinema-corner-btn:active {
 html[data-mode="light"] .cinema-corner-btn:focus-visible,
 html[data-mode="light"] .cbtn:focus-visible,
 html[data-mode="light"] .cinema-pbar:focus-visible,
+html[data-mode="light"] .cinema-vol-icon-btn:focus-visible,
 html[data-mode="light"] .cinema-vol-slider:focus-visible {
   box-shadow: 0 0 0 2px rgba(0,0,0,.75), 0 0 0 4px rgba(255,255,255,.45);
 }
+
+/* Task 7 — la teinte --cin-rgb-ui est garantie >=4.5:1 contre NOIR uniquement ;
+   sur le fond clair du cinéma light elle serait illisible. Retour aux valeurs
+   light-safe pré-Task-7 (l'accent de thème --g est déjà validé AA en light). */
+html[data-mode="light"] .cbtn.on                        { color: var(--g); filter: none; }
+html[data-mode="light"] #cinema-rep.rep-one::after      { color: var(--g); }
+html[data-mode="light"] .cinema-pbar:hover .cinema-fill { background: rgba(255,255,255,.88); }
+html[data-mode="light"] .cinema-vol-slider::-webkit-slider-thumb { background: var(--c-white); }
+html[data-mode="light"] .cinema-vol-slider::-moz-range-thumb     { background: var(--c-white); }
 
 html[data-mode="light"] #art-blur-bg {
   background: rgba(255, 255, 255, 0.45);   /* voile clair au lieu du noir 72% */

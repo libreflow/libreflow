@@ -1975,6 +1975,51 @@ section('components/lf-toast-stack.logic.js -- import-smoke');
     console.error('  ✗  _kmeansColors import/test crashed:', e.message);
   }
 
+  // Task 7 — artcolor.js — ensureContrastOnDark (garde-fou contraste, real import —
+  // avoids drift from inline duplicate; same WCAG relative-luminance math as _wcag.cjs).
+  section('artcolor.js -- ensureContrastOnDark (import réel)');
+  try {
+    const { ensureContrastOnDark } = await import('../src/artcolor.js');
+    const { contrastRatio } = require('./_wcag.cjs');
+    const toHex = ([r, g, b]) => '#' + [r, g, b].map(v => Math.round(v).toString(16).padStart(2, '0')).join('');
+
+    // Already-conforming colour (pure red, ~5.25:1 vs black) is returned unchanged.
+    const red = ensureContrastOnDark([255, 0, 0], 4.5);
+    assert(red[0] === 255 && red[1] === 0 && red[2] === 0,
+      'ensureContrastOnDark: couleur déjà conforme (rouge pur) inchangée');
+
+    // Dark colour raised to >= 4.5:1 against pure black, only ever lightened.
+    const dark = [10, 10, 40];
+    const darkOut = ensureContrastOnDark(dark, 4.5);
+    assert(contrastRatio(toHex(darkOut), '#000000') >= 4.5 - 1e-6,
+      'ensureContrastOnDark: couleur sombre remontée à >= 4.5:1 vs noir');
+    assert(darkOut[0] >= dark[0] && darkOut[1] >= dark[1] && darkOut[2] >= dark[2],
+      'ensureContrastOnDark: éclaircissement uniquement vers le blanc (jamais assombri)');
+
+    // Pure black -> light gray (neutral channels, ratio met, not blown out to white).
+    const blackOut = ensureContrastOnDark([0, 0, 0], 4.5);
+    assert(blackOut[0] === blackOut[1] && blackOut[1] === blackOut[2],
+      'ensureContrastOnDark: noir pur -> gris neutre (r=g=b)');
+    assert(blackOut[0] > 60 && blackOut[0] < 255,
+      'ensureContrastOnDark: noir pur -> gris clair (ni noir ni blanc)');
+    assert(contrastRatio(toHex(blackOut), '#000000') >= 4.5 - 1e-6,
+      'ensureContrastOnDark: noir pur -> contraste >= 4.5:1');
+
+    // Idempotence: applying twice === applying once.
+    const once  = ensureContrastOnDark(dark, 4.5);
+    const twice = ensureContrastOnDark(once, 4.5);
+    assert(once[0] === twice[0] && once[1] === twice[1] && once[2] === twice[2],
+      'ensureContrastOnDark: idempotent (appliquer deux fois = une fois)');
+
+    // Convergence guard: white input must not loop and stays white.
+    const whiteOut = ensureContrastOnDark([255, 255, 255], 4.5);
+    assert(whiteOut[0] === 255 && whiteOut[1] === 255 && whiteOut[2] === 255,
+      'ensureContrastOnDark: blanc pur inchangé (pas de boucle infinie)');
+  } catch (e) {
+    _ko++;
+    console.error('  ✗  ensureContrastOnDark import/test crashed:', e.message);
+  }
+
   // WCAG 2.2 SC 2.5.7 — pure reorder helper moveByOne (alternative non-drag)
   try {
     const { moveByOne } = await import('../src/utils.js');

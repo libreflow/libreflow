@@ -58,6 +58,7 @@ import { showCtxMenu, closeCtxMenu,
          ctxMoveTrackUp, ctxMoveTrackDown } from './ctxmenu.js';
 import { toggleCinema, closeCinema, cycleCinemaBg,
          toggleCinemaFullscreen }                              from './cinema.js';
+import { syncCinVolumeUI, toggleCinemaMute }                   from './cinema-render.js';
 import { openRadioView, ctxStartRadio,
          radioSaveAsPlaylist, radioRegenerateFromCurrent,
          stopRadio, playRadioTrackAt, removeRadioTrack }       from './radio.js';
@@ -219,6 +220,7 @@ const _ACTIONS = {
   'cinema-fullscreen':     ()    => toggleCinemaFullscreen(),
   'cycle-cinema-bg':       ()    => cycleCinemaBg(),
   'toggle-cinema-radio':   ()    => toggleCinemaRadio(),
+  'cinema-mute':           ()    => toggleCinemaMute(),
 
   // ── Radio ─────────────────────────────────────────────────
   'open-radio':            (btn) => openRadioView(btn),
@@ -613,6 +615,9 @@ function _handleInput(e) {
       if (main) { main.value = el.value; updateVolSlider(main); }
       setAriaValueText(el,   _v => `${Math.round(_v * 100)} pour cent`, v);
       if (main) setAriaValueText(main, _v => `${Math.round(_v * 100)} pour cent`, v);
+      // Task 7 — mouvement manuel du slider : re-dérive l'état muet/icône barrée
+      // depuis le volume réel (pas de flag séparé — cohérent avec le bouton mute).
+      syncCinVolumeUI(v);
       break;
     }
 

@@ -403,6 +403,63 @@ async function run() {
       "le check A9 doit exiger :focus-visible — sans ça, un clic souris sur un bouton épingle les contrôles pour toujours");
   });
 
+  // ═══════════════════════════════════════════════════════════════════════
+  // Task 7 — mute cliquable (#cinema-vol-icon) + cohésion chromatique --cin-rgb-ui
+  // ═══════════════════════════════════════════════════════════════════════
+
+  // --- Mute cinéma : vrai <button>, nom accessible + état toggle (SC 4.1.2) ---
+  await t('#cinema-vol-icon is a <button> with data-action, aria-label and aria-pressed (Task 7)', () => {
+    const tag = openTagById(HTML, 'cinema-vol-icon');
+    assert.ok(tag, '#cinema-vol-icon introuvable dans index.html');
+    assert.ok(/^<button\b/.test(tag), '#cinema-vol-icon doit être un <button> (mute cliquable)');
+    assert.ok(/data-action="cinema-mute"/.test(tag), '#cinema-vol-icon doit porter data-action="cinema-mute"');
+    assert.ok(/\saria-label="[^"]+"/.test(tag) && /data-i18n-aria="[^"]+"/.test(tag),
+      '#cinema-vol-icon doit porter aria-label + data-i18n-aria (libellé i18n)');
+    assert.ok(/\saria-pressed="(true|false)"/.test(tag), '#cinema-vol-icon doit déclarer aria-pressed');
+  });
+
+  await t('syncCinVolumeUI syncs aria-pressed/aria-label on mute state (Task 7)', () => {
+    const cr = readRepoFile('frontend/src/cinema-render.js');
+    const m = /export function syncCinVolumeUI\([\s\S]*?\n\}/.exec(cr);
+    assert.ok(m, 'syncCinVolumeUI introuvable dans cinema-render.js');
+    assert.ok(/setAttribute\(\s*'aria-pressed'/.test(m[0]),
+      'syncCinVolumeUI doit synchroniser aria-pressed sur #cinema-vol-icon');
+    assert.ok(/setAttribute\(\s*'aria-label'/.test(m[0]),
+      'syncCinVolumeUI doit basculer aria-label (mute/unmute) sur #cinema-vol-icon');
+  });
+
+  // --- SC 2.5.8 : cible >=24px sur le bouton mute (plancher --target-min) ---
+  await t('.cinema-vol-icon-btn declares >=24px target size (SC 2.5.8, Task 7)', () => {
+    const m = /\.cinema-vol-icon-btn\s*\{[^}]*\}/.exec(SS);
+    assert.ok(m, 'règle .cinema-vol-icon-btn introuvable dans style.css');
+    assert.ok(/min-width\s*:\s*var\(--target-min\)/.test(m[0])
+      && /min-height\s*:\s*var\(--target-min\)/.test(m[0]),
+      '.cinema-vol-icon-btn doit déclarer min-width/min-height: var(--target-min)');
+  });
+
+  // --- SC 2.4.13 : le focus ring cinéma reste le token dual-tone (jamais teinté) ---
+  await t('cinema focus rings stay on --cin-focus-ring, never tinted by --cin-rgb-ui (Task 7)', () => {
+    const focusRules = SS.match(/[^{}]*:focus-visible[^{}]*\{[^}]*\}/g) || [];
+    const offenders = focusRules.filter(r => /cin-rgb/.test(r));
+    assert.ok(offenders.length === 0,
+      `focus ring teinté par --cin-rgb(-ui) détecté (AAA 2.4.13 exige la stabilité) :\n   ${offenders.slice(0, 2).join('\n   ')}`);
+    assert.ok(/\.cinema-vol-icon-btn:focus-visible\s*\{[^}]*var\(--cin-focus-ring\)/.test(SS),
+      '.cinema-vol-icon-btn:focus-visible doit utiliser var(--cin-focus-ring)');
+  });
+
+  // --- Cohésion chromatique : seule --cin-rgb-ui (garde-fou 4.5:1) teinte l'UI ---
+  await t('UI tint uses contrast-guarded --cin-rgb-ui, raw --cin-rgb reserved to backgrounds (Task 7)', () => {
+    const cr = readRepoFile('frontend/src/cinema-render.js');
+    assert.ok(/setProperty\(\s*'--cin-rgb-ui'/.test(cr),
+      'renderCinColor doit poser --cin-rgb-ui (ensureContrastOnDark) à côté de --cin-rgb');
+    assert.ok(/ensureContrastOnDark/.test(cr),
+      'cinema-render.js doit dériver --cin-rgb-ui via ensureContrastOnDark');
+    // color: teinté doit passer par --cin-rgb-ui, jamais la brute --cin-rgb
+    const colorRules = SS.match(/(?:^|;|\{)\s*color\s*:[^;}]*var\(--cin-rgb\s*[,)]/gm) || [];
+    assert.ok(colorRules.length === 0,
+      `du texte utilise la --cin-rgb brute (non garantie 4.5:1) : ${colorRules.slice(0, 2).join(' | ')}`);
+  });
+
   if (fail) { console.log(`\nA11Y FAIL: ${fail}/${pass + fail}`); process.exit(1); }
   console.log(`\nA11Y OK: ${pass}/${pass}`);
 }

@@ -10,13 +10,23 @@
 //   syncCinProgress()                — barre de progression + temps (chemin updateCinema)
 //   applyCinText(t, title, artist)   — écrit titre/artiste/album (Task 6, stateless)
 //   decodeArtImage(img, em, art)     — skeleton/fondu/fallback décodage pochette (Task 6, stateless)
+//   toggleCinemaMute()               — mute cliquable #cinema-vol-icon (Task 7 — vit ici
+//                                      et non dans cinema.js, resté sous le cap 800 lignes)
 
 import { fmt }                                  from './utils.js';
 import { audio }                                from './player.js';
+import { i18n }                                 from './i18n.js';
+import { setMasterGain }                        from './eq.js';
+import { saveCfg }                              from './cfgsave.js';
+import { emit, EVENTS }                         from './bus.js';
 import { updateCinArtRGBFromTrack, snapArtColor, startAmbientAnim } from './cinema-bg.js';
 import { startCinemaViz }                       from './cinema-viz.js';
 import { prefersReducedMotion }                 from './motion.js';
 import { isSeekDragging }                       from './cinema-seek.js';
+import { ensureContrastOnDark }                 from './artcolor.js';
+
+// Task 7 — ratio AA (4.5:1) exigé pour --cin-rgb-ui contre le fond quasi-noir du cinéma.
+const CIN_UI_MIN_CONTRAST = 4.5;
 
 /**
  * Couleur dominante de la pochette pour le visualiseur + teinte CSS.
@@ -44,11 +54,24 @@ export function renderCinColor(t, trackChanged) {
   // redessin statique avec la couleur à jour (ce point est atteint sur les 3 déclencheurs
   // requis : changement de piste, resize, changement de mode — tous invoquent updateCinema()).
   if (prefersReducedMotion()) { startCinemaViz(); startAmbientAnim(); }
-  // Propager --cin-rgb → teinte CSS du sous-titre artiste et album.
-  document.getElementById('cinema-overlay')?.style.setProperty('--cin-rgb', artRgb);
+  // Propager --cin-rgb (brute, pour fonds/viz) + --cin-rgb-ui (garde-fou contraste
+  // WCAG AA 4.5:1 vs noir, Task 7 — SEULE teinte utilisée pour texte/contrôles).
+  const overlay = document.getElementById('cinema-overlay');
+  if (overlay) {
+    overlay.style.setProperty('--cin-rgb', artRgb);
+    const rgbParts = artRgb.split(',').map(Number);
+    const uiRgb = ensureContrastOnDark(rgbParts, CIN_UI_MIN_CONTRAST);
+    overlay.style.setProperty('--cin-rgb-ui', uiRgb.join(','));
+  }
 }
 
-/** Slider volume + icône (muet / bas / haut). `vol` est lu depuis #vol par l'appelant (§2). */
+/**
+ * Slider volume + icône (muet / bas / haut) + bouton mute (Task 7). `vol` est lu
+ * depuis #vol par l'appelant (§2) — c'est la SEULE source de vérité pour l'état
+ * "muet" affiché (pas de flag séparé) : cohérent même si le slider #cinema-vol
+ * est bougé manuellement pendant que le son est coupé (handlers.js appelle
+ * cette même fonction sur 'input', cf. Task 7 self-review).
+ */
 export function syncCinVolumeUI(vol) {
   const muted = audio.muted || vol === 0;
   const volSlider = document.getElementById('cinema-vol');
@@ -57,6 +80,58 @@ export function syncCinVolumeUI(vol) {
   const w2 = document.getElementById('cinema-vol-wave2');
   if (w1) w1.style.display = muted ? 'none' : '';
   if (w2) w2.style.display = (muted || vol < 0.5) ? 'none' : '';
+  const x1  = document.getElementById('cinema-vol-x1');
+  const x2  = document.getElementById('cinema-vol-x2');
+  const btn = document.getElementById('cinema-vol-icon');
+  if (x1) x1.style.display = muted ? '' : 'none';
+  if (x2) x2.style.display = muted ? '' : 'none';
+  if (btn) {
+    btn.setAttribute('aria-pressed', String(muted));
+    btn.setAttribute('aria-label', i18n(muted ? 'aria_cinema_unmute' : 'aria_cinema_mute'));
+    btn.title = i18n(muted ? 't_cinema_unmute' : 't_cinema_mute');
+  }
+}
+
+// ── Mute cliquable (Task 7) ──────────────────────────────────
+// Mémorise le volume courant avant mute — restauré au re-clic (même principe que
+// _preMuteVol dans handlers.js pour #btn-vol-mute, mémoire dédiée cinéma — elle
+// survit aux changements de piste : rien ne la réécrit hors de toggleCinemaMute).
+// L'état affiché (icône barrée, aria-pressed) N'EST PAS un flag séparé : il est
+// dérivé du volume réel par syncCinVolumeUI(), appelée ici ET par handlers.js sur
+// tout mouvement manuel de #cinema-vol — donc toujours cohérent.
+let _cinPreMuteVol = 1;
+
+/** Lit le volume depuis le slider DOM #vol — source de vérité unique (§2). */
+function _readVolDom() {
+  const dom = parseFloat(document.getElementById('vol')?.value);
+  return Number.isFinite(dom) ? dom : 1;
+}
+
+/** Pose `v` sur les DEUX sliders (#cinema-vol + #vol) via le bus existant (même
+ *  chemin que _syncCinVol dans cinema.js) + saveCfg() debounced (§8). */
+function _setVolSliders(v) {
+  const cvol = document.getElementById('cinema-vol');
+  if (cvol) { cvol.value = v; emit(EVENTS.VOL_SLIDER_UPDATE, { elId: 'cinema-vol' }); }
+  const vel = document.getElementById('vol');
+  if (vel) { vel.value = v; emit(EVENTS.VOL_SLIDER_UPDATE, { elId: 'vol' }); }
+  saveCfg();
+}
+
+/** Toggle mute du cinéma — passe par slider→setMasterGain (§2/§9 : JAMAIS
+ *  d'assignation littérale d'audio.volume). Idempotent au double-clic :
+ *  mute/unmute ramène exactement au volume mémorisé. */
+export function toggleCinemaMute() {
+  const v = _readVolDom();
+  if (v > 0) {
+    _cinPreMuteVol = v;
+    setMasterGain(0);
+    _setVolSliders(0);
+  } else {
+    const restore = _cinPreMuteVol > 0 ? _cinPreMuteVol : 1;
+    setMasterGain(restore);
+    _setVolSliders(restore);
+  }
+  syncCinVolumeUI(_readVolDom());
 }
 
 /** Barre de progression + temps courant/total (chemin updateCinema, pas le 60fps). */

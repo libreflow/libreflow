@@ -1422,11 +1422,15 @@
     <!-- Séparateur + Volume -->
     <div class="cinema-vol-sep"></div>
     <div class="cinema-vol-wrap" title="Volume">
-      <svg class="cinema-vol-icon" id="cinema-vol-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
-        <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
-        <path id="cinema-vol-wave1" d="M15.54 8.46a5 5 0 0 1 0 7.07"/>
-        <path id="cinema-vol-wave2" d="M19.07 4.93a10 10 0 0 1 0 14.14"/>
-      </svg>
+      <button type="button" class="cinema-vol-icon-btn" id="cinema-vol-icon" data-action="cinema-mute" title="" data-i18n-title="t_cinema_mute" data-i18n-aria="aria_cinema_mute" aria-label="Couper le son" aria-pressed="false">
+        <svg class="cinema-vol-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
+          <path id="cinema-vol-wave1" d="M15.54 8.46a5 5 0 0 1 0 7.07"/>
+          <path id="cinema-vol-wave2" d="M19.07 4.93a10 10 0 0 1 0 14.14"/>
+          <line id="cinema-vol-x1" x1="23" y1="9" x2="17" y2="15" style="display:none"/>
+          <line id="cinema-vol-x2" x1="17" y1="9" x2="23" y2="15" style="display:none"/>
+        </svg>
+      </button>
       <div class="cinema-vol-bar">
         <canvas id="cinema-vol-vis" class="cinema-vol-vis" aria-hidden="true"></canvas>
         <!-- Bug 3 fix : appeler updateVolSlider pour synchroniser le gradient du slider principal -->

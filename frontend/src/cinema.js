@@ -14,6 +14,7 @@
 //   setCinemaBg, cycleCinemaBg, applyCinemaBg, syncCinemaBgSettings, updateCinemaBgBtn
 //   toggleCinemaFullscreen, toggleCinemaRadio
 //   CINEMA_BG_MODES, CINEMA_BG_LABELS
+//   (toggleCinemaMute — Task 7 — vit dans cinema-render.js, cap 800 lignes ici)
 //   initCinemaVizSuspend (câblage viz.js suspendViz/resumeViz — appelé une fois depuis app.js)
 
 import { eqCtx, eqAnalyser, masterGainNode, setMasterGain } from './eq.js'; // réutiliser le graphe EQ existant
