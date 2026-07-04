@@ -54,11 +54,11 @@ export class LfToastStack extends LitElement {
       color: var(--lf-toast-fg, var(--text-primary));
       padding: 14px 16px;
       border-radius: var(--radius-md);
-      box-shadow: var(--shadow-lg);
+      box-shadow: var(--shadow-lg), 0 0 0 1px color-mix(in srgb, var(--lf-toast-accent) 35%, transparent);
       display: flex;
       align-items: center;
       gap: 12px;
-      min-width: 288px;
+      min-width: 260px;
       max-width: 568px;
       font-size: 14px;
       line-height: 20px;
@@ -69,7 +69,7 @@ export class LfToastStack extends LitElement {
       transition: transform var(--motion-fast) var(--ease-standard), box-shadow var(--motion-base) var(--ease-standard);
     }
     .t-item.t-out { animation: t-out var(--motion-fast) cubic-bezier(.4, 0, 1, 1) forwards; }
-    .t-item:hover  { transform: translateY(-1px); box-shadow: var(--shadow-xl, var(--shadow-lg)); }
+    .t-item:hover  { transform: translateY(-1px); box-shadow: var(--shadow-xl, var(--shadow-lg)), 0 0 0 1px color-mix(in srgb, var(--lf-toast-accent) 55%, transparent); }
     .t-item:active { transform: scale(.985); transition-duration: var(--motion-fast); }
 
     /* Per-type accent — applied to the icon glyph and the thin bottom bar only. */
