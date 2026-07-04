@@ -3,31 +3,33 @@
 // Extrait de app.js.
 //
 // Dépendances :
-//   import  : cinema-render.js (helpers de rendu extraits de updateCinema)
+//   import  : cinema-render.js (helpers de rendu extraits de updateCinema, dont
+//             readCinVolDom/setCinVolSliders — Task 7 : lecture/écriture volume déléguées)
 //   import  : cinema-seek.js (scrubbing complet de la pbar, Task 5 — injection de deps)
 //   import  : cinema-input.js (clavier/molette/dblclick/contrôles auto-masquables, Task 6 — injection de deps)
-//   import  : saveCfg (cfgsave.js), updateVolSlider (playerbar.js)
+//   bus     : EVENTS.CINEMA_PROGRESS (Task 7 — player.js émet, cinema.js écoute ; casse le
+//             cycle d'import player.js ↔ cinema.js qui existait via updateCinemaProgress)
 //   window  : audio, curIdx, tracks, liked, shuffle, repeat, getFiltered (getters), toast
 //
 // Exports publics (utilisés par app.js) :
 //   cinemaOpen, cinemaBg
-//   toggleCinema, openCinema, closeCinema, updateCinema, updateCinemaProgress
+//   toggleCinema, openCinema, closeCinema, updateCinema
 //   setCinemaBg, cycleCinemaBg, applyCinemaBg, syncCinemaBgSettings, updateCinemaBgBtn
 //   toggleCinemaFullscreen, toggleCinemaRadio
 //   CINEMA_BG_MODES, CINEMA_BG_LABELS
 //   (toggleCinemaMute — Task 7 — vit dans cinema-render.js, cap 650 lignes ici depuis Task 6)
+//   (updateCinemaProgress — Task 7 — n'est plus exportée : app.js ne l'appelait plus depuis
+//    le passage au bus ; reste une fonction interne appelée via on(EVENTS.CINEMA_PROGRESS))
 //   initCinemaVizSuspend (câblage viz.js suspendViz/resumeViz — appelé une fois depuis app.js)
 
-import { eqCtx, eqAnalyser, masterGainNode, setMasterGain } from './eq.js'; // réutiliser le graphe EQ existant
+import { eqAnalyser, setMasterGain }          from './eq.js'; // réutiliser le graphe EQ existant
 import { i18n }                               from './i18n.js';
-import { get, set }                           from './store.js';
+import { get }                                from './store.js';
 import { audio, toggleLike, next, prev, getNextIdx, hasExplicitQueueNext } from './player.js';
 import { radioActive, stopRadio, startRadio, getRadioQueue } from './radio.js';
 import { toast }                                        from './ui.js';
-import { saveCfg }                   from './cfgsave.js';
-import { rgbToHsl, hslToRgb, boostSat, regionAvg, sampleArtColors } from './artcolor.js';
-import { emit, on, EVENTS }          from './bus.js';
-import { timeline, tween, set as motionSet, kill as motionKill, eases } from './motion.js';
+import { on, EVENTS }                from './bus.js';
+import { timeline, set as motionSet, kill as motionKill, eases } from './motion.js';
 import { cinemaBg, CINEMA_BG_MODES, CINEMA_BG_LABELS, applyCinemaBg, setCinemaBg, cycleCinemaBg,
          syncCinemaBgSettings, updateCinemaBgBtn, initCinemaBg, initCinemaBgModule,
          updateCinArtColor,
@@ -36,7 +38,8 @@ import { cinemaBg, CINEMA_BG_MODES, CINEMA_BG_LABELS, applyCinemaBg, setCinemaBg
 import { startCinemaViz, stopCinemaViz, initCinemaVizModule, drawVizFrame } from './cinema-viz.js';
 import { initCinemaLoop, startCinemaLoop, stopCinemaLoop, wakeCinemaLoop } from './cinema-loop.js';
 import { renderCinColor, syncCinVolumeUI, syncCinProgress, applyCinText, beginCinSwapIn, renderCinNextPanel,
-         getCinemaQueueUpcoming, playCinemaQueueTrack } from './cinema-render.js';
+         getCinemaQueueUpcoming, playCinemaQueueTrack,
+         readCinVolDom, setCinVolSliders } from './cinema-render.js';
 import { initCinemaSeek, isSeekDragging, resetCinemaSeek } from './cinema-seek.js';
 import { initCinemaQueue, refreshCinemaQueuePanel, closeCinemaQueuePanel } from './cinema-queue.js';
 import { initCinemaInput, attachCinemaInput, detachCinemaInput, showCinemaControls } from './cinema-input.js';
@@ -48,6 +51,9 @@ export { cinemaBg, CINEMA_BG_MODES, CINEMA_BG_LABELS, applyCinemaBg, setCinemaBg
 // Radio demande le toggle cinéma (cycle d'import) ; play/pause réveille la boucle maître.
 on(EVENTS.CINEMA_RADIO_TOGGLE, () => { if (cinemaOpen) toggleCinemaRadio(); });
 on(EVENTS.PLAY_STATE,          () => { if (cinemaOpen) wakeCinemaLoop(); });
+// Task 7 — player.js émet la progression timeupdate (~60fps) via le bus au lieu d'un
+// import direct de cinema.js (cassait le cycle player.js ↔ cinema.js).
+on(EVENTS.CINEMA_PROGRESS, ({ p, cur, dur }) => updateCinemaProgress(p, cur, dur));
 
 // ── State ───────────────────────────────────────────────────
 export let cinemaOpen     = false;
@@ -126,20 +132,8 @@ export function toggleCinema() {
 
 
 // ── Volume : lecture DOM + sync (exposés à cinema-input.js via deps — Task 6) ──
-/** Lit le volume depuis le slider DOM #vol (source de vérité — §2). Fallbacks : master gain puis 1. */
-function _readVol() {
-  const dom = parseFloat(document.getElementById('vol')?.value);
-  if (Number.isFinite(dom)) return dom;
-  return masterGainNode?.gain.value ?? 1;
-}
-
-function _syncCinVol(v) {
-  const cvol = document.getElementById('cinema-vol');
-  if (cvol) { cvol.value = v; emit(EVENTS.VOL_SLIDER_UPDATE, { elId: 'cinema-vol' }); }
-  const vel = document.getElementById('vol');
-  if (vel) { vel.value = v; emit(EVENTS.VOL_SLIDER_UPDATE, { elId: 'vol' }); }
-  saveCfg();
-}
+// Task 7 — _readVol/_syncCinVol supprimées : cinema.js délègue à readCinVolDom/
+// setCinVolSliders (cinema-render.js, ex-_readVolDom/_setVolSliders, mêmes signatures).
 
 export function openCinema() {
   if (cinemaOpen) return;
@@ -164,7 +158,7 @@ export function openCinema() {
   _cinPbar  = document.getElementById('cinema-pbar');
   // Synchroniser le slider volume avec l'état courant de l'audio
   const volSlider = document.getElementById('cinema-vol');
-  if (volSlider) volSlider.value = _readVol();
+  if (volSlider) volSlider.value = readCinVolDom();
   applyCinemaBg();
   updateCinema();
   _startClock();
@@ -339,7 +333,7 @@ export function updateCinema() {
   _syncCinButtons(curIdx);                        // play/pause + shuffle/repeat/like/radio (aria-pressed)
   _updateNextTrack();                             // panneau piste suivante / hint shuffle
   refreshCinemaQueuePanel();                      // Task 9 — re-rend le panneau file d'attente s'il est ouvert
-  syncCinVolumeUI(_readVol());                    // slider volume + icônes
+  syncCinVolumeUI(readCinVolDom());               // slider volume + icônes
   syncCinProgress();                              // barre de progression + temps
 }
 
@@ -469,15 +463,17 @@ initCinemaInput({
   toggleLike, next, prev,
   audio,
   setMasterGain,
-  readVol: _readVol,
-  syncVol: _syncCinVol,
+  readVol: readCinVolDom,
+  syncVol: setCinVolSliders,
 });
 
 /**
- * Mise à jour légère de la progression — appelée depuis le handler timeupdate
- * de app.js à ~60 fps (evite getElementById par cycle grâce au cache _cinFill/Tc/Td).
+ * Mise à jour légère de la progression — appelée depuis le handler timeupdate de
+ * player.js à ~60 fps via EVENTS.CINEMA_PROGRESS (Task 7 : plus un import direct
+ * player.js → cinema.js, casse le cycle). N'est plus exportée : app.js ne l'utilisait
+ * plus depuis le passage au bus (§6, une seule route d'appel désormais).
  */
-export function updateCinemaProgress(p, cur, dur) {
+function updateCinemaProgress(p, cur, dur) {
   if (!cinemaOpen) return;
   if (isSeekDragging()) return; // Task 5 — drag en cours : cinema-seek.js pilote déjà fill/thumb/temps/aria
   if (_cinFill)  _cinFill.style.transform = 'scaleX(' + p + ')';

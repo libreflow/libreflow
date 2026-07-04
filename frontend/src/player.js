@@ -41,7 +41,6 @@ import { clearQueueOverride, queueOpen,
          renderQueue,
          peekFirstExplicit, consumeFirstExplicit,
          peekExplicitQueue, removeFromQueue }      from './queue.js';
-import { updateCinemaProgress }                   from './cinema.js';
 import { CFG, SPEEDS, SPEED_LBLS }                from './cfg.js';
 import { getFiltered, filteredIdx, trackIdx, _trackIdxMap, invalidateFilterCache } from './search.js';
 import { toast }                                        from './ui.js';
@@ -1320,7 +1319,7 @@ audio.addEventListener('timeupdate', () => {
     pbar.setAttribute('aria-valuenow', pNow);
     pbar.setAttribute('aria-valuetext', `${cur} / ${dur}`);
   }
-  updateCinemaProgress(p, cur, dur);
+  emit(EVENTS.CINEMA_PROGRESS, { p, cur, dur });
   // Sauvegarde de position throttlée — évite l'IDB flood à 60fps
   const now = Date.now();
   if (now - _lastPosSave > 5000) { _lastPosSave = now; saveCfg(); }

@@ -81,6 +81,7 @@ export const EVENTS = Object.freeze({
   SEARCH_DEBOUNCE_CANCEL: 'search:debounce_cancel',  // {}
   // Cinema
   CINEMA_RADIO_TOGGLE:  'cinema:radio_toggle',       // {}
+  CINEMA_PROGRESS:      'cinema:progress',           // { p, cur, dur }
   // Smart playlist
   SMART_PLAYLIST_SWITCH_TAB: 'smartplaylist:switch_tab', // { tab: string }
   // Player bar update (from artLoader)

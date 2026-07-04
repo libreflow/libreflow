@@ -3858,6 +3858,82 @@ section('components/lf-toast-stack.logic.js -- import-smoke');
       'resetBandEnergy(): remet getMaxBandEnergy() à 0 (fix revue -- évite un traceur figé sur l\'ancien mode bg)');
   }());
 
+  // =============================================================================
+  // Cinema Polish Cycle 2, Task 7 — cycle player<->cinema cassé via bus
+  // CINEMA_PROGRESS + purge imports morts (scans statiques, house style).
+  // =============================================================================
+  try {
+    const fs = require('fs'), path = require('path');
+    const root = path.join(__dirname, '../..');
+    const read = f => fs.readFileSync(path.join(root, f), 'utf8');
+
+    section('cinema Task 7 -- cycle player<->cinema casse + purge imports morts');
+
+    const playerSrc = read('frontend/src/player.js');
+    const busSrc     = read('frontend/src/bus.js');
+    const cinSrc     = read('frontend/src/cinema.js');
+    const renderSrc  = read('frontend/src/cinema-render.js');
+    const appSrc     = read('frontend/src/app.js');
+
+    // (a) player.js n'importe plus depuis cinema.js (cycle casse par le bus).
+    assert(!/from '\.\/cinema\.js'/.test(playerSrc),
+      "player.js n'importe plus depuis cinema.js (cycle casse)");
+    assert(/emit\(EVENTS\.CINEMA_PROGRESS,\s*\{\s*p,\s*cur,\s*dur\s*\}\)/.test(playerSrc),
+      'player.js emet EVENTS.CINEMA_PROGRESS { p, cur, dur } sur timeupdate');
+
+    // (b) bus.js declare CINEMA_PROGRESS avec la forme de payload documentee.
+    assert(/CINEMA_PROGRESS:\s*'cinema:progress',\s*\/\/\s*\{\s*p,\s*cur,\s*dur\s*\}/.test(busSrc),
+      "bus.js declare CINEMA_PROGRESS: 'cinema:progress' // { p, cur, dur }");
+
+    // cinema.js s'abonne a CINEMA_PROGRESS et route vers updateCinemaProgress (interne).
+    assert(/on\(EVENTS\.CINEMA_PROGRESS,\s*\(\{\s*p,\s*cur,\s*dur\s*\}\)\s*=>\s*updateCinemaProgress\(p,\s*cur,\s*dur\)\)/.test(cinSrc),
+      'cinema.js: on(EVENTS.CINEMA_PROGRESS, ...) route vers updateCinemaProgress(p, cur, dur)');
+
+    // app.js n'importe plus updateCinemaProgress (mort : plus utilise depuis la purge cycle).
+    assert(!/updateCinemaProgress/.test(appSrc),
+      "app.js n'importe plus updateCinemaProgress (mort, remplace par le bus)");
+
+    // (c) cinema.js purge de ses imports morts : artcolor (groupe complet), tween (motion.js),
+    // eqCtx (eq.js — eqAnalyser reste, consomme par initCinemaLoop), set de store.js (get reste).
+    assert(!/rgbToHsl|hslToRgb|boostSat|regionAvg|sampleArtColors/.test(cinSrc),
+      "cinema.js n'importe plus le groupe artcolor (rgbToHsl/hslToRgb/boostSat/regionAvg/sampleArtColors)");
+    assert(!/\btween\b/.test(cinSrc),
+      "cinema.js n'importe plus tween depuis motion.js");
+    assert(!/\beqCtx\b/.test(cinSrc),
+      "cinema.js n'importe plus eqCtx depuis eq.js");
+    assert(/\beqAnalyser\b/.test(cinSrc),
+      'cinema.js conserve eqAnalyser (consomme par initCinemaLoop getAnalyser)');
+    const storeImportMatch = /import\s*\{([^}]*)\}\s*from '\.\/store\.js'/.exec(cinSrc);
+    assert(storeImportMatch && /\bget\b/.test(storeImportMatch[1]),
+      'cinema.js importe toujours get depuis store.js');
+    assert(!storeImportMatch || !/\bset\b/.test(storeImportMatch[1]),
+      "cinema.js n'importe plus set depuis store.js");
+
+    // (d) _readVol/_syncCinVol disparaissent de cinema.js au profit des exports renommes
+    // de cinema-render.js (readCinVolDom/setCinVolSliders) -- deps de initCinemaInput (Task 6)
+    // pointent dessus.
+    assert(!/function _readVol\(/.test(cinSrc),
+      "cinema.js: _readVol() supprimee (deleguee a cinema-render.js)");
+    assert(!/function _syncCinVol\(/.test(cinSrc),
+      "cinema.js: _syncCinVol() supprimee (deleguee a cinema-render.js)");
+    assert(/from '\.\/cinema-render\.js'/.test(cinSrc) && /readCinVolDom/.test(cinSrc) && /setCinVolSliders/.test(cinSrc),
+      'cinema.js importe readCinVolDom/setCinVolSliders depuis cinema-render.js');
+    assert(/readVol:\s*readCinVolDom/.test(cinSrc) && /syncVol:\s*setCinVolSliders/.test(cinSrc),
+      'cinema.js: deps initCinemaInput pointent sur readCinVolDom/setCinVolSliders');
+
+    assert(/export function readCinVolDom/.test(renderSrc),
+      'cinema-render.js exporte readCinVolDom (renomme depuis _readVolDom)');
+    assert(/export function setCinVolSliders/.test(renderSrc),
+      'cinema-render.js exporte setCinVolSliders (renomme depuis _setVolSliders)');
+
+    // cinema.js reste sous le cap 650 lignes (§16, abaisse au Task 6).
+    const cinLines7 = cinSrc.split('\n').length;
+    assert(cinLines7 <= 650, `cinema.js <= 650 lignes apres purge Task 7 (actual: ${cinLines7})`);
+  } catch (e) {
+    console.error('  KO  cinema Task 7 scans crashed:', e.message);
+    _ko++;
+  }
+
   // -- Résultat -----------------------------------------------------------
   console.log('\n═══════════════════════════════════════════════════════════');
   console.log(`  Total : ${_ok + _ko}   OK: ${_ok}   KO: ${_ko}`);

@@ -373,7 +373,9 @@ async function run() {
     assert.ok(gated.test(cj),
       "l'écriture #cinema-announce.textContent doit être conditionnée par _trackChanged (pas d'annonce par tick)");
     // Garde inverse : updateCinemaProgress (chemin 60fps) ne doit jamais toucher cinema-announce.
-    const prog = /export function updateCinemaProgress\([\s\S]*?\n\}/.exec(cj);
+    // Task 7 (Cycle 2) : n'est plus exportée (appelée uniquement via on(EVENTS.CINEMA_PROGRESS, ...),
+    // le bus casse le cycle player.js <-> cinema.js) -- le regex ne cherche donc plus `export`.
+    const prog = /function updateCinemaProgress\([\s\S]*?\n\}/.exec(cj);
     assert.ok(prog, 'updateCinemaProgress introuvable');
     assert.ok(!/cinema-announce/.test(prog[0]),
       'updateCinemaProgress (60fps) ne doit pas écrire dans #cinema-announce');

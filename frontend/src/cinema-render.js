@@ -12,6 +12,10 @@
 //   decodeArtImage(img, em, art)     — skeleton/fondu/fallback décodage pochette (Task 6, stateless)
 //   toggleCinemaMute()               — mute cliquable #cinema-vol-icon (Task 7 — vit ici
 //                                      et non dans cinema.js, resté sous le cap 800 lignes)
+//   readCinVolDom()                  — Task 7 : lit #vol (ex-_readVolDom) ; cinema.js délègue
+//                                      ici (deps.readVol de initCinemaInput, casse le doublon)
+//   setCinVolSliders(v)              — Task 7 : pose #cinema-vol + #vol (ex-_setVolSliders) ;
+//                                      cinema.js délègue ici (deps.syncVol de initCinemaInput)
 //   getCinemaQueueUpcoming()         — Task 9 : agrège search.js/player.js(façade queue.js)/
 //                                      radio.js pour buildUpcoming() (cinema-queue.js, fonction pure)
 //   playCinemaQueueTrack(t)          — Task 9 : lecture depuis une rangée du panneau
@@ -110,15 +114,18 @@ export function syncCinVolumeUI(vol) {
 // tout mouvement manuel de #cinema-vol — donc toujours cohérent.
 let _cinPreMuteVol = 1;
 
-/** Lit le volume depuis le slider DOM #vol — source de vérité unique (§2). */
-function _readVolDom() {
+/** Lit le volume depuis le slider DOM #vol — source de vérité unique (§2).
+ *  Task 7 — renommée depuis _readVolDom + exportée : cinema.js délègue ici
+ *  (readVol des deps initCinemaInput, ex-_readVol) au lieu de dupliquer la lecture. */
+export function readCinVolDom() {
   const dom = parseFloat(document.getElementById('vol')?.value);
   return Number.isFinite(dom) ? dom : 1;
 }
 
-/** Pose `v` sur les DEUX sliders (#cinema-vol + #vol) via le bus existant (même
- *  chemin que _syncCinVol dans cinema.js) + saveCfg() debounced (§8). */
-function _setVolSliders(v) {
+/** Pose `v` sur les DEUX sliders (#cinema-vol + #vol) via le bus existant + saveCfg()
+ *  debounced (§8). Task 7 — renommée depuis _setVolSliders + exportée : cinema.js
+ *  délègue ici (syncVol des deps initCinemaInput, ex-_syncCinVol) au lieu de dupliquer. */
+export function setCinVolSliders(v) {
   const cvol = document.getElementById('cinema-vol');
   if (cvol) { cvol.value = v; emit(EVENTS.VOL_SLIDER_UPDATE, { elId: 'cinema-vol' }); }
   const vel = document.getElementById('vol');
@@ -130,17 +137,17 @@ function _setVolSliders(v) {
  *  d'assignation littérale d'audio.volume). Idempotent au double-clic :
  *  mute/unmute ramène exactement au volume mémorisé. */
 export function toggleCinemaMute() {
-  const v = _readVolDom();
+  const v = readCinVolDom();
   if (v > 0) {
     _cinPreMuteVol = v;
     setMasterGain(0);
-    _setVolSliders(0);
+    setCinVolSliders(0);
   } else {
     const restore = _cinPreMuteVol > 0 ? _cinPreMuteVol : 1;
     setMasterGain(restore);
-    _setVolSliders(restore);
+    setCinVolSliders(restore);
   }
-  syncCinVolumeUI(_readVolDom());
+  syncCinVolumeUI(readCinVolDom());
 }
 
 /** Barre de progression + temps courant/total (chemin updateCinema, pas le 60fps). */
