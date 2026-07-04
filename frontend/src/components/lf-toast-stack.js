@@ -35,12 +35,11 @@ export class LfToastStack extends LitElement {
     /* Google Material Snackbar look — single dark slab, accent via icon + thin progress bar. */
     :host {
       position: fixed;
-      bottom: calc(var(--pb, 96px) + 16px);
-      left: 50%;
-      transform: translateX(-50%);
+      top: calc(var(--tb, 32px) + 12px);
+      right: var(--sp-4, 16px);
       display: flex;
       flex-direction: column-reverse;
-      align-items: center;
+      align-items: flex-end;
       gap: 8px;
       z-index: 9999;
       pointer-events: none;
@@ -129,8 +128,8 @@ export class LfToastStack extends LitElement {
       transform: scaleX(1);
     }
 
-    @keyframes t-in  { from { transform: translateY(20px); opacity: 0; } }
-    @keyframes t-out { to   { transform: translateY(20px); opacity: 0; } }
+    @keyframes t-in  { from { transform: translateX(24px); opacity: 0; } }
+    @keyframes t-out { to   { transform: translateX(24px); opacity: 0; } }
 
     :host-context(html[data-mode="light"]) .t-item {
       background: var(--lf-toast-bg, rgba(255, 255, 255, 0.92));
