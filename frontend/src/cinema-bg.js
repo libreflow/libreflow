@@ -21,7 +21,7 @@ import { saveCfg }                            from './cfgsave.js';
 import { toast }                              from './ui.js';
 import { rgbToHsl, hslToRgb, boostSat, sampleArtColors } from './artcolor.js';
 import { renderAmbientFrame }                 from './ambientRenderer.js';
-import { drawWavesFrame, drawStarfieldFrame, initStarfield, killCanvasTweens } from './cinema-canvas.js';
+import { drawWavesFrame, drawStarfieldFrame, initStarfield, killCanvasTweens, getMaxBandEnergy } from './cinema-canvas.js';
 import { prefersReducedMotion }               from './motion.js';
 import { wakeCinemaLoop }                     from './cinema-loop.js';
 
@@ -62,8 +62,12 @@ export function setArtColorStr(str) { _cinArtRGB = str; }
 // seulement quand les composantes arrondies ont changé depuis la frame précédente
 // (zéro allocation en régime stable, couleur convergée). Migré depuis cinema-viz.js
 // (Task 3) pour garder l'état couleur privé à ce module.
-let _lerpRLast = -1, _lerpGLast = -1, _lerpBLast = -1;
-let _lerpRGBCache = '0,0,0';
+// Sentinelle initiale : 255 (blanc), pas -1 — cohérent avec _cinArtRGBCur ([255,255,255]
+// au chargement du module) : drawBgFrame() peut lire ce cache AVANT le premier appel de
+// stepArtColorLerp() (ex. tout premier frame après ouverture du cinéma) — un -1 y
+// produirait du noir au lieu du blanc neutre attendu (Task 5, cycle 2 polish).
+let _lerpRLast = 255, _lerpGLast = 255, _lerpBLast = 255;
+let _lerpRGBCache = '255,255,255';
 
 /**
  * Snap immédiat de la couleur affichée vers la cible — appelé par cinema.js au
@@ -272,8 +276,8 @@ function _stopAmbientAnim() {
 }
 
 // Sous ce niveau d'énergie basses, les vagues/étoiles sont visuellement statiques.
-// Réservé au raffinement T5 (getMaxBandEnergy() une fois le FFT partagé câblé) — pas
-// encore consommé ici (T3 conservateur, cf. drawBgFrame ci-dessous).
+// Consommé par drawBgFrame ci-dessous depuis Task 5 (cycle 2 polish) : remplace le
+// « toujours actif » conservateur de T3 une fois le FFT/beat partagé câblé.
 const _EPS_BAND = 0.002;
 
 /**
@@ -282,8 +286,8 @@ const _EPS_BAND = 0.002;
  * de bascule éventuel. Ne planifie plus rien lui-même (pas de rAF, pas de garde de
  * focus/visibilité — la cadence et le sommeil sont décidés par l'appelant).
  * @param {number} dt   — ms écoulées depuis la frame précédente (clampées par l'appelant).
- * @param {Uint8Array|null} fft  — snapshot FFT partagé (non encore consommé ici, cf. T5).
- * @param {boolean} beat — beat détecté cette frame (non encore consommé ici, cf. T5).
+ * @param {Uint8Array|null} fft  — snapshot FFT partagé (câblé aux modes waves/starfield).
+ * @param {boolean} beat — beat détecté cette frame (câblé aux modes waves/starfield).
  * @returns {boolean} needsFrames — true si une frame supplémentaire est encore utile
  *   (cross-fade en cours, couleur pas encore convergée, ou mode intrinsèquement animé).
  */
@@ -301,12 +305,14 @@ export function drawBgFrame(dt, fft, beat) {
   const isPlaying = _getIsPlaying();
   // Task 14 : gel en pause (ambient/amoled/starfield) ; les cross-fades (performance.now) se terminent — voulu.
   if (isPlaying) _ambientT += dt;
-  // NOTE T3 : cinema-canvas garde ses signatures ACTUELLES jusqu'à T5 (tableau couleur
-  // par référence + lecture analyser interne) — dt/fft/beat ne leur sont câblés qu'en T5.
+  // Task 5 (cycle 2 polish) : cinema-canvas.js consomme dtN/fft/beat directement — plus
+  // de tableau couleur par référence (r/g/b scalaires depuis stepArtColorLerp, lu une
+  // frame plus tôt via cinema-viz.js — même lag pré-existant qu'avec _cinArtRGBCur).
+  const dtN = dt / 16.667;
   if (cinemaBg === 'waves') {
-    drawWavesFrame(_cinBgCtx, _winW, _winH, _cinArtRGBCur, isPlaying);
+    drawWavesFrame(_cinBgCtx, _winW, _winH, _lerpRLast, _lerpGLast, _lerpBLast, isPlaying, dtN, fft, beat);
   } else if (cinemaBg === 'starfield') {
-    drawStarfieldFrame(_cinBgCtx, _winW, _winH, _cinArtRGBCur, _ambientT);
+    drawStarfieldFrame(_cinBgCtx, _winW, _winH, _lerpRLast, _lerpGLast, _lerpBLast, _ambientT, dtN, fft, beat);
   } else if (cinemaBg !== 'spectrum') {
     // spectrum : rendu par cinema-viz sur son propre canvas — drawBg ne peint rien
     // (canvas vidé au switch, cf. applyCinemaBg) mais laisse le cross-fade se terminer.
@@ -325,10 +331,11 @@ export function drawBgFrame(dt, fft, beat) {
     _cinBgCtx.globalAlpha = 1;
     if (p >= 1) _ambientCross = null;
   }
-  // T3 conservateur : waves/starfield considérés toujours actifs (raffiné en T5 avec
-  // l'epsilon d'énergie getMaxBandEnergy() > _EPS_BAND une fois le FFT partagé câblé).
+  // Task 5 (cycle 2 polish) : waves/starfield ne réclament plus une frame en continu —
+  // seulement tant que leur énergie de bande dépasse l'epsilon de sommeil (silence/pause
+  // prolongée → decay asymptotique jamais tout à fait 0, d'où l'epsilon plutôt qu'un test == 0).
   return !!_ambientCross || !isArtColorConverged()
-      || cinemaBg === 'waves' || cinemaBg === 'starfield';
+      || ((cinemaBg === 'waves' || cinemaBg === 'starfield') && getMaxBandEnergy() > _EPS_BAND);
 }
 
 function _updateAmbientGradient() {

@@ -2459,8 +2459,7 @@ section('components/lf-toast-stack.logic.js -- import-smoke');
     assert(d4.sample(200, 1100, 100) === false, 'beat: mode baseline externe respecte le cooldown');
     assert(d4.sample(200, 2000, 100) === true, 'beat: mode baseline externe → nouveau beat une fois le cooldown écoulé');
 
-    // (b) canvas n'a pas sa propre boucle historique — il importe cinema-beat.js.
-    // cinema-viz.js, lui, ne détecte PLUS le beat depuis Task 4 (cycle 2) : le beat
+    // (b) cinema-viz.js ne détecte PLUS le beat depuis Task 4 (cycle 2) : le beat
     // arrive en paramètre de drawVizFrame(dt, fft, beat), calculé une seule fois par
     // frame dans cinema-loop.js (même config createBeatDetector, partagée) — cf. Task 4
     // cycle 2 ci-dessous pour la vérification positive de ce nouveau contrat.
@@ -2468,8 +2467,11 @@ section('components/lf-toast-stack.logic.js -- import-smoke');
     assert(!/createBeatDetector/.test(cinVizSrc),       'cinema-viz.js n\'utilise plus createBeatDetector (Task 4)');
     assert(!/_beatHistorySum/.test(cinVizSrc),
       'cinema-viz.js ne réimplémente plus le running-sum de beat (déplacé dans cinema-beat.js)');
-    assert(/from '.\/cinema-beat.js'/.test(canvasSrc), 'cinema-canvas.js importe cinema-beat.js');
-    assert(/createBeatDetector/.test(canvasSrc),       'cinema-canvas.js utilise createBeatDetector');
+    // cinema-canvas.js, lui, ne détecte PLUS le beat depuis Task 5 (cycle 2 polish) :
+    // drawWavesFrame/drawStarfieldFrame reçoivent le beat déjà calculé en paramètre
+    // (même snapshot partagé bg+viz+vol-vis) — même contrat que cinema-viz.js ci-dessus.
+    assert(!/from '.\/cinema-beat.js'/.test(canvasSrc), 'cinema-canvas.js n\'importe plus cinema-beat.js (Task 5)');
+    assert(!/createBeatDetector/.test(canvasSrc),       'cinema-canvas.js n\'utilise plus createBeatDetector (Task 5)');
 
     // (c) cinema-bg.js : état couleur privé — plus d'arrays exportés par référence
     assert(!/export const _cinArtRGBCur/.test(bgSrc),     'cinema-bg.js n\'exporte plus _cinArtRGBCur (array par réf)');
@@ -2639,7 +2641,7 @@ section('components/lf-toast-stack.logic.js -- import-smoke');
     assert(/export function killCanvasTweens/.test(canvasSrc),
       'cinema-canvas.js exporte killCanvasTweens() (P4 fix)');
     assert(/motionKill\(_waveBeatObj\)/.test(canvasSrc) && /motionKill\(_shootPool\[i\]\)/.test(canvasSrc),
-      'killCanvasTweens() tue _waveBeatTw et tous les _shootTweens via motionKill');
+      'killCanvasTweens() tue le tween _waveBeatObj et tous les _shootTweens via motionKill (kill by target, pas de handle)');
     assert(/killCanvasTweens\(\)/.test(bgSrc),
       'cinema-bg.js appelle killCanvasTweens() dans le chemin de fermeture (_stopAmbientAnim → closeCinema)');
 
@@ -3497,8 +3499,10 @@ section('components/lf-toast-stack.logic.js -- import-smoke');
     // Écume : pool pré-alloué, spawn dans la branche beat (déjà gated reduced-motion)
     assert(/_FOAM_MAX/.test(CANVAS) && /_foamPool/.test(CANVAS),
       'cinema-canvas.js: pool d\'écume pré-alloué (zéro allocation par frame)');
-    assert(/_waveBeat\.sample\([\s\S]{0,400}_spawnFoam\(/.test(CANVAS),
-      'cinema-canvas.js: écume spawnée dans la branche beat (héritée du gate reduced-motion)');
+    // Task 5 : plus de détecteur local _waveBeat — la branche beat consomme le
+    // paramètre partagé `beat` (cf. section Task 5 cycle 2 ci-dessous pour le scan positif).
+    assert(/prefersReducedMotion\(\)\s*&&\s*beat\)\s*\{[\s\S]{0,400}_spawnFoam\(/.test(CANVAS),
+      'cinema-canvas.js: écume spawnée dans la branche beat partagée (héritée du gate reduced-motion)');
     // Reflet d'horizon : gradient caché + fillRect borné à la bande sous l'horizon
     assert(/_waveHorizonGrad/.test(CANVAS),
       'cinema-canvas.js: reflet d\'horizon caché avec les styles (clé couleur+h)');
@@ -3583,13 +3587,13 @@ section('components/lf-toast-stack.logic.js -- import-smoke');
     // pattern renderer-passif à ce jour (cinema-bg.js par Task 3, cinema-viz.js par
     // Task 4), seul cinema-loop.js lit encore getByteFrequencyData — la lecture FFT
     // est strictement centralisée pour bg+viz+vol-vis. cinema-canvas.js (waves/
-    // starfield) garde SA PROPRE lecture analyser jusqu'à Task 5 (hors scope ici,
-    // cf. brief Task 4 "Code Organization" — ne pas toucher cinema-canvas.js) ; il
-    // est donc volontairement exclu de ce scan, pas un cluster-wide cinema-*.js.
-    const passiveRenderers = ['cinema-bg.js', 'cinema-viz.js'];
+    // starfield) a rejoint ce cluster en Task 5 (cycle 2 polish) — sa propre lecture
+    // analyser/détecteurs de beat locaux ont été retirés (cf. section Task 5 cycle 2
+    // dédiée ci-dessus pour le scan positif détaillé) ; inclus ici désormais.
+    const passiveRenderers = ['cinema-bg.js', 'cinema-viz.js', 'cinema-canvas.js'];
     const filesWithGetByteFreq = passiveRenderers.filter(f => /getByteFrequencyData/.test(read('frontend/src/' + f)));
     assert(filesWithGetByteFreq.length === 0,
-      `renderers passifs (cinema-bg.js, cinema-viz.js): aucun getByteFrequencyData (trouvé dans: ${filesWithGetByteFreq.join(', ') || 'aucun'})`);
+      `renderers passifs (cinema-bg.js, cinema-viz.js, cinema-canvas.js): aucun getByteFrequencyData (trouvé dans: ${filesWithGetByteFreq.join(', ') || 'aucun'})`);
     const loopSrc = read('frontend/src/cinema-loop.js');
     assert(/getByteFrequencyData/.test(loopSrc),
       'cinema-loop.js: lit bien le FFT (seul propriétaire pour bg+viz+vol-vis)');
@@ -3650,6 +3654,88 @@ section('components/lf-toast-stack.logic.js -- import-smoke');
     assert(/on\(EVENTS\.PLAY_STATE,\s*\(\)\s*=>\s*\{\s*if \(cinemaOpen\) wakeCinemaLoop\(\);\s*\}\);/.test(cinSrc),
       'cinema.js: listener EVENTS.PLAY_STATE réveille la boucle si le cinéma est ouvert');
   }
+
+  // =============================================================================
+  // Task 5 (cycle 2 polish) — dt propagé dans cinema-canvas.js (vagues, écume,
+  // étoiles) : drawWavesFrame/drawStarfieldFrame consomment le snapshot FFT/beat
+  // partagé (cinema-loop.js) et des couleurs LERP scalaires — plus d'eqAnalyser
+  // importé ni de détecteurs de beat locaux. _wavePhases/écume avancent selon dtN
+  // (framerate-indépendant). getMaxBandEnergy() affine la garde de sommeil de
+  // cinema-bg.js (drawBgFrame).
+  // =============================================================================
+  section('Task 5 cycle 2 -- cinema-canvas.js dt/FFT/beat partagés (waves/starfield)');
+
+  await (async function () {
+    const fs   = require('fs');
+    const path = require('path');
+    const root = path.join(__dirname, '../..');
+    const read = f => fs.readFileSync(path.join(root, f), 'utf8');
+    const CANVAS = read('frontend/src/cinema-canvas.js');
+    const BG     = read('frontend/src/cinema-bg.js');
+
+    // (a) scan : cinema-canvas.js n'importe plus eqAnalyser ni createBeatDetector —
+    // le FFT/beat arrivent en paramètres (même contrat que cinema-bg.js/cinema-viz.js).
+    assert(!/from '.\/eq\.js'/.test(CANVAS) && !/\beqAnalyser\b/.test(CANVAS),
+      'cinema-canvas.js n\'importe plus eqAnalyser (fft reçu en paramètre)');
+    assert(!/from '.\/cinema-beat\.js'/.test(CANVAS) && !/createBeatDetector/.test(CANVAS),
+      'cinema-canvas.js n\'importe plus createBeatDetector (beat reçu en paramètre)');
+
+    // (b) scan : _wavePhases[l] += et f.life -= sont bien multipliés par un facteur
+    // dtN — framerate-indépendance (regex ciblée sur les lignes concernées, pas un
+    // sondage global "dtN existe quelque part").
+    assert(/_wavePhases\[l\]\s*\+=\s*\([^)]*\)\s*\*\s*boostMult\s*\*\s*dtN;/.test(CANVAS),
+      'cinema-canvas.js: _wavePhases[l] += … est multiplié par dtN (avance framerate-indépendante)');
+    assert(/f\.life\s*-=\s*0\.035\s*\*\s*dtN;/.test(CANVAS),
+      'cinema-canvas.js: f.life -= 0.035 * dtN (fondu écume framerate-indépendant)');
+
+    // (c) signatures publiques exactes — consommées par cinema-bg.js (drawBgFrame).
+    assert(/export function drawWavesFrame\(ctx, w, h, r, g, b, isPlaying, dtN, fft, beat\)/.test(CANVAS),
+      'cinema-canvas.js exporte drawWavesFrame(ctx, w, h, r, g, b, isPlaying, dtN, fft, beat)');
+    assert(/export function drawStarfieldFrame\(ctx, w, h, r, g, b, ambientT, dtN, fft, beat\)/.test(CANVAS),
+      'cinema-canvas.js exporte drawStarfieldFrame(ctx, w, h, r, g, b, ambientT, dtN, fft, beat)');
+    assert(/export function getMaxBandEnergy\(\)/.test(CANVAS),
+      'cinema-canvas.js exporte getMaxBandEnergy()');
+
+    // (d) cinema-bg.js : les deux sites d'appel passent des scalaires r/g/b (plus de
+    // tableau cinArtRGBCur par référence) + dtN/fft/beat ; getMaxBandEnergy() consommé
+    // dans le return de drawBgFrame (raffinement du "toujours actif" T3 conservateur).
+    assert(/drawWavesFrame\(_cinBgCtx, _winW, _winH, _lerpRLast, _lerpGLast, _lerpBLast, isPlaying, dtN, fft, beat\)/.test(BG),
+      'cinema-bg.js: drawBgFrame appelle drawWavesFrame avec r/g/b scalaires + dtN/fft/beat');
+    assert(/drawStarfieldFrame\(_cinBgCtx, _winW, _winH, _lerpRLast, _lerpGLast, _lerpBLast, _ambientT, dtN, fft, beat\)/.test(BG),
+      'cinema-bg.js: drawBgFrame appelle drawStarfieldFrame avec r/g/b scalaires + dtN/fft/beat');
+    assert(/getMaxBandEnergy\(\)\s*>\s*_EPS_BAND/.test(BG),
+      'cinema-bg.js: drawBgFrame consomme getMaxBandEnergy() > _EPS_BAND (raffinement T5 de la garde de sommeil)');
+    assert(/import \{[^}]*getMaxBandEnergy[^}]*\}\s*from '.\/cinema-canvas\.js'/.test(BG),
+      'cinema-bg.js importe getMaxBandEnergy depuis cinema-canvas.js');
+
+    // (e) edge case _lerpRLast/_lerpGLast/_lerpBLast : sentinelle initiale 255 (blanc),
+    // pas -1 — sinon le tout premier drawBgFrame() (avant tout stepArtColorLerp())
+    // peindrait waves/starfield en noir au lieu du blanc neutre attendu.
+    assert(/let _lerpRLast = 255, _lerpGLast = 255, _lerpBLast = 255;/.test(BG),
+      'cinema-bg.js: _lerpRLast/_lerpGLast/_lerpBLast initialisés à 255 (cohérent avec _cinArtRGBCur initial)');
+
+    // (f) invariant pur d'accumulation de phase linéaire — _wavePhases est privé à
+    // cinema-canvas.js (pas d'export), donc on vérifie l'invariant mathématique dont
+    // dépend la multiplication par dtN via waveY (import ESM réel, pure) : avancer une
+    // phase d'un pas à dtN=2 doit produire EXACTEMENT le même y qu'avancer deux pas à
+    // dtN=1 chacun (accumulation linéaire — même principe que stepArtColorLerp dtN plus
+    // haut dans ce fichier, mais ici sur l'incrément de phase des vagues plutôt que le LERP couleur).
+    const { waveY } = await import('../src/cinema-waves.js');
+    const speed = 0.005 + 3 * 0.0018 + 0.4 * 0.020; // incrément représentatif d'une couche
+    const freq = 2.6, amp = 1;
+    // 1 pas à dtN=2
+    const phaseA = 0 + speed * 1 * 2;
+    // 2 pas à dtN=1
+    let phaseB = 0;
+    phaseB += speed * 1 * 1;
+    phaseB += speed * 1 * 1;
+    assert(Math.abs(phaseA - phaseB) < 1e-12,
+      'dtN linéarité: phase accumulée identique (1 pas dtN=2 == 2 pas dtN=1)');
+    const yA = waveY(0.37, phaseA, freq, amp);
+    const yB = waveY(0.37, phaseB, freq, amp);
+    assert(yA === yB,
+      `dtN linéarité: waveY(phase) identique pour les deux trajectoires (yA=${yA}, yB=${yB})`);
+  }());
 
   // -- Résultat -----------------------------------------------------------
   console.log('\n═══════════════════════════════════════════════════════════');
