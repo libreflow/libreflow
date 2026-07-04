@@ -2268,6 +2268,7 @@ section('components/lf-toast-stack.logic.js -- import-smoke');
     const renderLines = read('frontend/src/cinema-render.js').split('\n').length;
     const seekLines   = read('frontend/src/cinema-seek.js').split('\n').length;
     const queueLines  = read('frontend/src/cinema-queue.js').split('\n').length;
+    const loopLines   = read('frontend/src/cinema-loop.js').split('\n').length;
 
     assert(cinLines < 800, `cinema.js < 800 lignes (actual: ${cinLines})`);
     assert(vizLines < 500, `cinema-viz.js < 500 lignes (actual: ${vizLines})`);
@@ -2277,6 +2278,8 @@ section('components/lf-toast-stack.logic.js -- import-smoke');
     // Task 15 : fade d'entrée spectrum (_vizFadeIn + câblage) + gardes Tasks 11/14 — cap 480→495.
     assert(bgLines  < 495, `cinema-bg.js < 495 lignes (actual: ${bgLines})`);
     assert(beatLines   < 200, `cinema-beat.js < 200 lignes (actual: ${beatLines})`);
+    // Task 2 : cinema-loop.js — boucle rAF maître, snapshot FFT, beat unique, cadence, <200 lignes.
+    assert(loopLines   < 200, `cinema-loop.js < 200 lignes (actual: ${loopLines})`);
     // Task 9 : getCinemaQueueUpcoming()/playCinemaQueueTrack() ajoutés — reste < 400.
     assert(renderLines < 400, `cinema-render.js < 400 lignes (actual: ${renderLines})`);
     // Task 5 : cinema-seek.js — scrubbing complet de la pbar (drag/hover/clavier), <300 lignes.
@@ -2290,10 +2293,19 @@ section('components/lf-toast-stack.logic.js -- import-smoke');
     const seekSrc = read('frontend/src/cinema-seek.js');
     const renderSrc = read('frontend/src/cinema-render.js');
     const queueSrc  = read('frontend/src/cinema-queue.js');
+    const loopSrc  = read('frontend/src/cinema-loop.js');
 
     assert(/export function startCinemaViz/.test(vizSrc),      'cinema-viz.js exports startCinemaViz');
     assert(/export function stopCinemaViz/.test(vizSrc),       'cinema-viz.js exports stopCinemaViz');
     assert(/export function initCinemaVizModule/.test(vizSrc), 'cinema-viz.js exports initCinemaVizModule');
+
+    // Task 2 — cinema-loop.js : boucle rAF maître (non câblée en T2).
+    assert(/export function initCinemaLoop/.test(loopSrc),     'cinema-loop.js exports initCinemaLoop');
+    assert(/export function startCinemaLoop/.test(loopSrc),    'cinema-loop.js exports startCinemaLoop');
+    assert(/export function stopCinemaLoop/.test(loopSrc),     'cinema-loop.js exports stopCinemaLoop');
+    assert(/export function wakeCinemaLoop/.test(loopSrc),     'cinema-loop.js exports wakeCinemaLoop');
+    assert(/export function loopCadence/.test(loopSrc),        'cinema-loop.js exports loopCadence (pure)');
+    assert(/export function computeBassEnergy/.test(loopSrc),  'cinema-loop.js exports computeBassEnergy (pure)');
 
     assert(/export let cinemaBg/.test(bgSrc),                'cinema-bg.js exports cinemaBg');
     assert(/export const CINEMA_BG_MODES/.test(bgSrc),       'cinema-bg.js exports CINEMA_BG_MODES');
@@ -3385,6 +3397,42 @@ section('components/lf-toast-stack.logic.js -- import-smoke');
     // Courbes : tracé quadratique partagé fill/crête
     assert(/quadraticCurveTo\(/.test(CANVAS), 'cinema-canvas.js: chemin de vague lissé (quadratiques points milieux)');
     assert(/function _traceWavePath\(/.test(CANVAS), 'cinema-canvas.js: tracé partagé remplissage/crête (_traceWavePath)');
+  }());
+
+  // =============================================================================
+  // Task 2 — Cinema Loop (boucle maître rAF)
+  // =============================================================================
+  section('Task 2 -- cinema-loop.js (loopCadence, computeBassEnergy)');
+
+  await (async function () {
+    const { loopCadence, computeBassEnergy } = await import('../src/cinema-loop.js');
+
+    // (a) loopCadence pure — 1 = 60fps, 2 = 30fps
+    assert(loopCadence('waves', true) === 1, 'loopCadence: waves + focus → 1 (60fps)');
+    assert(loopCadence('ambient', true) === 2, 'loopCadence: ambient + focus → 2 (30fps)');
+    assert(loopCadence('amoled', true) === 2, 'loopCadence: amoled + focus → 2 (30fps)');
+    assert(loopCadence('waves', false) === 2, 'loopCadence: waves + no focus → 2 (30fps)');
+    assert(loopCadence('spectrum', true) === 1, 'loopCadence: spectrum + focus → 1 (60fps)');
+
+    // (b) computeBassEnergy pure — moyenne des carrés des 10% premiers bins
+    const silence = new Uint8Array(1024);
+    assert(computeBassEnergy(silence) === 0, 'computeBassEnergy: silence → 0');
+    const impulse = new Uint8Array(1024);
+    for (let i = 0; i < 102; i++) impulse[i] = 255; // 10% of 1024 = 102.4
+    const energy = computeBassEnergy(impulse);
+    assert(energy > 0, `computeBassEnergy: impulse (255 @ first 10%) → >0 (got ${energy})`);
+
+    // (c) scan: exactly one getByteFrequencyData call
+    const fs   = require('fs');
+    const path = require('path');
+    const root = path.join(__dirname, '../..');
+    const LOOP = fs.readFileSync(path.join(root, 'frontend/src/cinema-loop.js'), 'utf8');
+    const getByteFreqMatches = (LOOP.match(/getByteFrequencyData/g) || []).length;
+    assert(getByteFreqMatches === 1, `cinema-loop.js: exactly 1 getByteFrequencyData (got ${getByteFreqMatches})`);
+
+    // (d) scan: createBeatDetector with exact config (history: 43, threshold: 1.35, cooldownMs: 650)
+    assert(/createBeatDetector\(\s*\{\s*history:\s*43,\s*threshold:\s*1\.35,\s*cooldownMs:\s*650\s*\}/.test(LOOP),
+      'cinema-loop.js: createBeatDetector config (history: 43, threshold: 1.35, cooldownMs: 650)');
   }());
 
   // -- Résultat -----------------------------------------------------------
