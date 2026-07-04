@@ -3609,6 +3609,48 @@ section('components/lf-toast-stack.logic.js -- import-smoke');
     assert(/export function stopCinemaViz/.test(cinVizSrc),  'cinema-viz.js exporte stopCinemaViz()');
   }
 
+  // =============================================================================
+  // Task 4 (cycle 2) Part B — cinema.js câblé sur cinema-loop.js (boucle maître).
+  // Reassigné depuis Task 3 "Step 5" : nécessitait drawBgFrame (T3) ET drawVizFrame
+  // (T4) — les deux existent maintenant, donc le câblage complet vit ici.
+  // =============================================================================
+  section('Task 4 cycle 2 Part B -- cinema.js cablé sur cinema-loop.js');
+
+  {
+    const fs   = require('fs');
+    const path = require('path');
+    const root = path.join(__dirname, '../..');
+    const read = f => fs.readFileSync(path.join(root, f), 'utf8');
+    const cinSrc = read('frontend/src/cinema.js');
+
+    // cinema.js câblé sur cinema-loop.js : import + initCinemaLoop + startCinemaLoop()/
+    // stopCinemaLoop() aux bons endroits + wakeCinemaLoop() au réveil.
+    assert(/from '.\/cinema-loop.js'/.test(cinSrc), 'cinema.js importe cinema-loop.js');
+    assert(/initCinemaLoop\(\s*\{/.test(cinSrc), 'cinema.js appelle initCinemaLoop({...})');
+    assert(/drawBg:\s*drawBgFrame/.test(cinSrc) && /drawViz:\s*drawVizFrame/.test(cinSrc),
+      'cinema.js câble drawBg/drawViz sur drawBgFrame/drawVizFrame dans initCinemaLoop');
+
+    const openBody  = /export function openCinema\(\)[\s\S]*?\n\}\n/.exec(cinSrc)?.[0]  || '';
+    const closeBody = /export function closeCinema\(\)[\s\S]*?\n\}\n/.exec(cinSrc)?.[0] || '';
+    assert(openBody.length > 0, 'cinema.js: openCinema() trouvée');
+    assert(closeBody.length > 0, 'cinema.js: closeCinema() trouvée');
+    assert(/startCinemaViz\(\);\s*\n\s*startCinemaLoop\(\);/.test(openBody),
+      'openCinema(): startCinemaLoop() appelé juste après startCinemaViz()');
+    assert(/stopCinemaLoop\(\);\s*\n\s*stopAmbientAnim\(\);/.test(closeBody),
+      'closeCinema(): stopCinemaLoop() appelé juste avant stopAmbientAnim()');
+
+    assert(/if \(!document\.hidden && cinemaOpen\) wakeCinemaLoop\(\);/.test(cinSrc),
+      'cinema.js: visibilitychange réveille la boucle via wakeCinemaLoop() (condition simplifiée)');
+
+    const updateCinemaBody = /export function updateCinema\(\)[\s\S]*?\n\}\n/.exec(cinSrc)?.[0] || '';
+    assert(updateCinemaBody.length > 0, 'cinema.js: updateCinema() trouvée');
+    assert(/if \(!cinemaOpen\) return;\s*\n\s*wakeCinemaLoop\(\);/.test(updateCinemaBody),
+      'updateCinema(): wakeCinemaLoop() appelé juste après la garde !cinemaOpen (réveil sur changement de piste en pause)');
+
+    assert(/on\(EVENTS\.PLAY_STATE,\s*\(\)\s*=>\s*\{\s*if \(cinemaOpen\) wakeCinemaLoop\(\);\s*\}\);/.test(cinSrc),
+      'cinema.js: listener EVENTS.PLAY_STATE réveille la boucle si le cinéma est ouvert');
+  }
+
   // -- Résultat -----------------------------------------------------------
   console.log('\n═══════════════════════════════════════════════════════════');
   console.log(`  Total : ${_ok + _ko}   OK: ${_ok}   KO: ${_ko}`);

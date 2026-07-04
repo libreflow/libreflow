@@ -30,9 +30,10 @@ import { timeline, tween, set as motionSet, kill as motionKill, eases } from './
 import { cinemaBg, CINEMA_BG_MODES, CINEMA_BG_LABELS, applyCinemaBg, setCinemaBg, cycleCinemaBg,
          syncCinemaBgSettings, updateCinemaBgBtn, initCinemaBg, initCinemaBgModule,
          updateCinArtColor,
-         startAmbientAnim, stopAmbientAnim, resetAmbientColors, updateAmbientGradient,
-         updateCachedWinSize } from './cinema-bg.js';
-import { startCinemaViz, stopCinemaViz, initCinemaVizModule } from './cinema-viz.js';
+         stopAmbientAnim, resetAmbientColors, updateAmbientGradient,
+         updateCachedWinSize, drawBgFrame } from './cinema-bg.js';
+import { startCinemaViz, stopCinemaViz, initCinemaVizModule, drawVizFrame } from './cinema-viz.js';
+import { initCinemaLoop, startCinemaLoop, stopCinemaLoop, wakeCinemaLoop } from './cinema-loop.js';
 import { renderCinColor, syncCinVolumeUI, syncCinProgress, applyCinText, beginCinSwapIn, renderCinNextPanel,
          getCinemaQueueUpcoming, playCinemaQueueTrack } from './cinema-render.js';
 import { initCinemaSeek, isSeekDragging, resetCinemaSeek } from './cinema-seek.js';
@@ -42,8 +43,9 @@ export { cinemaBg, CINEMA_BG_MODES, CINEMA_BG_LABELS, applyCinemaBg, setCinemaBg
          syncCinemaBgSettings, updateCinemaBgBtn, initCinemaBg, updateCinArtColor,
          startCinemaViz }; // Task 10 : app.js relance le viz spectre au retour 'full' (cinéma ouvert)
 
-// Radio demande le toggle cinéma — évite le cycle d'import cinema.js ↔ radio.js.
+// Radio demande le toggle cinéma (cycle d'import) ; play/pause réveille la boucle maître.
 on(EVENTS.CINEMA_RADIO_TOGGLE, () => { if (cinemaOpen) toggleCinemaRadio(); });
+on(EVENTS.PLAY_STATE,          () => { if (cinemaOpen) wakeCinemaLoop(); });
 
 // ── State ───────────────────────────────────────────────────
 export let cinemaOpen     = false;
@@ -62,9 +64,7 @@ let _cinTc      = null;
 let _cinTd      = null;
 let _cinPbar    = null;
 let _lastCinArt  = null; // dernière URL d'art — évite le bug de normalisation url("…")
-// _cinBgCtx → cinema-bg.js
-
-// Visualiseur : _cinVizRaf et _beatTimer vivent dans cinema-viz.js
+// _cinBgCtx → cinema-bg.js ; _beatTimer → cinema-viz.js (renderer passif, boucle dans cinema-loop.js)
 // Couleur dominante : état privé dans cinema-bg.js — muté via snapArtColor()/stepArtColorLerp().
 let _kbVariant  = 0;                  // variante Ken Burns courante (0-3)
 let _lastCinIdx = -1;                 // dernier curIdx vu dans updateCinema — détecte le changement de piste
@@ -289,6 +289,7 @@ export function openCinema() {
   updateCinema();
   _startClock();
   startCinemaViz();
+  startCinemaLoop();
   _suspendViz(); // P1 fix — le viz player-bar est masqué sous l'overlay, rendu inutile
   // Animation d'entrée : scale 0.88 → 1 + fade-in
   const artWrap = document.querySelector('.cinema-art-wrap');
@@ -419,6 +420,7 @@ export function closeCinema() {
   }
   _cinemaLastFocus = null;
   _stopKenBurns();
+  stopCinemaLoop();
   stopAmbientAnim();
   resetAmbientColors();
   _stopClock();
@@ -499,6 +501,7 @@ function _stopKenBurns() {
 // rendu (couleur/fond avant meta avant pochette avant boutons) — ne pas réordonner.
 export function updateCinema() {
   if (!cinemaOpen) return;
+  wakeCinemaLoop(); // réveil si la boucle est endormie (ex. changement de piste en pause)
   const curIdx = get('curIdx');
   const tracks = get('tracks'); // Phase 4 — store alimenté depuis Jalon 3
   // audio imported from player.js
@@ -638,6 +641,7 @@ function _syncCinButtons(curIdx) {
 // ── Init sub-modules (posé ici : cinemaOpen et updateCinema sont désormais déclarés) ──
 initCinemaBgModule({ getCinemaOpen: () => cinemaOpen, onUpdateCinema: () => updateCinema(), getIsPlaying: () => !audio.paused });
 initCinemaVizModule({ getCinemaOpen: () => cinemaOpen });
+initCinemaLoop({ getCinemaOpen: () => cinemaOpen, getIsPlaying: () => !audio.paused, getBgMode: () => cinemaBg, getAnalyser: () => eqAnalyser, drawBg: drawBgFrame, drawViz: drawVizFrame });
 
 /**
  * Mise à jour légère de la progression — appelée depuis le handler timeupdate
@@ -720,8 +724,6 @@ function _stopClock() {
   if (_clockInterval) { clearInterval(_clockInterval); _clockInterval = null; }
 }
 
-// _startViz / _stopViz → cinema-viz.js (startCinemaViz / stopCinemaViz)
-
 // ═══════════════════════════════════════════════════════════
 // ── Piste suivante ───────────────────────────────────────────
 // ═══════════════════════════════════════════════════════════
@@ -768,11 +770,9 @@ function _updateNextTrack() {
   renderCinNextPanel(panel, hint, ni >= 0 ? tracks[ni] : null, shuffle);
 }
 
-// ── Visibilité onglet — relancer le loop ambient si l'onglet redevient visible ──
+// ── Visibilité onglet — relancer la boucle maître (no-op interne si cinéma fermé) ──
 document.addEventListener('visibilitychange', () => {
-  if (!document.hidden && cinemaOpen && (cinemaBg === 'ambient' || cinemaBg === 'amoled' || cinemaBg === 'waves' || cinemaBg === 'starfield')) {
-    startAmbientAnim();
-  }
+  if (!document.hidden && cinemaOpen) wakeCinemaLoop();
 });
 
 // ── Barre de progression cinéma — scrubbing complet (Task 5) ─
