@@ -98,11 +98,15 @@ have room to breathe.
 
 ### Everything else
 
-Background (`--lf-toast-bg` / `--glass-toast` in dark, the
-`:host-context(html[data-mode="light"])` override in light), border-radius
-(`--radius-md`), icon rendering, the bottom progress bar (`.t-bar`), the
-entrance/exit slide animation, and the top-right anchor position are all
-untouched by this change.
+Border-radius (`--radius-md`), icon rendering, the bottom progress bar
+(`.t-bar`), the entrance/exit slide animation, and the top-right anchor
+position are all untouched by this change. Background (`--lf-toast-bg` /
+`--glass-toast` in dark) is also untouched.
+
+Note: the light-mode `:host-context(html[data-mode="light"])` override
+defines its own complete `box-shadow` (higher specificity than
+`.t-item`/`.t-item:hover`), so it required its own ring addition to match
+dark mode — see the Ring section above.
 
 ---
 

@@ -137,7 +137,15 @@ export class LfToastStack extends LitElement {
       box-shadow:
         0 6px 10px rgba(0, 0, 0, .10),
         0 1px 18px rgba(0, 0, 0, .08),
-        0 3px 5px rgba(0, 0, 0, .14);
+        0 3px 5px rgba(0, 0, 0, .14),
+        0 0 0 1px color-mix(in srgb, var(--lf-toast-accent) 35%, transparent);
+    }
+    :host-context(html[data-mode="light"]) .t-item:hover {
+      box-shadow:
+        0 6px 10px rgba(0, 0, 0, .10),
+        0 1px 18px rgba(0, 0, 0, .08),
+        0 3px 5px rgba(0, 0, 0, .14),
+        0 0 0 1px color-mix(in srgb, var(--lf-toast-accent) 55%, transparent);
     }
     :host-context(html[data-mode="light"]) .t-action {
       color: var(--lf-toast-action, var(--lf-toast-accent, #2563eb));
