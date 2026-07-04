@@ -777,7 +777,7 @@ export function registerHandlers() {
   document.addEventListener('keydown',     _handleKeydown,      { signal });
   document.addEventListener('dragstart',   _handleDragStart,    { signal });
 
-  // Wheel volume — molette sur #vol → ±2% par tick (même pattern que cinema.js _onCinWheel)
+  // Wheel volume — molette sur #vol → ±2% par tick (même pattern que cinema-input.js _onCinWheel)
   const _volEl = document.getElementById('vol');
   if (_volEl) {
     _volEl.addEventListener('wheel', e => {

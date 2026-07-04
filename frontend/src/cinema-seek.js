@@ -5,7 +5,7 @@
 //   - pointerdown/move/up/cancel + setPointerCapture -> drag au pointeur
 //   - hover -> tooltip flottante affichant le temps sous le curseur
 //   - clavier (pbar focalisée) -> Home/End/PageUp/PageDown (les ←/→ ±5s globaux
-//     restent gérés par _onCinKey dans cinema.js -- non dupliqués ici)
+//     restent gérés par _onCinKey dans cinema-input.js -- non dupliqués ici)
 //
 // Robustesse pointeur (fix post-review) :
 //   - Pendant un drag actif, move/up/cancel sont écoutés sur `window` (attachés au
@@ -201,8 +201,8 @@ function _onKeyDown(e) {
   else if (e.key === 'PageUp')   sec = Math.min(duration, audio.currentTime + PAGE_STEP_S);
   else if (e.key === 'PageDown') sec = Math.max(0, audio.currentTime - PAGE_STEP_S);
   else return;
-  e.preventDefault(); // pas de stopPropagation : _onCinKey (cinema.js) doit voir l'évènement
-                       // bulle pour réarmer _showControls() (idle timer contrôles)
+  e.preventDefault(); // pas de stopPropagation : _onCinKey (cinema-input.js) doit voir l'évènement
+                       // bulle pour réarmer showCinemaControls() (idle timer contrôles)
   _applyLive(sec, duration);
   _commit(sec);
 }

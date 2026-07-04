@@ -2269,8 +2269,12 @@ section('components/lf-toast-stack.logic.js -- import-smoke');
     const seekLines   = read('frontend/src/cinema-seek.js').split('\n').length;
     const queueLines  = read('frontend/src/cinema-queue.js').split('\n').length;
     const loopLines   = read('frontend/src/cinema-loop.js').split('\n').length;
+    const inputLines  = read('frontend/src/cinema-input.js').split('\n').length;
 
-    assert(cinLines < 800, `cinema.js < 800 lignes (actual: ${cinLines})`);
+    // Task 6 : extraction cinema-input.js (clavier/molette/dblclick/contrôles auto-masquables)
+    // -- cap cinema.js abaissé de 800 à 650 lignes (Global Constraints du plan Cycle 2).
+    assert(cinLines <= 650, `cinema.js <= 650 lignes (actual: ${cinLines})`);
+    assert(inputLines < 250, `cinema-input.js < 250 lignes (actual: ${inputLines})`);
     assert(vizLines < 500, `cinema-viz.js < 500 lignes (actual: ${vizLines})`);
     // Task 3 : cinema-bg.js gagne snapArtColor()/stepArtColorLerp() (état couleur privé) — cap 400→470.
     // Task 8 : cross-fade de bascule de mode (MODE_CROSSFADE_MS, _snapshotModeCanvas) — cap 470→480
@@ -2294,6 +2298,20 @@ section('components/lf-toast-stack.logic.js -- import-smoke');
     const renderSrc = read('frontend/src/cinema-render.js');
     const queueSrc  = read('frontend/src/cinema-queue.js');
     const loopSrc  = read('frontend/src/cinema-loop.js');
+    const inputSrc = read('frontend/src/cinema-input.js');
+
+    // Task 6 — cinema-input.js : surface publique + zéro import cross-feature (DI pure,
+    // même discipline que cinema-seek.js : ni player.js/eq.js).
+    assert(/export function initCinemaInput/.test(inputSrc),     'cinema-input.js exports initCinemaInput');
+    assert(/export function attachCinemaInput/.test(inputSrc),   'cinema-input.js exports attachCinemaInput');
+    assert(/export function detachCinemaInput/.test(inputSrc),   'cinema-input.js exports detachCinemaInput');
+    assert(/export function showCinemaControls/.test(inputSrc),  'cinema-input.js exports showCinemaControls');
+    assert(!/from '\.\/(player|eq)\.js'/.test(inputSrc),
+      "cinema-input.js n'importe pas player.js/eq.js (DI uniquement, CLAUDE.md §6)");
+    assert(/from '.\/cinema-input.js'/.test(cinSrc),       "cinema.js importe depuis cinema-input.js");
+    assert(/initCinemaInput\(/.test(cinSrc),               "cinema.js appelle initCinemaInput()");
+    assert(/attachCinemaInput\(overlay\)/.test(cinSrc),    "cinema.js appelle attachCinemaInput(overlay) (openCinema)");
+    assert(/detachCinemaInput\(overlay\)/.test(cinSrc),    "cinema.js appelle detachCinemaInput(overlay) (closeCinema)");
 
     assert(/export function startCinemaViz/.test(vizSrc),      'cinema-viz.js exports startCinemaViz');
     assert(/export function stopCinemaViz/.test(vizSrc),       'cinema-viz.js exports stopCinemaViz');
@@ -2349,6 +2367,72 @@ section('components/lf-toast-stack.logic.js -- import-smoke');
       "cinema-render.js importe buildUpcoming depuis cinema-queue.js");
   } catch (e) {
     console.error('  KO  cinema split crashed:', e.message);
+    _ko++;
+  }
+
+  // =============================================================================
+  // Cinema Polish Cycle 2, Task 6 — extraction cinema-input.js + 4 bugs d'input
+  // (scans statiques, house style). NB : distinct de l'ancienne numérotation
+  // "cinema Task 6" (text swap sync, plus bas) — plan différent.
+  // =============================================================================
+  try {
+    const fs = require('fs'), path = require('path');
+    const root = path.join(__dirname, '../..');
+    const read = f => fs.readFileSync(path.join(root, f), 'utf8');
+
+    section('cinema-input.js split (Cycle 2 Task 6) -- extraction + 4 bugs input');
+
+    const inputSrc = read('frontend/src/cinema-input.js');
+    const cinSrc   = read('frontend/src/cinema.js');
+
+    const onCinKeyBody = /function _onCinKey\(e\)\s*\{[\s\S]*?\n\}\n/.exec(inputSrc)?.[0] || '';
+    assert(onCinKeyBody.length > 0, 'cinema-input.js : _onCinKey() trouvée');
+
+    // (b) KeyC ferme le cinéma — la tooltip promet « Fermer [C / Échap] » (i18n
+    // t_cinema_close) mais seul Escape était géré avant ce fix.
+    const keyCBlock = /case 'KeyC':([\s\S]*?)break;/.exec(onCinKeyBody)?.[1] || '';
+    assert(keyCBlock.length > 0 && /closeCinema\(\)/.test(keyCBlock),
+      "cinema-input.js : case 'KeyC' présent et appelle deps.closeCinema() (fix tooltip « Fermer [C / Échap] »)");
+
+    // (c) _onCinWheel : early-return AVANT preventDefault quand la molette cible le
+    // panneau file d'attente — le scroll natif du panneau reprend ses droits.
+    const onCinWheelBody = /function _onCinWheel\(e\)\s*\{[\s\S]*?\n\}\n/.exec(inputSrc)?.[0] || '';
+    assert(onCinWheelBody.length > 0, 'cinema-input.js : _onCinWheel() trouvée');
+    const closestIdx = onCinWheelBody.indexOf("closest('#cinema-queue-panel')");
+    const preventIdx = onCinWheelBody.indexOf('preventDefault('); // forme appel — évite un faux négatif si un commentaire mentionne le mot sans parenthèse
+    assert(closestIdx > -1 && preventIdx > -1 && closestIdx < preventIdx,
+      "cinema-input.js : _onCinWheel() early-return closest('#cinema-queue-panel') AVANT preventDefault");
+
+    // (d) seek clavier ArrowLeft/ArrowRight gardé par isFinite(audio.duration) — sans
+    // la garde, une durée NaN faisait `audio.duration || 0` -> 0 et ArrowRight ramenait
+    // la lecture au tout début du morceau (Math.min(0, currentTime+5) === 0).
+    const arrowLeftBlock  = /case 'ArrowLeft':([\s\S]*?)break;/.exec(onCinKeyBody)?.[1] || '';
+    const arrowRightBlock = /case 'ArrowRight':([\s\S]*?)break;/.exec(onCinKeyBody)?.[1] || '';
+    assert(arrowLeftBlock.length > 0 && /isFinite\(audio\.duration\)/.test(arrowLeftBlock),
+      'cinema-input.js : ArrowLeft gardé par isFinite(audio.duration) (miroir ArrowRight)');
+    assert(arrowRightBlock.length > 0 && /isFinite\(audio\.duration\)/.test(arrowRightBlock)
+        && /Math\.min\(audio\.duration,/.test(arrowRightBlock),
+      'cinema-input.js : ArrowRight gardé par isFinite(audio.duration) (fix NaN -> seek forcé à 0)');
+
+    // (e) les deux callbacks rAF d'ouverture (cinema.js/openCinema) doivent vérifier
+    // cinemaOpen avant d'agir — un close() survenu entre l'appel et l'exécution de la
+    // frame ne doit pas focaliser/animer un overlay déjà refermé (race rAF).
+    const openCinemaBody = /export function openCinema\(\)\s*\{[\s\S]*?\n\}\n/.exec(cinSrc)?.[0] || '';
+    assert(openCinemaBody.length > 0, 'cinema.js : openCinema() trouvée');
+    const rafGuardCount = (openCinemaBody.match(/requestAnimationFrame\(\(\)\s*=>\s*\{\s*if \(!cinemaOpen\) return;/g) || []).length;
+    assert(rafGuardCount === 2,
+      `cinema.js : les deux callbacks rAF de openCinema() contiennent if (!cinemaOpen) return (fix races rAF, actual: ${rafGuardCount})`);
+
+    // (f) _onArtDblClick : clearTimeout(_heartTimer) AVANT réassignation — un
+    // double-double-clic rapide laissait sinon le premier timer orphelin.
+    const onArtDblClickBody = /function _onArtDblClick\(e\)\s*\{[\s\S]*?\n\}\n/.exec(inputSrc)?.[0] || '';
+    assert(onArtDblClickBody.length > 0, 'cinema-input.js : _onArtDblClick() trouvée');
+    const clearIdx = onArtDblClickBody.indexOf('clearTimeout(_heartTimer)');
+    const reassignIdx = onArtDblClickBody.indexOf('_heartTimer = setTimeout');
+    assert(clearIdx > -1 && reassignIdx > -1 && clearIdx < reassignIdx,
+      'cinema-input.js : clearTimeout(_heartTimer) avant réassignation dans _onArtDblClick (fix timer orphelin)');
+  } catch (e) {
+    console.error('  KO  cinema Task 6 scans crashed:', e.message);
     _ko++;
   }
 

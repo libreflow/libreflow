@@ -228,7 +228,7 @@ export function initShortcuts({ updateVolSlider, closeModal, cycleSpeed }) {
 
     if (e.key.toLowerCase() === 'c' && !e.ctrlKey && !e.altKey) toggleCinema();
     // Note : 'b' (cycleCinemaBg) et 'f' (toggleCinemaFullscreen) en mode cinéma sont gérés
-    // par _onCinKey dans cinema.js — ces guards `&& cinemaOpen` seraient inatteignables ici
+    // par _onCinKey dans cinema-input.js — ces guards `&& cinemaOpen` seraient inatteignables ici
     // car le `if (cinemaOpen) return` ci-dessus les bloque.
     if (e.key.toLowerCase() === 'd' && !e.ctrlKey) detectDupes();
     if (e.key.toLowerCase() === 'x' && !e.ctrlKey && !e.altKey) cycleSpeed();

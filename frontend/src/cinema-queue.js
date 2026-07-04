@@ -18,8 +18,8 @@
 // Clavier — garde Échap/flèches (décision documentée, cf. task-9-report.md) :
 // le listener keydown est posé DIRECTEMENT sur #cinema-queue-panel (phase bulle, pas de
 // capture). Comme le panneau est un ANCÊTRE des rangées focalisées, il reçoit l'évènement
-// AVANT que la bulle n'atteigne document (où vivent _onCinKey/_onCinemaTrapKey, cinema.js).
-// stopPropagation() sur Échap/↑/↓/Tab empêche donc cinema.js de réinterpréter ces touches
+// AVANT que la bulle n'atteigne document (où vivent _onCinKey/_onCinemaTrapKey, cinema-input.js).
+// stopPropagation() sur Échap/↑/↓/Tab empêche donc cinema-input.js de réinterpréter ces touches
 // (Échap → fermerait tout le cinéma ; ↑/↓ → changeraient le volume ; Tab → piège overlay
 // entier au lieu du panneau seul).
 
@@ -194,7 +194,7 @@ function _moveFocus(dir) {
 function _onPanelKey(e) {
   if (!_open) return;
   if (e.key === 'Escape') {
-    // Ferme UNIQUEMENT le panneau — stopPropagation empêche _onCinKey (cinema.js) de
+    // Ferme UNIQUEMENT le panneau — stopPropagation empêche _onCinKey (cinema-input.js) de
     // voir cet Échap et de quitter le plein écran / fermer tout le mode cinéma.
     e.stopPropagation();
     e.preventDefault();

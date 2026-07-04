@@ -397,14 +397,15 @@ async function run() {
   // Le check doit distinguer focus CLAVIER (:focus-visible) du focus résiduel de clic
   // souris (activeElement reste posé sur un <button> cliqué sous Chromium/WebView2) —
   // sinon les contrôles sont épinglés en permanence pour les utilisateurs souris.
-  await t('cinema.js auto-hide defers only for keyboard focus (:focus-visible) (A9)', () => {
-    const cj = readRepoFile('frontend/src/cinema.js');
+  await t('cinema-input.js auto-hide defers only for keyboard focus (:focus-visible) (A9)', () => {
+    // Task 6 : _hideControls/_isKeyboardFocusInOverlay déménagés cinema.js -> cinema-input.js.
+    const cj = readRepoFile('frontend/src/cinema-input.js');
     const m = /function _hideControls\(\)\s*\{[\s\S]*?\n\}/.exec(cj);
-    assert.ok(m, '_hideControls() introuvable dans cinema.js');
+    assert.ok(m, '_hideControls() introuvable dans cinema-input.js');
     assert.ok(/_isKeyboardFocusInOverlay/.test(m[0]),
       '_hideControls() doit passer par le check focus clavier avant de masquer (A9)');
     const h = /function _isKeyboardFocusInOverlay\([\s\S]*?\n\}/.exec(cj);
-    assert.ok(h, '_isKeyboardFocusInOverlay() introuvable dans cinema.js');
+    assert.ok(h, '_isKeyboardFocusInOverlay() introuvable dans cinema-input.js');
     assert.ok(/activeElement/.test(h[0]),
       'le check A9 doit lire document.activeElement');
     assert.ok(/:focus-visible/.test(h[0]),
@@ -520,7 +521,7 @@ async function run() {
     const escBlock = /if\s*\(\s*e\.key\s*===\s*'Escape'\s*\)\s*\{[\s\S]*?\}/.exec(m[0]);
     assert.ok(escBlock, 'bloc Escape introuvable dans _onPanelKey()');
     assert.ok(/stopPropagation\(\)/.test(escBlock[0]),
-      'Escape doit appeler stopPropagation() — sinon _onCinKey (cinema.js) referme tout le mode cinéma / quitte le plein écran');
+      'Escape doit appeler stopPropagation() — sinon _onCinKey (cinema-input.js) referme tout le mode cinéma / quitte le plein écran');
     assert.ok(/_closePanel\(/.test(escBlock[0]),
       'Escape doit fermer UNIQUEMENT le panneau (_closePanel), pas le cinéma');
   });
@@ -548,10 +549,11 @@ async function run() {
       '_closePanel() doit réinitialiser _rows (pas de refs vers des boutons détachés)');
   });
 
-  await t('cinema.js Tab-trap filters invisible focusables (Task 9 fix)', () => {
-    const cj = readRepoFile('frontend/src/cinema.js');
+  await t('cinema-input.js Tab-trap filters invisible focusables (Task 9 fix)', () => {
+    // Task 6 : _onCinemaTrapKey déménagé cinema.js -> cinema-input.js.
+    const cj = readRepoFile('frontend/src/cinema-input.js');
     const m = /function _onCinemaTrapKey\([\s\S]*?\n\}/.exec(cj);
-    assert.ok(m, '_onCinemaTrapKey() introuvable dans cinema.js');
+    assert.ok(m, '_onCinemaTrapKey() introuvable dans cinema-input.js');
     assert.ok(/getBoundingClientRect\(\)/.test(m[0]) && /width\s*>\s*0/.test(m[0]),
       "_onCinemaTrapKey doit filtrer les éléments invisibles (getBoundingClientRect, pattern queue.js) — sinon un focusable display:none devient first/last, le Tab natif le saute et le focus s'échappe du modal");
   });

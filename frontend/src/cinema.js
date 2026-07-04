@@ -5,6 +5,7 @@
 // Dépendances :
 //   import  : cinema-render.js (helpers de rendu extraits de updateCinema)
 //   import  : cinema-seek.js (scrubbing complet de la pbar, Task 5 — injection de deps)
+//   import  : cinema-input.js (clavier/molette/dblclick/contrôles auto-masquables, Task 6 — injection de deps)
 //   import  : saveCfg (cfgsave.js), updateVolSlider (playerbar.js)
 //   window  : audio, curIdx, tracks, liked, shuffle, repeat, getFiltered (getters), toast
 //
@@ -14,7 +15,7 @@
 //   setCinemaBg, cycleCinemaBg, applyCinemaBg, syncCinemaBgSettings, updateCinemaBgBtn
 //   toggleCinemaFullscreen, toggleCinemaRadio
 //   CINEMA_BG_MODES, CINEMA_BG_LABELS
-//   (toggleCinemaMute — Task 7 — vit dans cinema-render.js, cap 800 lignes ici)
+//   (toggleCinemaMute — Task 7 — vit dans cinema-render.js, cap 650 lignes ici depuis Task 6)
 //   initCinemaVizSuspend (câblage viz.js suspendViz/resumeViz — appelé une fois depuis app.js)
 
 import { eqCtx, eqAnalyser, masterGainNode, setMasterGain } from './eq.js'; // réutiliser le graphe EQ existant
@@ -38,6 +39,7 @@ import { renderCinColor, syncCinVolumeUI, syncCinProgress, applyCinText, beginCi
          getCinemaQueueUpcoming, playCinemaQueueTrack } from './cinema-render.js';
 import { initCinemaSeek, isSeekDragging, resetCinemaSeek } from './cinema-seek.js';
 import { initCinemaQueue, refreshCinemaQueuePanel, closeCinemaQueuePanel } from './cinema-queue.js';
+import { initCinemaInput, attachCinemaInput, detachCinemaInput, showCinemaControls } from './cinema-input.js';
 
 export { cinemaBg, CINEMA_BG_MODES, CINEMA_BG_LABELS, applyCinemaBg, setCinemaBg, cycleCinemaBg,
          syncCinemaBgSettings, updateCinemaBgBtn, initCinemaBg, updateCinArtColor,
@@ -49,7 +51,7 @@ on(EVENTS.PLAY_STATE,          () => { if (cinemaOpen) wakeCinemaLoop(); });
 
 // ── State ───────────────────────────────────────────────────
 export let cinemaOpen     = false;
-let cinemaHideTimer       = null;
+// cinemaHideTimer → cinema-input.js (Task 6 — timer d'auto-masquage des contrôles)
 
 // ── A11Y: focus management (A.8) ────────────────────────────
 // Stores the element that had focus before cinema opened so it
@@ -75,8 +77,7 @@ let _clockInterval = null;
 // Timers pour l'animation de swap pochette — stockés pour annulation dans closeCinema()
 let _cinSwapOutTimer = null;
 let _cinSwapInTimer  = null;
-// Timer de la particule cœur (dbl-clic like) — stocké pour clear dans closeCinema() (Task 3)
-let _heartTimer      = null;
+// _heartTimer (particule cœur, dbl-clic like) → cinema-input.js (Task 6)
 
 // GSAP timeline pour la chorégraphie d'ouverture — kill au close + au re-open
 // (évite que deux séquences se superposent si l'utilisateur toggle vite).
@@ -96,10 +97,9 @@ export function initCinemaVizSuspend({ suspendViz, resumeViz }) {
 
 // ── Constantes ──────────────────────────────────────────────
 // Modes, labels, AMBIENT_CROSSFADE_MS → cinema-bg.js
-const CINEMA_CONTROLS_HIDE_MS  = 3000;  // délai avant masquage des contrôles
+// CINEMA_CONTROLS_HIDE_MS, HEART_BURST_MS → cinema-input.js (Task 6)
 const CIN_SWAP_OUT_MS          =  120;  // durée animation pochette sortante
 const CIN_SWAP_IN_MS           =  440;  // durée animation pochette entrante
-const HEART_BURST_MS           =  750;  // durée de la particule coeur
 const CLOCK_TICK_MS            = 1000;  // intervalle de mise à jour de l'horloge
 
 // ── Init modules ─────────────────────────────────────────────
@@ -125,27 +125,7 @@ export function toggleCinema() {
 }
 
 
-// ── Raccourcis clavier cinema ────────────────────────────────
-function _onArtDblClick(e) {
-  e.stopPropagation();
-  // Appeler toggleLike du player principal (window scope)
-  toggleLike();
-  // Feedback visuel : cœur qui pulse sur la pochette
-  const wrap = document.querySelector('.cinema-art-wrap');
-  const overlay = document.getElementById('cinema-overlay');
-  if (!wrap || !overlay) return;
-  const r = wrap.getBoundingClientRect();
-  const cx = r.left + r.width / 2;
-  const cy = r.top + r.height / 2;
-  const heart = document.createElement('div');
-  heart.className = 'cin-heart-burst';
-  heart.textContent = '❤';
-  heart.style.left = cx + 'px';
-  heart.style.top  = cy + 'px';
-  overlay.appendChild(heart);
-  _heartTimer = setTimeout(() => { heart.remove(); _heartTimer = null; }, HEART_BURST_MS);
-}
-
+// ── Volume : lecture DOM + sync (exposés à cinema-input.js via deps — Task 6) ──
 /** Lit le volume depuis le slider DOM #vol (source de vérité — §2). Fallbacks : master gain puis 1. */
 function _readVol() {
   const dom = parseFloat(document.getElementById('vol')?.value);
@@ -153,114 +133,12 @@ function _readVol() {
   return masterGainNode?.gain.value ?? 1;
 }
 
-function _onCinKey(e) {
-  if (!cinemaOpen) return;
-  // Ignorer si focus sur un input/slider
-  const _ct = e.target.tagName;
-  if (_ct === 'INPUT' || _ct === 'TEXTAREA' || _ct === 'SELECT' || e.target.isContentEditable) return;
-  _showControls(); // reset idle timer sur toute touche
-  // audio imported from player.js
-  switch (e.code) {
-    case 'Space':
-      e.preventDefault();
-      if (audio) { audio.paused ? audio.play().catch(() => {}) : audio.pause(); updateCinema(); } // B33 FIX : .catch — évite un rejet non géré si autoplay refuse
-      break;
-    case 'ArrowLeft':
-      e.preventDefault();
-      if (audio) { audio.currentTime = Math.max(0, audio.currentTime - 5); }
-      break;
-    case 'ArrowRight':
-      e.preventDefault();
-      if (audio) { audio.currentTime = Math.min(audio.duration || 0, audio.currentTime + 5); }
-      break;
-    case 'ArrowUp':
-      e.preventDefault();
-      if (audio) { const v = Math.min(1, _readVol() + 0.05); setMasterGain(v); _syncCinVol(v); updateCinema(); }
-      break;
-    case 'ArrowDown':
-      e.preventDefault();
-      if (audio) { const v = Math.max(0, _readVol() - 0.05); setMasterGain(v); _syncCinVol(v); updateCinema(); }
-      break;
-    case 'KeyN': case 'KeyL':
-      e.preventDefault();
-      next();
-      break;
-    case 'KeyP':
-      e.preventDefault();
-      prev();
-      break;
-    case 'KeyF':
-      e.preventDefault();
-      toggleCinemaFullscreen();
-      break;
-    case 'KeyB':
-      e.preventDefault();
-      cycleCinemaBg();
-      break;
-    case 'KeyR':
-      e.preventDefault();
-      toggleCinemaRadio().catch(err => console.warn('[cinema] radio toggle:', err));
-      break;
-    case 'Escape':
-      // Si plein écran actif → quitter le plein écran uniquement (pas fermer le cinéma)
-      if (document.fullscreenElement) {
-        document.exitFullscreen().catch(() => {});
-      } else {
-        closeCinema();
-      }
-      break;
-  }
-}
-
-// ── A11Y A.8 — Tab trap ──────────────────────────────────────
-// Separate from _onCinKey so it can be removed cleanly in closeCinema().
-// Traps Tab focus within the overlay. ESC and all other keys are handled
-// exclusively by _onCinKey (which also manages fullscreen exit).
-function _onCinemaTrapKey(e) {
-  const overlay = document.getElementById('cinema-overlay');
-  if (!overlay || !overlay.classList.contains('active')) return;
-
-  if (e.key === 'Tab') {
-    _showControls(); // A11Y : rendre les contrôles visibles lors de la navigation clavier
-    // Task 9 fix — filtre de visibilité (même pattern que le trap de queue.js) : sans lui,
-    // un élément display:none (ex: rangée cachée du panneau file d'attente) peut devenir
-    // first/last ; le Tab natif le saute, le wrap ne fire jamais → le focus s'échappe du modal.
-    const focusables = [...overlay.querySelectorAll(
-      'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
-    )].filter(el => { const r = el.getBoundingClientRect(); return r.width > 0 && r.height > 0; });
-    if (!focusables.length) { e.preventDefault(); return; }
-    const first  = focusables[0];
-    const last   = focusables[focusables.length - 1];
-    const active = document.activeElement;
-    if (e.shiftKey && active === first) {
-      e.preventDefault();
-      last.focus();
-    } else if (!e.shiftKey && active === last) {
-      e.preventDefault();
-      first.focus();
-    }
-  }
-}
-
-// ── Scroll molette → volume ──────────────────────────────────
 function _syncCinVol(v) {
   const cvol = document.getElementById('cinema-vol');
   if (cvol) { cvol.value = v; emit(EVENTS.VOL_SLIDER_UPDATE, { elId: 'cinema-vol' }); }
   const vel = document.getElementById('vol');
   if (vel) { vel.value = v; emit(EVENTS.VOL_SLIDER_UPDATE, { elId: 'vol' }); }
   saveCfg();
-}
-
-function _onCinWheel(e) {
-  e.preventDefault();
-  e.stopPropagation();
-  // audio imported from player.js
-  if (!audio) return;
-  const delta = e.deltaY < 0 ? 0.05 : -0.05;
-  const v = Math.min(1, Math.max(0, _readVol() + delta));
-  setMasterGain(v);
-  _syncCinVol(v);
-  updateCinema();
 }
 
 export function openCinema() {
@@ -271,7 +149,9 @@ export function openCinema() {
   // A11Y A.8 — capture previous focus; move focus into overlay on next paint
   // (overlay has tabindex="-1" from A.7, so it is programmatically focusable)
   _cinemaLastFocus = document.activeElement;
-  requestAnimationFrame(() => overlay.focus());
+  // FIX (Task 6) : garde `if (!cinemaOpen) return` -- un toggle rapide (ouvrir puis fermer
+  // avant la prochaine frame) ne doit pas focaliser un overlay déjà refermé.
+  requestAnimationFrame(() => { if (!cinemaOpen) return; overlay.focus(); });
   overlay.classList.add('active');
   // Marquer le bouton toolbar comme actif (état toggle visible)
   const tbtCinema = document.getElementById('tbt-cinema');
@@ -295,28 +175,17 @@ export function openCinema() {
   const artWrap = document.querySelector('.cinema-art-wrap');
   if (artWrap) {
     artWrap.classList.remove('cin-enter');
+    // FIX (Task 6) : même garde `if (!cinemaOpen) return` sur le double-rAF -- un
+    // close() survenu entre les deux frames ne doit pas relancer Ken Burns ni
+    // ré-ajouter .cin-enter sur un overlay déjà fermé.
     requestAnimationFrame(() => requestAnimationFrame(() => {
+      if (!cinemaOpen) return;
       artWrap.classList.add('cin-enter');
       _startKenBurns(); // démarrer Ken Burns à l'ouverture du mode cinéma
     }));
   }
-  overlay.removeEventListener('mousemove', _onCinemaMouseMove);
-  overlay.addEventListener('mousemove', _onCinemaMouseMove);
-  overlay.removeEventListener('click',     _onCinemaMouseMove);
-  overlay.addEventListener('click',     _onCinemaMouseMove);
-  overlay.removeEventListener('wheel',     _onCinWheel);
-  overlay.addEventListener('wheel',     _onCinWheel, { passive: false });
-  overlay.removeEventListener('focusin',   _onCinemaFocusIn);
-  overlay.addEventListener('focusin',   _onCinemaFocusIn);
-  document.removeEventListener('keydown',  _onCinKey);
-  document.addEventListener('keydown',  _onCinKey);
-  document.removeEventListener('keydown', _onCinemaTrapKey);
-  document.addEventListener('keydown', _onCinemaTrapKey);
-  // Double-clic pochette → like/unlike (removeEventListener d'abord : évite les listeners zombies)
-  const _artWrapDb = document.querySelector('.cinema-art-wrap');
-  _artWrapDb?.removeEventListener('dblclick', _onArtDblClick);
-  _artWrapDb?.addEventListener('dblclick', _onArtDblClick);
-  _showControls();
+  attachCinemaInput(overlay);
+  showCinemaControls();
   _runOpenChoreography();
 }
 
@@ -390,19 +259,10 @@ export function closeCinema() {
   // pendant un changement de piste) laisse le titre/artiste à opacity:0 (cin-txt-swap-out
   // est `forwards`) à la prochaine ouverture, avant le premier changement de piste.
   _cinTxtEls().forEach(el => el.classList.remove('cin-txt-swap-out', 'cin-txt-swap-in'));
-  overlay.removeEventListener('mousemove', _onCinemaMouseMove);
-  overlay.removeEventListener('click',     _onCinemaMouseMove);
-  overlay.removeEventListener('wheel',     _onCinWheel);
-  overlay.removeEventListener('focusin',   _onCinemaFocusIn);
-  document.removeEventListener('keydown',  _onCinKey);
-  document.removeEventListener('keydown',  _onCinemaTrapKey);
-  _aw?.removeEventListener('dblclick', _onArtDblClick);
-  if (cinemaHideTimer) { clearTimeout(cinemaHideTimer); cinemaHideTimer = null; } // Bug 5 fix
+  detachCinemaInput(overlay); // Task 6 — retire listeners + cinemaHideTimer/_heartTimer + hearts résiduels
   clearTimeout(_cinSwapOutTimer); _cinSwapOutTimer = null;
   clearTimeout(_cinSwapInTimer);  _cinSwapInTimer  = null;
   clearTimeout(_resizeTimer);     _resizeTimer     = null; // évite applyCinemaBg() orphelin après fermeture
-  if (_heartTimer) { clearTimeout(_heartTimer); _heartTimer = null; } // Task 3 : pas de setTimeout orphelin
-  overlay.querySelectorAll('.cin-heart-burst').forEach(h => h.remove());  // retirer les cœurs restants
   // Killer la timeline d'ouverture si elle est encore en vol + reset des inline
   // styles laissés par gsap (autoAlpha posé display:none / opacity:0 sur l'élément).
   if (_openTl) { _openTl.kill(); _openTl = null; }
@@ -430,48 +290,7 @@ export function closeCinema() {
   if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
 }
 
-// ── Contrôles — visibilité unifiée via .ctrl-on sur l'overlay ──
-
-function _showControls() {
-  const overlay = document.getElementById('cinema-overlay');
-  if (!overlay) return;
-  overlay.classList.add('ctrl-on');
-  if (cinemaHideTimer) clearTimeout(cinemaHideTimer);
-  cinemaHideTimer = setTimeout(_hideControls, CINEMA_CONTROLS_HIDE_MS);
-}
-
-// A9 : vrai si le focus est CLAVIER (:focus-visible). Un clic souris sur un <button>
-// le laisse activeElement indéfiniment sous Chromium/WebView2, mais :focus-visible
-// reste false pour un focus souris — c'est exactement la distinction voulue :
-// différer le masquage pour Tab, jamais épingler les contrôles pour la souris.
-function _isKeyboardFocusInOverlay(overlay) {
-  const active = document.activeElement;
-  if (!active || active === overlay || !overlay.contains(active)) return false;
-  try { return active.matches(':focus-visible'); } catch { return false; }
-}
-
-function _hideControls() {
-  const overlay = document.getElementById('cinema-overlay');
-  if (!overlay) return;
-  // A11Y A9 — ne pas masquer les contrôles sous le focus clavier : si l'élément actif
-  // dans l'overlay est focalisé au clavier (:focus-visible), réarmer le timer au lieu
-  // de masquer — sinon un utilisateur clavier perd le contrôle qu'il vient de focaliser.
-  if (_isKeyboardFocusInOverlay(overlay)) {
-    cinemaHideTimer = setTimeout(_hideControls, CINEMA_CONTROLS_HIDE_MS);
-    return;
-  }
-  overlay.classList.remove('ctrl-on');
-}
-
-function _onCinemaMouseMove() {
-  _showControls();
-}
-
-// A11Y A9 — focusin bubbling couvre Shift+Tab entrant depuis l'extérieur de l'overlay
-// (le trap key handler ne voit que les Tab pressés pendant que l'overlay a déjà le focus).
-function _onCinemaFocusIn() {
-  _showControls();
-}
+// ── Contrôles auto-masquables (_showControls/_hideControls/_onCinema*) → cinema-input.js (Task 6) ──
 
 // ── Rendu cinéma ─────────────────────────────────────────────
 
@@ -642,6 +461,17 @@ function _syncCinButtons(curIdx) {
 initCinemaBgModule({ getCinemaOpen: () => cinemaOpen, onUpdateCinema: () => updateCinema(), getIsPlaying: () => !audio.paused });
 initCinemaVizModule({ getCinemaOpen: () => cinemaOpen });
 initCinemaLoop({ getCinemaOpen: () => cinemaOpen, getIsPlaying: () => !audio.paused, getBgMode: () => cinemaBg, getAnalyser: () => eqAnalyser, drawBg: drawBgFrame, drawViz: drawVizFrame });
+// Task 6 — cinema-input.js : clavier/molette/dblclick/contrôles auto-masquables.
+initCinemaInput({
+  getCinemaOpen: () => cinemaOpen,
+  closeCinema, updateCinema,
+  toggleCinemaFullscreen, cycleCinemaBg, toggleCinemaRadio,
+  toggleLike, next, prev,
+  audio,
+  setMasterGain,
+  readVol: _readVol,
+  syncVol: _syncCinVol,
+});
 
 /**
  * Mise à jour légère de la progression — appelée depuis le handler timeupdate
