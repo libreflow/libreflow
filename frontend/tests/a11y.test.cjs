@@ -180,11 +180,17 @@ async function run() {
   // 3 flashs/s : BEAT_COOLDOWN >= 334 ms. (Audit : le visualizer lisse + clear
   // chaque frame, prefers-reduced-motion coupe toutes les boucles — pas de flash.)
   await t('cinema beat cooldown keeps flashes <=3/sec (SC 2.3.1)', () => {
-    // BEAT_COOLDOWN moved to cinema-viz.js after cinema split — check both files
-    const cj  = readRepoFile('frontend/src/cinema.js');
-    const cvj = (() => { try { return readRepoFile('frontend/src/cinema-viz.js'); } catch { return ''; } })();
-    const m = /BEAT_COOLDOWN\s*=\s*(\d+)/.exec(cvj) || /BEAT_COOLDOWN\s*=\s*(\d+)/.exec(cj);
-    assert.ok(m, 'BEAT_COOLDOWN introuvable dans cinema.js ni cinema-viz.js');
+    // Task 4 (cycle 2) : le détecteur de beat pochette a migré de cinema-viz.js vers
+    // cinema-loop.js (boucle maître, beat calculé une fois par frame et partagé). Le
+    // cooldown y est passé inline à createBeatDetector({ cooldownMs: 650 }), plus de
+    // constante nommée BEAT_COOLDOWN — on cherche donc BEAT_COOLDOWN (ancien nom, si
+    // jamais réintroduit) OU cooldownMs inline dans cinema-loop.js/cinema.js/cinema-viz.js.
+    const cj   = readRepoFile('frontend/src/cinema.js');
+    const cvj  = (() => { try { return readRepoFile('frontend/src/cinema-viz.js'); } catch { return ''; } })();
+    const clj  = (() => { try { return readRepoFile('frontend/src/cinema-loop.js'); } catch { return ''; } })();
+    const m = /BEAT_COOLDOWN\s*=\s*(\d+)/.exec(cvj) || /BEAT_COOLDOWN\s*=\s*(\d+)/.exec(cj)
+      || /cooldownMs:\s*(\d+)/.exec(clj);
+    assert.ok(m, 'BEAT_COOLDOWN/cooldownMs introuvable dans cinema.js, cinema-viz.js ni cinema-loop.js');
     assert.ok(parseInt(m[1], 10) >= 334,
       `BEAT_COOLDOWN ${m[1]}ms < 334ms → risque de >3 flashs/s (SC 2.3.1)`);
   });

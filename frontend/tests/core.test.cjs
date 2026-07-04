@@ -2459,9 +2459,13 @@ section('components/lf-toast-stack.logic.js -- import-smoke');
     assert(d4.sample(200, 1100, 100) === false, 'beat: mode baseline externe respecte le cooldown');
     assert(d4.sample(200, 2000, 100) === true, 'beat: mode baseline externe → nouveau beat une fois le cooldown écoulé');
 
-    // (b) viz + canvas n'ont plus leur propre boucle historique — ils importent cinema-beat.js
-    assert(/from '.\/cinema-beat.js'/.test(cinVizSrc), 'cinema-viz.js importe cinema-beat.js');
-    assert(/createBeatDetector/.test(cinVizSrc),       'cinema-viz.js utilise createBeatDetector');
+    // (b) canvas n'a pas sa propre boucle historique — il importe cinema-beat.js.
+    // cinema-viz.js, lui, ne détecte PLUS le beat depuis Task 4 (cycle 2) : le beat
+    // arrive en paramètre de drawVizFrame(dt, fft, beat), calculé une seule fois par
+    // frame dans cinema-loop.js (même config createBeatDetector, partagée) — cf. Task 4
+    // cycle 2 ci-dessous pour la vérification positive de ce nouveau contrat.
+    assert(!/from '.\/cinema-beat.js'/.test(cinVizSrc), 'cinema-viz.js n\'importe plus cinema-beat.js (Task 4)');
+    assert(!/createBeatDetector/.test(cinVizSrc),       'cinema-viz.js n\'utilise plus createBeatDetector (Task 4)');
     assert(!/_beatHistorySum/.test(cinVizSrc),
       'cinema-viz.js ne réimplémente plus le running-sum de beat (déplacé dans cinema-beat.js)');
     assert(/from '.\/cinema-beat.js'/.test(canvasSrc), 'cinema-canvas.js importe cinema-beat.js');
@@ -3538,6 +3542,72 @@ section('components/lf-toast-stack.logic.js -- import-smoke');
     assert(/createBeatDetector\(\s*\{\s*history:\s*43,\s*threshold:\s*1\.35,\s*cooldownMs:\s*650\s*\}/.test(LOOP),
       'cinema-loop.js: createBeatDetector config (history: 43, threshold: 1.35, cooldownMs: 650)');
   }());
+
+  // =============================================================================
+  // Task 4 (cycle 2) Part A — cinema-viz.js devient renderer passif : plus de rAF ni
+  // de lecture analyser locale (le FFT/beat arrivent en paramètres depuis
+  // cinema-loop.js, même snapshot que drawBgFrame). drawVizFrame(dt, fft, beat)
+  // exportée ; le beat pochette ne fait plus que l'effet visuel (_pulseBeat), la
+  // détection d'énergie a migré dans cinema-loop.js (Task 2). Le câblage cinema.js →
+  // cinema-loop.js (Part B) est testé dans la section suivante, commit séparé.
+  // =============================================================================
+  section('Task 4 cycle 2 Part A -- cinema-viz.js renderer passif (drawVizFrame, beat partagé)');
+
+  {
+    const fs   = require('fs');
+    const path = require('path');
+    const root = path.join(__dirname, '../..');
+    const read = f => fs.readFileSync(path.join(root, f), 'utf8');
+    const cinVizSrc = read('frontend/src/cinema-viz.js');
+
+    // (a) scan : aucun requestAnimationFrame planifié en boucle dans cinema-viz.js —
+    // seul le pulse pochette (_pulseBeat) utilise encore un requestAnimationFrame
+    // ONE-SHOT pour rejouer la classe .beat (pas une auto-replanification de frame).
+    // On vérifie donc l'absence du pattern d'auto-replanification `= requestAnimationFrame(`
+    // (assignation à une variable de handle, signature du rAF-loop), pas l'absence totale
+    // du mot-clé.
+    assert(!/=\s*requestAnimationFrame\(/.test(cinVizSrc),
+      'cinema-viz.js: aucune auto-replanification de rAF (renderer passif, Task 4)');
+    assert(!/_cinVizRaf/.test(cinVizSrc),
+      'cinema-viz.js: plus de handle rAF local (_cinVizRaf supprimé)');
+
+    // (b) scan : cinema-viz.js ne lit plus l'analyser lui-même (FFT reçu en paramètre)
+    assert(!/getByteFrequencyData/.test(cinVizSrc),
+      'cinema-viz.js: aucun getByteFrequencyData (FFT lu par cinema-loop.js)');
+    assert(!/_vizBuf/.test(cinVizSrc),
+      'cinema-viz.js: plus de buffer FFT local (_vizBuf supprimé, fft vient en paramètre)');
+    assert(!/createBeatDetector/.test(cinVizSrc) && !/from '.\/cinema-beat.js'/.test(cinVizSrc),
+      'cinema-viz.js: plus de détecteur de beat local (beat vient en paramètre)');
+
+    // (c) scan cluster (renderers déjà passivés) : parmi les modules migrés vers le
+    // pattern renderer-passif à ce jour (cinema-bg.js par Task 3, cinema-viz.js par
+    // Task 4), seul cinema-loop.js lit encore getByteFrequencyData — la lecture FFT
+    // est strictement centralisée pour bg+viz+vol-vis. cinema-canvas.js (waves/
+    // starfield) garde SA PROPRE lecture analyser jusqu'à Task 5 (hors scope ici,
+    // cf. brief Task 4 "Code Organization" — ne pas toucher cinema-canvas.js) ; il
+    // est donc volontairement exclu de ce scan, pas un cluster-wide cinema-*.js.
+    const passiveRenderers = ['cinema-bg.js', 'cinema-viz.js'];
+    const filesWithGetByteFreq = passiveRenderers.filter(f => /getByteFrequencyData/.test(read('frontend/src/' + f)));
+    assert(filesWithGetByteFreq.length === 0,
+      `renderers passifs (cinema-bg.js, cinema-viz.js): aucun getByteFrequencyData (trouvé dans: ${filesWithGetByteFreq.join(', ') || 'aucun'})`);
+    const loopSrc = read('frontend/src/cinema-loop.js');
+    assert(/getByteFrequencyData/.test(loopSrc),
+      'cinema-loop.js: lit bien le FFT (seul propriétaire pour bg+viz+vol-vis)');
+
+    // (d) drawVizFrame(dt, fft, beat) exportée ; _drawSpectrumBars/_drawStandardBars
+    // n'ont plus le paramètre `analyser` (dropped — data.length remplace
+    // analyser.frequencyBinCount, cf. brief).
+    assert(/export function drawVizFrame\(dt, fft, beat\)/.test(cinVizSrc),
+      'cinema-viz.js exporte drawVizFrame(dt, fft, beat)');
+    assert(/function _drawSpectrumBars\(ctx, data, w, h, lerpRGB, sg\)/.test(cinVizSrc),
+      'cinema-viz.js: _drawSpectrumBars sans paramètre analyser (data.length remplace frequencyBinCount)');
+    assert(/function _drawStandardBars\(ctx, data, w, h, lerpRGB\)/.test(cinVizSrc),
+      'cinema-viz.js: _drawStandardBars sans paramètre analyser');
+
+    // (e) startCinemaViz/stopCinemaViz restent exportées (contrat inchangé pour cinema.js)
+    assert(/export function startCinemaViz/.test(cinVizSrc), 'cinema-viz.js exporte startCinemaViz()');
+    assert(/export function stopCinemaViz/.test(cinVizSrc),  'cinema-viz.js exporte stopCinemaViz()');
+  }
 
   // -- Résultat -----------------------------------------------------------
   console.log('\n═══════════════════════════════════════════════════════════');
