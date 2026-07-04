@@ -21,7 +21,7 @@ import { saveCfg }                            from './cfgsave.js';
 import { toast }                              from './ui.js';
 import { rgbToHsl, hslToRgb, boostSat, sampleArtColors } from './artcolor.js';
 import { renderAmbientFrame }                 from './ambientRenderer.js';
-import { drawWavesFrame, drawStarfieldFrame, initStarfield, killCanvasTweens, getMaxBandEnergy } from './cinema-canvas.js';
+import { drawWavesFrame, drawStarfieldFrame, initStarfield, killCanvasTweens, getMaxBandEnergy, resetBandEnergy } from './cinema-canvas.js';
 import { prefersReducedMotion }               from './motion.js';
 import { wakeCinemaLoop }                     from './cinema-loop.js';
 
@@ -156,6 +156,7 @@ export function initCinemaBg(mode) {
 export function setCinemaBg(mode) {
   if (!CINEMA_BG_MODES.includes(mode)) return;
   cinemaBg = mode; set('cinemaBg', mode);
+  resetBandEnergy();
   applyCinemaBg();
   syncCinemaBgSettings();
   saveCfg();
@@ -175,6 +176,7 @@ export function cycleCinemaBg() {
   const cur = CINEMA_BG_MODES.indexOf(cinemaBg);
   cinemaBg  = CINEMA_BG_MODES[(cur + 1) % CINEMA_BG_MODES.length];
   set('cinemaBg', cinemaBg);
+  resetBandEnergy();
   applyCinemaBg();
   syncCinemaBgSettings();
   saveCfg();

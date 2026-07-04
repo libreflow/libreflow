@@ -6,6 +6,7 @@
 //   drawWavesFrame(ctx, w, h, r, g, b, isPlaying, dtN, fft, beat)
 //   drawStarfieldFrame(ctx, w, h, r, g, b, ambientT, dtN, fft, beat)
 //   getMaxBandEnergy()
+//   resetBandEnergy()
 //   initStarfield()
 //   killCanvasTweens()
 
@@ -140,6 +141,14 @@ export function getMaxBandEnergy() {
   let max = _starBassSmooth;
   for (let i = 0; i < _WAVE_LAYERS; i++) if (_waveBandsNorm[i] > max) max = _waveBandsNorm[i];
   return max;
+}
+
+/** Remet à zéro les traceurs d'énergie (bascule de mode bg) — évite un getMaxBandEnergy()
+ * figé sur une valeur périmée de l'ancien mode (fix revue Task 5). */
+export function resetBandEnergy() {
+  _waveBands.fill(0);
+  _waveBandsNorm.fill(0);
+  _starBassSmooth = 0;
 }
 
 // Réveille 4 glints d'écume sur les 2 couches avant (round-robin dans le pool).

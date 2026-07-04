@@ -3735,6 +3735,43 @@ section('components/lf-toast-stack.logic.js -- import-smoke');
     const yB = waveY(0.37, phaseB, freq, amp);
     assert(yA === yB,
       `dtN linéarité: waveY(phase) identique pour les deux trajectoires (yA=${yA}, yB=${yB})`);
+
+    // (g) fix revue (post-review) : getMaxBandEnergy() ne doit pas rester figé sur une
+    // valeur périmée de l'ancien mode bg (ex. starfield visité puis switch vers waves —
+    // _starBassSmooth ne décroît plus car _updateStarAudio ne tourne plus). resetBandEnergy()
+    // remet les deux traceurs à zéro. Exercice réel (pas de réimplémentation de la logique
+    // testée) : import ESM réel de cinema-canvas.js — possible en Node sans jsdom (motion.js
+    // garde `typeof window !== 'undefined'`, cf. sondage préalable) — + un ctx 2D minimal
+    // qui STUBS uniquement la surface Canvas utilisée par drawWavesFrame (fillRect/beginPath/
+    // moveTo/lineTo/quadraticCurveTo/closePath/fill/stroke/gradients) sans jamais reproduire le
+    // calcul d'énergie/bandes de cinema-canvas.js lui-même, qui reste exercé pour de vrai.
+    const { getMaxBandEnergy, resetBandEnergy, drawWavesFrame } = await import('../src/cinema-canvas.js');
+
+    const mockCtx2D = () => {
+      const grad = { addColorStop() {} };
+      return {
+        fillStyle: '', strokeStyle: '', lineWidth: 1, globalAlpha: 1,
+        fillRect() {}, beginPath() {}, moveTo() {}, lineTo() {}, quadraticCurveTo() {},
+        closePath() {}, fill() {}, stroke() {}, arc() {}, save() {}, restore() {},
+        translate() {}, rotate() {},
+        createLinearGradient() { return grad; },
+        createRadialGradient() { return grad; },
+      };
+    };
+
+    assert(getMaxBandEnergy() === 0,
+      'getMaxBandEnergy(): 0 avant toute injection d\'énergie (état initial du module)');
+
+    // FFT fort (basses saturées) → une seule frame suffit à pousser _waveBandsNorm bien
+    // au-dessus de _EPS_BAND (AGC : peaks[k] = bands[k] au tout premier appel ⇒ ratio 1).
+    const loudFft = new Uint8Array(256).fill(220);
+    drawWavesFrame(mockCtx2D(), 800, 450, 200, 150, 100, true, 1, loudFft, false);
+    assert(getMaxBandEnergy() > 0,
+      'getMaxBandEnergy(): > 0 après une frame de vagues avec FFT fort (bandes normalisées poussées au-dessus de _EPS_BAND)');
+
+    resetBandEnergy();
+    assert(getMaxBandEnergy() === 0,
+      'resetBandEnergy(): remet getMaxBandEnergy() à 0 (fix revue -- évite un traceur figé sur l\'ancien mode bg)');
   }());
 
   // -- Résultat -----------------------------------------------------------
