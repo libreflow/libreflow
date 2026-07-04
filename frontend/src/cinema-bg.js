@@ -1,15 +1,18 @@
 // LibreFlow — cinema-bg.js
-// Gestion de l'arrière-plan du mode Cinéma : modes, gradient ambient, animation RAF.
+// Gestion de l'arrière-plan du mode Cinéma : modes, gradient ambient, rendu passif.
 // Extrait de cinema.js pour respecter la limite de 800 lignes par fichier (CLAUDE.md §16).
+// Task 3 : cinema-bg.js n'a plus de boucle rAF propre — la boucle MAÎTRE vit dans
+// cinema-loop.js, qui appelle drawBgFrame(dt, fft, beat) à chaque frame.
 //
 // Exports publics :
 //   cinemaBg, CINEMA_BG_MODES, CINEMA_BG_LABELS
 //   initCinemaBg, setCinemaBg, syncCinemaBgSettings, cycleCinemaBg, applyCinemaBg, updateCinemaBgBtn
 //   initCinemaBgModule
-//   getArtColorStr, setArtColorStr, snapArtColor, stepArtColorLerp
+//   getArtColorStr, setArtColorStr, snapArtColor, stepArtColorLerp, isArtColorConverged
 //   updateCinArtColor, updateCinArtRGBFromTrack
 //   NB : l'état couleur (_cinArtRGBCur/_cinArtRGBTarget/_LERP_K) est PRIVÉ (Task 3) —
 //        muté uniquement ici via snapArtColor()/stepArtColorLerp(), jamais par référence.
+//   drawBgFrame — renderer passif appelé par cinema-loop.js
 //   startAmbientAnim, stopAmbientAnim, resetAmbientColors, updateAmbientGradient, updateCachedWinSize
 
 import { i18n }                               from './i18n.js';
@@ -20,6 +23,7 @@ import { rgbToHsl, hslToRgb, boostSat, sampleArtColors } from './artcolor.js';
 import { renderAmbientFrame }                 from './ambientRenderer.js';
 import { drawWavesFrame, drawStarfieldFrame, initStarfield, killCanvasTweens } from './cinema-canvas.js';
 import { prefersReducedMotion }               from './motion.js';
+import { wakeCinemaLoop }                     from './cinema-loop.js';
 
 // ── Modes d'arrière-plan ─────────────────────────────────────
 export let cinemaBg       = 'ambient'; // default mode
@@ -72,24 +76,34 @@ export function snapArtColor() {
 }
 
 /**
+ * true quand les 3 canaux de _cinArtRGBCur sont à < 0.5 de la cible — même garde
+ * de convergence que stepArtColorLerp(), exposée pour drawBgFrame() (needsFrames).
+ */
+export function isArtColorConverged() {
+  return Math.abs(_cinArtRGBCur[0] - _cinArtRGBTarget[0]) < 0.5 &&
+         Math.abs(_cinArtRGBCur[1] - _cinArtRGBTarget[1]) < 0.5 &&
+         Math.abs(_cinArtRGBCur[2] - _cinArtRGBTarget[2]) < 0.5;
+}
+
+/**
  * Avance le LERP d'une frame vers la cible et retourne la string "r,g,b" courante.
- * Appelé par la boucle rAF de cinema-viz.js. Zéro allocation en régime stable :
- * la string n'est reconstruite que si une composante arrondie a changé.
+ * Appelé par la boucle rAF (cinema-loop.js, via cinema-viz.js). Zéro allocation en
+ * régime stable : la string n'est reconstruite que si une composante arrondie a changé.
+ * @param {number} dtN — delta-t normalisé (dt / 16.667), rend le LERP framerate-indépendant.
  * @returns {string} couleur courante interpolée, format "r,g,b"
  */
-export function stepArtColorLerp() {
+export function stepArtColorLerp(dtN) {
   // Convergence guard : snap quand tous les canaux sont à < 0.5 de la cible —
   // stoppe le calcul LERP à chaque frame en régime permanent.
-  if (Math.abs(_cinArtRGBCur[0] - _cinArtRGBTarget[0]) < 0.5 &&
-      Math.abs(_cinArtRGBCur[1] - _cinArtRGBTarget[1]) < 0.5 &&
-      Math.abs(_cinArtRGBCur[2] - _cinArtRGBTarget[2]) < 0.5) {
+  if (isArtColorConverged()) {
     _cinArtRGBCur[0] = _cinArtRGBTarget[0];
     _cinArtRGBCur[1] = _cinArtRGBTarget[1];
     _cinArtRGBCur[2] = _cinArtRGBTarget[2];
   } else {
-    _cinArtRGBCur[0] += (_cinArtRGBTarget[0] - _cinArtRGBCur[0]) * _LERP_K;
-    _cinArtRGBCur[1] += (_cinArtRGBTarget[1] - _cinArtRGBCur[1]) * _LERP_K;
-    _cinArtRGBCur[2] += (_cinArtRGBTarget[2] - _cinArtRGBCur[2]) * _LERP_K;
+    const k = 1 - Math.pow(1 - _LERP_K, dtN || 1);
+    _cinArtRGBCur[0] += (_cinArtRGBTarget[0] - _cinArtRGBCur[0]) * k;
+    _cinArtRGBCur[1] += (_cinArtRGBTarget[1] - _cinArtRGBCur[1]) * k;
+    _cinArtRGBCur[2] += (_cinArtRGBTarget[2] - _cinArtRGBCur[2]) * k;
   }
   const rR = Math.round(_cinArtRGBCur[0]);
   const rG = Math.round(_cinArtRGBCur[1]);
@@ -102,12 +116,12 @@ export function stepArtColorLerp() {
 }
 
 // ── Ambient animation state ──────────────────────────────────
-let _ambientAnimRaf = null;   // RAF handle for continuous breathing loop
+// Task 3 : plus de RAF/génération locaux — la boucle MAÎTRE (cinema-loop.js) possède
+// le rAF ; ce module ne fait que peindre une frame quand drawBgFrame() est appelé.
 let _ambientT       = 0;      // animation time in ms — persists across tracks
 let _ambientColors  = null;   // { cT, cL, cR } — rebuilt each track change
 let _ambientCross   = null;   // { snapshot, start, dur } — active cross-fade
-let _frameCount     = 0;      // frame counter for ambient 30fps cap
-let _ambientGen     = 0;      // génération courante — incrémentée à chaque _stopAmbientAnim() pour invalider les loops orphelins
+let _cinBgCanvas    = null;   // cache de l'élément #cinema-bg (évite getElementById par frame)
 let _cinBgCtx       = null;   // cache du contexte 2D de #cinema-bg (évite getContext() par frame)
 let _starsInited    = false;  // flag pour éviter double _initStarfield
 
@@ -249,96 +263,72 @@ function _buildAmbientColors() {
   };
 }
 
-/** Stop the breathing animation loop and clear any pending cross-fade. */
+/** Stop the breathing animation and clear any pending cross-fade. */
 function _stopAmbientAnim() {
-  _ambientGen++; // invalider tous les loops RAF orphelins
-  if (_ambientAnimRaf) { cancelAnimationFrame(_ambientAnimRaf); _ambientAnimRaf = null; }
   _ambientCross = null;
   // P4 fix : tue les tweens GSAP waves/starfield en vol (évite la fuite mémoire à la
   // fermeture du cinéma ou au changement de mode — cf. killCanvasTweens en tête de fichier).
   killCanvasTweens();
 }
 
-// Dessine une frame du mode courant sur _cinBgCtx — factorisé entre loop() et la frame statique.
-function _drawBgFrame(isPlaying) {
+// Sous ce niveau d'énergie basses, les vagues/étoiles sont visuellement statiques.
+// Réservé au raffinement T5 (getMaxBandEnergy() une fois le FFT partagé câblé) — pas
+// encore consommé ici (T3 conservateur, cf. drawBgFrame ci-dessous).
+const _EPS_BAND = 0.002;
+
+/**
+ * Renderer passif appelé par la boucle MAÎTRE (cinema-loop.js) à chaque frame.
+ * Peint le mode d'arrière-plan courant sur #cinema-bg et fait avancer le cross-fade
+ * de bascule éventuel. Ne planifie plus rien lui-même (pas de rAF, pas de garde de
+ * focus/visibilité — la cadence et le sommeil sont décidés par l'appelant).
+ * @param {number} dt   — ms écoulées depuis la frame précédente (clampées par l'appelant).
+ * @param {Uint8Array|null} fft  — snapshot FFT partagé (non encore consommé ici, cf. T5).
+ * @param {boolean} beat — beat détecté cette frame (non encore consommé ici, cf. T5).
+ * @returns {boolean} needsFrames — true si une frame supplémentaire est encore utile
+ *   (cross-fade en cours, couleur pas encore convergée, ou mode intrinsèquement animé).
+ */
+export function drawBgFrame(dt, fft, beat) {
+  const canvas = _cinBgCanvas || (_cinBgCanvas = document.getElementById('cinema-bg'));
+  if (!canvas) return false;
+  // Cache le contexte 2D — getContext() une seule fois tant que le canvas est le même.
+  // FIX HiDPI : si le cache est invalide, ré-appliquer setTransform après getContext().
+  if (!_cinBgCtx || _cinBgCtx.canvas !== canvas) {
+    _cinBgCtx = canvas.getContext('2d');
+    if (!_cinBgCtx) return false;
+    const _dpr = window.devicePixelRatio || 1;
+    _cinBgCtx.setTransform(_dpr, 0, 0, _dpr, 0, 0);
+  }
+  const isPlaying = _getIsPlaying();
+  // Task 14 : gel en pause (ambient/amoled/starfield) ; les cross-fades (performance.now) se terminent — voulu.
+  if (isPlaying) _ambientT += dt;
+  // NOTE T3 : cinema-canvas garde ses signatures ACTUELLES jusqu'à T5 (tableau couleur
+  // par référence + lecture analyser interne) — dt/fft/beat ne leur sont câblés qu'en T5.
   if (cinemaBg === 'waves') {
     drawWavesFrame(_cinBgCtx, _winW, _winH, _cinArtRGBCur, isPlaying);
   } else if (cinemaBg === 'starfield') {
     drawStarfieldFrame(_cinBgCtx, _winW, _winH, _cinArtRGBCur, _ambientT);
-  } else {
-    renderAmbientFrame(_ambientT, _cinBgCtx.canvas, _cinBgCtx, cinemaBg, _cinArtRGB, _ambientColors, _winW, _winH);
+  } else if (cinemaBg !== 'spectrum') {
+    // spectrum : rendu par cinema-viz sur son propre canvas — drawBg ne peint rien
+    // (canvas vidé au switch, cf. applyCinemaBg) mais laisse le cross-fade se terminer.
+    renderAmbientFrame(_ambientT, canvas, _cinBgCtx, cinemaBg, _cinArtRGB, _ambientColors, _winW, _winH);
   }
-}
-
-// A11Y SC 2.3.3 : peint UNE frame statique sur #cinema-bg, sans planifier de rAF.
-function _renderAmbientStatic() {
-  const canvas = document.getElementById('cinema-bg');
-  if (!canvas) return;
-  if (!_cinBgCtx || _cinBgCtx.canvas !== canvas) {
-    _cinBgCtx = canvas.getContext('2d');
-    if (!_cinBgCtx) return;
-    const _dpr = window.devicePixelRatio || 1;
-    _cinBgCtx.setTransform(_dpr, 0, 0, _dpr, 0, 0);
+  // ── Cross-fade overlay — draw old snapshot fading out over the new mode's frame.
+  // Task 8 : plus de restriction par mode — le cross-fade de bascule (MODE_CROSSFADE_MS)
+  // doit fonctionner vers/depuis waves et starfield, pas seulement ambient/amoled.
+  if (_ambientCross) {
+    const { snapshot, start, dur } = _ambientCross;
+    const p    = Math.min(1, (performance.now() - start) / dur);
+    // easeInOutQuad : transition symétrique, ralentit aux extrêmes (moins de "boue" chromatique)
+    const ease = p < 0.5 ? 2 * p * p : 1 - Math.pow(-2 * p + 2, 2) / 2;
+    _cinBgCtx.globalAlpha = 1 - ease;
+    _cinBgCtx.drawImage(snapshot, 0, 0, _winW, _winH); // FIX HiDPI : ctx transformé en CSS px
+    _cinBgCtx.globalAlpha = 1;
+    if (p >= 1) _ambientCross = null;
   }
-  _drawBgFrame(false); // isPlaying=false → phases figées
-}
-
-/** Start the continuous breathing animation RAF loop. No-op if already running. */
-function _startAmbientAnim() {
-  if (_ambientAnimRaf) return;
-  // A11Y SC 2.3.3 : sous reduced-motion, une seule frame statique — jamais de rAF.
-  if (prefersReducedMotion()) { _renderAmbientStatic(); return; }
-  const myGen = _ambientGen; // capturer le token de génération courante
-  let last = performance.now();
-  function loop(now) {
-    // Guard génération : si _stopAmbientAnim() a été appelé depuis, ce loop est orphelin
-    if (myGen !== _ambientGen) return;
-    // Boucle active pour ambient, amoled, waves et starfield
-    if ((cinemaBg !== 'ambient' && cinemaBg !== 'amoled' && cinemaBg !== 'waves' && cinemaBg !== 'starfield') || !_getCinemaOpen() || document.hidden) {
-      last = now;  // prevent time-jump on resume (BUG-D3A-7)
-      _ambientAnimRaf = null;
-      return;
-    }
-    // Task 11 (défrizz) : cap 30fps (skip 1 frame/2) UNIQUEMENT quand la fenêtre n'a
-    // pas le focus — fenêtre focalisée → 60fps pour tous les modes (le viz de la
-    // player-bar est suspendu sous l'overlay depuis T1, le budget GPU est disponible).
-    // L'accumulation temporelle (_ambientT += now - last) garantit une vitesse
-    // d'animation identique quel que soit le framerate effectif.
-    if (!document.hasFocus() && _frameCount++ % 2 !== 0) {
-      _ambientAnimRaf = requestAnimationFrame(loop);
-      return;
-    }
-    // Task 14 : gel en pause (ambient/amoled/starfield) ; les cross-fades (performance.now) se terminent — voulu.
-    if (_getIsPlaying()) _ambientT += now - last;
-    last = now;
-    const canvas = document.getElementById('cinema-bg');
-    if (!canvas) { _ambientAnimRaf = null; return; }
-    // Cache le contexte 2D — getContext() une seule fois tant que le canvas est le même.
-    // FIX HiDPI : si le cache est invalide, ré-appliquer setTransform après getContext().
-    if (!_cinBgCtx || _cinBgCtx.canvas !== canvas) {
-      _cinBgCtx = canvas.getContext('2d');
-      if (!_cinBgCtx) { _ambientAnimRaf = requestAnimationFrame(loop); return; }
-      const _dpr = window.devicePixelRatio || 1;
-      _cinBgCtx.setTransform(_dpr, 0, 0, _dpr, 0, 0);
-    }
-    // P3 fix — _winW/_winH lus depuis le cache, plus de getter DOM par frame
-    _drawBgFrame(_getIsPlaying());
-    // ── Cross-fade overlay — draw old snapshot fading out over the new mode's frame.
-    // Task 8 : plus de restriction par mode — le cross-fade de bascule (MODE_CROSSFADE_MS)
-    // doit fonctionner vers/depuis waves et starfield, pas seulement ambient/amoled.
-    if (_ambientCross) {
-      const { snapshot, start, dur } = _ambientCross;
-      const p    = Math.min(1, (now - start) / dur);
-      // easeInOutQuad : transition symétrique, ralentit aux extrêmes (moins de "boue" chromatique)
-      const ease = p < 0.5 ? 2 * p * p : 1 - Math.pow(-2 * p + 2, 2) / 2;
-      _cinBgCtx.globalAlpha = 1 - ease;
-      _cinBgCtx.drawImage(snapshot, 0, 0, _winW, _winH); // FIX HiDPI : ctx transformé en CSS px
-      _cinBgCtx.globalAlpha = 1;
-      if (p >= 1) _ambientCross = null;
-    }
-    _ambientAnimRaf = requestAnimationFrame(loop);
-  }
-  _ambientAnimRaf = requestAnimationFrame(loop);
+  // T3 conservateur : waves/starfield considérés toujours actifs (raffiné en T5 avec
+  // l'epsilon d'énergie getMaxBandEnergy() > _EPS_BAND une fois le FFT partagé câblé).
+  return !!_ambientCross || !isArtColorConverged()
+      || cinemaBg === 'waves' || cinemaBg === 'starfield';
 }
 
 function _updateAmbientGradient() {
@@ -362,7 +352,7 @@ function _updateAmbientGradient() {
     if (!_cinBgCtx) return;
     _cinBgCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
     // Pas de _buildAmbientColors ni de cross-fade pour AMOLED
-    _startAmbientAnim();
+    wakeCinemaLoop();
     return;
   }
 
@@ -373,7 +363,7 @@ function _updateAmbientGradient() {
     _cinBgCtx = canvas.getContext('2d');
     if (!_cinBgCtx) return;
     _cinBgCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    _startAmbientAnim();
+    wakeCinemaLoop();
     return;
   }
 
@@ -385,7 +375,7 @@ function _updateAmbientGradient() {
     if (!_cinBgCtx) return;
     _cinBgCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
     if (!_starsInited) { initStarfield(); _starsInited = true; }
-    _startAmbientAnim();
+    wakeCinemaLoop();
     return;
   }
 
@@ -412,13 +402,13 @@ function _updateAmbientGradient() {
     _ambientCross = { snapshot, start: performance.now(), dur: AMBIENT_CROSSFADE_MS };
   }
 
-  _startAmbientAnim();
+  wakeCinemaLoop();
 }
 
 // ── Wrappers exportés pour cinema.js ────────────────────────
 
-/** Démarre l'animation ambient (visibilitychange handler dans cinema.js). */
-export function startAmbientAnim() { _startAmbientAnim(); }
+/** Réveille la boucle cinéma (visibilitychange handler dans cinema.js). */
+export function startAmbientAnim() { wakeCinemaLoop(); }
 
 /** Arrête l'animation ambient (closeCinema dans cinema.js). */
 export function stopAmbientAnim()  { _stopAmbientAnim(); }

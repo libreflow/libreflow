@@ -2490,6 +2490,104 @@ section('components/lf-toast-stack.logic.js -- import-smoke');
   }
 
   // =============================================================================
+  // Task 3 (cycle 2) — cinema-bg.js devient renderer passif : plus de rAF local
+  // (la boucle MAÎTRE vit dans cinema-loop.js), stepArtColorLerp(dtN) devient
+  // framerate-indépendant (k = 1 - (1-K)^dtN), isArtColorConverged()/drawBgFrame()
+  // exportées. cinema.js n'est PAS câblé dans ce cycle (T4 le fait, une fois
+  // drawVizFrame disponible) — cf. brief Task 3, scope change.
+  // =============================================================================
+  section('Task 3 cycle 2 -- cinema-bg.js renderer passif (drawBgFrame, stepArtColorLerp dtN)');
+
+  try {
+    const fs = require('fs'), path = require('path');
+    const root = path.join(__dirname, '../..');
+    const read = f => fs.readFileSync(path.join(root, f), 'utf8');
+    const bgSrc = read('frontend/src/cinema-bg.js');
+
+    // (a) scan : aucun requestAnimationFrame dans cinema-bg.js — la boucle vit
+    // désormais dans cinema-loop.js (renderer passif).
+    assert(!/requestAnimationFrame/.test(bgSrc),
+      'cinema-bg.js: aucun requestAnimationFrame (renderer passif, Task 3)');
+
+    // (b) scan : cinema-bg.js ne référence plus getByteFrequencyData ni
+    // document.hasFocus() — FFT et cadence/focus sont la responsabilité de
+    // cinema-loop.js (déjà mergé, Task 2).
+    assert(!/getByteFrequencyData/.test(bgSrc),
+      'cinema-bg.js: aucun getByteFrequencyData (FFT lue par cinema-loop.js)');
+    assert(!/document\.hasFocus\(\)/.test(bgSrc),
+      'cinema-bg.js: aucun document.hasFocus() (cadence décidée par cinema-loop.js)');
+
+    // (d) drawBgFrame(dt, fft, beat)/isArtColorConverged() exportées — vérifié par
+    // scan (drawBgFrame touche document.getElementById ; pas de DOM dans ce runner
+    // Node, cf. (c) ci-dessous pour l'exercice réel des fonctions pure-numériques).
+    assert(/export function drawBgFrame\(dt, fft, beat\)/.test(bgSrc),
+      'cinema-bg.js exporte drawBgFrame(dt, fft, beat)');
+    assert(/export function isArtColorConverged/.test(bgSrc),
+      'cinema-bg.js exporte isArtColorConverged()');
+  } catch (e) {
+    console.error('  KO  cinema Task 3 cycle 2 scans crashed:', e.message);
+    _ko++;
+  }
+
+  // (c) stepArtColorLerp(dtN) : NB — import ESM réel impossible ici (cinema-bg.js
+  // importe ui.js -> composants Lit -> lit-html, qui exige un vrai DOM au chargement
+  // du module, ex: `TypeError: l.createTreeWalker is not a function` sous Node nu ;
+  // ce runner est "zero deps" et n'embarque pas jsdom). Même pattern que le beat
+  // detector plus haut dans ce fichier (section "cinema Task 3") : logique reproduite
+  // inline (house style) + garde anti-drift qui vérifie la formule EXACTE dans la
+  // source réelle. Converge vers la cible ; dtN=2 converge strictement plus vite que
+  // dtN=1 sur une frame (k = 1 - (1-K)^dtN) ; idempotent une fois convergé.
+  try {
+    const K = 0.06; // == _LERP_K dans cinema-bg.js (vérifié par la garde anti-drift ci-dessous)
+    function stepInline(cur, target, dtN) {
+      if (Math.abs(cur[0] - target[0]) < 0.5 && Math.abs(cur[1] - target[1]) < 0.5 && Math.abs(cur[2] - target[2]) < 0.5) {
+        cur[0] = target[0]; cur[1] = target[1]; cur[2] = target[2];
+        return true;
+      }
+      const k = 1 - Math.pow(1 - K, dtN || 1);
+      cur[0] += (target[0] - cur[0]) * k;
+      cur[1] += (target[1] - cur[1]) * k;
+      cur[2] += (target[2] - cur[2]) * k;
+      return false;
+    }
+
+    // dtN=1 vs dtN=2 depuis la même distance de départ (noir → blanc)
+    const target = [255, 255, 255];
+    const cur1 = [0, 0, 0];
+    stepInline(cur1, target, 1);
+    const cur2 = [0, 0, 0];
+    stepInline(cur2, target, 2);
+    assert(cur2[0] > cur1[0],
+      `stepArtColorLerp: dtN=2 converge plus vite que dtN=1 en une frame (r1=${cur1[0].toFixed(3)}, r2=${cur2[0].toFixed(3)})`);
+
+    // convergence complète après suffisamment de frames
+    const cur3 = [0, 0, 0];
+    let iter = 0, converged = false;
+    while (!converged && iter < 2000) { converged = stepInline(cur3, target, 1); iter++; }
+    assert(converged, `stepArtColorLerp: converge vers la cible en ${iter} frames`);
+    assert(cur3[0] === target[0] && cur3[1] === target[1] && cur3[2] === target[2],
+      'stepArtColorLerp: snap exact sur la cible une fois convergé');
+
+    // idempotent une fois convergé (rappel ne s'éloigne pas de la cible)
+    const before = [...cur3];
+    stepInline(cur3, target, 1);
+    assert(cur3[0] === before[0] && cur3[1] === before[1] && cur3[2] === before[2],
+      "stepArtColorLerp: idempotent une fois convergé (rappel ne s'éloigne pas de la cible)");
+
+    // garde anti-drift : la formule ET _LERP_K réels dans cinema-bg.js correspondent
+    // exactement à la copie inline ci-dessus.
+    const fs = require('fs'), path = require('path');
+    const bgSrc = fs.readFileSync(path.join(__dirname, '../../frontend/src/cinema-bg.js'), 'utf8');
+    assert(/const k = 1 - Math\.pow\(1 - _LERP_K, dtN \|\| 1\)/.test(bgSrc),
+      'cinema-bg.js: stepArtColorLerp() implémente k = 1 - (1-K)^dtN (formule framerate-indépendante)');
+    assert(new RegExp(`_LERP_K\\s*=\\s*${K}[^0-9]`).test(bgSrc),
+      `cinema-bg.js: _LERP_K vaut ${K} (cohérent avec la copie inline du test)`);
+  } catch (e) {
+    console.error('  KO  cinema-bg.js stepArtColorLerp (logique inline) crashed:', e.message);
+    _ko++;
+  }
+
+  // =============================================================================
   // cinema perf — boucles rAF, allocations, fuites GSAP (audit perf 2026-07-02)
   // P1 : viz.js (player bar) rend sous l'overlay cinéma — doit se suspendre.
   // P2 : viz.js sans garde document.hidden.
@@ -2560,11 +2658,13 @@ section('components/lf-toast-stack.logic.js -- import-smoke');
     assert(/_starBgFillCache/.test(canvasSrc),
       'cinema-canvas.js : fond teinté de drawStarfieldFrame mis en cache');
 
-    // (bonus P3) cinema-bg.js : innerWidth/innerHeight mis en cache, boucle RAF ne relit pas le DOM
-    const loopBody = /function loop\(now\)[\s\S]*?\n  \}\n/.exec(bgSrc)?.[0] || '';
-    assert(loopBody.length > 0, 'cinema-bg.js : boucle RAF loop() trouvée');
-    assert(!/window\.innerWidth|window\.innerHeight/.test(loopBody),
-      'cinema-bg.js : la boucle RAF ne lit plus window.innerWidth/innerHeight (P3 fix)');
+    // (bonus P3) cinema-bg.js : innerWidth/innerHeight mis en cache. Task 3 : plus de
+    // boucle RAF locale — drawBgFrame() (renderer passif appelé par cinema-loop.js)
+    // reprend la garantie : elle ne relit pas window.innerWidth/innerHeight par frame.
+    const drawBgBody = /export function drawBgFrame\([^)]*\)\s*\{[\s\S]*?\n\}\n/.exec(bgSrc)?.[0] || '';
+    assert(drawBgBody.length > 0, 'cinema-bg.js : drawBgFrame() trouvée');
+    assert(!/window\.innerWidth|window\.innerHeight/.test(drawBgBody),
+      'cinema-bg.js : drawBgFrame() ne lit plus window.innerWidth/innerHeight (P3 fix)');
     assert(/export function updateCachedWinSize/.test(bgSrc),
       'cinema-bg.js exporte updateCachedWinSize() (mise à jour par le handler resize de cinema.js)');
     assert(/updateCachedWinSize\(\)/.test(read('frontend/src/cinema.js')),
@@ -2616,14 +2716,13 @@ section('components/lf-toast-stack.logic.js -- import-smoke');
     assert(/if\s*\([^)]*prefersReducedMotion\(\)[^)]*\)\s*return null;/.test(snapshotBody),
       'cinema-bg.js : _snapshotModeCanvas() retourne null sous reduced-motion (dry-cut garanti, pas de snapshot cross-fade)');
 
-    // (b) amoled soumis au même cap 30fps que les autres modes — l'exemption a disparu
-    // de la condition de frame-skip de la boucle rAF.
-    const loopBody = /function loop\(now\)[\s\S]*?\n  \}\n/.exec(bgSrc)?.[0] || '';
-    assert(loopBody.length > 0, 'cinema-bg.js : boucle RAF loop() trouvée');
-    assert(/_frameCount\+\+ % 2/.test(loopBody),
-      'loop() applique le frame-skip du cap 30fps');
-    assert(!/cinemaBg\s*!==\s*['"]amoled['"]\s*&&\s*_frameCount/.test(loopBody),
-      'amoled ne bénéficie plus d\'une exemption au cap 30fps (Task 8, ex cinema-bg.js:190-193)');
+    // (b) amoled soumis au même cap 30fps que les autres modes — l'exemption a disparu.
+    // Task 3 : le frame-skip 30fps/60fps a migré dans cinema-loop.js (loopCadence),
+    // qui traite déjà amoled sans exemption (cf. Task 2 test : loopCadence('amoled',
+    // true) === 2, section "cinema-loop.js"). cinema-bg.js n'a plus de cadence
+    // propre — on vérifie juste qu'aucun résidu local (_frameCount) ne subsiste.
+    assert(!/_frameCount/.test(bgSrc),
+      'cinema-bg.js : plus de _frameCount local (cadence déléguée à cinema-loop.js)');
 
     // (c) design-system.css : tokens de coin/horloge cinéma en clamp() (plus de px fixes)
     for (const tok of ['--cinema-corner-top', '--cinema-corner-x', '--cinema-clock-inset']) {
@@ -3037,13 +3136,16 @@ section('components/lf-toast-stack.logic.js -- import-smoke');
     const BG  = read('frontend/src/cinema-bg.js');
     const CSS = read('frontend/src/style.css');
 
-    // (a) le frame-skip 30fps de la boucle rAF dépend du focus fenêtre — fenêtre
-    // focalisée → 60fps pour tous les modes (le viz player-bar est suspendu sous
-    // l'overlay depuis T1). Plus de cap inconditionnel.
-    assert(/!document\.hasFocus\(\)\s*&&\s*_frameCount\+\+\s*%\s*2/.test(BG),
-      'cinema-bg.js: skip 1 frame/2 conditionné à !document.hasFocus() (fenêtre focalisée → 60fps)');
-    assert(!/if\s*\(\s*_frameCount\+\+\s*%\s*2\s*!==\s*0\s*\)/.test(BG),
-      'cinema-bg.js: plus de cap 30fps inconditionnel dans la boucle rAF');
+    // (a) le frame-skip 30fps dépend du focus fenêtre — fenêtre focalisée → 60fps
+    // pour tous les modes (le viz player-bar est suspendu sous l'overlay depuis T1).
+    // Task 3 : cette logique a migré dans cinema-loop.js (loopCadence, testée dans
+    // la section "Task 2 -- cinema-loop.js" : loopCadence('waves', true) === 1,
+    // loopCadence('waves', false) === 2). cinema-bg.js n'a plus de boucle ni de
+    // check hasFocus locaux (renderer passif).
+    assert(!/document\.hasFocus/.test(BG),
+      'cinema-bg.js: plus de check document.hasFocus local (délégué à cinema-loop.js)');
+    assert(!/requestAnimationFrame/.test(BG),
+      'cinema-bg.js: plus de requestAnimationFrame local (Task 3 -- renderer passif)');
 
     // (b) bascule VERS spectrum : le snapshot de cross-fade de mode n'est jamais
     // retenu — la boucle rAF ambient ne tourne pas dans ce mode (rendu par
@@ -3230,8 +3332,10 @@ section('components/lf-toast-stack.logic.js -- import-smoke');
     // en pause, ambient (drift), amoled (halo) et starfield (scintillement)
     // gèlent comme les vagues (qui passent déjà par isPlaying).
     const BG3 = read('frontend/src/cinema-bg.js');
-    assert(/if\s*\(\s*_getIsPlaying\(\)\s*\)\s*_ambientT\s*\+=\s*now\s*-\s*last/.test(BG3),
-      'cinema-bg.js: _ambientT n\'avance que si _getIsPlaying() (gel en pause pour les 4 modes canvas)');
+    // Task 3 : _ambientT avance de dt (fourni par cinema-loop.js) au lieu de now-last
+    // (plus de timestamp local) -- même invariant : gel en pause pour les 4 modes canvas.
+    assert(/if\s*\(\s*isPlaying\s*\)\s*_ambientT\s*\+=\s*dt/.test(BG3),
+      'cinema-bg.js: _ambientT n\'avance que si isPlaying (gel en pause pour les 4 modes canvas)');
 
     // (b) le fond starfield est teinté depuis les 3 canaux de la couleur d'art
     // (plus de rgba(0,0,<bleu seul>) — un album rouge teintait un ciel noir pur).
