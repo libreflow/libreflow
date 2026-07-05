@@ -100,8 +100,13 @@ with:
       font-family: var(--lf-font-ui, var(--font-body));
     }
     /* Corner fallback — same values as the previous default :host rule,
-       restored whenever the sidebar isn't a normal full-height column. */
-    :host-context(#app.np-full),
+       restored whenever the sidebar isn't a normal full-height column.
+       body.np-full (not #app.np-full): <lf-toast-stack> is a SIBLING of
+       #app under <body> (appended via document.body.appendChild in
+       ui.js), not a descendant, so :host-context() needs a real ancestor
+       to match — see Step 2b, which mirrors the np-full class onto
+       <body> for exactly this reason. */
+    :host-context(body.np-full),
     :host-context(html[data-platform="mobile"]) {
       bottom: auto;
       left: auto;
@@ -124,10 +129,53 @@ with:
 
 The two fallback blocks MUST be placed immediately after the base `:host` rule and before `.t-item { ... }` — the `@media` block's `:host` selector has identical specificity to the base `:host` rule, so it only wins the cascade because it comes later in source order. Placing it earlier, or after unrelated rules, does not change correctness but placing it before the base rule WOULD break the fallback (the base rule would then win the tie instead).
 
+- [ ] **Step 2b: Mirror the `np-full` class onto `<body>` in `nowplaying.js`**
+
+Step 2's `body.np-full` selector needs `<body>` to actually carry the `np-full` class for the now-playing-fullscreen fallback to work — `nowplaying.js` currently only toggles it on `#app`. Run:
+
+Run: `grep -n "np-full" frontend/src/nowplaying.js`
+
+Expected output (current state, for reference):
+
+```
+258:    document.getElementById('app')?.classList.remove('np-full');
+266:  document.getElementById('app')?.classList.toggle('np-full', _fullscreen);
+```
+
+If the grep output differs from the above, stop and re-read the surrounding ~15 lines around both call sites before editing — later edits assume this exact content.
+
+In `frontend/src/nowplaying.js`, at the first call site, replace:
+
+```js
+    document.getElementById('app')?.classList.remove('np-full');
+```
+
+with:
+
+```js
+    document.getElementById('app')?.classList.remove('np-full');
+    document.body.classList.remove('np-full');
+```
+
+At the second call site, replace:
+
+```js
+  document.getElementById('app')?.classList.toggle('np-full', _fullscreen);
+```
+
+with:
+
+```js
+  document.getElementById('app')?.classList.toggle('np-full', _fullscreen);
+  document.body.classList.toggle('np-full', _fullscreen);
+```
+
+Do NOT remove or change the existing `#app` calls — `style.css`'s `.np-full { --sb: 0px; }` and `.np-full #sb { overflow: hidden; pointer-events: none; }` still depend on `#app.np-full` and must keep working exactly as before. This step only ADDS a parallel call targeting `document.body` at each site, so `<body>` genuinely carries the class whenever `#app` does.
+
 - [ ] **Step 3: Run the JS unit test suite to confirm no regression**
 
 Run: `npm test`
-Expected: same pass count as the current baseline (1429/1429 as of the last recorded run) — this task touched no logic file.
+Expected: same pass count as the current baseline (1429/1429 as of the last recorded run) — Step 2b's `nowplaying.js` change is two lines mirroring an existing class toggle, not new logic, and there is no existing test coverage of the `np-full` toggle in `frontend/tests/core.test.cjs` to regress.
 
 - [ ] **Step 4: Regenerate and verify the visual snapshot baselines**
 
@@ -152,7 +200,7 @@ Then in the running app (or via a throwaway Playwright script against the dev se
 
 1. On a normal desktop-width window (sidebar visible as a full column, not now-playing fullscreen), trigger a toast → confirm it appears docked at the bottom of the sidebar, spanning close to the sidebar's width, sitting above the player bar.
 2. Drag the sidebar resize handle (`#sb-resize`) to change the sidebar width → trigger a toast → confirm its width tracks the resized sidebar.
-3. Enter now-playing fullscreen (the view/mode that adds the `np-full` class to `#app` — check `frontend/src/nowplaying.js` for how it's triggered if unsure) → trigger a toast → confirm it falls back to the top-right corner, not hidden behind the collapsed sidebar.
+3. Enter now-playing fullscreen (the view/mode that adds the `np-full` class to both `#app` and `<body>`, per Step 2b — check `frontend/src/nowplaying.js` for how it's triggered if unsure) → trigger a toast → confirm it falls back to the top-right corner, not hidden behind the collapsed sidebar.
 4. Resize the window below 719px width → trigger a toast → confirm it falls back to the top-right corner, not squeezed into the 54px icon-only sidebar.
 5. Trigger 3 toasts in quick succession while docked → confirm the newest lands nearest the bottom (sidebar/player-bar boundary), older ones pushed upward, and the stack doesn't overflow above the titlebar even with several toasts visible on a short window.
 6. If a mobile platform build/profile is available to test, confirm the same top-right fallback there; if not testable in this environment, disclose that explicitly rather than fabricating a check.
@@ -162,9 +210,11 @@ Expected: all 6 checks pass. If any fails, stop and fix before committing.
 - [ ] **Step 6: Commit**
 
 ```bash
-git add frontend/src/components/lf-toast-stack.js frontend/tests/visual/__snapshots__/lit-toast.spec.js-snapshots/lf-toast-info-chromium-win32.png frontend/tests/visual/__snapshots__/lit-toast.spec.js-snapshots/lf-toast-error-chromium-win32.png
+git add frontend/src/components/lf-toast-stack.js frontend/src/nowplaying.js frontend/tests/visual/__snapshots__/lit-toast.spec.js-snapshots/lf-toast-info-chromium-win32.png frontend/tests/visual/__snapshots__/lit-toast.spec.js-snapshots/lf-toast-error-chromium-win32.png
 git commit -m "feat(ui): dock toasts to sidebar bottom, corner fallback for np-full/mobile/compact"
 ```
+
+(As executed, this shipped as two separate commits — `7f9f3a3` for the CSS docking + corner-fallback blocks, and a follow-up `036518c` once the `#app.np-full` selector was found broken and Step 2b's fix was applied. A from-scratch execution of this corrected plan can do it in one commit as shown above, since Step 2 and Step 2b are now both present up front.)
 
 ---
 
