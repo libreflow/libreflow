@@ -35,15 +35,37 @@ export class LfToastStack extends LitElement {
     /* Google Material Snackbar look — single dark slab, accent via icon + thin progress bar. */
     :host {
       position: fixed;
-      top: calc(var(--tb, 32px) + 12px);
-      right: var(--sp-4, 16px);
+      bottom: calc(var(--pb) + var(--sp-2));
+      left: var(--sp-2);
+      width: calc(var(--sb) - var(--sp-4));
       display: flex;
       flex-direction: column-reverse;
-      align-items: flex-end;
+      align-items: stretch;
       gap: 8px;
       z-index: 9999;
       pointer-events: none;
       font-family: var(--lf-font-ui, var(--font-body));
+    }
+    /* Corner fallback — same values as the previous default :host rule,
+       restored whenever the sidebar isn't a normal full-height column. */
+    :host-context(#app.np-full),
+    :host-context(html[data-platform="mobile"]) {
+      bottom: auto;
+      left: auto;
+      width: auto;
+      top: calc(var(--tb, 32px) + 12px);
+      right: var(--sp-4, 16px);
+      align-items: flex-end;
+    }
+    @media (max-width: 719px) {
+      :host {
+        bottom: auto;
+        left: auto;
+        width: auto;
+        top: calc(var(--tb, 32px) + 12px);
+        right: var(--sp-4, 16px);
+        align-items: flex-end;
+      }
     }
     .t-item {
       pointer-events: auto;
