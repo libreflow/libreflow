@@ -256,6 +256,7 @@ export function closeNowPlaying() {
   if (_fullscreen) {
     _fullscreen = false;
     document.getElementById('app')?.classList.remove('np-full');
+    document.body.classList.remove('np-full');
   }
   _showViewRaw(_prevView);
   set('view', _prevView);
@@ -264,6 +265,7 @@ export function closeNowPlaying() {
 export function toggleNowPlayingFullscreen() {
   _fullscreen = !_fullscreen;
   document.getElementById('app')?.classList.toggle('np-full', _fullscreen);
+  document.body.classList.toggle('np-full', _fullscreen);
   const btn = document.querySelector('#vnp .vnp-full-btn');
   if (btn) {
     btn.innerHTML = _fullscreen ? _COMPRESS_ICON : _EXPAND_ICON;

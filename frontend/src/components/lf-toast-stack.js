@@ -48,7 +48,7 @@ export class LfToastStack extends LitElement {
     }
     /* Corner fallback — same values as the previous default :host rule,
        restored whenever the sidebar isn't a normal full-height column. */
-    :host-context(#app.np-full),
+    :host-context(body.np-full),
     :host-context(html[data-platform="mobile"]) {
       bottom: auto;
       left: auto;
