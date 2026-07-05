@@ -1424,6 +1424,32 @@ section('tlistZoom.js -- _nextZoomLevel cycling');
 }());
 
 // =============================================================================
+// tlistZoom — --tr-h / --tart-size CSS tokens (design-system.css)
+// =============================================================================
+section('tlistZoom.js -- --tr-h / --tart-size tokens (design-system.css)');
+
+(function () {
+  const fs   = require('fs');
+  const path = require('path');
+  const css  = fs.readFileSync(path.join(__dirname, '../src/design-system.css'), 'utf8');
+
+  assert(/--tr-h:\s*56px/.test(css), 'base --tr-h (comfortable/default) = 56px');
+  assert(/--tart-size:\s*40px/.test(css), 'base --tart-size (comfortable/default) = 40px');
+  assert(
+    /:root\[data-tlist-zoom="compact"\]\s*\{\s*--tr-h:\s*44px;\s*--tart-size:\s*32px;\s*\}/.test(css),
+    'compact overrides --tr-h:44px and --tart-size:32px together'
+  );
+  assert(
+    /:root\[data-tlist-zoom="spacious"\]\s*\{\s*--tr-h:\s*72px;\s*--tart-size:\s*56px;\s*\}/.test(css),
+    'spacious overrides --tr-h:72px and --tart-size:56px together'
+  );
+  assert(
+    !/data-tlist-zoom="comfortable"/.test(css),
+    'no leftover [data-tlist-zoom="comfortable"] selector (renamed to spacious/removed)'
+  );
+}());
+
+// =============================================================================
 // X. bench.cjs --json flag emits one JSON line per scenario
 // =============================================================================
 section('bench.cjs --json — emits valid JSON lines');

@@ -1244,15 +1244,19 @@ body.sb-resizing { cursor: col-resize; user-select: none; }
 
 /* Artwork track — légèrement plus grand */
 .tart {
-  width: var(--icon-36); height: var(--icon-36); border-radius: var(--r);
+  width: var(--tart-size); height: var(--tart-size); border-radius: var(--r);
   background: var(--bg4);
   display: flex; align-items: center; justify-content: center;
   overflow: hidden; flex-shrink: 0; position: relative;
-  /* .tart (36px) < colonne art de .tr (var(--art-list), 56px) : une grid-item avec
-     une largeur explicite n'est PAS étirée par le "stretch" par défaut, elle se
-     cale au bord de départ de la colonne — d'où la pochette collée à gauche au
-     lieu d'être centrée dans sa colonne (visible surtout au survol). */
+  /* .tart (var(--tart-size), 32-56px selon densité) < colonne art de .tr
+     (var(--art-list), 56px fixe à tout niveau) : une grid-item avec une largeur
+     explicite n'est PAS étirée par le "stretch" par défaut, elle se cale au bord
+     de départ de la colonne — d'où la pochette collée à gauche au lieu d'être
+     centrée dans sa colonne (visible surtout au survol). */
   justify-self: center;
+  /* --tart-size grandit/rétrécit avec la densité (tlistZoom.js) — transition
+     douce plutôt qu'un saut brutal quand l'utilisateur change de niveau. */
+  transition: width var(--dur-mid) var(--smooth), height var(--dur-mid) var(--smooth);
 }
 .tart img { width: 100%; height: 100%; object-fit: cover; display: block;
             transition: transform var(--dur-mid) var(--spring-soft); } /* BUG FIX cinéma : transform sur le contenu, pas le conteneur */

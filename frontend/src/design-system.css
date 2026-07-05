@@ -574,7 +574,8 @@ html[data-mode="light"] {
   --art-cover:    100px;   /* cover placeholder modal */
   --art-hero:     148px;   /* hero cover — taille pleine */
   --art-list:      56px;   /* colonne artwork dans rangée track (grid) */
-  --tr-h:          48px;   /* hauteur d'une ligne piste — pilotée par data-tlist-zoom */
+  --tr-h:          56px;   /* hauteur d'une ligne piste (défaut = Comfortable) — pilotée par data-tlist-zoom */
+  --tart-size:     40px;   /* taille pochette .tart (défaut = Comfortable) — pilotée par data-tlist-zoom */
   /* rem (pas em) : .tr et #tlist-col-hdr n'ont pas la même taille de police —
      un em résoudrait à une largeur différente dans chacun et désalignerait
      la colonne album entre l'en-tête et les lignes. */
@@ -1118,8 +1119,8 @@ html[data-mode="light"] {
    (cf. .tr { min-height: 44px }, CLAUDE.md §2.9) — descendre en dessous
    recréerait le même désaccord via min-height qui regonflerait la ligne
    au-delà de ce que --tr-h annonce. */
-:root[data-tlist-zoom="compact"]     { --tr-h: 44px; }
-:root[data-tlist-zoom="comfortable"] { --tr-h: 60px; }
+:root[data-tlist-zoom="compact"]  { --tr-h: 44px; --tart-size: 32px; }
+:root[data-tlist-zoom="spacious"] { --tr-h: 72px; --tart-size: 56px; }
 
 /* ── Thèmes couleur (accent par défaut = Electric Indigo via --accent) ─── */
 [data-theme="indigo"] { --g:#8B6BFF; --g-rgb:139,107,255; --gd:rgba(139,107,255,.14); --gg:rgba(139,107,255,.28); }
