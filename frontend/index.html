@@ -1350,6 +1350,10 @@
     <div id="cinema-clock-date" class="ck-date"></div>
   </div>
 
+  <!-- Task 1 (layout grid) : wrapper -- zone de grille side-r (Task 2). Regroupe
+       piste-suivante/hint-shuffle (superposés, un seul visible via opacity togglée
+       en JS) et le panneau file d'attente (ancré relativement à ce wrapper). -->
+  <div class="cinema-side-r">
   <!-- Piste suivante (bottom-right, avec les contrôles) — Task 9 : bouton dépliant le
        panneau file d'attente (#cinema-queue-panel). Pas d'attribut hidden sur ce
        bouton : la visibilité est gérée via .cin-has-next + opacity CSS (display:none
@@ -1391,19 +1395,25 @@
       <span data-i18n="cinema_shuffle_on">Lecture aléatoire</span>
     </div>
   </div>
+  </div>
 
   <!-- Boutons de coin -->
   <button id="cinema-bg-btn" class="cinema-corner-btn" data-action="cycle-cinema-bg" title="" data-i18n-title="t_cinema_bg" data-i18n-aria="aria_cinema_bg" aria-label="Changer l'arrière-plan du cinéma">
     <!-- icône dynamique selon le mode — mis à jour par updateCinemaBgBtn() -->
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 3H8L6 7h12l-2-4z" opacity=".5"/></svg>
   </button>
-  <button id="cinema-fs-btn" class="cinema-corner-btn" data-action="cinema-fullscreen" title="" data-i18n-title="t_cinema_fs" data-i18n-aria="aria_cinema_fs" aria-label="Basculer en plein écran">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>
-  </button>
-  <button class="cinema-close cinema-corner-btn" data-action="close-cinema" title="" data-i18n-title="t_cinema_close" data-i18n-aria="aria_cinema_close" aria-label="Fermer le mode cinéma">
-    <svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-  </button>
+  <!-- Task 1 (layout grid) : wrapper -- zone de grille corner-r (Task 2). -->
+  <div class="cinema-corner-r">
+    <button id="cinema-fs-btn" class="cinema-corner-btn" data-action="cinema-fullscreen" title="" data-i18n-title="t_cinema_fs" data-i18n-aria="aria_cinema_fs" aria-label="Basculer en plein écran">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>
+    </button>
+    <button class="cinema-close cinema-corner-btn" data-action="close-cinema" title="" data-i18n-title="t_cinema_close" data-i18n-aria="aria_cinema_close" aria-label="Fermer le mode cinéma">
+      <svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    </button>
+  </div>
 
+  <!-- Task 1 (layout grid) : wrapper -- zone de grille hero (Task 2). -->
+  <div class="cinema-hero">
   <div class="cinema-art-wrap" id="cinema-art-wrap">
     <img id="cinema-art-img" alt="" style="display:none">
     <div id="cinema-art-em"><svg viewBox="0 0 24 24" width="48" height="48" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" opacity=".3"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg></div>
@@ -1470,6 +1480,7 @@
                data-input-action="cinema-vol">
       </div>
     </div>
+  </div>
   </div>
 </div>
 

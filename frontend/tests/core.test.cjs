@@ -4030,6 +4030,48 @@ section('components/lf-toast-stack.logic.js -- import-smoke');
     _ko++;
   }
 
+  // =============================================================================
+  // cinema layout grid — repositionnement en grille (2026-07-05)
+  // =============================================================================
+  try {
+    const fs = require('fs'), path = require('path');
+    const root = path.join(__dirname, '../..');
+    const read = f => fs.readFileSync(path.join(root, f), 'utf8');
+
+    section('cinema layout grid Task 1 -- wrappers corner-r / hero / side-r');
+
+    const HTML1 = read('frontend/index.html');
+    const iClock      = HTML1.indexOf('id="cinema-clock"');
+    const iSideR      = HTML1.indexOf('class="cinema-side-r"');
+    const iNext       = HTML1.indexOf('id="cinema-next"');
+    const iQueuePanel = HTML1.indexOf('id="cinema-queue-panel"');
+    const iShuffle    = HTML1.indexOf('id="cinema-shuffle-hint"');
+    const iBgBtn      = HTML1.indexOf('id="cinema-bg-btn"');
+    const iCornerR    = HTML1.indexOf('class="cinema-corner-r"');
+    const iFsBtn      = HTML1.indexOf('id="cinema-fs-btn"');
+    const iClose      = HTML1.indexOf('cinema-close');
+    const iHero       = HTML1.indexOf('class="cinema-hero"');
+    const iArtWrap    = HTML1.indexOf('id="cinema-art-wrap"');
+    const iInfo       = HTML1.indexOf('id="cinema-info"');
+    const iProg       = HTML1.indexOf('class="cinema-prog"');
+    const iControls   = HTML1.indexOf('id="cinema-controls"');
+
+    const allFound = [iClock, iSideR, iNext, iQueuePanel, iShuffle, iBgBtn, iCornerR,
+      iFsBtn, iClose, iHero, iArtWrap, iInfo, iProg, iControls].every(i => i !== -1);
+    assert(allFound,
+      'index.html: horloge, les 3 wrappers et tous leurs enfants existent');
+
+    assert(allFound && iClock < iSideR && iSideR < iNext && iNext < iQueuePanel && iQueuePanel < iShuffle,
+      '.cinema-side-r precede piste-suivante < panneau-file-d\'attente < hint-shuffle, apres l\'horloge');
+    assert(allFound && iShuffle < iBgBtn && iBgBtn < iCornerR && iCornerR < iFsBtn && iFsBtn < iClose,
+      '#cinema-bg-btn reste hors wrapper, suivi de .cinema-corner-r contenant fs-btn < close');
+    assert(allFound && iClose < iHero && iHero < iArtWrap && iArtWrap < iInfo && iInfo < iProg && iProg < iControls,
+      '.cinema-hero contient art-wrap < info < prog < controls, apres .cinema-corner-r');
+  } catch (e) {
+    console.error('  KO  cinema layout grid Task 1 scans crashed:', e.message);
+    _ko++;
+  }
+
   // -- Résultat -----------------------------------------------------------
   console.log('\n═══════════════════════════════════════════════════════════');
   console.log(`  Total : ${_ok + _ko}   OK: ${_ok}   KO: ${_ko}`);
