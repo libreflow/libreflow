@@ -67,6 +67,16 @@ export class LfToastStack extends LitElement {
         align-items: flex-end;
       }
     }
+    /* Corner fallback floor for .t-item — mirrors the same three conditions
+       :host uses above; the default docked .t-item has no floor (min-width: 0)
+       so it stretches to fill whatever width :host computes from --sb. */
+    :host-context(body.np-full) .t-item,
+    :host-context(html[data-platform="mobile"]) .t-item {
+      min-width: 260px;
+    }
+    @media (max-width: 719px) {
+      .t-item { min-width: 260px; }
+    }
     .t-item {
       pointer-events: auto;
       position: relative;
@@ -80,7 +90,7 @@ export class LfToastStack extends LitElement {
       display: flex;
       align-items: center;
       gap: 12px;
-      min-width: 260px;
+      min-width: 0;
       max-width: 568px;
       font-size: 14px;
       line-height: 20px;
