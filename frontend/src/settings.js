@@ -339,7 +339,7 @@ function _syncMotionPrefSelect() {
 }
 
 function _syncTlistZoomRadios() {
-  const cur = get('tlistZoom') || 'normal';
+  const cur = get('tlistZoom') || 'comfortable';
   document.querySelectorAll('input[name="tlist-zoom"]').forEach(r => {
     r.checked = r.value === cur;
   });

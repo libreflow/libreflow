@@ -101,7 +101,7 @@ async function _doSaveCfg() {
     const formatFilter  = get('formatFilter') || '';
     const cdCopyrightAck = get('cdCopyrightAck') === true; // CONFORMITÉ-CD
     const lastSettingsTab = get('lastSettingsTab') || 'appearance'; // UX-Ergo : mémoire onglet
-    const tlistZoom      = get('tlistZoom') || 'normal';            // zoom liste pistes
+    const tlistZoom      = get('tlistZoom') || 'comfortable';       // zoom liste pistes
     const motionPref     = get('motionPref') || 'full';             // Task 10 : Système/Complètes/Réduites
 
     const likedIds    = liked instanceof Set ? [...liked] : [];

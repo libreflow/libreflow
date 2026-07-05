@@ -167,7 +167,7 @@
  * Niveaux de zoom de la liste de pistes.
  * Correspond aux valeurs de TLIST_ZOOM_LEVELS dans tlistZoom.js.
  *
- * @typedef {'compact'|'normal'|'comfortable'} ZoomLevel
+ * @typedef {'compact'|'comfortable'|'spacious'} ZoomLevel
  */
 
 /**
