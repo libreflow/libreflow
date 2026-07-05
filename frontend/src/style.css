@@ -4952,6 +4952,32 @@ html[data-motion="reduce"] .cinema-viz.viz-fade-in { animation: none !important;
 .cn-info { min-width: 0; }
 .cn-title  { font-size: var(--fs-md); font-weight: 600; color: rgba(255,255,255,.88); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .cn-artist { font-size: var(--fs-sm); color: rgba(255,255,255,.65); margin-top: var(--sp-1q); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cn-icon { display: none; width: var(--icon-lg); height: var(--icon-lg); flex-shrink: 0; }
+
+/* ── Compact : piste suivante / hint shuffle → bouton icône seule (Task 3) ──
+   En dessous de ces seuils, la carte riche (vignette+titre/artiste, ou texte du
+   hint shuffle) ne tient plus sans chevaucher la pill de contrôles ou le texte
+   titre/artiste. Plutôt que masquer l'accès à la file d'attente (perte
+   fonctionnelle), on le réduit à un bouton rond icône seule, même gabarit que
+   .cinema-corner-btn. Seuil largeur (700px) distinct du seuil de compaction de
+   la pill de contrôles (600px, inchangé) -- c'est le point réel où la carte
+   piste-suivante ne tient plus, pas où la pill se resserre. */
+@media (max-width: 700px), (max-height: 640px) {
+  .cinema-next, .cinema-shuffle-hint {
+    width: var(--btn-h-lg); height: var(--btn-h-lg);
+    min-width: 0; max-width: none;
+    padding: 0; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    background: var(--cin-surface-hover);
+    backdrop-filter: blur(var(--blur-8));
+    -webkit-backdrop-filter: blur(var(--blur-8));
+    color: rgba(255,255,255,.55);
+  }
+  .cinema-next .cn-label,
+  .cinema-next .cn-body,
+  .cinema-shuffle-hint .cn-body--hint span { display: none; }
+  .cinema-next .cn-icon { display: block; }
+}
 
 /* ── Hint shuffle (Task 6) — même panneau/style que .cinema-next, contenu différent ── */
 .cn-body--hint {

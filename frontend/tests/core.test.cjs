@@ -4133,6 +4133,44 @@ section('components/lf-toast-stack.logic.js -- import-smoke');
     _ko++;
   }
 
+  try {
+    const fs = require('fs'), path = require('path');
+    const root = path.join(__dirname, '../..');
+    const read = f => fs.readFileSync(path.join(root, f), 'utf8');
+
+    section('cinema layout grid Task 3 -- next/queue-access compact icon-only');
+
+    const CSS3 = read('frontend/src/style.css');
+    const HTML3 = read('frontend/index.html');
+
+    const nextBtnIdx = HTML3.indexOf('id="cinema-next"');
+    const nextBtnEnd = HTML3.indexOf('</button>', nextBtnIdx);
+    assert(nextBtnIdx !== -1 && nextBtnEnd !== -1,
+      '#cinema-next: bouton localise (ouverture + fermeture)');
+    const nextBtnBody = HTML3.slice(nextBtnIdx, nextBtnEnd);
+    assert(/class="cn-icon"/.test(nextBtnBody),
+      '#cinema-next contient une icone .cn-icon (mode compact) avant sa fermeture');
+    assert(/aria-hidden="true"/.test(nextBtnBody.slice(nextBtnBody.indexOf('class="cn-icon"'))),
+      '.cn-icon est aria-hidden (decorative, le nom accessible reste porte par le bouton)');
+    assert(/aria-expanded="false"/.test(nextBtnBody) && /aria-controls="cinema-queue-panel"/.test(nextBtnBody) &&
+      /aria-label="Afficher la file d'attente"/.test(nextBtnBody),
+      '#cinema-next conserve aria-expanded/aria-controls/aria-label apres ajout de .cn-icon');
+
+    assert(/\.cn-icon \{ display: none;/.test(CSS3),
+      '.cn-icon masquee par defaut (pleine taille)');
+    assert(/@media \(max-width: 700px\), \(max-height: 640px\) \{/.test(CSS3),
+      'media query compacte next/queue-access (700px largeur OU 640px hauteur)');
+    assert(/\.cinema-next \.cn-icon \{ display: block; \}/.test(CSS3),
+      '.cinema-next .cn-icon visible en mode compact');
+    const compactMQAnchor = '@media (max-width: 700px), (max-height: 640px) {';
+    const compactMQIdx = CSS3.indexOf(compactMQAnchor);
+    assert(/border-radius: 50%;/.test(CSS3.slice(compactMQIdx, compactMQIdx + 500)),
+      'le bloc compact force un bouton rond (border-radius:50%)');
+  } catch (e) {
+    console.error('  KO  cinema layout grid Task 3 scans crashed:', e.message);
+    _ko++;
+  }
+
   // -- Résultat -----------------------------------------------------------
   console.log('\n═══════════════════════════════════════════════════════════');
   console.log(`  Total : ${_ok + _ko}   OK: ${_ok}   KO: ${_ko}`);
