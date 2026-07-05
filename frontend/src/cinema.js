@@ -461,7 +461,14 @@ initCinemaInput({
   closeCinema, updateCinema,
   toggleCinemaFullscreen, cycleCinemaBg, toggleCinemaRadio,
   toggleLike, next, prev,
-  audio,
+  // FIX (audit console) : `audio` ne doit pas être déréférencé ici -- ce bloc s'exécute
+  // en synchrone au chargement du module cinema.js, qui fait partie du cycle
+  // player.js → cfgsave.js → settings.js → cinema.js (import de `audio` depuis player.js).
+  // Tant que player.js n'a pas fini d'évaluer sa ligne `export const audio = ...`, lire
+  // `audio` ici lève un ReferenceError TDZ (throw non catché → tout le graphe de modules
+  // échoue, l'app reste bloquée sur #boot-spinner). getAudio() diffère la lecture à l'appel
+  // (clavier/molette), bien après le boot — même pattern que getIsPlaying ci-dessus.
+  getAudio: () => audio,
   setMasterGain,
   readVol: readCinVolDom,
   syncVol: setCinVolSliders,

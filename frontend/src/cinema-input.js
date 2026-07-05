@@ -6,7 +6,7 @@
 // de lignes par fichier (CLAUDE.md §16).
 //
 // Injection de dépendances via initCinemaInput({ getCinemaOpen, closeCinema, updateCinema,
-// toggleCinemaFullscreen, cycleCinemaBg, toggleCinemaRadio, toggleLike, next, prev, audio,
+// toggleCinemaFullscreen, cycleCinemaBg, toggleCinemaRadio, toggleLike, next, prev, getAudio,
 // setMasterGain, readVol, syncVol }) -- aucun import de player.js/eq.js ici ; cinema.js
 // fournit les refs (CLAUDE.md §6, zéro import cross-feature — même discipline que
 // cinema-seek.js, DI pure).
@@ -55,7 +55,7 @@ function _onCinKey(e) {
   const _ct = e.target.tagName;
   if (_ct === 'INPUT' || _ct === 'TEXTAREA' || _ct === 'SELECT' || e.target.isContentEditable) return;
   showCinemaControls(); // reset idle timer sur toute touche
-  const audio = _deps.audio;
+  const audio = _deps.getAudio();
   switch (e.code) {
     case 'Space':
       e.preventDefault();
@@ -153,7 +153,7 @@ function _onCinWheel(e) {
   if (e.target.closest('#cinema-queue-panel')) return;
   e.preventDefault();
   e.stopPropagation();
-  const audio = _deps.audio;
+  const audio = _deps.getAudio();
   if (!audio) return;
   const delta = e.deltaY < 0 ? 0.05 : -0.05;
   const v = Math.min(1, Math.max(0, _deps.readVol() + delta));
