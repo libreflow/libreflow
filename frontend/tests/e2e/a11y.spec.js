@@ -122,6 +122,10 @@ test.describe('panel toggles — aria-expanded', () => {
   });
 
   test('#btn-eq toggles aria-expanded and reveals the panel', async ({ page }) => {
+    // #btn-eq now lives inside #sb-more-pop (hidden until #sb-more-btn opens it).
+    await page.locator('#sb-more-btn').click();
+    await page.locator('#sb-more-pop').waitFor({ state: 'visible' });
+
     const btn = page.locator('#btn-eq');
     await expect(btn).toHaveAttribute('aria-expanded', 'false');
 
@@ -129,6 +133,10 @@ test.describe('panel toggles — aria-expanded', () => {
     await expect(btn).toHaveAttribute('aria-expanded', 'true');
     await expect(page.locator('#eq-panel')).toBeVisible();
 
+    // Clicking the menu item closed the popover (document click-outside
+    // listener) — reopen it to toggle the EQ panel closed again.
+    await page.locator('#sb-more-btn').click();
+    await page.locator('#sb-more-pop').waitFor({ state: 'visible' });
     await btn.click();
     await expect(btn).toHaveAttribute('aria-expanded', 'false');
   });
