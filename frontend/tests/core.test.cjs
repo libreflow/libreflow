@@ -1407,20 +1407,70 @@ section('tlistZoom.js -- _nextZoomLevel cycling');
 
 (function () {
   // Reproduit la logique pure inline (pas d'import ESM)
-  const TLIST_ZOOM_LEVELS = ['compact', 'normal', 'comfortable'];
+  const TLIST_ZOOM_LEVELS = ['compact', 'comfortable', 'spacious'];
   function _nextZoomLevel(current, dir) {
     const idx = TLIST_ZOOM_LEVELS.indexOf(current);
-    if (idx === -1) return 'normal';
+    if (idx === -1) return 'comfortable';
     if (dir === 'in')  return TLIST_ZOOM_LEVELS[Math.min(idx + 1, TLIST_ZOOM_LEVELS.length - 1)];
     if (dir === 'out') return TLIST_ZOOM_LEVELS[Math.max(idx - 1, 0)];
     return current;
   }
 
-  assert(_nextZoomLevel('compact',     'in')  === 'normal',      'zoomIn depuis compact → normal');
-  assert(_nextZoomLevel('comfortable', 'in')  === 'comfortable', 'zoomIn depuis comfortable → reste comfortable');
-  assert(_nextZoomLevel('comfortable', 'out') === 'normal',      'zoomOut depuis comfortable → normal');
+  assert(_nextZoomLevel('compact',     'in')  === 'comfortable', 'zoomIn depuis compact → comfortable');
+  assert(_nextZoomLevel('comfortable', 'in')  === 'spacious',    'zoomIn depuis comfortable → spacious');
+  assert(_nextZoomLevel('spacious',    'in')  === 'spacious',    'zoomIn depuis spacious → reste spacious');
+  assert(_nextZoomLevel('spacious',    'out') === 'comfortable', 'zoomOut depuis spacious → comfortable');
   assert(_nextZoomLevel('compact',     'out') === 'compact',     'zoomOut depuis compact → reste compact');
-  assert(_nextZoomLevel('normal',      'out') === 'compact',     'zoomReset depuis normal → compact via zoomOut');
+  assert(_nextZoomLevel('comfortable', 'out') === 'compact',     'zoomReset depuis comfortable → compact via zoomOut');
+}());
+
+// =============================================================================
+// tlistZoom — migration des anciens noms de niveaux (_LEGACY_ZOOM_MAP)
+// =============================================================================
+section('tlistZoom.js -- legacy level name migration');
+
+(function () {
+  // Reproduit la logique pure inline (pas d'import ESM) — même map que tlistZoom.js
+  const _LEGACY_ZOOM_MAP = { normal: 'comfortable', comfortable: 'spacious' };
+  function migrate(level) { return _LEGACY_ZOOM_MAP[level] || level; }
+
+  assert(migrate('normal')      === 'comfortable', "ancien 'normal' → nouveau 'comfortable'");
+  assert(migrate('comfortable') === 'spacious',    "ancien 'comfortable' → nouveau 'spacious'");
+  assert(migrate('compact')     === 'compact',     "'compact' inchangé (jamais renommé)");
+  assert(migrate('spacious')    === 'spacious',    "'spacious' (déjà nouveau) inchangé — pas de double mapping");
+}());
+
+// =============================================================================
+// tlistZoom — TLIST_ZOOM_ROW_H reste synchro avec --tr-h (design-system.css)
+// =============================================================================
+section('tlistZoom.js -- TLIST_ZOOM_ROW_H matches CSS --tr-h per level');
+
+(function () {
+  const assert = require('assert');
+  const fs   = require('fs');
+  const path = require('path');
+  const jsSrc  = fs.readFileSync(path.join(__dirname, '../src/tlistZoom.js'), 'utf8');
+  const cssSrc = fs.readFileSync(path.join(__dirname, '../src/design-system.css'), 'utf8');
+
+  const rowHBlock = /TLIST_ZOOM_ROW_H = \{([^}]*)\}/.exec(jsSrc);
+  assert(rowHBlock, 'TLIST_ZOOM_ROW_H object literal found in tlistZoom.js');
+  const rowH = {};
+  const kv = /(\w+):\s*(\d+)/g;
+  let m;
+  while ((m = kv.exec(rowHBlock[1]))) rowH[m[1]] = Number(m[2]);
+
+  assert.strictEqual(rowH.compact,     44, 'TLIST_ZOOM_ROW_H.compact === 44');
+  assert.strictEqual(rowH.comfortable, 56, 'TLIST_ZOOM_ROW_H.comfortable === 56');
+  assert.strictEqual(rowH.spacious,    72, 'TLIST_ZOOM_ROW_H.spacious === 72');
+
+  // Regression guard for the exact CSS/JS desync bug fixed earlier this session:
+  // VIRT.ROW_H (this object) must always equal the real rendered --tr-h.
+  const baseTrH     = Number(/--tr-h:\s*(\d+)px/.exec(cssSrc)[1]);
+  const compactTrH  = Number(/data-tlist-zoom="compact"\]\s*\{\s*--tr-h:\s*(\d+)px/.exec(cssSrc)[1]);
+  const spaciousTrH = Number(/data-tlist-zoom="spacious"\]\s*\{\s*--tr-h:\s*(\d+)px/.exec(cssSrc)[1]);
+  assert.strictEqual(rowH.comfortable, baseTrH,     'VIRT.ROW_H.comfortable matches CSS base --tr-h');
+  assert.strictEqual(rowH.compact,     compactTrH,  'VIRT.ROW_H.compact matches CSS --tr-h override');
+  assert.strictEqual(rowH.spacious,    spaciousTrH, 'VIRT.ROW_H.spacious matches CSS --tr-h override');
 }());
 
 // =============================================================================

@@ -435,7 +435,7 @@ async function boot() {
     }
   }
   // Zoom liste de pistes — appliquer AVANT le premier rendu (tlistZoom.js)
-  setTlistZoom((cfg && cfg.tlistZoom) || 'normal');
+  setTlistZoom((cfg && cfg.tlistZoom) || 'comfortable', { silent: true });
   // Task 10 — préférence d'animation : data-motion déjà posé avant le 1er paint par
   // public/boot-motion.js (mirror localStorage lf-motion, fallback statique "full") ;
   // la cfg IDB reste la source de vérité — on corrige ici attribut ET mirror si divergents
