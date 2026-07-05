@@ -11,7 +11,7 @@
 //   tlistZoomReset()      — retour à 'normal'
 //   _nextZoomLevel(cur, dir) — logique pure de cycling (testable sans DOM)
 //   TLIST_ZOOM_LEVELS     — ['compact','normal','comfortable']
-//   TLIST_ZOOM_ROW_H      — {compact:36, normal:48, comfortable:60}
+//   TLIST_ZOOM_ROW_H      — {compact:44, normal:48, comfortable:60}
 
 import { VIRT }            from './virt.js';
 import { set, get }        from './store.js';
@@ -20,8 +20,11 @@ import { saveCfg }         from './cfgsave.js';
 
 export const TLIST_ZOOM_LEVELS = ['compact', 'normal', 'comfortable'];
 
+// compact = 44 (pas 36) : plancher WCAG 2.5.8 partagé avec .tr { min-height }
+// (design-system.css) — doit rester identique à --tr-h sous [data-tlist-zoom]
+// pour que le pas du virtual scroll corresponde à la hauteur réelle des lignes.
 export const TLIST_ZOOM_ROW_H = {
-  compact:     36,
+  compact:     44,
   normal:      48,
   comfortable: 60,
 };

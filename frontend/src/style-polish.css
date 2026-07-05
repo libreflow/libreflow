@@ -50,14 +50,21 @@
   text-overflow: ellipsis;
 }
 
-#tlist-col-hdr .col-dur { text-align: right; }
+/* Le libellé "Durée" doit surplomber les chiffres de durée (.tdur), pas le
+   cluster d'icônes like/ajout qui partage la même colonne .tr-r — sans ce
+   padding, le texte s'aligne sur le bord droit de la colonne (les icônes),
+   décalé par rapport aux valeurs qu'il légende. */
+#tlist-col-hdr .col-dur {
+  text-align: right;
+  padding-right: calc(2 * var(--target-min) + 2 * var(--sp-1h) + var(--sp-micro));
+}
 
 @container main (max-width: 820px) {
   #content-area[data-view="list"] #tlist-col-hdr {
     grid-template-columns:
       var(--art-list)
       minmax(0, 1fr)
-      minmax(0, 7em)
+      minmax(0, 7rem)
       var(--tr-r-w);
   }
 }

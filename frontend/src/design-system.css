@@ -575,7 +575,10 @@ html[data-mode="light"] {
   --art-hero:     148px;   /* hero cover — taille pleine */
   --art-list:      56px;   /* colonne artwork dans rangée track (grid) */
   --tr-h:          48px;   /* hauteur d'une ligne piste — pilotée par data-tlist-zoom */
-  --tr-album-col:  12em;   /* largeur de la colonne album dans la grille .tr */
+  /* rem (pas em) : .tr et #tlist-col-hdr n'ont pas la même taille de police —
+     un em résoudrait à une largeur différente dans chacun et désalignerait
+     la colonne album entre l'en-tête et les lignes. */
+  --tr-album-col:  12rem;   /* largeur de la colonne album dans la grille .tr */
 
   /* Éléments structurels — tracks & sliders */
   --track-h-xs: 2px;   /* indicateurs fins, tab active line */
@@ -1101,6 +1104,22 @@ html[data-mode="light"] {
   /* Transition racine : tous les héritiers voient la valeur animée */
   transition: --art-color var(--dur-art-color) ease;
 }
+
+/* ── Zoom liste de pistes (tlistZoom.js) ─────────────────────────────────
+   --tr-h doit rester synchro avec TLIST_ZOOM_ROW_H (tlistZoom.js) : c'est
+   VIRT.ROW_H (le pas utilisé par le virtual scroll pour positionner les
+   lignes) qui doit correspondre à la hauteur RÉELLEMENT rendue par .tr.
+   Avant ce fix, --tr-h restait figé à 48px quel que soit data-tlist-zoom —
+   le virtual scroll croyait les lignes plus hautes/basses qu'elles ne
+   l'étaient réellement, ce qui désynchronisait le rendu de la position de
+   scroll (lignes tronquées au bord du viewport, surtout visible plein
+   écran où la fenêtre virtualisée couvre beaucoup plus de lignes).
+   "compact" est fixé à 44px (pas 36px) : c'est le plancher WCAG 2.5.8
+   (cf. .tr { min-height: 44px }, CLAUDE.md §2.9) — descendre en dessous
+   recréerait le même désaccord via min-height qui regonflerait la ligne
+   au-delà de ce que --tr-h annonce. */
+:root[data-tlist-zoom="compact"]     { --tr-h: 44px; }
+:root[data-tlist-zoom="comfortable"] { --tr-h: 60px; }
 
 /* ── Thèmes couleur (accent par défaut = Electric Indigo via --accent) ─── */
 [data-theme="indigo"] { --g:#8B6BFF; --g-rgb:139,107,255; --gd:rgba(139,107,255,.14); --gg:rgba(139,107,255,.28); }
