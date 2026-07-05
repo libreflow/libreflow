@@ -4072,6 +4072,67 @@ section('components/lf-toast-stack.logic.js -- import-smoke');
     _ko++;
   }
 
+  try {
+    const fs = require('fs'), path = require('path');
+    const root = path.join(__dirname, '../..');
+    const read = f => fs.readFileSync(path.join(root, f), 'utf8');
+
+    section('cinema layout grid Task 2 -- #cinema-overlay grid + zones nommees');
+
+    const CSS2 = read('frontend/src/style.css');
+    const DS2  = read('frontend/src/design-system.css');
+
+    assert(/#cinema-overlay \{[\s\S]{0,500}display: grid;/.test(CSS2),
+      '#cinema-overlay passe en display:grid');
+    assert(/"corner-l\s+\.\s+corner-r"/.test(CSS2) && /"side-l\s+hero\s+side-r"/.test(CSS2),
+      '#cinema-overlay declare les 5 zones (corner-l/corner-r/side-l/hero/side-r) dans le bon ordre');
+    assert(/padding:\s*var\(--cinema-corner-top\)\s*var\(--cinema-corner-x\)\s*var\(--cinema-clock-inset\);/.test(CSS2),
+      '#cinema-overlay applique les insets harmonises via padding (corner-top/corner-x/clock-inset)');
+
+    for (const zone of ['corner-l', 'corner-r', 'side-l', 'hero', 'side-r']) {
+      const n = (CSS2.match(new RegExp(`grid-area:\\s*${zone}\\b`, 'g')) || []).length;
+      assert(n === 1, `zone '${zone}' assignee exactement une fois (trouve ${n})`);
+    }
+
+    assert(/#cinema-bg-btn \{\s*\n\s*grid-area: corner-l; justify-self: start; align-self: start;/.test(CSS2),
+      '#cinema-bg-btn place en corner-l (start/start)');
+    assert(/\.cinema-corner-r \{\s*\n\s*grid-area: corner-r; justify-self: end; align-self: start;/.test(CSS2),
+      '.cinema-corner-r place en corner-r (end/start)');
+    assert(/#cinema-clock \{\s*\n\s*grid-area: side-l; justify-self: start; align-self: end;/.test(CSS2),
+      '#cinema-clock place en side-l, ancre au bas de sa cellule (align-self:end)');
+    assert(/\.cinema-hero \{\s*\n\s*grid-area: hero; justify-self: center; align-self: center;/.test(CSS2),
+      '.cinema-hero centre vraiment (justify-self/align-self: center)');
+    assert(/\.cinema-side-r \{\s*\n\s*grid-area: side-r; justify-self: end; align-self: end;/.test(CSS2),
+      '.cinema-side-r place en side-r (end/end)');
+
+    const sideRIdx = CSS2.indexOf('.cinema-side-r {');
+    assert(sideRIdx !== -1 && /position: relative;/.test(CSS2.slice(sideRIdx, sideRIdx + 200)),
+      '.cinema-side-r est position:relative (ancre #cinema-queue-panel)');
+
+    assert(/\.cinema-shuffle-hint \{ position: absolute; inset: 0; \}/.test(CSS2),
+      '.cinema-shuffle-hint se superpose exactement a #cinema-next (inset:0)');
+
+    assert(!/\.cinema-corner-btn \{\s*\n\s*position: absolute;/.test(CSS2),
+      '.cinema-corner-btn ne porte plus position:absolute (place par grid/flex desormais)');
+    assert(!/\.cinema-close\s*\{\s*top:/.test(CSS2), "l'ancienne regle .cinema-close { top:...; right:...; } est retiree");
+    assert(!/#cinema-bg-btn\s*\{\s*top:/.test(CSS2), "l'ancienne regle #cinema-bg-btn { top:...; left:...; } est retiree");
+    assert(!/#cinema-fs-btn\s*\{\s*top:/.test(CSS2), "l'ancienne regle #cinema-fs-btn { top:...; right:...; } est retiree");
+
+    const nextIdx = CSS2.indexOf('.cinema-next {');
+    assert(nextIdx !== -1 && !/position: absolute; bottom: var\(--sp-8\)/.test(CSS2.slice(nextIdx, nextIdx + 150)),
+      '.cinema-next ne porte plus bottom/right en dur relatif au viewport');
+
+    const qpIdx = CSS2.indexOf('.cinema-queue-panel {');
+    assert(qpIdx !== -1 && /position: absolute; bottom: calc\(100% \+ var\(--cqp-trigger-gap\)\); right: 0;/.test(CSS2.slice(qpIdx, qpIdx + 300)),
+      '.cinema-queue-panel ancre a 100% (haut de .cinema-side-r) + right:0 -- decouple du viewport');
+
+    assert(!/--cinema-fs-right/.test(DS2), 'token --cinema-fs-right retire de design-system.css (mort)');
+    assert(!/--cinema-fs-right/.test(CSS2), 'token --cinema-fs-right plus reference dans style.css');
+  } catch (e) {
+    console.error('  KO  cinema layout grid Task 2 scans crashed:', e.message);
+    _ko++;
+  }
+
   // -- Résultat -----------------------------------------------------------
   console.log('\n═══════════════════════════════════════════════════════════');
   console.log(`  Total : ${_ok + _ko}   OK: ${_ok}   KO: ${_ko}`);

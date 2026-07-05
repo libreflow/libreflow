@@ -4722,13 +4722,22 @@ html[data-motion="reduce"] .eq-slider::-moz-range-thumb { transition: none; }
 #cinema-overlay {
   position: fixed; inset: 0; z-index: var(--z-overlay);
   background: var(--c-black);
-  display: flex; /* toujours flex — visibility/opacity gèrent l'état */
-  flex-direction: column; align-items: center; justify-content: flex-start;
-  /* Centre l'art à 36vh (position "hero") — laisse plus de place aux contrôles
-     sans les pousser trop bas. La composition complète (art+contrôles) se centre
-     autour de ~45vh, légèrement au-dessus du milieu visuel (choix intentionnel).
-     Formule : padding-top = 36vh − demi-hauteur-art = 36vh − min(23vh,23vw,210px) */
-  padding-top: calc(36vh - min(23vh, 23vw, 210px));
+  /* Task 2 (layout grid) : chaque élément a une zone nommée explicite -- les
+     collisions deviennent structurellement impossibles au lieu d'être patchées
+     par breakpoint. Colonnes extérieures égales (1fr/1fr) : le héros reste centré
+     même si l'horloge (gauche) et la carte piste-suivante (droite) ont des
+     largeurs différentes. */
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  grid-template-rows: auto 1fr;
+  grid-template-areas:
+    "corner-l .    corner-r"
+    "side-l   hero side-r";
+  /* Insets harmonisés : mêmes tokens que les boutons de coin pour corner-l/r,
+     même token que l'horloge pour le bas (side-l/side-r) -- avant ce commit,
+     .cinema-next/.cinema-queue-panel utilisaient --sp-8 (32px fixe) au lieu de
+     --cinema-clock-inset (clamp 40-80px), écart non intentionnel. */
+  padding: var(--cinema-corner-top) var(--cinema-corner-x) var(--cinema-clock-inset);
   overflow: hidden; /* empêche tout scroll interne */
   /* ── Animation d'entrée / sortie ── */
   opacity: 0;
@@ -4864,7 +4873,7 @@ html[data-motion="reduce"] .cinema-viz.viz-fade-in { animation: none !important;
 
 /* ── Horloge idle (bottom-left, inversement de ctrl-on) ─── */
 #cinema-clock {
-  position: absolute; bottom: var(--cinema-clock-inset); left: var(--cinema-clock-inset); z-index: 5;
+  grid-area: side-l; justify-self: start; align-self: end; z-index: 5;
   opacity: 0; transform: translateY(var(--sp-2));
   transition: opacity var(--dur-reveal) ease, transform var(--dur-reveal) ease;
   pointer-events: none;
@@ -4910,7 +4919,7 @@ html[data-motion="reduce"] .cinema-viz.viz-fade-in { animation: none !important;
 
 /* ── Piste suivante (bottom-right, avec les contrôles) ──── */
 .cinema-next {
-  position: absolute; bottom: var(--sp-8); right: var(--sp-8); z-index: 5;
+  z-index: 5;
   background: var(--cin-surface);
   backdrop-filter: blur(var(--blur-18)) saturate(1.3);
   -webkit-backdrop-filter: blur(var(--blur-18)) saturate(1.3);
@@ -4961,7 +4970,9 @@ html[data-motion="reduce"] .cinema-viz.viz-fade-in { animation: none !important;
 /* ── Panneau file d'attente dépliable (Task 9) — ancré au-dessus de #cinema-next,
      même glass que .cinema-next ; translateY+fade tokenisés (--motion-base). ──── */
 .cinema-queue-panel {
-  position: absolute; bottom: calc(var(--sp-8) + var(--cqp-trigger-gap)); right: var(--sp-8);
+  /* Task 2 (layout grid) : ancré relativement à .cinema-side-r (position:relative)
+     au lieu du bord du viewport -- découplé de tout inset dupliqué. */
+  position: absolute; bottom: calc(100% + var(--cqp-trigger-gap)); right: 0;
   z-index: 6;
   width: var(--cn-next-max); max-height: var(--cqp-max-h); overflow-y: auto;
   background: var(--cin-surface);
@@ -4998,7 +5009,7 @@ html[data-motion="reduce"] .cinema-queue-panel { transition: none; }
 
 /* ── Boutons de coin (close + bg + fs) ────────────────────── */
 .cinema-corner-btn {
-  position: absolute; z-index: 10;
+  z-index: 10;
   background: var(--cin-surface-hover); border: none;
   width: var(--btn-h-lg); height: var(--btn-h-lg); border-radius: 50%;
   display: flex; align-items: center; justify-content: center;
@@ -5018,10 +5029,30 @@ html[data-motion="reduce"] .cinema-queue-panel { transition: none; }
 .cinema-corner-btn:active { transform: scale(0.95); }
 .cinema-corner-btn:focus-visible { outline: none; box-shadow: var(--cin-focus-ring); }
 .cinema-corner-btn svg   { width: var(--icon-lg); height: var(--icon-lg); }
-.cinema-close  { top: var(--cinema-corner-top); right: var(--cinema-corner-x); }
 .cinema-close svg { stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; width: var(--icon-md); height: var(--icon-md); }
-#cinema-bg-btn { top: var(--cinema-corner-top); left: var(--cinema-corner-x); }
-#cinema-fs-btn { top: var(--cinema-corner-top); right: var(--cinema-fs-right); } /* entre bg-btn et close */
+
+/* ── Zones de grille (Task 2 -- repositionnement cinéma) ──────────────────
+   Chaque zone nommée est assignée exactement une fois -- les collisions sont
+   structurellement impossibles (cf. grid-template-areas de #cinema-overlay). */
+#cinema-bg-btn {
+  grid-area: corner-l; justify-self: start; align-self: start;
+}
+.cinema-corner-r {
+  grid-area: corner-r; justify-self: end; align-self: start;
+  display: flex; align-items: center; gap: var(--sp-2);
+}
+.cinema-hero {
+  grid-area: hero; justify-self: center; align-self: center;
+  display: flex; flex-direction: column; align-items: center;
+}
+.cinema-side-r {
+  grid-area: side-r; justify-self: end; align-self: end;
+  position: relative; /* ancre #cinema-queue-panel (bottom:100% relatif à cette boîte) */
+}
+/* .cinema-shuffle-hint partage la classe .cinema-next (même carte visuelle) mais doit
+   se superposer EXACTEMENT à #cinema-next plutôt que s'empiler dessous en flux normal
+   -- seul l'un des deux est visible à la fois (opacity togglée en JS, cinema.js). */
+.cinema-shuffle-hint { position: absolute; inset: 0; }
 
 /* ── UI visibility — état initial (masqué) pour cinema-info uniquement ── */
 /* cinema-prog et cinema-controls ont leur état initial dans leurs blocs layout ci-dessous */
