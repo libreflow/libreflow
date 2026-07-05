@@ -5630,9 +5630,6 @@ html[data-mode="light"] #cinema-overlay::after {
   .cbtn            { width: var(--icon-32); height: var(--icon-32); }
   .cinema-vol-sep,
   .cinema-vol-wrap { display: none; }
-  /* Panneau "suivant" masqué sur écrans étroits — évite le chevauchement avec la pill de contrôles */
-  .cinema-next,
-  .cinema-queue-panel { display: none; } /* Task 9 — le panneau file d'attente suit son déclencheur */
 }
 
 /* ── Cinema responsive — breakpoint intermédiaire (tablette/petit desktop) ──
@@ -5650,9 +5647,7 @@ html[data-mode="light"] #cinema-overlay::after {
    texte titre/artiste. Les deux sont purement informatifs → masqués sans perte
    fonctionnelle (la pill de contrôles reste toujours visible/accessible). */
 @media (max-height: 640px) {
-  #cinema-clock,
-  #cinema-next,
-  #cinema-queue-panel { display: none; } /* Task 9 — le panneau suit son déclencheur */
+  #cinema-clock { display: none; } /* purement décoratif, aucune perte fonctionnelle */
 }
 
 /* ═══ PANNEAUX OVERLAY (raccourcis + doublons) ═══════════════ */

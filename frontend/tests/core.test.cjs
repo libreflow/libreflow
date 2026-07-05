@@ -2920,11 +2920,15 @@ section('components/lf-toast-stack.logic.js -- import-smoke');
     assert(/@media\s*\(min-width:\s*1600px\)[\s\S]*?--art-cinema-max:\s*520px/.test(dsSrc),
       'design-system.css : @media (min-width:1600px) porte --art-cinema-max: 520px');
 
-    // (e) style.css : anti-chevauchement sur petites hauteurs (horloge + next masqués)
+    // (e) style.css : anti-chevauchement sur petites hauteurs (horloge masquée seule).
+    // Fix post-review (Critical finding) — #cinema-next/#cinema-queue-panel n'étaient
+    // plus censés disparaître ici depuis l'ajout du mode compact-icône (Task 3, cf.
+    // section "cinema legacy display:none override" plus bas) : ce bloc ne masque
+    // plus que l'horloge, purement décorative.
     const shortHeightBlock = /@media\s*\(max-height:\s*640px\)\s*\{[\s\S]*?\n\}/.exec(ssSrc)?.[0] || '';
     assert(shortHeightBlock.length > 0, 'style.css : @media (max-height: 640px) trouvé');
-    assert(/#cinema-clock/.test(shortHeightBlock) && /#cinema-next/.test(shortHeightBlock),
-      'style.css : @media (max-height: 640px) masque #cinema-clock et #cinema-next');
+    assert(/#cinema-clock/.test(shortHeightBlock) && !/#cinema-next/.test(shortHeightBlock),
+      'style.css : @media (max-height: 640px) masque #cinema-clock seule (next/queue-access iconifient au lieu de disparaître)');
 
     // (f) breakpoint intermédiaire 601-1023px : pill compacte, volume conservé, vol-vis masqué
     const midBlock = /@media\s*\(min-width:\s*601px\)\s*and\s*\(max-width:\s*1023px\)\s*\{[\s\S]*?\n\}/.exec(ssSrc)?.[0] || '';
@@ -4168,6 +4172,48 @@ section('components/lf-toast-stack.logic.js -- import-smoke');
       'le bloc compact force un bouton rond (border-radius:50%)');
   } catch (e) {
     console.error('  KO  cinema layout grid Task 3 scans crashed:', e.message);
+    _ko++;
+  }
+
+  try {
+    const fs = require('fs'), path = require('path');
+    const root = path.join(__dirname, '../..');
+    const read = f => fs.readFileSync(path.join(root, f), 'utf8');
+
+    section('cinema legacy display:none override -- fix: compact-icon collapse must not be overridden');
+
+    const CSS4 = read('frontend/src/style.css');
+
+    // Bloc @media (max-width: 600px) -- borné par le prochain @media (breakpoint
+    // tablette, quelques lignes plus bas) pour éviter les faux positifs ailleurs
+    // dans le fichier.
+    const mw600Anchor = '@media (max-width: 600px) {';
+    const mw600Idx = CSS4.indexOf(mw600Anchor);
+    assert(mw600Idx !== -1, '@media (max-width: 600px) localise');
+    const mw600NextMQ = CSS4.indexOf('@media', mw600Idx + mw600Anchor.length);
+    const mw600Body = CSS4.slice(mw600Idx, mw600NextMQ);
+    assert(!/\.cinema-next\b/.test(mw600Body),
+      '@media (max-width: 600px) ne masque plus .cinema-next (le mode compact-icone prend le relais)');
+    assert(!/\.cinema-queue-panel\b/.test(mw600Body),
+      '@media (max-width: 600px) ne masque plus .cinema-queue-panel (le mode compact-icone prend le relais)');
+    assert(/\.cinema-vol-wrap \{ display: none; \}/.test(mw600Body),
+      '@media (max-width: 600px) masque toujours le volume (comportement preexistant conserve)');
+
+    // Bloc @media (max-height: 640px) -- borné par la fermeture de bloc ('\n}\n'),
+    // ce bloc ne contient qu'une seule règle donc pas de risque de faux négatif.
+    const mh640Anchor = '@media (max-height: 640px) {';
+    const mh640Idx = CSS4.indexOf(mh640Anchor);
+    assert(mh640Idx !== -1, '@media (max-height: 640px) localise');
+    const mh640Close = CSS4.indexOf('\n}\n', mh640Idx);
+    const mh640Body = CSS4.slice(mh640Idx, mh640Close + 3);
+    assert(/#cinema-clock\b/.test(mh640Body),
+      '@media (max-height: 640px) masque toujours #cinema-clock (decoratif, aucune perte fonctionnelle)');
+    assert(!/#cinema-next\b/.test(mh640Body),
+      '@media (max-height: 640px) ne masque plus #cinema-next (le mode compact-icone prend le relais)');
+    assert(!/#cinema-queue-panel\b/.test(mh640Body),
+      '@media (max-height: 640px) ne masque plus #cinema-queue-panel (le mode compact-icone prend le relais)');
+  } catch (e) {
+    console.error('  KO  cinema legacy display:none override scans crashed:', e.message);
     _ko++;
   }
 
