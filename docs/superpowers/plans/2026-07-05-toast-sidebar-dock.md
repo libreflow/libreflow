@@ -4,7 +4,7 @@
 
 **Goal:** Dock `<lf-toast-stack>` to the bottom of the sidebar column on normal desktop layouts (filling the empty space there), falling back to the existing top-right corner position whenever the sidebar isn't a normal full-height vertical column (now-playing fullscreen, mobile platform, or the compact <719px breakpoint).
 
-**Architecture:** Pure CSS change inside the Lit component's `static styles`. The base `:host` rule switches from corner values to sidebar-docked values (position/width computed from the same `--sb`/`--pb`/`--tb`/`--sp-*` custom properties the sidebar and adjacent panels already use). Two new override blocks — one `:host-context()` selector list, one `@media` block — restore the current corner values as a fallback, using DOM state that's already set by other code (`#app.np-full`, `html[data-platform="mobile"]`, and the existing compact breakpoint). No JS/logic change, no DOM re-parenting.
+**Architecture:** Primarily a CSS change inside the Lit component's `static styles`, plus one small authorized JS exception. The base `:host` rule switches from corner values to sidebar-docked values (position/width computed from the same `--sb`/`--pb`/`--tb`/`--sp-*` custom properties the sidebar and adjacent panels already use). Two new override blocks — one `:host-context()` selector list, one `@media` block — restore the current corner values as a fallback, using DOM state that's already set by other code (`body.np-full`, `html[data-platform="mobile"]`, and the existing compact breakpoint). The now-playing-fullscreen fallback required `nowplaying.js` to also mirror `np-full` onto `<body>` (see Global Constraints and `.superpowers/sdd/task-1-report.md` for why). No DOM re-parenting.
 
 **Tech Stack:** Lit 3.x (`static styles = css\`...\``), CSS `:host-context()`, `@media`, existing CSS custom properties (`--sb`, `--pb`, `--tb`, `--sp-2`, `--sp-4`).
 
@@ -13,7 +13,7 @@
 - No change to `frontend/src/components/lf-toast-stack.logic.js` or the public `ui.js` façade — spec §Non-Goals.
 - No DOM re-parenting — `<lf-toast-stack>` stays appended to `document.body` exactly as today (`ui.js:33-40`).
 - No change to the stack cap (`MAX_TOASTS = 5`), the ring/background/radius/icon/progress-bar visual treatment, or the entrance/exit animation direction — all untouched from the two prior toast specs.
-- The three fallback conditions must reuse existing DOM state only — `#app.np-full` (set by `nowplaying.js`), `html[data-platform="mobile"]`, and the existing `@media (max-width: 719px)` compact breakpoint (`style.css:6507-6523`) — no new class/attribute/JS wiring introduced.
+- The three fallback conditions must reuse existing DOM state where possible. This held for two of the three (mobile, compact breakpoint — `html[data-platform="mobile"]`, `@media (max-width: 719px)` per `style.css:6507-6523`), with no new class/attribute/JS wiring for those. The now-playing-fullscreen condition required a small, authorized exception once a DOM-structure assumption in the original design was found to be wrong (`#app` is not an ancestor of `<lf-toast-stack>`): `nowplaying.js` mirrors the `np-full` class onto `<body>` at its two existing `#app` toggle call sites. See `.superpowers/sdd/task-1-report.md` for the full story.
 - The fallback values must be an exact copy of the current corner rule (`top: calc(var(--tb, 32px) + 12px); right: var(--sp-4, 16px); align-items: flex-end`) — nothing new invented for the fallback state.
 - No CSS selector mixing id + class (CLAUDE.md §13) — not introduced by this change.
 - No `console.log` added.
@@ -23,8 +23,17 @@
 
 ### Task 1: Dock the toast stack to the sidebar, with corner fallback
 
+> **Note:** This task's scope expanded mid-implementation from the CSS-only
+> plan below — the now-playing-fullscreen fallback selector originally
+> planned (`:host-context(#app.np-full)`) turned out not to work, since
+> `<lf-toast-stack>` is a sibling of `#app`, not a descendant. The resolved
+> fix also touches `frontend/src/nowplaying.js` (2 lines). See
+> `.superpowers/sdd/task-1-report.md` for the full investigation, including a
+> first fix attempt that didn't pan out.
+
 **Files:**
 - Modify: `frontend/src/components/lf-toast-stack.js:36-47` (`:host` rule — switch to docked values; insert two new blocks immediately after it)
+- Modify: `frontend/src/nowplaying.js` (2 lines — mirrors `np-full` onto `document.body` at its two existing toggle call sites, alongside the pre-existing `#app` toggle)
 - Test: `frontend/tests/visual/lit-toast.spec.js` (existing — baselines will be regenerated, not the spec file itself)
 - Test: `frontend/tests/core.test.cjs` (existing, run not modified)
 

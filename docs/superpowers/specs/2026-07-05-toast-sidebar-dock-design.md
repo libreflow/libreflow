@@ -19,6 +19,21 @@ resulting empty space at the bottom of the column reads as wasted room.
 
 ---
 
+## Implementation Note (post-hoc correction)
+
+This spec's original design for the now-playing-fullscreen fallback relied on
+`:host-context(#app.np-full)`. That selector turned out not to work: it
+assumed `#app` was an ancestor of `<lf-toast-stack>`, but the toast stack is
+mounted as a **sibling** of `#app` under `<body>` (`ui.js` appends it via
+`document.body.appendChild()`) — a DOM relationship this spec's original
+design didn't account for. This was discovered and corrected during
+implementation. See `.superpowers/sdd/task-1-report.md` for the full
+investigation — including a first fix attempt (`:host-context(body:has(#app
+.np-full))`) that also didn't pan out — and the sections below for the
+corrected design as shipped.
+
+---
+
 ## Goal
 
 Dock the toast stack to the bottom of the sidebar column when the sidebar
@@ -31,11 +46,14 @@ sidebar isn't in that shape.
 
 ## Non-Goals
 
-- No JS/logic change. This is pure CSS: the docking condition reuses DOM
-  state that's already set by other code (`#app.np-full` class set by
-  `nowplaying.js`, `html[data-platform="mobile"]` attribute, and the
-  existing `@media (max-width: 719px)` compact breakpoint) — no new
-  attribute, class, or JS wiring is introduced.
+- Mostly pure CSS, with one small, authorized exception. Two of the three
+  fallback conditions (mobile, compact breakpoint) reuse DOM state already
+  set by other code with no new wiring. The now-playing-fullscreen condition
+  needed a small JS change once the `#app`-sibling issue below was
+  discovered: `nowplaying.js` now also mirrors the `np-full` class onto
+  `<body>` at its two existing `#app` toggle call sites, so `:host-context()`
+  has a real ancestor to match. See `.superpowers/sdd/task-1-report.md` for
+  the full detail.
 - No DOM re-parenting. `<lf-toast-stack>` stays appended to `document.body`
   exactly as today (`ui.js:33-40`, `_getStack()`) — docking is achieved by
   `position: fixed` coordinates that match the sidebar's on-screen rectangle,
@@ -69,11 +87,18 @@ Default rule (applies whenever none of the fallback selectors below match):
 sidebar-docked. The three fallback conditions, in the order they appear in
 `frontend/src/components/lf-toast-stack.js`'s `static styles`:
 
-1. `:host-context(#app.np-full)` — now-playing fullscreen. Confirmed via
-   `style.css:6883-6889`: `.np-full { --sb: 0px; } .np-full #sb { overflow:
-   hidden; pointer-events: none; }` — the sidebar column collapses to zero
-   width and stops being interactive, so a docked toast would be invisible
-   there if left in the default state.
+1. `:host-context(body.np-full)` — now-playing fullscreen. `<lf-toast-stack>`
+   is mounted via `document.body.appendChild()` (`ui.js`), making it a
+   **sibling** of `#app`, not a descendant — `:host-context()` requires an
+   actual ancestor, so `#app.np-full` can never match here. `nowplaying.js`
+   now mirrors the `np-full` class onto `<body>` (a genuine ancestor) at its
+   two existing `#app` toggle call sites, specifically so this selector has
+   something real to match; the pre-existing `#app` toggle stays, since other
+   CSS (`style.css:6883-6889`: `.np-full { --sb: 0px; } .np-full #sb {
+   overflow: hidden; pointer-events: none; }`) still keys off `#app.np-full`.
+   The sidebar column collapses to zero width and stops being interactive in
+   that state, so a docked toast would be invisible there if left in the
+   default state.
 2. `:host-context(html[data-platform="mobile"])` — confirmed via
    `style.css:6614-6619`: `.sb-nav` flips to `flex-direction: row` (a 56px
    horizontal icon bar), no room for a card.
@@ -129,8 +154,11 @@ container; no change needed to `.t-item` itself.
 
 ### Corner fallback (unchanged values, new conditional wrapper)
 
+As shipped (see Implementation Note above for why `body.np-full` rather than
+`#app.np-full`):
+
 ```css
-:host-context(#app.np-full),
+:host-context(body.np-full),
 :host-context(html[data-platform="mobile"]) {
   bottom: auto;
   left: auto;
@@ -168,8 +196,11 @@ stack cap (5), and all logic/JS are untouched by this change.
 | File | Change |
 |---|---|
 | `frontend/src/components/lf-toast-stack.js` | `:host` rule (docked-by-default position/sizing); two new conditional blocks (`:host-context` for np-full/mobile, `@media` for compact) restoring the current corner values as fallback |
+| `frontend/src/nowplaying.js` | 2 lines — mirrors the `np-full` class add/remove/toggle onto `document.body` at its two existing `#app` toggle call sites, so `:host-context(body.np-full)` has a real ancestor to match |
 
-No other file changes. `lf-toast-stack.logic.js` and `ui.js` are untouched.
+`lf-toast-stack.logic.js` and `ui.js` are untouched. See
+`.superpowers/sdd/task-1-report.md` for full rationale on the `nowplaying.js`
+change.
 
 ---
 
@@ -200,15 +231,12 @@ No other file changes. `lf-toast-stack.logic.js` and `ui.js` are untouched.
 - No external network calls — unaffected.
 - No `console.log` added.
 - No `tracks[]` mutation — unaffected.
-- No CSS selector mixing id + class — `:host-context(#app.np-full)` and
-  `:host-context(html[data-platform="mobile"])` are each single-class /
-  single-attribute selectors inside `:host-context()`, not a mixed
-  id+class compound selector; `#app.np-full` matches an existing pattern
-  already used elsewhere in this codebase for the same class
-  (`style.css:6883`, itself previously audited and confirmed compliant per
-  the `AUDIT-2026-07-01 M1` comment there — the class alone carries the
-  semantics, `#app` is only the `:host-context` anchor point, not a new
-  mixed selector authored by this change).
+- No CSS selector mixing id + class — the shipped selector is
+  `:host-context(body.np-full)` (a bare class selector, no id involved at
+  all), and `:host-context(html[data-platform="mobile"])` is a single
+  attribute selector — trivially compliant, no detailed justification
+  needed. See `.superpowers/sdd/task-1-report.md` for why the selector
+  targets `body` rather than `#app`.
 - No new design tokens — reuses `--sb`, `--sp-2`, `--sp-4`, `--pb`, `--tb`,
   all pre-existing.
 
