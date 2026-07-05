@@ -74,9 +74,6 @@ export class LfToastStack extends LitElement {
     :host-context(html[data-platform="mobile"]) .t-item {
       min-width: 260px;
     }
-    @media (max-width: 719px) {
-      .t-item { min-width: 260px; }
-    }
     .t-item {
       pointer-events: auto;
       position: relative;
@@ -99,6 +96,14 @@ export class LfToastStack extends LitElement {
       animation: t-in var(--motion-base) var(--ease-standard);
       cursor: pointer;
       transition: transform var(--motion-fast) var(--ease-standard), box-shadow var(--motion-base) var(--ease-standard);
+    }
+    /* Placed AFTER the base .t-item rule (same tie-break the :host media
+       block above relies on) — @media (max-width: 719px) { .t-item { ... } }
+       has identical specificity to the base rule, so it only wins because
+       it comes later in source order. Moving it earlier would silently
+       disable this fallback again. */
+    @media (max-width: 719px) {
+      .t-item { min-width: 260px; }
     }
     .t-item.t-out { animation: t-out var(--motion-fast) cubic-bezier(.4, 0, 1, 1) forwards; }
     .t-item:hover  { transform: translateY(-1px); box-shadow: var(--shadow-xl, var(--shadow-lg)), 0 0 0 1px color-mix(in srgb, var(--lf-toast-accent) 55%, transparent); }
