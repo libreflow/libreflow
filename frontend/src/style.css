@@ -1367,11 +1367,17 @@ html[data-mode="light"] .q-art img { outline-color: rgba(0,0,0,.08); }
   font-size: var(--fs-md); font-weight: 500; color: var(--t);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   line-height: var(--lh-snug); letter-spacing: var(--ls-tight);
+  /* Densité "compact" (--tr-h: 44px) laisse moins de marge que les autres
+     niveaux ; sans flex-shrink:0 ce flex-item (colonne .ti) peut se faire
+     comprimer sous sa propre line-height quand l'espace vertical est serré,
+     tronquant visuellement le texte au lieu de simplement border la ligne. */
+  flex-shrink: 0;
 }
 .ts   {
   font-size: var(--fs-sm); color: var(--t2); margin-top: var(--sp-micro);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   font-weight: 400; letter-spacing: var(--ls-slight);
+  flex-shrink: 0;
 }
 
 /* Highlight termes de recherche */
