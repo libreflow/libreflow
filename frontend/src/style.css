@@ -3842,6 +3842,23 @@ html[data-mode="light"] .pl-folder-h:hover .pl-folder-count { background: var(--
 .tlist-zoom-radio input[type="radio"]:not(:checked) + span:hover { background: var(--border-2); color: var(--t2); }
 .tlist-zoom-radio input[type="radio"]:active + span { transform: scale(.97); }
 
+/* ── HUD feedback zoom liste de pistes ────────────────────
+   #zoom-hud (index.html) existe déjà en markup (role=status,
+   aria-live=polite) — ce bloc lui donne enfin un style. Affiché
+   brièvement par tlistZoom.js à chaque changement de densité. */
+#zoom-hud {
+  position: fixed; top: calc(var(--tb) + 12px); left: 50%;
+  transform: translateX(-50%) translateY(-6px);
+  background: var(--bg3); color: var(--t); border: var(--border-w-sm) solid var(--sep);
+  padding: var(--sp-1p) var(--sp-3); border-radius: var(--r-pill);
+  font-size: var(--fs-xs); font-weight: 600; letter-spacing: var(--ls-caps);
+  text-transform: uppercase; box-shadow: var(--shadow-lg);
+  opacity: 0; pointer-events: none; z-index: var(--z-toast);
+  transition: opacity var(--dur-fast) ease, transform var(--dur-fast) ease;
+}
+#zoom-hud.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+html[data-motion="reduce"] #zoom-hud { transition: opacity var(--dur-fast) ease; }
+
 .theme-swatches   { display: flex; gap: var(--sp-2); flex-wrap: wrap; }
 .theme-swatch     { width: var(--icon-28); height: var(--icon-28); border-radius: 50%; border: var(--border-w-lg) solid transparent; transition: transform var(--ease), border-color var(--ease), outline-color var(--ease); flex-shrink: 0; padding: 0; cursor: pointer; }
 .theme-swatch:focus-visible { outline: var(--border-w-lg) solid var(--t); outline-offset: var(--sp-1q); }

@@ -1450,6 +1450,26 @@ section('tlistZoom.js -- --tr-h / --tart-size tokens (design-system.css)');
 }());
 
 // =============================================================================
+// tlistZoom — #zoom-hud CSS wired (style.css)
+// =============================================================================
+section('tlistZoom.js -- #zoom-hud CSS (style.css)');
+
+(function () {
+  const fs   = require('fs');
+  const path = require('path');
+  const css  = fs.readFileSync(path.join(__dirname, '../src/style.css'), 'utf8');
+
+  assert(/#zoom-hud\s*\{/.test(css), '#zoom-hud has a base rule');
+  assert(/#zoom-hud\.show\s*\{/.test(css), '#zoom-hud.show has a rule');
+  assert(/#zoom-hud\s*\{[^}]*opacity:\s*0;/.test(css), '#zoom-hud is hidden (opacity:0) by default');
+  assert(/#zoom-hud\.show\s*\{[^}]*opacity:\s*1;/.test(css), '#zoom-hud.show is visible (opacity:1)');
+  assert(
+    /html\[data-motion="reduce"\]\s*#zoom-hud\s*\{/.test(css),
+    '#zoom-hud has a data-motion="reduce" override'
+  );
+}());
+
+// =============================================================================
 // X. bench.cjs --json flag emits one JSON line per scenario
 // =============================================================================
 section('bench.cjs --json — emits valid JSON lines');
