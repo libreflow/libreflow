@@ -1431,11 +1431,11 @@ section('tlistZoom.js -- legacy level name migration');
 
 (function () {
   // Reproduit la logique pure inline (pas d'import ESM) — même map que tlistZoom.js
-  const _LEGACY_ZOOM_MAP = { normal: 'comfortable', comfortable: 'spacious' };
+  const _LEGACY_ZOOM_MAP = { normal: 'comfortable' };
   function migrate(level) { return _LEGACY_ZOOM_MAP[level] || level; }
 
   assert(migrate('normal')      === 'comfortable', "ancien 'normal' → nouveau 'comfortable'");
-  assert(migrate('comfortable') === 'spacious',    "ancien 'comfortable' → nouveau 'spacious'");
+  assert(migrate('comfortable') === 'comfortable', "'comfortable' (nouveau palier valide) inchangé — PAS coercé en 'spacious'");
   assert(migrate('compact')     === 'compact',     "'compact' inchangé (jamais renommé)");
   assert(migrate('spacious')    === 'spacious',    "'spacious' (déjà nouveau) inchangé — pas de double mapping");
 }());

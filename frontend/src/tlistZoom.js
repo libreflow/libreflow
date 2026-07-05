@@ -35,10 +35,20 @@ export const TLIST_ZOOM_ROW_H = {
 };
 
 // Anciens noms de niveaux (avant le renommage Spotify) → nouveaux noms.
-// Remappe une seule fois, à l'entrée de setTlistZoom() — pas de double mapping :
-// 'comfortable' (déjà un nom valide aujourd'hui, = spacious) ne repasse pas dans
-// la map une deuxième fois puisque le lookup n'est fait qu'une fois par appel.
-const _LEGACY_ZOOM_MAP = { normal: 'comfortable', comfortable: 'spacious' };
+// Remappe une seule fois, à l'entrée de setTlistZoom() — pas de double mapping.
+// 'comfortable' est DÉLIBÉRÉMENT absent de la map : ce mot est ambigu, c'était
+// l'ancien palier le plus grand ET c'est aujourd'hui le nouveau palier du milieu
+// (défaut). setTlistZoom() étant appelé sur CHAQUE niveau valide (boot, radio
+// Settings, molette, reset) — pas seulement au chargement d'un vieux cfg — une
+// entrée comfortable→spacious ici coercerait aussi tous les appels légitimes
+// avec le nouveau 'comfortable', le rendant impossible à sélectionner. Il n'y a
+// pas de version de schéma cfg pour distinguer l'ancien 'comfortable' du
+// nouveau ; le compromis retenu (delibéré) : les rares comptes dont le cfg
+// sauvegardé contient encore l'ancien 'comfortable' (= ancien palier max)
+// atterrissent une fois sur le nouveau palier du milieu au lieu de 'spacious'
+// — dégradation cosmétique mineure, ponctuelle, largement préférable à casser
+// le défaut et le palier du milieu pour tout le monde.
+const _LEGACY_ZOOM_MAP = { normal: 'comfortable' };
 
 /**
  * Logique pure de cycling (sans effet de bord — testable unitairement).
