@@ -207,7 +207,7 @@ function _setSrchDisabled(disabled) {
 
 let _searchDebounceTimer = null;
 let _navDirTimer = null;
-const _NAV_ORDER = ['all', 'liked', 'recent', 'artists', 'albums', 'genres', 'playlists', 'radio'];
+const _NAV_ORDER = ['all', 'liked', 'recent', 'artists', 'albums', 'genres', 'playlists'];
 
 /** Annule le debounce de recherche en cours (ex: drill-down depuis renderer.js). */
 export function cancelSearchDebounce() {

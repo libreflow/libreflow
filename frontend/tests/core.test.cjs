@@ -4219,6 +4219,21 @@ section('components/lf-toast-stack.logic.js -- import-smoke');
     assert(/triggerNavWipe\(\)/.test(setViewBlock[0]),
       'setView() calls triggerNavWipe() in the fine-grained direction block');
 
+    // Fine layer's _NAV_ORDER must NOT include 'radio' -- '#vradio' is its own top-level
+    // container (exactly like stats/now-playing), not a sub-view of the library grid the
+    // way all/liked/recent/artists/albums/genres/playlists are. Radio transitions must be
+    // handled solely by the coarse layer (_CONTAINER_TO_COARSE.vradio = 'radio'); leaving
+    // 'radio' in _NAV_ORDER too made both layers fire triggerNavWipe() for one transition
+    // (task-2 review finding, fixed by removing it from this array).
+    const navOrderMatch = /const _NAV_ORDER = \[([^\]]*)\]/.exec(VJS);
+    assert(navOrderMatch, '_NAV_ORDER array literal located');
+    const navOrderEntries = navOrderMatch[1].match(/'[^']+'/g).map(s => s.slice(1, -1));
+    assert(!navOrderEntries.includes('radio'),
+      "_NAV_ORDER no longer contains 'radio' (radio is its own coarse container, not a fine sub-view)");
+    ['all', 'liked', 'recent', 'artists', 'albums', 'genres', 'playlists'].forEach(k => {
+      assert(navOrderEntries.includes(k), `_NAV_ORDER still contains '${k}'`);
+    });
+
     // Coarse layer: _showViewRaw() gets its own order + tracking + detection.
     assert(/_COARSE_NAV_ORDER\s*=\s*\[\s*'welcome',\s*'lib',\s*'stats',\s*'radio',\s*'now-playing'\s*\]/.test(VJS),
       '_COARSE_NAV_ORDER defines the 5 coarse view keys in the expected order');
