@@ -391,7 +391,6 @@ html[data-mode="light"] .ni.on        {
   background: var(--bg4);
   color: var(--t);
 }
-html[data-mode="light"] .ni.on::before { background:var(--g); }
 html[data-mode="light"] .ni.on svg    { opacity:1; color:var(--g); }
 /* Icônes nav inactives — opacity 0.55 trop faible sur fond clair */
 html[data-mode="light"] .ni svg       { opacity: 0.72; }
@@ -935,6 +934,7 @@ body.sb-resizing { cursor: col-resize; user-select: none; }
   flex: 1; padding: var(--sp-3) var(--sp-2);
   display: flex; flex-direction: column; gap: var(--sp-1h);
   overflow-y: auto;
+  position: relative; /* offsetParent for #ni-indicator */
   scrollbar-gutter: stable; /* CLS fix : réserve la place de la scrollbar (comme #tlist) */
 }
 
@@ -957,12 +957,15 @@ body.sb-resizing { cursor: col-resize; user-select: none; }
   background: rgba(var(--g-rgb), .12); color: var(--t);
   position: relative;
 }
-.ni.on::before {
-  content: '';
-  position: absolute; left: 0; top: 50%;
-  transform: translateY(-50%);
-  width: var(--sp-micro); height: var(--icon-xl);
-  background: var(--g); border-radius: 0 var(--r-xs) var(--r-xs) 0;
+/* Active-item bar is now #ni-indicator (a shared sibling in .sb-nav, positioned
+   from views.js _positionNiIndicator()) so it can glide between items instead
+   of popping — a per-item ::before has no shared identity to animate between. */
+#ni-indicator {
+  position: absolute; left: 0; top: 0; width: var(--sp-micro);
+  border-radius: 0 var(--r-xs) var(--r-xs) 0;
+  background: var(--g);
+  opacity: 0;
+  transition: transform var(--motion-fast) var(--ease-spring), height var(--motion-fast) var(--ease-spring);
 }
 /* AUDIT-2026-07-01 M2 : ne pas forcer fill — le CSS battait le fill="none" des
    icônes stroke (cœur Favoris rempli en permanence, hack inline sur #ni-recent). */
@@ -6175,7 +6178,7 @@ html[data-mode="light"] .tn { color: var(--t); font-weight: 500; }
 #modal-bg.on, #pl-modal-bg.on { animation: overlayIn var(--dur-card) var(--smooth) forwards; }
 
 /* AUDIT-2026-07-01 M8 : « 3. Nav active indicator » supprimé — no-op (la règle
-   de base .ni.on::before ne pose aucun box-shadow à annuler). */
+   de base #ni-indicator ne pose aucun box-shadow à annuler). */
 
 /* 4a. Bouton play/pause — pulse doux quand la lecture est en cours */
 @keyframes playGlow {
@@ -6779,13 +6782,14 @@ html[data-platform="mobile"] .ni:focus-visible > span {
   transform: none;
 }
 
-/* Active indicator: top bar (2px, full width, centred) instead of left bar */
-html[data-platform="mobile"] .ni.on::before {
+/* Active indicator: top bar (2px, full width, centred) instead of left bar.
+   NOTE: transform/height are still overwritten inline by _positionNiIndicator()
+   (views.js) on every setView() call, so only left/top/width/border-radius
+   below take effect on mobile — full mobile parity is a known follow-up. */
+html[data-platform="mobile"] #ni-indicator {
   left: 50%;
   top: 0;
-  transform: translateX(-50%);
   width: 24px;
-  height: var(--sp-micro); /* 2px */
   border-radius: 0 0 var(--r-xs) var(--r-xs);
 }
 

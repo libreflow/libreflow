@@ -92,6 +92,16 @@ async function run() {
     assert.ok(/pointer-events\s*:\s*none/.test(m[0]), '#nav-eq-wipe must set pointer-events:none');
   });
 
+  await t('#ni-indicator is aria-hidden and not tab-reachable', () => {
+    const els = findElements(HTML, e => e.id === 'ni-indicator');
+    assert.ok(els.length === 1, '#ni-indicator not found in index.html');
+    assert.strictEqual(els[0].attrs['aria-hidden'], 'true', '#ni-indicator must be aria-hidden="true"');
+    assert.ok(!('tabindex' in els[0].attrs), '#ni-indicator must not declare tabindex');
+  });
+  await t('.ni.on::before pseudo-element indicator removed (replaced by #ni-indicator)', () => {
+    assert.ok(!/\.ni\.on::before/.test(SS), '.ni.on::before should no longer exist in style.css');
+  });
+
   // --- SC 4.1.2 Cinema overlay must have role=dialog + aria-modal -------
   await t('#cinema-overlay has role="dialog"', () => {
     const re = /id="cinema-overlay"[^>]*role="dialog"|role="dialog"[^>]*id="cinema-overlay"/;

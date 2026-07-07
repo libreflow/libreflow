@@ -88,6 +88,29 @@ function normTag(s) {
 }());
 
 // =============================================================================
+// N. views.js -- _positionNiIndicator() position math (reproduced inline —
+// pas d'import ES module, cf. en-tête de ce fichier)
+// =============================================================================
+section('views.js -- _positionNiIndicator() position math');
+
+function computeIndicatorStyle(el) {
+  if (!el) return { opacity: '0' };
+  return { opacity: '1', transform: `translateY(${el.offsetTop}px)`, height: `${el.offsetHeight}px` };
+}
+
+(function () {
+  const fakeActive = { offsetTop: 48, offsetHeight: 36 };
+  const r1 = computeIndicatorStyle(fakeActive);
+  assert(r1.opacity === '1', '_positionNiIndicator: active item -> opacity 1');
+  assert(r1.transform === 'translateY(48px)', '_positionNiIndicator: translateY matches offsetTop');
+  assert(r1.height === '36px', '_positionNiIndicator: height matches offsetHeight');
+
+  const r2 = computeIndicatorStyle(null);
+  assert(r2.opacity === '0', '_positionNiIndicator: no active item -> opacity 0');
+  assert(r2.transform === undefined, '_positionNiIndicator: no active item -> no transform written');
+}());
+
+// =============================================================================
 // 4. Utils — mainArtist
 // =============================================================================
 section('utils.js -- mainArtist');

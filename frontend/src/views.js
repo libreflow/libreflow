@@ -464,6 +464,18 @@ function _svMarkNav(v, btn) {
     const _tab = document.querySelector(`.lib-tab[data-view="${v}"]`);
     if (_tab) { _tab.classList.add('on'); _tab.setAttribute('aria-selected', 'true'); }
   }
+
+  _positionNiIndicator(document.querySelector('.ni.on'));
+}
+
+/** Glide #ni-indicator to the currently active sidebar item (or hide it). */
+function _positionNiIndicator(el) {
+  const ind = document.getElementById('ni-indicator');
+  if (!ind) return;
+  if (!el) { ind.style.opacity = '0'; return; }
+  ind.style.opacity = '1';
+  ind.style.transform = `translateY(${el.offsetTop}px)`;
+  ind.style.height = `${el.offsetHeight}px`;
 }
 
 /** Reset grilles/breadcrumb + mode contenu + titre de vue. */
