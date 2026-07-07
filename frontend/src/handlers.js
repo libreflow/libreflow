@@ -23,7 +23,7 @@
 
 import { togglePlay, prev, next, toggleShuffle, toggleRepeat, toggleLike,
          likeat, playAt, isCurrentTrack, audio }              from './player.js';
-import { toggleQueue, closeQueue, playQueueItem,
+import { toggleQueue, closeQueue, toggleQueuePin, playQueueItem,
          addToQueueNext, addToQueueEnd,
          removeFromQueue, clearExplicitQueue, moveQueueItem }  from './queue.js';
 import { toggleEQ, closeEQ, applyEQPreset,
@@ -160,6 +160,7 @@ const _ACTIONS = {
   // ── Queue ─────────────────────────────────────────────────
   'toggle-queue':          ()    => { closeNowPlaying(); toggleQueue(); },
   'close-queue':           ()    => closeQueue(),
+  'toggle-queue-pin':      ()    => toggleQueuePin(),
   'clear-queue':           ()    => clearExplicitQueue(),
   'remove-from-queue':     btn  => { removeFromQueue(btn.dataset.trackId); },
   'queue-move-up':         btn  => moveQueueItem(btn.dataset.id, -1),

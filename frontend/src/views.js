@@ -38,15 +38,6 @@ function invalidateFilter() {
   emit(EVENTS.FILTER_CHANGED, {});
 }
 
-// ── Welcome ambient hooks (injected by app.js via registerWelcomeHooks) ──────
-let _welcomeOnShow = null;
-let _welcomeOnHide = null;
-
-export function registerWelcomeHooks(onShow, onHide) {
-  _welcomeOnShow = onShow;
-  _welcomeOnHide = onHide;
-}
-
 // ── Helpers d'état ────────────────────────────────────────────────────────────
 // Toutes les lectures passent par get() — les mutations set() maintiennent le store à jour.
 // Les vars locales dans app.js sont synchronisées via subscribe() (déclaré dans app.js).
@@ -154,10 +145,6 @@ export function _showViewRaw(v) {
     // Fallback path : GSAP "exit on top" cross-fade
     transitionViews(prev !== next ? prev : null, next);
   }
-
-  // Welcome ambient particle hooks — no-ops until registerWelcomeHooks() is called.
-  if (next.id === 'vw') _welcomeOnShow?.();
-  else if (prev && prev.id === 'vw') _welcomeOnHide?.();
 }
 
 export function showView(v) {

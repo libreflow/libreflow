@@ -42,6 +42,7 @@ function _waitTauriReady() {
 /** @overload @param {'open_folder'} cmd @returns {Promise<OpenFolderResult | null>} */
 /** @overload @param {'check_paths'} cmd @param {{ paths: string[] }} args @returns {Promise<string[]>} */
 /** @overload @param {'read_audio_props'} cmd @param {{ path: string }} args @returns {Promise<AudioProps>} */
+/** @overload @param {'read_audio_bytes'} cmd @param {{ path: string }} args @returns {Promise<number[]>} */
 /** @overload @param {'write_tags'} cmd @param {{ data: { path: string, title: string, artist: string, album: string, genre: string, year: number|null, track_number: number|null } }} args @returns {Promise<void>} */
 /** @overload @param {'write_cover'} cmd @param {{ data: { audio_path: string, image_path: string } }} args @returns {Promise<void>} */
 /** @overload @param {'write_replaygain_tags'} cmd @param {{ data: { path: string, gain_db: number, peak: number } }} args @returns {Promise<void>} */
@@ -49,6 +50,7 @@ function _waitTauriReady() {
 /** @overload @param {'win_set_title'} cmd @param {{ title: string }} args @returns {Promise<void>} */
 /** @overload @param {'taskbar_set_playing'} cmd @param {{ playing: boolean }} args @returns {Promise<void>} */
 /** @overload @param {'taskbar_set_has_tracks'} cmd @param {{ hasTracks: boolean }} args @returns {Promise<void>} */
+/** @overload @param {'mini_get_state'} cmd @returns {Promise<Record<string, unknown>>} */
 /** @overload @param {'mini_update'} cmd @param {{ data: Record<string, unknown> }} args @returns {Promise<void>} */
 /** @overload @param {'mini_progress'} cmd @param {{ data: Record<string, unknown> }} args @returns {Promise<void>} */
 /** @overload @param {'allow_asset_dir'} cmd @param {{ path: string }} args @returns {Promise<void>} */

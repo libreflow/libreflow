@@ -62,7 +62,7 @@ export function hlText(text, query, re) {
   return text.replace(r, '\x00$1\x01').split('\x00').map((seg, i) => {
     if (i === 0) return esc(seg);
     const parts = seg.split('\x01');
-    return `<mark>${esc(parts[0])}</mark>${esc(parts[1] || '')}`;
+    return `<mark class="srch-hl">${esc(parts[0])}</mark>${esc(parts[1] || '')}`;
   }).join('');
 }
 

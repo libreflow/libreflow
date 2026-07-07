@@ -298,6 +298,11 @@ function _applyThemeVars(t) {
   document.documentElement.style.setProperty('--g-rgb', THEME_RGB[t] || '59,130,246');
   const artWrap = $id('pl-art');
   if (artWrap) artWrap.style.setProperty('--ring-color', THEME_COLORS[t] || '#3b82f6');
+  // Mirror localStorage synchrone — lu par public/boot-theme.js AVANT le premier
+  // paint au prochain boot (la cfg IDB est async, trop tard pour l'attribut initial).
+  // Couvre à la fois le changement utilisateur (setTheme) et la correction au boot
+  // (applyTheme), qui passent tous deux par cette fonction. Cfg = source de vérité.
+  try { localStorage.setItem('lf-theme', t); } catch (e) { console.warn('[settings] mirror lf-theme non écrit:', e); }
 }
 
 export function setTheme(t) {
@@ -489,6 +494,10 @@ export function setMode(mode) {
   // Toolbar toggle button — reflète le mode actif pour les lecteurs d'écran
   const modeBtn = $id('mode-toggle-btn');
   if (modeBtn) modeBtn.setAttribute('aria-pressed', mode === 'light' ? 'true' : 'false');
+  // Mirror localStorage synchrone — lu par public/boot-theme.js AVANT le premier
+  // paint au prochain boot. Called both on user toggle and at boot (app.js:259
+  // setMode(getDisplayMode())), so this single call site covers both mirror-write cases.
+  try { localStorage.setItem('lf-mode', mode); } catch (e) { console.warn('[settings] mirror lf-mode non écrit:', e); }
   saveCfg();
 }
 

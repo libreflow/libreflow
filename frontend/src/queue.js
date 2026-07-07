@@ -5,8 +5,8 @@
 // Remaining window.* : closeSettings (app.js — pas encore extrait).
 //
 // Exports publics (utilisés par app.js + HTML) :
-//   queueOpen
-//   toggleQueue, closeQueue, renderQueue, refreshQueueBadge
+//   queueOpen, queuePinned
+//   toggleQueue, closeQueue, toggleQueuePin, renderQueue, refreshQueueBadge
 //   getQueueState, restoreQueueState, clearQueueOverride
 //   removeFromQueue, clearExplicitQueue
 //   addToQueueNext, addToQueueEnd, playQueueItem
@@ -30,7 +30,9 @@ import { emit, on, EVENTS } from './bus.js';
 import { toast, toastWithAction } from './ui.js';
 
 // Fermeture via bus — évite les cycles d'import avec views.js et settings.js.
-on(EVENTS.PANEL_CLOSE_QUEUE, () => { if (queueOpen) closeQueue(); });
+// Épinglée (queuePinned), la file d'attente ignore ces fermetures forcées : elle
+// reste ouverte (état + DOM) et réapparaît telle quelle une fois l'autre panneau fermé.
+on(EVENTS.PANEL_CLOSE_QUEUE, () => { if (queueOpen && !queuePinned) closeQueue(); });
 
 // ── Focus trap ──────────────────────────────────────────────
 // FOCUS-1 FIX : trap Tab/Shift+Tab dans #queue-panel quand ouvert.
@@ -59,6 +61,7 @@ function _setupQueueFocusTrap(panel) {
 
 // ── State ────────────────────────────────────────────────────
 export let queueOpen  = false;
+export let queuePinned = false;
 // BUG FIX : mémoriser l'ordre de la queue après un drag-drop utilisateur.
 // On stocke les IDs + le curIdx au moment du reorder pour détecter un changement de piste.
 let _queueOverride        = null; // null | Array<string> (IDs dans l'ordre voulu)
@@ -227,6 +230,16 @@ export function toggleQueue() {
     const panel = document.getElementById('queue-panel');
     if (panel) _setupQueueFocusTrap(panel);
   }
+}
+
+/** Épingle/désépingle la file d'attente : épinglée, elle ignore panel:close_queue
+ *  (émis quand un autre panneau modal/latéral s'ouvre) et reste affichée. */
+export function toggleQueuePin() {
+  queuePinned = !queuePinned;
+  const btn = document.querySelector('[data-action="toggle-queue-pin"]');
+  btn?.classList.toggle('on', queuePinned);
+  btn?.setAttribute('aria-pressed', String(queuePinned));
+  document.getElementById('queue-panel')?.classList.toggle('pinned', queuePinned);
 }
 
 export function closeQueue() {

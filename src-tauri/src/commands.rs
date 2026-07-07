@@ -410,6 +410,40 @@ pub async fn read_audio_props(path: String) -> Option<AudioProps> {
     .flatten()
 }
 
+/// Lit les octets bruts d'un fichier audio pour décodage côté JS (analyse ReplayGain
+/// via OfflineAudioContext.decodeAudioData). Plafonné à 30 Mo — le JS estime déjà la
+/// taille avant d'appeler (CFG.RG_MAX_FILE_BYTES) mais on revalide côté Rust en défense
+/// en profondeur, l'estimation JS étant basée sur la durée et pouvant sous-évaluer.
+/// Async avec spawn_blocking pour éviter de bloquer le thread Tauri sur les gros fichiers.
+#[tauri::command]
+pub async fn read_audio_bytes(path: String) -> Option<Vec<u8>> {
+    const MAX_BYTES: u64 = 31_457_280; // 30 Mo — même plafond que CFG.RG_MAX_FILE_BYTES (JS)
+    tokio::task::spawn_blocking(move || {
+        let p = Path::new(&path);
+        if !is_audio(p) {
+            return None;
+        }
+        let canon = std::fs::canonicalize(p).ok()?;
+        if !is_audio(&canon) {
+            return None;
+        }
+        // Même garde is_safe_dir que read_tags/read_audio_props.
+        if let Some(parent) = canon.parent() {
+            if !is_safe_dir(parent) {
+                return None;
+            }
+        }
+        let meta = std::fs::metadata(&canon).ok()?;
+        if meta.len() > MAX_BYTES {
+            return None;
+        }
+        std::fs::read(&canon).ok()
+    })
+    .await
+    .ok()
+    .flatten()
+}
+
 /// Résout le dossier Musique de l'OS et crée `LibreFlow/` dedans si absent.
 /// Retourne le chemin canonique du sous-dossier créé.
 /// Windows : %USERPROFILE%\Music\LibreFlow
