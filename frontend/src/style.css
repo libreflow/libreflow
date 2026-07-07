@@ -6783,13 +6783,15 @@ html[data-platform="mobile"] .ni:focus-visible > span {
 }
 
 /* Active indicator: top bar (2px, full width, centred) instead of left bar.
-   NOTE: transform/height are still overwritten inline by _positionNiIndicator()
-   (views.js) on every setView() call, so only left/top/width/border-radius
-   below take effect on mobile — full mobile parity is a known follow-up. */
+   _positionNiIndicator() (views.js) skips setting inline transform/height on
+   mobile specifically so these two declarations below can take effect instead
+   of the desktop gliding geometry. */
 html[data-platform="mobile"] #ni-indicator {
   left: 50%;
   top: 0;
+  transform: translateX(-50%);
   width: 24px;
+  height: var(--sp-micro);
   border-radius: 0 0 var(--r-xs) var(--r-xs);
 }
 

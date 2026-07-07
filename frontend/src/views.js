@@ -468,12 +468,16 @@ function _svMarkNav(v, btn) {
   _positionNiIndicator(document.querySelector('.ni.on'));
 }
 
-/** Glide #ni-indicator to the currently active sidebar item (or hide it). */
+/** Glide #ni-indicator to the currently active sidebar item (or hide it).
+ * Skips inline transform/height on mobile — html[data-platform="mobile"]
+ * #ni-indicator (style.css) owns that geometry instead (centered top bar,
+ * distinct from the desktop gliding side bar). */
 function _positionNiIndicator(el) {
   const ind = document.getElementById('ni-indicator');
   if (!ind) return;
   if (!el) { ind.style.opacity = '0'; return; }
   ind.style.opacity = '1';
+  if (document.documentElement.dataset.platform === 'mobile') return;
   ind.style.transform = `translateY(${el.offsetTop}px)`;
   ind.style.height = `${el.offsetHeight}px`;
 }

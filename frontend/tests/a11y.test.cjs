@@ -18,6 +18,7 @@ async function run() {
   const DS  = readRepoFile('frontend/src/design-system.css');
   const SS  = readRepoFile('frontend/src/style.css');
   const HTML = readRepoFile('frontend/index.html');
+  const VJ  = readRepoFile('frontend/src/views.js');
 
   // --- SC 1.4.11 Non-text Contrast (borders >= 3:1 on Vantablack) -------
   function extractBorderAlpha(css, tokenName) {
@@ -100,6 +101,24 @@ async function run() {
   });
   await t('.ni.on::before pseudo-element indicator removed (replaced by #ni-indicator)', () => {
     assert.ok(!/\.ni\.on::before/.test(SS), '.ni.on::before should no longer exist in style.css');
+  });
+  await t('mobile #ni-indicator rule still declares its own transform/height (top-bar geometry)', () => {
+    const re = /html\[data-platform="mobile"\]\s*#ni-indicator\s*\{([^}]*)\}/;
+    const m = re.exec(SS);
+    assert.ok(m, 'html[data-platform="mobile"] #ni-indicator rule not found in style.css');
+    assert.ok(/transform\s*:\s*translateX/.test(m[1]), 'mobile #ni-indicator rule must declare transform: translateX(...)');
+    assert.ok(/height\s*:\s*var\(--sp-micro\)/.test(m[1]), 'mobile #ni-indicator rule must declare height: var(--sp-micro)');
+  });
+  await t('_positionNiIndicator() guards inline transform/height writes on mobile', () => {
+    const re = /function _positionNiIndicator\(el\)\s*\{([\s\S]*?)\n\}/;
+    const m = re.exec(VJ);
+    assert.ok(m, '_positionNiIndicator() not found in views.js');
+    const body = m[1];
+    const guardIdx = body.search(/dataset\.platform\s*===\s*['"]mobile['"]/);
+    const transformIdx = body.search(/ind\.style\.transform\s*=/);
+    assert.ok(guardIdx !== -1, '_positionNiIndicator() must guard on dataset.platform === "mobile"');
+    assert.ok(transformIdx !== -1, '_positionNiIndicator() must still write ind.style.transform for desktop');
+    assert.ok(guardIdx < transformIdx, 'mobile guard must appear before the inline transform/height writes');
   });
 
   // --- SC 4.1.2 Cinema overlay must have role=dialog + aria-modal -------
