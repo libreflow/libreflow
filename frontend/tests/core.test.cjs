@@ -4198,6 +4198,40 @@ section('components/lf-toast-stack.logic.js -- import-smoke');
     _ko++;
   }
 
+  // ===========================================================================
+  // N+3. views.js -- fine + coarse nav-direction wiring (structural)
+  // ===========================================================================
+  try {
+    const fs = require('fs'), path = require('path');
+    const root = path.join(__dirname, '..');
+    const VJS = fs.readFileSync(path.join(root, 'src/views.js'), 'utf8');
+
+    section('views.js -- nav-direction + wipe wiring');
+
+    assert(/import\s*\{\s*runViewTransition,\s*triggerNavWipe\s*\}\s*from\s*'\.\/view-transition\.js'/.test(VJS),
+      'views.js imports triggerNavWipe from view-transition.js');
+
+    // Fine layer: setView()'s existing data-nav-dir block also fires the wipe.
+    const setViewBlock = /export function setView[\s\S]*?_withVT\(\(\) => \{/.exec(VJS);
+    assert(setViewBlock, 'setView() body located');
+    assert(/setAttribute\('data-nav-dir'/.test(setViewBlock[0]),
+      'setView() still sets data-nav-dir (fine layer untouched)');
+    assert(/triggerNavWipe\(\)/.test(setViewBlock[0]),
+      'setView() calls triggerNavWipe() in the fine-grained direction block');
+
+    // Coarse layer: _showViewRaw() gets its own order + tracking + detection.
+    assert(/_COARSE_NAV_ORDER\s*=\s*\[\s*'welcome',\s*'lib',\s*'stats',\s*'radio',\s*'now-playing'\s*\]/.test(VJS),
+      '_COARSE_NAV_ORDER defines the 5 coarse view keys in the expected order');
+    assert(/let _lastCoarseView/.test(VJS), '_lastCoarseView module-level tracking var declared');
+    const rawBlock = /export function _showViewRaw[\s\S]*?\n\}/.exec(VJS);
+    assert(rawBlock, '_showViewRaw() body located');
+    assert(/triggerNavWipe\(\)/.test(rawBlock[0]),
+      '_showViewRaw() calls triggerNavWipe() in the coarse direction block');
+  } catch (e) {
+    console.error('  KO  views.js nav-direction wiring scan crashed:', e.message);
+    _ko++;
+  }
+
   try {
     const fs = require('fs'), path = require('path');
     const root = path.join(__dirname, '../..');

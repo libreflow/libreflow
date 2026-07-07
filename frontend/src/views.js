@@ -28,7 +28,7 @@ import { openNewPlaylistModal, renderPlHero }                        from './pla
 import { openSmartPlaylistModal }                                    from './smartplaylist.js';
 import { saveCfg }                                                   from './cfgsave.js';
 import { clearSelection }                                            from './selection.js';
-import { runViewTransition }                                         from './view-transition.js';
+import { runViewTransition, triggerNavWipe }                         from './view-transition.js';
 import { transitionViews, staggerIn }                                from './motion.js';
 
 // Inline helper — équivalent de app.js:invalidateFilter() (ARCH-1, no circular dep)
@@ -109,11 +109,34 @@ function _deferGridRender(renderFn) {
 
 // ══ VUE BRUTE (sans VT) ══════════════════════════════════════════════════════
 
+const _COARSE_NAV_ORDER = ['welcome', 'lib', 'stats', 'radio', 'now-playing'];
+let _lastCoarseView = null;
+
 /** Bascule vers une vue sans View Transition — utilisé en interne pour éviter l'imbrication. */
 export function _showViewRaw(v) {
   const map = { welcome: 'vw', wlc: 'vw', scan: 'vscan', lib: 'vlib', stats: 'vstats', radio: 'vradio', 'now-playing': 'vnp' };
   const next = document.getElementById(map[v] || 'vlib');
   if (!next) return;
+
+  // Coarse direction layer — covers welcome/lib/stats/radio/now-playing switches
+  // that the fine _NAV_ORDER layer in setView() never sees (that layer only
+  // compares two fine sub-view keys, e.g. 'albums' vs 'artists', both of which
+  // resolve to the SAME coarse container here — so this stays silent for those,
+  // and the fine layer stays silent whenever the destination isn't one of its 8
+  // sub-view keys — each transition is handled by exactly one of the two layers.
+  const _CONTAINER_TO_COARSE = { vw: 'welcome', vlib: 'lib', vstats: 'stats', vradio: 'radio', vnp: 'now-playing' };
+  const _coarseTo = _CONTAINER_TO_COARSE[next.id];
+  if (_coarseTo) {
+    const _cfi = _COARSE_NAV_ORDER.indexOf(_lastCoarseView);
+    const _cti = _COARSE_NAV_ORDER.indexOf(_coarseTo);
+    if (_cfi >= 0 && _cti >= 0 && _cfi !== _cti) {
+      document.documentElement.setAttribute('data-nav-dir', _cti > _cfi ? 'forward' : 'back');
+      setTimeout(() => document.documentElement.removeAttribute('data-nav-dir'), 400);
+      triggerNavWipe();
+    }
+    _lastCoarseView = _coarseTo;
+  }
+
   if (v === 'welcome' || v === 'wlc') {
     document.querySelectorAll('.sb-nav .ni').forEach(b => {
       b.classList.remove('on');
@@ -348,12 +371,14 @@ export function setView(v, btn, plId) {
   clearSelection();
 
   // Direction slide — active les animations directionnelles CSS (navSlideOut/In)
+  // + le wipe équaliseur (triggerNavWipe) — même attribut, même granularité fine.
   const _fi = _NAV_ORDER.indexOf(get('view') || 'all');
   const _ti = _NAV_ORDER.indexOf(v);
   if (_fi >= 0 && _ti >= 0 && _fi !== _ti) {
     clearTimeout(_navDirTimer);
     document.documentElement.setAttribute('data-nav-dir', _ti > _fi ? 'forward' : 'back');
     _navDirTimer = setTimeout(() => document.documentElement.removeAttribute('data-nav-dir'), 400);
+    triggerNavWipe();
   }
 
   _withVT(() => {
