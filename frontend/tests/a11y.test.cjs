@@ -3,7 +3,7 @@
 'use strict';
 
 const assert = require('assert');
-const { readRepoFile, flattenAlpha } = require('./_a11y.cjs');
+const { readRepoFile, flattenAlpha, findElements } = require('./_a11y.cjs');
 const { contrastRatio } = require('./_wcag.cjs');
 
 async function run() {
@@ -74,6 +74,22 @@ async function run() {
       || /filter\s*:.*drop-shadow/i.test(cssText);
     assert.ok(hasCue,
       '.tlk.on relies on color only — add a non-color cue (background, transform, or filled-icon swap)');
+  });
+
+  // --- Nav equalizer wipe overlay — decorative only, never in the a11y tree ---
+  await t('#nav-eq-wipe is aria-hidden and has 7 .wbar children', () => {
+    const els = findElements(HTML, e => e.id === 'nav-eq-wipe');
+    assert.ok(els.length === 1, '#nav-eq-wipe not found in index.html');
+    assert.strictEqual(els[0].attrs['aria-hidden'], 'true', '#nav-eq-wipe must be aria-hidden="true"');
+    const wipeBlock = /<div id="nav-eq-wipe"[^>]*>([\s\S]*?)<\/div>/.exec(HTML);
+    assert.ok(wipeBlock, '#nav-eq-wipe block not found');
+    const barCount = (wipeBlock[1].match(/class="wbar"/g) || []).length;
+    assert.strictEqual(barCount, 7, `#nav-eq-wipe should contain 7 .wbar spans, found ${barCount}`);
+  });
+  await t('#nav-eq-wipe is pointer-events:none in CSS', () => {
+    const m = /#nav-eq-wipe\s*\{[^}]*\}/.exec(SS);
+    assert.ok(m, '#nav-eq-wipe base rule not found in style.css');
+    assert.ok(/pointer-events\s*:\s*none/.test(m[0]), '#nav-eq-wipe must set pointer-events:none');
   });
 
   // --- SC 4.1.2 Cinema overlay must have role=dialog + aria-modal -------

@@ -1479,6 +1479,36 @@ html[data-mode="light"] mark.srch-hl { background: rgba(var(--g-rgb), .22); }
 /* Mouvement réduit : barres statiques, pas d'animation */
 html[data-motion="reduce"] .eq-bars span { animation: none; height: 8px; }
 
+/* ── Nav equalizer wipe — reuses the .eq-bars visual language (bar width/color/
+   radius) for the main-nav transition accent. One-shot pulse (eq-wipe), unlike
+   .eq-bars' infinite eq-dance loop. Purely decorative — see .eq-bars above for
+   the "now playing" indicator this deliberately echoes. ────────────────────── */
+#nav-eq-wipe {
+  position: absolute; top: 0; left: 0; right: 0;
+  display: flex; align-items: flex-end; justify-content: center; gap: var(--sp-1);
+  height: 20px; pointer-events: none; z-index: var(--z-sticky);
+  opacity: 0;
+}
+#nav-eq-wipe.wiping { opacity: 1; }
+.wbar {
+  width: 3px; height: 4px; background: var(--g); border-radius: 1px;
+  transform-origin: bottom;
+}
+#nav-eq-wipe.wiping .wbar { animation: eq-wipe var(--motion-base) var(--ease-standard) both; }
+#nav-eq-wipe.wiping .wbar:nth-child(1) { animation-delay: 0ms;  }
+#nav-eq-wipe.wiping .wbar:nth-child(2) { animation-delay: 14ms; }
+#nav-eq-wipe.wiping .wbar:nth-child(3) { animation-delay: 28ms; }
+#nav-eq-wipe.wiping .wbar:nth-child(4) { animation-delay: 42ms; }
+#nav-eq-wipe.wiping .wbar:nth-child(5) { animation-delay: 56ms; }
+#nav-eq-wipe.wiping .wbar:nth-child(6) { animation-delay: 70ms; }
+#nav-eq-wipe.wiping .wbar:nth-child(7) { animation-delay: 84ms; }
+
+@keyframes eq-wipe {
+  0%   { height: 4px;  opacity: .35; }
+  45%  { height: 20px; opacity: 1;   }
+  100% { height: 4px;  opacity: 0;   }
+}
+
 /* Bouton like — visible seulement au hover ou si actif */
 .tlk {
   background: none; border: none; color: var(--t3); padding: var(--sp-1p);
@@ -5957,6 +5987,10 @@ html[data-nav-dir="back"] ::view-transition-new(main-content) {
 @keyframes navSlideInRight  { from { opacity: 0; transform: translateX(var(--sp-4h));  } }
 @keyframes navSlideOutRight { to   { opacity: 0; transform: translateX(var(--sp-4h));  } }
 @keyframes navSlideInLeft   { from { opacity: 0; transform: translateX(calc(-1 * var(--sp-4h))); } }
+
+/* Nav equalizer wipe sweeps opposite direction on back-navigation — same
+   data-nav-dir attribute the directional slide above already uses. */
+html[data-nav-dir="back"] #nav-eq-wipe { flex-direction: row-reverse; }
 
 /* Supprime les animations concurrentes pendant une View Transition */
 html.vt-running .view.on   { animation: none !important; }

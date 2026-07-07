@@ -4175,6 +4175,29 @@ section('components/lf-toast-stack.logic.js -- import-smoke');
     _ko++;
   }
 
+  // ===========================================================================
+  // N+2. view-transition.js -- triggerNavWipe() structural checks
+  // ===========================================================================
+  try {
+    const fs = require('fs'), path = require('path');
+    const root = path.join(__dirname, '..');
+    const VT = fs.readFileSync(path.join(root, 'src/view-transition.js'), 'utf8');
+
+    section('view-transition.js -- triggerNavWipe()');
+
+    assert(/export function triggerNavWipe\s*\(\s*\)/.test(VT),
+      'triggerNavWipe() is exported');
+    assert(/dataset\.motion === 'reduce'\)\s*return;/.test(VT),
+      'triggerNavWipe() short-circuits under data-motion="reduce"');
+    assert(/getElementById\(WIPE_ID\)/.test(VT) || /getElementById\('nav-eq-wipe'\)/.test(VT),
+      'triggerNavWipe() targets #nav-eq-wipe');
+    assert(/classList\.add\(WIPE_CLASS\)/.test(VT) || /classList\.add\('wiping'\)/.test(VT),
+      'triggerNavWipe() adds the wiping class');
+  } catch (e) {
+    console.error('  KO  view-transition.js triggerNavWipe scan crashed:', e.message);
+    _ko++;
+  }
+
   try {
     const fs = require('fs'), path = require('path');
     const root = path.join(__dirname, '../..');
