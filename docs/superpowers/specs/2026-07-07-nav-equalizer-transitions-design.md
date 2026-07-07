@@ -73,9 +73,14 @@ Static markup, added once (not recreated per-transition):
 </div>
 ```
 
-- Positioned `absolute`, anchored under the view header (`#vhtitle`), horizontally
-  centered, `pointer-events:none`, `opacity:0` at rest. Never in tab order, never
-  intercepts clicks.
+- Positioned `absolute` as a **direct child of `#main`** (which is already
+  `position: relative` — `style.css:1056-1063`), pinned to the top edge
+  (`top:0; left:0; right:0`), centered horizontally, `pointer-events:none`,
+  `opacity:0` at rest. `#main` is the one container present regardless of which
+  `.view` is active (`#vhtitle` only exists inside `#vlib` — Stats/Radio/Now
+  Playing/Welcome don't have it, so anchoring there would only work for library
+  views). `z-index: var(--z-sticky)` — above view content, below dropdowns/modals.
+  Never in tab order, never intercepts clicks.
 - `.wbar` styling deliberately matches `.eq-bars span` (3px width, `var(--g)`, 1px
   radius, `transform-origin: bottom`) — same bars, different context — rather than a
   new shape. Each `.wbar` gets a fixed `animation-delay` via `:nth-child` (0, 18,
@@ -107,21 +112,42 @@ Called from the same call sites that set `data-nav-dir` (see §2) — one call s
 covers both the VT-API path and the GSAP fallback path, since the wipe is an
 independent CSS layer, not tied to `::view-transition-*` pseudo-elements.
 
-### 2. Unify directional detection across all main-nav switches
+### 2. Unify directional detection across all main-nav switches — two layers
 
-Extend the conceptual order (currently in `views.js`, scoped to library sub-views)
-to include the top-level views:
+`setView()`'s existing fine-grained `_NAV_ORDER` (`all/liked/recent/artists/albums/
+genres/playlists/radio`) stays exactly as-is — it already fires correctly for
+library sub-view navigation. It gains one addition: a `triggerNavWipe()` call
+alongside its existing `data-nav-dir` set.
+
+A **separate, coarse** layer is added at `_showViewRaw(v)` (`views.js:113`) — the
+single physical DOM-swap function reached by every path: `showView()` (welcome/scan/
+now-playing), `_svDispatchView()`'s internal calls (`_showViewRaw('lib'|'stats'|
+'radio')`), and `nowplaying.js`'s direct call (`nowplaying.js:233`). This is
+deliberately a second, independent order/tracking pair — reusing the fine
+`_NAV_ORDER` for this would collapse all library sub-views to the same coarse
+target (`'lib'`) and either miss real transitions or double-fire alongside the fine
+layer:
 
 ```js
-const _NAV_ORDER = ['all', 'liked', 'recent', 'artists', 'albums', 'genres', 'playlists', 'radio', 'stats', 'now-playing'];
+const _COARSE_NAV_ORDER = ['welcome', 'lib', 'stats', 'radio', 'now-playing'];
+let _lastCoarseView = null; // module-level, seeded on first _showViewRaw() call
 ```
 
-The existing direction-detection block in `setView()` (index comparison, `data-nav-dir`
-attribute, 400ms cleanup timer — unchanged mechanism from the 2026-07-01 spec) now
-also fires for `stats`/`now-playing`. `showView()`/`_showViewRaw()` gains the same
-direction-detection + `triggerNavWipe()` call for the views it handles directly, so
-every main-nav path (sidebar single-view, library tabs, Stats, Radio, Now Playing)
-ends up going through one consistent direction + wipe treatment.
+Inside `_showViewRaw(v)`, before the existing VT-branch: normalize `v` (`'wlc'` →
+`'welcome'`; `'scan'` is intentionally excluded from the order — an interstitial,
+not a navigable destination, so `indexOf` returns -1 and it falls through to the
+existing plain fade, unchanged from today). If both the normalized previous and
+current coarse keys are found in `_COARSE_NAV_ORDER` and differ, set `data-nav-dir`
+(same attribute the fine layer uses) and call `triggerNavWipe()`. Always update
+`_lastCoarseView` at the end, regardless of whether a direction fired.
+
+**Why this doesn't double-fire:** the fine layer only ever compares two fine
+sub-view keys (e.g. `albums` → `artists`); when the destination is `stats` or
+`now-playing` (not in `_NAV_ORDER`), the fine layer's index lookup returns -1 and
+it stays silent — only the coarse layer fires. Conversely, when two fine sub-views
+both map to the same coarse container (e.g. `albums` → `artists`, both `'lib'`),
+the coarse layer sees no change and stays silent — only the fine layer fires. Each
+transition is handled by exactly one layer.
 
 ### 3. Sidebar indicator glide
 
@@ -154,7 +180,7 @@ measurable perf cost. When no `.ni` is active (e.g. drill-down/playlist detail),
 | `frontend/index.html` | + `#nav-eq-wipe` (7 `.wbar` children) near `#content-area`; + `#ni-indicator` inside `.sb-nav` |
 | `frontend/src/style.css` | + `.wbar`/`eq-wipe` keyframes + direction reversal rule; replace `.ni.on::before` rule with `#ni-indicator` positioning/transition rules |
 | `frontend/src/view-transition.js` | + `triggerNavWipe()` |
-| `frontend/src/views.js` | extend `_NAV_ORDER`; call `triggerNavWipe()` alongside existing `data-nav-dir` logic in `setView()`; add direction-detection + wipe trigger to `showView()`/`_showViewRaw()`; extend `_svMarkNav()` to position `#ni-indicator` |
+| `frontend/src/views.js` | call `triggerNavWipe()` alongside existing `data-nav-dir` logic in `setView()`; add `_COARSE_NAV_ORDER`/`_lastCoarseView` + coarse direction-detection + `triggerNavWipe()` call to `_showViewRaw()`; extend `_svMarkNav()` to position `#ni-indicator` |
 
 ---
 
