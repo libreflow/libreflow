@@ -346,7 +346,6 @@ html[data-mode="light"] .pl-art {
 html[data-mode="light"] .pbar         { background:var(--bg5); }
 html[data-mode="light"] .pfill        { background:var(--g); }
 html[data-mode="light"] .pbar:hover .pfill { background:var(--g); filter:brightness(1.1); }
-html[data-mode="light"] .pbar-handle  { background:var(--g); }
 /* Thumb progress bar — blanc invisible sur fond clair → accent */
 html[data-mode="light"] .pbar:hover .pfill::after {
   background: var(--g);
@@ -376,8 +375,7 @@ html[data-mode="light"] .pcplay:hover  { filter:brightness(1.08); transform:scal
 html[data-mode="light"] .pc           { color:var(--t2); }
 html[data-mode="light"] .pc:hover     { color:var(--t); background:var(--bg4); transform:scale(1.08); }
 html[data-mode="light"] .pc.on        { color:var(--g); background:var(--accent-subtle); }
-html[data-mode="light"] #pl-n-time,
-html[data-mode="light"] .pl-dur       { color:var(--t3); }
+html[data-mode="light"] #pl-n-time    { color:var(--t3); }
 
 /* ── Titlebar ── */
 html[data-mode="light"] .tbt          { color:var(--t3); }
@@ -432,11 +430,10 @@ html[data-mode="light"] .tr.act       {
 html[data-mode="light"] .tr.act .tn   { color:var(--t); font-weight:600; }
 html[data-mode="light"] .tr.act .ts   { color:var(--t2); }
 html[data-mode="light"] .tr.selected  { background:rgba(var(--g-rgb),.1); }
-html[data-mode="light"] .tname, html[data-mode="light"] .tn { color:var(--t); }
-html[data-mode="light"] .tsub,  html[data-mode="light"] .ts { color:var(--t3); }
+html[data-mode="light"] .tn { color:var(--t); }
+html[data-mode="light"] .ts { color:var(--t3); }
 html[data-mode="light"] .tdur         { color:var(--t3); }
 html[data-mode="light"] .tart         { background:var(--bg4); }
-html[data-mode="light"] .grp-lbl      { color:var(--t3); background:var(--bg); letter-spacing: var(--ls-label); border-bottom:var(--border-w-sm) solid var(--sep); box-shadow: 0 1px 0 var(--border-subtle); }
 /* SC 1.4.11 (3:1 UI) : --t4 (#95A0B4) = 2.42:1 sur --bg → remplacé par --t3 (#373C4C) = 10.97:1 */
 html[data-mode="light"] .tlk svg      { stroke:var(--t3); }
 html[data-mode="light"] .tlk.on svg   { stroke:var(--g); fill:var(--g); }
@@ -464,7 +461,6 @@ html[data-mode="light"] .genre-badge { background:var(--row-active); border-colo
 /* background/border automatiques via --glass-panel / --border-3 */
 html[data-mode="light"] #ctx-menu,
 html[data-mode="light"] #pl-ctx-menu  { backdrop-filter:none; -webkit-backdrop-filter:none; box-shadow:var(--shadow-ctx-lt); }
-html[data-mode="light"] .ctx-head     { color:var(--t); border-bottom:var(--border-w-sm) solid var(--sep); }
 html[data-mode="light"] .ctx-item                { color:var(--t2); }
 html[data-mode="light"] .ctx-item:hover          { background:var(--bg4); color:var(--t); }
 html[data-mode="light"] .ctx-item svg            { stroke:var(--t3); }
@@ -488,8 +484,7 @@ html[data-mode="light"] #batch-tag-modal {
   box-shadow: var(--shadow-modal2);
 }
 html[data-mode="light"] .modal-title   { color:var(--t); }
-html[data-mode="light"] .modal-inp,
-html[data-mode="light"] .modal-select  { background:var(--bg4); border-color:var(--bg5); color:var(--t); }
+html[data-mode="light"] .modal-inp     { background:var(--bg4); border-color:var(--bg5); color:var(--t); }
 html[data-mode="light"] .modal-inp:focus { border-color:var(--g); background:var(--bg2); }
 html[data-mode="light"] .modal-tab     { color:var(--t3); border-color:var(--bg5); }
 html[data-mode="light"] .modal-tab.on  { color:var(--t); border-color:var(--g); }
@@ -534,7 +529,6 @@ html[data-mode="light"] #usb-modal-bg {
 /* ── Settings ── */
 html[data-mode="light"] #settings-box    { background:var(--bg2); }
 html[data-mode="light"] .set-section     { border-bottom:var(--border-w-sm) solid var(--bg5); }
-html[data-mode="light"] .set-row-t       { color:var(--t); }
 html[data-mode="light"] .set-row-sub     { color:var(--t3); }
 
 /* ── Panneau EQ ── */
@@ -672,9 +666,6 @@ html[data-mode="light"] .hm-legend-cell[data-n="1"] { background:rgba(var(--g-rg
 html[data-mode="light"] .hm-legend-cell[data-n="2"] { background:rgba(var(--g-rgb),.35); }
 html[data-mode="light"] .hm-legend-cell[data-n="3"] { background:rgba(var(--g-rgb),.60); }
 html[data-mode="light"] .hm-legend-cell[data-n="4"] { background:var(--g); }
-html[data-mode="light"] .top-bar-fill  { background:var(--g); }
-html[data-mode="light"] .top-bar-track { background:var(--bg4); }
-
 /* ── Seek-tip (B3.7) ── */
 html[data-mode="light"] #seek-tip  { background:var(--bg-elevated); color:var(--text-primary); border-color:var(--border-default); box-shadow:var(--elev-2); }
 
@@ -924,10 +915,6 @@ body.sb-resizing { cursor: col-resize; user-select: none; }
 .clear-filters-btn:hover { background: var(--accent-mid); }
 .clear-filters-btn:focus-visible { outline: var(--focus-ring); outline-offset: var(--focus-offset); }
 .clear-filters-btn svg { flex-shrink: 0; }
-
-.sb-stat-val {
-  font-variant-numeric: tabular-nums;
-}
 
 .sb-nav {
   flex: 1; padding: var(--sp-3) var(--sp-2);
@@ -1205,16 +1192,6 @@ body.sb-resizing { cursor: col-resize; user-select: none; }
 
 /* ═══ LISTE DE TITRES ════════════════════════════════════════ */
 /* .tlist styles managed via #content-area #tlist below */
-
-.grp-lbl {
-  padding: var(--sp-4) var(--sp-3h) var(--sp-2);
-  font-size: var(--fs-xs); font-weight: 700; color: var(--t3);
-  letter-spacing: var(--ls-caps); text-transform: uppercase;
-  position: sticky; top: 0; z-index: var(--z-sticky);
-  background: var(--bg);
-  border-bottom: var(--border-w-sm) solid var(--sep);
-  min-height: 28px; /* doit correspondre à VIRT_GRP_H dans cfg.js */
-}
 
 .tr {
   display: grid; grid-template-columns: var(--art-list) minmax(0,1fr) minmax(0,var(--tr-album-col)) auto;
@@ -1753,7 +1730,7 @@ html[data-motion="reduce"] .eq-bars span { animation: none; height: 8px; }
 #content-area #tlist   { flex: 1; overflow-y: auto; padding: var(--sp-1h) var(--sp-2h) var(--sp-4); min-height: 0;
                          scrollbar-gutter: stable;         /* CLS fix : réserve la place de la scrollbar dès le départ */
                          /* WCAG 2.2 SC 2.4.11 : réserver la hauteur de l'en-tête de groupe collant
-                            (.grp-lbl, sticky top:0, min-height 28px) pour qu'une ligne focusée au
+                            (.tr-grp, sticky top:0, min-height 28px) pour qu'une ligne focusée au
                             clavier ne se retrouve jamais masquée dessous (scrollIntoView/focus). */
                          scroll-padding-top: 32px;
                          contain: layout paint;            /* CLS fix : les re-renders virtuels n'affectent pas le layout parent */ }
@@ -2919,12 +2896,6 @@ html[data-mode="light"] .orphan-item { border-bottom-color: var(--bg5); }
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   font-family: monospace;
 }
-.orphan-more {
-  padding: var(--sp-1h) var(--sp-2h);
-  font-size: var(--fs-caption); color: var(--t3); font-style: italic;
-  list-style: none;
-}
-
 /* Bouton "Relocaliser" par piste */
 .orphan-relocate-btn {
   flex-shrink: 0;
@@ -3326,7 +3297,6 @@ html[data-mode="light"] .bte-cover-clear    { background: var(--bg3); border-col
 }
 .pl-nav-empty-ico { opacity: .18; }
 .pl-nav-empty-h   { font-size: var(--fs-caption); font-weight: 600; color: var(--t2); }
-.pl-nav-empty-s   { font-size: var(--fs-sm); color: var(--t3); line-height: var(--lh-base); text-wrap: pretty; }
 .pl-nav-empty-btn {
   margin-top: var(--sp-1h); padding: var(--sp-1p) var(--sp-3h);
   border-radius: var(--r); border: var(--border-w-sm) solid var(--bg5);
@@ -3544,9 +3514,6 @@ html[data-mode="light"] .bte-cover-clear    { background: var(--bg3); border-col
    s'applique. SC 2.5.8 : cible portée au plancher 24px via --target-min. */
 .sb-lib-add { min-width: var(--target-min); min-height: var(--target-min); }
 .sb-lib-add svg { width: var(--icon-sm); height: var(--icon-sm); }
-
-/* ── Séparateur visuel entre bibliothèque et parcourir ───────── */
-.sb-nav-section { margin-top: var(--sp-3); }
 
 /* Barre d'actions playlist (Lire tout / Mélanger / Supprimer) */
 .pl-action-bar {
@@ -4745,13 +4712,6 @@ html[data-motion="reduce"] .eq-presets--disabled .eq-preset,
 html[data-motion="reduce"] .eq-cats--disabled .eq-cat { transition: none; }
 html[data-motion="reduce"] .eq-slider::-webkit-slider-thumb,
 html[data-motion="reduce"] .eq-slider::-moz-range-thumb { transition: none; }
-
-/* ═══ REPLAY GAIN ════════════════════════════════════════════ */
-.rg-row      { display: flex; align-items: center; gap: var(--sp-2h); padding: var(--sp-2h) var(--sp-4); border-bottom: var(--border-w-sm) solid var(--sep); font-size: var(--fs-caption); }
-.rg-label    { color: var(--t2); min-width: var(--rg-label-min); }
-.rg-value    { color: var(--g); font-weight: 600; font-variant-numeric: tabular-nums; min-width: var(--rg-value-min); }
-.rg-bar      { flex: 1; height: var(--track-h-md); background: var(--bg5); border-radius: var(--r-xs); overflow: hidden; }
-.rg-bar-fill { height: 100%; background: var(--g); border-radius: var(--r-xs); transition: width var(--dur-slow) ease; }
 
 /* ═══ MODE CINÉMA ════════════════════════════════════════════ */
 /* ═══ MODE CINÉMA ════════════════════════════════════════════ */
@@ -6011,10 +5971,6 @@ html[data-nav-dir="back"] ::view-transition-new(main-content) {
    data-nav-dir attribute the directional slide above already uses. */
 html[data-nav-dir="back"] #nav-eq-wipe { flex-direction: row-reverse; }
 
-/* Supprime les animations concurrentes pendant une View Transition */
-html.vt-running .view.on   { animation: none !important; }
-html.vt-running .view-enter { animation: none !important; }
-
 @keyframes wlFadeIn {
   0%   { opacity: 0; transform: translateY(var(--sp-4)); }
   100% { opacity: 1; transform: translateY(0); }
@@ -6100,8 +6056,6 @@ html.vt-running .view-enter { animation: none !important; }
 }
 /* .tr.act background défini ligne ~725 */
 
-/* Grp label — fond opaque art-tinted pour éviter artefacts scroll */
-.grp-lbl { background: color-mix(in srgb, var(--art-color) 3%, var(--bg)); }
 /* Heatmap colors — calculées depuis --g (accent) via opacity */
 .hm-cell[data-n="0"] { background: var(--bg3); }
 .hm-cell[data-n="1"] { background: var(--accent-subtle); }
@@ -6664,8 +6618,6 @@ html[data-mode="light"] .rv-start-btn  { background: var(--g); }
 
   /* Header scanner : centré, pas de marge haut */
   .sb-lib-header { justify-content: center; padding: var(--sp-2) var(--sp-1h); margin-top: 0; }
-  /* Séparateur visuel réduit en compact */
-  .sb-nav-section { margin-top: var(--sp-1h); }
 
   /* Nav items : icône centrée + tooltip au survol */
   .ni {

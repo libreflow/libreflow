@@ -52,8 +52,6 @@
 
 /* ----------------------------------------------------- 1. Breakpoints ----- */
 :root {
-  --screen-mobile : 768px;   /* < 768px = mobile */
-  --screen-pc     : 1280px;  /* >= 1280px = pc full */
 }
 
 
@@ -65,25 +63,28 @@
  * ni Twitter-blue, ni Apple-rouge), AA-validée sur toutes les surfaces.
  * ============================================================================ */
 :root {
-  /* --- Surfaces — flat-Vantablack uniforme (panneaux = base) ------------- */
-  /* Tous les paliers convergent vers #030303. Élévation perceptible via
-     ΔRGB minimal + bordures hairline renforcées (§2ter). Les modales,
-     menus, popovers et sidebar partagent désormais l'identité Vantablack. */
-  --bg-base       : #030303;   /* canonique — toutes les surfaces partent d'ici */
-  --bg-surface    : #060606;   /* cards, sidebar (Δ minimal) */
-  --bg-elevated   : #0A0A0A;   /* modales, menus contextuels */
-  --bg-raised     : #0E0E0E;   /* popovers, surfaces ultra-élevées */
-  --bg-overlay    : rgba(14, 14, 14, 0.82);
+  /* --- Surfaces — élévation tonale par paliers distincts (pas de bordures) -
+     La fenêtre/zone principale reste Vantablack (#030303, inchangé). Chaque
+     palier au-dessus (sidebar → cards/hover/flottants → popovers empilés)
+     saute d'un ΔRGB perceptible à l'œil nu (façon Spotify/Deezer) : la
+     profondeur se lit au contraste, plus besoin de hairline borders pour
+     distinguer les surfaces. Contrepartie assumée : --text-muted ne tient
+     AAA (7:1) que sur --bg-base ; sur --bg-elevated/--bg-raised il reste
+     AA (>=4.5:1) — voir calcul à jour ci-dessous. */
+  --bg-base       : #030303;   /* canonique — fenêtre, zone principale (inchangé) */
+  --bg-surface    : #121214;   /* sidebar / navigation — un cran plus clair */
+  --bg-elevated   : #1C1C20;   /* cards, survols, lignes de liste au survol, éléments flottants */
+  --bg-raised     : #1C1C20;   /* popovers empilés au-dessus d'un élevé (cas rare) — même palier que le
+                                   précédent : au-delà, le texte accent ne tient plus AA (4.5:1) (§2.9) */
+  --bg-sunken     : #000000;   /* champs "creusés" (recherche) — plus sombre que tout conteneur */
 
-  /* --- Texte — neutres calibrés AAA sur Vantablack ----------------------- */
+  /* --- Texte — neutres calibrés sur Vantablack --------------------------- */
   --text-primary   : #F5F6F8;                 /* titres — 19:1 sur #030303 */
   --text-secondary : #B4B7C2;                 /* artistes — 10.3:1 sur #030303 */
-  --text-muted     : #979CAC;                 /* metadata — 7.5:1 sur #030303, 7.05:1 sur --bg-raised (AAA SC 1.4.6) */
+  --text-muted     : #979CAC;                 /* metadata — 7.5:1 AAA sur #030303 ; 6.2:1 AA sur --bg-elevated/--bg-raised (palier le plus clair) */
 
   /* --- Accent — Electric Indigo (signature unique) ----------------------- */
-  --accent         : #8B6BFF;                 /* indigo vif — 5.2:1 sur --bg-surface */
-  --accent-hover   : #A084FF;                 /* +14% luminosité au hover */
-  --accent-active  : #6F4DEB;                 /* -16% au press, sensation tactile */
+  --accent         : #8B6BFF;                 /* indigo vif — 5.0:1 sur --bg-surface, 4.6:1 sur --bg-elevated/--bg-raised */
   --accent-glow    : rgba(139, 107, 255, 0.45);
   --accent-subtle  : rgba(139, 107, 255, 0.12);
 }
@@ -105,7 +106,7 @@
 
   /* --- Alias historiques (B1) reliés à la palette respirée (B2) --------- */
   --bg  : var(--bg-base);
-  --bg1 : #11131A;
+  --bg1 : var(--bg-surface);   /* ex #11131A (teinte bleutée à part) — unifié sur l'échelle canonique */
   --bg2 : var(--bg-surface);
   --bg3 : var(--bg-elevated);
   --bg4 : var(--bg-raised);
@@ -146,11 +147,8 @@
   /* --- Bordures — AA non-text contrast (>=3:1 sur Vantablack) ---------- */
   --border-subtle  : rgba(255, 255, 255, 0.45);   /* 3.1:1 vs #030303 */
   --border-default : rgba(255, 255, 255, 0.55);   /* 4.0:1 */
-  --border-strong  : rgba(255, 255, 255, 0.65);   /* 5.2:1 */
-  --border-focus   : var(--accent);
 
   /* --- États -------------------------------------------------------------- */
-  --state-playing  : var(--accent);
   --state-error    : #FF5A5F;
   --state-success  : #4ADE80;
 }
@@ -167,7 +165,6 @@
   /* --- Familles ----------------------------------------------------------- */
   --font-display : 'Syne', system-ui, -apple-system, Segoe UI, sans-serif;
   --font-body    : 'DM Sans', system-ui, -apple-system, Segoe UI, sans-serif;
-  --font-mono    : ui-monospace, 'SF Mono', 'Cascadia Mono', Consolas, Menlo, monospace;
 
   /* --- Tailles fluides ---------------------------------------------------- */
   --text-xs      : clamp(10px, 1vw,   12px);
@@ -180,20 +177,10 @@
   --text-display : clamp(28px, 4vw,   48px);
 
   /* --- Weights ------------------------------------------------------------ */
-  --weight-regular  : 400;
-  --weight-medium   : 500;
-  --weight-semibold : 600;
-  --weight-bold     : 700;
 
   /* --- Line heights ------------------------------------------------------- */
-  --leading-tight   : 1.15;
-  --leading-snug    : 1.35;
-  --leading-normal  : 1.55;
 
   /* --- Letter spacing ----------------------------------------------------- */
-  --tracking-tight  : -0.01em;
-  --tracking-normal : 0;
-  --tracking-wide   : 0.04em;
 }
 
 
@@ -201,7 +188,6 @@
  * 4. SPACING — base 4px
  * ============================================================================ */
 :root {
-  --space-0  : 0;     /* relocalisé depuis §2bis — seul palier unique */
   --space-1  : 4px;
   --space-2  : 8px;
   --space-3  : 12px;
@@ -210,9 +196,6 @@
   --space-6  : 24px;
   --space-7  : 48px;  /* relocalisé depuis §2bis — consommé par --sp-10/12/15 */
   --space-8  : 32px;
-  --space-10 : 40px;
-  --space-12 : 48px;
-  --space-16 : 64px;
 }
 
 
@@ -226,34 +209,19 @@
 :root {
   --player-height    : 80px;   /* aligné sur --pb (valeur effective du layout) */
   --sidebar-width    : 260px;  /* aligné sur --sb (valeur effective de la grille) */
-  --track-row-height : 48px;
-  --cover-sm         : 40px;
-  --cover-md         : 56px;
-  --cover-lg         : 200px;
   --control-size     : 36px;
-  --tap-target       : 36px;
 }
 
 :root[data-platform="pc"] {
   --player-height    : 80px;   /* aligné sur --pb */
   --sidebar-width    : 260px;  /* aligné sur --sb */
-  --track-row-height : 48px;
-  --cover-sm         : 40px;
-  --cover-md         : 56px;
-  --cover-lg         : 200px;
   --control-size     : 36px;
-  --tap-target       : 36px;
 }
 
 :root[data-platform="mobile"] {
   --player-height    : 64px;
   --sidebar-width    : 0px;       /* bottom nav remplace la sidebar */
-  --track-row-height : 64px;
-  --cover-sm         : 48px;
-  --cover-md         : 64px;
-  --cover-lg         : 100%;      /* cover full-width sur mobile */
   --control-size     : 48px;
-  --tap-target       : 48px;      /* minimum tactile WCAG */
 }
 
 
@@ -264,9 +232,8 @@
   --radius-xs   : 4px;    /* relocalisé depuis §2bis — consommé par --r-xs/sm/md */
   --radius-sm   : 6px;    /* tags, badges */
   --radius-md   : 10px;   /* boutons, inputs */
-  --radius-lg   : 14px;   /* cards, covers */
-  --radius-xl   : 20px;   /* modales, drawers */
-  --radius-full : 9999px; /* pills, avatars */
+  --radius-row  : 8px;    /* lignes de piste (survol + actif), vignettes/pochettes */
+  --radius-lg   : 16px;   /* grands panneaux et cartes (album/playlist/stats, toasts) */
   --radius-pill : 999px;  /* relocalisé depuis §2bis — consommé par --r-pill/round/full */
 }
 
@@ -285,9 +252,6 @@
   --shadow-lg :
     0 4px 16px rgba(0, 0, 0, 0.22);
 
-  --shadow-glow :
-    0 8px 32px var(--accent-glow),
-    0 2px 8px  rgba(0, 0, 0, 0.40);
 }
 
 
@@ -315,19 +279,9 @@
  * Mobile : main, player, bottom nav empilés.
  * ============================================================================ */
 :root[data-platform="pc"] {
-  --layout-columns  : 240px 1fr;
-  --layout-rows     : 1fr 90px;
-  --layout-areas    : "sidebar main" "player player";
-  --content-max     : 1600px;
-  --content-padding : var(--space-8);
 }
 
 :root[data-platform="mobile"] {
-  --layout-columns  : 1fr;
-  --layout-rows     : 1fr 64px 56px;
-  --layout-areas    : "main" "player" "nav";
-  --content-max     : 100%;
-  --content-padding : var(--space-4);
 }
 
 
@@ -358,7 +312,6 @@ html[data-mode="light"] {
   --bg-surface    : #E5E8EE;
   --bg-elevated   : #D9DDE6;
   --bg-raised     : #CAD0DC;
-  --bg-overlay    : rgba(217, 221, 230, 0.78);
 
   --bg  : var(--bg-base);
   --bg1 : #EEF0F4;
@@ -384,18 +337,14 @@ html[data-mode="light"] {
   /* Bordures light — alpha noir au lieu d'alpha blanc */
   --border-subtle  : rgba(0, 0, 0, 0.06);
   --border-default : rgba(0, 0, 0, 0.12);
-  --border-strong  : rgba(0,0,0,.11);   /* préserve la valeur light (ex var(--border-3)) — sinon le .65 BLANC de §2ter fuirait en clair */
 
   /* Voiles & teintes light */
-  --scrim-1 : rgba(0, 0, 0, 0.15);
   --scrim-2 : rgba(0, 0, 0, 0.22);
   --scrim-3 : rgba(0, 0, 0, 0.35);
   --tint-1  : rgba(0, 0, 0, 0.04);
   --tint-2  : rgba(0, 0, 0, 0.08);
-  --tint-3  : rgba(0, 0, 0, 0.14);
 
   /* Focus light — même logique subtile, micro-lueur accent */
-  --focus-halo : transparent;
   --focus-ring-contrast : rgba(var(--g-rgb), 0.10);
 
   /* Hover surfaces — inversées pour le mode clair (alpha noir) */
@@ -430,12 +379,9 @@ html[data-mode="light"] {
      ════════════════════════════════════════════════════════════════ */
 
   /* Typographie — taille hero (display est défini en §3 : clamp(28px,4vw,48px)) */
-  --text-hero:    clamp(40px, 6vw, 80px);
 
   /* Graisses */
-  --fw-regular:  400;
   --fw-medium:   500;
-  --fw-semibold: 600;
   --fw-bold:     700;
 
   /* Élévations — migrées vers design-system.css (B1) */
@@ -450,12 +396,10 @@ html[data-mode="light"] {
   --blur-xl: 48px;
 
   /* Voiles & teintes (cible des rgba(0/255…) littéraux) */
-  --scrim-1: rgba(0,0,0,.4);
   --scrim-2: rgba(0,0,0,.30);
   --scrim-3: rgba(0,0,0,.45);
   --tint-1:  rgba(255,255,255,.06);
   --tint-2:  rgba(255,255,255,.10);
-  --tint-3:  rgba(255,255,255,.16);
 
   /* États — sémantique partagée (toasts, trends, stop/delete) */
   --red:     #e84040;
@@ -478,7 +422,6 @@ html[data-mode="light"] {
   --eq-cut:        #ff7a45;   /* valeur en coupe active */
 
   /* États sémantiques contextuels */
-  --cinema-active: #fb923c;   /* genre/tag actif dans le cinéma */
   --like-active:   #e0304a;   /* cœur like actif dans le mini-player */
 
   /* Layout — --sb et --pb aliasent les tokens canoniques §5 */
@@ -525,17 +468,12 @@ html[data-mode="light"] {
   --sp-4h: var(--space-4);    /* 18 → 16 */
   --sp-5h: var(--space-5);    /* 22 → 24 */
   --sp-7h: var(--space-6);    /* 30 → 32 */
-  --sp-2d: var(--space-3);    /* 11 → 12 */
-  --sp-3d: var(--space-4);    /* 15 → 16 */
   --sp-8:  var(--space-6);    /* 32 */
   --sp-10: var(--space-7);    /* 40 → 48 */
   --sp-12: var(--space-7);    /* 48 */
   --sp-15: var(--space-7);    /* 60 → 48 */
 
   /* Échelle de breakpoints canonique — 3 seuils intentionnels (voir le plan). */
-  --bp-compact: 720px;
-  --bp-wide:    1100px;
-  --bp-short:   560px;  /* seuil vertical (height) — déclaré ici pour cohérence, @media ne peut pas lire les vars CSS */
 
   /* Icônes — sous-échelle SVG resserrée (harmonisation, audit §2.7 / FND-09).
      Ancres icône : xs 12 / xl 16 / 3xl 20 / 4xl 24 / 32. Les tokens servant de
@@ -553,13 +491,11 @@ html[data-mode="light"] {
   --icon-22:   22px;   /* conteneur — gardé littéral */
   --icon-26:   26px;   /* conteneur — gardé littéral */
   --icon-32:   32px;   /* ancre display */
-  --icon-dot:   6px;   /* indicateur — gardé littéral */
   --icon-28:   28px;   /* conteneur bouton — gardé littéral */
   --icon-36:   36px;   /* conteneur — gardé littéral */
   --icon-40:   40px;   /* conteneur — gardé littéral */
   --icon-44:   44px;   /* conteneur — gardé littéral */
   --icon-4:     4px;   /* dot xs — gardé littéral */
-  --icon-9:    var(--icon-xs);   /* 9 → 12 */
   --ctrl-30:   30px;   /* conteneur — gardé littéral */
 
   /* Artwork display sizes */
@@ -604,7 +540,6 @@ html[data-mode="light"] {
   --orphan-list-max-h: 260px;   /* cap liste orphelins modale (scroll) */
   --spl-results-max-h: 120px;   /* cap liste résultats smart playlist (scroll) — R-L5 */
   --spl-preview-max-h: 100px;   /* cap liste preview smart playlist (scroll) — R-L5 */
-  --eq-presets-max-h:  128px;   /* cap zone presets EQ (scroll) — aligné grille 4px (UIH-eq-01) */
   --eq-spacer-min:      12px;   /* respiration min espace-courbe EQ — aligné grille 4px (UIH-eq-01) */
   --eq-spacer-max:      52px;   /* plafond espace-courbe EQ */
   --eq-bands-max-h:    280px;   /* cap panneau bandes EQ */
@@ -619,7 +554,6 @@ html[data-mode="light"] {
   --modal-pl-w:        380px;   /* modal playlist */
   --modal-bte-w:       360px;   /* modal batch tag editor */
   --modal-dupe-w:      520px;   /* modal doublons */
-  --search-input-w:    170px;   /* champ input recherche */
   --search-input-min:  120px;   /* min-width input recherche (responsive) */
   --tb-btn-min:         34px;   /* min-width boutons toolbar / track-r */
   --target-min:         24px;   /* WCAG 2.2 SC 2.5.8 — cible tactile minimale (boutons icône inline) */
@@ -635,8 +569,6 @@ html[data-mode="light"] {
   --text-empty-max:    260px;   /* max-width texte état vide */
   --text-desc-max:     320px;   /* max-width descriptions modales sm */
   --text-sf-max:       380px;   /* max-width chemin fichier, overflow ellipsis */
-  --modal-narrow-max:  360px;   /* max-width modaux étroits (radio, tags) */
-  --modal-mid-max:     440px;   /* max-width modaux medium */
   --welcome-desc-max:  360px;   /* max-width sous-titre écran d'accueil (.wsub) */
   --welcome-content-max: 440px; /* max-width grille features écran d'accueil (.wfeats) */
   --modal-pl-max:      480px;   /* max-width barre progression playlist */
@@ -649,8 +581,6 @@ html[data-mode="light"] {
   /* Dimensions d'alignement UI — labels & valeurs */
   --cfg-val-min:        30px;   /* min-width valeur config slider */
   --eq-note-min:        28px;   /* min-width label note EQ */
-  --rg-label-min:       80px;   /* min-width label ReplayGain */
-  --rg-value-min:       50px;   /* min-width valeur ReplayGain */
   --kbd-min:            26px;   /* min-width touche clavier */
   --stats-rank-min:     20px;   /* min-width numéro rang stats */
   --stats-count-min:    40px;   /* min-width compteur lecture stats */
@@ -666,14 +596,12 @@ html[data-mode="light"] {
   --cinema-corner-top:  clamp(16px, 2vh, 32px);   /* inset top boutons coin cinéma */
   --cinema-corner-x:    clamp(20px, 2.5vw, 48px); /* inset horizontal principal coin cinéma */
   --cinema-clock-inset: clamp(40px, 5vh, 80px);   /* insets bas de #cinema-overlay -- horloge (side-l) ET piste suivante/file d'attente (side-r), harmonisés (Task 2 layout grid) */
-  --sleep-menu-right:   80px;   /* offset droit du menu sleep */
 
   /* Focus — accessibilité clavier */
   --focus-ring:    2px solid var(--g);
   --focus-offset:  2px;
   /* Micro-lueur subtile (style Spotify) — halo très transparent en couleur accent,
      visible seulement au clavier. Pas de double anneau opaque. */
-  --focus-halo:    transparent;
   --focus-ring-contrast: rgba(var(--g-rgb), 0.12);
   --border-w-sm:   1px;    /* épaisseur border fine — bordures standard (1px hairline) */
   --border-w-md:   1.5px;  /* épaisseur border medium — inputs actifs, modal highlight */
@@ -714,7 +642,6 @@ html[data-mode="light"] {
   --lh-comfort: var(--lh-base);     /* 1.4  → 1.5 */
   --lh-airy:    var(--lh-base);     /* 1.6  → 1.5 */
   --lh-spacious:var(--lh-loose);    /* 1.65 → 1.75 */
-  --lh-2:       var(--lh-loose);    /* 1.9  → 1.75 */
   --lh-px-14:   14px;               /* hauteur fixe badges — gardé littéral */
   /* Letter-spacing — recâblé (harmonisation, audit §2.3). 22 → 4 ancres. */
   --ls-display: -0.02em;            /* ancre — display serré */
@@ -729,11 +656,8 @@ html[data-mode="light"] {
   --ls-slight:  var(--ls-reset);    /* .01  → 0 */
   --ls-micro:   var(--ls-reset);    /* .02  → 0 */
   --ls-subtle:  var(--ls-reset);    /* .03  → 0 */
-  --ls-tag:     var(--ls-reset);    /* .3px → 0 */
   --ls-filter:  var(--ls-reset);    /* .4px → 0 */
   --ls-wide:    var(--ls-label);    /* .04  → .06 */
-  --ls-tag-meta:var(--ls-label);    /* .05  → .06 */
-  --ls-badge:   var(--ls-label);    /* .07  → .06 */
   --ls-xwide:   var(--ls-label);    /* .08  → .06 */
   --ls-cinema:  var(--ls-label);    /* .10  → .06 */
   --ls-caps:    var(--ls-label);    /* 1.2px → .06em */
@@ -748,10 +672,7 @@ html[data-mode="light"] {
 
   /* Boutons — base tokens partagés */
   --btn-h:    30px;
-  --btn-h-sm: 26px;
   --btn-h-lg: 40px;
-  --btn-r:    var(--r);
-  --btn-pad:  0 var(--sp-3);
 
   /* Bordures — --border-subtle/default/strong NE sont volontairement PAS
      ré-aliasés ici : les valeurs AA (>=3:1 sur Vantablack, §2ter) font foi.
@@ -776,7 +697,6 @@ html[data-mode="light"] {
   --fs-lg:      var(--text-lg);       /* 17 → 16 */
   --fs-xl:      var(--text-xl);       /* 19 → 20 */
   --fs-lg2:     var(--text-xl);       /* 20 */
-  --fs-2xl:     var(--text-2xl);      /* 26 */
   --fs-disp:    var(--text-display);  /* 32 */
   --fs-disp-sm: var(--text-display);  /* 36 → 32 */
   --fs-disp-md: 48px;                 /* display rare — gardé littéral */
@@ -792,8 +712,6 @@ html[data-mode="light"] {
   --fs-f-caption: clamp(0.69rem, 0.66rem + 0.15cqi, 0.78rem);
   --fs-f-body:    clamp(0.81rem, 0.77rem + 0.25cqi, 0.94rem);
   --fs-f-subhead: clamp(0.94rem, 0.88rem + 0.4cqi,  1.13rem);
-  --fs-f-title:   clamp(1.06rem, 0.95rem + 0.7cqi,  1.5rem);
-  --fs-f-disp:    clamp(1.4rem,  1.1rem + 2cqi,     2.4rem);
 
   /* Typographie responsive — clamp() fluid (px min, vw fluid, px max) */
   --fs-vw-view:      clamp(26px, 3.5vw, 40px);  /* titre de vue/section responsive */
@@ -818,12 +736,11 @@ html[data-mode="light"] {
   --r-art:    var(--radius-sm);    /* 8 */
   --r-9:      var(--radius-sm);    /* 9  → 8 */
   --r2:       var(--radius-md);    /* 10 → 12 */
-  --r-card:   var(--radius-md);    /* 12 */
+  --r-card:   var(--radius-lg);    /* 12 → 16 — grands panneaux/cartes (album, stats, toasts) */
   --r3:       var(--radius-md);    /* 14 → 12 */
   --r-4xl:    var(--radius-lg);    /* 16 */
   --r-pill:   var(--radius-pill);  /* 20 → pilule pleine */
   --r-32:     var(--radius-lg);    /* 32 → 16 */
-  --r-round:  var(--radius-pill);  /* 50 → pilule pleine */
   --r-full:   var(--radius-pill);  /* 60 → pilule pleine */
 
   /* @deprecated Utiliser --motion-fast (120ms) / --motion-base (200ms) / --motion-slow (320ms) directement (§2bis) */
@@ -852,7 +769,6 @@ html[data-mode="light"] {
   --anim-glow:     2.6s;    /* playGlow / logopulse infinite glow */
 
   /* Durées animations longues (infini) — gardées littérales */
-  --anim-pulse:    1.6s;    /* radio-pulse / dotpulse animation period */
   --anim-shim:     1.8s;    /* skeleton shimmer / drago border / radio-cbtn — boucles lentes */
   --anim-art:      0.8s;    /* art-color background transition */
   --ease:       var(--dur) ease;
@@ -880,12 +796,10 @@ html[data-mode="light"] {
   /* Ombres composants — drop-shadows recâblées sur --elev-* (audit §2.4 / FND-04).
      Les variantes thème clair (-lt / -pl) restent littérales (re-définies par mode
      au re-skin couleur), ainsi que les composites et glows spécifiques. */
-  --shadow-xs:     var(--elev-1);               /* toolbar */
   --shadow-sm-lt:  none;
   --shadow-sm-pl:  none;
   --shadow-sm-tip: none;
   --shadow-logo:   none;
-  --shadow-logo-d: none;
   --shadow-pop:    none;
   --shadow-art:    none;
   --shadow-art-hv: none;
@@ -899,13 +813,10 @@ html[data-mode="light"] {
   --shadow-cin-btn:none;
   --shadow-cin-vol:none;
   --shadow-mp-drag:none;
-  --shadow-tart:   none;
   --shadow-sb-tip: none;
   --shadow-radio:  none;
   --shadow-cin-art:none;
-  --shadow-ring:   var(--glow-accent);          /* pbar thumb ring → lueur accent */
   --shadow-thumb:  var(--elev-1);               /* pbar thumb shadow */
-  --shadow-big-modal: var(--elev-3);            /* big modal */
 
   /* Ombres accent — glows simples recâblés sur --glow-accent ; les anneaux
      multi-état (hover/light) et composites restent littéraux. */
@@ -913,18 +824,14 @@ html[data-mode="light"] {
   --shadow-pcplay-hv: 0 0 0 5px rgba(var(--g-rgb),.16);
   --shadow-pcplay-lt: 0 0 0 5px rgba(var(--g-rgb),.18);
   --shadow-acc-glow:  var(--glow-accent);       /* accent glow doux */
-  --shadow-srch-dk:   var(--glow-accent);       /* search focus */
-  --shadow-srch-lt:   0 0 0 3px rgba(var(--g-rgb),.1);  /* variante claire — gardée littérale */
   --shadow-wbtn-hv:   var(--glow-accent);       /* wbtn hover */
   --shadow-pbar-thumb: 0 0 0 3px rgba(var(--g-rgb),.35);
   --shadow-pl-icon:   var(--glow-accent);       /* pl-icon playing */
   --shadow-dot-glow:  var(--glow-accent);       /* dot glow */
-  --shadow-dot-pulse: 0 0 10px rgba(var(--g-rgb),.65), 0 0 3px rgba(var(--g-rgb),.9); /* keyframe — gardé littéral */
   --shadow-vslider:   0 0 0 2px rgba(var(--g-rgb),.25);
   --shadow-pbar-glow: var(--glow-accent);       /* pbar fill glow */
 
   /* Ombres inset & indicateurs */
-  --shadow-act-bar:   inset 3px 0 0 var(--g); /* barre active gauche */
   --shadow-tab-top:   inset 0 2px 0 0 var(--g); /* onglet actif haut */
   --shadow-tab-bot:   inset 0 -2px 0 0 var(--g); /* onglet actif bas */
   --shadow-tr-focus:  inset 0 0 0 2px var(--g), inset 0 0 0 4px rgba(255,255,255,0.18); /* A11Y-22: colored ring + white inner layer */
@@ -945,43 +852,28 @@ html[data-mode="light"] {
 
   /* Ombres latérales (side panels) */
   --shadow-queue:     -1px 0 0 var(--sep);
-  --shadow-radio-bar: inset 3px 0 0 var(--g);
-  --shadow-radio-lt:  inset 3px 0 0 var(--g);
 
   /* Ombres playlist */
   --shadow-pl-list:   0 0 0 1px rgba(var(--g-rgb),.10);
   --shadow-pl-list2:  0 0 0 1px rgba(var(--g-rgb),.16);
-  --shadow-pl-card:   0 0 0 1px rgba(var(--g-rgb),.18); /* pl-card active */
 
   /* Ombres texte & drop-shadow */
   --tshadow-genre:    0 1px 3px rgba(255,255,255,.5);   /* genre name light */
   --tshadow-title:    0 1px 4px rgba(0,0,0,.45);          /* track title dark */
-  --tshadow-glow:     0 0 8px rgba(var(--g-rgb),.7);    /* text glow cinéma */
   --dropshadow-art:   none;
-  --dropshadow-card:  none;
   --dropshadow-art-sm:none;
-  --dropshadow-tlk:   0 0 5px rgba(var(--g-rgb),.5);   /* tlk icon glow */
   --dropshadow-heart: 0 0 16px rgba(255,60,100,.7);     /* like heart glow */
-  --dropshadow-art-glow: 0 0 6px;                        /* art glow (color via keyframe) */
 
   /* Ombres animation/motion (keyframes) */
   --shadow-kbd:        none;
-  --shadow-pl-hero-sh: inset 0 1px 0 var(--border-1);
-  --shadow-big-gl:     none;
   --shadow-pcplay-anim:0 2px 12px rgba(var(--g-rgb),.4), 0 0 0 0 rgba(var(--g-rgb),0);
   --shadow-pcplay-glow:0 4px 18px rgba(var(--g-rgb),.6), 0 0 0 5px rgba(var(--g-rgb),.1);
   --shadow-art-col:    0 0 0 1px rgba(var(--g-rgb),.20); /* art-color ring 1 */
   --shadow-art-col2:   0 0 0 1px color-mix(in srgb, var(--art-color) 40%, rgba(var(--g-rgb), .14));
-  --shadow-art-col3:   0 0 0 1px color-mix(in srgb, var(--art-color) 55%, rgba(var(--g-rgb), .22));
 
   /* Ombres keyframe pulsation — radio-pulse */
-  --shadow-pulse-start: 0 0 0 0   rgba(var(--g-rgb), .6);  /* départ (opaque) */
-  --shadow-pulse-mid:   0 0 0 6px rgba(var(--g-rgb), 0);   /* expansion 70% */
-  --shadow-pulse-zero:  0 0 0 0   rgba(var(--g-rgb), 0);   /* fin (transparent) */
 
   /* Ombres keyframe rename feedback */
-  --shadow-rename-mid:  0 0 0 4px rgba(var(--g-rgb), .12); /* flash save (35%) */
-  --shadow-rename-zero: 0 0 0 0   rgba(var(--g-rgb), 0);   /* base / fin (transparent) */
 
   /* Ombres keyframe cinema — glow art-color (valeurs dynamiques color-mix) */
   --shadow-cin-glow-lo:  0 0 40px 10px color-mix(in srgb, var(--art-color) 22%, transparent);
@@ -1016,13 +908,11 @@ html[data-mode="light"] {
   /* Échelle d'opacités blanches cinéma — usages répétés uniquement */
   --cin-text-hi:       rgba(255,255,255,.95);  /* cinema-title */
   --cin-text-mid:      rgba(255,255,255,.72);  /* cinema-artist */
-  --cin-text-dim:      rgba(255,255,255,.42);  /* cinema-album */
   --cin-surface:       rgba(255,255,255,.06);  /* cinema-next background */
   --cin-surface-hover: rgba(255,255,255,.10);  /* cinema-corner-btn background */
   --cin-hairline:      rgba(255,255,255,.08);  /* cinema-corner-btn border / art-img outline */
 
   --shadow-player-ring:  0 -1px 0 rgba(var(--g-rgb),.15);                       /* player bar top accent line */
-  --shadow-inset-hi:     none;
   --shadow-eq-curve:     none;
 
   /* Dimensions supplémentaires — layout & modales */
@@ -1032,7 +922,6 @@ html[data-mode="light"] {
   --panel-queue-w:      300px;  /* largeur panneau queue latéral */
   --panel-eq-w:         320px;  /* largeur panneau EQ latéral (mode simple) */
   --panel-eq-expert-w:  400px;  /* largeur panneau EQ latéral (mode expert) */
-  --sp-3q:              var(--space-3);   /* 13 → 12 (harmonisation) */
 
   /* Dimensions cinéma & artwork */
   --art-cinema-max:     420px;  /* taille max pochette cinéma (min(46vh,46vw,N)) — 520px ≥1600px, cf. @media plus bas */
@@ -1084,7 +973,6 @@ html[data-mode="light"] {
   --glass-surface: rgba(20,20,20,.82);      /* fond modales (playlist, settings, confirm) */
   --glass-panel:   rgba(22,22,22,.88);      /* fond ctx-menu, drawers */
   --glass-toast:   rgba(22,22,22,.92);      /* fond toasts — NE PAS surcharger en light */
-  --glass-hi:      rgba(255,255,255,.07);   /* reflet inset top 1px sur surfaces glass */
 
   /* ── Scrims (overlay de fond sous les modales) ── */
   --scrim:         rgba(0,0,0,.5);          /* modal std, batch-tag, orphans */

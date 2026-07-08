@@ -163,19 +163,6 @@ export function subscribe(key, cb) {
 }
 
 /**
- * @param {Partial<AppState>} updates
- */
-export function setBatch(updates) {
-  const toNotify = [];
-  for (const [key, val] of Object.entries(updates)) {
-    if (_state[key] === val) continue;
-    _state[key] = val;
-    toNotify.push(key);
-  }
-  for (const key of toNotify) _notify(key, _state[key]);
-}
-
-/**
  * Force-notify subscribers for a key even if the value reference hasn't changed.
  * Use when mutating an object/array in-place (e.g. tracks.splice()).
  * @param {keyof AppState} key

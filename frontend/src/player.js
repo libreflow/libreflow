@@ -206,7 +206,7 @@ let _cfRafId       = null;
 let _cfGen         = 0; // token anti-race incrémenté à chaque clearCrossfadeTimers()
 let _cfPending     = false; // guard anti-race pendant l'await ensureUrl dans checkCrossfade()
 /** @type {HTMLAudioElement | null} */
-export let audioNext       = null;
+let audioNext       = null;
 /** @type {MediaElementAudioSourceNode | null} */
 let audioNextSource        = null;
 /** @type {GainNode | null} */

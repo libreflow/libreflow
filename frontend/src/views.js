@@ -12,7 +12,7 @@
 import { get, set, subscribe }                                        from './store.js';
 import { CFG, SORTS, SLBLS }                                         from './cfg.js';
 import { i18n }                                                       from './i18n.js';
-import { emit, EVENTS }                                              from './bus.js';
+import { emit, on, EVENTS }                                          from './bus.js';
 import { eqOpen, closeEQ }                                           from './eq.js';
 import { queueOpen, closeQueue }                                     from './queue.js';
 import { VIRT }                                                       from './virt.js';
@@ -200,6 +200,9 @@ const _NAV_ORDER = ['all', 'liked', 'recent', 'artists', 'albums', 'genres', 'pl
 export function cancelSearchDebounce() {
   if (_searchDebounceTimer) { clearTimeout(_searchDebounceTimer); _searchDebounceTimer = null; }
 }
+// drillDown() (renderer.js) émet SEARCH_DEBOUNCE_CANCEL avant de naviguer, pour éviter
+// qu'un debounce de recherche en vol ne se déclenche après-coup et écrase la vue.
+on(EVENTS.SEARCH_DEBOUNCE_CANCEL, cancelSearchDebounce);
 
 function _updateSrchBadge(count) {
   let badge = document.getElementById('srch-badge');

@@ -16,7 +16,7 @@ import { updateVizColor, getVizMode, getVizEnabled }     from './viz.js';
 import { saveCfg }       from './cfgsave.js';
 import { emit, on, EVENTS } from './bus.js';
 import { _allPlayerUI } from './allplayerui.js';
-import { $id, $input, $select } from './dom.js';
+import { $id, $select } from './dom.js';
 import { setTlistZoom }         from './tlistZoom.js';
 
 // Fermeture via bus — évite le cycle d'import settings.js ↔ queue.js.
@@ -280,13 +280,6 @@ export function initSettingsListeners() {
 }
 
 // ══ THEMES ════════════════════════════════════════════════════════════════════
-export const THEMES = ['green', 'blue', 'purple', 'red', 'orange', 'pink', 'cyan'];
-
-export const THEME_COLORS = {
-  green: '#1db954', blue: '#3b82f6', purple: '#a855f7',
-  red: '#ef4444', orange: '#f97316', pink: '#ec4899', cyan: '#06b6d4',
-};
-
 // BUG FIX: --g-rgb était jamais défini → tous les rgba(var(--g-rgb,...)) tombaient sur le vert
 export const THEME_RGB = {
   green: '29,185,84', blue: '59,130,246', purple: '168,85,247',
@@ -296,8 +289,6 @@ export const THEME_RGB = {
 function _applyThemeVars(t) {
   document.documentElement.setAttribute('data-theme', t);
   document.documentElement.style.setProperty('--g-rgb', THEME_RGB[t] || '59,130,246');
-  const artWrap = $id('pl-art');
-  if (artWrap) artWrap.style.setProperty('--ring-color', THEME_COLORS[t] || '#3b82f6');
   // Mirror localStorage synchrone — lu par public/boot-theme.js AVANT le premier
   // paint au prochain boot (la cfg IDB est async, trop tard pour l'attribut initial).
   // Couvre à la fois le changement utilisateur (setTheme) et la correction au boot
@@ -405,10 +396,7 @@ export function applyArtColor(color) {
   updateVizColor(color);
   updateCinArtColor(color);
   const artWrap = $id('pl-art');
-  if (artWrap) {
-    artWrap.classList.add('pl-art-glow', 'glow-on');
-    artWrap.style.setProperty('--ring-color', THEME_COLORS[_theme] || '#3b82f6');
-  }
+  if (artWrap) artWrap.classList.add('pl-art-glow', 'glow-on');
 }
 
 export function clearArtColor() {

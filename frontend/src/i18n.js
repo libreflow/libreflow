@@ -83,8 +83,6 @@ export function applyLang() {
     el.setAttribute('aria-label', i18n(el.dataset.ariaI18n));
   });
 
-  emit(EVENTS.LANG_CHANGED, {});
-
   // Sort label
   const SLBLS_I18N = { az: 'sort_az', za: 'sort_za', artist: 'sort_artist', album: 'sort_album', recent: 'sort_recent' };
   setText('sort-lbl', SLBLS_I18N[get('sort')] || 'sort_az', true);

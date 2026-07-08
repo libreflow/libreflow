@@ -148,12 +148,6 @@ export function resetGridCaches() {
   _artTrackById.clear();
 }
 
-/** Accès public à la liste des albums (memoïsée). */
-export function getAlbumMap() { return _getAlbumMap(); }
-
-/** Accès public à la liste des artistes (memoïsée). */
-export function getArtistMap() { return _getArtistMap(); }
-
 // ── Drill header ──────────────────────────────────────────────────────────────
 
 function _getOrCreateDrillHeader() {

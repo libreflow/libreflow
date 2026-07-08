@@ -11,10 +11,6 @@
 //   normTag(s)       Normalize a metadata tag string (trim, NFC, collapse spaces)
 //   mainArtist(raw)              Extract primary artist, stripping feat./collab suffixes
 //   moveByOne(a,i,d)             Move array item one step (single-pointer reorder, WCAG 2.2 SC 2.5.7)
-//   normalizePathKey(p)          Normalize path to a case-insensitive lookup key
-//   extractAudioFileArg(argv)    Find first safe audio path in an argv array
-//   trackCopyText(t, i18n)       Format track for clipboard ("Artist — Title" or "Title")
-//   smtcMetaFromTrack(t, dur)    Build capped, safe SMTC metadata object
 
 /** Escape a string for safe insertion into HTML. */
 export function esc(s = '') {
@@ -91,72 +87,6 @@ export function mainArtist(raw) {
     .replace(/\s*,\s*.+$/, '')
     .trim();
   return s || normTag(raw);
-}
-
-/** Normalize a file path to a case-insensitive lookup key (backslashes → slashes, lowercase). */
-export function normalizePathKey(p) {
-  if (p == null) return '';
-  return String(p).replace(/\\/g, '/').toLowerCase();
-}
-
-const _AUDIO_EXTS = new Set([
-  'mp3', 'flac', 'ogg', 'opus', 'aac', 'm4a', 'wav', 'wma', 'ape', 'mka', 'mp4', 'webm',
-]);
-
-/**
- * Find the first audio file path in an argv array.
- * Skips --flags and non-audio extensions.
- * Fail-closed: returns null immediately if any non-flag argument fails isSafePath(),
- * aborting the entire search (not just skipping the bad entry).
- *
- * @param {string[] | null} argv
- * @returns {string | null}
- */
-export function extractAudioFileArg(argv) {
-  if (!argv || !argv.length) return null;
-  for (const arg of argv) {
-    if (!arg || typeof arg !== 'string' || arg.startsWith('--')) continue;
-    const ext = arg.split('.').pop()?.toLowerCase() || '';
-    if (!_AUDIO_EXTS.has(ext)) continue;
-    if (!isSafePath(arg)) return null;
-    return arg;
-  }
-  return null;
-}
-
-/**
- * Format a track for clipboard copy: "Artist — Title" or just "Title" when artist is unknown.
- *
- * @param {{ name?: string, artist?: string } | null} track
- * @param {string} unknownArtistI18n  - i18n value of "Unknown Artist" in the current locale
- * @returns {string}
- */
-export function trackCopyText(track, unknownArtistI18n) {
-  if (!track || !track.name) return '';
-  const a = track.artist;
-  if (!a || a === unknownArtistI18n || a === 'Unknown Artist') return track.name;
-  return `${a} — ${track.name}`;
-}
-
-/**
- * Build a safe SMTC metadata object from a track, capping field lengths and validating the path.
- *
- * @param {{ name?: string, artist?: string, artistFull?: string, album?: string, path?: string } | null} track
- * @param {number} durationSecs
- * @returns {{ title: string, artist: string, album: string, path: string|null, durationSecs: number|null } | null}
- */
-export function smtcMetaFromTrack(track, durationSecs) {
-  if (!track) return null;
-  const cap = (s, n) => String(s || '').slice(0, n);
-  const rawPath = track.path || null;
-  return {
-    title:       cap(track.name, 256),
-    artist:      cap(track.artistFull || track.artist, 256),
-    album:       cap(track.album, 256),
-    path:        rawPath && isSafePath(rawPath) ? rawPath : null,
-    durationSecs: (typeof durationSecs === 'number' && isFinite(durationSecs) && durationSecs >= 0)
-                  ? durationSecs : null,
-  };
 }
 
 /**

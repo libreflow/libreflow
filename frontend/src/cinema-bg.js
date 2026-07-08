@@ -8,7 +8,7 @@
 //   cinemaBg, CINEMA_BG_MODES, CINEMA_BG_LABELS
 //   initCinemaBg, setCinemaBg, syncCinemaBgSettings, cycleCinemaBg, applyCinemaBg, updateCinemaBgBtn
 //   initCinemaBgModule
-//   getArtColorStr, setArtColorStr, snapArtColor, stepArtColorLerp, isArtColorConverged
+//   snapArtColor, stepArtColorLerp, isArtColorConverged
 //   updateCinArtColor, updateCinArtRGBFromTrack
 //   NB : l'état couleur (_cinArtRGBCur/_cinArtRGBTarget/_LERP_K) est PRIVÉ (Task 3) —
 //        muté uniquement ici via snapArtColor()/stepArtColorLerp(), jamais par référence.
@@ -54,9 +54,6 @@ let   _cinArtRGB       = '255,255,255'; // fallback statique courant (chaîne "r
 const _cinArtRGBTarget = [255, 255, 255]; // couleur cible — PRIVÉ (Task 3)
 const _cinArtRGBCur    = [255, 255, 255]; // couleur affichée (LERP) — PRIVÉ (Task 3)
 const _LERP_K          = 0.06;            // vitesse de transition (~16 frames → 50% done)
-
-export function getArtColorStr() { return _cinArtRGB; }
-export function setArtColorStr(str) { _cinArtRGB = str; }
 
 // PERF : cache de la string "r,g,b" de la couleur LERP courante — reconstruite
 // seulement quand les composantes arrondies ont changé depuis la frame précédente

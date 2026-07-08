@@ -12,8 +12,8 @@
 //
 // Exports publics :
 //   radioActive   (live binding lu par app.js / sleep.js)
-//   startRadio, stopRadio, resetRadio, radioRefillQueue, toggleRadio
-//   ctxStartRadio, updateRadioBanner (stub compat), showRadioBanner (stub), hideRadioBanner (stub)
+//   startRadio, stopRadio, resetRadio, radioRefillQueue
+//   ctxStartRadio
 //   radioRegenerateFromCurrent, renderRadioView, openRadioView
 
 import { esc, fmt }                           from './utils.js';
@@ -62,10 +62,7 @@ let _radioRefillInProgress = false; // B34 : guard anti-concurrence pour le refi
 // ── Progress bar live (rv-prog-fill) ─────────────────────────
 // NOTE : la mise à jour de rv-prog-fill est gérée directement par le handler
 // timeupdate de app.js (avec guard isConnected pour supporter les re-renders
-// sans passer par setView). Ces helpers locaux sont supprimés pour éviter un
-// double handler sur l'événement 'timeupdate'.
-function _cleanRvProg()       { /* no-op — géré par app.js */ }
-function _installRvProgUpdate() { /* no-op — géré par app.js */ }
+// sans passer par setView).
 
 // ── Scoring ──────────────────────────────────────────────────
 
@@ -275,7 +272,6 @@ export async function startRadio(trackId) {
 
 /** Teardown synchrone de l'état radio + UI. Partagé par stopRadio() et stopRadioSilent(). */
 function _radioTeardown() {
-  _cleanRvProg();
   radioActive     = false;
   radioSeedId     = null;
   radioQueue      = [];
@@ -322,7 +318,6 @@ export function stopRadioSilent() {
 
 /** Réinitialise tout l'état radio sans side-effects UI (appelé depuis clearLibrary). */
 export function resetRadio() {
-  _cleanRvProg();
   radioActive     = false;
   radioSeedId     = null;
   radioQueue      = [];
@@ -484,36 +479,9 @@ function _syncRadioLibBar(active) {
     </div>`;
 }
 
-// Lock anti-double-clic : empêche deux dialogs "Arrêter ?" simultanées.
-let _radioToggleLock = false;
-
-/** Toggle radio depuis le player bar : démarre depuis le titre courant, ou arrête. */
-export async function toggleRadio() {
-  if (_radioToggleLock) return;
-  _radioToggleLock = true;
-  try {
-    if (radioActive) { await stopRadio(); return; }
-    const curIdx = get('curIdx');
-    const tracks = get('tracks'); // Phase 4
-    const seed   = (curIdx >= 0 && tracks && tracks[curIdx]) ? tracks[curIdx] : null;
-    if (!seed) { toast(i18n('radio_no_seed'), 'warning'); return; }
-    await startRadio(seed.id);
-  } finally {
-    _radioToggleLock = false;
-  }
-}
-
 /** Synchronise #radio-lib-bar dans #vlib. Appelé depuis setView() à chaque
  *  entrée dans la vue bibliothèque, pour garantir l'affichage immédiat. */
 export function syncRadioLibBar() { _syncRadioLibBar(radioActive); }
-
-// ── Stubs bannière (conservé pour compat. imports) ─────────────
-/** @deprecated — la bannière flottante a été supprimée. Utilisez renderRadioView(). */
-export function showRadioBanner()  { /* supprimée */ }
-export function hideRadioBanner()  { /* supprimée */ }
-export function updateRadioBanner() {
-  if (get('view') === 'radio') renderRadioView();
-}
 
 export async function radioSaveAsPlaylist() {
   if (!radioActive) return;
@@ -623,9 +591,6 @@ export function removeRadioTrack(idx) {
 export function renderRadioView() {
   const el = document.getElementById('vradio');
   if (!el) return;
-
-  // Nettoyer l'écouteur timeupdate précédent avant tout remplacement du DOM
-  _cleanRvProg();
 
   if (!radioActive) {
     el.innerHTML = `
@@ -743,9 +708,6 @@ export function renderRadioView() {
   }
 
   el.innerHTML = seedHtml + queueHtml;
-
-  // Installer la mise à jour live de la progress bar APRÈS le rendu du DOM
-  _installRvProgUpdate();
 }
 
 /** Ouvre la vue radio (démarre si nécessaire). Appelé depuis la sidebar ou la bannière. */

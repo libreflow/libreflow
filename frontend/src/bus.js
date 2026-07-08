@@ -47,25 +47,19 @@ export const EVENTS = Object.freeze({
   // Player
   TRACK_CHANGE:     'track:change',       // { track, idx }
   PLAY_STATE:       'player:state',       // { playing }
-  SEEK:             'player:seek',        // { time, ratio }
-  VOLUME_CHANGE:    'player:volume',      // { volume }
   // Library
   LIBRARY_UPDATED:  'library:updated',   // { tracks }
-  TAGS_READY:       'library:tags',      // { track }
   // Search / filter
   FILTER_CHANGED:   'search:filtered',   // { list }
   // UI
-  VIEW_CHANGE:      'ui:view',           // { view }
-  THEME_CHANGE:     'ui:theme',          // { theme }
   RENDER_LIB:       'ui:render_lib',     // {} — demande un renderLib() à app.js
   // Panel coordination (évite les cycles d'import entre panneaux)
   PANEL_CLOSE_QUEUE:    'panel:close_queue',    // {}
   PANEL_CLOSE_SETTINGS: 'panel:close_settings', // {}
   VIEW_REQUEST:         'ui:view_request',       // { view: string, btn: Element|null, plId?: string }
-  // i18n
-  LANG_CHANGED:         'i18n:lang_changed',     // {}
   // Library
   TRACK_SAVE_REQUEST:   'library:save_request',  // { track }
+  TRACK_REMOVED:        'library:track_removed', // { ids: string[] }
   // Settings / theme
   THEME_APPLY_REQUEST:  'theme:apply_request',     // {}
   // Player bar

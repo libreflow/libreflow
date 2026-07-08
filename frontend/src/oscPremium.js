@@ -5,8 +5,6 @@
 //   const osc = createPremiumOscilloscope(canvas, analyserNode, opts?);
 //   osc.start();                 // begin rAF loop
 //   osc.stop();                  // cancel + clear
-//   osc.setColor(h, s, l);       // pin static HSL; pass (null) to re-enable dynamic hue
-//   osc.destroy();               // stop + disconnect ResizeObserver
 //
 // Hard requirements satisfied:
 //   • bezierCurveTo path (Catmull-Rom → cubic Bezier, k = 1/6)
@@ -149,17 +147,6 @@ export function createPremiumOscilloscope(canvas, analyser) {
       running = false;
       if (raf) cancelAnimationFrame(raf);
       raf = null;
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-    },
-    setColor(h, s, l) {
-      if (h == null) { staticColor = null; return; }
-      staticColor = { h, s: s == null ? SAT : s, l: l == null ? LUM : l };
-    },
-    destroy() {
-      running = false;
-      if (raf) cancelAnimationFrame(raf);
-      raf = null;
-      ro.disconnect();
       ctx.clearRect(0, 0, canvas.width, canvas.height);
     },
     _meta: { sampleCount, hasOffscreen },

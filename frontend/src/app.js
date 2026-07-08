@@ -5,17 +5,17 @@ import { audio, playAt, prev, next, togglePlay, buildQ,
          toggleShuffle, toggleRepeat, toggleLike, likeat,
          setIcon, setSpeed, setCrossfade, initCrossfadeAudio,
          clearCrossfadeTimers, getNextIdx, ensureUrl,
-         initMediaSession, updateMediaSession, updateMediaSessionState,
+         initMediaSession,
          checkCrossfade, setManualQueue, resetShuffleQ,
          adjustShuffleQAfterDelete, setBootVizState }       from './player.js';
 import { emit, on, EVENTS }                                from './bus.js';
-import { get, set, notify, subscribe, setBatch }           from './store.js';
+import { get, set, notify, subscribe }                     from './store.js';
 // Side-effect import: registers GSAP core + Flip + CustomEase once at boot.
 // Consumers import named primitives from './motion.js' as needed.
 import { setMotionPref, onMotionPrefChange, applyMotionAttr } from './motion.js'; // Task 10
 import { CFG, SORTS, SLBLS, SPEEDS, SPEED_LBLS } from './cfg.js';
 import { openDB, tx, dget, dall, dput, ddel, DB, getStorageEstimate } from './db.js';
-import { readTags, extractColor, GENRE_ARTISTS, GENRE_KEYWORDS, guessGenre } from './tags.js';
+import { extractColor, guessGenre } from './tags.js';
 import { LANGS, i18n, initLang, getLang, applyLang, setLang } from './i18n.js';
 import { cinemaOpen, cinemaBg, initCinemaBg, toggleCinema, openCinema, closeCinema, updateCinema, setCinemaBg, cycleCinemaBg, applyCinemaBg, syncCinemaBgSettings, updateCinemaBgBtn, toggleCinemaFullscreen, CINEMA_BG_MODES, CINEMA_BG_LABELS, updateCinArtColor, initCinemaVizSuspend, startCinemaViz } from './cinema.js';
 import { syncCinVolumeUI } from './cinema-render.js'; // Task 7 fix : chemin volume mini-player → état mute cinéma cohérent
@@ -23,14 +23,14 @@ import { queueOpen, toggleQueue, closeQueue, renderQueue, playQueueItem, clearQu
 import { exportM3U, importM3U } from './m3u.js';
 import { VIRT } from './virt.js';
 import { playLog, setPlayLog, logPlay, flushPlayLog, cancelPlayLogFlush } from './playlog.js';
-import { eqCtx, eqSource, eqNodes, eqEnabled, eqOpen, initEQ, ensureEQResumed, toggleEQ, closeEQ, renderEQBands, setEQBand, applyEQPreset, eqAutoMode, setEQAutoMode, toggleEQAutoMode, loadEQProfiles, getEQProfiles, applyGenreEQ, startSmartEQ, stopSmartEQ, updateSmartEQLoudness, updateSmartEQGenre, filterEQPresets, initBootEQ, getActiveEqPreset, masterGainNode, setMasterGain, setEQExpert } from './eq.js';
+import { eqCtx, eqSource, eqNodes, eqEnabled, eqOpen, initEQ, ensureEQResumed, toggleEQ, closeEQ, applyEQPreset, eqAutoMode, setEQAutoMode, toggleEQAutoMode, loadEQProfiles, getEQProfiles, startSmartEQ, updateSmartEQGenre, filterEQPresets, initBootEQ, getActiveEqPreset, masterGainNode, setMasterGain, setEQExpert } from './eq.js';
 import { initDeviceEQ }                                from './eqdevice.js';
 import { initDevices }                                 from './devices.js';
 import { cleanupCdCache }                              from './cdaudio.js';
 import { initViz, startViz, stopViz, updateVizColor, setVizMode, getVizMode, setVizEnabled, getVizEnabled, suspendViz, resumeViz } from './viz.js';
 import { sleepFading, setSleepFading, sleepEndOfTrack, toggleSleepMenu, setSleepTimer, setSleepEndOfTrack, setSleepCustom, cancelSleepTimer } from './sleep.js';
 import { esc, fmt, fmtd, extEmoji, normTag, mainArtist, validYear } from './utils.js';
-import { radioActive, startRadio, stopRadio, resetRadio, radioRefillQueue, toggleRadio, ctxStartRadio, radioRegenerateFromCurrent, radioSaveAsPlaylist, getRadioQueue, renderRadioView, openRadioView, syncRadioLibBar, getRadioSeedId, initRadioSeedId, initRadioPlCallbacks } from './radio.js';
+import { radioActive, startRadio, stopRadio, resetRadio, radioRefillQueue, ctxStartRadio, radioRegenerateFromCurrent, radioSaveAsPlaylist, getRadioQueue, renderRadioView, openRadioView, syncRadioLibBar, getRadioSeedId, initRadioSeedId, initRadioPlCallbacks } from './radio.js';
 import { initWatchPath, getWatchPath, stopWatchFolder, updateWatchUI, importPaths, startWatchNative } from './watchfolder.js'; // Bug #7 fix : startWatchNative ajouté
 import { renderStats, getHeatPeriod, initHeatPeriod } from './stats.js';
 import { switchPlTab, openSmartPlaylistModal, _setSmartSeed, smartSeedSearch, smartPreview, confirmSmartPlaylist, regenerateSmartPlaylist } from './smartplaylist.js';
@@ -39,7 +39,7 @@ import { checkOrphans } from './orphans.js';
 import { selection, selectionMode, clearSelection, toggleTrackSelection, selAddToPlaylist, selAddBatch, selToggleLike, selRemove, selBatchTagEdit, closeBatchTagModal, confirmBatchTagEdit } from './selection.js';
 import { toggleMiniPlayer, updateMiniPlayer, updateMiniProgress, resetMiniProgressThrottle, setMiniPos, getMiniPos } from './miniplayer.js';
 import { toggleMiniOverlay, syncMiniOverlay, updateMiniOverlayProgress, initMiniOverlayDrag, reclampMiniOverlay } from './minioverlay.js';
-import { rgEnabled, rgTargetLUFS, initRgState, initRG, setReplayGain, setRGTarget, analyzeAndApplyRG, applyRGGain, cancelRgAnalysis } from './replaygain.js';
+import { rgEnabled, rgTargetLUFS, initRgState, initRG, setReplayGain, setRGTarget, analyzeAndApplyRG, cancelRgAnalysis } from './replaygain.js';
 import { openTagEditor, saveTagEdit, cancelTagEdit } from './tagedit.js';
 import { toast, toastWithAction, confirmAction, resolveConfirm, initRipple } from './ui.js';
 import { checkForUpdate, checkForUpdateManual, initAppVersion } from './updater.js';
@@ -48,6 +48,7 @@ import { getFiltered, filteredIdx, rebuildTrackIdxMap, trackIdx, invalidateFilte
 import { loadTagsAndDurations, loadTagsBg,
          saveTrack, saveTracks, saveTrackNow, flushTrackBatch,
          cancelTrackBatch }                                           from './library.js';
+import { revokeArt } from './artLoader.js';
 import { renderGenresGrid, drillGenre, setContentView, rescanGenres, invalidateGenreGridSig } from './genres.js';
 import {
   savePlaylists, savePlaylistsNow, renderPlNav, setupPlNavDrop,
@@ -103,10 +104,10 @@ import { setTlistZoom, initTlistZoomWheel } from './tlistZoom.js';
 import { confirmClear, closeModal } from './modal.js';
 export { confirmClear, closeModal }; // re-export pour handlers.js
 import { updateBar, updateVolSlider, setupMarquee, reflowMarquee } from './playerbar.js';
-export { updateBar, updateVolSlider }; // re-exports pour library.js, selection.js, tagedit.js, handlers.js
+export { updateVolSlider }; // re-export pour handlers.js
 // ── cfgsave.js (ARCH-1) ──────────────────────────────────────────────────────
 import { saveCfg, saveCfgNow } from './cfgsave.js';
-export { saveCfg, saveCfgNow }; // re-exports pour cinema.js, ctxmenu.js, player.js, etc.
+export { saveCfg }; // re-export pour cinema.js, ctxmenu.js, player.js, etc.
 // ── state.js (ARCH-1) ────────────────────────────────────────────────────────
 import { setCurIdx, setTracks, setLiked, setCtxTrackId, replaceTracks } from './state.js';
 import { setAriaValueText }                                    from './a11y.js';
@@ -214,6 +215,19 @@ on(EVENTS.LIBRARY_UPDATED, ({ tracks }) => {
 // smartplaylist) — seul app.js a le droit d'appeler setView (§6). Le listener
 // avait été perdu au merge a11y (8e70a17) : 14 émissions étaient des no-op.
 on(EVENTS.VIEW_REQUEST, ({ view: v, btn, plId }) => setView(v, btn || undefined, plId));
+// TRACK_SAVE_REQUEST : replaygain.js a calculé rgGain/rgGainDB/rgPeak pour la piste
+// courante — persister via saveTracks() (IDB, debounced) pour éviter de refaire
+// l'analyse RG complète (décodage + LUFS) à chaque lecture future de cette piste.
+on(EVENTS.TRACK_SAVE_REQUEST, ({ track }) => saveTracks(track));
+// STATS_DRILL_ARTIST / STATS_DRILL_GENRE : clic sur une ligne artiste/genre dans le
+// panneau Stats → naviguer vers la vue détail correspondante (statsGoToArtist/Genre,
+// déjà implémentées dans views.js mais jamais câblées à ces émissions).
+on(EVENTS.STATS_DRILL_ARTIST, ({ displayName }) => statsGoToArtist(displayName));
+on(EVENTS.STATS_DRILL_GENRE, ({ key, displayName }) => statsGoToGenre(key, displayName));
+// TRACK_REMOVED : state.js a retiré une/des piste(s) de tracks[] — libérer leur
+// blob: URL d'artwork en cache (artLoader.js), sinon elles ne sont récupérées que
+// de façon incidente par l'éviction LRU sous pression cache.
+on(EVENTS.TRACK_REMOVED, ({ ids }) => { ids.forEach(id => revokeArt(id)); });
 
 // Task 10 — préférence d'animation : recalcule data-motion + relance les boucles
 // canvas cinéma (applyCinemaBg + startCinemaViz, cf. Task 2) si le mode cinéma est
@@ -684,7 +698,7 @@ async function boot() {
 // openFolder, loadTagsAndDurations, loadTagsBg → library.js
 // getFiltered, rebuildTrackIdxMap, trackIdx, _trackIdxMap → search.js (imports directs)
 
-export function invalidateFilter() {
+function invalidateFilter() {
   invalidateFilterCache();    // search.js : _GF, _PSC, _albumMapCache, _artistMapCache
   invalidateGenreGridSig();   // genres.js (Jalon 5)
   emit(EVENTS.FILTER_CHANGED, {}); // Jalon 4 — signal "dirty" : subscribers appellent getFiltered()

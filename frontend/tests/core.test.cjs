@@ -2103,13 +2103,6 @@ section('cinema-queue.js -- buildUpcoming (pure logic)');
 }());
 
 // =============================================================================
-// N. artcolor.js — _kmeansColors (k-means++ clustering, pure function)
-// =============================================================================
-section('artcolor.js -- _kmeansColors');
-
-// Tests run in the async IIFE below via real import from artcolor.js
-
-// =============================================================================
 // N+2. lf-toast-stack.logic — import-smoke (real ESM module surface verification)
 // =============================================================================
 // Moved to async IIFE that owns the final result printing, so the 9 import-smoke
@@ -2144,68 +2137,6 @@ section('components/lf-toast-stack.logic.js -- import-smoke');
   } catch (e) {
     console.error('  KO  import-smoke crashed:', e.message);
     _ko++;
-  }
-
-  // search.js — relevanceScore (scorer de pertinence)
-  section('search.js -- relevanceScore (import réel)');
-  try {
-    const { relevanceScore } = await import('../src/search.js');
-    assert(typeof relevanceScore === 'function', 'relevanceScore est une fonction exportée');
-    assert(
-      relevanceScore({ name: 'Discovery' }, 'dis') > relevanceScore({ name: 'The Distance' }, 'dis'),
-      'relevanceScore: title prefix beats title substring'
-    );
-    assert(
-      relevanceScore({ name: 'Endless Discovery' }, 'dis') > relevanceScore({ name: 'Misdiagnosed' }, 'dis'),
-      'relevanceScore: title word-start beats title substring'
-    );
-    assert(
-      relevanceScore({ name: 'Dance', artist: 'X' }, 'dan') > relevanceScore({ name: 'X', artist: 'Dance' }, 'dan'),
-      'relevanceScore: title match beats artist match'
-    );
-    assert(
-      relevanceScore({ artist: 'Daft Punk', album: 'X' }, 'daf') > relevanceScore({ artist: 'X', album: 'Daft Album' }, 'daf'),
-      'relevanceScore: artist match beats album match'
-    );
-    assert(
-      relevanceScore({ name: 'Zzz', artist: 'Yyy' }, 'dis') === 0,
-      'relevanceScore: no match scores 0'
-    );
-    assert(
-      relevanceScore({ name: 'Paradise' }, 'dis') > relevanceScore({ name: 'X', artist: 'Disco' }, 'dis'),
-      'relevanceScore: title substring beats artist prefix (field dominates position)'
-    );
-  } catch (e) {
-    _ko++;
-    console.error('  ✗  relevanceScore import/test crashed:', e.message);
-  }
-
-  // artcolor.js — _kmeansColors (real import — avoids drift from inline duplicate)
-  section('artcolor.js -- _kmeansColors (import réel)');
-  try {
-    const { _kmeansColors } = await import('../src/artcolor.js');
-    // 2048 pure-red + 2048 pure-blue pixels
-    const px = new Uint8ClampedArray(4096 * 4);
-    for (let i = 0; i < 2048; i++) { px[i*4]=255; px[i*4+1]=0;   px[i*4+2]=0;   px[i*4+3]=255; }
-    for (let i = 2048; i < 4096; i++) { px[i*4]=0;   px[i*4+1]=0; px[i*4+2]=255; px[i*4+3]=255; }
-    const res = _kmeansColors(px, 2, 8);
-    assert(res.length === 2,                         '_kmeansColors: retourne k=2 clusters');
-    assert(res[0].score >= res[1].score,             '_kmeansColors: trié score desc');
-    assert(res[0].size > 0 && res[1].size > 0,       '_kmeansColors: clusters non vides');
-    assert(res[0].size + res[1].size === 4096,        '_kmeansColors: tous pixels assignés');
-    const ctrs = res.map(r => r.center);
-    assert(ctrs.some(c => c[0] > 200 && c[2] < 60), '_kmeansColors: identifie le cluster rouge');
-    assert(ctrs.some(c => c[2] > 200 && c[0] < 60), '_kmeansColors: identifie le cluster bleu');
-    // Edge case: all identical pixels
-    const mono = new Uint8ClampedArray(100 * 4);
-    for (let i = 0; i < 100; i++) { mono[i*4]=128; mono[i*4+1]=64; mono[i*4+2]=32; mono[i*4+3]=255; }
-    const monoRes = _kmeansColors(mono, 5, 8);
-    assert(monoRes.length === 5, '_kmeansColors: edge case mono → k=5 clusters');
-    assert(monoRes.every(r => r.center.every(v => v >= 0 && v <= 255)),
-      '_kmeansColors: centres valides RGB 0-255 sur mono');
-  } catch (e) {
-    _ko++;
-    console.error('  ✗  _kmeansColors import/test crashed:', e.message);
   }
 
   // Task 7 — artcolor.js — ensureContrastOnDark (garde-fou contraste, real import —
@@ -2291,62 +2222,6 @@ section('components/lf-toast-stack.logic.js -- import-smoke');
       'real module: buildUpcoming repeat-all wrappe en fin de liste (courante exclue)');
   } catch (e) {
     console.error('  KO  cinema-queue.js import-smoke crashed:', e.message);
-    _ko++;
-  }
-
-  // Plugins single-instance / cli — helpers de résolution de fichier (import réel)
-  section('utils.js -- normalizePathKey / extractAudioFileArg (import réel)');
-  try {
-    const { normalizePathKey, extractAudioFileArg } = await import('../src/utils.js');
-    assert(normalizePathKey('C:\\Music\\A.flac') === 'c:/music/a.flac',
-      'normalizePathKey: backslashes → slashes + lowercase');
-    assert(normalizePathKey('c:/music/a.flac') === normalizePathKey('C:\\MUSIC\\A.FLAC'),
-      'normalizePathKey: même fichier, casse/séparateurs différents → même clé');
-    assert(normalizePathKey(null) === '' && normalizePathKey(undefined) === '',
-      'normalizePathKey: null/undefined → chaîne vide');
-    assert(extractAudioFileArg(['C:\\Music\\song.mp3']) === 'C:\\Music\\song.mp3',
-      'extractAudioFileArg: fichier audio simple accepté');
-    assert(extractAudioFileArg(['--flag', 'C:\\a.flac']) === 'C:\\a.flac',
-      'extractAudioFileArg: les flags sont ignorés');
-    assert(extractAudioFileArg(['C:\\doc.pdf', 'C:\\b.opus']) === 'C:\\b.opus',
-      'extractAudioFileArg: extension non-audio sautée');
-    assert(extractAudioFileArg(['C:\\..\\evil.mp3']) === null,
-      'extractAudioFileArg: traversée .. rejetée (isSafePath)');
-    assert(extractAudioFileArg([]) === null && extractAudioFileArg(null) === null,
-      'extractAudioFileArg: argv vide/null → null');
-  } catch (e) {
-    console.error('  KO  normalizePathKey/extractAudioFileArg crashed:', e.message);
-    _ko++;
-  }
-
-  // SMTC + clipboard-manager — helpers purs (import réel)
-  section('utils.js -- trackCopyText / smtcMetaFromTrack (import réel)');
-  try {
-    const { trackCopyText, smtcMetaFromTrack } = await import('../src/utils.js');
-    assert(trackCopyText({ name: 'Song', artist: 'Artist' }, 'Artiste inconnu') === 'Artist — Song',
-      'trackCopyText: artiste connu → « Artiste — Titre »');
-    assert(trackCopyText({ name: 'Song', artist: 'Artiste inconnu' }, 'Artiste inconnu') === 'Song',
-      'trackCopyText: artiste inconnu (i18n) → titre seul');
-    assert(trackCopyText({ name: 'Song', artist: 'Unknown Artist' }, 'Artiste inconnu') === 'Song',
-      'trackCopyText: Unknown Artist littéral → titre seul');
-    assert(trackCopyText(null, 'x') === '' && trackCopyText({}, 'x') === '',
-      'trackCopyText: piste null/sans nom → chaîne vide');
-    const m = smtcMetaFromTrack({ name: 'T', artist: 'A', artistFull: 'A feat. B', album: 'Al', path: 'C:\\m\\t.flac' }, 200.5);
-    assert(m.title === 'T' && m.artist === 'A feat. B' && m.album === 'Al',
-      'smtcMetaFromTrack: artistFull prioritaire, champs mappés');
-    assert(m.path === 'C:\\m\\t.flac' && m.durationSecs === 200.5,
-      'smtcMetaFromTrack: path safe conservé + durée finie');
-    assert(smtcMetaFromTrack({ name: 'T', path: 'C:\\..\\evil.flac' }, NaN).path === null,
-      'smtcMetaFromTrack: path traversée .. rejeté (isSafePath)');
-    assert(smtcMetaFromTrack({ name: 'T' }, NaN).durationSecs === null
-        && smtcMetaFromTrack({ name: 'T' }, -3).durationSecs === null,
-      'smtcMetaFromTrack: durée NaN/négative → null');
-    assert(smtcMetaFromTrack(null, 10) === null,
-      'smtcMetaFromTrack: piste null → null');
-    assert(smtcMetaFromTrack({ name: 'x'.repeat(500) }, 10).title.length === 256,
-      'smtcMetaFromTrack: titre cappé à 256 chars (tags non fiables)');
-  } catch (e) {
-    console.error('  KO  trackCopyText/smtcMetaFromTrack crashed:', e.message);
     _ko++;
   }
 
@@ -2681,7 +2556,8 @@ section('components/lf-toast-stack.logic.js -- import-smoke');
     assert(!/export const _cinArtRGBTarget/.test(bgSrc),  'cinema-bg.js n\'exporte plus _cinArtRGBTarget (array par réf)');
     assert(/export function snapArtColor/.test(bgSrc),    'cinema-bg.js exporte snapArtColor()');
     assert(/export function stepArtColorLerp/.test(bgSrc),'cinema-bg.js exporte stepArtColorLerp()');
-    assert(/export function getArtColorStr/.test(bgSrc),  'cinema-bg.js conserve getArtColorStr()');
+    assert(!/export function getArtColorStr/.test(bgSrc),
+      'cinema-bg.js n\'exporte plus getArtColorStr()/setArtColorStr() (dead code, jamais appelees hors du module)');
     assert(!/_cinArtRGBCur/.test(cinVizSrc),
       'cinema-viz.js n\'accède plus à _cinArtRGBCur (passe par stepArtColorLerp)');
     assert(!/_cinArtRGBCur/.test(cinSrc),

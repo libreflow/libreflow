@@ -34,8 +34,6 @@ import {
   calculateRipPercent,
 } from './cdaudio_pure.js';
 
-export { detectNewAudioCds };
-
 // ── État module ───────────────────────────────────────────────────────────────
 
 let _currentRipId     = null;

@@ -13,14 +13,6 @@ export function $id(id) {
 
 /**
  * @param {string} id
- * @returns {HTMLInputElement}
- */
-export function $input(id) {
-  return /** @type {HTMLInputElement} */ (document.getElementById(id));
-}
-
-/**
- * @param {string} id
  * @returns {HTMLSelectElement}
  */
 export function $select(id) {

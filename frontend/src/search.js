@@ -276,9 +276,6 @@ function _sortTracks(src, sort, recentPlays) {
 /** True when the last getFiltered() call used the trigram fuzzy fallback. */
 let _lastWasFuzzy = false;
 
-/** Returns true if the last getFiltered() call used fuzzy (trigram) matching. */
-export function wasFuzzySearch() { return _lastWasFuzzy; }
-
 /**
  * Retourne la liste de pistes filtrées + triées pour la vue et le tri courants.
  * Résultat mis en cache ; invalider via invalidateFilterCache().
@@ -436,33 +433,6 @@ export function getFiltered() {
  * @param {Track | string | null} track
  * @returns {number}
  */
-/**
- * Score the relevance of a track to a lowercased query string.
- * Field priority: name > artist > album. Position priority: prefix > word-start > substring.
- * Returns 0 if no field matches.
- *
- * @param {{ name?: string, artist?: string, album?: string }} track
- * @param {string} query
- * @returns {number}
- */
-export function relevanceScore(track, query) {
-  if (!query) return 0;
-  const q = query.toLowerCase();
-
-  function _fieldScore(field) {
-    if (!field) return 0;
-    const f = field.toLowerCase();
-    if (f.startsWith(q)) return 3;
-    if (f.split(/\s+/).some(w => w.startsWith(q))) return 2;
-    if (f.includes(q)) return 1;
-    return 0;
-  }
-
-  return _fieldScore(track.name)   * 100
-       + _fieldScore(track.artist) * 10
-       + _fieldScore(track.album)  * 1;
-}
-
 export function filteredIdx(track) {
   if (!track || !_GF.posMap) return -1;
   // Compatibilité : appelé avec un objet piste ou un id string direct

@@ -24,6 +24,7 @@
 
 import { get, set, notify } from './store.js';
 import { rebuildTrackIdxMap }  from './search.js';
+import { emit, EVENTS } from './bus.js';
 
 /**
  * Sync curIdx dans app.js et dans le store réactif.
@@ -91,9 +92,10 @@ export function pushTracks(items) {
  * @param {number} idx — index dans tracks[] (doit être >= 0)
  */
 export function removeTrackAt(idx) {
-  get('tracks').splice(idx, 1);
+  const [removed] = get('tracks').splice(idx, 1);
   rebuildTrackIdxMap();
   notify('tracks');
+  if (removed) emit(EVENTS.TRACK_REMOVED, { ids: [removed.id] });
 }
 
 /**
@@ -142,9 +144,14 @@ export function removeTracksBatch(sortedDescIndices) {
       break;
     }
   }
+  const removedIds = [];
   for (const idx of indices) {
-    if (idx >= 0 && idx < tracks.length) tracks.splice(idx, 1);
+    if (idx >= 0 && idx < tracks.length) {
+      const [removed] = tracks.splice(idx, 1);
+      if (removed) removedIds.push(removed.id);
+    }
   }
   rebuildTrackIdxMap();
   notify('tracks');
+  if (removedIds.length) emit(EVENTS.TRACK_REMOVED, { ids: removedIds });
 }

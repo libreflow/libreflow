@@ -16,8 +16,8 @@ import { radioActive, stopRadioSilent }     from './radio.js';
 import { toast }                                        from './ui.js';
 import { masterGainNode, eqCtx, setMasterGain }        from './eq.js';
 
-export let sleepTimerEnd  = 0;    // timestamp (ms) when sleep fires; 0 = inactive
-export let sleepTickTimer = null; // setInterval handle
+let sleepTimerEnd  = 0;    // timestamp (ms) when sleep fires; 0 = inactive
+let sleepTickTimer = null; // setInterval handle
 export let sleepFading    = false; // true once fade-out has started
 export let sleepEndOfTrack = false; // true = stop after current track ends (no timer)
 let _sleepWarnedMin       = false; // guard for 1-min warning toast

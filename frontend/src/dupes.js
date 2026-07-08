@@ -47,7 +47,7 @@ export function detectDupes() {
   panel.classList.add('open');
 }
 
-export function updateDupesBadge() {
+function updateDupesBadge() {
   const badge = document.getElementById('dupes-badge');
   const countEl = document.getElementById('dupes-badge-count');
   if (!badge || !countEl) return;
