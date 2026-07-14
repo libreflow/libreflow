@@ -1278,6 +1278,26 @@ html[data-mode="light"] .q-art img { outline-color: var(--tint-2); }
   animation: shim var(--anim-shim) linear infinite;
 }
 
+/* Mode clair : les overrides html[data-mode="light"] .tart/.card-art/#pl-art
+   (background:var(--bg4)) ont une spécificité plus élevée que .loading seul
+   et écrasaient le gradient de shimmer ci-dessus, laissant un bloc plat
+   pendant le chargement. Re-déclare le même gradient scoped à .loading pour
+   regagner la spécificité (--bg3/--bg5/--bg6 résolvent déjà en valeurs
+   claires sous ce sélecteur — cf. design-system.css). */
+html[data-mode="light"] .tart.loading,
+html[data-mode="light"] .card-art.loading,
+html[data-mode="light"] #pl-art.loading {
+  background: linear-gradient(
+    105deg,
+    var(--bg3) 0%,
+    var(--bg3) 35%,
+    var(--bg5) 46%, var(--bg6) 50%, var(--bg5) 54%,
+    var(--bg3) 65%,
+    var(--bg3) 100%
+  );
+  background-size: 500% 100%;
+}
+
 /* Masque le glyphe 💿 pendant le shimmer — évite la superposition
    emoji + gradient animé (bruit visuel, cf. spec flagship-polish-pass). */
 .card-art.loading .card-art-ph { opacity: 0; }
@@ -4043,7 +4063,6 @@ html[data-motion="reduce"] #zoom-hud { transition: opacity var(--dur-fast) ease;
 .queue-item:hover     { background: var(--row-hover); }
 .queue-item:active    { background: var(--row-active); transform: scale(.98); transition-duration: var(--dur-fast); }
 .queue-item.active    { background: var(--accent-subtle); }
-.queue-empty          { padding: var(--sp-10) var(--sp-5); text-align: center; color: var(--t3); font-size: var(--fs-caption); }
 .q-art    { width: var(--icon-36); height: var(--icon-36); border-radius: var(--sp-1); background: var(--bg4); flex-shrink: 0; overflow: hidden; display: flex; align-items: center; justify-content: center; font-size: var(--fs-base); position: relative; }
 .q-art img { width: 100%; height: 100%; object-fit: cover; }
 /* Overlay play/pause sur l'artwork queue */

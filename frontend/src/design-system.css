@@ -570,7 +570,7 @@ html[data-mode="light"] {
   --text-desc-max:     320px;   /* max-width descriptions modales sm */
   --text-sf-max:       380px;   /* max-width chemin fichier, overflow ellipsis */
   --welcome-desc-max:  360px;   /* max-width sous-titre écran d'accueil (.wsub) */
-  --welcome-content-max: 440px; /* max-width grille features écran d'accueil (.wfeats) */
+  --welcome-content-max: 440px; /* max-width grille features écran d'accueil (.wf-row) */
   --modal-pl-max:      480px;   /* max-width barre progression playlist */
   --modal-orphan-max:  540px;   /* max-width modale orphelins étendue */
   --cn-next-max:       270px;   /* max-width panneau cinema next */
