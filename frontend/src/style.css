@@ -5869,6 +5869,12 @@ kbd              { display: inline-flex; align-items: center; justify-content: c
 }
 .sel-action svg { width: var(--icon-xs); height: var(--icon-xs); flex-shrink: 0; }
 .sel-action:hover { background: var(--bg4); color: var(--t); border-color: var(--sep); }
+.sel-action:active {
+  transform: scale(.96);
+  transition-property: transform, background-color, color, border-color;
+  transition-duration: var(--motion-fast);
+}
+html[data-motion="reduce"] .sel-action:active { transform: none; }
 .sel-action.danger       { color: var(--t3); }
 .sel-action.danger:hover { background: rgba(var(--red-rgb),.12); color: var(--red); border-color: rgba(var(--red-rgb),.25); }
 /* Action supprimer isolée visuellement à droite — séparée des actions sûres */
