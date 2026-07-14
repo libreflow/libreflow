@@ -58,12 +58,16 @@ function _hydrateArtPlaceholders(rootEl, { observe = false } = {}) {
     const t = _artTrackById.get(ph.getAttribute('data-art-tid'));
     if (!t) return;
     getArtUrl(t).then(url => {
-      if (!url || !ph.isConnected) return;
+      if (!ph.isConnected) return;
+      // Fetch resolved to nothing (no embedded art) — settle into the
+      // permanent 💿 placeholder state instead of shimmering forever.
+      if (!url) { ph.closest('.card-art')?.classList.remove('loading'); return; }
       const img = document.createElement('img');
       img.alt = '';
       img.setAttribute('aria-hidden', 'true');
       if (ph.dataset.artImgClass) img.className = ph.dataset.artImgClass;
       img.src = url;
+      ph.closest('.card-art')?.classList.remove('loading');
       ph.replaceWith(img);
     }).catch(e => console.warn('[getArtUrl]', t?.id, e));
   };
@@ -335,6 +339,7 @@ export function renderAlbumsGrid() {
     const isMulti   = a._artistSet && a._artistSet.size > 1;
     const artistSub = isMulti ? i18n('multi_artists') : (a.artist || i18n('unknown_artist'));
     const meta = a.year ? `<span class="card-year">${esc(String(a.year))}</span>` : '';
+    const isPending = !a.artUrl && !!a.artTrack;
     const artHtml = a.artUrl
       ? `<img src="${esc(a.artUrl)}" alt="" aria-hidden="true">`
       : a.artTrack
@@ -345,7 +350,7 @@ export function renderAlbumsGrid() {
       data-action="drill-album" data-key="${esc(a.name)}" data-name="${esc(a.name)}"
       data-from="albums" data-display="${esc(a.name)}"
       aria-label="${esc(a.name || i18n('sans_album'))}${a.artist ? esc(' — ' + a.artist) : ''}">
-      <div class="card-art">${artHtml}
+      <div class="card-art${isPending ? ' loading' : ''}">${artHtml}
         <button class="card-play-btn" data-action="play-card" tabindex="-1" aria-hidden="true"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><polygon points="5,3 19,12 5,21"/></svg></button>
       </div>
       <div class="card-info">
@@ -414,6 +419,7 @@ export function renderArtistsGrid() {
 
   grid.innerHTML = artists.map(a => {
     const nbAlbums = a.albumCount.size;
+    const isPending = !a.artUrl && !!a.artTrack;
     const artHtml  = a.artUrl
       ? `<img src="${esc(a.artUrl)}" alt="" aria-hidden="true">`
       : a.artTrack
@@ -424,7 +430,7 @@ export function renderArtistsGrid() {
       data-action="drill-artist" data-key="${esc(a.name)}" data-name="${esc(a.name)}"
       data-from="artists" data-display="${esc(a.name)}"
       aria-label="${esc(a.name)}">
-      <div class="card-art card-art-round">${artHtml}
+      <div class="card-art card-art-round${isPending ? ' loading' : ''}">${artHtml}
         <button class="card-play-btn" data-action="play-card" tabindex="-1" aria-hidden="true"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><polygon points="5,3 19,12 5,21"/></svg></button>
       </div>
       <div class="card-info">

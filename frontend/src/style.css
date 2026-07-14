@@ -1280,6 +1280,10 @@ html[data-mode="light"] .q-art img { outline-color: var(--tint-2); }
   animation: shim var(--anim-shim) linear infinite;
 }
 
+/* Masque le glyphe 💿 pendant le shimmer — évite la superposition
+   emoji + gradient animé (bruit visuel, cf. spec flagship-polish-pass). */
+.card-art.loading .card-art-ph { opacity: 0; }
+
 /* ── Skeleton rows (affichés pendant le chargement de la DB) ── */
 .tr-skel { pointer-events:none; cursor:default; }
 .skel-line {

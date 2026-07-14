@@ -1004,6 +1004,26 @@ section('renderer.js -- thtml artwork state (reproduced inline)');
   assert(resolvedNoArt.hasPh, 'thtml: metaDone sans art → placeholder monogramme permanent');
 }());
 
+// =============================================================================
+// 31. Renderer grids — card-art "loading" flag (reproduced inline)
+// =============================================================================
+section('renderer-grids.js -- card-art isPending (reproduced inline)');
+
+(function () {
+  // Reproduces the isPending predicate used by the album/artist/playlist
+  // card templates: shimmer only while a fetch is genuinely in flight.
+  function isPending(entry) {
+    return !entry.artUrl && !!entry.artTrack;
+  }
+
+  assert(isPending({ artUrl: null, artTrack: { id: 't1' } }) === true,
+    'isPending: pas encore résolu + track candidate → true (shimmer)');
+  assert(isPending({ artUrl: 'blob:x', artTrack: { id: 't1' } }) === false,
+    'isPending: déjà résolu → false');
+  assert(isPending({ artUrl: null, artTrack: null }) === false,
+    'isPending: aucune track avec art → false (état permanent, pas de shimmer)');
+}());
+
 // ─── eqdevice.js — profil EQ par appareil ────────────────────────────────────
 {
   const assert = require('assert');
