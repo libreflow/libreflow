@@ -44,3 +44,6 @@ blob-report/
 
 # Perf benchmarks (current run artifacts, not committed)
 .perf-current.json
+
+# Subagent-driven-development scratch state (progress ledger, briefs, reports)
+.superpowers/
