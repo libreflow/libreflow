@@ -1267,7 +1267,8 @@ html[data-mode="light"] .q-art img { outline-color: var(--tint-2); }
   to   { background-position: -250% center; }
 }
 .tart.loading,
-.card-art.loading {
+.card-art.loading,
+.pl-art.loading {
   background: linear-gradient(
     105deg,
     var(--bg3) 0%,

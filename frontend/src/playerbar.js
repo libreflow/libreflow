@@ -154,8 +154,15 @@ export function updateBar() {
   setupMarquee(document.getElementById('pl-a'), t.artistFull || t.artist || i18n('unknown_artist'));
 
   const img = document.getElementById('pl-img'), em = document.getElementById('pl-em');
-  if (t.art) { img.src = t.art; img.alt = t.album || t.name || ''; img.style.display = 'block'; em.style.display = 'none'; animateArtChange(); }
-  else       { img.alt = ''; img.style.display = 'none'; em.style.display = ''; em.innerHTML = extEmoji(t.ext); }
+  const plArt = document.getElementById('pl-art');
+  plArt?.classList.toggle('loading', !t.metaDone);
+  if (!t.metaDone) {
+    img.style.display = 'none'; em.style.display = 'none';
+  } else if (t.art) {
+    img.src = t.art; img.alt = t.album || t.name || ''; img.style.display = 'block'; em.style.display = 'none'; animateArtChange();
+  } else {
+    img.alt = ''; img.style.display = 'none'; em.style.display = ''; em.innerHTML = extEmoji(t.ext);
+  }
 
   const liked = get('liked');
   const _isLikedNow = liked instanceof Set ? liked.has(t.id) : false;
