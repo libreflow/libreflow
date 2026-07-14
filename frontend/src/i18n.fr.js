@@ -432,6 +432,7 @@ export default {
   t_sleep_end_track:     '⏱ Arrêt après le titre en cours',
   t_sleep_end_track_done:'⏱ Extinction — bonne nuit !',
   queue_empty:          "File vide",
+  queue_empty_s:        "Ajoute des titres depuis ta bibliothèque pour les voir apparaître ici.",
   queue_now_playing:    'En cours de lecture',
   eq_reset:             'Réinitialiser',
   sc_prev:          'Titre précédent',

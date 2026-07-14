@@ -354,7 +354,9 @@ export function renderQueue() {
   }
 
   if (!explicit.length && !natural.length) {
-    el.innerHTML = html + `<div class="queue-empty">${i18n('queue_empty')}</div>`;
+    const _qIco = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><line x1="9" y1="6" x2="21" y2="6"/><line x1="9" y1="12" x2="21" y2="12"/><line x1="9" y1="18" x2="21" y2="18"/><circle cx="3.5" cy="6" r="1.2" fill="currentColor" stroke="none"/><circle cx="3.5" cy="12" r="1.2" fill="currentColor" stroke="none"/><circle cx="3.5" cy="18" r="1.2" fill="currentColor" stroke="none"/></svg>';
+    el.innerHTML = html + `<div class="empty"><div class="empty-ico">${_qIco}</div>`
+      + `<div class="empty-h">${esc(i18n('queue_empty'))}</div><div class="empty-s">${esc(i18n('queue_empty_s'))}</div></div>`;
     const _ael = /** @type {HTMLAudioElement|null} */ (document.getElementById('audio'));
     patchPlayState(_ael ? !_ael.paused : false);
     return;

@@ -1024,6 +1024,26 @@ section('renderer-grids.js -- card-art isPending (reproduced inline)');
     'isPending: aucune track avec art → false (état permanent, pas de shimmer)');
 }());
 
+// =============================================================================
+// 32. Queue — empty-state markup (reproduced inline)
+// =============================================================================
+section('queue.js -- empty-state markup (reproduced inline)');
+
+(function () {
+  // Reproduces the queue-empty HTML block from queue.js — same .empty
+  // pattern already used by renderer.js's main-list empty state.
+  function queueEmptyHTML(icoSvg, h, s) {
+    return `<div class="empty"><div class="empty-ico">${icoSvg}</div>`
+      + `<div class="empty-h">${h}</div><div class="empty-s">${s}</div></div>`;
+  }
+
+  const html = queueEmptyHTML('<svg></svg>', 'File vide', 'Ajoute des titres…');
+  assert(html.includes('class="empty"'),     'queue empty: classe .empty (réutilise le pattern existant)');
+  assert(html.includes('class="empty-ico"'), 'queue empty: icône présente (pas de texte seul)');
+  assert(html.includes('class="empty-h"'),   'queue empty: titre présent');
+  assert(html.includes('class="empty-s"'),   'queue empty: sous-titre présent');
+}());
+
 // ─── eqdevice.js — profil EQ par appareil ────────────────────────────────────
 {
   const assert = require('assert');

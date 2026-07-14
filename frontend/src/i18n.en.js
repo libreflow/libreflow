@@ -432,6 +432,7 @@ export default {
   t_sleep_end_track:     '⏱ Stop after current track',
   t_sleep_end_track_done:'⏱ Sleep — good night!',
   queue_empty:          'Queue empty',
+  queue_empty_s:        'Add tracks from your library to see them here.',
   queue_now_playing:    'Now playing',
   eq_reset:             'Reset',
   sc_prev:          'Previous track',
