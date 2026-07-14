@@ -69,7 +69,7 @@ function _hydrateArtPlaceholders(rootEl, { observe = false } = {}) {
       img.src = url;
       ph.closest('.card-art')?.classList.remove('loading');
       ph.replaceWith(img);
-    }).catch(e => console.warn('[getArtUrl]', t?.id, e));
+    }).catch(e => { console.warn('[getArtUrl]', t?.id, e); ph.closest('.card-art')?.classList.remove('loading'); });
   };
   const phs = rootEl.querySelectorAll('[data-art-tid]');
   if (observe && 'IntersectionObserver' in window) {
