@@ -5,13 +5,13 @@
 // Le canal passe par les deux sources (main + crossfade) car l'analyser est en fin
 // de chaîne EQ, avant la destination.
 //
-// API publique (window.*) :
-//   window.initViz()              — à appeler une fois après initEQ()
-//   window.startViz()             — démarrer le rendu rAF (au play)
-//   window.stopViz()              — arrêter le rendu + effacer (au pause/stop)
-//   window.updateVizColor(color)  — mettre à jour la couleur (artColor → string rgb/hex)
-//   window.setVizMode(mode)       — 'bars' | 'oscilloscope' | 'circle'
-//   window.getVizMode()           — retourner le mode courant
+// API publique (exports ESM — importés directement par les modules appelants) :
+//   initViz()              — à appeler une fois après initEQ()
+//   startViz()             — démarrer le rendu rAF (au play)
+//   stopViz()              — arrêter le rendu + effacer (au pause/stop)
+//   updateVizColor(color)  — mettre à jour la couleur (artColor → string rgb/hex)
+//   setVizMode(mode)       — 'bars' | 'oscilloscope' | 'circle'
+//   getVizMode()           — retourner le mode courant
 
 import { eqAnalyser, eqCtx } from './eq.js';
 import { audio }               from './player.js';
@@ -282,6 +282,13 @@ function _ensurePremiumOsc() {
 }
 
 function _startEngine() {
+  // Bug fix : cinéma ouvert (_vizSuspended) → ne rien démarrer ici. L'oscilloscope
+  // premium (oscPremium.js) a son propre rAF sans notion de _vizSuspended -- contrairement
+  // à _draw() (bars/circle) qui s'auto-vérifie à chaque frame, le démarrer ici le ferait
+  // tourner (invisible tant que l'overlay reste ouvert, mais visible dès sa fermeture)
+  // sans jamais repasser par _vizSuspended. `running` reste vrai (posé par l'appelant
+  // avant _startEngine()) : resumeViz() démarre déjà le bon moteur quand le cinéma ferme.
+  if (_vizSuspended) return;
   if (vizMode === 'oscilloscope') {
     const p = _ensurePremiumOsc();
     if (p) p.start();
@@ -451,8 +458,3 @@ function _drawCircle(bins, w, h) {
   canvasCtx.fillStyle = _vizRgbaFill;
   canvasCtx.fill();
 }
-
-/* ── Exports window.* ─────────────────────────────────────── */
-// setVizMode / getVizMode sont intentionnellement absents ici :
-// app.js les importe et les ré-exporte sur window — un seul point d'export.
-Object.assign(window, { initViz, startViz, stopViz, updateVizColor, setVizEnabled, getVizEnabled });

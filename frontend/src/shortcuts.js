@@ -141,13 +141,24 @@ export function initShortcuts({ updateVolSlider, closeModal, cycleSpeed }) {
     // coréen) — sinon une séquence de composition peut déclencher un raccourci.
     if (e.isComposing) return;
 
+    // BUG FIX (audit settings 2026-07-08) : le panneau raccourcis clavier (#shortcuts-panel)
+    // doit rester fermable au clavier même une fois ajouté à _anyModalOpen ci-dessous —
+    // sinon le early-return empêche toute fermeture et devient un piège clavier. Traité
+    // AVANT le guard modal générique, en miroir du reste de la cascade Escape plus bas.
+    if (e.code === 'Escape' && isShortcutsOpen()) { closeShortcuts(); return; }
+
     // A11Y : tout backdrop de modale visible (id se terminant par "modal-bg")
     // capture les raccourcis globaux — couvre modal/pl/confirm/organize/usb/cd/
     // batch-tag sans énumération fragile. NB : suffixe sans tiret pour aussi
     // matcher le backdrop générique #modal-bg (pas seulement #*-modal-bg).
+    // BUG FIX : #shortcuts-panel.open manquait ici → les raccourcis single-key
+    // (Space, flèches, S, R, F, M, I, C, D, V, X…) restaient actifs en arrière-plan
+    // pendant que l'utilisateur consultait l'aide raccourcis (violation d'inertie
+    // de fond attendue pour un role="dialog" aria-modal).
     const _anyModalOpen =
       document.querySelector('[id$="modal-bg"].on') !== null ||
       document.getElementById('settings-panel')?.classList.contains('on') ||
+      document.getElementById('shortcuts-panel')?.classList.contains('open') ||
       document.getElementById('dupes-panel')?.classList.contains('open') ||
       document.querySelector('.orphan-modal-bg.on') !== null ||
       document.querySelector('.ctx-menu.on') !== null;
@@ -196,7 +207,8 @@ export function initShortcuts({ updateVolSlider, closeModal, cycleSpeed }) {
       const _sleepMenu = document.getElementById('sleep-menu');
       if (_sleepMenu?.classList.contains('on')) { _sleepMenu.classList.remove('on'); return; }
       if (cinemaOpen)                        { closeCinema(); return; }
-      if (isShortcutsOpen())                 { closeShortcuts(); return; }
+      // NB : le cas #shortcuts-panel est traité plus haut, avant le guard _anyModalOpen
+      // (qui bloquerait sinon Escape lui-même) — inatteignable ici, non dupliqué.
       if (document.getElementById('pl-modal-bg')?.classList.contains('on'))      { closePlModal(); return; }
       if (document.getElementById('modal-bg')?.classList.contains('on'))         { closeModal(); return; }
       if (document.getElementById('confirm-modal-bg')?.classList.contains('on')) { document.querySelector('#confirm-modal .mbtn.cancel')?.click(); return; }

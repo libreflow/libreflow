@@ -51,7 +51,22 @@ pub struct WriteTagsData {
 pub struct NotifyTrackData {
     pub title: String,
     pub artist: String,
-    #[allow(dead_code)] // reçu depuis le frontend mais non utilisé côté Rust (pas d'icône notif)
+    // Reçu depuis le frontend (data: URL base64) mais non exploitable côté Rust :
+    // limitation confirmée de tauri-plugin-notification 2.3.3 (pas un bug LibreFlow).
+    // `NotificationBuilder::icon()` existe bien et descend jusqu'à
+    // `notify_rust::Notification::icon()`, MAIS le backend Windows de notify-rust
+    // 4.17.0 (src/windows.rs::show_notification) ne lit *jamais* le champ `icon` —
+    // il ne lit que `path_to_image`, renseigné uniquement par
+    // `Notification::image_path()`. Or `tauri_plugin_notification::desktop::imp::
+    // Notification` (le wrapper interne utilisé par `.builder()...show()`)
+    // n'expose aucune méthode `image`/`image_path` : seul `.icon()` est câblé,
+    // et il route vers le champ ignoré sur Windows. Résultat : passer un chemin
+    // de fichier via `.icon()` sur Windows (plateforme primaire de LibreFlow)
+    // ne fait rien — silencieusement. Implémenter l'icône art nécessiterait de
+    // contourner tauri-plugin-notification et d'appeler notify-rust directement
+    // (ou un autre crate de notification) — décision à prendre par un humain,
+    // hors scope de ce fix.
+    #[allow(dead_code)]
     pub art: Option<String>,
 }
 

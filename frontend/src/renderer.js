@@ -640,22 +640,6 @@ export function _withVT(fn) {
   }
 }
 
-export function animateViewChange() {
-  const ca = document.getElementById('content-area');
-  if (!ca) return;
-  ca.classList.remove('view-in');
-  // C-4: double-rAF — évite le reflow synchrone forcé; re-query dans l'inner rAF
-  // pour ne pas agir sur un nœud détaché si une transition DOM survient entre les deux ticks
-  requestAnimationFrame(() => {
-    requestAnimationFrame(() => {
-      const live = document.getElementById('content-area');
-      if (!live) return;
-      live.classList.add('view-in');
-      live.addEventListener('animationend', () => live.classList.remove('view-in'), { once: true });
-    });
-  });
-}
-
 export function scrollToCurrentTrack() {
   const curIdx = get('curIdx');
   if (curIdx < 0) return;

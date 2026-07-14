@@ -71,6 +71,7 @@ export const EVENTS = Object.freeze({
   // Stats navigation
   STATS_DRILL_GENRE:    'nav:stats_genre',           // { key, displayName }
   STATS_DRILL_ARTIST:   'nav:stats_artist',          // { displayName }
+  STATS_DRILL_ALBUM:    'nav:stats_album',           // { key, displayName }
   // Search
   SEARCH_DEBOUNCE_CANCEL: 'search:debounce_cancel',  // {}
   // Cinema

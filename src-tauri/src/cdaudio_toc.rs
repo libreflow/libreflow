@@ -210,4 +210,10 @@ mod tests {
         assert!((frames_to_seconds(0) - 0.0).abs() < 1e-5);
         assert!((frames_to_seconds(150) - 2.0).abs() < 1e-5);
     }
+
+    // NOTE: property-based fuzzing (proptest) for `parse_toc_lba` already lives
+    // in `src-tauri/tests/cdaudio_toc_fuzz_test.rs` (never-panics on random/
+    // boundary bytes, valid-TOC invariants, monotonic LBA, length-field
+    // overflow attack, `frames_to_seconds` totality). Not duplicated here —
+    // see that file for the fuzz coverage of this parser.
 }

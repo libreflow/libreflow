@@ -271,6 +271,37 @@ async function run() {
       `expected >=4 usages of var(--cin-focus-ring) in the cinema CSS section, found ${tokenUsage}`);
   });
 
+  // --- Audit fix : chaque règle :focus-visible cinéma qui utilise --cin-focus-ring
+  // (conçu pour fond noir) doit avoir un override light-mode -- sinon l'anneau reste
+  // blanc-sur-blanc sur le dégradé clair du cinéma (invisible au clavier, SC 2.4.13/2.4.7).
+  await t('every cinema :focus-visible rule using --cin-focus-ring has a light-mode override (SC 2.4.7/2.4.13)', () => {
+    const cinemaCss = extractCinemaSection(SS);
+    const darkSelectors = new Set();
+    const re = /([.#][\w-]+):focus-visible\s*\{[^}]*var\(--cin-focus-ring\)/g;
+    let m;
+    while ((m = re.exec(cinemaCss))) darkSelectors.add(m[1]);
+    assert.ok(darkSelectors.size >= 4,
+      `expected several dark cinema :focus-visible rules using --cin-focus-ring, found ${darkSelectors.size}`);
+
+    const lightBlockM = /html\[data-mode="light"\][^{]*\.cinema-corner-btn:focus-visible[\s\S]*?\{[^}]*\}/.exec(SS);
+    assert.ok(lightBlockM, 'light-mode focus-ring override block (anchored on .cinema-corner-btn) introuvable');
+
+    const missing = [...darkSelectors].filter(sel => !lightBlockM[0].includes(sel + ':focus-visible'));
+    assert.strictEqual(missing.length, 0,
+      `sélecteurs :focus-visible cinéma sans override light-mode : ${missing.join(', ')} -- anneau blanc-sur-blanc en thème clair`);
+  });
+
+  // --- Audit fix : le placeholder de pochette (pas d'artwork / décodage en cours) est
+  // --c-black/--c-1a (quasi-noir) sans override light-mode, contrairement à chaque autre
+  // surface cinéma de ce bloc -- une pochette absente afficherait un carré quasi-noir sur
+  // le dégradé clair du cinéma light (contredit l'intention documentée du bloc light).
+  await t('.cinema-art-wrap and #cinema-art-em have a light-mode background override', () => {
+    assert.ok(/html\[data-mode="light"\]\s*\.cinema-art-wrap\s*\{[^}]*background/.test(SS),
+      '.cinema-art-wrap doit avoir un override light-mode -- sinon il reste --c-black (quasi-noir) sur le dégradé clair du cinéma');
+    assert.ok(/html\[data-mode="light"\]\s*#cinema-art-em\s*\{[^}]*background/.test(SS),
+      '#cinema-art-em doit avoir un override light-mode -- sinon il reste --c-1a (quasi-noir) sur le dégradé clair du cinéma');
+  });
+
   // --- SC 1.3.1 Info & Relationships — landmarks de navigation/recherche -----
   await t('document declares main + search + navigation landmarks (SC 1.3.1)', () => {
     assert.ok(/role="main"/.test(HTML),       'landmark role="main" manquant');
@@ -493,6 +524,29 @@ async function run() {
       '.cinema-vol-icon-btn doit déclarer min-width/min-height: var(--target-min)');
   });
 
+  // --- SC 2.5.8 : cible >=24px sur la barre de progression cinéma (expansion via ::after) ---
+  await t('.cinema-pbar effective hit-target reaches >=24px at rest and hover (SC 2.5.8)', () => {
+    const baseM = /--track-h-md\s*:\s*(\d+(?:\.\d+)?)px/.exec(DS);
+    assert.ok(baseM, '--track-h-md introuvable dans design-system.css');
+    const hoverM = /--cinema-pbar-hover-h\s*:\s*(\d+(?:\.\d+)?)px/.exec(DS);
+    assert.ok(hoverM, '--cinema-pbar-hover-h introuvable dans design-system.css');
+    const afterM = /\.cinema-pbar::after\s*\{[^}]*\}/.exec(SS);
+    assert.ok(afterM, 'règle .cinema-pbar::after introuvable dans style.css');
+    const insetM = /inset\s*:\s*-(\d+(?:\.\d+)?)px\s+0/.exec(afterM[0]);
+    assert.ok(insetM, '.cinema-pbar::after doit déclarer inset: -Npx 0 (expansion verticale de la cible)');
+
+    const base  = parseFloat(baseM[1]);
+    const hover = parseFloat(hoverM[1]);
+    const inset = parseFloat(insetM[1]);
+    const restTarget  = base  + 2 * inset;
+    const hoverTarget = hover + 2 * inset;
+
+    assert.ok(restTarget >= 24,
+      `.cinema-pbar hit-target au repos = ${restTarget}px (piste ${base}px + 2x${inset}px) < 24px (SC 2.5.8)`);
+    assert.ok(hoverTarget >= 24,
+      `.cinema-pbar hit-target au hover = ${hoverTarget}px (piste ${hover}px + 2x${inset}px) < 24px (SC 2.5.8)`);
+  });
+
   // --- SC 2.4.13 : le focus ring cinéma reste le token dual-tone (jamais teinté) ---
   await t('cinema focus rings stay on --cin-focus-ring, never tinted by --cin-rgb-ui (Task 7)', () => {
     const focusRules = SS.match(/[^{}]*:focus-visible[^{}]*\{[^}]*\}/g) || [];
@@ -514,6 +568,19 @@ async function run() {
     const colorRules = SS.match(/(?:^|;|\{)\s*color\s*:[^;}]*var\(--cin-rgb\s*[,)]/gm) || [];
     assert.ok(colorRules.length === 0,
       `du texte utilise la --cin-rgb brute (non garantie 4.5:1) : ${colorRules.slice(0, 2).join(' | ')}`);
+  });
+
+  // --- Cohésion chromatique : la piste du curseur volume cinéma reflète --cin-rgb-ui,
+  // pas seulement le thumb -- miroir de .vslider (piste principale) qui teinte toute
+  // la piste avec l'accent, pas seulement son thumb (Task 7 gap) ---
+  await t('.cinema-vol-slider track is tinted by --cin-rgb-ui, with a light-mode neutral override (Task 7)', () => {
+    const m = /\.cinema-vol-slider\s*\{[^}]*\}/.exec(SS);
+    assert.ok(m, 'règle .cinema-vol-slider introuvable dans style.css');
+    assert.ok(/background\s*:\s*rgba\(\s*var\(--cin-rgb-ui,/.test(m[0]),
+      '.cinema-vol-slider (piste) doit être teintée par --cin-rgb-ui, comme le thumb');
+
+    assert.ok(/html\[data-mode="light"\]\s*\.cinema-vol-slider\s*\{[^}]*background/.test(SS),
+      'un override light-mode doit neutraliser la teinte --cin-rgb-ui sur .cinema-vol-slider (illisible sur fond clair, cf. Task 7)');
   });
 
   // --- Task 7 fix (review) : le chemin volume mini-player rafraîchit l'état mute cinéma ---

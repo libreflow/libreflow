@@ -16,7 +16,7 @@ function _parseArtColor() {
   return { r: parseInt(m[1]), g: parseInt(m[2]), b: parseInt(m[3]) };
 }
 
-export function getArtLuminance() {
+function getArtLuminance() {
   const c = _parseArtColor();
   if (!c) return 0; // fallback: treat as dark
   return _luminance(c.r, c.g, c.b);

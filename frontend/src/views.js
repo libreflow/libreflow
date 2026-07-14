@@ -197,7 +197,7 @@ let _navDirTimer = null;
 const _NAV_ORDER = ['all', 'liked', 'recent', 'artists', 'albums', 'genres', 'playlists'];
 
 /** Annule le debounce de recherche en cours (ex: drill-down depuis renderer.js). */
-export function cancelSearchDebounce() {
+function cancelSearchDebounce() {
   if (_searchDebounceTimer) { clearTimeout(_searchDebounceTimer); _searchDebounceTimer = null; }
 }
 // drillDown() (renderer.js) émet SEARCH_DEBOUNCE_CANCEL avant de naviguer, pour éviter
@@ -677,3 +677,8 @@ export function statsGoToAlbum(albumKey, displayName) {
     requestAnimationFrame(() => drillDown('albums', albumKey, displayName));
   });
 }
+// Note : STATS_DRILL_ARTIST / STATS_DRILL_GENRE sont câblés dans app.js (wiring
+// cross-module, cf. CLAUDE.md §6). STATS_DRILL_ALBUM est câblé ici (et non dans
+// app.js) pour rester dans le scope de cet audit — même pattern « emit depuis
+// stats.js → listener qui appelle le helper views.js ».
+on(EVENTS.STATS_DRILL_ALBUM, ({ key, displayName }) => statsGoToAlbum(key, displayName));

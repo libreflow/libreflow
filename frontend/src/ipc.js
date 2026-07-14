@@ -58,6 +58,17 @@ function _waitTauriReady() {
 /** @overload @param {'pick_audio_file'} cmd @returns {Promise<string | null>} */
 /** @overload @param {'pick_image'} cmd @returns {Promise<string | null>} */
 /** @overload @param {'win_close'|'win_minimize'|'win_maximize'|'mini_toggle'|'mini_close'|'watch_folder_stop'|'open_devtools'} cmd @returns {Promise<void>} */
+/** @overload @param {'get_or_create_default_music_dir'} cmd @returns {Promise<string>} */
+/** @overload @param {'organize_files'} cmd @param {{ moves: Array<{ from: string, to: string }>, dryRun: boolean }} args @returns {Promise<{ moves: Array<{ from: string, to: string, ok: boolean, error?: string }>, error_count: number }>} */
+/** @overload @param {'export_backup'} cmd @param {{ payload: { manifest: string, library: string, playlists: string, playlog: string, imports: string, config: string } }} args @returns {Promise<string | null>} */
+/** @overload @param {'import_backup'} cmd @returns {Promise<{ manifest: string, library: string, playlists: string, playlog: string, imports: string, config: string } | null>} */
+/** @overload @param {'list_drives'} cmd @returns {Promise<Array<{ path: string, label: string, kind: string, audio_cd: boolean, track_count: number }>>} */
+/** @overload @param {'open_folder_at'} cmd @param {{ startPath: string }} args @returns {Promise<OpenFolderResult | null>} */
+/** @overload @param {'cd_read_toc'} cmd @param {{ drive: string }} args @returns {Promise<{ drive: string, tracks: Array<{ idx: number, lba_start: number, frames: number, duration_sec: number }>, total_duration_sec: number }>} */
+/** @overload @param {'cd_rip_track'} cmd @param {{ drive: string, trackIdx: number, destPath: string, ripId: string }} args @returns {Promise<void>} */
+/** @overload @param {'cd_cancel_rip'} cmd @param {{ ripId: string }} args @returns {Promise<void>} */
+/** @overload @param {'cd_cache_dir'} cmd @returns {Promise<string>} */
+/** @overload @param {'cd_purge_cache'} cmd @returns {Promise<void>} */
 /**
  * @param {string} cmd
  * @param {Record<string, unknown>} [args]

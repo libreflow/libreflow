@@ -99,7 +99,7 @@ export function installAutoFocusTrap() {
   // `shortcuts-panel` est inclus : le panel lui-même porte `role="dialog"` (pas de wrapper).
   const autoIds = [
     'confirm-modal-bg', 'organize-modal-bg', 'usb-modal-bg', 'cd-modal-bg',
-    'pl-modal-bg',      'batch-tag-modal-bg', 'smart-pl-modal-bg',
+    'pl-modal-bg',      'batch-tag-modal-bg',
     'dupes-panel',
     'shortcuts-panel',
     // A11Y-14 : sleep-menu se déclare role=dialog aria-modal — il porte le rôle

@@ -30,8 +30,10 @@ let _rows  = [];    // boutons de rangée actuellement rendus (navigation flèch
 /**
  * Construit la liste des ≤ limit prochaines pistes. Même priorité que
  * cinema.js/_updateNextTrack() (source de vérité, Task 6) :
- *   1. File explicite (entrées valides — présentes dans `filtered`) : priorité absolue,
- *      complétée par la suite séquentielle de `filtered` si elle ne remplit pas `limit`.
+ *   1. File explicite (entrées non-null — déjà validées par l'appelant contre la
+ *      bibliothèque complète, peekExplicitQueue()/_trackIdxMap, PAS contre `filtered`) :
+ *      priorité absolue, complétée par la suite séquentielle de `filtered` si elle ne
+ *      remplit pas `limit`.
  *   2. Radio active (sans file explicite) : tête de la file radio SEULE — pas de
  *      complément séquentiel (radioRefillQueue() génère la suite dynamiquement, imprévisible).
  *   3. Shuffle actif (sans file explicite ni radio) : imprévisible → [] (le panneau
@@ -60,10 +62,11 @@ export function buildUpcoming({
 } = {}) {
   if (limit <= 0) return [];
 
-  const filteredIds   = new Set(filtered.map(t => t.id));
-  // "Stale" : entrée absente/nulle ou dont l'id n'est plus dans `filtered` (piste
-  // supprimée de la bibliothèque, ou hors de la vue filtrée courante) — ignorée.
-  const validExplicit = explicitQueue.filter(t => t && filteredIds.has(t.id));
+  // Bug fix : explicitQueue est déjà validée contre la bibliothèque par l'appelant
+  // (peekExplicitQueue()/_trackIdxMap) -- filtrer aussi contre `filtered` exclurait à tort
+  // une piste hors vue recherche/filtre, alors que getNextIdx() (vérité réelle) la joue
+  // quand même. Seuls null/undefined (défensif) sont ignorés ici.
+  const validExplicit = explicitQueue.filter(Boolean);
 
   if (validExplicit.length) {
     const out = validExplicit.slice(0, limit);

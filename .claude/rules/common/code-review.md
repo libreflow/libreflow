@@ -33,6 +33,14 @@ General quality:
 - [ ] No console.log left in committed code (console.warn for documented signals is OK)
 - [ ] Tests added for the changed path
 
+Flagship polish (UI/UX-touching changes only — see [agents.md](agents.md#flagship-quality-bar-spotify--deezer--apple-music-standard)):
+
+- [ ] Transitions use `--motion-*` tokens, animate transform/opacity only, respect `prefers-reduced-motion`
+- [ ] Every interactive control has hover/active/focus-visible/disabled states, not just a base style
+- [ ] Spacing/type/radius/shadow use `design-system.css` tokens — no ad hoc magic numbers
+- [ ] New/changed views define an empty state, a loading (skeleton) state, and an error/recovery state
+- [ ] No dropped frames on the 50k-track scroll path (`npm run bench` not regressed)
+
 ## Severity Levels
 
 | Level | Meaning | Action |
@@ -52,6 +60,9 @@ General quality:
 | `tracks[]` mutation logic | **code-reviewer** (invariant focus) |
 | Boot sequence in `app.js` | **architect** |
 | Rust crate borrow/lifetime work | **rust-reviewer** |
+| New/changed component styling, tokens | **design-system-engineer** |
+| New interactive control, modal, or list | **accessibility-specialist** |
+| Cinema/nav/motion timing changes | **performance-optimizer** + **make-interfaces-feel-better** |
 
 ## Common Issues to Catch
 
@@ -76,11 +87,20 @@ General quality:
 - Inline event handlers in HTML
 - Imported web font instead of local `@fontsource` (CLAUDE.md §12)
 
+### Polish / Flagship Quality
+
+- Hover-only or color-only interaction feedback (no active/focus-visible/disabled treatment)
+- Animating `top`/`left`/`width`/`height` instead of `transform` (layout thrash, jank under load)
+- No `prefers-reduced-motion` fallback on a new animation
+- Magic spacing/color/radius values instead of `design-system.css` tokens
+- A list, panel, or modal with no defined empty/loading/error state
+- Contrast or focus-ring regression against CLAUDE.md §2.9 (AA/AAA) baselines
+
 ## Approval Criteria
 
-- **Approve** — no CRITICAL or HIGH; §19 checklist green
-- **Warning** — HIGH issues only; merge with explicit acknowledgement
-- **Block** — any CRITICAL invariant violation
+- **Approve** — no CRITICAL or HIGH; §19 checklist green; Flagship polish checklist green for UI/UX changes
+- **Warning** — HIGH issues only, or Flagship polish gaps without an a11y/perf regression; merge with explicit acknowledgement
+- **Block** — any CRITICAL invariant violation, or a Flagship polish gap that regresses accessibility or bench performance
 
 ## Integration
 

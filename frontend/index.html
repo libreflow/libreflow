@@ -839,10 +839,10 @@
           </div>
         </div>
         <div class="set-row">
-          <div>
+          <label class="set-toggle-label" for="dyn-color-chk">
             <div class="set-row-label" data-i18n="set_dyn_label">Accent dynamique</div>
             <div class="set-row-sub" data-i18n="set_dyn_sub">Suit la couleur de la pochette</div>
-          </div>
+          </label>
           <label class="toggle-wrap">
             <input type="checkbox" id="dyn-color-chk"
                    data-i18n-aria="set_dyn_label"
@@ -877,15 +877,15 @@
         <div class="set-row">
           <div class="tlist-zoom-radios" id="tlist-zoom-radios" role="radiogroup" aria-label="Densité de la liste">
             <label class="tlist-zoom-radio">
-              <input type="radio" name="tlist-zoom" value="compact" data-action="tlist-zoom">
+              <input type="radio" name="tlist-zoom" value="compact">
               <span data-i18n="tlist_zoom_compact">Compact</span>
             </label>
             <label class="tlist-zoom-radio">
-              <input type="radio" name="tlist-zoom" value="comfortable" data-action="tlist-zoom" checked>
+              <input type="radio" name="tlist-zoom" value="comfortable" checked>
               <span data-i18n="tlist_zoom_comfortable">Confortable</span>
             </label>
             <label class="tlist-zoom-radio">
-              <input type="radio" name="tlist-zoom" value="spacious" data-action="tlist-zoom">
+              <input type="radio" name="tlist-zoom" value="spacious">
               <span data-i18n="tlist_zoom_spacious">Spacieux</span>
             </label>
           </div>
@@ -915,10 +915,10 @@
       <div class="set-section">
         <div class="set-section-lbl" data-i18n="set_rg_section">Normalisation du volume</div>
         <div class="set-row">
-          <div>
+          <label class="set-toggle-label" for="rg-enabled">
             <div class="set-row-label" data-i18n="set_rg_label">Replay Gain</div>
             <div class="set-row-sub" data-i18n="set_rg_sub">Égalise le volume entre les pistes</div>
-          </div>
+          </label>
           <label class="toggle-wrap">
             <input type="checkbox" id="rg-enabled" data-input-action="rg-enabled" data-i18n-aria="set_rg_label" aria-label="Replay Gain">
             <span class="toggle-slider"></span>
@@ -955,10 +955,10 @@
         <div class="set-section-lbl" data-i18n="set_viz_section">Visualiseur</div>
         <!-- Activer / désactiver le visualiseur -->
         <div class="set-row">
-          <div>
+          <label class="set-toggle-label" for="set-viz-toggle">
             <div class="set-row-label" data-i18n="set_viz_toggle_label">Visualiseur actif</div>
             <div class="set-row-sub" data-i18n="set_viz_toggle_sub">Afficher le visualiseur dans la barre de lecture</div>
-          </div>
+          </label>
           <label class="toggle-wrap">
             <input type="checkbox" id="set-viz-toggle"
                    data-input-action="viz-enabled"
@@ -1036,10 +1036,10 @@
           </button>
         </div>
         <div class="set-row">
-          <div>
+          <label class="set-toggle-label" for="watch-folder-chk">
             <div class="set-row-label" data-i18n="set_watch_label">Surveillance automatique</div>
             <div class="set-row-sub" data-i18n="set_watch_sub">Détecte les nouveaux fichiers et les mises à jour de tags</div>
-          </div>
+          </label>
           <label class="toggle-wrap">
             <input type="checkbox" id="watch-folder-chk"
                    data-i18n-aria="set_watch_label"
@@ -1171,9 +1171,9 @@
       <div class="set-section">
         <div class="set-section-lbl" data-i18n="set_updates_section">Mises à jour</div>
         <div class="set-row">
-          <div class="set-row-label" data-i18n="set_update_auto_label">Vérifier les mises à jour au lancement</div>
+          <label class="set-row-label set-toggle-label" for="auto-update-chk" data-i18n="set_update_auto_label">Vérifier les mises à jour au lancement</label>
           <label class="toggle-wrap">
-            <input type="checkbox" id="auto-update-chk" data-input-action="auto-update" data-i18n-aria="set_update_auto_label" aria-label="Vérifier les mises à jour au lancement">
+            <input type="checkbox" id="auto-update-chk" data-i18n-aria="set_update_auto_label" aria-label="Vérifier les mises à jour au lancement">
             <span class="toggle-slider"></span>
           </label>
         </div>
@@ -1532,6 +1532,9 @@
       <div class="sc-key"><kbd>Échap</kbd></div><div class="sc-desc"><span data-i18n="sc_esc">Fermer / Vider la recherche</span></div>
       <div class="sc-key"><kbd>F11</kbd></div><div class="sc-desc"><span data-i18n="sc_fullscreen">Plein écran</span></div>
       <div class="sc-key"><kbd>Ctrl</kbd><span style="opacity:.4;font-size:10px">+</span><kbd>,</kbd></div><div class="sc-desc"><span data-i18n="sc_settings">Ouvrir / fermer les paramètres</span></div>
+      <div class="sc-key"><kbd>Ctrl</kbd><span style="opacity:.4;font-size:10px">+</span><kbd>+</kbd></div><div class="sc-desc"><span data-i18n="sc_zoom_in">Zoomer la liste de pistes</span></div>
+      <div class="sc-key"><kbd>Ctrl</kbd><span style="opacity:.4;font-size:10px">+</span><kbd>-</kbd></div><div class="sc-desc"><span data-i18n="sc_zoom_out">Dézoomer la liste de pistes</span></div>
+      <div class="sc-key"><kbd>Ctrl</kbd><span style="opacity:.4;font-size:10px">+</span><kbd>0</kbd></div><div class="sc-desc"><span data-i18n="sc_zoom_reset">Réinitialiser le zoom de la liste</span></div>
     </div>
     <button class="shortcuts-close" data-action="toggle-shortcuts" data-i18n="sc_close">Fermer</button>
   </div>

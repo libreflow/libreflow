@@ -22,7 +22,7 @@
 //   renderEQBands, filterEQPresets, toggleEQAB
 //   setMasterGain
 
-import { get, set } from './store.js';
+import { get } from './store.js';
 import { emit, EVENTS } from './bus.js';
 import { i18n } from './i18n.js';
 

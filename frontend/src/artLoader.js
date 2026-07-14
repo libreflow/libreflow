@@ -11,8 +11,7 @@
 //   - Un cache LRU (MAX_ART_CACHE entrées) borne la mémoire à ~6 MB en régime normal.
 //
 // Exports :
-//   loadArt(t)            — charge et affiche l'artwork d'une piste
-//   prefetchArts(list)    — batch fire-and-forget (virtual scroll window)
+//   prefetchArts(list)    — batch fire-and-forget (virtual scroll window), appelle loadArt() en interne
 //   revokeArt(trackId)    — libère le blob: URL d'une piste supprimée
 
 import { DB, dget }    from './db.js';
@@ -172,7 +171,7 @@ export async function getArtUrl(t) {
  *
  * @param {object} t - Track object (doit avoir _hasArt, noArt, id, art)
  */
-export async function loadArt(t) {
+async function loadArt(t) {
   if (!t._hasArt || t.noArt) return;
   const hadArt = !!t.art;
   const url = await getArtUrl(t);

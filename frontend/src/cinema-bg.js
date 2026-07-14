@@ -129,7 +129,8 @@ let _starsInited    = false;  // flag pour éviter double _initStarfield
 // P3 fix : cache innerWidth/innerHeight — évite un getter DOM par frame RAF.
 let _winW = (typeof window !== 'undefined' && window.innerWidth)  || 1280;
 let _winH = (typeof window !== 'undefined' && window.innerHeight) || 800;
-export function updateCachedWinSize() { _winW = window.innerWidth || 1280; _winH = window.innerHeight || 800; }
+// _ambientCross = null : coupe un cross-fade en vol (snapshot à l'ANCIENNE taille -- fix).
+export function updateCachedWinSize() { _winW = window.innerWidth || 1280; _winH = window.innerHeight || 800; _ambientCross = null; }
 
 // ── Callback pour accéder à l'état de cinema.js sans créer de cycle d'import ──
 let _getCinemaOpen   = () => false;
@@ -442,10 +443,7 @@ function _parseColorToRGB(str) {
   return null;
 }
 
-/**
- * Appelé depuis app.js/applyArtColor() — pousse la couleur dominante immédiatement
- * sans attendre updateCinema().
- */
+/** Appelé depuis app.js/applyArtColor() — pousse la couleur dominante et réveille la boucle. */
 export function updateCinArtColor(hex) {
   const rgb = _parseColorToRGB(hex);
   if (rgb) {
@@ -456,6 +454,8 @@ export function updateCinArtColor(hex) {
     _cinArtRGBTarget[0] = 255; _cinArtRGBTarget[1] = 255; _cinArtRGBTarget[2] = 255;
     _cinArtRGB = '255,255,255';
   }
+  // Bug fix : extractColor() (playerbar.js) résout en async -- réveille une boucle endormie.
+  if (_getCinemaOpen()) wakeCinemaLoop();
 }
 
 /**

@@ -5,7 +5,7 @@
 // Remaining window.* : window.innerWidth/Height (DOM).
 //
 // Exports publics :
-//   miniOvOpen, toggleMiniOverlay, syncMiniOverlay,
+//   toggleMiniOverlay, syncMiniOverlay,
 //   updateMiniOverlayProgress, initMiniOverlayDrag
 
 import { get }   from './store.js';
@@ -16,7 +16,7 @@ const SVG_PLAY  = `<svg viewBox="0 0 24 24"><polygon points="6 3 20 12 6 21" fil
 const SVG_PAUSE = `<svg viewBox="0 0 24 24"><rect x="5.5" y="4" width="4" height="16" rx="1.5" fill="currentColor"/><rect x="14.5" y="4" width="4" height="16" rx="1.5" fill="currentColor"/></svg>`;
 
 // ── État ──────────────────────────────────────────────────────────
-export let miniOvOpen = false;
+let miniOvOpen = false;
 
 // ── Toggle ────────────────────────────────────────────────────────
 export function toggleMiniOverlay() {

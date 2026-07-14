@@ -7,7 +7,7 @@
 //   import  : esc            (utils.js)
 //   import  : CFG            (cfg.js)
 //   window  : tracks, curIdx, liked, recentPlays, _trackIdxMap  (getters)
-//             confirmAction, closeCtxMenu, getFiltered, playAt, setView
+//             confirmAction, closeCtxMenu, playAt, setView
 //             setManualQueue, toast, ctxTrackId  (callbacks / getter)
 //
 // Exports publics :
@@ -20,7 +20,7 @@ import { esc, fmt }                           from './utils.js';
 import { CFG }                                from './cfg.js';
 import { i18n }                               from './i18n.js';
 import { get, notify }                        from './store.js';
-import { getFiltered, filteredIdx, _trackIdxMap } from './search.js';
+import { filteredIdx, _trackIdxMap } from './search.js';
 import { audio, playAt }                      from './player.js';
 import { toast, toastWithAction, confirmAction }                       from './ui.js';
 import { setManualQueue } from './player.js';

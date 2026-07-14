@@ -108,11 +108,11 @@ export async function analyzeAndApplyRG() {
     if (_rgAnalysisId !== myId) return;
 
     const _dur = isFinite(t.duration) && t.duration > 0 ? t.duration : 30;
-    const _probeCtx = new OfflineAudioContext(2, Math.round(44100 * Math.min(30, _dur)), 44100);
+    const _probeCtx = new OfflineAudioContext(2, Math.round(44100 * Math.min(CFG.RG_ANALYSIS_SECS, _dur)), 44100);
     let srcBuf      = await _probeCtx.decodeAudioData(arrayBuf);
     arrayBuf = null;
     const nChannels = srcBuf.numberOfChannels > 1 ? 2 : 1;
-    const offline   = new OfflineAudioContext(nChannels, Math.round(44100 * Math.min(30, _dur)), 44100);
+    const offline   = new OfflineAudioContext(nChannels, Math.round(44100 * Math.min(CFG.RG_ANALYSIS_SECS, _dur)), 44100);
     if (_rgAnalysisId !== myId) { srcBuf = null; return; }
 
     const nch = nChannels;

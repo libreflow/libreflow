@@ -330,7 +330,7 @@ const _ACTIONS = {
   },
 
   'backup-export': async () => {
-    await exportBackup(false);
+    await exportBackup();
   },
 
   'backup-import': async () => {

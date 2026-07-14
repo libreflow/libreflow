@@ -161,6 +161,9 @@ let _errUnlisten  = null; // unlistener pour 'watch-error' (watcher Rust mort)
 let _modDebTimer  = null; // debounce timer pour les modifications
 let _modRawPaths  = [];   // buffer des paths de fichiers modifiés
 let _watchActive  = false; // true si le watcher natif tourne
+// MODIF-RACE FIX : paths modifiés reçus pendant que loadTagsBg tournait encore
+// pour ce fichier — rejoués dès que ce chargement se termine (_retryPendingReload).
+let _modPendingRetry = new Set();
 
 /** Initialise watchPath depuis la config au démarrage (pas de side-effects). */
 export function initWatchPath(path) { watchPath = path; }
@@ -208,10 +211,30 @@ function _reloadTagsForPaths(paths) {
   const byPath = new Map(tracks.map(t => [t.path, t]));
   for (const p of paths) {
     const t = byPath.get(p);
-    if (!t || !t.metaDone) continue; // TODO: track in _modPendingRetry set and reschedule after current load
-    t.metaDone = false;
-    loadTagsBg(t);
+    if (!t) continue;
+    if (!t.metaDone) {
+      // MODIF-RACE FIX : chargement des tags encore en cours pour ce chemin —
+      // au lieu de perdre l'événement, on le mémorise pour relancer le reload
+      // dès que ce chargement se termine (voir _reloadOneTrack ci-dessous).
+      _modPendingRetry.add(p);
+      continue;
+    }
+    _reloadOneTrack(t);
   }
+}
+
+/** Relance loadTagsBg pour une piste puis rejoue tout reload en attente sur son chemin. */
+function _reloadOneTrack(t) {
+  t.metaDone = false;
+  loadTagsBg(t).then(() => _retryPendingReload(t.path));
+}
+
+/** Si un reload a été mis en attente pour ce chemin pendant le chargement précédent, le rejoue. */
+function _retryPendingReload(path) {
+  if (!_modPendingRetry.has(path)) return;
+  _modPendingRetry.delete(path);
+  const t = get('tracks').find(tr => tr.path === path);
+  if (t) _reloadOneTrack(t);
 }
 
 /**
@@ -318,6 +341,7 @@ export function stopWatchFolder(silent = false, keepPath = false) {
   if (_errUnlisten) { _errUnlisten(); _errUnlisten = null; }
   if (_modDebTimer) { clearTimeout(_modDebTimer); _modDebTimer = null; }
   _modRawPaths = [];
+  _modPendingRetry.clear();
   invoke('watch_folder_stop').catch(e => console.warn('[watchfolder:watch_folder_stop]', e));
   _watchActive = false;
   _starting    = false;
@@ -378,8 +402,12 @@ export function updateWatchUI() {
 
 /** Importe une liste de chemins absolus dans la bibliothèque.
  *  Déduplique via watchSnapshot. Retourne le nombre de titres ajoutés.
- *  RACE-2 FIX : si un import est en cours, paths mis en queue → zéro corruption de tracks[]. */
-export async function importPaths(paths) {
+ *  RACE-2 FIX : si un import est en cours, paths mis en queue → zéro corruption de tracks[].
+ *  @param {string[]} paths
+ *  @param {'folder-scan'|'usb'} [source='folder-scan'] — source loguée dans l'historique
+ *    des imports (imports.js) pour ce batch. Les paths mis en queue pendant un import en
+ *    cours (accumulés via watcher natif) restent logués sous 'folder-scan'. */
+export async function importPaths(paths, source = 'folder-scan') {
   // SEC : filtre défensif côté JS — Rust reste la garde finale, mais on rejette
   // les chemins évidemment dangereux (.. / null bytes / contrôle) avant l'IPC.
   const before = paths.length;
@@ -395,7 +423,7 @@ export async function importPaths(paths) {
   }
   _importing = true;
   try {
-    let added = await _doImportPaths(paths);
+    let added = await _doImportPaths(paths, source);
     // Drainer la queue accumulée pendant cet import
     while (_pendingPaths.length) {
       const pending = _pendingPaths.splice(0);
@@ -407,7 +435,7 @@ export async function importPaths(paths) {
   }
 }
 
-async function _doImportPaths(paths) {
+async function _doImportPaths(paths, source = 'folder-scan') {
   let added = 0;
   const newPaths  = [];
   const newTracks = []; // B10 : différer loadTagsBg jusqu'après rebuildTrackIdxMap
@@ -449,11 +477,13 @@ async function _doImportPaths(paths) {
     if (VIRT) VIRT._lastListSig = '';
     const niAll = document.getElementById('ni-all');
     setView('all', niAll ?? null);
-    logImport('folder-scan', newPaths);
+    logImport(source, newPaths);
     // B10 FIX : loadTagsBg APRÈS rebuildTrackIdxMap — sinon _trackIdxMap n'est
     // plus une projection exacte de tracks[] (CLAUDE.md §2) pendant la boucle, et
     // flushTrackBatch exclut les pistes pas encore mappées de l'écriture IDB.
-    for (const t of newTracks) loadTagsBg(t);
+    // MODIF-RACE FIX : on chaîne _retryPendingReload — si watch-modified-files
+    // arrive pour ce chemin avant la fin de ce premier chargement, il est rejoué ici.
+    for (const t of newTracks) loadTagsBg(t).then(() => _retryPendingReload(t.path));
   }
   return added;
 }
