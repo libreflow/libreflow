@@ -105,10 +105,15 @@ export function makeEqHTML(_t) {
 
 // A11Y-3: role="listitem" tabindex="0" aria-label; P6: classes dynamiques
 export function thtml(t, fi, { active = false, liked = false, likedSet, query = '', isAlbumDetail: _isAlbumDetail, albumDetailSort: _albumDetailSort, hlRe, isTabStop = false, setSize = 0 } = {}) {
-  // Artwork — img avec fade-in (.art-img → .art-loaded au onload) OU placeholder
-  const artInner = t.art
-    ? `<img class="art-img" src="${esc(t.art)}" alt="" aria-hidden="true">`
-    : artPlaceholder(t);
+  // Artwork — pendant l'hydratation des tags (!metaDone), on ne sait pas
+  // encore si une pochette existe : shimmer (classe .tart.loading) plutôt
+  // que le monogramme, qui doit rester réservé à l'état final "pas d'art".
+  const artInner = !t.metaDone
+    ? ''
+    : t.art
+      ? `<img class="art-img" src="${esc(t.art)}" alt="" aria-hidden="true">`
+      : artPlaceholder(t);
+  const tartClass = t.metaDone ? 'tart' : 'tart loading';
 
   // M-1: utiliser la valeur pré-calculée si fournie, sinon fallback sur get() (compatibilité standalone)
   const isAlbumDetail   = _isAlbumDetail   ?? (get('view') === 'album-detail');
@@ -131,7 +136,7 @@ export function thtml(t, fi, { active = false, liked = false, likedSet, query = 
   return `<div class="${classes}" id="tr-${esc(t.id)}" data-track-id="${esc(t.id)}" data-fi="${fi}"
   data-action="track-click" role="listitem" tabindex="${tabIdx}" aria-setsize="${setSize}" aria-posinset="${fi + 1}" aria-label="${esc(ariaLbl)}"${ariaCur}
   draggable="true" data-drag-action="track-drag">
-  ${trackNum}<div class="tart">
+  ${trackNum}<div class="${tartClass}">
     ${artInner}
     <button class="tart-hover-play" data-action="play-track" data-track-id="${esc(t.id)}" tabindex="-1" aria-label="${i18n('play') || 'Lire'}">
       <svg class="icon-play" viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true"><polygon points="5,3 19,12 5,21"/></svg>

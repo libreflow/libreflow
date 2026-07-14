@@ -977,6 +977,33 @@ section('motion.js -- public surface (static source check)');
     'motion.js honors prefers-reduced-motion');
 }());
 
+// =============================================================================
+// 30. Renderer — thtml artwork state (loading / placeholder / image)
+// =============================================================================
+section('renderer.js -- thtml artwork state (reproduced inline)');
+
+(function () {
+  // Reproduces the artInner/class selection logic from thtml() —
+  // matches the artPlaceholder inline-reproduction convention above.
+  function artState(t) {
+    if (!t.metaDone) return { tartClass: 'tart loading', hasImg: false, hasPh: false };
+    if (t.art)       return { tartClass: 'tart', hasImg: true, hasPh: false };
+    return { tartClass: 'tart', hasImg: false, hasPh: true };
+  }
+
+  const pending = artState({ metaDone: false, art: null });
+  assert(pending.tartClass === 'tart loading', 'thtml: !metaDone → classe "tart loading"');
+  assert(!pending.hasImg && !pending.hasPh, 'thtml: !metaDone → ni <img> ni placeholder (shimmer seul)');
+
+  const resolvedWithArt = artState({ metaDone: true, art: 'blob:abc' });
+  assert(resolvedWithArt.tartClass === 'tart', 'thtml: metaDone + art → classe "tart" (pas loading)');
+  assert(resolvedWithArt.hasImg, 'thtml: metaDone + art → <img> rendu');
+
+  const resolvedNoArt = artState({ metaDone: true, art: null });
+  assert(resolvedNoArt.tartClass === 'tart', 'thtml: metaDone sans art → classe "tart" (pas loading)');
+  assert(resolvedNoArt.hasPh, 'thtml: metaDone sans art → placeholder monogramme permanent');
+}());
+
 // ─── eqdevice.js — profil EQ par appareil ────────────────────────────────────
 {
   const assert = require('assert');
