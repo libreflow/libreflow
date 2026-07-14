@@ -110,11 +110,10 @@ export function applyLang() {
   setBtnText('.wbtn-scan', 'wlc_btn');
   setBtnText('.wbtn-m3u', 'wlc_btn_m3u');
   setText('.whint', 'wlc_hint');
-  const feats = document.querySelectorAll('.wf');
-  const featKeys = ['wlc_feat1', 'wlc_feat2', 'wlc_feat3', 'wlc_feat4'];
-  feats.forEach((f, i) => {
-    const wft = f.querySelector('.wf-t'); if (wft) wft.textContent = i18n(featKeys[i] + '_t');
-    const wfd = f.querySelector('.wf-d'); if (wfd) wfd.textContent = i18n(featKeys[i] + '_d');
+  const chips = document.querySelectorAll('.wf-chip');
+  const chipKeys = ['wlc_feat1_t', 'wlc_feat2_t', 'wlc_feat3_t', 'wlc_feat4_t'];
+  chips.forEach((c, i) => {
+    const lbl = c.querySelector('.wf-chip-label'); if (lbl) lbl.textContent = i18n(chipKeys[i]);
   });
 
   // Sidebar buttons

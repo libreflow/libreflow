@@ -581,8 +581,7 @@ html[data-mode="light"] .tag-edit-cancel { color:var(--t3); }
 html[data-mode="light"] .tag-edit-cancel:hover { color:var(--t2); }
 
 /* ── Dossier surveillé ── */
-html[data-mode="light"] .wf           { background:var(--bg2); border:var(--border-w-sm) solid var(--bg5); }
-html[data-mode="light"] .wf:hover     { background:var(--bg3); border-color:var(--bg6); }
+html[data-mode="light"] .wf-chip      { background:var(--bg2); border-color:var(--bg5); color:var(--t2); }
 html[data-mode="light"] .wbtn         { background:var(--g); color: var(--text-on-accent); }
 html[data-mode="light"] .wbtn svg     { stroke: var(--text-on-accent); fill:none; }
 
@@ -600,8 +599,6 @@ html[data-mode="light"] ::-webkit-scrollbar-thumb { background:rgba(0,0,0,.18); 
 html[data-mode="light"] ::-webkit-scrollbar-thumb:hover { background:rgba(0,0,0,.28); }
 
 /* ── Contraste & accessibilité light mode ── */
-/* Descriptions feature cards welcome screen — 11px sur blanc, t3 = 5.4:1 (AA-compliant) */
-html[data-mode="light"] .wf-d           { color: var(--t3); }
 /* Boutons droit du player (file d'attente, vitesse…) */
 html[data-mode="light"] .pl-queue-btn   { color: var(--t); }
 html[data-mode="light"] .pl-speed-btn   { color: var(--t); }
@@ -2030,59 +2027,49 @@ html[data-motion="reduce"] #vw::before, html[data-motion="reduce"] #vw::after { 
   letter-spacing: var(--ls-slight);
 }
 
-/* Feature cards grid */
-.wfeats {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: var(--sp-2) var(--sp-5);
-  margin-bottom: var(--sp-7);
-  width: 100%;
+/* Hero halo behind the welcome logo — reuses the emptyPulse keyframe
+   already defined for empty-state icons (§1913), same visual language. */
+.wl-hero {
+  position: relative;
+  display: inline-flex;
+  flex-shrink: 0;
+}
+.wl-hero::before,
+.wl-hero::after {
+  content: '';
+  position: absolute;
+  inset: -14px;
+  border-radius: 50%;
+  background: rgba(var(--g-rgb), 0.10);
+  animation: emptyPulse 2.4s ease-in-out infinite;
+}
+.wl-hero::after {
+  inset: -20px;
+  animation-delay: 1.2s;
+}
+html[data-motion="reduce"] .wl-hero::before,
+html[data-motion="reduce"] .wl-hero::after { animation: none; opacity: 0; }
+
+/* Compact feature row — replaces the 4-card description grid. Icon +
+   short label only; full descriptions belong in Paramètres, not a
+   first-run screen (flagship-polish-pass spec, item B). */
+.wf-row {
+  display: flex; flex-wrap: wrap;
+  gap: var(--sp-2);
+  margin-top: var(--sp-6);
   max-width: var(--welcome-content-max);
 }
-/* R-H8 : sous 700px les deux colonnes de cartes features sont à l'étroit —
-   repli sur une seule colonne. */
-@media (max-width: 700px) { /* modale waveform — grille features repliée en colonne, non-containerisable (modale hors flux principal) */
-  .wfeats { grid-template-columns: 1fr; }
-}
-
-/* Individual card */
-.wf {
-  background: none;
-  border: none;
-  border-radius: 0;
-  padding: 0;
-  display: flex;
-  align-items: flex-start;
-  gap: var(--sp-2q);
-  text-align: left;
-}
-
-/* Card icon — accent bleu */
-.wf-ico {
-  width: var(--icon-26); height: var(--icon-26);
-  flex-shrink: 0;
-  margin-top: var(--sp-nano);
-  display: flex; align-items: center; justify-content: center;
-  background: rgba(var(--g-rgb),.10);
-  border: var(--border-w-sm) solid rgba(var(--g-rgb),.16);
-  border-radius: var(--r);
-  color: var(--g);
-}
-.wf-ico svg { width: var(--icon-sm); height: var(--icon-sm); stroke: var(--g); fill: none; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
-
-/* Card typography */
-.wf-t {
+.wf-chip {
+  display: inline-flex; align-items: center; gap: var(--sp-1h);
+  padding: var(--sp-1h) var(--sp-3);
+  background: rgba(var(--g-rgb), .08);
+  border: var(--border-w-sm) solid rgba(var(--g-rgb), .16);
+  border-radius: var(--r-pill, 999px);
   font-size: var(--fs-caption);
   font-weight: 600;
-  color: var(--t);
-  letter-spacing: var(--ls-numeric);
-  margin-bottom: var(--sp-1q);
+  color: var(--t2);
 }
-.wf-d {
-  font-size: var(--fs-sm);
-  color: var(--t3);
-  line-height: var(--lh-base);
-}
+.wf-chip svg { stroke: var(--g); flex-shrink: 0; }
 
 /* CTA button — bleu de marque */
 .wbtn {
@@ -6000,7 +5987,7 @@ html[data-nav-dir="back"] #nav-eq-wipe { flex-direction: row-reverse; }
 #vw.on .wl      { animation: wlFadeIn .42s var(--decelerate) .04s both; }
 #vw.on .wh1     { animation: wlFadeIn .38s var(--decelerate) .12s both; }
 #vw.on .wsub    { animation: wlFadeIn .36s var(--decelerate) .18s both; }
-#vw.on .wfeats  { animation: wlFadeIn .34s var(--decelerate) .24s both; }
+#vw.on .wf-row  { animation: wlFadeIn .34s var(--decelerate) .24s both; }
 #vw.on .wbtn    { animation: wlFadeIn .32s var(--decelerate) .30s both; }
 #vw.on .whint   { animation: wlFadeIn .30s var(--decelerate) .38s both; }
 
