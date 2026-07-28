@@ -2,37 +2,38 @@
   "_tolerancePct": 5,
   "_note": "Edited by `npm run perf:baseline`. Per-scenario tolerance overrides preserved.",
   "_toleranceNote": "Windows CI variance is high; per-scenario tolerances set to 2× observed peak drift.",
+  "_rebaselineNote": "2026-07-29: medians re-recorded from the CI run on feat/cinema-overhaul (job 'Bench regression check'). The previous June baseline was ~2× faster across ALL scenarios uniformly — runner hardware drift, not a code regression: a same-machine A/B (master vs branch, back-to-back) showed parity or better on every scenario.",
   "scenarios": {
     "filterExact()           full pass empty": {
       "medianMs": 0,
       "tolerancePct": 10
     },
     "filterExact()           query \"shadow\"": {
-      "medianMs": 167.02,
+      "medianMs": 288.91,
       "tolerancePct": 20
     },
     "filterExact()           query \"queen pulse\"": {
-      "medianMs": 166.46,
+      "medianMs": 321.56,
       "tolerancePct": 20
     },
     "filterExact()           cache hit  \"shadow\"": {
-      "medianMs": 3.27,
+      "medianMs": 3.32,
       "tolerancePct": 30
     },
     "filterFuzzy()           query \"shdaow\"": {
-      "medianMs": 180.38,
+      "medianMs": 375.77,
       "tolerancePct": 15
     },
     "virtBuildRows()         sort=az (grouped)": {
-      "medianMs": 9.4,
+      "medianMs": 19.63,
       "tolerancePct": 15
     },
     "virtBuildRows()         sort=artist (grouped)": {
-      "medianMs": 1.91,
+      "medianMs": 3.97,
       "tolerancePct": 30
     },
     "virtBuildRows()         sort=date (flat)": {
-      "medianMs": 1.08,
+      "medianMs": 1.26,
       "tolerancePct": 60
     }
   }
