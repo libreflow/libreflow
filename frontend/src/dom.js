@@ -13,42 +13,9 @@ export function $id(id) {
 
 /**
  * @param {string} id
- * @returns {HTMLInputElement}
- */
-export function $input(id) {
-  return /** @type {HTMLInputElement} */ (document.getElementById(id));
-}
-
-/**
- * @param {string} id
  * @returns {HTMLSelectElement}
  */
 export function $select(id) {
   return /** @type {HTMLSelectElement} */ (document.getElementById(id));
 }
 
-/**
- * @param {string} id
- * @returns {HTMLTextAreaElement}
- */
-export function $textarea(id) {
-  return /** @type {HTMLTextAreaElement} */ (document.getElementById(id));
-}
-
-/**
- * @param {HTMLElement | Document} root
- * @param {string} selector
- * @returns {HTMLElement}
- */
-export function $qs(root, selector) {
-  return /** @type {HTMLElement} */ (root.querySelector(selector));
-}
-
-/**
- * @param {HTMLElement | Document} root
- * @param {string} selector
- * @returns {HTMLInputElement}
- */
-export function $qsInput(root, selector) {
-  return /** @type {HTMLInputElement} */ (root.querySelector(selector));
-}

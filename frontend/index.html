@@ -1,12 +1,21 @@
 <!DOCTYPE html>
-<html lang="fr">
+<html lang="fr" data-motion="full">
 <head>
 <meta charset="UTF-8">
 <title>LibreFlow</title>
 <!-- Supprime la requête auto du navigateur vers /favicon.ico (pas de fichier statique dans Tauri) -->
 <link rel="icon" href="data:,">
   <link rel="stylesheet" href="/src/design-system.css">
-  <link rel="stylesheet" href="/src/style.css">
+  <link rel="stylesheet" href="/src/style.css"><!-- style-polish.css fusionné dans style.css (audit 2026-07-27) -->
+  <!-- M2 (audit 2026-06-11) : script classique render-blocking — pose
+       data-mode/data-theme depuis les mirrors localStorage AVANT le premier
+       paint (la cfg IDB est async). CSP script-src 'self' → pas d'inline. -->
+  <script src="/boot-theme.js"></script>
+  <!-- Task 10 : pose data-motion (mirror localStorage lf-motion, défaut 'full')
+       AVANT le premier paint — évite le flash d'animations non réduites pour un
+       profil 'reduce'/'system' pendant la lecture async de la cfg IDB.
+       CSP script-src 'self' → pas d'inline, d'où le fichier dans public/. -->
+  <script src="/boot-motion.js"></script>
   <script type="module" src="/src/main.js"></script>
 </head>
 <body>
@@ -28,23 +37,41 @@
 
 <!-- TITLEBAR -->
 <div id="tb">
-  <!-- Left group : modes actifs → préférences → config (ordre par fréquence d'usage) -->
-  <div class="tb-btns tb-left">
-    <!-- Gestion de la fenêtre -->
-    <button class="tb-icon-btn" id="tbt-mini" data-action="toggle-mini-player" title="" data-i18n-title="tb_mini" data-aria-i18n="tb_mini" aria-label="Mini-player" aria-pressed="false">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="12" width="20" height="10" rx="2"/><path d="M7 16l2.5 2L12 16l2.5 2L17 16"/><path d="M8 8h8M10 4h4"/></svg>
+  <!-- More menu (top-left, not draggable) -->
+  <div class="tb-more-wrap">
+    <button class="tb-more-btn" id="sb-more-btn" data-action="toggle-sb-more"
+            aria-label="Plus d'options" aria-expanded="false" aria-haspopup="menu" aria-controls="sb-more-pop">
+      <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="5" cy="12" r="1.5" fill="currentColor"/><circle cx="12" cy="12" r="1.5" fill="currentColor"/><circle cx="19" cy="12" r="1.5" fill="currentColor"/></svg>
     </button>
-    <div class="tb-divider"></div>
-    <!-- Préférences d'affichage + configuration -->
-    <button class="tb-icon-btn" id="mode-toggle-btn" data-action="toggle-mode" title="" data-i18n-title="tb_mode" data-aria-i18n="tb_mode" aria-label="Thème clair / sombre">
-      <svg id="ico-mode-dark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
-      <svg id="ico-mode-light" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" style="display:none"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
-    </button>
-    <button class="tb-icon-btn" id="tbt-settings" data-action="open-settings" title="" data-i18n-title="tb_settings" data-aria-i18n="tb_settings" aria-label="Paramètres" aria-expanded="false" aria-controls="settings-panel" aria-haspopup="dialog" aria-keyshortcuts="Control+Comma">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
-    </button>
+    <div id="sb-more-pop" class="sb-more-pop" role="menu" aria-label="Plus d'options" hidden>
+      <button class="sb-more-item" id="mode-toggle-btn" data-action="toggle-mode" role="menuitem"
+              aria-label="Thème" data-i18n-aria="tb_mode">
+        <svg id="ico-mode-dark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+        <svg id="ico-mode-light" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="display:none"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+        <span data-i18n="tb_mode">Thème</span>
+      </button>
+      <button class="sb-more-item" id="tbt-settings" data-action="open-settings" role="menuitem"
+              aria-label="Paramètres" data-i18n-aria="tb_settings"
+              aria-expanded="false" aria-controls="settings-panel" aria-haspopup="dialog" aria-keyshortcuts="Control+Comma">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+        <span data-i18n="tb_settings">Paramètres</span>
+      </button>
+      <hr class="sb-more-sep">
+      <!-- AUDIT-2026-07-27 : Statistiques → sidebar (#ni-stats), Égaliseur + Mode
+           cinéma → player bar (.pl-r) — features majeures désenterrées du menu ⋯. -->
+      <button class="sb-more-item" id="tbt-mini" data-action="toggle-mini-player" role="menuitem"
+              aria-label="Mini-player" data-i18n-aria="tb_mini" aria-pressed="false">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="12" width="20" height="10" rx="2"/><path d="M7 16l2.5 2L12 16l2.5 2L17 16"/><path d="M8 8h8M10 4h4"/></svg>
+        <span data-i18n="tb_mini">Mini-player</span>
+      </button>
+      <div class="sb-more-item" id="sleep-indicator" data-action="toggle-sleep" role="menuitem" tabindex="0"
+           aria-label="Minuterie sommeil" data-i18n-aria="aria_sleep">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 15"/></svg>
+        <span data-i18n="pl_sleep_title">Minuterie</span>
+        <span id="sleep-countdown" class="sb-more-badge"></span>
+      </div>
+    </div>
   </div>
-
   <!-- Spacer (draggable) -->
   <div class="tb-drag-spacer"></div>
 
@@ -66,29 +93,22 @@
 <!-- A11Y SC 1.3.1 : #sb est un conteneur (recherche + nav + playlists) ; le landmark
      navigation est porté par le <nav class="sb-nav"> réel ci-dessous (plus de double nav). -->
 <div id="sb">
-  <div class="sb-head">
-    <div class="sb-brand" data-action="go-home" role="button" tabindex="0" aria-label="Accueil" data-i18n-aria="nav_home" title="" data-i18n-title="nav_home">
-      <span class="sb-dot"><img src="/icon-32.png" class="sb-dot-logo" alt=""></span>
-      <span class="sb-brand-name">LibreFlow</span>
-    </div>
-    <div class="sb-stats" id="sb-stats" aria-live="polite" aria-atomic="true" data-i18n="sb_empty">Aucune musique importée</div>
-  </div>
-  <div class="sb-search" role="search">
-    <div class="srch">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="11" cy="11" r="7.5"/><line x1="21" y1="21" x2="16.65" y2="16.65" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
-      <input id="srch" type="text" placeholder="Rechercher…" data-i18n-aria="aria_search" aria-label="Rechercher dans la bibliothèque" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" data-input-action="search">
-      <button id="srch-clear" class="srch-clear" data-action="clear-search" title="Effacer" data-i18n-aria="aria_srch_clear" aria-label="Effacer la recherche" style="display:none"><svg viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="4" y1="4" x2="20" y2="20"/><line x1="20" y1="4" x2="4" y2="20"/></svg></button>
-      <span id="srch-badge" class="srch-ct" aria-live="polite" aria-atomic="true"></span>
-    </div>
-    <button id="clear-filters" class="clear-filters-btn" data-action="clear-filters" title="Effacer tous les filtres actifs" data-i18n-title="ergo_clear_filters_title" data-i18n-aria="ergo_clear_filters_aria" aria-label="Effacer tous les filtres (recherche, format, drill)" style="display:none">
-      <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z"/><line x1="18" y1="6" x2="22" y2="2"/><line x1="22" y1="6" x2="18" y2="2"/></svg>
-      <span data-i18n="ergo_clear_filters_title">Effacer tous les filtres actifs</span>
-    </button>
-  </div>
   <nav class="sb-nav" data-i18n-aria="aria_nav_main" aria-label="Navigation principale">
 
-    <!-- ── Bibliothèque ── -->
-    <div class="sb-section-lbl" data-i18n="sb_group_lib">Bibliothèque</div>
+    <div id="ni-indicator" aria-hidden="true"></div>
+
+    <!-- ── Header Ma bibliothèque + scanner ── -->
+    <div class="sb-lib-header">
+      <span class="sb-lib-title" data-i18n="sb_group_lib">Ma bibliothèque</span>
+      <!-- REWORK-2 : icône dossier+ (cohérente avec le welcome screen) — le simple «+»
+           était ambigu face au «+» de création de playlist de la section PLAYLISTS. -->
+      <button class="sb-lib-add" data-action="open-folder"
+              aria-label="Scanner un dossier" data-i18n-aria="sb_scan_folder"
+              title="Scanner un dossier" data-i18n-title="sb_scan_folder">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/><line x1="12" y1="11" x2="12" y2="17"/><line x1="9" y1="14" x2="15" y2="14"/></svg>
+      </button>
+    </div>
+
     <button class="ni on" id="ni-all" data-action="set-view" data-view="all" aria-current="page">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M3 6h18M3 12h14M3 18h10"/></svg>
       <span data-i18n="nav_all">Tous les titres</span>
@@ -98,54 +118,62 @@
       <span data-i18n="nav_liked">Favoris</span>
     </button>
     <button class="ni" id="ni-recent" data-action="set-view" data-view="recent">
-      <svg viewBox="0 0 24 24" fill="none" style="fill:none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="16.5" y1="13.5" x2="12" y2="13"/></svg>
-      <span data-i18n="nav_recent">Récemment écoutés</span>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="16.5" y1="13.5" x2="12" y2="13"/></svg>
+      <span data-i18n="nav_recent">Récents</span>
     </button>
-    <button class="ni" id="ni-playlists" data-action="set-view" data-view="playlists">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="6" x2="14" y2="6"/><line x1="3" y1="12" x2="14" y2="12"/><line x1="3" y1="18" x2="10" y2="18"/><polygon points="17 10 23 14 17 18"/></svg>
-      <span data-i18n="nav_playlists">Playlists</span>
-    </button>
-    <div id="pl-list-nav" class="pl-list-nav"></div>
-
-    <!-- ── Parcourir ── -->
-    <div class="sb-section-lbl" data-i18n="sb_group_explore">Parcourir</div>
-    <button class="ni" id="ni-artists" data-action="set-view" data-view="artists">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
-      <span data-i18n="nav_artists">Artistes</span>
-    </button>
-    <button class="ni" id="ni-albums" data-action="set-view" data-view="albums">
-      <svg viewBox="0 0 24 24" fill="none" style="fill:none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="2.5" width="19" height="19" rx="3"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.5"/></svg>
-      <span data-i18n="nav_albums">Albums</span>
-    </button>
-    <button class="ni ni-radio" id="ni-radio" data-action="set-view" data-view="radio">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 17a24.12 24.12 0 0 1 0-10"/><path d="M5.5 12a18.5 18.5 0 0 0 0 5"/><path d="M5.5 7a18.5 18.5 0 0 1 0 5"/><path d="M21.5 17a24.12 24.12 0 0 0 0-10"/><path d="M18.5 12a18.5 18.5 0 0 1 0 5"/><path d="M18.5 7a18.5 18.5 0 0 0 0 5"/><circle cx="12" cy="12" r="2"/></svg>
+    <!-- AUDIT-2026-07-27 : Radio promue en sidebar (était un onglet bibliothèque —
+         c'est une fonctionnalité de lecture, pas une facette de la collection) -->
+    <button class="ni" id="ni-radio" data-action="set-view" data-view="radio">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 17a24.12 24.12 0 0 1 0-10"/><path d="M5.5 7a18.5 18.5 0 0 1 0 10"/><path d="M21.5 17a24.12 24.12 0 0 0 0-10"/><path d="M18.5 7a18.5 18.5 0 0 0 0 10"/><circle cx="12" cy="12" r="2"/></svg>
       <span data-i18n="nav_radio">Radio</span>
     </button>
-    <!-- Statistiques séparées visuellement — usage moins fréquent -->
-    <div class="sb-sep"></div>
+    <!-- AUDIT-2026-07-27 : Statistiques promue au premier niveau (était dans le menu ⋯) -->
     <button class="ni" id="ni-stats" data-action="set-view" data-view="stats">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
       <span data-i18n="nav_stats">Statistiques</span>
     </button>
+    <!-- REWORK-2 : l'item nav « Playlists » (vue grille) doublonnait la liste juste
+         en dessous. Remplacé par un en-tête de section portant les deux actions :
+         + (créer) et grille (parcourir). Hiérarchie : MA BIBLIOTHÈQUE = vues,
+         PLAYLISTS = collections. -->
+    <div class="sb-lib-header sb-pl-header">
+      <span class="sb-lib-title" data-i18n="nav_playlists">Playlists</span>
+      <div class="sb-pl-header-actions">
+        <button class="sb-lib-add" data-action="new-playlist"
+                aria-label="Nouvelle playlist" data-i18n-aria="sb_new_pl"
+                title="Nouvelle playlist" data-i18n-title="sb_new_pl">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        </button>
+        <button class="sb-lib-add sb-nav-btn" data-action="set-view" data-view="playlists"
+                aria-label="Parcourir les playlists" data-i18n-aria="sb_pl_grid"
+                title="Parcourir les playlists" data-i18n-title="sb_pl_grid">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+        </button>
+      </div>
+    </div>
+    <div id="pl-list-nav" class="pl-list-nav"></div>
+
 
   </nav>
-  <div id="watch-indicator" style="display:none" class="watch-indicator">
-    <div class="watch-dot"></div>
-    <span id="watch-label">Dossier surveillé</span>
-  </div>
-  <div class="sb-foot">
-    <button class="btn-scan" data-action="open-folder">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/><line x1="12" y1="11" x2="12" y2="17"/><line x1="9" y1="14" x2="15" y2="14"/></svg>
-      Scanner un dossier
-    </button>
-  </div>
+  <!-- REWORK-5 (2026-07-02) : plus de footer — l'état de surveillance vit dans
+       Paramètres > Bibliothèque, les métriques dans la vue Statistiques. -->
+  <!-- QUALITÉ-1 : poignée de redimensionnement — drag (Pointer Events), ←/→,
+       Home/End, double-clic = reset. Logique dans sbresize.js. -->
+  <div id="sb-resize" role="separator" aria-orientation="vertical" tabindex="0"
+       aria-label="Redimensionner la barre latérale" data-i18n-aria="sb_resize"
+       aria-controls="sb" aria-valuemin="200" aria-valuemax="420" aria-valuenow="260"></div>
 </div>
 
 <!-- MAIN -->
 <div id="main" role="main">
 
+  <!-- Nav equalizer wipe — decorative accent on main-nav transitions (aria-hidden, no click) -->
+  <div id="nav-eq-wipe" aria-hidden="true">
+    <span class="wbar"></span><span class="wbar"></span><span class="wbar"></span><span class="wbar"></span><span class="wbar"></span><span class="wbar"></span><span class="wbar"></span>
+  </div>
+
   <!-- Welcome -->
-  <div class="view on" id="vw">
+  <div class="view on" id="vw" role="region" aria-label="Bienvenue">
     <div class="wl">
       <img src="/icon-512.png" alt="LibreFlow logo" class="wl-logo">
       <h1 class="wh1">Bienvenue sur LibreFlow</h1>
@@ -169,13 +197,13 @@
   </div>
 
   <!-- Scanning -->
-  <div class="view" id="vscan">
+  <div class="view" id="vscan" role="region" aria-label="Importation en cours">
     <div class="sring"></div>
     <div class="sh" data-i18n="scan_title">Lecture en cours…</div>
-    <div class="sn" id="sn">0</div>
+    <div class="sn" id="sn" aria-live="polite" aria-atomic="true">0</div>
     <div class="ss" data-i18n="scan_sub">fichiers audio chargés</div>
     <div class="scan-bar-wrap"><div class="scan-bar-fill" id="scan-bar"></div></div>
-    <div class="sf" id="sf">…</div>
+    <div class="sf" id="sf" aria-live="polite" aria-atomic="false">…</div>
   </div>
 
   <!-- Library -->
@@ -196,6 +224,24 @@
 
   <!-- Library -->
   <div class="view" id="vlib">
+    <!-- ── Onglets bibliothèque : Tous / Artistes / Albums / Radio ── -->
+    <!-- AUDIT-2026-07-27 : onglets = facettes de la bibliothèque. « Tous les
+         titres » (doublon sidebar) → « Titres » ; Radio → sidebar (#ni-radio) ;
+         Genres ajouté (vue complète, était inaccessible). -->
+    <div class="lib-tabs" role="tablist" aria-label="Vues bibliothèque">
+      <button class="lib-tab on" role="tab" aria-selected="true" data-action="set-view" data-view="all">
+        <span data-i18n="lib_tab_tracks">Titres</span>
+      </button>
+      <button class="lib-tab" role="tab" aria-selected="false" data-action="set-view" data-view="artists">
+        <span data-i18n="nav_artists">Artistes</span>
+      </button>
+      <button class="lib-tab" role="tab" aria-selected="false" data-action="set-view" data-view="albums">
+        <span data-i18n="nav_albums">Albums</span>
+      </button>
+      <button class="lib-tab" role="tab" aria-selected="false" data-action="set-view" data-view="genres">
+        <span data-i18n="nav_genres">Genres</span>
+      </button>
+    </div>
     <div class="vh">
       <div class="vh-title" id="vhtitle" role="heading" aria-level="1">Tous les titres</div>
       <button id="dupes-badge" class="dupes-badge" data-action="detect-dupes"
@@ -203,16 +249,72 @@
         <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/></svg>
         <span id="dupes-badge-count">0</span> doublons
       </button>
+      <button id="srch-toggle" class="vh-srch-toggle" data-action="toggle-search"
+              aria-label="Rechercher" data-i18n-aria="aria_search_toggle"
+              aria-expanded="false" aria-controls="srch">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7.5"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      </button>
+      <div class="vh-srch-wrap" id="vh-srch-wrap" role="search" hidden>
+        <div class="srch">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7.5"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          <input id="srch" type="text" placeholder="Rechercher…"
+                 aria-label="Rechercher dans la bibliothèque" data-i18n-aria="aria_search"
+                 autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
+                 data-input-action="search">
+          <button id="srch-clear" class="srch-clear" data-action="clear-search"
+                  title="Effacer" aria-label="Effacer la recherche" data-i18n-aria="aria_srch_clear"
+                  style="display:none">
+            <svg viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><line x1="4" y1="4" x2="20" y2="20"/><line x1="20" y1="4" x2="4" y2="20"/></svg>
+          </button>
+          <span id="srch-badge" class="srch-ct" aria-live="polite" aria-atomic="true"></span>
+        </div>
+        <button id="clear-filters" class="clear-filters-btn" data-action="clear-filters"
+                title="Effacer tous les filtres actifs" data-i18n-title="ergo_clear_filters_title"
+                aria-label="Effacer tous les filtres" data-i18n-aria="ergo_clear_filters_aria"
+                style="display:none">
+          <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z"/><line x1="18" y1="6" x2="22" y2="2"/><line x1="22" y1="6" x2="18" y2="2"/></svg>
+          <span data-i18n="ergo_clear_filters_title">Effacer tous les filtres actifs</span>
+        </button>
+      </div>
       <button class="sort-btn" id="main-sort-btn" data-action="next-sort">
         <span id="sort-lbl" aria-live="polite">A–Z</span>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M8 6h13M8 12h9M8 18h5"/></svg>
       </button>
       <button class="sort-btn" id="album-sort-btn" data-action="next-album-sort" style="display:none" title="" data-i18n-title="sort_albums_title" data-i18n-aria="aria_album_sort" aria-label="Trier les albums">A–Z</button>
     </div>
+    <!-- Barre d'action bibliothèque — Play/Shuffle saillants (audit 2026-07-27).
+         Visible sur les vues liste (all/liked/recent/genre-detail), gérée par views.js. -->
+    <div id="lib-action-bar" class="lib-action-bar">
+      <button class="fab-play" data-action="dh-play-all"
+              aria-label="Tout lire" data-i18n-aria="lib_play_all"
+              title="Tout lire" data-i18n-title="lib_play_all">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><polygon points="7 4 21 12 7 20" fill="currentColor"/></svg>
+      </button>
+      <button class="lib-shuf-btn" data-action="dh-shuffle-all"
+              aria-label="Lecture aléatoire" data-i18n-aria="lib_shuffle_all"
+              title="Lecture aléatoire" data-i18n-title="lib_shuffle_all">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="m18 14 4 4-4 4"/>
+          <path d="m18 2 4 4-4 4"/>
+          <path d="M2 18h1.973a4 4 0 0 0 3.3-1.7l5.454-8.6A4 4 0 0 1 16.027 6H22"/>
+          <path d="M2 6h1.972a4 4 0 0 1 3.6 2.2"/>
+          <path d="M22 18h-6.041a4 4 0 0 1-3.3-1.8l-.359-.45"/>
+        </svg>
+      </button>
+    </div>
     <!-- Format filter chips — injecté par renderFormatChips() -->
     <div id="format-bar" class="format-bar" role="group" aria-label="Filtrer par format audio"></div>
     <div id="radio-lib-bar" role="status" aria-live="polite"></div>
     <div id="content-area" data-view="list">
+      <!-- En-tête de colonnes — masqué aux lecteurs d'écran (tabindex=-1 : pas de
+           descendant focusable sous aria-hidden). Colonnes cliquables à la souris
+           (audit 2026-07-27) ; le clavier garde #main-sort-btn. -->
+      <div id="tlist-col-hdr" aria-hidden="true">
+        <span class="col-art"></span>
+        <button class="col-btn col-title" data-action="sort-col" data-col="title" tabindex="-1">Titre<span class="col-arrow"></span></button>
+        <button class="col-btn col-album" data-action="sort-col" data-col="album" tabindex="-1">Album<span class="col-arrow"></span></button>
+        <button class="col-btn col-dur" data-action="sort-col" data-col="duration" tabindex="-1">Durée<span class="col-arrow"></span></button>
+      </div>
       <div class="tlist" id="tlist" role="list" aria-label="Liste des morceaux"></div>
     </div>
   </div>
@@ -248,7 +350,10 @@
   <!-- Canvas visualiseur — arrière-plan absolu, z-index 0 -->
   <canvas id="pl-viz" aria-hidden="true"></canvas>
   <div class="pl-info" data-action="toggle-now-playing" role="button" tabindex="0" data-i18n-aria="aria_toggle_now_playing" aria-label="Voir la piste en cours" style="cursor:pointer">
-    <div class="pl-art" id="pl-art"><span id="pl-em"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg></span><img id="pl-img" alt="" style="display:none"></div>
+    <div class="pl-art" id="pl-art"><span id="pl-em"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg></span><img id="pl-img" alt="" style="display:none">
+      <!-- AUDIT-2026-07-27 : affordance Now Playing — chevron d'expansion au hover (style Spotify) -->
+      <span class="pl-art-expand" aria-hidden="true"><svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 15 12 9 18 15"/></svg></span>
+    </div>
     <div class="pl-tr">
       <div class="pl-n" id="pl-n">–</div>
       <div class="pl-a" id="pl-a">–</div>
@@ -261,22 +366,20 @@
   <div class="pl-c">
     <div class="pl-btns">
       <button class="pc" id="pc-shuf" data-action="toggle-shuffle" title="" data-i18n-title="pc_shuffle" data-aria-i18n="aria_shuffle" aria-label="Lecture aléatoire" aria-pressed="false">
-        <!-- Shuffle icon: two interlaced arrows with dot accent -->
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M4 5h3a6 6 0 0 1 5.5 3.6"/>
-          <path d="M4 19h3a6 6 0 0 0 5.5-3.6"/>
-          <polyline points="16 3 20 7 16 11"/>
-          <polyline points="16 13 20 17 16 21"/>
-          <path d="M20 7h-3a6 6 0 0 0-5 2.7"/>
-          <path d="M20 17h-3a6 6 0 0 1-5-2.7"/>
+          <path d="m18 14 4 4-4 4"/>
+          <path d="m18 2 4 4-4 4"/>
+          <path d="M2 18h1.973a4 4 0 0 0 3.3-1.7l5.454-8.6A4 4 0 0 1 16.027 6H22"/>
+          <path d="M2 6h1.972a4 4 0 0 1 3.6 2.2"/>
+          <path d="M22 18h-6.041a4 4 0 0 1-3.3-1.8l-.359-.45"/>
         </svg>
       </button>
       <button class="pc" data-action="prev" data-i18n-title="pc_prev" data-aria-i18n="pc_prev" aria-label="Titre précédent" aria-keyshortcuts="ArrowLeft">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><polygon points="19 20 9 12 19 4" fill="currentColor" stroke="none"/><line x1="5" y1="19" x2="5" y2="5"/></svg>
       </button>
       <button class="pcplay" id="pcplay" data-action="toggle-play" title="" data-i18n-title="pc_play" data-aria-i18n="aria_play" aria-label="Lecture / Pause" aria-pressed="false" aria-keyshortcuts="Space">
-        <svg id="ico-play"  viewBox="0 0 24 24"><polygon points="6 3 20 12 6 21" fill="currentColor"/></svg>
-        <svg id="ico-pause" viewBox="0 0 24 24" style="display:none"><rect x="5.5" y="4" width="4" height="16" rx="1.5" fill="currentColor"/><rect x="14.5" y="4" width="4" height="16" rx="1.5" fill="currentColor"/></svg>
+        <svg id="ico-play"  viewBox="0 0 24 24" aria-hidden="true"><polygon points="6 3 20 12 6 21" fill="currentColor"/></svg>
+        <svg id="ico-pause" viewBox="0 0 24 24" aria-hidden="true"><rect x="5.5" y="4" width="4" height="16" rx="1.5" fill="currentColor"/><rect x="14.5" y="4" width="4" height="16" rx="1.5" fill="currentColor"/></svg>
       </button>
       <button class="pc" id="btn-next" data-action="next" data-i18n-title="pc_next" data-aria-i18n="pc_next" aria-label="Titre suivant" aria-keyshortcuts="ArrowRight">
         <div id="next-preview" aria-hidden="true">
@@ -290,13 +393,15 @@
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 4 15 12 5 20" fill="currentColor" stroke="none"/><line x1="19" y1="5" x2="19" y2="19"/></svg>
       </button>
       <button class="pc" id="pc-rep" data-action="toggle-repeat" title="" data-i18n-title="pc_repeat" aria-label="Mode répétition" aria-pressed="false">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 2 21 6 17 10"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 22 3 18 7 14"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="m17 2 4 4-4 4"/><path d="M3 11v-1a4 4 0 0 1 4-4h14"/><path d="m7 22-4-4 4-4"/><path d="M21 13v1a4 4 0 0 1-4 4H3"/></svg>
       </button>
     </div>
     <div class="pl-prog">
       <span class="pt" id="tc">0:00</span>
       <div class="pbar" id="pbar" role="slider" tabindex="0" data-i18n-aria="aria_pbar" aria-label="Position de lecture" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" aria-valuetext="0:00"><div class="pfill" id="pfill"></div><div id="seek-tip" aria-hidden="true"></div></div>
-      <span class="pt r" id="td">–:––</span>
+      <button class="pt r" id="td" data-action="toggle-remaining"
+              aria-label="Basculer durée totale / temps restant" data-i18n-aria="aria_toggle_remaining"
+              title="Durée totale / temps restant" data-i18n-title="aria_toggle_remaining">–:––</button>
     </div>
   </div>
 
@@ -304,36 +409,44 @@
   <div id="np-live" class="sr-only" aria-live="assertive" aria-atomic="true"></div>
 
   <div class="pl-r">
+      <!-- AUDIT-2026-07-27 : EQ + Cinéma promus dans la player bar (étaient dans
+           le menu ⋯). Ids conservés — eq.js/cinema.js synchronisent aria/active. -->
+      <button class="pl-queue-btn" id="btn-eq" data-action="toggle-eq" title="" data-i18n-title="pl_eq_title"
+              aria-label="Égaliseur" data-i18n-aria="pl_eq_title"
+              aria-expanded="false" aria-controls="eq-panel">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="13"/><line x1="12" y1="9" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="17"/><line x1="20" y1="13" x2="20" y2="3"/><rect x="1.5" y="12.5" width="5" height="3" rx="1.5" fill="currentColor" stroke="none"/><rect x="9.5" y="7.5" width="5" height="3" rx="1.5" fill="currentColor" stroke="none"/><rect x="17.5" y="15.5" width="5" height="3" rx="1.5" fill="currentColor" stroke="none"/></svg>
+      </button>
+      <button class="pl-queue-btn" id="tbt-cinema" data-action="toggle-cinema" title="" data-i18n-title="tb_cinema"
+              aria-label="Mode cinéma" data-i18n-aria="tb_cinema" aria-pressed="false">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3H5a2 2 0 0 0-2 2v3"/><path d="M21 8V5a2 2 0 0 0-2-2h-3"/><path d="M3 16v3a2 2 0 0 0 2 2h3"/><path d="M16 21h3a2 2 0 0 0 2-2v-3"/></svg>
+      </button>
       <button class="pl-queue-btn" id="btn-queue" data-action="toggle-queue" title="" data-i18n-title="pl_queue_title" data-aria-i18n="pl_queue_title" aria-label="File d'attente" aria-expanded="false" aria-controls="queue-panel" style="position:relative">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><line x1="9" y1="6" x2="21" y2="6"/><line x1="9" y1="12" x2="21" y2="12"/><line x1="9" y1="18" x2="21" y2="18"/><circle cx="3.5" cy="6" r="1.2" fill="currentColor" stroke="none"/><circle cx="3.5" cy="12" r="1.2" fill="currentColor" stroke="none"/><circle cx="3.5" cy="18" r="1.2" fill="currentColor" stroke="none"/></svg>
         <span id="queue-badge" class="queue-badge" style="display:none"></span>
-      </button>
-      <button class="pl-queue-btn" id="btn-eq" data-action="toggle-eq" title="" data-i18n-title="pl_eq_title" data-aria-i18n="pl_eq_title" aria-label="Égaliseur" aria-expanded="false" aria-controls="eq-panel">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="13"/><line x1="12" y1="9" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="17"/><line x1="20" y1="13" x2="20" y2="3"/><rect x="1.5" y="12.5" width="5" height="3" rx="1.5" fill="currentColor" stroke="none"/><rect x="9.5" y="7.5" width="5" height="3" rx="1.5" fill="currentColor" stroke="none"/><rect x="17.5" y="15.5" width="5" height="3" rx="1.5" fill="currentColor" stroke="none"/></svg>
-      </button>
-      <button class="pl-queue-btn" id="tbt-cinema" data-action="toggle-cinema" title="" data-i18n-title="tb_cinema" data-aria-i18n="tb_cinema" aria-label="Mode cinéma" aria-pressed="false">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3"/><path d="M21 8V5a2 2 0 0 0-2-2h-3"/><path d="M3 16v3a2 2 0 0 0 2 2h3"/><path d="M16 21h3a2 2 0 0 0 2-2v-3"/></svg>
       </button>
       <button class="pl-queue-btn pl-speed-btn" id="btn-speed" data-action="cycle-speed" title="" data-i18n-title="pl_speed_title" data-aria-i18n="pl_speed_title" aria-label="Vitesse de lecture">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M5 14a7 7 0 1 1 14 0"/><path d="M12 14 9 8.5"/><circle cx="12" cy="14" r="1.5" fill="currentColor" stroke="none"/></svg>
         <span class="speed-lbl">1×</span>
       </button>
       <span id="np-speed-live" aria-live="polite" class="sr-only"></span>
-      <div id="sleep-indicator" data-action="toggle-sleep" title="" data-i18n-title="pl_sleep_title" data-i18n-aria="aria_sleep" role="button" tabindex="0" aria-label="Minuterie sommeil">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 15"/></svg>
-        <span id="sleep-countdown"></span>
-      </div>
     <div class="vol">
+      <button class="pl-queue-btn vol-mute-btn" id="btn-vol-mute" data-action="toggle-mute" aria-label="Couper le son" aria-pressed="false" data-i18n-title="vol_mute" title="Couper le son">
+        <svg id="vol-mute-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+          <polygon id="vol-speaker" points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" fill="currentColor" stroke="none"/>
+          <path id="vol-wave1" d="M15.54 8.46a5 5 0 0 1 0 7.07"/>
+          <path id="vol-wave2" d="M19.07 4.93a10 10 0 0 1 0 14.14"/>
+          <line id="vol-x1" x1="23" y1="9" x2="17" y2="15" style="display:none"/>
+          <line id="vol-x2" x1="17" y1="9" x2="23" y2="15" style="display:none"/>
+        </svg>
+      </button>
       <div id="vol-tip" class="vol-tip" aria-hidden="true"></div>
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" fill="currentColor" stroke="none"/><line x1="15" y1="12" x2="19" y2="12"/></svg>
       <input type="range" class="vslider" id="vol" min="0" max="1" step="0.01" value="1" data-i18n-aria="aria_vol" aria-label="Volume" data-input-action="vol">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" fill="currentColor" stroke="none"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M18.5 5.5a10 10 0 0 1 0 13"/></svg>
     </div>
   </div>
 </div>
 </div><!-- #app -->
 
-<div id="drago"><div class="drago-msg"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/><line x1="12" y1="11" x2="12" y2="17"/><line x1="9" y1="14" x2="15" y2="14"/></svg><span data-i18n="drag_hint">Dépose tes fichiers ici</span></div></div>
+<div id="drago" role="region" aria-label="Zone de dépôt de fichiers"><div class="drago-msg"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/><line x1="12" y1="11" x2="12" y2="17"/><line x1="9" y1="14" x2="15" y2="14"/></svg><span data-i18n="drag_hint">Dépose tes fichiers ici</span></div></div>
 <div id="sleep-menu" role="dialog" aria-modal="true" data-i18n-aria="aria_sleep_menu" aria-label="Minuterie sommeil">
   <button class="sleep-opt" data-action="sleep-timer" data-minutes="15"  data-i18n="sleep_opt_15">15 minutes</button>
   <button class="sleep-opt" data-action="sleep-timer" data-minutes="30"  data-i18n="sleep_opt_30">30 minutes</button>
@@ -393,7 +506,7 @@
 <div id="usb-modal-bg" data-backdrop-action="usb-cancel">
   <div id="usb-modal" role="dialog" aria-modal="true" aria-labelledby="usb-modal-title">
     <div class="modal-h" id="usb-modal-title">Importer depuis un disque</div>
-    <div class="modal-s">Sélectionnez un disque, puis choisissez un dossier à importer.</div>
+    <div class="modal-s">Sélectionne un disque, puis choisis un dossier à importer.</div>
     <div id="usb-drives-list" class="usb-drives-list">
       <!-- Injecté dynamiquement par _renderDrivesList() -->
     </div>
@@ -460,7 +573,8 @@
         </div>
       </div>
       <label for="pl-modal-inp" class="sr-only">Nom de la playlist</label>
-      <input class="pl-modal-inp" id="pl-modal-inp" type="text" placeholder="Nom de la playlist…" maxlength="60" autocomplete="off" autocorrect="off" spellcheck="false">
+      <input class="pl-modal-inp" id="pl-modal-inp" type="text" placeholder="Nom de la playlist…" maxlength="60" autocomplete="off" autocorrect="off" spellcheck="false" aria-describedby="pl-name-error">
+      <span id="pl-name-error" class="sr-only" role="alert"></span>
       <div class="pl-modal-btns">
         <button class="mbtn cancel" data-action="close-pl-modal">Annuler</button>
         <!-- FIX-B4 : .confirm à la place de .danger (sémantique correcte, style dans style.css) -->
@@ -741,8 +855,8 @@
             <div class="set-row-sub" data-i18n="set_language_sub">Redémarre l'app pour tout appliquer</div>
           </div>
           <div class="lang-toggle">
-            <button class="lang-btn" id="lang-fr" data-action="set-lang" data-lang="fr">FR</button>
-            <button class="lang-btn" id="lang-en" data-action="set-lang" data-lang="en">EN</button>
+            <button class="lang-btn" id="lang-fr" data-action="set-lang" data-lang="fr" aria-pressed="true">FR</button>
+            <button class="lang-btn" id="lang-en" data-action="set-lang" data-lang="en" aria-pressed="false">EN</button>
           </div>
         </div>
       </div>
@@ -750,20 +864,22 @@
         <div class="set-section-lbl" data-i18n="set_theme_section">Thème de couleur</div>
         <div class="set-row">
           <div class="theme-swatches">
-            <button class="theme-swatch"    data-theme="green"  style="background:#1db954" data-action="set-theme"  data-i18n-aria="aria_theme_green"  aria-label="Vert"   aria-pressed="false"></button>
-            <button class="theme-swatch on" data-theme="blue"   style="background:#3b82f6" data-action="set-theme"   data-i18n-aria="aria_theme_blue"   aria-label="Bleu"   aria-pressed="true"></button>
-            <button class="theme-swatch"    data-theme="purple" style="background:#a855f7" data-action="set-theme" data-i18n-aria="aria_theme_purple" aria-label="Violet" aria-pressed="false"></button>
-            <button class="theme-swatch"    data-theme="red"    style="background:#ef4444" data-action="set-theme"    data-i18n-aria="aria_theme_red"    aria-label="Rouge"  aria-pressed="false"></button>
-            <button class="theme-swatch"    data-theme="orange" style="background:#f97316" data-action="set-theme" data-i18n-aria="aria_theme_orange" aria-label="Orange" aria-pressed="false"></button>
-            <button class="theme-swatch"    data-theme="pink"   style="background:#ec4899" data-action="set-theme"   data-i18n-aria="aria_theme_pink"   aria-label="Rose"   aria-pressed="false"></button>
-            <button class="theme-swatch"    data-theme="cyan"   style="background:#06b6d4" data-action="set-theme"   data-i18n-aria="aria_theme_cyan"   aria-label="Cyan"   aria-pressed="false"></button>
+            <!-- Couleur du swatch : background var(--g) résolu via la map [data-theme]
+                 de design-system.css (source unique — les hex inline driftaient) -->
+            <button class="theme-swatch"    data-theme="green"  data-action="set-theme"  data-i18n-aria="aria_theme_green"  aria-label="Vert"   aria-pressed="false"></button>
+            <button class="theme-swatch on" data-theme="blue"   data-action="set-theme"   data-i18n-aria="aria_theme_blue"   aria-label="Bleu"   aria-pressed="true"></button>
+            <button class="theme-swatch"    data-theme="purple" data-action="set-theme" data-i18n-aria="aria_theme_purple" aria-label="Violet" aria-pressed="false"></button>
+            <button class="theme-swatch"    data-theme="red"    data-action="set-theme"    data-i18n-aria="aria_theme_red"    aria-label="Rouge"  aria-pressed="false"></button>
+            <button class="theme-swatch"    data-theme="orange" data-action="set-theme" data-i18n-aria="aria_theme_orange" aria-label="Orange" aria-pressed="false"></button>
+            <button class="theme-swatch"    data-theme="pink"   data-action="set-theme"   data-i18n-aria="aria_theme_pink"   aria-label="Rose"   aria-pressed="false"></button>
+            <button class="theme-swatch"    data-theme="cyan"   data-action="set-theme"   data-i18n-aria="aria_theme_cyan"   aria-label="Cyan"   aria-pressed="false"></button>
           </div>
         </div>
         <div class="set-row">
-          <div>
+          <label class="set-toggle-label" for="dyn-color-chk">
             <div class="set-row-label" data-i18n="set_dyn_label">Accent dynamique</div>
             <div class="set-row-sub" data-i18n="set_dyn_sub">Suit la couleur de la pochette</div>
-          </div>
+          </label>
           <label class="toggle-wrap">
             <input type="checkbox" id="dyn-color-chk"
                    data-i18n-aria="set_dyn_label"
@@ -781,22 +897,33 @@
           </div>
         </div>
       </div>
+      <!-- ── Animations (Task 10 — Système/Complètes/Réduites) ────────────── -->
+      <div class="set-section">
+        <div class="set-section-lbl" data-i18n="settings_motion">Animations</div>
+        <div class="set-row">
+          <select id="set-motion-pref" class="pl-modal-inp spl-select" data-i18n-aria="settings_motion" aria-label="Animations">
+            <option value="system" data-i18n="motion_system" selected>Système</option>
+            <option value="full" data-i18n="motion_full">Complètes</option>
+            <option value="reduce" data-i18n="motion_reduce">Réduites</option>
+          </select>
+        </div>
+      </div>
       <!-- ── Densité de la liste ──────────────────────────── -->
       <div class="set-section">
         <div class="set-section-lbl" data-i18n="tlist_zoom_label">Densité de la liste</div>
         <div class="set-row">
           <div class="tlist-zoom-radios" id="tlist-zoom-radios" role="radiogroup" aria-label="Densité de la liste">
             <label class="tlist-zoom-radio">
-              <input type="radio" name="tlist-zoom" value="compact" data-action="tlist-zoom">
+              <input type="radio" name="tlist-zoom" value="compact">
               <span data-i18n="tlist_zoom_compact">Compact</span>
             </label>
             <label class="tlist-zoom-radio">
-              <input type="radio" name="tlist-zoom" value="normal" data-action="tlist-zoom" checked>
-              <span data-i18n="tlist_zoom_normal">Normal</span>
+              <input type="radio" name="tlist-zoom" value="comfortable" checked>
+              <span data-i18n="tlist_zoom_comfortable">Confortable</span>
             </label>
             <label class="tlist-zoom-radio">
-              <input type="radio" name="tlist-zoom" value="comfortable" data-action="tlist-zoom">
-              <span data-i18n="tlist_zoom_comfortable">Confortable</span>
+              <input type="radio" name="tlist-zoom" value="spacious">
+              <span data-i18n="tlist_zoom_spacious">Spacieux</span>
             </label>
           </div>
         </div>
@@ -825,10 +952,10 @@
       <div class="set-section">
         <div class="set-section-lbl" data-i18n="set_rg_section">Normalisation du volume</div>
         <div class="set-row">
-          <div>
+          <label class="set-toggle-label" for="rg-enabled">
             <div class="set-row-label" data-i18n="set_rg_label">Replay Gain</div>
             <div class="set-row-sub" data-i18n="set_rg_sub">Égalise le volume entre les pistes</div>
-          </div>
+          </label>
           <label class="toggle-wrap">
             <input type="checkbox" id="rg-enabled" data-input-action="rg-enabled" data-i18n-aria="set_rg_label" aria-label="Replay Gain">
             <span class="toggle-slider"></span>
@@ -865,10 +992,10 @@
         <div class="set-section-lbl" data-i18n="set_viz_section">Visualiseur</div>
         <!-- Activer / désactiver le visualiseur -->
         <div class="set-row">
-          <div>
+          <label class="set-toggle-label" for="set-viz-toggle">
             <div class="set-row-label" data-i18n="set_viz_toggle_label">Visualiseur actif</div>
             <div class="set-row-sub" data-i18n="set_viz_toggle_sub">Afficher le visualiseur dans la barre de lecture</div>
-          </div>
+          </label>
           <label class="toggle-wrap">
             <input type="checkbox" id="set-viz-toggle"
                    data-input-action="viz-enabled"
@@ -924,9 +1051,11 @@
             <div class="set-row-sub" data-i18n="set_cinema_bg_sub">Fond derrière la pochette</div>
           </div>
           <div class="set-btn-group">
-            <button id="set-cinema-ambient"  class="mbtn mbtn-sm" data-action="set-cinema-bg" data-bg="ambient"  data-i18n-title="set_cinema_ambient" aria-pressed="false" data-i18n="set_cinema_ambient_label">Ambient</button>
-            <button id="set-cinema-spectrum" class="mbtn mbtn-sm" data-action="set-cinema-bg" data-bg="spectrum" data-i18n-title="set_cinema_spectrum" aria-pressed="false" data-i18n="set_cinema_spectrum_label">Spectre</button>
-            <button id="set-cinema-amoled"   class="mbtn mbtn-sm" data-action="set-cinema-bg" data-bg="amoled"   data-i18n-title="set_cinema_amoled" aria-pressed="false">AMOLED</button>
+            <button id="set-cinema-ambient"   class="mbtn mbtn-sm" data-action="set-cinema-bg" data-bg="ambient"   data-i18n-title="set_cinema_ambient"  aria-pressed="false" data-i18n="set_cinema_ambient_label">Ambient</button>
+            <button id="set-cinema-spectrum"  class="mbtn mbtn-sm" data-action="set-cinema-bg" data-bg="spectrum"  data-i18n-title="set_cinema_spectrum" aria-pressed="false" data-i18n="set_cinema_spectrum_label">Spectre</button>
+            <button id="set-cinema-amoled"    class="mbtn mbtn-sm" data-action="set-cinema-bg" data-bg="amoled"    data-i18n-title="set_cinema_amoled"    aria-pressed="false">AMOLED</button>
+            <button id="set-cinema-waves"     class="mbtn mbtn-sm" data-action="set-cinema-bg" data-bg="waves"     data-i18n-title="set_cinema_waves"     aria-pressed="false" data-i18n="set_cinema_waves_label">Vagues</button>
+            <button id="set-cinema-starfield" class="mbtn mbtn-sm" data-action="set-cinema-bg" data-bg="starfield" data-i18n-title="set_cinema_starfield"  aria-pressed="false" data-i18n="set_cinema_starfield_label">Étoiles</button>
           </div>
         </div>
       </div>
@@ -944,10 +1073,10 @@
           </button>
         </div>
         <div class="set-row">
-          <div>
+          <label class="set-toggle-label" for="watch-folder-chk">
             <div class="set-row-label" data-i18n="set_watch_label">Surveillance automatique</div>
             <div class="set-row-sub" data-i18n="set_watch_sub">Détecte les nouveaux fichiers et les mises à jour de tags</div>
-          </div>
+          </label>
           <label class="toggle-wrap">
             <input type="checkbox" id="watch-folder-chk"
                    data-i18n-aria="set_watch_label"
@@ -971,6 +1100,15 @@
               <span data-i18n="set_export_btn">Exporter</span>
             </button>
           </div>
+        </div>
+        <div class="set-row">
+          <div>
+            <div class="set-row-label" data-i18n="set_xspf_label">Export playlist XSPF</div>
+            <div class="set-row-sub" data-i18n="set_xspf_sub">Format compatible VLC, foobar2000, Strawberry</div>
+          </div>
+          <button class="mbtn mbtn-sm" data-action="settings-export-xspf">
+            <span data-i18n="set_xspf_btn">Exporter XSPF</span>
+          </button>
         </div>
       </div>
       <div class="set-section">
@@ -1070,9 +1208,9 @@
       <div class="set-section">
         <div class="set-section-lbl" data-i18n="set_updates_section">Mises à jour</div>
         <div class="set-row">
-          <div class="set-row-label" data-i18n="set_update_auto_label">Vérifier les mises à jour au lancement</div>
+          <label class="set-row-label set-toggle-label" for="auto-update-chk" data-i18n="set_update_auto_label">Vérifier les mises à jour au lancement</label>
           <label class="toggle-wrap">
-            <input type="checkbox" id="auto-update-chk" data-input-action="auto-update" data-i18n-aria="set_update_auto_label" aria-label="Vérifier les mises à jour au lancement">
+            <input type="checkbox" id="auto-update-chk" data-i18n-aria="set_update_auto_label" aria-label="Vérifier les mises à jour au lancement">
             <span class="toggle-slider"></span>
           </label>
         </div>
@@ -1109,18 +1247,24 @@
 
 
 <!-- PLAYLIST QUICK-ADD POPUP -->
-<div id="pl-quick-pop">
-  <div class="pqp-head">Ajouter à</div>
+<div id="pl-quick-pop" role="menu" aria-labelledby="pqp-heading">
+  <div class="pqp-head" id="pqp-heading" data-i18n="pl_add_to_hd">Ajouter à</div>
 </div>
 
 <!-- QUEUE PANEL — A11Y-07: complementary landmark -->
-<div id="queue-panel" role="complementary" data-i18n-aria="aria_queue_panel" aria-label="File d'attente">
+<div id="queue-panel" role="complementary" data-i18n-aria="aria_queue_panel" aria-label="File d'attente" tabindex="-1">
   <div class="queue-head">
     <h3><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" class="panel-title-ico"><line x1="9" y1="6" x2="21" y2="6"/><line x1="9" y1="12" x2="21" y2="12"/><line x1="9" y1="18" x2="21" y2="18"/><circle cx="3.5" cy="6" r="1.2" fill="currentColor" stroke="none"/><circle cx="3.5" cy="12" r="1.2" fill="currentColor" stroke="none"/><circle cx="3.5" cy="18" r="1.2" fill="currentColor" stroke="none"/></svg>File d'attente</h3>
     <div class="queue-head-actions">
       <!-- A11Y-17: aria-label on queue utility buttons -->
       <button class="queue-close queue-util-btn" data-action="scroll-to-current" title="Aller à la piste en cours" data-i18n-aria="aria_scroll_to_current" aria-label="Aller à la piste en cours">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg>
+      </button>
+      <button class="queue-pin-btn queue-util-btn" data-action="toggle-queue-pin" aria-label="Épingler la file d'attente" aria-pressed="false" title="Épingler">
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+          <line x1="12" y1="17" x2="12" y2="22"/>
+          <path d="M5 17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V6h1a2 2 0 0 0 0-4H8a2 2 0 0 0 0 4h1v4.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24Z"/>
+        </svg>
       </button>
       <button class="queue-close" data-action="close-queue" data-i18n-aria="aria_close_queue" aria-label="Fermer la file d'attente">
         <svg viewBox="0 0 24 24" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
@@ -1245,7 +1389,9 @@
 </div>
 
 <!-- CINEMA MODE -->
-<div id="cinema-overlay" role="dialog" aria-modal="true" aria-label="Mode cinéma" tabindex="-1">
+<div id="cinema-overlay" role="dialog" aria-modal="true" aria-label="Mode cinéma" data-i18n-aria="aria_cinema_overlay" tabindex="-1">
+  <!-- A11Y A7 : annonce le changement de piste aux lecteurs d'écran (polie — pas de spam par tick) -->
+  <div id="cinema-announce" class="sr-only" aria-live="polite"></div>
   <canvas class="cinema-bg" id="cinema-bg"></canvas>
 
   <!-- Canvas visualiseur audio (full-width, fond, z=1) -->
@@ -1257,10 +1403,16 @@
     <div id="cinema-clock-date" class="ck-date"></div>
   </div>
 
-  <!-- Piste suivante (bottom-right, avec les contrôles) -->
-  <!-- Pas d'attribut hidden : la visibilité est gérée via .cin-has-next + opacity CSS
-       (display:none casse les transitions opacity) -->
-  <div id="cinema-next" class="cinema-next">
+  <!-- Task 1 (layout grid) : wrapper -- zone de grille side-r (Task 2). Regroupe
+       piste-suivante/hint-shuffle (superposés, un seul visible via opacity togglée
+       en JS) et le panneau file d'attente (ancré relativement à ce wrapper). -->
+  <div class="cinema-side-r">
+  <!-- Piste suivante (bottom-right, avec les contrôles) — Task 9 : bouton dépliant le
+       panneau file d'attente (#cinema-queue-panel). Pas d'attribut hidden sur ce
+       bouton : la visibilité est gérée via .cin-has-next + opacity CSS (display:none
+       casse les transitions opacity) ; renderCinNextPanel() bascule aussi .disabled
+       pour éviter un focus fantôme quand aucune piste suivante n'est prévisible. -->
+  <button type="button" id="cinema-next" class="cinema-next" aria-expanded="false" aria-controls="cinema-queue-panel" aria-label="Afficher la file d'attente" data-i18n-aria="aria_cinema_queue_toggle">
     <div class="cn-label">Suivant</div>
     <div class="cn-body">
       <img id="cinema-next-img" class="cn-img" alt="">
@@ -1269,6 +1421,40 @@
         <div id="cinema-next-artist" class="cn-artist">–</div>
       </div>
     </div>
+    <!-- Task 3 (layout grid) : icone seule visible en mode compact (media query
+         plus bas) -- accès file d'attente toujours possible au lieu de disparaître. -->
+    <svg class="cn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true">
+      <line x1="4" y1="6" x2="20" y2="6"/>
+      <line x1="4" y1="12" x2="20" y2="12"/>
+      <line x1="4" y1="18" x2="14" y2="18"/>
+    </svg>
+  </button>
+
+  <!-- Panneau file d'attente dépliable (Task 9) — ancré au-dessus de #cinema-next.
+       Rangées injectées par cinema-queue.js (textContent uniquement, §13). -->
+  <div id="cinema-queue-panel" class="cinema-queue-panel" hidden>
+    <div class="cqp-header" data-i18n="cinema_queue_title">À suivre</div>
+    <div id="cinema-queue-list" class="cqp-list"></div>
+    <div class="cqp-empty" data-i18n="cinema_queue_empty" hidden>Aucune piste prévue</div>
+  </div>
+
+  <!-- Hint shuffle (Task 6) — remplace le panneau ci-dessus quand aucune piste suivante
+       n'est prévisible (shuffle actif, sans file explicite ni radio). Même position/style
+       que #cinema-next (classe .cinema-next partagée) — .cin-has-next bascule laquelle
+       des deux est visible (jamais les deux en même temps). -->
+  <div id="cinema-shuffle-hint" class="cinema-next cinema-shuffle-hint">
+    <div class="cn-body cn-body--hint">
+      <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true">
+        <path d="M4 5h3a6 6 0 0 1 5.5 3.6"/>
+        <path d="M4 19h3a6 6 0 0 0 5.5-3.6"/>
+        <polyline points="16 3 20 7 16 11"/>
+        <polyline points="16 13 20 17 16 21"/>
+        <path d="M20 7h-3a6 6 0 0 0-5 2.7"/>
+        <path d="M20 17h-3a6 6 0 0 1-5-2.7"/>
+      </svg>
+      <span data-i18n="cinema_shuffle_on">Lecture aléatoire</span>
+    </div>
+  </div>
   </div>
 
   <!-- Boutons de coin -->
@@ -1276,13 +1462,18 @@
     <!-- icône dynamique selon le mode — mis à jour par updateCinemaBgBtn() -->
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 3H8L6 7h12l-2-4z" opacity=".5"/></svg>
   </button>
-  <button id="cinema-fs-btn" class="cinema-corner-btn" data-action="cinema-fullscreen" title="" data-i18n-title="t_cinema_fs" data-i18n-aria="aria_cinema_fs" aria-label="Basculer en plein écran">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>
-  </button>
-  <button class="cinema-close cinema-corner-btn" data-action="close-cinema" title="" data-i18n-title="t_cinema_close" data-i18n-aria="aria_cinema_close" aria-label="Fermer le mode cinéma">
-    <svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-  </button>
+  <!-- Task 1 (layout grid) : wrapper -- zone de grille corner-r (Task 2). -->
+  <div class="cinema-corner-r">
+    <button id="cinema-fs-btn" class="cinema-corner-btn" data-action="cinema-fullscreen" title="" data-i18n-title="t_cinema_fs" data-i18n-aria="aria_cinema_fs" aria-label="Basculer en plein écran">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>
+    </button>
+    <button class="cinema-close cinema-corner-btn" data-action="close-cinema" title="" data-i18n-title="t_cinema_close" data-i18n-aria="aria_cinema_close" aria-label="Fermer le mode cinéma">
+      <svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    </button>
+  </div>
 
+  <!-- Task 1 (layout grid) : wrapper -- zone de grille hero (Task 2). -->
+  <div class="cinema-hero">
   <div class="cinema-art-wrap" id="cinema-art-wrap">
     <img id="cinema-art-img" alt="" style="display:none">
     <div id="cinema-art-em"><svg viewBox="0 0 24 24" width="48" height="48" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" opacity=".3"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg></div>
@@ -1294,11 +1485,11 @@
   </div>
   <div class="cinema-prog">
     <span class="cinema-time" id="cinema-tc">0:00</span>
-    <div class="cinema-pbar" id="cinema-pbar"><div class="cinema-fill" id="cinema-fill"></div></div>
+    <div class="cinema-pbar" id="cinema-pbar" role="slider" tabindex="0" aria-label="Position de lecture (cinéma)" data-i18n-aria="aria_cinema_pbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" aria-valuetext="0:00"><div class="cinema-fill" id="cinema-fill"></div><div class="cinema-pbar-thumb" id="cinema-pbar-thumb" aria-hidden="true"></div><div class="cinema-seek-tip" id="cinema-seek-tip" aria-hidden="true"></div></div>
     <span class="cinema-time" id="cinema-td">–:––</span>
   </div>
   <div class="cinema-controls" id="cinema-controls">
-    <button class="cbtn" data-action="toggle-shuffle" id="cinema-shuf" title="" data-i18n-title="pc_shuffle" data-i18n-aria="aria_shuffle" aria-label="Lecture aléatoire">
+    <button class="cbtn" data-action="toggle-shuffle" id="cinema-shuf" title="" data-i18n-title="pc_shuffle" data-i18n-aria="aria_shuffle" aria-label="Lecture aléatoire" aria-pressed="false">
       <svg viewBox="0 0 24 24">
         <path d="M4 5h3a6 6 0 0 1 5.5 3.6"/>
         <path d="M4 19h3a6 6 0 0 0 5.5-3.6"/>
@@ -1312,13 +1503,13 @@
       <svg viewBox="0 0 24 24"><polygon points="19 20 9 12 19 4" fill="currentColor" stroke="none"/><line x1="5" y1="19" x2="5" y2="5"/></svg>
     </button>
     <button class="cbtn cbtn-play" data-action="toggle-play" id="cinema-play" title="" data-i18n-title="pc_play" data-i18n-aria="aria_play" aria-label="Lecture / Pause">
-      <svg id="cinema-ico-play"  viewBox="0 0 24 24" fill="currentColor"><polygon points="6 3 20 12 6 21"/></svg>
-      <svg id="cinema-ico-pause" viewBox="0 0 24 24" style="display:none" fill="currentColor"><rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/></svg>
+      <svg id="cinema-ico-play"  viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><polygon points="6 3 20 12 6 21"/></svg>
+      <svg id="cinema-ico-pause" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/></svg>
     </button>
     <button class="cbtn" data-action="next" title="" data-i18n-title="pc_next" data-i18n-aria="aria_next" aria-label="Titre suivant">
       <svg viewBox="0 0 24 24"><polygon points="5 4 15 12 5 20" fill="currentColor" stroke="none"/><line x1="19" y1="5" x2="19" y2="19"/></svg>
     </button>
-    <button class="cbtn" data-action="toggle-repeat" id="cinema-rep" title="" data-i18n-title="pc_repeat" data-i18n-aria="aria_repeat" aria-label="Mode répétition">
+    <button class="cbtn" data-action="toggle-repeat" id="cinema-rep" title="" data-i18n-title="pc_repeat" data-i18n-aria="aria_repeat" aria-label="Mode répétition" aria-pressed="false">
       <svg viewBox="0 0 24 24"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>
     </button>
     <button class="cbtn cbtn-like" data-action="toggle-like" id="cinema-lk" title="" data-i18n-title="t_cinema_like" data-i18n-aria="aria_like" aria-label="Ajouter aux favoris" aria-pressed="false">
@@ -1330,18 +1521,26 @@
     <!-- Séparateur + Volume -->
     <div class="cinema-vol-sep"></div>
     <div class="cinema-vol-wrap" title="Volume">
-      <svg class="cinema-vol-icon" id="cinema-vol-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
-        <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
-        <path id="cinema-vol-wave1" d="M15.54 8.46a5 5 0 0 1 0 7.07"/>
-        <path id="cinema-vol-wave2" d="M19.07 4.93a10 10 0 0 1 0 14.14"/>
-      </svg>
-      <!-- Bug 3 fix : appeler updateVolSlider pour synchroniser le gradient du slider principal -->
-      <input type="range" id="cinema-vol" class="cinema-vol-slider"
-             min="0" max="1" step="0.01" value="1"
-             data-i18n-aria="aria_vol"
-             aria-label="Volume"
-             data-input-action="cinema-vol">
+      <button type="button" class="cinema-vol-icon-btn" id="cinema-vol-icon" data-action="cinema-mute" title="" data-i18n-title="t_cinema_mute" data-i18n-aria="aria_cinema_mute" aria-label="Couper le son" aria-pressed="false">
+        <svg class="cinema-vol-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
+          <path id="cinema-vol-wave1" d="M15.54 8.46a5 5 0 0 1 0 7.07"/>
+          <path id="cinema-vol-wave2" d="M19.07 4.93a10 10 0 0 1 0 14.14"/>
+          <line id="cinema-vol-x1" x1="23" y1="9" x2="17" y2="15" style="display:none"/>
+          <line id="cinema-vol-x2" x1="17" y1="9" x2="23" y2="15" style="display:none"/>
+        </svg>
+      </button>
+      <div class="cinema-vol-bar">
+        <canvas id="cinema-vol-vis" class="cinema-vol-vis" aria-hidden="true"></canvas>
+        <!-- Bug 3 fix : appeler updateVolSlider pour synchroniser le gradient du slider principal -->
+        <input type="range" id="cinema-vol" class="cinema-vol-slider"
+               min="0" max="1" step="0.01" value="1"
+               data-i18n-aria="aria_vol"
+               aria-label="Volume"
+               data-input-action="cinema-vol">
+      </div>
     </div>
+  </div>
   </div>
 </div>
 
@@ -1370,16 +1569,19 @@
       <div class="sc-key"><kbd>Échap</kbd></div><div class="sc-desc"><span data-i18n="sc_esc">Fermer / Vider la recherche</span></div>
       <div class="sc-key"><kbd>F11</kbd></div><div class="sc-desc"><span data-i18n="sc_fullscreen">Plein écran</span></div>
       <div class="sc-key"><kbd>Ctrl</kbd><span style="opacity:.4;font-size:10px">+</span><kbd>,</kbd></div><div class="sc-desc"><span data-i18n="sc_settings">Ouvrir / fermer les paramètres</span></div>
+      <div class="sc-key"><kbd>Ctrl</kbd><span style="opacity:.4;font-size:10px">+</span><kbd>+</kbd></div><div class="sc-desc"><span data-i18n="sc_zoom_in">Zoomer la liste de pistes</span></div>
+      <div class="sc-key"><kbd>Ctrl</kbd><span style="opacity:.4;font-size:10px">+</span><kbd>-</kbd></div><div class="sc-desc"><span data-i18n="sc_zoom_out">Dézoomer la liste de pistes</span></div>
+      <div class="sc-key"><kbd>Ctrl</kbd><span style="opacity:.4;font-size:10px">+</span><kbd>0</kbd></div><div class="sc-desc"><span data-i18n="sc_zoom_reset">Réinitialiser le zoom de la liste</span></div>
     </div>
     <button class="shortcuts-close" data-action="toggle-shortcuts" data-i18n="sc_close">Fermer</button>
   </div>
 </div>
 
 <!-- DUPES PANEL -->
-<div id="dupes-panel" data-backdrop-action="close-dupes">
+<div id="dupes-panel" data-backdrop-action="close-dupes" role="dialog" aria-modal="true" aria-labelledby="dupes-panel-title">
   <div class="dupes-box">
     <div class="dupes-head">
-      <h3><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:6px;vertical-align:middle"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>Doublons détectés</h3>
+      <h3 id="dupes-panel-title"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:6px;vertical-align:middle" aria-hidden="true"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>Doublons détectés</h3>
       <button class="dupes-close" data-action="close-dupes" aria-label="Fermer">
         <svg viewBox="0 0 24 24" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
       </button>
@@ -1398,16 +1600,17 @@
     <div class="modal-h" id="batch-tag-modal-title">✏ Édition en lot</div>
     <div id="bte-count" class="modal-s"></div>
     <div class="bte-cover-zone">
-      <div id="bte-cover-preview" class="bte-cover-preview" data-action="bte-cover-click" role="button" tabindex="0">
+      <div id="bte-cover-preview" class="bte-cover-preview" data-action="bte-cover-click" role="button" tabindex="0" aria-labelledby="bte-cover-label">
         <span id="bte-cover-label" class="bte-cover-label">Cliquer pour choisir une pochette</span>
         <img id="bte-cover-img" class="bte-cover-img" style="display:none" alt="">
       </div>
-      <button id="bte-cover-clear" class="bte-cover-clear" style="display:none" data-action="bte-cover-clear">✕</button>
+      <button id="bte-cover-clear" class="bte-cover-clear" style="display:none" data-action="bte-cover-clear" aria-label="Retirer la pochette">✕</button>
       <input type="file" id="bte-cover-file" accept="image/jpeg,image/png" style="display:none" data-input-action="bte-cover-selected">
     </div>
     <div class="bte-fields">
       <label class="bte-label" for="bte-year">Année</label>
-      <input class="bte-input" id="bte-year" type="number" min="1800" max="2099" placeholder="">
+      <input class="bte-input" id="bte-year" type="number" min="1800" max="2099" placeholder="" aria-describedby="bte-year-error">
+      <span id="bte-year-error" class="sr-only" role="alert"></span>
       <label class="bte-label" for="bte-artist">Artiste</label>
       <input class="bte-input" id="bte-artist" type="text" placeholder="">
       <label class="bte-label" for="bte-album">Album</label>
@@ -1452,5 +1655,8 @@
   </div>
   <div class="mp-ov-bar"><div id="mp-ov-fill" class="mp-ov-fill"></div></div>
 </div>
+
+<!-- HUD indicateur de zoom — affiché brièvement via tlistZoom.js -->
+<div id="zoom-hud" role="status" aria-live="polite" aria-atomic="true"></div>
 </body>
 </html>

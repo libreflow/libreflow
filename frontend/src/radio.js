@@ -7,25 +7,39 @@
 //   import  : esc            (utils.js)
 //   import  : CFG            (cfg.js)
 //   window  : tracks, curIdx, liked, recentPlays, _trackIdxMap  (getters)
-//             confirmAction, closeCtxMenu, getFiltered, playAt, setView
+//             confirmAction, closeCtxMenu, playAt, setView
 //             setManualQueue, toast, ctxTrackId  (callbacks / getter)
 //
 // Exports publics :
 //   radioActive   (live binding lu par app.js / sleep.js)
-//   startRadio, stopRadio, resetRadio, radioRefillQueue, toggleRadio
-//   ctxStartRadio, updateRadioBanner (stub compat), showRadioBanner (stub), hideRadioBanner (stub)
+//   startRadio, stopRadio, resetRadio, radioRefillQueue
+//   ctxStartRadio
 //   radioRegenerateFromCurrent, renderRadioView, openRadioView
 
 import { esc, fmt }                           from './utils.js';
 import { CFG }                                from './cfg.js';
 import { i18n }                               from './i18n.js';
 import { get, notify }                        from './store.js';
-import { getFiltered, filteredIdx, _trackIdxMap } from './search.js';
+import { filteredIdx, _trackIdxMap } from './search.js';
 import { audio, playAt }                      from './player.js';
 import { toast, toastWithAction, confirmAction }                       from './ui.js';
 import { setManualQueue } from './player.js';
-import { savePlaylists, renderPlNav, setupPlNavDrop } from './playlists.js';
 import { emit, EVENTS } from './bus.js';
+
+// ── Callbacks injectés par app.js (CLAUDE.md §6 — pas d'import direct playlists.js) ──
+let _savePlaylists  = null;
+let _renderPlNav    = null;
+let _setupPlNavDrop = null;
+
+/**
+ * Câble les fonctions playlists depuis app.js (cross-module wiring via §6).
+ * Doit être appelé une fois au démarrage avant tout radioSaveAsPlaylist().
+ */
+export function initRadioPlCallbacks({ savePlaylists, renderPlNav, setupPlNavDrop }) {
+  _savePlaylists  = savePlaylists;
+  _renderPlNav    = renderPlNav;
+  _setupPlNavDrop = setupPlNavDrop;
+}
 
 // ── Constantes ───────────────────────────────────────────────
 const RADIO_SIZE           = CFG.RADIO_QUEUE_SIZE;
@@ -48,10 +62,7 @@ let _radioRefillInProgress = false; // B34 : guard anti-concurrence pour le refi
 // ── Progress bar live (rv-prog-fill) ─────────────────────────
 // NOTE : la mise à jour de rv-prog-fill est gérée directement par le handler
 // timeupdate de app.js (avec guard isConnected pour supporter les re-renders
-// sans passer par setView). Ces helpers locaux sont supprimés pour éviter un
-// double handler sur l'événement 'timeupdate'.
-function _cleanRvProg()       { /* no-op — géré par app.js */ }
-function _installRvProgUpdate() { /* no-op — géré par app.js */ }
+// sans passer par setView).
 
 // ── Scoring ──────────────────────────────────────────────────
 
@@ -261,7 +272,6 @@ export async function startRadio(trackId) {
 
 /** Teardown synchrone de l'état radio + UI. Partagé par stopRadio() et stopRadioSilent(). */
 function _radioTeardown() {
-  _cleanRvProg();
   radioActive     = false;
   radioSeedId     = null;
   radioQueue      = [];
@@ -308,7 +318,6 @@ export function stopRadioSilent() {
 
 /** Réinitialise tout l'état radio sans side-effects UI (appelé depuis clearLibrary). */
 export function resetRadio() {
-  _cleanRvProg();
   radioActive     = false;
   radioSeedId     = null;
   radioQueue      = [];
@@ -394,7 +403,6 @@ export async function radioRefillQueue() {
 // ── Sync boutons radio (cinéma + sidebar nav) ─────────────────
 function _syncRadioButtons(active) {
   const cinBtn  = document.getElementById('cinema-radio');
-  const navBtn  = document.getElementById('ni-radio');
   if (cinBtn) {
     cinBtn.classList.toggle('on', active);
     cinBtn.setAttribute('aria-pressed', String(active));
@@ -404,19 +412,8 @@ function _syncRadioButtons(active) {
     cinBtn.title = cinLbl;
     cinBtn.setAttribute('aria-label', cinLbl);
   }
-  // Badge "live" sur le bouton Radio de la sidebar quand la radio tourne
-  if (navBtn) {
-    let badge = navBtn.querySelector('.ni-radio-live');
-    if (active) {
-      if (!badge) {
-        badge = document.createElement('span');
-        badge.className = 'ni-radio-live';
-        navBtn.appendChild(badge);
-      }
-    } else {
-      badge?.remove();
-    }
-  }
+  // AUDIT-2026-07-01 M8 : badge « live » #ni-radio supprimé — le bouton n'a
+  // jamais existé dans le DOM (code mort null-guardé, CSS associé purgé).
   // Bannière dans la vue bibliothèque principale
   _syncRadioLibBar(active);
 }
@@ -482,36 +479,9 @@ function _syncRadioLibBar(active) {
     </div>`;
 }
 
-// Lock anti-double-clic : empêche deux dialogs "Arrêter ?" simultanées.
-let _radioToggleLock = false;
-
-/** Toggle radio depuis le player bar : démarre depuis le titre courant, ou arrête. */
-export async function toggleRadio() {
-  if (_radioToggleLock) return;
-  _radioToggleLock = true;
-  try {
-    if (radioActive) { await stopRadio(); return; }
-    const curIdx = get('curIdx');
-    const tracks = get('tracks'); // Phase 4
-    const seed   = (curIdx >= 0 && tracks && tracks[curIdx]) ? tracks[curIdx] : null;
-    if (!seed) { toast(i18n('radio_no_seed'), 'warning'); return; }
-    await startRadio(seed.id);
-  } finally {
-    _radioToggleLock = false;
-  }
-}
-
 /** Synchronise #radio-lib-bar dans #vlib. Appelé depuis setView() à chaque
  *  entrée dans la vue bibliothèque, pour garantir l'affichage immédiat. */
 export function syncRadioLibBar() { _syncRadioLibBar(radioActive); }
-
-// ── Stubs bannière (conservé pour compat. imports) ─────────────
-/** @deprecated — la bannière flottante a été supprimée. Utilisez renderRadioView(). */
-export function showRadioBanner()  { /* supprimée */ }
-export function hideRadioBanner()  { /* supprimée */ }
-export function updateRadioBanner() {
-  if (get('view') === 'radio') renderRadioView();
-}
 
 export async function radioSaveAsPlaylist() {
   if (!radioActive) return;
@@ -531,25 +501,31 @@ export async function radioSaveAsPlaylist() {
   const pl = { id: 'pl_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8), name, trackIds: ids }; // BUG-m2 FIX : suffixe aléatoire pour éviter collision si sauvegardé 2× dans la même ms
   get('playlists').push(pl);
   notify('playlists'); // CM-5 FIX: push() in-place → notify() so subscribers see the change
+  if (!_savePlaylists) {
+    console.warn('[radio] initRadioPlCallbacks non appelé — playlist non persistée');
+    return;
+  }
   try {
-    await savePlaylists();
+    await _savePlaylists();
   } catch (e) {
     // Roll back : retirer la playlist ajoutée optimistiquement si la sauvegarde échoue
     const playlists = get('playlists');
     const idx = playlists.indexOf(pl);
-    if (idx >= 0) playlists.splice(idx, 1);
+    if (idx >= 0) { playlists.splice(idx, 1); notify('playlists'); }
     toast(i18n('radio_save_error') || 'Erreur lors de la sauvegarde', 'error');
     return;
   }
-  renderPlNav();
-  setupPlNavDrop();
+  _renderPlNav?.();
+  _setupPlNavDrop?.();
   // Ne pas naviguer vers la playlist → ne polluent pas "Récentes" + l'utilisateur reste sur la radio.
   // Un toast avec bouton "Voir →" permet d'y accéder si besoin.
   toastWithAction(
     i18n('radio_pl_saved', name, ids.length),
     'success',
     i18n('radio_pl_see') || 'Voir →',
-    () => emit(EVENTS.VIEW_REQUEST, { view: 'playlist', btn: document.getElementById('ni-playlists'), plId: pl.id }),
+    // AUDIT-2026-07-01 M5 : cibler la ligne ni-pl-<id> (comme tous les autres
+    // émetteurs) — #ni-playlists provoquait un double marquage .on/aria-current.
+    () => emit(EVENTS.VIEW_REQUEST, { view: 'playlist', btn: document.getElementById('ni-pl-' + pl.id), plId: pl.id }),
     6000
   );
 }
@@ -593,6 +569,12 @@ export function playRadioTrackAt(idx) {
   for (let i = 0; i < idx; i++) _radioPlayedIds.add(radioQueue[i].id);
   const fi = filteredIdx(t);
   if (fi >= 0) {
+    // AUDIT CINÉMA 2026-07-20 (P1) : retirer immédiatement les titres sautés de la file et
+    // resynchroniser manualQueue (miroir consommé par next() AVANT la branche radio) —
+    // sinon next() rejouait un titre sauté et le panneau « Suivant » du cinéma affichait
+    // une piste différente de celle réellement jouée.
+    radioQueue.splice(0, idx);
+    _radioSyncManualQueue();
     playAt(fi);
     if (get('view') === 'radio') renderRadioView();
   } else {
@@ -605,6 +587,9 @@ export function removeRadioTrack(idx) {
   if (idx < 0 || idx >= radioQueue.length) return;
   const removed = radioQueue[idx];
   radioQueue.splice(idx, 1);
+  // AUDIT CINÉMA 2026-07-20 (P1) : resynchroniser le miroir manualQueue — next() le
+  // consomme avant la branche radio ; sans ce sync, une piste retirée restait jouable.
+  _radioSyncManualQueue();
   if (get('view') === 'radio') renderRadioView();
   _syncRadioLibBar(true);
   // Bug #15 fix : feedback utilisateur manquant — la suppression était silencieuse.
@@ -615,9 +600,6 @@ export function removeRadioTrack(idx) {
 export function renderRadioView() {
   const el = document.getElementById('vradio');
   if (!el) return;
-
-  // Nettoyer l'écouteur timeupdate précédent avant tout remplacement du DOM
-  _cleanRvProg();
 
   if (!radioActive) {
     el.innerHTML = `
@@ -735,21 +717,21 @@ export function renderRadioView() {
   }
 
   el.innerHTML = seedHtml + queueHtml;
-
-  // Installer la mise à jour live de la progress bar APRÈS le rendu du DOM
-  _installRvProgUpdate();
 }
 
 /** Ouvre la vue radio (démarre si nécessaire). Appelé depuis la sidebar ou la bannière. */
 export async function openRadioView(btn) {
   // Si en mode cinéma → toggle via bus (cinema.js répond et vérifie cinemaOpen localement)
-  if (document.getElementById('cinema-overlay')?.classList.contains('on')) {
+  // AUDIT CINÉMA 2026-07-20 : l'overlay pose la classe 'active', pas 'on' — l'ancien
+  // test 'on' rendait cette route morte (le toggle bus n'était jamais émis).
+  if (document.getElementById('cinema-overlay')?.classList.contains('active')) {
     emit(EVENTS.CINEMA_RADIO_TOGGLE, {}); return;
   }
 
-  // Bug #8 fix : ignorer le `btn` passé (peut être un bouton bannière ou n'importe quel élément
-  // cliqué). setView() attend l'item nav #ni-radio pour activer la bonne entrée de sidebar.
-  const niBtn = document.getElementById('ni-radio');
+  // Bug #8 fix : ignorer le `btn` passé (peut être un bouton bannière ou n'importe
+  // quel élément cliqué). AUDIT-2026-07-01 M8 : #ni-radio n'existe pas — 'radio'
+  // est une vue bibliothèque, setView() active #ni-all + l'onglet lib lui-même.
+  const niBtn = null;
 
   if (!radioActive) {
     const curIdx = get('curIdx');

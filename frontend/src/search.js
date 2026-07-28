@@ -21,6 +21,7 @@
 /** @import { Track } from './types.js' */
 
 import { get, subscribe } from './store.js';
+import { CFG } from './cfg.js';
 
 // ── Trigram helpers ───────────────────────────────────────────────────────────
 
@@ -266,6 +267,11 @@ function _sortTracks(src, sort, recentPlays) {
         (a.track || 0) - (b.track || 0) ||
         _compare(a.name, b.name)
       );
+    case 'duration': // colonne « Durée » cliquable (audit 2026-07-27)
+      return copy.sort((a, b) =>
+        (a.duration || 0) - (b.duration || 0) ||
+        _compare(a.name, b.name)
+      );
     default: // 'az'
       return copy.sort((a, b) => _compare(a.name, b.name));
   }
@@ -275,9 +281,6 @@ function _sortTracks(src, sort, recentPlays) {
 
 /** True when the last getFiltered() call used the trigram fuzzy fallback. */
 let _lastWasFuzzy = false;
-
-/** Returns true if the last getFiltered() call used fuzzy (trigram) matching. */
-export function wasFuzzySearch() { return _lastWasFuzzy; }
 
 /**
  * Retourne la liste de pistes filtrées + triées pour la vue et le tri courants.
@@ -364,7 +367,6 @@ export function getFiltered() {
     } else if (query.trim().length >= 3) {
       // Fuzzy fallback — trigram Jaccard similarity.
       // PM-2 : c'est UNIQUEMENT ici qu'on construit les trigrammes (lazy par track).
-      const FUZZY_THRESHOLD = 0.4;
       const qTrigrams = _trigrams(query.toLowerCase().replace(/\s+/g, ' ').trim());
       // PM-1: pre-compute scores once (O(n)) so both filter and sort use O(1) Map lookups
       // instead of recomputing _trigramScore ~2×n×log(n) times inside the sort comparator.
@@ -375,7 +377,7 @@ export function getFiltered() {
         _scores.set(t.id, _trigramScore(qTrigrams, t._trigrams));
       }
       const fuzzy = src
-        .filter(t => (_scores.get(t.id) ?? 0) >= FUZZY_THRESHOLD)
+        .filter(t => (_scores.get(t.id) ?? 0) >= CFG.FUZZY_THRESHOLD)
         .sort((a, b) => (_scores.get(b.id) ?? 0) - (_scores.get(a.id) ?? 0));
       _lastWasFuzzy = fuzzy.length > 0;
       // Cache result directly and return — skip normal sort since results are ordered by score

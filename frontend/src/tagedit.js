@@ -16,6 +16,7 @@
 import { extEmoji, esc, mainArtist } from './utils.js';
 import { VIRT }                       from './virt.js';
 import { invoke }                     from './ipc.js';
+import { CFG }                        from './cfg.js';
 import { i18n }                       from './i18n.js';
 import { get, subscribe }               from './store.js'; // Phase 4
 import { emit, EVENTS }               from './bus.js';
@@ -212,17 +213,20 @@ export async function saveTagEdit(trackId) {
   //    Erreur non fatale : les modifs sont déjà en IDB, on avertit juste l'utilisateur
   // Tauri v2 : les args sont { nomDuParamètreRust: valeur }
   // La commande Rust prend `data: WriteTagsData` → il faut passer { data: {...} }
-  const writeResult = await invoke('write_tags', {
-    data: {
-      path:        t.path,
-      title:       name,
-      artist:      artist,
-      album:       album,
-      genre:       genre  || '',
-      year:        year   || null,
-      track_number: track || null,
-    },
-  }).then(() => null).catch(err => String(err));
+  const writeResult = await Promise.race([
+    invoke('write_tags', {
+      data: {
+        path:        t.path,
+        title:       name,
+        artist:      artist,
+        album:       album,
+        genre:       genre  || '',
+        year:        year   || null,
+        track_number: track || null,
+      },
+    }),
+    new Promise((_, rej) => setTimeout(() => rej(new Error('IPC timeout')), CFG.IPC_TIMEOUT_MS)),
+  ]).then(() => null).catch(err => String(err));
 
   // Invalider le cache et re-render complet (plus fiable que outerHTML sur un élément virtualisé)
   invalidateFilterCache(); emit(EVENTS.FILTER_CHANGED, {});

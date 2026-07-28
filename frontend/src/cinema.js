@@ -3,38 +3,61 @@
 // Extrait de app.js.
 //
 // Dépendances :
-//   import  : fmt, extEmoji  (utils.js)
-//   import  : saveCfg (cfgsave.js), updateVolSlider (playerbar.js)
+//   import  : cinema-render.js (helpers de rendu extraits de updateCinema, dont
+//             readCinVolDom/setCinVolSliders — Task 7 : lecture/écriture volume déléguées)
+//   import  : cinema-seek.js (scrubbing complet de la pbar, Task 5 — injection de deps)
+//   import  : cinema-input.js (clavier/molette/dblclick/contrôles auto-masquables, Task 6 — injection de deps)
+//   bus     : EVENTS.CINEMA_PROGRESS (Task 7 — player.js émet, cinema.js écoute ; casse le
+//             cycle d'import player.js ↔ cinema.js qui existait via updateCinemaProgress)
 //   window  : audio, curIdx, tracks, liked, shuffle, repeat, getFiltered (getters), toast
 //
 // Exports publics (utilisés par app.js) :
 //   cinemaOpen, cinemaBg
-//   toggleCinema, openCinema, closeCinema, updateCinema, updateCinemaProgress
+//   toggleCinema, openCinema, closeCinema, updateCinema
 //   setCinemaBg, cycleCinemaBg, applyCinemaBg, syncCinemaBgSettings, updateCinemaBgBtn
-//   toggleCinemaFullscreen
+//   toggleCinemaFullscreen, toggleCinemaRadio
 //   CINEMA_BG_MODES, CINEMA_BG_LABELS
+//   (toggleCinemaMute — Task 7 — vit dans cinema-render.js, cap 650 lignes ici depuis Task 6)
+//   (updateCinemaProgress — Task 7 — n'est plus exportée : app.js ne l'appelait plus depuis
+//    le passage au bus ; reste une fonction interne appelée via on(EVENTS.CINEMA_PROGRESS))
+//   initCinemaVizSuspend (câblage viz.js suspendViz/resumeViz — appelé une fois depuis app.js)
 
-import { fmt, extEmoji }                     from './utils.js';
-import { eqCtx, eqAnalyser, masterGainNode, setMasterGain } from './eq.js'; // réutiliser le graphe EQ existant
+import { eqAnalyser, setMasterGain }          from './eq.js'; // réutiliser le graphe EQ existant
 import { i18n }                               from './i18n.js';
-import { get, set }                           from './store.js';
-import { getFiltered, filteredIdx }            from './search.js';
-import { audio, toggleLike, next, prev }      from './player.js';
+import { get }                                from './store.js';
+import { audio, toggleLike, next, prev, getNextIdx, hasExplicitQueueNext } from './player.js';
 import { radioActive, stopRadio, startRadio, getRadioQueue } from './radio.js';
 import { toast }                                        from './ui.js';
-import { saveCfg }                   from './cfgsave.js';
-import { rgbToHsl, hslToRgb, boostSat, regionAvg, sampleArtColors } from './artcolor.js';
-import { emit, on, EVENTS }          from './bus.js';
-import { renderAmbientFrame }                from './ambientRenderer.js';
+import { on, EVENTS }                from './bus.js';
 import { timeline, set as motionSet, kill as motionKill, eases } from './motion.js';
+import { cinemaBg, CINEMA_BG_MODES, CINEMA_BG_LABELS, applyCinemaBg, setCinemaBg, cycleCinemaBg,
+         syncCinemaBgSettings, updateCinemaBgBtn, initCinemaBg, initCinemaBgModule,
+         updateCinArtColor,
+         stopAmbientAnim, resetAmbientColors, updateAmbientGradient,
+         updateCachedWinSize, drawBgFrame } from './cinema-bg.js';
+import { startCinemaViz, stopCinemaViz, initCinemaVizModule, drawVizFrame } from './cinema-viz.js';
+import { initCinemaLoop, startCinemaLoop, stopCinemaLoop, wakeCinemaLoop } from './cinema-loop.js';
+import { renderCinColor, syncCinVolumeUI, syncCinProgress, applyCinText, beginCinSwapIn, renderCinNextPanel,
+         getCinemaQueueUpcoming, playCinemaQueueTrack,
+         readCinVolDom, setCinVolSliders } from './cinema-render.js';
+import { initCinemaSeek, isSeekDragging, resetCinemaSeek } from './cinema-seek.js';
+import { initCinemaQueue, refreshCinemaQueuePanel, closeCinemaQueuePanel } from './cinema-queue.js';
+import { initCinemaInput, attachCinemaInput, detachCinemaInput, showCinemaControls } from './cinema-input.js';
 
-// Radio demande le toggle cinéma — évite le cycle d'import cinema.js ↔ radio.js.
+export { cinemaBg, CINEMA_BG_MODES, CINEMA_BG_LABELS, applyCinemaBg, setCinemaBg, cycleCinemaBg,
+         syncCinemaBgSettings, updateCinemaBgBtn, initCinemaBg, updateCinArtColor,
+         startCinemaViz }; // Task 10 : app.js relance le viz spectre au retour 'full' (cinéma ouvert)
+
+// Radio demande le toggle cinéma (cycle d'import) ; play/pause réveille la boucle maître.
 on(EVENTS.CINEMA_RADIO_TOGGLE, () => { if (cinemaOpen) toggleCinemaRadio(); });
+on(EVENTS.PLAY_STATE,          () => { if (cinemaOpen) wakeCinemaLoop(); });
+// Task 7 — player.js émet la progression timeupdate (~60fps) via le bus au lieu d'un
+// import direct de cinema.js (cassait le cycle player.js ↔ cinema.js).
+on(EVENTS.CINEMA_PROGRESS, ({ p, cur, dur }) => updateCinemaProgress(p, cur, dur));
 
 // ── State ───────────────────────────────────────────────────
 export let cinemaOpen     = false;
-export let cinemaBg       = 'ambient'; // default mode
-let cinemaHideTimer       = null;
+// cinemaHideTimer → cinema-input.js (Task 6 — timer d'auto-masquage des contrôles)
 
 // ── A11Y: focus management (A.8) ────────────────────────────
 // Stores the element that had focus before cinema opened so it
@@ -44,20 +67,13 @@ let _cinemaLastFocus = null;
 // DOM cache (peuplé dans openCinema, vidé dans closeCinema)
 // Utilisé par updateCinemaProgress() pour les mises à jour timeupdate à 60 fps.
 let _cinFill    = null;
+let _cinThumb   = null; // Task 5 — thumb de scrub (sibling de _cinFill, position en %)
 let _cinTc      = null;
 let _cinTd      = null;
+let _cinPbar    = null;
 let _lastCinArt  = null; // dernière URL d'art — évite le bug de normalisation url("…")
-let _cinBgCtx    = null; // cache du contexte 2D de #cinema-bg (évite getContext() par frame)
-
-// Visualiseur (animation RAF uniquement — pas de création d'AudioContext ni de source)
-let _cinVizRaf  = null;
-let _beatTimer  = null; // timer classe .beat — module scope pour pouvoir le nettoyer dans _stopViz()
-// Couleur dominante de la pochette courante — mise à jour dans updateCinema()
-// (même principe que _vizRGB dans viz.js — évite la lecture async artColor dans le loop rAF)
-let _cinArtRGB       = '255,255,255'; // couleur courante (interpolée)
-let _cinArtRGBTarget = [255,255,255]; // couleur cible
-let _cinArtRGBCur    = [255,255,255]; // couleur affichée (LERP)
-const _LERP_K        = 0.06;          // vitesse de transition (~16 frames → 50% done)
+// _cinBgCtx → cinema-bg.js ; _beatTimer → cinema-viz.js (renderer passif, boucle dans cinema-loop.js)
+// Couleur dominante : état privé dans cinema-bg.js — muté via snapArtColor()/stepArtColorLerp().
 let _kbVariant  = 0;                  // variante Ken Burns courante (0-3)
 let _lastCinIdx = -1;                 // dernier curIdx vu dans updateCinema — détecte le changement de piste
 
@@ -67,254 +83,44 @@ let _clockInterval = null;
 // Timers pour l'animation de swap pochette — stockés pour annulation dans closeCinema()
 let _cinSwapOutTimer = null;
 let _cinSwapInTimer  = null;
+// _heartTimer (particule cœur, dbl-clic like) → cinema-input.js (Task 6)
 
 // GSAP timeline pour la chorégraphie d'ouverture — kill au close + au re-open
 // (évite que deux séquences se superposent si l'utilisateur toggle vite).
 let _openTl = null;
 
+// ── Suspension du viz player-bar pendant le mode cinéma (P1 fix) ────────────
+// Callbacks injectés depuis app.js (pattern initRadioPlCallbacks) — évite un
+// import direct cinema.js → viz.js pour rester découplé (CLAUDE.md §6).
+let _suspendViz = () => {};
+let _resumeViz  = () => {};
+
+/** À appeler une seule fois depuis app.js après l'import de viz.js. */
+export function initCinemaVizSuspend({ suspendViz, resumeViz }) {
+  _suspendViz = suspendViz || (() => {});
+  _resumeViz  = resumeViz  || (() => {});
+}
+
 // ── Constantes ──────────────────────────────────────────────
-// ── Modes d'arrière-plan disponibles ────────────────────────
-// blur     : pochette ultra-floue, saturée — signature colorée
-// ambient  : gradient radial depuis la couleur dominante de la pochette (Apple Music style)
-// spectrum : visualiseur audio plein écran, barres bilatérales colorées
-// amoled   : noir pur, optimal pour écrans OLED
-export const CINEMA_BG_MODES  = ['ambient', 'spectrum', 'amoled'];
-export const CINEMA_BG_LABELS = {
-  ambient:  'Ambient',
-  spectrum: 'Spectre',
-  amoled:   'AMOLED',
-};
-const CINEMA_BG_ICONS = {
-  ambient:  `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4" opacity=".5"/><line x1="12" y1="3" x2="12" y2="1"/><line x1="12" y1="23" x2="12" y2="21"/><line x1="3" y1="12" x2="1" y2="12"/><line x1="23" y1="12" x2="21" y2="12"/></svg>`,
-  spectrum: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><line x1="4"  y1="20" x2="4"  y2="12"/><line x1="8"  y1="20" x2="8"  y2="6"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="16" y1="20" x2="16" y2="9"/><line x1="20" y1="20" x2="20" y2="14"/></svg>`,
-  amoled:   `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="12" cy="12" r="2" fill="currentColor" opacity=".4"/></svg>`,
-};
+// Modes, labels, AMBIENT_CROSSFADE_MS → cinema-bg.js
+// CINEMA_CONTROLS_HIDE_MS, HEART_BURST_MS → cinema-input.js (Task 6)
+const CIN_SWAP_OUT_MS          =  120;  // durée animation pochette sortante
+const CIN_SWAP_IN_MS           =  440;  // durée animation pochette entrante
+const CLOCK_TICK_MS            = 1000;  // intervalle de mise à jour de l'horloge
 
-// ── Constantes d'animation ──────────────────────────────────
-const CINEMA_CONTROLS_HIDE_MS  = 3000;  // délai avant masquage des contrôles
-const AMBIENT_CROSSFADE_MS     = 1400;  // durée du cross-fade ambient
-
-// ── Arrière-plan ────────────────────────────────────────────
-
-/** Initialise cinemaBg depuis la config au démarrage (pas de side-effects DOM/saveCfg). */
-export function initCinemaBg(mode) {
-  if (CINEMA_BG_MODES.includes(mode)) { cinemaBg = mode; set('cinemaBg', mode); }
-}
-
-export function setCinemaBg(mode) {
-  if (!CINEMA_BG_MODES.includes(mode)) return;
-  cinemaBg = mode; set('cinemaBg', mode);
-  applyCinemaBg();
-  syncCinemaBgSettings();
-  saveCfg();
-}
-
-export function syncCinemaBgSettings() {
-  CINEMA_BG_MODES.forEach(m => {
-    const btn = document.getElementById('set-cinema-' + m);
-    if (!btn) return;
-    const active = m === cinemaBg;
-    btn.classList.toggle('on', active);
-    btn.setAttribute('aria-pressed', String(active));
-  });
-}
-
-export function cycleCinemaBg() {
-  const cur = CINEMA_BG_MODES.indexOf(cinemaBg);
-  cinemaBg  = CINEMA_BG_MODES[(cur + 1) % CINEMA_BG_MODES.length];
-  set('cinemaBg', cinemaBg);
-  applyCinemaBg();
-  syncCinemaBgSettings();
-  saveCfg();
-  toast(i18n('t_cinema_bg', CINEMA_BG_LABELS[cinemaBg]));
-}
-
-export function applyCinemaBg() {
-  const overlay = document.getElementById('cinema-overlay');
-  if (!overlay) return;
-  CINEMA_BG_MODES.forEach(m => overlay.classList.remove('bg-' + m));
-  overlay.classList.add('bg-' + cinemaBg);
-  updateCinemaBgBtn();
-  // Synchroniser la pochette dans cinema-bg si disponible
-  // Bug 6 fix : plImg.src est TOUJOURS truthy (retourne l'URL absolue de la page si vide)
-  //             → utiliser getAttribute('src') qui retourne null si l'attribut est absent
-  const cinBg = document.getElementById('cinema-bg');
-  // Arrêter l'animation breathing avant tout switch de mode
-  _stopAmbientAnim();
-  _ambientColors = null;
-  // Vider le canvas immédiatement à chaque switch (évite interférence entre modes)
-  if (cinBg?.getContext) {
-    const c = _cinBgCtx || cinBg.getContext('2d');
-    if (c) c.clearRect(0, 0, cinBg.width || 1, cinBg.height || 1);
-  }
-  // ambient : gradient multi-radial complet. amoled : halo minimaliste (même boucle RAF).
-  if (cinemaBg === 'ambient' || cinemaBg === 'amoled') _updateAmbientGradient();
-  // Bug #9 fix : rafraîchir l'UI cinéma (pochette, infos piste, contrôles) après chaque
-  // switch de mode — sans ça la pochette flou reste stale après cycleCinemaBg().
-  if (cinemaOpen) updateCinema();
-}
-
-/**
- * Mode ambient : gradient radial depuis la couleur dominante de la pochette.
- * Inspiré du mode "ambient" d'Apple Music — la couleur rayonne depuis le haut de l'écran.
- */
-/**
- * Ambient : rendu canvas avec dithering noise pour éliminer le banding CSS.
- * Technique : gradient canvas multi-radial + calque noise grain (Perlin simplifié).
- */
-let _ambientAnimRaf = null;   // RAF handle for continuous breathing loop
-let _ambientT       = 0;      // animation time in ms — persists across tracks
-let _ambientColors  = null;   // { cT, cL, cR } — rebuilt each track change
-let _ambientCross   = null;   // { snapshot, start, dur } — active cross-fade
-let _frameCount     = 0;      // frame counter for ambient 30fps cap
-let _ambientGen     = 0;      // génération courante — incrémentée à chaque _stopAmbientAnim() pour invalider les loops orphelins
-
-/** Extract and boost 3 ambient colours from artwork (or fallback to _cinArtRGB). */
-function _buildAmbientColors() {
-  const img = document.getElementById('cinema-art-img');
-  if (img && img.naturalWidth && img.style.display !== 'none') {
-    const colors = sampleArtColors(img, 64);
-    if (colors) return colors;
-  }
-  const [rF, gF, bF] = _cinArtRGB.split(',').map(Number);
-  const cT = boostSat(rF, gF, bF);
-  const [hF, sF, lF] = rgbToHsl(...cT);
-  return {
-    cT,
-    cL: hslToRgb((hF + 38) % 360, Math.min(1, sF), lF),
-    cR: hslToRgb((hF - 32 + 360) % 360, Math.min(1, sF), lF),
-  };
-}
-
-/** Stop the breathing animation loop and clear any pending cross-fade. */
-function _stopAmbientAnim() {
-  _ambientGen++; // invalider tous les loops RAF orphelins
-  if (_ambientAnimRaf) { cancelAnimationFrame(_ambientAnimRaf); _ambientAnimRaf = null; }
-  _ambientCross = null;
-}
-
-/** Start the continuous breathing animation RAF loop. No-op if already running. */
-function _startAmbientAnim() {
-  if (_ambientAnimRaf) return;
-  const myGen = _ambientGen; // capturer le token de génération courante
-  let last = performance.now();
-  function loop(now) {
-    // Guard génération : si _stopAmbientAnim() a été appelé depuis, ce loop est orphelin
-    if (myGen !== _ambientGen) return;
-    // Boucle active en mode 'ambient' ET 'amoled' (halo minimaliste dans renderAmbientFrame)
-    if ((cinemaBg !== 'ambient' && cinemaBg !== 'amoled') || !cinemaOpen || document.hidden) {
-      last = now;  // prevent time-jump on resume (BUG-D3A-7)
-      _ambientAnimRaf = null;
-      return;
-    }
-    // Ambient 30fps cap — skip odd frames to halve GPU load
-    if (cinemaBg === 'ambient' && _frameCount++ % 2 !== 0) {
-      _ambientAnimRaf = requestAnimationFrame(loop);
-      return;
-    }
-    _ambientT += now - last;
-    last = now;
-    const canvas = document.getElementById('cinema-bg');
-    if (!canvas) { _ambientAnimRaf = null; return; }
-    // Cache le contexte 2D — getContext() une seule fois tant que le canvas est le même.
-    // FIX HiDPI : si le cache est invalide, ré-appliquer setTransform après getContext().
-    if (!_cinBgCtx || _cinBgCtx.canvas !== canvas) {
-      _cinBgCtx = canvas.getContext('2d');
-      if (!_cinBgCtx) { _ambientAnimRaf = requestAnimationFrame(loop); return; }
-      const _dpr = window.devicePixelRatio || 1;
-      _cinBgCtx.setTransform(_dpr, 0, 0, _dpr, 0, 0);
-    }
-    renderAmbientFrame(_ambientT, canvas, _cinBgCtx, cinemaBg, _cinArtRGB, _ambientColors);
-    // ── Cross-fade overlay — draw old snapshot fading out ────────
-    if (_ambientCross) {
-      const { snapshot, start, dur } = _ambientCross;
-      const p    = Math.min(1, (now - start) / dur);
-      // easeInOutQuad : transition symétrique qui passe vite au milieu (50/50 blend)
-      // et ralentit aux extrêmes → moins de "boue" chromatique lors du cross-fade.
-      // easeOutCubic parcourait 58% en 30% du temps → instabilité visible sur couleurs contrastées.
-      const ease = p < 0.5 ? 2 * p * p : 1 - Math.pow(-2 * p + 2, 2) / 2;
-      // FIX HiDPI : ctx est transformé en CSS px → dessiner le snapshot aux dimensions CSS.
-      const _cW = window.innerWidth || 1280, _cH = window.innerHeight || 800;
-      _cinBgCtx.globalAlpha = 1 - ease;
-      _cinBgCtx.drawImage(snapshot, 0, 0, _cW, _cH);
-      _cinBgCtx.globalAlpha = 1;
-      if (p >= 1) _ambientCross = null;
-    }
-    _ambientAnimRaf = requestAnimationFrame(loop);
-  }
-  _ambientAnimRaf = requestAnimationFrame(loop);
-}
-
-function _updateAmbientGradient() {
-  const canvas = document.getElementById('cinema-bg');
-  if (!canvas || !canvas.getContext) return;
-
-  const dpr = window.devicePixelRatio || 1;
-  const W   = window.innerWidth  || 1280;
-  const H   = window.innerHeight || 800;
-  // FIX HiDPI : le backing store doit être en pixels physiques.
-  // Sans ça, le canvas est rendu en pixels CSS 1:1 → flou sur écrans 2×.
-  const PW  = Math.round(W * dpr);
-  const PH  = Math.round(H * dpr);
-
-  // Mode AMOLED : halo coloré simple, animé via le même loop RAF qu'ambient.
-  // Il n'a pas besoin de _ambientColors (utilise _cinArtRGB directement).
-  // FIX : la garde `if (cinemaBg !== 'ambient') return` empêchait _startAmbientAnim()
-  // d'être appelée → canvas vide en mode AMOLED. On isole le cas AMOLED ici.
-  if (cinemaBg === 'amoled') {
-    _stopAmbientAnim();
-    canvas.width  = PW;
-    canvas.height = PH;
-    _cinBgCtx = canvas.getContext('2d');
-    if (!_cinBgCtx) return;
-    _cinBgCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    // Pas de _buildAmbientColors ni de cross-fade pour AMOLED
-    _startAmbientAnim();
-    return;
-  }
-
-  if (cinemaBg !== 'ambient') return;
-
-  // Snapshot current canvas for cross-fade (only if colors already exist)
-  let snapshot = null;
-  if (_ambientColors && canvas.width > 0 && canvas.height > 0) {
-    snapshot = document.createElement('canvas');
-    snapshot.width = PW; snapshot.height = PH;
-    const snapCtx = snapshot.getContext('2d');
-    if (snapCtx) snapCtx.drawImage(canvas, 0, 0, PW, PH);
-  }
-
-  _stopAmbientAnim();
-  canvas.width  = PW;
-  canvas.height = PH;
-  _cinBgCtx = canvas.getContext('2d');
-  if (!_cinBgCtx) return;
-  _cinBgCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
-  _ambientColors = _buildAmbientColors();
-
-  if (snapshot) {
-    _ambientCross = { snapshot, start: performance.now(), dur: AMBIENT_CROSSFADE_MS };
-  }
-
-  _startAmbientAnim();
-}
-
-export function updateCinemaBgBtn() {
-  const btn = document.getElementById('cinema-bg-btn');
-  if (!btn) return;
-  // Fallback sur 'ambient' si mode inconnu (CINEMA_BG_ICONS n'a pas de clé 'blur')
-  btn.innerHTML = CINEMA_BG_ICONS[cinemaBg] || CINEMA_BG_ICONS.ambient;
-  const label = CINEMA_BG_LABELS[cinemaBg] || cinemaBg;
-  btn.title = i18n('t_cinema_bg', label) + ' [B]';
-}
+// ── Init modules ─────────────────────────────────────────────
+// Doit être posé après la déclaration de cinemaOpen et updateCinema.
+// Ces deux appels sont effectués après le bloc de déclarations.
+// (voir plus bas, juste après la déclaration de updateCinema)
 
 // ── Resize handler — redessine blur/ambient si dimensions changent ──
 let _resizeTimer = null;
 window.addEventListener('resize', () => {
+  updateCachedWinSize(); // P3 fix — tient le cache innerWidth/innerHeight à jour pour la boucle RAF ambient
   if (!cinemaOpen) return;
   clearTimeout(_resizeTimer);
   _resizeTimer = setTimeout(() => {
-    if (cinemaBg === 'ambient' || cinemaBg === 'amoled') applyCinemaBg();
+    if (cinemaBg === 'ambient' || cinemaBg === 'amoled' || cinemaBg === 'waves' || cinemaBg === 'starfield') applyCinemaBg();
   }, 200);
 });
 
@@ -325,140 +131,9 @@ export function toggleCinema() {
 }
 
 
-// ── Raccourcis clavier cinema ────────────────────────────────
-function _onArtDblClick(e) {
-  e.stopPropagation();
-  // Appeler toggleLike du player principal (window scope)
-  toggleLike();
-  // Feedback visuel : cœur qui pulse sur la pochette
-  const wrap = document.querySelector('.cinema-art-wrap');
-  const overlay = document.getElementById('cinema-overlay');
-  if (!wrap || !overlay) return;
-  const r = wrap.getBoundingClientRect();
-  const cx = r.left + r.width / 2;
-  const cy = r.top + r.height / 2;
-  const heart = document.createElement('div');
-  heart.className = 'cin-heart-burst';
-  heart.textContent = '❤';
-  heart.style.left = cx + 'px';
-  heart.style.top  = cy + 'px';
-  overlay.appendChild(heart);
-  setTimeout(() => heart.remove(), 750);
-}
-
-/** Lit le volume depuis le slider DOM #vol (source de vérité — §2). Fallbacks : master gain puis 1. */
-function _readVol() {
-  const dom = parseFloat(document.getElementById('vol')?.value);
-  if (Number.isFinite(dom)) return dom;
-  return masterGainNode?.gain.value ?? 1;
-}
-
-function _onCinKey(e) {
-  if (!cinemaOpen) return;
-  // Ignorer si focus sur un input/slider
-  const _ct = e.target.tagName;
-  if (_ct === 'INPUT' || _ct === 'TEXTAREA' || _ct === 'SELECT' || e.target.isContentEditable) return;
-  _showControls(); // reset idle timer sur toute touche
-  // audio imported from player.js
-  switch (e.code) {
-    case 'Space':
-      e.preventDefault();
-      if (audio) { audio.paused ? audio.play().catch(() => {}) : audio.pause(); updateCinema(); } // B33 FIX : .catch — évite un rejet non géré si autoplay refuse
-      break;
-    case 'ArrowLeft':
-      e.preventDefault();
-      if (audio) { audio.currentTime = Math.max(0, audio.currentTime - 5); }
-      break;
-    case 'ArrowRight':
-      e.preventDefault();
-      if (audio) { audio.currentTime = Math.min(audio.duration || 0, audio.currentTime + 5); }
-      break;
-    case 'ArrowUp':
-      e.preventDefault();
-      if (audio) { const v = Math.min(1, _readVol() + 0.05); setMasterGain(v); _syncCinVol(v); updateCinema(); }
-      break;
-    case 'ArrowDown':
-      e.preventDefault();
-      if (audio) { const v = Math.max(0, _readVol() - 0.05); setMasterGain(v); _syncCinVol(v); updateCinema(); }
-      break;
-    case 'KeyN': case 'KeyL':
-      e.preventDefault();
-      next();
-      break;
-    case 'KeyP':
-      e.preventDefault();
-      prev();
-      break;
-    case 'KeyF':
-      e.preventDefault();
-      toggleCinemaFullscreen();
-      break;
-    case 'KeyB':
-      e.preventDefault();
-      cycleCinemaBg();
-      break;
-    case 'KeyR':
-      e.preventDefault();
-      toggleCinemaRadio();
-      break;
-    case 'Escape':
-      // Si plein écran actif → quitter le plein écran uniquement (pas fermer le cinéma)
-      if (document.fullscreenElement) {
-        document.exitFullscreen().catch(() => {});
-      } else {
-        closeCinema();
-      }
-      break;
-  }
-}
-
-// ── A11Y A.8 — Tab trap + ESC-to-close ──────────────────────
-// Separate from _onCinKey so it can be removed cleanly in closeCinema().
-// ESC handling here complements _onCinKey's ESC (which also exits fullscreen).
-// Tab cycles focus within the overlay; ESC closes cinema (unless fullscreen
-// is active, in which case _onCinKey handles exiting fullscreen first).
-function _onCinemaTrapKey(e) {
-  const overlay = document.getElementById('cinema-overlay');
-  if (!overlay || !overlay.classList.contains('active')) return;
-
-  if (e.key === 'Tab') {
-    const focusables = overlay.querySelectorAll(
-      'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
-    );
-    if (!focusables.length) { e.preventDefault(); return; }
-    const first  = focusables[0];
-    const last   = focusables[focusables.length - 1];
-    const active = document.activeElement;
-    if (e.shiftKey && active === first) {
-      e.preventDefault();
-      last.focus();
-    } else if (!e.shiftKey && active === last) {
-      e.preventDefault();
-      first.focus();
-    }
-  }
-}
-
-// ── Scroll molette → volume ──────────────────────────────────
-function _syncCinVol(v) {
-  const cvol = document.getElementById('cinema-vol');
-  if (cvol) { cvol.value = v; emit(EVENTS.VOL_SLIDER_UPDATE, { elId: 'cinema-vol' }); }
-  const vel = document.getElementById('vol');
-  if (vel) { vel.value = v; emit(EVENTS.VOL_SLIDER_UPDATE, { elId: 'vol' }); }
-  saveCfg();
-}
-
-function _onCinWheel(e) {
-  e.preventDefault();
-  e.stopPropagation();
-  // audio imported from player.js
-  if (!audio) return;
-  const delta = e.deltaY < 0 ? 0.05 : -0.05;
-  const v = Math.min(1, Math.max(0, _readVol() + delta));
-  setMasterGain(v);
-  _syncCinVol(v);
-  updateCinema();
-}
+// ── Volume : lecture DOM + sync (exposés à cinema-input.js via deps — Task 6) ──
+// Task 7 — _readVol/_syncCinVol supprimées : cinema.js délègue à readCinVolDom/
+// setCinVolSliders (cinema-render.js, ex-_readVolDom/_setVolSliders, mêmes signatures).
 
 export function openCinema() {
   if (cinemaOpen) return;
@@ -468,46 +143,43 @@ export function openCinema() {
   // A11Y A.8 — capture previous focus; move focus into overlay on next paint
   // (overlay has tabindex="-1" from A.7, so it is programmatically focusable)
   _cinemaLastFocus = document.activeElement;
-  requestAnimationFrame(() => overlay.focus());
+  // FIX (Task 6) : garde `if (!cinemaOpen) return` -- un toggle rapide (ouvrir puis fermer
+  // avant la prochaine frame) ne doit pas focaliser un overlay déjà refermé.
+  requestAnimationFrame(() => { if (!cinemaOpen) return; overlay.focus(); });
   overlay.classList.add('active');
   // Marquer le bouton toolbar comme actif (état toggle visible)
   const tbtCinema = document.getElementById('tbt-cinema');
   if (tbtCinema) { tbtCinema.classList.add('on'); tbtCinema.setAttribute('aria-pressed', 'true'); }
   // Mettre en cache les refs cinéma pour updateCinemaProgress (timeupdate à 60 fps)
-  _cinFill = document.getElementById('cinema-fill');
-  _cinTc   = document.getElementById('cinema-tc');
-  _cinTd   = document.getElementById('cinema-td');
+  _cinFill  = document.getElementById('cinema-fill');
+  _cinThumb = document.getElementById('cinema-pbar-thumb');
+  _cinTc    = document.getElementById('cinema-tc');
+  _cinTd    = document.getElementById('cinema-td');
+  _cinPbar  = document.getElementById('cinema-pbar');
   // Synchroniser le slider volume avec l'état courant de l'audio
   const volSlider = document.getElementById('cinema-vol');
-  if (volSlider) volSlider.value = _readVol();
+  if (volSlider) volSlider.value = readCinVolDom();
   applyCinemaBg();
   updateCinema();
   _startClock();
-  _startViz();
+  startCinemaViz();
+  startCinemaLoop();
+  _suspendViz(); // P1 fix — le viz player-bar est masqué sous l'overlay, rendu inutile
   // Animation d'entrée : scale 0.88 → 1 + fade-in
   const artWrap = document.querySelector('.cinema-art-wrap');
   if (artWrap) {
     artWrap.classList.remove('cin-enter');
+    // FIX (Task 6) : même garde `if (!cinemaOpen) return` sur le double-rAF -- un
+    // close() survenu entre les deux frames ne doit pas relancer Ken Burns ni
+    // ré-ajouter .cin-enter sur un overlay déjà fermé.
     requestAnimationFrame(() => requestAnimationFrame(() => {
+      if (!cinemaOpen) return;
       artWrap.classList.add('cin-enter');
       _startKenBurns(); // démarrer Ken Burns à l'ouverture du mode cinéma
     }));
   }
-  overlay.removeEventListener('mousemove', onCinemaMouseMove);
-  overlay.addEventListener('mousemove', onCinemaMouseMove);
-  overlay.removeEventListener('click',     onCinemaMouseMove);
-  overlay.addEventListener('click',     onCinemaMouseMove);
-  overlay.removeEventListener('wheel',     _onCinWheel);
-  overlay.addEventListener('wheel',     _onCinWheel, { passive: false });
-  document.removeEventListener('keydown',  _onCinKey);
-  document.addEventListener('keydown',  _onCinKey);
-  document.removeEventListener('keydown', _onCinemaTrapKey);
-  document.addEventListener('keydown', _onCinemaTrapKey);
-  // Double-clic pochette → like/unlike (removeEventListener d'abord : évite les listeners zombies)
-  const _artWrapDb = document.querySelector('.cinema-art-wrap');
-  _artWrapDb?.removeEventListener('dblclick', _onArtDblClick);
-  _artWrapDb?.addEventListener('dblclick', _onArtDblClick);
-  _showControls();
+  attachCinemaInput(overlay);
+  showCinemaControls();
   _runOpenChoreography();
 }
 
@@ -520,7 +192,7 @@ function _runOpenChoreography() {
   // qu'elle aurait laissés pour éviter le drift visuel à la prochaine séquence.
   if (_openTl) { _openTl.kill(); _openTl = null; }
   const targets = [
-    '#cinema-info',
+    '#cinema-info', '#cinema-title', '#cinema-artist',
     '#cinema-pbar', '#cinema-tc', '#cinema-td',
     '#cinema-controls',
     '#cinema-clock',
@@ -530,7 +202,10 @@ function _runOpenChoreography() {
   // État initial : utiliser gsap.set (pas inline CSS) — évite tout flash visible
   // avant la première frame de la timeline (les éléments seraient sinon rendus
   // dans leur état CSS naturel pendant 1 frame).
-  motionSet('#cinema-info',     { y: 24, autoAlpha: 0 });
+  // Parent #cinema-info visible immédiatement — on anime chaque enfant texte séparément.
+  motionSet('#cinema-info',     { y: 0, autoAlpha: 1 });
+  motionSet('#cinema-title',    { y: 22, autoAlpha: 0 });
+  motionSet('#cinema-artist',   { y: 16, autoAlpha: 0 });
   motionSet('#cinema-pbar',     { scaleX: 0.7, transformOrigin: 'left center', autoAlpha: 0 });
   motionSet('#cinema-tc',       { autoAlpha: 0 });
   motionSet('#cinema-td',       { autoAlpha: 0 });
@@ -540,18 +215,23 @@ function _runOpenChoreography() {
   _openTl = timeline({
     defaults: { ease: eases.PREMIUM },
     onComplete() {
-      // Libère l'inline transform sur les éléments fixes (info/pbar) pour que
-      // tout repaint déclenché par updateCinema repose sur la CSS d'origine.
-      motionSet('#cinema-info, #cinema-pbar, #cinema-controls > *', { clearProps: 'transform' });
+      // Supprime TOUS les styles GSAP inline posés pendant l'animation (opacity, visibility, transform)
+      // pour que les règles CSS (.ctrl-on) reprennent le contrôle — sans ça, les éléments restent
+      // visibles en permanence même quand ctrl-on est retiré (inline style > CSS specificity).
+      motionSet(
+        '#cinema-info, #cinema-title, #cinema-artist, #cinema-pbar, #cinema-tc, #cinema-td, #cinema-controls > *, #cinema-clock',
+        { clearProps: 'transform,opacity,visibility' }
+      );
       _openTl = null;
     },
   });
 
   _openTl
-    .to('#cinema-info', { y: 0, autoAlpha: 1, duration: 0.45 }, 0.08)
-    .to('#cinema-pbar', { scaleX: 1, autoAlpha: 1, duration: 0.50 }, '-=0.30')
-    .to('#cinema-tc',   { autoAlpha: 1, duration: 0.35 }, '<')
-    .to('#cinema-td',   { autoAlpha: 1, duration: 0.35 }, '<')
+    .to('#cinema-title',  { y: 0, autoAlpha: 1, duration: 0.48 }, 0.06)
+    .to('#cinema-artist', { y: 0, autoAlpha: 1, duration: 0.42 }, 0.14)
+    .to('#cinema-pbar',   { scaleX: 1, autoAlpha: 1, duration: 0.50 }, '-=0.28')
+    .to('#cinema-tc',     { autoAlpha: 1, duration: 0.35 }, '<')
+    .to('#cinema-td',     { autoAlpha: 1, duration: 0.35 }, '<')
     .to('#cinema-controls > *', {
       y: 0, autoAlpha: 1, duration: 0.42, stagger: 0.035,
     }, '-=0.32')
@@ -569,23 +249,23 @@ export function closeCinema() {
   // Cache unique — évite 2 querySelector distincts sur la même requête
   const _aw = document.querySelector('.cinema-art-wrap');
   _aw?.classList.remove('cin-enter', 'cin-swap-out', 'cin-swap');
-  overlay.removeEventListener('mousemove', onCinemaMouseMove);
-  overlay.removeEventListener('click',     onCinemaMouseMove);
-  overlay.removeEventListener('wheel',     _onCinWheel);
-  document.removeEventListener('keydown',  _onCinKey);
-  document.removeEventListener('keydown',  _onCinemaTrapKey);
-  _aw?.removeEventListener('dblclick', _onArtDblClick);
-  if (cinemaHideTimer) { clearTimeout(cinemaHideTimer); cinemaHideTimer = null; } // Bug 5 fix
+  // Task 6 : purger les classes de swap texte — sinon une fermeture mid-animation (Escape
+  // pendant un changement de piste) laisse le titre/artiste à opacity:0 (cin-txt-swap-out
+  // est `forwards`) à la prochaine ouverture, avant le premier changement de piste.
+  _cinTxtEls().forEach(el => el.classList.remove('cin-txt-swap-out', 'cin-txt-swap-in'));
+  detachCinemaInput(overlay); // Task 6 — retire listeners + cinemaHideTimer/_heartTimer + hearts résiduels
   clearTimeout(_cinSwapOutTimer); _cinSwapOutTimer = null;
   clearTimeout(_cinSwapInTimer);  _cinSwapInTimer  = null;
   clearTimeout(_resizeTimer);     _resizeTimer     = null; // évite applyCinemaBg() orphelin après fermeture
   // Killer la timeline d'ouverture si elle est encore en vol + reset des inline
   // styles laissés par gsap (autoAlpha posé display:none / opacity:0 sur l'élément).
   if (_openTl) { _openTl.kill(); _openTl = null; }
-  motionSet('#cinema-info, #cinema-pbar, #cinema-tc, #cinema-td, #cinema-controls > *, #cinema-clock',
+  motionSet('#cinema-info, #cinema-title, #cinema-artist, #cinema-pbar, #cinema-tc, #cinema-td, #cinema-controls > *, #cinema-clock',
     { clearProps: 'transform,opacity,visibility,display' });
   // Libérer les refs cachées
-  _cinFill = _cinTc = _cinTd = null;
+  _cinFill = _cinThumb = _cinTc = _cinTd = _cinPbar = null;
+  resetCinemaSeek(); // Task 5 — coupe un drag en cours + masque la tooltip (fermeture mid-scrub)
+  closeCinemaQueuePanel(); // Task 9 — pas d'état orphelin (aria-expanded/listener) si le cinéma se ferme panneau ouvert
   _lastCinArt = null; // reset pour forcer le swap à la prochaine ouverture
   _lastCinIdx = -1;   // reset pour détecter le changement de piste à la prochaine ouverture
   // A11Y A.8 — restore focus to the element that was focused before cinema opened
@@ -594,80 +274,21 @@ export function closeCinema() {
   }
   _cinemaLastFocus = null;
   _stopKenBurns();
-  _stopAmbientAnim();
-  _ambientColors = null;
+  stopCinemaLoop();
+  stopAmbientAnim();
+  resetAmbientColors();
   _stopClock();
-  _stopViz();
+  stopCinemaViz();
+  _resumeViz(); // reprendre le viz player-bar maintenant que l'overlay cinéma est fermé
   // Quitter le plein écran si actif
   if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
 }
 
-// ── Contrôles — visibilité unifiée via .ctrl-on sur l'overlay ──
-
-function _showControls() {
-  const overlay = document.getElementById('cinema-overlay');
-  if (!overlay) return;
-  overlay.classList.add('ctrl-on');
-  if (cinemaHideTimer) clearTimeout(cinemaHideTimer);
-  cinemaHideTimer = setTimeout(_hideControls, CINEMA_CONTROLS_HIDE_MS);
-}
-
-function _hideControls() {
-  const overlay = document.getElementById('cinema-overlay');
-  if (overlay) overlay.classList.remove('ctrl-on');
-}
-
-function onCinemaMouseMove() {
-  _showControls();
-}
+// ── Contrôles auto-masquables (_showControls/_hideControls/_onCinema*) → cinema-input.js (Task 6) ──
 
 // ── Rendu cinéma ─────────────────────────────────────────────
 
-/**
- * Appelé depuis app.js/applyArtColor() en même temps que updateVizColor() —
- * permet de pousser la couleur dominante immédiatement sans attendre updateCinema().
- */
-export function updateCinArtColor(hex) {
-  const rgb = _parseColorToRGB(hex);
-  if (rgb) {
-    _cinArtRGBTarget = rgb.split(',').map(Number);
-    _cinArtRGB = rgb; // mise à jour immédiate du fallback statique
-  } else {
-    _cinArtRGBTarget = [255, 255, 255];
-    _cinArtRGB = '255,255,255';
-  }
-}
-
-/**
- * Met à jour _cinArtRGB depuis artColor de la piste, avec fallback sur --art-color CSS.
- * Même principe que updateVizColor() dans viz.js — évite de lire artColor dans le loop rAF.
- */
-function _parseColorToRGB(str) {
-  if (!str || str === 'transparent') return null;
-  if (str.startsWith('rgb')) {
-    const m = str.match(/(\d+),\s*(\d+),\s*(\d+)/);
-    if (m) return `${m[1]},${m[2]},${m[3]}`;
-  }
-  if (str.startsWith('#') && str.length >= 7) {
-    const r = parseInt(str.slice(1, 3), 16);
-    const g = parseInt(str.slice(3, 5), 16);
-    const b = parseInt(str.slice(5, 7), 16);
-    return `${r},${g},${b}`;
-  }
-  return null;
-}
-
-function _updateCinArtRGB(t) {
-  // 1. Priorité : artColor sur l'objet track
-  const parsed = _parseColorToRGB(t?.artColor);
-  if (parsed) { _cinArtRGB = parsed; _cinArtRGBTarget = parsed.split(',').map(Number); return; }
-  // 2. Fallback : CSS variable --art-color
-  const css = getComputedStyle(document.documentElement).getPropertyValue('--art-color').trim();
-  const parsed2 = _parseColorToRGB(css);
-  if (parsed2) { _cinArtRGB = parsed2; _cinArtRGBTarget = parsed2.split(',').map(Number); return; }
-  // 3. Blanc neutre
-  _cinArtRGB = '255,255,255'; _cinArtRGBTarget = [255, 255, 255];
-}
+// updateCinArtColor, _parseColorToRGB, updateCinArtRGBFromTrack → cinema-bg.js
 
 // ── Ken Burns — zoom+pan lent sur la pochette (direction aléatoire) ────────
 
@@ -688,8 +309,12 @@ function _stopKenBurns() {
   img.classList.remove('cin-kb-0', 'cin-kb-1', 'cin-kb-2', 'cin-kb-3');
 }
 
+// updateCinema est un orchestrateur court (Task 3) : il détecte le changement de piste
+// puis délègue à des helpers <50 lignes. L'ORDRE des appels est un invariant du chemin de
+// rendu (couleur/fond avant meta avant pochette avant boutons) — ne pas réordonner.
 export function updateCinema() {
   if (!cinemaOpen) return;
+  wakeCinemaLoop(); // réveil si la boucle est endormie (ex. changement de piste en pause)
   const curIdx = get('curIdx');
   const tracks = get('tracks'); // Phase 4 — store alimenté depuis Jalon 3
   // audio imported from player.js
@@ -698,142 +323,177 @@ export function updateCinema() {
   const title  = t ? t.name : '–';
   const artist = t ? (t.artistFull || t.artist || '–') : '–';
   const art    = t ? (t.art || null) : null;
-
-  // ARCH-5 : Réinitialiser l'état interne lors d'un changement de piste.
-  // Snap immédiat de la couleur LERP vers la nouvelle cible — évite les artefacts visuels
-  // de couleur résiduelle de la piste précédente dans le visualiseur spectrum.
+  // ARCH-5 : détecter le changement de piste avant tout rendu qui en dépend.
   const _trackChanged = curIdx !== _lastCinIdx;
   _lastCinIdx = curIdx;
-  if (_trackChanged) {
-    // Snap couleur LERP → couleur cible immédiatement (pas de fondu depuis l'ancienne piste)
-    _cinArtRGBCur[0] = _cinArtRGBTarget[0];
-    _cinArtRGBCur[1] = _cinArtRGBTarget[1];
-    _cinArtRGBCur[2] = _cinArtRGBTarget[2];
-    // Effacer le canvas visualiseur pour éviter les artefacts de persistance entre pistes
-    const vizCanvas = document.getElementById('cinema-viz');
-    if (vizCanvas) {
-      const vCtx = vizCanvas.getContext('2d');
-      if (vCtx) vCtx.clearRect(0, 0, vizCanvas.width, vizCanvas.height);
-    }
-  }
+  // Bug fix : un drag de scrub en cours au moment d'un changement de piste (auto-avance,
+  // radio, fin de piste) doit être annulé -- sinon pointerup (cinema-seek.js) commit un
+  // seek sur la NOUVELLE piste avec la position pointeur calculée pour l'ANCIENNE durée.
+  if (_trackChanged) resetCinemaSeek();
 
-  // Mettre à jour la couleur dominante pour le visualiseur (même logique que viz.js/_vizRGB)
-  // Fallback : lire la CSS var --art-color posée par applyArtColor() dans app.js
-  _updateCinArtRGB(t);
-  // Après _updateCinArtRGB, si la piste a changé, synchroniser aussi _cinArtRGBCur avec la nouvelle valeur
-  if (_trackChanged) {
-    const parts = _cinArtRGB.split(',').map(Number);
-    _cinArtRGBCur[0] = parts[0]; _cinArtRGBCur[1] = parts[1]; _cinArtRGBCur[2] = parts[2];
-  }
-  // Propager --cin-rgb → teinte CSS du sous-titre artiste et album
-  document.getElementById('cinema-overlay')?.style.setProperty('--cin-rgb', _cinArtRGB);
-
-  const elT = document.getElementById('cinema-title');
-  const elA = document.getElementById('cinema-artist');
-  const img  = document.getElementById('cinema-art-img');
-  const em   = document.getElementById('cinema-art-em');
-  const bg   = document.getElementById('cinema-bg');
-
-  if (elT) elT.textContent = title;
-  if (elA) elA.textContent = artist;
-  // Ligne album + année — absente si données manquantes (masquée via display:none)
-  const elAlb = document.getElementById('cinema-album');
-  if (elAlb) {
-    const parts = [t?.album, t?.year ? `(${t.year})` : null].filter(Boolean);
-    elAlb.textContent = parts.join(' ');
-    elAlb.style.display = parts.length ? '' : 'none';
-  }
-
-  if (art) {
-    if (em) em.style.display = 'none';
-    const artWrap = document.querySelector('.cinema-art-wrap');
-    // Fond flou pour pochettes non carrées — custom property lue par ::before
-    // (plus fiable que style.backgroundImage + background-image:inherit dans WebView2)
-    if (artWrap) artWrap.style.setProperty('--cin-bg-url', `url("${art}")`);
-
-    if (art !== _lastCinArt) {
-      const hadArt = _lastCinArt !== null;
-      _lastCinArt = art; // préempter : évite le re-déclenchement si updateCinema rappelé pendant la transition
-
-      // Fonction de swap-in partagée entre premier chargement et changement de piste
-      const _doSwapIn = () => {
-        if (!cinemaOpen) return;
-        if (img) { img.src = art; img.style.display = 'block'; }
-        if (artWrap) {
-          artWrap.classList.remove('cin-swap-out', 'cin-swap');
-          requestAnimationFrame(() => artWrap.classList.add('cin-swap'));
-          _cinSwapInTimer = setTimeout(() => artWrap.classList.remove('cin-swap'), 440);
-        }
-        _startKenBurns(); // nouvelle piste → nouvelle direction Ken Burns
-        if (cinemaBg === 'ambient' || cinemaBg === 'amoled') _updateAmbientGradient();
-      };
-
-      if (hadArt && artWrap) {
-        // Animation sortante (120ms) puis entrante — transition bi-directionnelle
-        artWrap.classList.add('cin-swap-out');
-        _cinSwapOutTimer = setTimeout(_doSwapIn, 120);
-      } else {
-        // Premier chargement : pas d'animation sortante, swap immédiat
-        _doSwapIn();
-      }
-    } else {
-      // Même pochette (play/pause, volume…) — juste s'assurer que l'image est visible
-      if (img) { img.src = art; img.style.display = 'block'; }
-    }
-  } else {
-    if (img) img.style.display = 'none';
-    if (em)  { em.style.display = 'flex'; em.innerHTML = t ? extEmoji(t.ext) : '<svg viewBox="0 0 24 24" width="48" height="48" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" opacity=".3"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>'; }
-    document.querySelector('.cinema-art-wrap')?.style.removeProperty('--cin-bg-url');
-    _lastCinArt = null;
-  }
-
-  const playing = !audio.paused;
-  const iplay  = document.getElementById('cinema-ico-play');
-  const ipause = document.getElementById('cinema-ico-pause');
-  if (iplay)  iplay.style.display  = playing ? 'none'  : 'block';
-  if (ipause) ipause.style.display = playing ? 'block' : 'none';
-
-  // Sync états shuffle / repeat / like / radio
-  document.getElementById('cinema-shuf')?.classList.toggle('on', get('shuffle'));
-  const _cinRep = document.getElementById('cinema-rep');
-  _cinRep?.classList.toggle('on',      get('repeat') !== 'none');
-  _cinRep?.classList.toggle('rep-one', get('repeat') === 'one');
-  const isLiked = curIdx >= 0 && get('liked').has(get('tracks')?.[curIdx]?.id); // Phase 4
-  document.getElementById('cinema-lk')?.classList.toggle('on', isLiked);
-  document.getElementById('cinema-radio')?.classList.toggle('on', !!radioActive);
-  document.getElementById('cinema-radio')?.setAttribute('aria-pressed', radioActive ? 'true' : 'false');
-
-  // Piste suivante
-  _updateNextTrack();
-
-  // Sync volume slider + icône (muet / bas / haut)
-  const vol = _readVol();
-  const muted = audio.muted || vol === 0;
-  const volSlider = document.getElementById('cinema-vol');
-  if (volSlider && !volSlider.matches(':active')) volSlider.value = vol;
-  const w1 = document.getElementById('cinema-vol-wave1');
-  const w2 = document.getElementById('cinema-vol-wave2');
-  if (w1) w1.style.display = muted ? 'none' : '';
-  if (w2) w2.style.display = (muted || vol < 0.5) ? 'none' : '';
-
-  // Sync progress
-  const fill = document.getElementById('cinema-fill');
-  const tc   = document.getElementById('cinema-tc');
-  const td   = document.getElementById('cinema-td');
-  if (fill && audio.duration) fill.style.transform = 'scaleX(' + (audio.currentTime / audio.duration) + ')';
-  if (tc)  tc.textContent = fmt(audio.currentTime);
-  if (td)  td.textContent = audio.duration ? fmt(audio.duration) : '–:––';
+  renderCinColor(t, _trackChanged);                    // canvas clear + couleur + snap + reduced-motion + --cin-rgb
+  _renderCinMeta(title, artist, _trackChanged);         // annonce a11y (immédiate, découplée du swap visuel)
+  _renderCinArt(art, _trackChanged, t, title, artist);  // pochette + texte : swap synchronisé, Ken Burns
+  _syncCinButtons(curIdx);                        // play/pause + shuffle/repeat/like/radio (aria-pressed)
+  _updateNextTrack();                             // panneau piste suivante / hint shuffle
+  refreshCinemaQueuePanel();                      // Task 9 — re-rend le panneau file d'attente s'il est ouvert
+  syncCinVolumeUI(readCinVolDom());               // slider volume + icônes
+  syncCinProgress();                              // barre de progression + temps
 }
 
-/**
- * Mise à jour légère de la progression — appelée depuis le handler timeupdate
- * de app.js à ~60 fps (evite getElementById par cycle grâce au cache _cinFill/Tc/Td).
- */
-export function updateCinemaProgress(p, cur, dur) {
+// ── Métadonnées : annonce a11y (immédiate, indépendante du swap visuel du texte) ──
+function _renderCinMeta(title, artist, _trackChanged) {
+  // A11Y A7 : annoncer le changement de piste (poli) — jamais à chaque tick de progression,
+  // updateCinemaProgress() (60fps) est un chemin séparé qui ne touche pas cinema-announce.
+  // Ne doit pas attendre l'animation de swap texte (Task 6) : un lecteur d'écran est informé
+  // sans délai même si le rendu visuel du titre/artiste est différé de CIN_SWAP_OUT_MS.
+  if (_trackChanged) {
+    const announceEl = document.getElementById('cinema-announce');
+    if (announceEl) announceEl.textContent = `${title} — ${artist}`;
+  }
+}
+
+/** Éléments texte cinéma (titre/artiste/album) — requêtés à chaque appel (DOM stable, coût négligeable). */
+function _cinTxtEls() {
+  return ['cinema-title', 'cinema-artist', 'cinema-album'].map(id => document.getElementById(id)).filter(Boolean);
+}
+
+// ── Pochette + texte : fond flou, swap synchronisé bi-directionnel, Ken Burns, skeleton ──
+// Texte et pochette partagent les MÊMES timers (_cinSwapOutTimer/_cinSwapInTimer) — zéro
+// horloge séparée (Task 6). L'écriture DOM (texte/décodage image) est déléguée à
+// cinema-render.js (stateless) ; seule l'orchestration des timers reste ici.
+function _renderCinArt(art, trackChanged, t, title, artist) {
+  const img = document.getElementById('cinema-art-img');
+  const em  = document.getElementById('cinema-art-em');
+  if (!art) {
+    if (img) { img.style.display = 'none'; img.style.opacity = ''; }
+    if (em)  { em.style.display = 'flex'; em.innerHTML = '<svg viewBox="0 0 24 24" width="48" height="48" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" opacity=".3"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>'; }
+    document.querySelector('.cinema-art-wrap')?.style.removeProperty('--cin-bg-url');
+    _lastCinArt = null;
+    if (trackChanged) applyCinText(t, title, artist);
+    return;
+  }
+  if (em) em.style.display = 'none';
+  const artWrap = document.querySelector('.cinema-art-wrap');
+  // Fond flou pour pochettes non carrées — custom property lue par ::before
+  // (plus fiable que style.backgroundImage + background-image:inherit dans WebView2)
+  if (artWrap) artWrap.style.setProperty('--cin-bg-url', `url("${art}")`);
+
+  if (art === _lastCinArt) {
+    // Même pochette (play/pause, volume…) — texte à jour si la piste a changé sans que
+    // l'art ne diffère (cas rare : pochette identique entre deux pistes, pas d'animation)
+    if (trackChanged) applyCinText(t, title, artist);
+    if (img) { img.src = art; img.style.display = 'block'; }
+    return;
+  }
+
+  // Rapid skip (next/next/next) : annuler tout swap en vol — évite texte/pochette périmés.
+  clearTimeout(_cinSwapOutTimer); _cinSwapOutTimer = null;
+  clearTimeout(_cinSwapInTimer);  _cinSwapInTimer  = null;
+  const hadArt = _lastCinArt !== null;
+  _lastCinArt = art; // préempter : évite le re-déclenchement si updateCinema rappelé pendant la transition
+
+  if (hadArt && artWrap) {
+    // Animation sortante (120ms) puis entrante — transition bi-directionnelle, texte inclus.
+    // Retirer une cin-txt-swap-in en vol AVANT de poser l'out : déclarée après l'out dans
+    // style.css (spécificité égale), elle gagnerait la cascade et annulerait l'animation.
+    artWrap.classList.add('cin-swap-out');
+    _cinTxtEls().forEach(el => { el.classList.remove('cin-txt-swap-in'); el.classList.add('cin-txt-swap-out'); });
+    _cinSwapOutTimer = setTimeout(() => _cinSwapIn(art, t, title, artist, artWrap, img, em), CIN_SWAP_OUT_MS);
+  } else {
+    // Premier chargement : pas d'animation sortante, swap immédiat
+    _cinSwapIn(art, t, title, artist, artWrap, img, em);
+  }
+}
+
+// ── Swap-in partagé : premier chargement (pas d'out) et changement de piste (après l'out) ──
+// Contenu + classes d'entrée posés par cinema-render.js (beginCinSwapIn, stateless) ; seul
+// le nettoyage CIN_SWAP_IN_MS reste ici, sur le timer existant _cinSwapInTimer.
+function _cinSwapIn(art, t, title, artist, artWrap, img, em) {
   if (!cinemaOpen) return;
-  if (_cinFill) _cinFill.style.transform = 'scaleX(' + p + ')';
+  const txtEls = beginCinSwapIn(artWrap, img, em, t, title, artist, art);
+  if (artWrap) {
+    _cinSwapInTimer = setTimeout(() => {
+      artWrap.classList.remove('cin-swap');
+      txtEls.forEach(el => el.classList.remove('cin-txt-swap-in'));
+    }, CIN_SWAP_IN_MS);
+  }
+  _startKenBurns(); // nouvelle piste → nouvelle direction Ken Burns
+  if (cinemaBg === 'ambient' || cinemaBg === 'amoled') updateAmbientGradient();
+}
+
+// ── Synchro boutons/états : play/pause + shuffle/repeat/like/radio (aria-pressed A1/A2) ──
+function _syncCinButtons(curIdx) {
+  const playing = !audio.paused;
+  // Cross-fade play/pause : classe .playing sur le bouton, icônes en CSS
+  // (opacity/scale) — cohérent avec setIcon() de player.js.
+  document.getElementById('cinema-play')?.classList.toggle('playing', playing);
+  // Task 6 : geler les animations idle (Ken Burns/float/glow/breathe/ambient) en pause —
+  // basculée ici, là où l'état play/pause est déjà lu depuis audio.paused.
+  document.getElementById('cinema-overlay')?.classList.toggle('is-paused', !playing);
+
+  // A11Y A1/A2 : aria-pressed reflète .on partout, pas seulement la classe visuelle
+  // (imite le pattern déjà correct de #cinema-radio ci-dessous).
+  const _cinShuf = document.getElementById('cinema-shuf');
+  const _shufOn  = get('shuffle');
+  _cinShuf?.classList.toggle('on', _shufOn);
+  _cinShuf?.setAttribute('aria-pressed', _shufOn ? 'true' : 'false');
+
+  const _cinRep = document.getElementById('cinema-rep');
+  const _repOn  = get('repeat') !== 'none';
+  _cinRep?.classList.toggle('on',      _repOn);
+  _cinRep?.classList.toggle('rep-one', get('repeat') === 'one');
+  _cinRep?.setAttribute('aria-pressed', _repOn ? 'true' : 'false');
+
+  const isLiked = curIdx >= 0 && get('liked').has(get('tracks')?.[curIdx]?.id); // Phase 4
+  const _cinLk = document.getElementById('cinema-lk');
+  _cinLk?.classList.toggle('on', isLiked);
+  _cinLk?.setAttribute('aria-pressed', isLiked ? 'true' : 'false');
+
+  document.getElementById('cinema-radio')?.classList.toggle('on', !!radioActive);
+  document.getElementById('cinema-radio')?.setAttribute('aria-pressed', radioActive ? 'true' : 'false');
+}
+
+// ── Init sub-modules (posé ici : cinemaOpen et updateCinema sont désormais déclarés) ──
+initCinemaBgModule({ getCinemaOpen: () => cinemaOpen, onUpdateCinema: () => updateCinema(), getIsPlaying: () => audio && !audio.paused });
+initCinemaVizModule({ getCinemaOpen: () => cinemaOpen });
+initCinemaLoop({ getCinemaOpen: () => cinemaOpen, getIsPlaying: () => audio && !audio.paused, getBgMode: () => cinemaBg, getAnalyser: () => eqAnalyser, drawBg: drawBgFrame, drawViz: drawVizFrame });
+// Task 6 — cinema-input.js : clavier/molette/dblclick/contrôles auto-masquables.
+initCinemaInput({
+  getCinemaOpen: () => cinemaOpen,
+  closeCinema, updateCinema,
+  toggleCinemaFullscreen, cycleCinemaBg, toggleCinemaRadio,
+  toggleLike, next, prev,
+  // FIX (audit console) : `audio` ne doit pas être déréférencé ici -- ce bloc s'exécute
+  // en synchrone au chargement du module cinema.js, qui fait partie du cycle
+  // player.js → cfgsave.js → settings.js → cinema.js (import de `audio` depuis player.js).
+  // Tant que player.js n'a pas fini d'évaluer sa ligne `export const audio = ...`, lire
+  // `audio` ici lève un ReferenceError TDZ (throw non catché → tout le graphe de modules
+  // échoue, l'app reste bloquée sur #boot-spinner). getAudio() diffère la lecture à l'appel
+  // (clavier/molette), bien après le boot — même pattern que getIsPlaying ci-dessus.
+  getAudio: () => audio,
+  setMasterGain,
+  readVol: readCinVolDom,
+  syncVol: setCinVolSliders,
+});
+
+/**
+ * Mise à jour légère de la progression — appelée depuis le handler timeupdate de
+ * player.js à ~60 fps via EVENTS.CINEMA_PROGRESS (Task 7 : plus un import direct
+ * player.js → cinema.js, casse le cycle). N'est plus exportée : app.js ne l'utilisait
+ * plus depuis le passage au bus (§6, une seule route d'appel désormais).
+ */
+function updateCinemaProgress(p, cur, dur) {
+  if (!cinemaOpen) return;
+  if (isSeekDragging()) return; // Task 5 — drag en cours : cinema-seek.js pilote déjà fill/thumb/temps/aria
+  if (_cinFill)  _cinFill.style.transform = 'scaleX(' + p + ')';
+  if (_cinThumb) _cinThumb.style.left = (p * 100) + '%';
   if (_cinTc)   _cinTc.textContent = cur;
   if (_cinTd)   _cinTd.textContent = dur;
+  if (_cinPbar) {
+    _cinPbar.setAttribute('aria-valuenow', Math.round(p * 100));
+    _cinPbar.setAttribute('aria-valuetext', cur + ' / ' + dur);
+  }
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -893,7 +553,7 @@ function _updateClock() {
 function _startClock() {
   _stopClock();   // Bug 2 fix : éviter un double intervalle si appelé plusieurs fois
   _updateClock(); // affichage immédiat sans attendre le premier tick
-  _clockInterval = setInterval(_updateClock, 1000); // toutes les 1s
+  _clockInterval = setInterval(_updateClock, CLOCK_TICK_MS);
 }
 
 function _stopClock() {
@@ -901,329 +561,73 @@ function _stopClock() {
 }
 
 // ═══════════════════════════════════════════════════════════
-// ── Visualiseur audio ───────────────────────────────────────
-// ═══════════════════════════════════════════════════════════
-
-function _startViz() {
-  const canvas = document.getElementById('cinema-viz');
-  if (!canvas) return;
-
-  // ──────────────────────────────────────────────────────────
-  // Réutiliser le graphe audio de l'EQ (eqCtx + eqAnalyser).
-  // L'EQ a déjà appelé createMediaElementSource sur window.audio —
-  // on ne peut pas en créer un second : on lit simplement eqAnalyser.
-  // ──────────────────────────────────────────────────────────
-  const analyser = eqAnalyser; // live binding depuis eq.js
-  const ac       = eqCtx;
-
-  if (!analyser || !ac) {
-    // L'EQ n'est pas encore initialisé (rare) — on essaiera à la prochaine ouverture
-    return;
-  }
-  if (ac.state === 'suspended') ac.resume();
-
-  const ctx = canvas.getContext('2d');
-  if (!ctx) return;
-  const dpr = window.devicePixelRatio || 1;
-  let   cw  = 0, ch = 0;
-
-  // ── Beat detector ──────────────────────────────────────────
-  const BEAT_HISTORY  = 43;   // ~1.4s à 30fps
-  const BEAT_THRESH   = 1.35; // énergie > 1.35× moyenne → beat
-  const BEAT_COOLDOWN = 650;  // ms entre deux beats — >= durée animation (620ms) pour éviter overlap
-  const _beatHistory  = new Float32Array(BEAT_HISTORY);
-  let   _beatIdx      = 0;
-  let   _beatHistorySum = 0;  // running sum O(1) — évite reduce() dans la hot path (§5)
-  let   _lastBeat     = 0;
-  let   _artWrapCache = null; // PERF : cache lazy — évite querySelector à chaque beat
-  // _beatTimer est au scope module (déclaré en haut) pour être nettoyable par _stopViz()
-
-  // lerpRGB : chaîne "r,g,b" de la couleur courante interpolée — passée depuis draw()
-  // afin que le flash beat soit cohérent avec l'ambient (même frame de couleur).
-  function _detectBeat(data, lerpRGB) {
-    // Énergie basses fréquences (premiers 10% des bins)
-    const end = Math.floor(data.length * 0.10);
-    let energy = 0;
-    for (let i = 0; i < end; i++) energy += data[i] * data[i];
-    energy /= end;
-
-    // Running sum O(1) — slot calculé une seule fois
-    const slot = _beatIdx % BEAT_HISTORY;
-    _beatHistorySum -= _beatHistory[slot];
-    _beatHistory[slot] = energy;
-    _beatHistorySum += energy;
-    _beatIdx++;
-
-    // BUG FIX 1 — Warm-up : tant que le buffer n'est pas plein, avg ≈ 0
-    // → pratiquement tous les frames déclenchaient un faux beat au démarrage.
-    if (_beatIdx < BEAT_HISTORY) return;
-
-    // BUG FIX 2 — Correction de dérive flottante : recompute exact tous les BEAT_HISTORY frames.
-    // Les additions/soustractions fp s'accumulent sur de longues sessions et font dériver la moyenne.
-    if (_beatIdx % BEAT_HISTORY === 0) {
-      _beatHistorySum = 0;
-      for (let i = 0; i < BEAT_HISTORY; i++) _beatHistorySum += _beatHistory[i];
-    }
-
-    const avg = _beatHistorySum / BEAT_HISTORY;
-    const now = performance.now();
-    if (energy > avg * BEAT_THRESH && now - _lastBeat > BEAT_COOLDOWN) {
-      _lastBeat = now;
-      // PERF : cache lazy — querySelector une seule fois puis réutilisé
-      if (!_artWrapCache) _artWrapCache = document.querySelector('.cinema-art-wrap');
-      const artWrap = _artWrapCache;
-      if (artWrap) {
-        // BUG FIX 3 — utiliser lerpRGB (couleur interpolée de ce frame) et non _cinArtRGB
-        // (snapshot instantané) — cohérence avec le reste de la scène pendant les transitions.
-        artWrap.style.setProperty('--beat-color', `rgba(${lerpRGB},.32)`);
-        artWrap.classList.remove('beat');
-        requestAnimationFrame(() => artWrap.classList.add('beat'));
-        if (_beatTimer) clearTimeout(_beatTimer);
-        _beatTimer = setTimeout(() => { artWrap.classList.remove('beat'); _beatTimer = null; }, 620);
-      }
-    }
-  }
-
-  // ── Cache gradients spectre ────────────────────────────────
-  // PERF FIX : 2 gradients partagés recalculés seulement quand la couleur ou la hauteur change.
-  // Avant : 144 createLinearGradient/frame (72 barres × 2 gradients). Après : max 2/frame,
-  // 0 en régime stable (couleur LERP convergée). Gain ~72× sur le GC et le compositing GPU.
-  let _specGradTop  = null, _specGradBot  = null;
-  let _specGradRGB  = '',   _specGradMidY = -1;
-
-  function draw() {
-    if (!cinemaOpen) return;
-    if (document.hidden) { _cinVizRaf = requestAnimationFrame(draw); return; } // BUG-D3A-2: skip render when tab hidden, keep RAF alive
-    const w = canvas.clientWidth, h = canvas.clientHeight;
-    // Bug 7 fix : skip si le canvas n'est pas encore rendu (dimensions nulles).
-    if (w === 0 || h === 0) { _cinVizRaf = requestAnimationFrame(draw); return; }
-    if (w !== cw || h !== ch) {
-      canvas.width  = Math.round(w * dpr);
-      canvas.height = Math.round(h * dpr);
-      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      cw = w; ch = h;
-    }
-    ctx.clearRect(0, 0, w, h);
-
-    // Recréer le buffer si l'AudioContext a changé de frequencyBinCount (FFT resize / ctx recréé)
-    if (_vizBuf.length !== analyser.frequencyBinCount) {
-      _vizBuf = new Uint8Array(analyser.frequencyBinCount);
-    }
-    analyser.getByteFrequencyData(_vizBuf);
-    const data = _vizBuf;
-    const usedBins = Math.floor(data.length * 0.6);
-
-    // LERP couleur vers la cible (évite le snap brutal sur changement de piste).
-    // Calculé AVANT _detectBeat pour que le flash beat et les barres utilisent
-    // exactement la même couleur interpolée dans ce frame (BUG FIX 3 + 4).
-    // Convergence guard: snap to target when all channels are within 0.5 to
-    // stop running LERP math every frame in steady state (CP-2).
-    if (Math.abs(_cinArtRGBCur[0] - _cinArtRGBTarget[0]) < 0.5 &&
-        Math.abs(_cinArtRGBCur[1] - _cinArtRGBTarget[1]) < 0.5 &&
-        Math.abs(_cinArtRGBCur[2] - _cinArtRGBTarget[2]) < 0.5) {
-      _cinArtRGBCur[0] = _cinArtRGBTarget[0];
-      _cinArtRGBCur[1] = _cinArtRGBTarget[1];
-      _cinArtRGBCur[2] = _cinArtRGBTarget[2];
-    } else {
-      _cinArtRGBCur[0] += (_cinArtRGBTarget[0] - _cinArtRGBCur[0]) * _LERP_K;
-      _cinArtRGBCur[1] += (_cinArtRGBTarget[1] - _cinArtRGBCur[1]) * _LERP_K;
-      _cinArtRGBCur[2] += (_cinArtRGBTarget[2] - _cinArtRGBCur[2]) * _LERP_K;
-    }
-    const _lerpRGB = `${Math.round(_cinArtRGBCur[0])},${Math.round(_cinArtRGBCur[1])},${Math.round(_cinArtRGBCur[2])}`;
-
-    _detectBeat(data, _lerpRGB);
-
-    if (cinemaBg === 'spectrum') {
-      // ── Mode Spectre : barres bilatérales logarithmiques + glow ──
-      const barCount = 72;
-      const bw    = w / barCount;
-      const midY  = h / 2;
-      const rr    = 3;
-      const gap   = 1;
-      const totalBins = analyser.frequencyBinCount;
-      // Échelle logarithmique : distribue mieux basses/médiums/aigus
-      const logMin = Math.log2(1), logMax = Math.log2(totalBins * 0.72);
-
-      // PERF FIX : recréer les 2 gradients partagés seulement si couleur ou hauteur a changé.
-      // _lerpRGB converge après ~16 frames de LERP → 0 allocation en régime stable.
-      // globalAlpha par barre assure la modulation d'opacité individuelle (a = 0.08+v*0.75).
-      if (_lerpRGB !== _specGradRGB || midY !== _specGradMidY) {
-        _specGradRGB = _lerpRGB; _specGradMidY = midY;
-        _specGradTop = ctx.createLinearGradient(0, 0, 0, midY);
-        _specGradTop.addColorStop(0,    `rgba(${_lerpRGB},1)`);
-        _specGradTop.addColorStop(0.65, `rgba(${_lerpRGB},0.5)`);
-        _specGradTop.addColorStop(1,    `rgba(${_lerpRGB},0.08)`);
-        _specGradBot = ctx.createLinearGradient(0, midY, 0, h);
-        _specGradBot.addColorStop(0,    `rgba(${_lerpRGB},0.08)`);
-        _specGradBot.addColorStop(0.35, `rgba(${_lerpRGB},0.5)`);
-        _specGradBot.addColorStop(1,    `rgba(${_lerpRGB},1)`);
-      }
-
-      // Set glow fillStyle once before the loop — rgb() with no alpha (globalAlpha handles per-bar opacity)
-      const _glowFill = `rgb(${_lerpRGB})`;
-      for (let i = 0; i < barCount; i++) {
-        const t   = i / barCount;
-        const bin = Math.round(Math.pow(2, logMin + t * (logMax - logMin)));
-        const v   = data[Math.min(bin, totalBins - 1)] / 255;
-        const bh  = Math.max(2, v * midY * 0.94);
-        const a   = 0.08 + v * 0.75;
-        const x   = i * bw + 1, bww = Math.max(1, bw - 2);
-        // Opacité par barre via globalAlpha — gradient partagé fournit le dégradé spatial
-        ctx.globalAlpha = a;
-        if (ctx.roundRect) {
-          ctx.fillStyle = _specGradTop;
-          ctx.beginPath(); ctx.roundRect(x, midY - bh - gap, bww, bh, [rr, rr, 0, 0]); ctx.fill();
-          ctx.fillStyle = _specGradBot;
-          ctx.beginPath(); ctx.roundRect(x, midY + gap, bww, bh, [0, 0, rr, rr]); ctx.fill();
-        } else {
-          ctx.fillStyle = _specGradTop; ctx.fillRect(x, midY - bh - gap, bww, bh);
-          ctx.fillStyle = _specGradBot; ctx.fillRect(x, midY + gap, bww, bh);
-        }
-        ctx.globalAlpha = 1;
-        // Glow — fillStyle set once before loop (rgb, no alpha); globalAlpha handles per-bar opacity
-        if (v > 0.25) {
-          ctx.fillStyle   = _glowFill;
-          ctx.globalAlpha = Math.round(v * 14) / 100;
-          const gx = x - 3, gbw = bww + 6;
-          ctx.fillRect(gx, midY - bh - gap - 2, gbw, bh + 4);
-          ctx.fillRect(gx, midY + gap - 2,       gbw, bh + 4);
-          ctx.globalAlpha = 1;
-        }
-      }
-      ctx.globalAlpha = 1; // assure l'état propre après la boucle
-      // Ligne centrale subtile
-      ctx.globalAlpha = 0.12;
-      ctx.fillStyle = `rgb(${_lerpRGB})`;
-      ctx.fillRect(0, midY - 1, w, 2);
-      ctx.globalAlpha = 1;
-
-    } else {
-      // ── Mode standard (blur/ambient/amoled) : barres logarithmiques en bas ──
-      const barCount = 56;
-      const bw = w / barCount;
-      const totalBins = analyser.frequencyBinCount;
-      const logMin = Math.log2(1), logMax = Math.log2(totalBins * 0.65);
-      ctx.fillStyle = `rgb(${_lerpRGB})`; // set once — no per-bar string alloc (globalAlpha handles per-bar opacity)
-      for (let i = 0; i < barCount; i++) {
-        const t   = i / barCount;
-        const bin = Math.round(Math.pow(2, logMin + t * (logMax - logMin)));
-        const v   = data[Math.min(bin, totalBins - 1)] / 255;
-        const bh  = Math.max(2, v * h * 0.45);
-        const a   = 0.07 + v * 0.38;
-        ctx.globalAlpha = a;
-        ctx.beginPath();
-        if (ctx.roundRect) ctx.roundRect(i * bw + 1, h - bh, bw - 2, bh, [3, 3, 0, 0]);
-        else               ctx.rect(i * bw + 1, h - bh, bw - 2, bh);
-        ctx.fill();
-        // Reflet (miroir atténué)
-        if (v > 0.15) {
-          ctx.globalAlpha = a * 0.25;
-          ctx.beginPath();
-          if (ctx.roundRect) ctx.roundRect(i * bw + 1, h, bw - 2, bh * 0.3, [0, 0, 3, 3]);
-          else               ctx.rect(i * bw + 1, h, bw - 2, bh * 0.3);
-          ctx.fill();
-        }
-      }
-      ctx.globalAlpha = 1; // restore after loop
-    }
-    _cinVizRaf = requestAnimationFrame(draw);
-  }
-
-  // PERF : pré-allouer hors du loop draw — évite new Uint8Array(128) à chaque frame.
-  // `let` (et non `const`) : draw() le recrée si analyser.frequencyBinCount change.
-  let _vizBuf = new Uint8Array(analyser.frequencyBinCount);
-
-  if (_cinVizRaf) cancelAnimationFrame(_cinVizRaf);
-  draw();
-  canvas.style.opacity = '1';
-}
-
-function _stopViz() {
-  if (_cinVizRaf) { cancelAnimationFrame(_cinVizRaf); _cinVizRaf = null; }
-  // Nettoyer le beat timer orphelin (sinon la classe .beat reste si cinema fermé pendant un beat)
-  if (_beatTimer) {
-    clearTimeout(_beatTimer);
-    _beatTimer = null;
-    document.querySelector('.cinema-art-wrap')?.classList.remove('beat');
-  }
-  const canvas = document.getElementById('cinema-viz');
-  if (canvas) canvas.style.opacity = '0';
-  // Ne pas fermer l'AudioContext — il appartient au module EQ
-}
-
-// ═══════════════════════════════════════════════════════════
 // ── Piste suivante ───────────────────────────────────────────
 // ═══════════════════════════════════════════════════════════
 
+// Priorité identique à player.js/getNextIdx() (explicite > radio > shuffle > séquentiel) —
+// le panneau affiche la piste RÉELLEMENT prévue par next(), sauf en shuffle pur (aucune file
+// explicite) où deviner gâcherait la surprise : un hint discret la remplace (Task 6, Step 5).
 function _updateNextTrack() {
   const panel = document.getElementById('cinema-next');
+  const hint  = document.getElementById('cinema-shuffle-hint');
   if (!panel) return;
   const tracks  = get('tracks'); // Phase 4 — store alimenté depuis Jalon 3
   const curIdx  = get('curIdx');
   const shuffle = get('shuffle');
 
-  // En mode radio : piste suivante = tête de file radio
-  if (radioActive && getRadioQueue) {
-    const rq = getRadioQueue();
-    const nt = rq && rq.length ? rq[0] : null;
-    if (!nt) { panel.classList.remove('cin-has-next'); return; }
-    panel.classList.add('cin-has-next');
-    const titleEl  = document.getElementById('cinema-next-title');
-    const artistEl = document.getElementById('cinema-next-artist');
-    const imgEl    = document.getElementById('cinema-next-img');
-    if (titleEl)  titleEl.textContent  = nt.name || '–';
-    if (artistEl) artistEl.textContent = nt.artistFull || nt.artist || '–';
-    if (imgEl) { if (nt.art) { imgEl.src = nt.art; imgEl.style.display = 'block'; } else imgEl.style.display = 'none'; }
+  if (!tracks || curIdx < 0) {
+    renderCinNextPanel(panel, hint, null, shuffle);
     return;
   }
 
-  // En mode aléatoire on ne peut pas prédire la piste suivante
-  if (shuffle || !tracks || curIdx < 0) {
-    panel.classList.remove('cin-has-next'); return;
+  // File explicite : priorité 1 — même ordre que player.js/next(), avant radio ET shuffle
+  // (un "lire ensuite" manuel doit gagner même quand la radio est aussi active).
+  if (hasExplicitQueueNext()) {
+    const ni = getNextIdx(); // vérifie l'explicite en premier — renvoie forcément cet item ici
+    renderCinNextPanel(panel, hint, ni >= 0 ? tracks[ni] : null, shuffle);
+    return;
   }
 
-  // Chercher dans la liste filtrée si disponible, sinon tracks bruts
-  let nt = null;
-  const filtered = getFiltered();
-  if (filtered && filtered.length) {
-    const curTrack = tracks[curIdx];
-    const posInFiltered = filteredIdx(curTrack); // O(1) via posMap
-    nt = posInFiltered >= 0 && posInFiltered + 1 < filtered.length ? filtered[posInFiltered + 1] : null;
-  } else {
-    nt = curIdx + 1 < tracks.length ? tracks[curIdx + 1] : null;
+  // Radio : la tête de la file radio est la piste réelle suivante — prioritaire sur le shuffle
+  if (radioActive && getRadioQueue) {
+    const rq = getRadioQueue();
+    renderCinNextPanel(panel, hint, rq && rq.length ? rq[0] : null, false);
+    return;
   }
 
-  if (!nt) { panel.classList.remove('cin-has-next'); return; }
-  panel.classList.add('cin-has-next');
-
-  const titleEl  = document.getElementById('cinema-next-title');
-  const artistEl = document.getElementById('cinema-next-artist');
-  const imgEl    = document.getElementById('cinema-next-img');
-
-  if (titleEl)  titleEl.textContent  = nt.name || '–';
-  if (artistEl) artistEl.textContent = nt.artistFull || nt.artist || '–';
-  if (imgEl) {
-    if (nt.art) { imgEl.src = nt.art; imgEl.style.display = 'block'; }
-    else          imgEl.style.display = 'none';
+  // Shuffle actif (sans file explicite ni radio) : aucune piste prévisible → hint discret
+  if (shuffle) {
+    renderCinNextPanel(panel, hint, null, shuffle);
+    return;
   }
+
+  // Lecture séquentielle / repeat-all : piste réelle via getNextIdx()
+  const ni = getNextIdx();
+  renderCinNextPanel(panel, hint, ni >= 0 ? tracks[ni] : null, shuffle);
 }
 
-// ── Visibilité onglet — relancer le loop ambient si l'onglet redevient visible ──
+// ── Visibilité onglet — relancer la boucle maître (no-op interne si cinéma fermé) ──
 document.addEventListener('visibilitychange', () => {
-  if (!document.hidden && cinemaOpen && (cinemaBg === 'ambient' || cinemaBg === 'amoled')) {
-    _startAmbientAnim();
-  }
+  if (!document.hidden && cinemaOpen) wakeCinemaLoop();
 });
 
-// ── Barre de progression cinéma (click pour seek) ───────────
+// ── Barre de progression cinéma — scrubbing complet (Task 5) ─
+// Toute la logique de drag/hover/clavier vit dans cinema-seek.js ; câblage unique ici.
 document.addEventListener('DOMContentLoaded', function() {
-  const cpbar = document.getElementById('cinema-pbar');
-  if (cpbar) {
-    cpbar.addEventListener('click', function(e) {
-      // audio imported from player.js
-      if (!audio.duration) return;
-      const r = cpbar.getBoundingClientRect();
-      audio.currentTime = ((e.clientX - r.left) / r.width) * audio.duration;
-    });
-  }
+  initCinemaSeek({
+    audio,
+    pbar:    document.getElementById('cinema-pbar'),
+    fill:    document.getElementById('cinema-fill'),
+    thumb:   document.getElementById('cinema-pbar-thumb'),
+    timeEl:  document.getElementById('cinema-tc'),
+    tooltip: document.getElementById('cinema-seek-tip'),
+  });
+  // Task 9 — panneau file d'attente : getUpcoming/onPlayTrack fournis par cinema-render.js
+  // (déjà câblé sur search.js/queue.js/radio.js — cinema-queue.js reste zéro-import, §6).
+  initCinemaQueue({
+    getUpcoming: getCinemaQueueUpcoming,
+    onPlayTrack: playCinemaQueueTrack,
+    panel:       document.getElementById('cinema-queue-panel'),
+    trigger:     document.getElementById('cinema-next'),
+  });
 });

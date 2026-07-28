@@ -33,9 +33,6 @@
     "lit": "^3.3.3"
   },
   "devDependencies": {
-    "@fontsource/dm-sans": "^5.2.8",
-    "@fontsource/inter": "^5.2.8",
-    "@fontsource/syne": "^5.2.7",
     "@playwright/test": "^1.60.0",
     "@tauri-apps/cli": "^2.10.1",
     "acorn": "^8.16.0",

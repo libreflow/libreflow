@@ -23,6 +23,8 @@ import { toast, esc }            from './ui.js';
 import { VIRT }                  from './virt.js';
 import { rebuildTrackIdxMap,
          invalidateFilterCache } from './search.js';
+import { CFG }                   from './cfg.js';
+import { isSafePath }           from './utils.js';
 
 // ── État module ───────────────────────────────────────────────────────────────
 /** @type {Array<{from:string,to:string}>} */
@@ -73,7 +75,7 @@ export function computeMoves(tracks, basePath, scheme) {
   const seen  = new Set();
 
   for (const t of tracks) {
-    if (!t.path) continue;
+    if (!t.path || !isSafePath(t.path)) continue;
 
     const file   = _getBasename(t.path);
     const artist = sanitizeName(t.artist);
@@ -126,7 +128,7 @@ export async function organizePreview(scheme) {
 
   let dryResult;
   try {
-    dryResult = await invoke('organize_files', { moves, dryRun: true });
+    dryResult = await invoke('organize_files', { moves, dryRun: true }, { timeout: CFG.ORGANIZE_DRY_RUN_TIMEOUT_MS });
   } catch (e) {
     toast(`Erreur de validation : ${e}`, 'error');
     return;
@@ -156,11 +158,16 @@ export async function organizeConfirm() {
 
   let result;
   try {
-    result = await invoke('organize_files', { moves: _pendingMoves, dryRun: false });
+    result = await invoke('organize_files', { moves: _pendingMoves, dryRun: false }, { timeout: CFG.ORGANIZE_TIMEOUT_MS });
   } catch (e) {
     toast(`Erreur lors de l'organisation : ${e}`, 'error');
     organizeCancel();
     return;
+  }
+
+  if (!result || typeof result.error_count !== 'number') {
+    toast('Réponse inattendue du serveur', 'error');
+    organizeCancel(); return;
   }
 
   const failCount = result.error_count;

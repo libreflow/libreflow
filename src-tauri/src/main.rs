@@ -20,7 +20,6 @@ static MINI_CLOSE_SEQ: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU
 fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
-        .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .plugin(WindowStateBuilder::default().build())
@@ -51,8 +50,10 @@ fn main() {
             watch::watch_folder_start,
             watch::watch_folder_stop,
             commands::allow_asset_dir,
+            commands::get_or_create_default_music_dir,
             commands::check_paths,
             commands::read_audio_props,
+            commands::read_audio_bytes,
             commands::read_tags,
             commands::organize_files,
             commands::export_backup,

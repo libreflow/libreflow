@@ -1,12 +1,7 @@
 /**
- * library.js — Gestion de la bibliothèque musicale (Phase 3 refactoring)
+ * library.js — Gestion de la bibliothèque musicale.
  *
  * Possède : _saveTrackBatch, _saveTrackTimer, _scanInProgress.
- *
- * Imports directs depuis les modules stables.
- * Lit/écrit l'état applicatif via window.* (défini dans app.js).
- * Ces dépendances window.* seront éliminées lors des phases ultérieures
- * (Phase 4 : migration vers store.js/bus.js).
  *
  * Exports : loadTagsAndDurations, loadTagsBg,
  *           saveTrack, saveTracks, saveTrackNow, flushTrackBatch.
@@ -24,7 +19,7 @@ import { i18n }                                       from './i18n.js';
 import { extractColor, guessGenre }                   from './tags.js';
 import { rgEnabled }                                  from './replaygain.js';
 import { CFG }                                        from './cfg.js';
-import { normTag, mainArtist, fmtd, validYear }       from './utils.js';
+import { normTag, fmtArtists, mainArtist, fmtd, validYear } from './utils.js';
 
 import { adjustShuffleQAfterDelete }                  from './player.js';
 import { VIRT }                                       from './virt.js';
@@ -33,7 +28,7 @@ import { get, set }                                   from './store.js'; // Phas
 import { toast, toastWithAction }                                        from './ui.js';
 import { setCurIdx, removeTrackAt } from './state.js';
 import { updateBar } from './playerbar.js';
-import { updateStats, scheduleStatsUpdate, patchTrackEl } from './renderer.js';
+import { patchTrackEl } from './renderer.js';
 import { setReplayGain } from './replaygain.js';
 
 // ── Helpers locaux ────────────────────────────────────────────────────────────
@@ -55,6 +50,8 @@ function _sanitizeTagStr(val, maxLen = 500) {
 let _saveTrackBatch    = new Map();  // Map<id, Track> — pistes à flush
 let _saveTrackTimer    = null;       // debounce timer
 let _saveTrackMaxTimer = null;       // garantit un flush toutes les 2s sous charge continue
+let _flushGeneration   = 0;          // FIX FREEZE : incrémenté par cancelTrackBatch() pour annuler un flush en vol
+let _currentWriteTx    = null;       // FIX FREEZE : transaction IDB active — exposée pour abort d'urgence
 
 // ── loadTagsAndDurations ──────────────────────────────────────────────────────
 /**
@@ -63,10 +60,6 @@ let _saveTrackMaxTimer = null;       // garantit un flush toutes les 2s sous cha
  */
 export async function loadTagsAndDurations(newTracks) {
   const DUR_CONCURRENCY = CFG.TAG_LOAD_CONCURRENCY; // OPT-4 : CFG au lieu de 4 hardcodé
-  const _tagsLoadingId  = 'tags-loading-' + Date.now();
-  const _sbStats = document.getElementById('sb-stats');
-  if (_sbStats) _sbStats.insertAdjacentHTML('beforeend',
-    ` <span id="${_tagsLoadingId}" style="opacity:.5;font-size:10px">· chargement…</span>`);
   let _skippedCount = 0;
 
   async function loadOne(t) {
@@ -125,12 +118,11 @@ export async function loadTagsAndDurations(newTracks) {
     await new Promise(r => setTimeout(r, 0)); // OPT-3 : yield event loop, délai artificiel supprimé
   }
   if (_timedOutCount > 0) toast(i18n('err_tag_timeout', _timedOutCount), 'warning');
+  if (_saveTrackMaxTimer) { clearTimeout(_saveTrackMaxTimer); _saveTrackMaxTimer = null; }
   if (_saveTrackTimer) { clearTimeout(_saveTrackTimer); await flushTrackBatch(); }
   if (_skippedCount > 0) {
     toast(i18n('t_short_tracks_skipped', _skippedCount), 'warning');
   }
-  document.getElementById(_tagsLoadingId)?.remove();
-  scheduleStatsUpdate();
 
   // RG-PROMPT : proposer d'activer ReplayGain si ≥ 3 pistes non analysées
   const _unanalyzed = newTracks.filter(t => t.rgGain === undefined || t.rgGain === null).length;
@@ -210,7 +202,8 @@ export async function loadTagsBg(t, rustTags = null) {
     let changed = false;
     // SEC-5 : valider et tronquer les champs textuels avant tout traitement
     const ntitle      = normTag(_sanitizeTagStr(rustTags.title));
-    const nartistFull = normTag(_sanitizeTagStr(rustTags.artist));
+    // fmtArtists : "A/B;C" → "A, B, C" à l'affichage (garde AC/DC), normTag inclus
+    const nartistFull = fmtArtists(_sanitizeTagStr(rustTags.artist));
     const nartist     = mainArtist(nartistFull);
     const nalbum      = normTag(_sanitizeTagStr(rustTags.album));
     if (ntitle      && ntitle      !== t.name)       { t.name       = ntitle;       changed = true; delete t._nlc; }
@@ -226,23 +219,35 @@ export async function loadTagsBg(t, rustTags = null) {
     // Cover : décodage base64 → ArrayBuffer → blob URL géré par artLoader LRU.
     // Évite les blob URLs hors-cache qui s'accumulent en RAM (50-60 MB en batch).
     if (rustTags.cover_base64) {
-      if (t.art && t.art.startsWith('blob:')) try { URL.revokeObjectURL(t.art); } catch {}
-      const mime = ART_MIME_ALLOWLIST.includes(rustTags.cover_mime) ? rustTags.cover_mime : 'image/jpeg';
-      const u8 = Uint8Array.from(atob(rustTags.cover_base64), c => c.charCodeAt(0));
-      t._artBuf  = u8.buffer;
-      t._artMime = mime;
-      t._b64     = null; // invalider tout cache base64 existant
-      t.art      = cacheArt(t);    // ajoute à artLoader LRU + crée blob URL
-      t.noArt    = false;
-      t._hasArt  = true;             // ARCH-2 : marquer comme ayant une artwork
-      changed    = true;
-      // OPT-2 : extractColor fire-and-forget — ne bloque plus le batch critique
-      const artUrl = t.art;
-      extractColor(artUrl).then(color => {
-        if (!_trackIdxMap.has(t.id)) return;
-        t.artColor = color;
-        saveTracks(t);
-      }).catch(e => console.warn('[library:extractColor]', t.id, e));
+      if (rustTags.cover_base64.length > CFG.ART_B64_MAX_CHARS) {
+        console.warn('[library] cover_base64 trop grand, ignoré :', rustTags.cover_base64.length);
+      } else {
+        if (t.art && t.art.startsWith('blob:')) try { URL.revokeObjectURL(t.art); } catch {}
+        const mime = ART_MIME_ALLOWLIST.includes(rustTags.cover_mime) ? rustTags.cover_mime : 'image/jpeg';
+        try {
+          const u8 = Uint8Array.from(atob(rustTags.cover_base64), c => c.charCodeAt(0));
+          t._artBuf  = u8.buffer;
+          t._artMime = mime;
+          t._b64     = null; // invalider tout cache base64 existant
+          t.art      = cacheArt(t);    // ajoute à artLoader LRU + crée blob URL
+          t.noArt    = false;
+          t._hasArt  = true;             // ARCH-2 : marquer comme ayant une artwork
+          changed    = true;
+          // OPT-2 : extractColor fire-and-forget — ne bloque plus le batch critique
+          const artUrl = t.art;
+          extractColor(artUrl).then(color => {
+            if (!_trackIdxMap.has(t.id) || !color) return;
+            t.artColor = color;
+            saveTracks(t);
+          }).catch(e => console.warn('[library:extractColor]', t.id, e));
+        } catch (artE) {
+          console.warn('[loadTagsBg] cover_base64 malformé:', t.id, artE);
+          t.art     = null;
+          t.noArt   = true;
+          t._hasArt = false;
+          changed   = true;
+        }
+      } // end else (size guard)
     } else {
       t.noArt   = true;
       t._hasArt = false; // ARCH-2 : aucune artwork → désactiver le chargement paresseux
@@ -256,7 +261,6 @@ export async function loadTagsBg(t, rustTags = null) {
     if (changed) { delete t._trigrams; }
     if (changed) patchTrackEl(t.id);
     if (trackIdx(t.id) === get('curIdx')) updateBar();
-    if (changed) scheduleStatsUpdate();
   } catch(e) {
     console.warn('[loadTagsBg]', e);
     t.metaDone = true;
@@ -279,6 +283,8 @@ export async function flushTrackBatch() {
   if (!_saveTrackBatch.size || !DB) return;
   const batch = [..._saveTrackBatch.values()];
   _saveTrackBatch.clear();
+  // FIX FREEZE : snapshot de génération avant le premier await (résolution artwork)
+  const myGen = _flushGeneration;
 
   const records = await Promise.all(batch.map(async t => {
     if (!_trackIdxMap.has(t.id)) return null;
@@ -300,23 +306,30 @@ export async function flushTrackBatch() {
     };
   }));
 
+  // FIX FREEZE : cancelTrackBatch() a été appelé pendant la résolution artwork → abandonner sans écrire
+  if (_flushGeneration !== myGen) return;
+
   const validRecords = records.filter(Boolean);
   if (!validRecords.length) return;
 
   /** Exécute une transaction IDB de type readwrite pour écrire les records donnés. */
   async function _writeTx(recs) {
     const transaction = DB.transaction('tracks', 'readwrite');
+    _currentWriteTx = transaction; // FIX FREEZE : exposé pour abort si clearLibrary() intervient
     const store = transaction.objectStore('tracks');
     for (const rec of recs) store.put(rec);
     await new Promise((ok, fail) => {
-      transaction.oncomplete = ok;
-      transaction.onerror   = () => fail(transaction.error);
+      transaction.oncomplete = () => { _currentWriteTx = null; ok(); };
+      transaction.onerror   = () => { _currentWriteTx = null; fail(transaction.error); };
+      transaction.onabort   = () => { _currentWriteTx = null; fail(new Error('tx aborted')); };
     });
   }
 
   try {
     await _writeTx(validRecords);
   } catch(e) {
+    // FIX FREEZE : abort déclenché par cancelTrackBatch() → silencieux
+    if (_flushGeneration !== myGen) return;
     if (isQuotaError(e)) {
       // ARCH-7 : quota IDB dépassé — réessayer sans artBuf (artwork sacrifié, métadonnées préservées)
       console.warn('[flushTrackBatch] Quota IDB dépassé — retry sans artwork', e);
@@ -333,6 +346,7 @@ export async function flushTrackBatch() {
           'warning'
         );
       } catch(e2) {
+        if (_flushGeneration !== myGen) return;
         console.error('[flushTrackBatch] Quota IDB critique — métadonnées non sauvegardées', e2);
         toast(
           i18n('t_idb_quota_critical') || 'Stockage plein — données non sauvegardées. Libérez de l\'espace disque immédiatement.',
@@ -350,7 +364,7 @@ export async function flushTrackBatch() {
  * Accumule un track dans le batch de sauvegarde IDB (debounced).
  * Préférer saveTracks() en interne ; saveTrack() reste pour les satellites.
  */
-export async function saveTrack(t) {
+export function saveTrack(t) {
   _saveTrackBatch.set(t.id, t);
   if (!_saveTrackTimer) _saveTrackTimer = setTimeout(flushTrackBatch, CFG.TRACK_SAVE_DEBOUNCE);
 }
@@ -377,6 +391,9 @@ export function saveTracks(...ts) {
  * réécrites après le vidage de la bibliothèque (race condition timer).
  */
 export function cancelTrackBatch() {
+  // FIX FREEZE : invalider tout flush en cours (artwork en résolution OU _writeTx() démarrée)
+  _flushGeneration++;
+  if (_currentWriteTx) { try { _currentWriteTx.abort(); } catch(_e) {} _currentWriteTx = null; }
   if (_saveTrackTimer)    { clearTimeout(_saveTrackTimer);    _saveTrackTimer    = null; }
   if (_saveTrackMaxTimer) { clearTimeout(_saveTrackMaxTimer); _saveTrackMaxTimer = null; }
   _saveTrackBatch.clear();

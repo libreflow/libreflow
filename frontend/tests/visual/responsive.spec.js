@@ -81,7 +81,10 @@ test.describe('secondary panels at 720x600', () => {
     await page.setViewportSize({ width: 720, height: 600 });
     await page.goto('/');
     await waitForRealLibrary(page);
+    // #btn-eq now lives inside #sb-more-pop (hidden until #sb-more-btn opens it).
     // #btn-eq → data-action="toggle-eq" → toggleEQ() (handlers.js).
+    await page.click('#sb-more-btn');
+    await page.locator('#sb-more-pop').waitFor({ state: 'visible' });
     await page.click('#btn-eq');
     await page.waitForTimeout(500); // panel slide-in transition
     await expect(page).toHaveScreenshot('panel-eq-720x600.png', {

@@ -9,7 +9,6 @@
 //
 // Exports publics :
 //   setCurIdx(v)                  — met à jour curIdx dans app.js + store
-//   setTracks(v)                  — met à jour tracks dans app.js + store
 //   setLiked(v)                   — met à jour liked dans app.js + store
 //   setCtxTrackId(v)              — met à jour ctxTrackId dans app.js + store
 //
@@ -24,6 +23,7 @@
 
 import { get, set, notify } from './store.js';
 import { rebuildTrackIdxMap }  from './search.js';
+import { emit, EVENTS } from './bus.js';
 
 /**
  * Sync curIdx dans app.js et dans le store réactif.
@@ -38,17 +38,6 @@ export function setCurIdx(v)     { set('curIdx',     v); }
  * @param {Set<string>} v
  */
 export function setLiked(v)      { set('liked',      v); }
-
-/**
- * Sync tracks dans app.js et dans le store réactif.
- * Utilisé par : selection.js.
- * Applique l'invariant ARCH-3 : rebuildTrackIdxMap() est garanti en interne.
- * @param {object[]} v
- */
-export function setTracks(v) {
-  set('tracks', v);
-  rebuildTrackIdxMap(); // ARCH-3 : toute mutation tracks[] → rebuild _trackIdxMap
-}
 
 /**
  * Sync ctxTrackId (cible du menu contextuel) dans app.js et dans le store.
@@ -86,24 +75,28 @@ export function pushTracks(items) {
  * @param {number} idx — index dans tracks[] (doit être >= 0)
  */
 export function removeTrackAt(idx) {
-  get('tracks').splice(idx, 1);
+  const [removed] = get('tracks').splice(idx, 1);
   rebuildTrackIdxMap();
   notify('tracks');
+  if (removed) emit(EVENTS.TRACK_REMOVED, { ids: [removed.id] });
 }
 
 /**
  * Remplace l'intégralité du tableau tracks[] et rebuild _trackIdxMap.
  * Utilisé par : selection.js (delete sélection + undo).
  *
- * Note : set() notifie immédiatement (nouveau référence) → les subscribers
- * qui appellent trackIdx() juste après verront la map reconstruite car
- * rebuildTrackIdxMap() est appelé en synchrone dans la même frame.
+ * In-place mutation keeps the same reference → store's same-ref guard skips notify.
+ * rebuildTrackIdxMap() runs BEFORE notify('tracks') so subscribers calling trackIdx()
+ * always see a map consistent with the new array contents.
  *
  * @param {object[]} newArray — nouveau tableau de pistes
  */
 export function replaceTracks(newArray) {
-  set('tracks', newArray);
+  const arr = get('tracks');
+  arr.length = 0;
+  for (let i = 0; i < newArray.length; i++) arr[i] = newArray[i];
   rebuildTrackIdxMap();
+  notify('tracks');
 }
 
 /**
@@ -134,9 +127,14 @@ export function removeTracksBatch(sortedDescIndices) {
       break;
     }
   }
+  const removedIds = [];
   for (const idx of indices) {
-    if (idx >= 0 && idx < tracks.length) tracks.splice(idx, 1);
+    if (idx >= 0 && idx < tracks.length) {
+      const [removed] = tracks.splice(idx, 1);
+      if (removed) removedIds.push(removed.id);
+    }
   }
   rebuildTrackIdxMap();
   notify('tracks');
+  if (removedIds.length) emit(EVENTS.TRACK_REMOVED, { ids: removedIds });
 }

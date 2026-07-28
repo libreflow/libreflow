@@ -1,0 +1,512 @@
+// LibreFlow — cinema-canvas.js
+// Rendu canvas bas-niveau pour les modes Vagues et Étoiles du mode Cinéma.
+// Extrait de cinema.js pour respecter la limite de 800 lignes par fichier (CLAUDE.md §16).
+//
+// Exports :
+//   drawWavesFrame(ctx, w, h, r, g, b, isPlaying, dtN, fft, beat)
+//   drawStarfieldFrame(ctx, w, h, r, g, b, ambientT, dtN, fft, beat)
+//   getMaxBandEnergy()
+//   resetBandEnergy()
+//   initStarfield()
+//   killCanvasTweens()
+
+import { tween, kill as motionKill, eases, prefersReducedMotion } from './motion.js';
+import { waveLayerGeom, waveLayerPalette, computeBandEnergies, agcNormalize, waveY, WAVE_BEAT_BOOST_MAX } from './cinema-waves.js';
+
+// ── Vagues — pré-allocation module scope ────────────────────
+// Zéro allocation dans le hot path RAF (CLAUDE.md §10).
+const _WAVE_LAYERS  = 7;
+// Task 17 : 150→96 segments — le tracé quadratique par points milieux lisse mieux
+// que 150 segments droits, pour ~36 % de sin en moins.
+const _WAVE_STEPS   = 96;
+// Task 12 : géométrie de profondeur cohérente (l=0 arrière/haut, l=6 avant/bas) —
+// calculée une fois au chargement (cinema-waves.js, pur et testé).
+const _WAVE_GEOM    = Array.from({ length: _WAVE_LAYERS }, (_, l) => waveLayerGeom(l, _WAVE_LAYERS));
+const _waveBands     = new Float32Array(_WAVE_LAYERS); // énergies par bande (0 = basses), EMA in-place
+const _wavePeaks     = new Float32Array(_WAVE_LAYERS); // pics glissants AGC (Task 17)
+const _waveBandsNorm = new Float32Array(_WAVE_LAYERS); // bandes normalisées 0-1 — pilotent les couches
+const _waveY        = new Float32Array(_WAVE_STEPS + 1); // buffer y partagé remplissage/crête (1 seule passe sin)
+let _waveHorizonGrad = null; // reflet spéculaire sous l'horizon — cache (couleur, h)
+// Task 17 : écume au beat — pool pré-alloué (zéro allocation par frame), les
+// glints surfent la crête (y recalculé via waveY à chaque frame).
+const _FOAM_MAX  = 12;
+const _foamPool  = Array.from({ length: _FOAM_MAX }, () => ({ life: 0, nx: 0, layer: 0, size: 1 }));
+let _foamNext    = 0;
+let _waveSmoothed   = null;          // Float32Array — basses fréquences lissées
+const _wavePhases   = new Float32Array(_WAVE_LAYERS); // phases de chaque couche
+let _waveEnergy     = 0;             // énergie basse freq lissée 0-1
+// Beat vagues : le beat arrive en paramètre (snapshot partagé, cinema-loop.js) —
+// plus de détecteur local depuis Task 5 (cycle 2 polish).
+const _waveBeatObj  = { v: 0 };      // GSAP tween target — boost amplitude au beat
+const _waveGrads        = new Array(_WAVE_LAYERS).fill(null); // CanvasGradient de remplissage par couche
+const _waveCrestStrokes = new Array(_WAVE_LAYERS).fill('');   // style stroke crête par couche (cachés)
+let _waveGradRGB    = '';            // clé d'invalidation — couleur LERP
+let _waveGradH      = 0;             // clé d'invalidation — hauteur canvas
+// Halo atmosphérique en fond — gradient radial teinté par la pochette
+let _waveBgGrad    = null;
+let _waveBgGradRGB = '';
+let _waveBgGradW   = 0;
+let _waveBgGradH   = 0;
+// PERF : cache du template literal lerpRGB — reconstruit seulement si les composantes
+// arrondies ont changé depuis la frame précédente (audit perf cinema — cinema-canvas.js:117).
+let _waveLerpRLast = -1, _waveLerpGLast = -1, _waveLerpBLast = -1;
+let _waveLerpRGBCache = '0,0,0';
+
+// ── Étoiles — pré-allocation module scope ───────────────────
+const _STAR_COUNT   = 180;
+const _starX        = new Float32Array(_STAR_COUNT);  // positions X normalisées 0-1
+const _starY        = new Float32Array(_STAR_COUNT);  // positions Y normalisées 0-1
+const _starSize     = new Float32Array(_STAR_COUNT);  // taille base en px
+const _starBri      = new Float32Array(_STAR_COUNT);  // luminosité de base 0-1
+const _starPhase    = new Float32Array(_STAR_COUNT);  // phase scintillement
+const _starSpd      = new Float32Array(_STAR_COUNT);  // vitesse scintillement
+let _starsReady     = false;
+let _starHiFBuf     = null;          // Float32Array — hautes fréquences lissées
+let _starBassSmooth = 0;             // énergie basse lissée — reste pour l'EPS de sommeil (getMaxBandEnergy)
+// Beat étoiles : le beat arrive en paramètre (snapshot partagé, cinema-loop.js) —
+// plus de détecteur local depuis Task 5 (cycle 2 polish).
+const _SHOOT_MAX    = 3;
+// Étoiles filantes — objets plain tweenés par GSAP, lus dans le RAF
+const _shootPool    = Array.from({ length: _SHOOT_MAX }, () => ({ prog: 0, alpha: 0, x0: 0, y0: 0, x1: 0.3, y1: 0.1 }));
+const _shootTweens  = new Array(_SHOOT_MAX).fill(null);
+let _shootNext      = 0;
+// PERF : caches de strings couleur du ciel étoilé — reconstruits seulement si les
+// composantes RGB arrondies changent (audit perf cinema — cinema-canvas.js:260-264).
+let _starLerpRLast = -1, _starLerpGLast = -1, _starLerpBLast = -1;
+let _starFillCache = 'rgb(255,255,255)';      // étoiles (art + boost)
+let _starGlowFillCache = 'rgb(255,255,255)';  // halo des étoiles brillantes
+let _starBgTintLast = -1;
+let _starBgFillCache = 'rgba(0,0,0,0.96)';    // fond teinté
+
+// ── Initialisation étoiles ───────────────────────────────────
+
+/** Initialise les étoiles avec des positions pseudo-aléatoires normalisées 0-1. */
+export function initStarfield() {
+  for (let i = 0; i < _STAR_COUNT; i++) {
+    _starX[i]     = Math.random();
+    _starY[i]     = Math.random();
+    _starSize[i]  = 0.6 + Math.random() * 2.4;
+    _starBri[i]   = 0.25 + Math.random() * 0.75;
+    _starPhase[i] = Math.random() * Math.PI * 2;
+    _starSpd[i]   = 0.008 + Math.random() * 0.035;
+  }
+  _starsReady = true;
+}
+
+// ── Mode Vagues ──────────────────────────────────────────────
+
+// Consomme le snapshot FFT partagé (cinema-loop.js) : bandes par couche + énergie
+// globale ; le beat arrive déjà détecté en paramètre (plus de détecteur local).
+// Sans FFT (cinéma ouvert avant toute lecture) : décroissance douce vers 0 —
+// les vagues restent dessinées, plus d'écran noir (Task 12, finding #6). La
+// décroissance est framerate-indépendante (dtN) depuis Task 5.
+function _updateWaveAudio(fft, beat, dtN) {
+  if (!fft) {
+    const decay = Math.pow(0.95, dtN);
+    _waveEnergy *= decay;
+    for (let k = 0; k < _WAVE_LAYERS; k++) { _waveBands[k] *= decay; _waveBandsNorm[k] *= decay; }
+    return;
+  }
+  // Allocation unique — réallocation seulement si le FFT change de taille (rare)
+  if (!_waveSmoothed || _waveSmoothed.length !== Math.max(1, Math.floor(fft.length * 0.12))) {
+    _waveSmoothed = new Float32Array(Math.max(1, Math.floor(fft.length * 0.12)));
+  }
+  // Task 12 : énergies par bande log-espacées (0 = basses) — chaque couche a la sienne.
+  computeBandEnergies(fft, _waveBands, 0.30);
+  // Task 17 : AGC — normalise chaque bande par son pic glissant. Sans ça, le tilt
+  // spectral (~−6 dB/octave) laisse les vagues arrière (aigus) quasi immobiles.
+  agcNormalize(_waveBands, _wavePeaks, _waveBandsNorm);
+  // Énergie basse globale lissée — pilote l'intensité du halo de fond (finding #6).
+  const bassEnd = _waveSmoothed.length;
+  for (let i = 0; i < bassEnd; i++) {
+    _waveSmoothed[i] = _waveSmoothed[i] * 0.82 + fft[i] * 0.18;
+  }
+  let rawEnergy = 0;
+  for (let i = 0; i < bassEnd; i++) rawEnergy += _waveSmoothed[i];
+  rawEnergy /= bassEnd * 255;
+  _waveEnergy = _waveEnergy * 0.90 + rawEnergy * 0.10;
+  // Beat partagé → GSAP tween boost amplitude (A11Y SC 2.3.3 : pas de tween sous reduced-motion).
+  if (!prefersReducedMotion() && beat) {
+    motionKill(_waveBeatObj);
+    _waveBeatObj.v = 1;
+    tween(_waveBeatObj, { v: 0, duration: 0.55, ease: eases.PREMIUM });
+    _spawnFoam(); // Task 17 : écume sur les crêtes avant — hérite du gate reduced-motion
+  }
+}
+
+// Task 5 (cycle 2 polish) : scalaire cheap pour la garde de sommeil de cinema-bg.js
+// (getMaxBandEnergy() > _EPS_BAND) — max sur les bandes de vagues normalisées et
+// la basse lissée des étoiles.
+export function getMaxBandEnergy() {
+  let max = _starBassSmooth;
+  for (let i = 0; i < _WAVE_LAYERS; i++) if (_waveBandsNorm[i] > max) max = _waveBandsNorm[i];
+  return max;
+}
+
+/** Remet à zéro les traceurs d'énergie (bascule de mode bg) — évite un getMaxBandEnergy()
+ * figé sur une valeur périmée de l'ancien mode (fix revue Task 5). */
+export function resetBandEnergy() {
+  _waveBands.fill(0);
+  _waveBandsNorm.fill(0);
+  _starBassSmooth = 0;
+}
+
+// Réveille 4 glints d'écume sur les 2 couches avant (round-robin dans le pool).
+function _spawnFoam() {
+  for (let n = 0; n < 4; n++) {
+    const f = _foamPool[_foamNext];
+    _foamNext = (_foamNext + 1) % _FOAM_MAX;
+    f.life  = 1;
+    f.nx    = 0.08 + Math.random() * 0.84;
+    f.layer = _WAVE_LAYERS - 1 - (n & 1); // alterne les 2 couches de premier plan
+    f.size  = 1.2 + Math.random() * 1.6;
+  }
+}
+
+// Dessine l'écume active — y recalculé via waveY : les glints SURFENT la crête.
+// Fondu ~0.5s à 60fps nominal — décrément multiplié par dtN (framerate-indépendant,
+// Task 5) : ~0.035/frame à 60fps reste ~0.5s de fondu à n'importe quelle cadence.
+function _drawFoam(ctx, w, h, boostMult, dtN) {
+  ctx.fillStyle = '#fff';
+  for (let i = 0; i < _FOAM_MAX; i++) {
+    const f = _foamPool[i];
+    if (f.life <= 0.01) continue;
+    const geo  = _WAVE_GEOM[f.layer];
+    const band = _waveBandsNorm[_WAVE_LAYERS - 1 - f.layer];
+    const amp  = (geo.ampBase + band * geo.ampEnergy) * h * boostMult;
+    const y    = h * geo.yBase + waveY(f.nx, _wavePhases[f.layer], geo.freq, amp);
+    ctx.globalAlpha = f.life * 0.8;
+    ctx.beginPath();
+    ctx.arc(f.nx * w, y - f.size, f.size * f.life + 0.4, 0, Math.PI * 2);
+    ctx.fill();
+    f.life -= 0.035 * dtN;
+  }
+  ctx.globalAlpha = 1;
+}
+
+// Reconstruit palette par couche + gradients + styles de crête — invalidé seulement
+// quand (couleur LERP, hauteur) changent. Task 12 : chaque couche a SA couleur
+// (hue-shift ±14°, rampe de luminance arrière→avant, plancher pochettes sombres) —
+// fini le monochrome à alpha variable (finding #2/#3).
+function _rebuildWaveStyles(ctx, h, lerpRGB, r, g, b) {
+  _waveGradRGB = lerpRGB; _waveGradH = h;
+  const pal = waveLayerPalette(r, g, b, _WAVE_LAYERS);
+  for (let l = 0; l < _WAVE_LAYERS; l++) {
+    const geo = _WAVE_GEOM[l];
+    const [lr, lg, lb] = pal[l];
+    const yBase = h * geo.yBase;
+    const a0    = geo.fillAlpha;
+    // Task 16 (fix revue) : le gradient démarre à l'excursion MAX de la couche
+    // ((ampBase+ampEnergy)×boost max) — la crête ne peut jamais dépasser le stop-0
+    // (l'ancien offset fixe 0.12h laissait un aplat au sommet au pire cas).
+    const gradTop = yBase - (geo.ampBase + geo.ampEnergy) * WAVE_BEAT_BOOST_MAX * h;
+    const grad  = ctx.createLinearGradient(0, gradTop, 0, h);
+    grad.addColorStop(0,    `rgba(${lr},${lg},${lb},${a0.toFixed(2)})`);
+    grad.addColorStop(0.38, `rgba(${lr},${lg},${lb},${(a0 * 0.52).toFixed(2)})`);
+    grad.addColorStop(0.72, `rgba(${lr},${lg},${lb},${(a0 * 0.15).toFixed(2)})`);
+    grad.addColorStop(1,    'rgba(0,0,0,0)');
+    _waveGrads[l] = grad;
+    // Crête : version éclaircie de la couleur DE LA COUCHE (effet brillant cohérent)
+    const crR = Math.min(255, lr + 70), crG = Math.min(255, lg + 70), crB = Math.min(255, lb + 70);
+    _waveCrestStrokes[l] = `rgba(${crR},${crG},${crB},${geo.crestAlpha.toFixed(2)})`;
+  }
+  // Task 17 : reflet spéculaire sous l'horizon — vend la lecture « mer » et habille
+  // l'espace sous le contenu. Couleur de la couche ARRIÈRE éclaircie, très discret.
+  const [hr, hg, hb] = pal[0];
+  const yHor = h * _WAVE_GEOM[0].yBase;
+  _waveHorizonGrad = ctx.createLinearGradient(0, yHor, 0, yHor + h * 0.11);
+  _waveHorizonGrad.addColorStop(0,    `rgba(${Math.min(255, hr + 60)},${Math.min(255, hg + 60)},${Math.min(255, hb + 60)},0.14)`);
+  _waveHorizonGrad.addColorStop(0.25, `rgba(${hr},${hg},${hb},0.06)`);
+  _waveHorizonGrad.addColorStop(1,    'rgba(0,0,0,0)');
+}
+
+// Trace le chemin lissé de la couche depuis _waveY — quadratiques par points
+// milieux (Task 17), partagé entre le remplissage et la crête.
+function _traceWavePath(ctx, w) {
+  const inv = 1 / _WAVE_STEPS;
+  ctx.moveTo(0, _waveY[0]);
+  for (let s = 1; s < _WAVE_STEPS; s++) {
+    ctx.quadraticCurveTo(s * inv * w, _waveY[s], (s + 0.5) * inv * w, (_waveY[s] + _waveY[s + 1]) * 0.5);
+  }
+  // Dernier ~1% en segment droit : trade-off assumé de la technique points-milieux
+  // (les extrémités doivent ancrer les vrais points) — ne pas « corriger ».
+  ctx.lineTo(w, _waveY[_WAVE_STEPS]);
+}
+
+// Dessine une couche : les y sont calculés UNE fois dans _waveY (4 harmoniques),
+// puis rejoués pour le remplissage ET la crête — sin divisé par 2 (finding #5).
+function _drawWaveLayer(ctx, w, h, l, boostMult) {
+  const geo   = _WAVE_GEOM[l];
+  const yBase = h * geo.yBase;
+  // Mapping bande→couche : AVANT (l=6) ← basses (bande 0), arrière ← aigus.
+  // Task 16 : plus de terme _waveEnergy (triple comptage) — l'excursion max est
+  // (ampBase + ampEnergy) × WAVE_BEAT_BOOST_MAX, bornée sous l'horizon (testé).
+  // Task 17 : bandes NORMALISÉES (AGC) — chaque couche vit quel que soit le mixage.
+  const band      = _waveBandsNorm[_WAVE_LAYERS - 1 - l];
+  const amplitude = (geo.ampBase + band * geo.ampEnergy) * h * boostMult;
+  const ph = _wavePhases[l];
+  for (let s = 0; s <= _WAVE_STEPS; s++) {
+    _waveY[s] = yBase + waveY(s / _WAVE_STEPS, ph, geo.freq, amplitude);
+  }
+  // Remplissage — chemin lissé partagé (Task 17)
+  ctx.beginPath();
+  _traceWavePath(ctx, w);
+  ctx.lineTo(w, h); ctx.lineTo(0, h); ctx.closePath();
+  ctx.fillStyle = _waveGrads[l];
+  ctx.fill();
+  // Crête lumineuse — même courbe, rejouée depuis le buffer
+  ctx.beginPath();
+  _traceWavePath(ctx, w);
+  ctx.strokeStyle = _waveCrestStrokes[l];
+  ctx.lineWidth   = geo.lineWidth;
+  ctx.stroke();
+}
+
+/**
+ * Rendu mode Vagues sur #cinema-bg.
+ * Appelé depuis la boucle RAF de _startAmbientAnim (60fps focalisé / 30fps sinon).
+ * Zéro allocation en régime stable (gradients/palette cachés par couleur + hauteur,
+ * buffers pré-alloués). Task 12 : profondeur cohérente (avant = bas, ample,
+ * lumineux), palette ambient par couche, dynamique par bande de fréquences.
+ * @param {CanvasRenderingContext2D} ctx
+ * @param {number} w  largeur CSS px
+ * @param {number} h  hauteur CSS px
+ * @param {number} r  @param {number} g  @param {number} b  couleur LERP courante (scalaires arrondis)
+ * @param {boolean} isPlaying  true si de l'audio est en cours de lecture
+ * @param {number} dtN  delta-t normalisé (dt / 16.667) — framerate-indépendant (Task 5)
+ * @param {Uint8Array|null} fft  snapshot FFT partagé de la frame (cinema-loop.js)
+ * @param {boolean} beat  beat détecté cette frame (déjà gated reduced-motion en amont)
+ */
+export function drawWavesFrame(ctx, w, h, r, g, b, isPlaying, dtN, fft, beat) {
+  _updateWaveAudio(fft, beat, dtN);
+  const boostMult = 1 + _waveBeatObj.v * (WAVE_BEAT_BOOST_MAX - 1);
+  // PERF : reconstruit uniquement si r/g/b ont changé — zéro allocation en régime stable.
+  if (r !== _waveLerpRLast || g !== _waveLerpGLast || b !== _waveLerpBLast) {
+    _waveLerpRLast = r; _waveLerpGLast = g; _waveLerpBLast = b;
+    _waveLerpRGBCache = `${r},${g},${b}`;
+  }
+  const lerpRGB = _waveLerpRGBCache;
+
+  // ── Fond : noir profond + halo atmosphérique teinté par la pochette ──────────
+  ctx.fillStyle = '#000';
+  ctx.fillRect(0, 0, w, h);
+  if (lerpRGB !== _waveBgGradRGB || w !== _waveBgGradW || h !== _waveBgGradH) {
+    _waveBgGradRGB = lerpRGB; _waveBgGradW = w; _waveBgGradH = h;
+    const rx = w * 0.5, ry = h * 0.38, rad = Math.max(w, h) * 0.72;
+    _waveBgGrad = ctx.createRadialGradient(rx, ry, 0, rx, ry, rad);
+    _waveBgGrad.addColorStop(0,    `rgba(${lerpRGB},0.16)`);
+    _waveBgGrad.addColorStop(0.45, `rgba(${lerpRGB},0.05)`);
+    _waveBgGrad.addColorStop(1,    'rgba(0,0,0,0)');
+  }
+  // Intensité réagit à l'énergie basse + beat — animation sans recréer le gradient
+  ctx.globalAlpha = Math.min(1, 0.50 + _waveEnergy * 1.1 + _waveBeatObj.v * 0.5);
+  ctx.fillStyle   = _waveBgGrad;
+  ctx.fillRect(0, 0, w, h);
+  ctx.globalAlpha = 1;
+
+  // Phases par couche — vitesse pilotée par SA bande normalisée (avant = basses →
+  // houle marquée ; arrière = aigus → frémissement). Figées en pause / reduced-motion.
+  if (isPlaying && !prefersReducedMotion()) {
+    for (let l = 0; l < _WAVE_LAYERS; l++) {
+      const band = _waveBandsNorm[_WAVE_LAYERS - 1 - l];
+      _wavePhases[l] += (0.005 + l * 0.0018 + band * 0.020) * boostMult * dtN;
+    }
+  }
+
+  if (lerpRGB !== _waveGradRGB || h !== _waveGradH) _rebuildWaveStyles(ctx, h, lerpRGB, r, g, b);
+
+  // Reflet d'horizon (Task 17) — fillRect BORNÉ à la bande : un gradient linéaire
+  // étend son stop-0 au-delà de son départ, un rect plein teinterait la zone contenu.
+  const yHor = h * _WAVE_GEOM[0].yBase;
+  ctx.fillStyle = _waveHorizonGrad;
+  ctx.fillRect(0, yHor, w, h * 0.11);
+
+  // Dessin arrière → avant : l=0 (haut, lointain) d'abord, l=6 (bas, proche) par-dessus.
+  for (let l = 0; l < _WAVE_LAYERS; l++) _drawWaveLayer(ctx, w, h, l, boostMult);
+
+  // Écume au beat (Task 17) — par-dessus les crêtes.
+  _drawFoam(ctx, w, h, boostMult, dtN);
+}
+
+// ── Mode Ciel étoilé ─────────────────────────────────────────
+
+// Consomme le snapshot FFT partagé (cinema-loop.js) : scintillement (aigus) +
+// beat (déjà détecté, partagé) → étoile filante. Sans FFT : énergie 0 — ciel
+// statique dessiné quand même, plus d'écran noir (Task 12, finding #6). La
+// décroissance de _starBassSmooth est framerate-indépendante (dtN, Task 5).
+// Retourne hiEnergy 0-1.
+function _updateStarAudio(fft, beat, dtN) {
+  if (!fft) { _starBassSmooth *= Math.pow(0.95, dtN); return 0; }
+  // Allocation unique — réallocation seulement si le FFT change de taille
+  if (!_starHiFBuf || _starHiFBuf.length !== Math.max(1, Math.floor(fft.length * 0.3))) {
+    _starHiFBuf = new Float32Array(Math.max(1, Math.floor(fft.length * 0.3)));
+  }
+  // Hautes fréquences → intensité de scintillement
+  const hiStart = Math.floor(fft.length * 0.55);
+  const hiBins  = _starHiFBuf.length;
+  let hiEnergy  = 0;
+  for (let i = 0; i < hiBins; i++) {
+    const v = fft[Math.min(hiStart + i, fft.length - 1)];
+    _starHiFBuf[i] = _starHiFBuf[i] * 0.78 + v * 0.22;
+    hiEnergy += _starHiFBuf[i];
+  }
+  hiEnergy /= hiBins * 255;
+  // Basses fréquences — reste pour l'EPS de sommeil (getMaxBandEnergy, Task 5).
+  let bassE = 0;
+  const bassEnd = Math.max(1, Math.floor(fft.length * 0.10));
+  for (let i = 0; i < bassEnd; i++) bassE += fft[i];
+  bassE /= bassEnd * 255;
+  _starBassSmooth = _starBassSmooth * 0.88 + bassE * 0.12;
+  // A11Y SC 2.3.3 : pas d'étoile filante (tween GSAP) sous reduced-motion.
+  if (!prefersReducedMotion() && beat) _launchShootingStar();
+  return hiEnergy;
+}
+
+/**
+ * Rendu mode Ciel étoilé sur #cinema-bg.
+ * Étoiles scintillantes pilotées par les hautes fréquences audio.
+ * Étoiles filantes lancées par GSAP au moment des beats.
+ * @param {CanvasRenderingContext2D} ctx
+ * @param {number} w  largeur CSS px
+ * @param {number} h  hauteur CSS px
+ * @param {number} r  @param {number} g  @param {number} b  couleur LERP courante (scalaires arrondis)
+ * @param {number} ambientT  temps d'animation en ms (depuis _ambientT de cinema-bg.js)
+ * @param {number} dtN  delta-t normalisé (dt / 16.667) — framerate-indépendant (Task 5)
+ * @param {Uint8Array|null} fft  snapshot FFT partagé de la frame (cinema-loop.js)
+ * @param {boolean} beat  beat détecté cette frame (déjà gated reduced-motion en amont)
+ */
+export function drawStarfieldFrame(ctx, w, h, r, g, b, ambientT, dtN, fft, beat) {
+  if (!_starsReady) return;
+  const hiEnergy = _updateStarAudio(fft, beat, dtN);
+
+  // Couleur dominante — étoiles légèrement éclairées par l'art
+  // PERF : starFill/glowFill reconstruits uniquement si r/g/b ont changé.
+  if (r !== _starLerpRLast || g !== _starLerpGLast || b !== _starLerpBLast) {
+    _starLerpRLast = r; _starLerpGLast = g; _starLerpBLast = b;
+    const sr = Math.min(255, r + 90), sg = Math.min(255, g + 90), sb = Math.min(255, b + 90);
+    _starFillCache     = `rgb(${sr},${sg},${sb})`;
+    _starGlowFillCache = `rgb(${r},${g},${b})`;
+  }
+  const starFill = _starFillCache;
+  const glowFill = _starGlowFillCache;
+
+  // Fond : noir profond teinté par la couleur d'art — les 3 canaux (Task 14 :
+  // l'ancien code ne teintait que le bleu → ciel noir pur pour un album rouge).
+  // Cache clé sur la somme des composantes arrondies (invalidation fiable et cheap).
+  const rTint = Math.round(r * 0.045);
+  const gTint = Math.round(g * 0.045);
+  const bTint = Math.round(b * 0.10);
+  const tintKey = rTint * 66049 + gTint * 257 + bTint; // clé compacte sans collision (<257 par canal)
+  if (tintKey !== _starBgTintLast) {
+    _starBgTintLast = tintKey;
+    _starBgFillCache = `rgba(${rTint},${gTint},${bTint},0.96)`;
+  }
+  ctx.fillStyle = _starBgFillCache;
+  ctx.fillRect(0, 0, w, h);
+
+  const t = ambientT * 0.001; // secondes
+
+  // ── Étoiles ──────────────────────────────────────────────────
+  for (let i = 0; i < _STAR_COUNT; i++) {
+    const twk = 0.4 + 0.6 * (0.5 + 0.5 * Math.sin(_starPhase[i] + t * _starSpd[i] * 5.5));
+    const bri = _starBri[i] * twk * (1 + hiEnergy * 0.7);
+    const sz  = _starSize[i] * (0.75 + twk * 0.5);
+    const px  = _starX[i] * w;
+    const py  = _starY[i] * h;
+
+    ctx.globalAlpha = Math.min(1, bri);
+
+    if (sz < 1.2) {
+      // Pixels simples — zéro arc() pour les petites étoiles
+      ctx.fillStyle = starFill;
+      ctx.fillRect(Math.round(px), Math.round(py), 1, 1);
+    } else {
+      ctx.beginPath();
+      ctx.arc(px, py, sz * 0.5, 0, Math.PI * 2);
+      ctx.fillStyle = starFill;
+      ctx.fill();
+      // Halo pour les étoiles les plus brillantes
+      if (bri > 0.55 && sz > 1.5) {
+        ctx.globalAlpha = bri * 0.12;
+        ctx.beginPath();
+        ctx.arc(px, py, sz * 2.2, 0, Math.PI * 2);
+        ctx.fillStyle = glowFill;
+        ctx.fill();
+      }
+    }
+  }
+  ctx.globalAlpha = 1;
+
+  // ── Étoiles filantes (positions tweenées par GSAP, lues ici) ─
+  for (let i = 0; i < _SHOOT_MAX; i++) {
+    const st = _shootPool[i];
+    if (st.alpha < 0.01) continue;
+
+    const cx = (st.x0 + st.prog * (st.x1 - st.x0)) * w;
+    const cy = (st.y0 + st.prog * (st.y1 - st.y0)) * h;
+    const ox = st.x0 * w, oy = st.y0 * h;
+    const dx = cx - ox, dy = cy - oy;
+    const trailLen = Math.hypot(dx, dy);
+
+    if (trailLen > 3) {
+      const ang = Math.atan2(dy, dx);
+      ctx.save();
+      ctx.translate(cx, cy);
+      ctx.rotate(ang);
+      ctx.globalAlpha = st.alpha * 0.5;
+      ctx.fillStyle = '#fff';
+      ctx.fillRect(-trailLen, -1, trailLen, 2);
+      ctx.restore();
+    }
+
+    // Tête lumineuse
+    ctx.globalAlpha = st.alpha;
+    ctx.beginPath();
+    ctx.arc(cx, cy, 2.5, 0, Math.PI * 2);
+    ctx.fillStyle = '#fff';
+    ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+}
+
+/**
+ * Lance une étoile filante GSAP dans le _shootPool (round-robin).
+ * Les coordonnées prog et alpha sont tweenées ; le RAF lit les valeurs interpolées.
+ */
+function _launchShootingStar() {
+  const idx  = _shootNext % _SHOOT_MAX;
+  _shootNext = (_shootNext + 1) % _SHOOT_MAX;
+  const star = _shootPool[idx];
+  // Direction naturelle : légèrement diagonale haut-gauche → bas-droite
+  star.x0   = 0.05 + Math.random() * 0.55;
+  star.y0   = 0.03 + Math.random() * 0.32;
+  star.x1   = star.x0 + 0.18 + Math.random() * 0.22;
+  star.y1   = star.y0 + 0.04 + Math.random() * 0.14;
+  star.prog = 0;
+  star.alpha = 1;
+  // Kill éventuel tween précédent sur ce slot
+  if (_shootTweens[idx]) { motionKill(star); _shootTweens[idx] = null; }
+  _shootTweens[idx] = tween(star, {
+    prog: 1, alpha: 0,
+    duration: 0.85 + Math.random() * 0.55,
+    ease: eases.PREMIUM,
+    onComplete() { _shootTweens[idx] = null; star.alpha = 0; },
+  });
+}
+
+/**
+ * P4 fix : tue tous les tweens GSAP du mode Vagues/Étoiles (fuite mémoire —
+ * les tweens en vol n'étaient jamais annulés à la fermeture du mode cinéma).
+ * Appelée depuis cinema-bg.js (_stopAmbientAnim → closeCinema/changement de mode).
+ */
+export function killCanvasTweens() {
+  motionKill(_waveBeatObj);
+  _waveBeatObj.v = 0;
+  for (let i = 0; i < _SHOOT_MAX; i++) {
+    if (_shootTweens[i]) {
+      motionKill(_shootPool[i]);
+      _shootTweens[i] = null;
+    }
+    _shootPool[i].alpha = 0;
+  }
+}

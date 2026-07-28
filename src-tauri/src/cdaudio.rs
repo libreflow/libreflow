@@ -50,7 +50,7 @@ fn rip_cancel_lock() -> std::sync::MutexGuard<'static, Option<HashMap<String, Ar
     guard
 }
 
-#[allow(dead_code)]
+#[cfg(target_os = "windows")]
 fn register_cancel(rip_id: &str) -> Result<Arc<AtomicBool>, String> {
     let flag = Arc::new(AtomicBool::new(false));
     let mut guard = rip_cancel_lock();
@@ -69,7 +69,7 @@ fn register_cancel(rip_id: &str) -> Result<Arc<AtomicBool>, String> {
     Ok(flag)
 }
 
-#[allow(dead_code)]
+#[cfg(target_os = "windows")]
 fn unregister_cancel(rip_id: &str) {
     let mut guard = rip_cancel_lock();
     if let Some(map) = guard.as_mut() {
@@ -199,7 +199,9 @@ pub fn cd_cancel_rip(rip_id: String) -> Result<(), String> {
             return Ok(());
         }
     }
-    Err(format!("rip_id {} not found", rip_id))
+    // rip_id absent = rip déjà terminé (CancelGuard a déjà supprimé l'entrée).
+    // Traiter comme annulation réussie plutôt que d'alerter le JS inutilement.
+    Ok(())
 }
 
 /// Returns the absolute path of the CD ephemeral-rip cache directory,
@@ -246,7 +248,7 @@ mod windows_impl {
     use windows::core::PCWSTR;
     use windows::Win32::Foundation::{CloseHandle, HANDLE};
     use windows::Win32::Storage::FileSystem::{
-        CreateFileW, FILE_FLAGS_AND_ATTRIBUTES, FILE_SHARE_READ, OPEN_EXISTING,
+        CreateFileW, FILE_FLAGS_AND_ATTRIBUTES, FILE_SHARE_READ, FILE_SHARE_WRITE, OPEN_EXISTING,
     };
     use windows::Win32::System::IO::DeviceIoControl;
 
@@ -289,7 +291,7 @@ mod windows_impl {
             CreateFileW(
                 PCWSTR(wide.as_ptr()),
                 GENERIC_READ_U32,
-                FILE_SHARE_READ,
+                FILE_SHARE_READ | FILE_SHARE_WRITE,
                 None,
                 OPEN_EXISTING,
                 FILE_FLAGS_AND_ATTRIBUTES(0),
@@ -421,6 +423,13 @@ mod windows_impl {
             ));
         }
 
+        let expected = SECTOR_BYTES * sector_count as usize;
+        if (bytes_returned as usize) < expected {
+            return Err(format!(
+                "IOCTL_CDROM_RAW_READ at LBA {}: short read ({} < {} bytes expected)",
+                start_lba, bytes_returned, expected
+            ));
+        }
         out.truncate(bytes_returned as usize);
         Ok(out)
     }

@@ -42,10 +42,6 @@ export function initDevices() {
   _pollTimer = setInterval(_poll, POLL_INTERVAL_MS);
 }
 
-/** Stoppe le polling. Utile pour HMR / teardown. */
-export function stopDevices() {
-  if (_pollTimer) { clearInterval(_pollTimer); _pollTimer = null; }
-}
 
 /** Affiche le modal d'import USB avec la liste des lecteurs amovibles courants. */
 export async function openUsbImportModal() {
@@ -161,7 +157,7 @@ export async function importFromDrive(drivePath) {
     return;
   }
 
-  const added = await importPaths(files);
+  const added = await importPaths(files, 'usb');
   if (added > 0) {
     toast(`${added} piste(s) importée(s) depuis le lecteur USB`, 'success');
   } else {

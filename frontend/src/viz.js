@@ -5,13 +5,13 @@
 // Le canal passe par les deux sources (main + crossfade) car l'analyser est en fin
 // de chaîne EQ, avant la destination.
 //
-// API publique (window.*) :
-//   window.initViz()              — à appeler une fois après initEQ()
-//   window.startViz()             — démarrer le rendu rAF (au play)
-//   window.stopViz()              — arrêter le rendu + effacer (au pause/stop)
-//   window.updateVizColor(color)  — mettre à jour la couleur (artColor → string rgb/hex)
-//   window.setVizMode(mode)       — 'bars' | 'oscilloscope' | 'circle'
-//   window.getVizMode()           — retourner le mode courant
+// API publique (exports ESM — importés directement par les modules appelants) :
+//   initViz()              — à appeler une fois après initEQ()
+//   startViz()             — démarrer le rendu rAF (au play)
+//   stopViz()              — arrêter le rendu + effacer (au pause/stop)
+//   updateVizColor(color)  — mettre à jour la couleur (artColor → string rgb/hex)
+//   setVizMode(mode)       — 'bars' | 'oscilloscope' | 'circle'
+//   getVizMode()           — retourner le mode courant
 
 import { eqAnalyser, eqCtx } from './eq.js';
 import { audio }               from './player.js';
@@ -27,6 +27,10 @@ let canvas, canvasCtx;
 let raf         = null;
 let running     = false;
 let smoothed    = null;   // Float32Array lissé entre frames
+// PERF (P1 fix) : suspendu quand le mode cinéma est ouvert — la player bar est masquée
+// sous l'overlay cinéma, la rendre est un gaspillage GPU/CPU. Le rAF reste vivant
+// (pattern cinema-viz.js:166) pour permettre un resumeViz() instantané à la fermeture.
+let _vizSuspended = false;
 // PERF : Uint8Array pré-alloué — évite new Uint8Array(128) à chaque frame (7680 bytes/s de GC)
 let _vizData    = null;
 let _premiumOsc = null;   // instance oscilloscope premium (lazy) — possède son propre rAF + RO
@@ -206,6 +210,24 @@ export function stopViz() {
   }
 }
 
+/** Suspend le rendu (mode cinéma ouvert — P1 fix) sans arrêter le rAF ni l'analyser.
+ *  Le canvas garde son dernier contenu affiché jusqu'à resumeViz()/stopViz(). */
+export function suspendViz() {
+  _vizSuspended = true;
+  // P-H3 fix : l'oscilloscope premium a son propre rAF — le stopper aussi.
+  if (_premiumOsc) _premiumOsc.stop();
+}
+
+/** Reprend le rendu suspendu par suspendViz() et force un redraw immédiat
+ *  (n'attend pas le prochain tick rAF naturel — évite un frame de contenu périmé). */
+export function resumeViz() {
+  _vizSuspended = false;
+  if (!running || !canvas || !eqAnalyser) return;
+  if (vizMode === 'oscilloscope') { _ensurePremiumOsc()?.start(); return; }
+  if (raf) { cancelAnimationFrame(raf); raf = null; }
+  _draw();
+}
+
 /** Met à jour la couleur des barres.
  *  @param {string|null} color — chaîne CSS rgb(...) ou null pour fallback accent */
 export function updateVizColor(color) {
@@ -260,6 +282,13 @@ function _ensurePremiumOsc() {
 }
 
 function _startEngine() {
+  // Bug fix : cinéma ouvert (_vizSuspended) → ne rien démarrer ici. L'oscilloscope
+  // premium (oscPremium.js) a son propre rAF sans notion de _vizSuspended -- contrairement
+  // à _draw() (bars/circle) qui s'auto-vérifie à chaque frame, le démarrer ici le ferait
+  // tourner (invisible tant que l'overlay reste ouvert, mais visible dès sa fermeture)
+  // sans jamais repasser par _vizSuspended. `running` reste vrai (posé par l'appelant
+  // avant _startEngine()) : resumeViz() démarre déjà le bon moteur quand le cinéma ferme.
+  if (_vizSuspended) return;
   if (vizMode === 'oscilloscope') {
     const p = _ensurePremiumOsc();
     if (p) p.start();
@@ -281,6 +310,9 @@ function _draw() {
   if (!running) return;
   // Garde défensive : si on est en oscilloscope, le moteur premium possède le canvas
   if (vizMode === 'oscilloscope') return;
+  // P1+P2 fix : suspendu (mode cinéma ouvert) ou onglet caché → sauter le rendu mais
+  // garder le rAF vivant (pattern cinema-viz.js:166) pour un resume instantané.
+  if (_vizSuspended || document.hidden) { raf = requestAnimationFrame(_draw); return; }
   // Vérifier eqAnalyser AVANT de planifier le prochain frame — évite une boucle infinie si l'analyser disparaît
   if (!eqAnalyser) { running = false; return; }
 
@@ -426,8 +458,3 @@ function _drawCircle(bins, w, h) {
   canvasCtx.fillStyle = _vizRgbaFill;
   canvasCtx.fill();
 }
-
-/* ── Exports window.* ─────────────────────────────────────── */
-// setVizMode / getVizMode sont intentionnellement absents ici :
-// app.js les importe et les ré-exporte sur window — un seul point d'export.
-Object.assign(window, { initViz, startViz, stopViz, updateVizColor, setVizEnabled, getVizEnabled });

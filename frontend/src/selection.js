@@ -3,7 +3,7 @@
 // Extrait de app.js.
 //
 // Remaining window.* : toast, toastWithAction, savePlaylists, renderPlNav, renderLib,
-//   updateStats, invalidateFilter, openNewPlaylistModal.
+//   invalidateFilter, openNewPlaylistModal.
 //
 // Exports publics :
 //   selection     (live Set — lu par renderTrackRow dans app.js)
@@ -15,6 +15,7 @@
 
 import { esc, mainArtist }                              from './utils.js';
 import { VIRT }                                         from './virt.js';
+import { CFG }                                          from './cfg.js';
 import { ddel }                                         from './db.js';
 import { invoke, convertFileSrc }                       from './ipc.js';
 import { i18n }                                         from './i18n.js';
@@ -25,9 +26,8 @@ import { audio, resetShuffleQ, clearCrossfadeTimers }   from './player.js';
 import { saveTrackNow }                                 from './library.js';
 import { toast, toastWithAction }                                        from './ui.js';
 import { saveCfg }                        from './cfgsave.js';
-import { setCurIdx, setTracks, setLiked, replaceTracks } from './state.js';
+import { setCurIdx, setLiked, replaceTracks } from './state.js';
 import { updateBar }                       from './playerbar.js';
-import { updateStats } from './renderer.js';
 import { savePlaylists, renderPlNav, openNewPlaylistModal } from './playlists.js';
 // Playlists demande l'effacement de la sélection — évite le cycle playlists.js ↔ selection.js.
 on(EVENTS.SELECTION_CLEAR, () => clearSelection());
@@ -268,7 +268,7 @@ export function selRemove() {
     for (const id of ids) ddel('tracks', id).catch(e => console.warn('[selection] IDB delete failed:', e));
   }, UNDO_MS);
 
-  invalidateFilterCache(); emit(EVENTS.FILTER_CHANGED, {}); clearSelection(); emit(EVENTS.RENDER_LIB, {}); updateStats();
+  invalidateFilterCache(); emit(EVENTS.FILTER_CHANGED, {}); clearSelection(); emit(EVENTS.RENDER_LIB, {});
 
   // Annulation partagée entre le bouton du toast et le raccourci clavier Ctrl+Z.
   // Idempotente : le guard `undone` empêche un double-undo si les deux se déclenchent.
@@ -280,7 +280,7 @@ export function selRemove() {
     replaceTracks(oldTracks); // ARCH-3 : set + rebuildTrackIdxMap atomique (undo)
     setLiked(oldLiked);
     resetShuffleQ();
-    invalidateFilterCache(); emit(EVENTS.FILTER_CHANGED, {}); emit(EVENTS.RENDER_LIB, {}); updateStats();
+    invalidateFilterCache(); emit(EVENTS.FILTER_CHANGED, {}); emit(EVENTS.RENDER_LIB, {});
     toast(i18n('t_sel_undo_delete'), 'info');
   };
 
@@ -464,7 +464,7 @@ export async function confirmBatchTagEdit() {
             year:         t.year    ?? null,
             track_number: t.track   ?? null,
           }}),
-          new Promise((_, rej) => setTimeout(() => rej(new Error('IPC timeout')), 15000)),
+          new Promise((_, rej) => setTimeout(() => rej(new Error('IPC timeout')), CFG.IPC_TIMEOUT_MS)),
         ]);
       }
       // Écrire la pochette si une image a été sélectionnée
@@ -474,7 +474,7 @@ export async function confirmBatchTagEdit() {
             audio_path: t.path,
             image_path: coverPath,
           }}),
-          new Promise((_, rej) => setTimeout(() => rej(new Error('cover timeout')), 20000)),
+          new Promise((_, rej) => setTimeout(() => rej(new Error('cover timeout')), CFG.IPC_COVER_TIMEOUT_MS)),
         ]);
         // Mettre à jour l'art en mémoire (blob URL via convertFileSrc)
         if (t.art && t.art.startsWith('blob:')) try { URL.revokeObjectURL(t.art); } catch {}

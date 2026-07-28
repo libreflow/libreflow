@@ -718,16 +718,9 @@ body:hover .sys-btns { opacity: 1; }
 
 <script type="module">
 import { rgbToHsl, hslToRgb, boostSat, regionAvg, sampleArtColors } from './src/artcolor.js';
-function invoke(...a) {
-  if (window.__TAURI__?.core?.invoke) return window.__TAURI__.core.invoke(...a);
-  return new Promise((res, rej) => {
-    let n = 0;
-    const t = setInterval(() => {
-      if (window.__TAURI__?.core?.invoke) { clearInterval(t); window.__TAURI__.core.invoke(...a).then(res).catch(rej); }
-      else if (++n > 200) { clearInterval(t); rej(new Error('Tauri non disponible')); }
-    }, 25);
-  });
-}
+// CLAUDE.md §4/§6 : invoke() passe par src/ipc.js (event-based ready + timeout par
+// commande) au lieu d'une réimplémentation locale par polling sans timeout.
+import { invoke } from './src/ipc.js';
 function listen(...a) {
   if (window.__TAURI__?.event?.listen) return window.__TAURI__.event.listen(...a);
   return new Promise(res => {

@@ -2,7 +2,7 @@
 // Détection et suppression de doublons dans la bibliothèque.
 // Extrait de app.js.
 //
-// Remaining window.* : confirmAction, invalidateFilter, renderLib, updateStats, toast (app.js).
+// Remaining window.* : confirmAction, invalidateFilter, renderLib, toast (app.js).
 //
 // Exports publics :
 //   detectDupes, removeDupeTrack, deleteAllDupes, closeDupes
@@ -16,7 +16,6 @@ import { trackIdx, _trackIdxMap, rebuildTrackIdxMap, invalidateFilterCache } fro
 import { audio, adjustShuffleQAfterDelete }           from './player.js';
 import { toast, confirmAction }                                        from './ui.js';
 import { setCurIdx, removeTrackAt, removeTracksBatch } from './state.js';
-import { updateStats } from './renderer.js';
 
 // ── État interne ──────────────────────────────────────────────
 let dupesGroups = [];
@@ -43,12 +42,12 @@ function _computeDupeGroups() {
 export function detectDupes() {
   _computeDupeGroups();
   _renderDupes();
-  document.getElementById('dupes-panel').classList.add('open');
+  const panel = document.getElementById('dupes-panel');
+  if (!panel) return;
+  panel.classList.add('open');
 }
 
-export function getDupesCount() { return dupesGroups.length; }
-
-export function updateDupesBadge() {
+function updateDupesBadge() {
   const badge = document.getElementById('dupes-badge');
   const countEl = document.getElementById('dupes-badge-count');
   if (!badge || !countEl) return;
@@ -115,7 +114,7 @@ export async function removeDupeTrack(id, gi, ti) {
   }
   _renderDupes();
   updateDupesBadge();
-  invalidateFilterCache(); emit(EVENTS.FILTER_CHANGED, {}); emit(EVENTS.RENDER_LIB, {}); updateStats();
+  invalidateFilterCache(); emit(EVENTS.FILTER_CHANGED, {}); emit(EVENTS.RENDER_LIB, {});
 }
 
 export async function deleteAllDupes() {
@@ -165,7 +164,7 @@ export async function deleteAllDupes() {
   dupesGroups = [];
   _renderDupes();
   updateDupesBadge();
-  invalidateFilterCache(); emit(EVENTS.FILTER_CHANGED, {}); emit(EVENTS.RENDER_LIB, {}); updateStats();
+  invalidateFilterCache(); emit(EVENTS.FILTER_CHANGED, {}); emit(EVENTS.RENDER_LIB, {});
   toast(i18n('t_dupes_deleted', removed), 'success');
   } finally {
     if (_btn) { _btn.disabled = false; if (_btn.dataset.lbl != null) { _btn.textContent = _btn.dataset.lbl; delete _btn.dataset.lbl; } }
@@ -173,7 +172,10 @@ export async function deleteAllDupes() {
 }
 
 export function closeDupes() {
-  document.getElementById('dupes-panel').classList.remove('open');
+  const panel = document.getElementById('dupes-panel');
+  if (!panel) return;
+  panel.classList.remove('open');
+  document.getElementById('dupes-badge')?.focus();
 }
 
 // ── Auto-compute dupes after library updates ──────────────────────────────────

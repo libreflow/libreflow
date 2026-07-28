@@ -18,7 +18,7 @@
 //           moved INTO playlists.js — no more app.js circular dep.
 //
 // Exports publics :
-//   savePlaylists, renderPlNav, setupPlNavDrop
+//   savePlaylists, savePlaylistsNow, renderPlNav, setupPlNavDrop
 //   renderPlHero, setPlSort, setPlModalMode
 //   openNewPlaylistModal, openRenamePlaylistModal, closePlModal, confirmPlaylistModal
 //   deletePlaylist, addTrackToPlaylist, removeTrackFromPlaylist
@@ -29,9 +29,9 @@
 //   togglePlFolder, showPlFolderCtxMenu, renamePlFolder, deletePlFolder
 //   onPlFolderDragOver, onPlFolderDragLeave, onPlFolderDrop
 //   onPlCoverSelected, clearPlCover
-//   trapFocus
 
 import { esc, moveByOne }       from './utils.js';
+import { CFG }                   from './cfg.js';
 import { i18n }                  from './i18n.js';
 import { get, set, notify }      from './store.js';
 import { emit, EVENTS }          from './bus.js';
@@ -109,6 +109,73 @@ let _heroMosaicGen    = 0;      // B19 : token anti-race pour les img.onload du 
 /** Setter pour smartplaylist.js (window.setPlModalMode). */
 export function setPlModalMode(v) { plModalMode = v; }
 
+// AUDIT-2026-07-01 C3 (SC 2.1.1 / 2.5.7) — le menu ctx playlist/dossier était
+// mort au clavier alors qu'il est le SEUL chemin rename/delete/reorder de la
+// sidebar. Pattern identique à ctxmenu.js (A11Y-01) : role=menu/menuitem,
+// focus au premier item, flèches, Enter/Space, focus restauré à la fermeture.
+let _plCtxTrigger    = null; // élément qui a ouvert le menu (focus restauré au close)
+let _plCtxKeyHandler = null; // handler clavier actif sur #pl-ctx-menu
+
+function _plCtxMenuItems(menu) {
+  // offsetParent null = item dans un sous-menu fermé (display:none) → non navigable
+  return [...menu.querySelectorAll('[role="menuitem"]')].filter(el => el.offsetParent !== null);
+}
+
+function _setupPlCtxKeyNav(menu) {
+  if (_plCtxKeyHandler) menu.removeEventListener('keydown', _plCtxKeyHandler);
+  _plCtxKeyHandler = (e) => {
+    if (e.code === 'ArrowDown' || e.code === 'ArrowUp') {
+      e.preventDefault();
+      const items = _plCtxMenuItems(menu);
+      if (!items.length) return;
+      const idx  = items.indexOf(document.activeElement);
+      const next = e.code === 'ArrowDown'
+        ? items[(idx + 1) % items.length]
+        : items[(idx - 1 + items.length) % items.length];
+      next?.focus();
+    } else if (e.code === 'Enter' || e.code === 'Space') {
+      const cur = document.activeElement;
+      if (cur && menu.contains(cur) && cur.getAttribute('role') === 'menuitem') {
+        e.preventDefault();
+        // stopPropagation : sans lui, _handleKeydown (handlers.js) simulerait un
+        // second click sur le même [data-action] → double exécution (pin/unpin…).
+        e.stopPropagation();
+        cur.click();
+      }
+    }
+  };
+  menu.addEventListener('keydown', _plCtxKeyHandler);
+}
+
+/** Nettoie le handler clavier et restaure le focus si celui-ci était dans le menu. */
+function _plCtxKeyCleanup(menu) {
+  if (_plCtxKeyHandler && menu) {
+    menu.removeEventListener('keydown', _plCtxKeyHandler);
+    _plCtxKeyHandler = null;
+  }
+  if (_plCtxTrigger) {
+    // Ne pas voler le focus si l'utilisateur a cliqué ailleurs (fermeture mousedown)
+    if (!menu || menu.contains(document.activeElement) || document.activeElement === document.body) {
+      // Si renderPlNav() a reconstruit la ligne entre-temps, le nœud mémorisé est
+      // détaché — re-résoudre par id pour restaurer le focus sur la nouvelle ligne.
+      let t = _plCtxTrigger;
+      if (!t.isConnected && t.id) t = document.getElementById(t.id) || t;
+      t.focus?.();
+    }
+    _plCtxTrigger = null;
+  }
+}
+
+/**
+ * Position d'ouverture du menu : coordonnées souris, ou — invocation clavier
+ * (Shift+F10 / touche Menu → clientX/Y = 0) — le coin bas-gauche du déclencheur.
+ */
+function _plCtxAnchor(event) {
+  if ((event.clientX || event.clientY)) return { x: event.clientX, y: event.clientY };
+  const r = event.target?.getBoundingClientRect?.();
+  return r ? { x: r.left, y: r.bottom } : { x: 0, y: 0 };
+}
+
 /** FIX-B9 — Attache les listeners mousedown + Escape pour fermer le ctx-menu playlist/dossier. */
 function _attachPlCtxClose(menu) {
   if (_plCtxClose)    { document.removeEventListener('mousedown', _plCtxClose,    true); _plCtxClose    = null; }
@@ -123,6 +190,7 @@ function _attachPlCtxClose(menu) {
     document.removeEventListener('keydown',   escHandler, true);
     if (_plCtxClose    === mdHandler)  _plCtxClose    = null;
     if (_plCtxEscClose === escHandler) _plCtxEscClose = null;
+    _plCtxKeyCleanup(menu); // AUDIT-2026-07-01 C3 : cleanup clavier + restauration focus
   };
   const mdHandler  = (e) => { if (!menu.contains(e.target)) _close(); };
   const escHandler = (e) => { if (e.code === 'Escape') { e.stopPropagation(); _close(); } };
@@ -134,14 +202,49 @@ function _attachPlCtxClose(menu) {
   }, 0);
 }
 
+/**
+ * AUDIT-2026-07-01 C3 — ouverture commune des menus ctx playlist/dossier :
+ * mémorise le déclencheur, positionne (souris ou ancre clavier), attache la
+ * fermeture (mousedown/Escape), la navigation flèches et focalise le 1er item.
+ * Factorise le code dupliqué de showPlCtxMenu / showPlFolderCtxMenu.
+ */
+function _openPlCtxMenu(menu, event) {
+  _plCtxTrigger = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+  menu.setAttribute('role', 'menu');
+  // S157 FIX-5 : positionnement basé sur la taille réelle (mesure hors écran puis clamp)
+  menu.style.visibility = 'hidden';
+  menu.style.left = '0px';
+  menu.style.top  = '0px';
+  menu.classList.add('on');
+  const mw  = menu.offsetWidth  || 200;
+  const mh  = menu.offsetHeight || 200;
+  const pad = 8;
+  const a = _plCtxAnchor(event);
+  menu.style.left = Math.max(pad, Math.min(a.x, window.innerWidth  - mw - pad)) + 'px';
+  menu.style.top  = Math.max(pad, Math.min(a.y, window.innerHeight - mh - pad)) + 'px';
+  menu.style.visibility = '';
+  // FIX-B9 : fermeture mousedown extérieur + Escape (LEAK-1 FIX étendu)
+  _attachPlCtxClose(menu);
+  _setupPlCtxKeyNav(menu);
+  setTimeout(() => _plCtxMenuItems(menu)[0]?.focus(), 30);
+}
+
 // ══ Persistance ══════════════════════════════════════════════════════════════
 
-export async function savePlaylists() {
+// Coalescing debounce: all concurrent `await savePlaylists()` callers share one
+// IDB write per burst. Errors propagate to every waiter.
+let _savePlTimer   = null;
+let _savePlPending = [];
+
+async function _flushPlaylists() {
+  _savePlTimer = null;
+  const pending = _savePlPending.splice(0);
   const playlists = get('playlists');
-  notify('playlists'); emit(EVENTS.PLAYLIST_CHANGED, { playlists }); // BUG-M4 FIX : mutation in-place → notify() (set() ignore same-ref)
+  // BUG-M4 FIX : mutation in-place → notify() (set() ignore same-ref)
+  // AUDIT-2026-07-01 L4 : emit(PLAYLIST_CHANGED) retiré — zéro abonné, notify() fait foi.
+  notify('playlists');
   try {
     // Transaction atomique : clear + écriture en un seul commit
-    // Évite la perte de données si l'app crashe entre clear() et les dput() individuels
     const transaction = DB.transaction('playlists', 'readwrite');
     const store = transaction.objectStore('playlists');
     store.clear();
@@ -150,38 +253,24 @@ export async function savePlaylists() {
       transaction.oncomplete = ok;
       transaction.onerror   = () => fail(transaction.error);
     });
-  } catch(e) { console.warn('[savePlaylists]', e); }
+    pending.forEach(({ resolve }) => resolve());
+  } catch (e) {
+    console.warn('[savePlaylists]', e);
+    pending.forEach(({ reject }) => reject(e));
+  }
 }
 
-// ══ Focus trap (WCAG 2.1.2) ══════════════════════════════════════════════════
-// Confine le focus clavier à l'intérieur d'un modal tant qu'il est visible.
-// Retourne une fonction de cleanup pour retirer le listener.
-export function trapFocus(containerEl) {
-  const FOCUSABLE = [
-    'a[href]', 'button:not([disabled])', 'input:not([disabled])',
-    'select:not([disabled])', 'textarea:not([disabled])', '[tabindex]:not([tabindex="-1"])'
-  ].join(',');
-  function handler(e) {
-    if (e.code !== 'Tab') return;
-    const visible = containerEl.classList.contains('on') ||
-                    containerEl.style.display === 'flex';
-    if (!visible) return;
-    const els = [...containerEl.querySelectorAll(FOCUSABLE)]
-      .filter(el => el.offsetParent !== null && !el.closest('[hidden]'));
-    if (!els.length) { e.preventDefault(); return; }
-    const first = els[0], last = els[els.length - 1];
-    if (e.shiftKey) {
-      if (!containerEl.contains(document.activeElement) || document.activeElement === first) {
-        e.preventDefault(); last.focus();
-      }
-    } else {
-      if (!containerEl.contains(document.activeElement) || document.activeElement === last) {
-        e.preventDefault(); first.focus();
-      }
-    }
-  }
-  containerEl.addEventListener('keydown', handler);
-  return () => containerEl.removeEventListener('keydown', handler);
+export function savePlaylists() {
+  return new Promise((resolve, reject) => {
+    _savePlPending.push({ resolve, reject });
+    clearTimeout(_savePlTimer);
+    _savePlTimer = setTimeout(_flushPlaylists, CFG.PL_SAVE_DEBOUNCE);
+  });
+}
+
+export async function savePlaylistsNow() {
+  clearTimeout(_savePlTimer);
+  await _flushPlaylists();
 }
 
 // ══ PLAYLISTS ════════════════════════════════════════════════════════════════
@@ -342,6 +431,9 @@ export function _plHeroInlineRename(plId) {
 
   const finish = async () => {
     if (el.contentEditable !== 'true') return;
+    // AUDIT-2026-07-01 L5 : retirer onKey aussi sur le chemin blur simple (clic
+    // ailleurs) — avant, le listener keydown fuyait jusqu'au prochain renderPlHero.
+    el.removeEventListener('keydown', onKey);
     el.contentEditable = 'false';
     const newName = el.textContent.trim();
     if (newName && newName !== orig) {
@@ -427,6 +519,11 @@ export function _plNavInlineRename(plId, spanEl) {
 }
 
 // ── S91 — Vague A : rendu sectionné (Pinned / Récentes / Dossiers / Autres) ──
+// AUDIT-2026-07-01 C5/H9/M4 : la ligne était un <button> contenant des <span>
+// cliquables (HTML invalide, ▶/⋯ inexistants pour AT), sans aria-current, avec
+// un nom accessible pollué par le compteur. Nouvelle structure : div role=button
+// (activation Enter/Space via _handleKeydown de handlers.js) + vrais <button>
+// enfants pour ▶ et ⋯.
 function _plNavItemHTML(pl) {
   const count    = pl.trackIds ? pl.trackIds.length : 0;
   const isSmart  = !!pl.smart;
@@ -435,8 +532,9 @@ function _plNavItemHTML(pl) {
   const isActive = view === 'playlist' && curPlId === pl.id;
   const isPinned = !!pl.pinned;
   return `
-  <button class="ni ni-pl${isActive?' on':''}${isSmart?' smart':''}${pl.coverB64?' has-cover':''}${isPinned?' pinned':''}"
-    id="ni-pl-${pl.id}" data-action="set-view" data-view="playlist" data-pl-id="${pl.id}"
+  <div class="ni ni-pl${isActive?' on':''}${isSmart?' smart':''}${pl.coverB64?' has-cover':''}${isPinned?' pinned':''}"
+    id="ni-pl-${pl.id}" role="button" tabindex="0" aria-label="${esc(pl.name)}"${isActive ? ' aria-current="page"' : ''}
+    data-action="set-view" data-view="playlist" data-pl-id="${pl.id}"
     draggable="true" data-pl-drag-id="${pl.id}"
     data-pl-ctx-id="${pl.id}">
     <span class="pl-icon">
@@ -446,101 +544,122 @@ function _plNavItemHTML(pl) {
           ? `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>`
           : `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>`)
       }
+      ${isPinned ? `<svg class="pl-pin-badge" viewBox="0 0 24 24" width="9" height="9" fill="currentColor" aria-hidden="true"><path d="M12 2l1.4 4.3h4.5l-3.6 2.6 1.4 4.3L12 10.6 8.3 13.2l1.4-4.3L6.1 6.3h4.5z"/></svg>` : ''}
     </span>
     <span class="pl-name" data-pl-rename-id="${pl.id}" title="${i18n('pl_rename_title')} (double-clic)">${esc(pl.name)}</span>
-    ${isPinned ? `<svg class="pl-pin-badge" viewBox="0 0 24 24" width="10" height="10" fill="currentColor" aria-hidden="true"><path d="M12 2l1.4 4.3h4.5l-3.6 2.6 1.4 4.3L12 10.6 8.3 13.2l1.4-4.3L6.1 6.3h4.5z"/></svg>` : ''}
-    ${count > 0 ? `<span class="pl-count">${count}</span>` : ''}
-    <span class="pl-play" title="${i18n('pl_play_all')}" data-action="play-pl-direct" data-pl-id="${pl.id}">
-      <svg viewBox="0 0 24 24" width="11" height="11"><polygon points="6 3 20 12 6 21" fill="currentColor"/></svg>
+    ${count > 0 ? `<span class="pl-count" aria-hidden="true">${count}</span>` : ''}
+    <span class="pl-actions">
+      <button type="button" class="pl-play" title="${i18n('pl_play_all')}" aria-label="${i18n('pl_play_all')}" data-action="play-pl-direct" data-pl-id="${pl.id}">
+        <svg viewBox="0 0 24 24" width="11" height="11" aria-hidden="true"><polygon points="6 3 20 12 6 21" fill="currentColor"/></svg>
+      </button>
+      <button type="button" class="pl-more" title="${i18n('pl_more')}" aria-label="${i18n('pl_more')}" data-action="show-pl-ctx" data-pl-id="${pl.id}">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1.5" fill="currentColor"/><circle cx="12" cy="12" r="1.5" fill="currentColor"/><circle cx="19" cy="12" r="1.5" fill="currentColor"/></svg>
+      </button>
     </span>
-    <span class="pl-more" title="${i18n('pl_more')}" data-action="show-pl-ctx" data-pl-id="${pl.id}">
-      <svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.5" fill="currentColor"/><circle cx="12" cy="12" r="1.5" fill="currentColor"/><circle cx="19" cy="12" r="1.5" fill="currentColor"/></svg>
-    </span>
-  </button>`;
+  </div>`;
 }
 
 
-export function renderPlNav() {
-  const el = document.getElementById('pl-list-nav');
-  if (!el) return;
-  const playlists = get('playlists');
-  const plFolders = get('plFolders');
-  const recentPls = get('recentPls');
-
-  if (!playlists.length && !plFolders.length) {
-    el.innerHTML = `<div style="padding:6px 14px;font-size:11px;color:var(--t3);">${i18n('pl_empty')}</div>`;
-    return;
-  }
-
-  const visible = playlists;
-
-  // Index rapide id → playlist
-  const byId = new Map(visible.map(p => [p.id, p]));
+/**
+ * Construit le HTML sectionné de la nav playlists (Épinglées / Récentes /
+ * Dossiers / Hors dossier). Extrait de renderPlNav (règle <50 lignes, §16).
+ * @returns {string[]} fragments HTML dans l'ordre d'affichage
+ */
+function _plNavSectionsHTML(playlists, plFolders) {
+  const folderIds = new Set(plFolders.map(f => f.id));
 
   // Section 1 : Épinglées (respecte l'ordre dans `playlists`)
-  const pinned = visible.filter(p => p.pinned);
+  const pinned = playlists.filter(p => p.pinned);
 
-  // Section 2 : Récentes (plus de 2 items, hors épinglées)
-  const recents = recentPls
-    .map(id => byId.get(id))
-    .filter(p => p && !p.pinned)
-    .slice(0, 5);
-
-  // Section 3 : Dossiers + playlists hors dossier
-  // AUDIT-2026-05-22 : alimenter shownRecentIds avec les ids deja affiches en
-  // section "Recentes" — sans ca la deduplication echoue et les playlists
-  // recentes reapparaissent en double dans la section 3.
-  const shownRecentIds = new Set(recents.map(p => p.id));
-  const folderIds = new Set(plFolders.map(f => f.id));
-  const ungroupedOrNoFolder = visible.filter(p =>
+  // REWORK-1 (2026-07-02) : la section « Récentes » est supprimée — elle
+  // réordonnait la sidebar à chaque ouverture (instabilité spatiale) et
+  // collisionnait avec l'item nav « Récents ». La récence vit désormais dans
+  // le tri de la grille playlists (plGridSort='recent', cf. renderer-grids.js).
+  const ungroupedOrNoFolder = playlists.filter(p =>
     !p.pinned &&
-    !shownRecentIds.has(p.id) &&
     (!p.folderId || !folderIds.has(p.folderId))
   );
 
-  // Ordre d'affichage des sections
   const parts = [];
-
   if (pinned.length) {
     parts.push(`<div class="pl-nav-section-h">${i18n('pl_section_pinned')}</div>`);
     parts.push(pinned.map(_plNavItemHTML).join(''));
   }
-
   // Dossiers — regroupement O(N+F) au lieu de O(N×F)
   const byFolder = new Map();
-  for (const p of visible) {
+  for (const p of playlists) {
     if (p.folderId && !p.pinned) {
       if (!byFolder.has(p.folderId)) byFolder.set(p.folderId, []);
       byFolder.get(p.folderId).push(p);
     }
   }
   for (const folder of plFolders) {
-    const inside = byFolder.get(folder.id) || [];
-    const collapsed = !!folder.collapsed;
-    parts.push(`
-      <div class="pl-folder${collapsed?' collapsed':''}" data-folder-id="${folder.id}">
-        <div class="pl-folder-h"
-             data-action="toggle-pl-folder" data-folder-id="${folder.id}"
-             data-pl-folder-ctx-id="${folder.id}"
-             data-folder-drop-id="${folder.id}"
-             title="${esc(folder.name)}">
-          <svg class="pl-folder-chev" viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
-          <svg class="pl-folder-ico" viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
-          <span class="pl-folder-name">${esc(folder.name)}</span>
-          <span class="pl-folder-count">${inside.length}</span>
-        </div>
-        <div class="pl-folder-body">
-          ${inside.map(_plNavItemHTML).join('') || `<div class="pl-folder-empty">${i18n('pl_folder_empty')}</div>`}
-        </div>
-      </div>
-    `);
+    parts.push(_plFolderHTML(folder, byFolder.get(folder.id) || []));
   }
-
   if (ungroupedOrNoFolder.length) {
     parts.push(ungroupedOrNoFolder.map(_plNavItemHTML).join(''));
   }
+  return parts;
+}
 
+/** Bloc dossier (en-tête focalisable + corps). Extrait de renderPlNav (§16). */
+function _plFolderHTML(folder, inside) {
+  const collapsed = !!folder.collapsed;
+  return `
+    <div class="pl-folder${collapsed?' collapsed':''}" data-folder-id="${folder.id}">
+      <div class="pl-folder-h"
+           role="button" tabindex="0" aria-expanded="${collapsed ? 'false' : 'true'}"
+           aria-label="${esc(folder.name)}"
+           data-action="toggle-pl-folder" data-folder-id="${folder.id}"
+           data-pl-folder-ctx-id="${folder.id}"
+           data-folder-drop-id="${folder.id}"
+           title="${esc(folder.name)}">
+        <svg class="pl-folder-chev" viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="9 18 15 12 9 6"/></svg>
+        <svg class="pl-folder-ico" viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
+        <span class="pl-folder-name">${esc(folder.name)}</span>
+        <span class="pl-folder-count" aria-hidden="true">${inside.length}</span>
+      </div>
+      <div class="pl-folder-body">
+        ${inside.map(_plNavItemHTML).join('') || `<div class="pl-folder-empty">${i18n('pl_folder_empty')}</div>`}
+      </div>
+    </div>
+  `;
+}
+
+export function renderPlNav() {
+  const el = document.getElementById('pl-list-nav');
+  if (!el) return;
+  const playlists = get('playlists');
+  const plFolders = get('plFolders');
+
+  if (!playlists.length && !plFolders.length) {
+    // AUDIT-2026-07-01 M3-CSS : utiliser l'empty-state designé (.pl-nav-empty,
+    // style.css) au lieu d'un div inline avec px codés en dur.
+    el.innerHTML = `<div class="pl-nav-empty">
+      <svg class="pl-nav-empty-ico" viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
+      <div class="pl-nav-empty-h">${i18n('pl_empty')}</div>
+      <button type="button" class="pl-nav-empty-btn" data-action="new-playlist">${i18n('pl_new')}</button>
+    </div>`;
+    return;
+  }
+
+  const parts = _plNavSectionsHTML(playlists, plFolders);
+
+  // AUDIT-2026-07-01 H9 (SC 2.4.3) : le swap innerHTML détruisait le focus
+  // clavier (perdu sur <body> après un « Déplacer vers le haut », un pin, etc.).
+  // Mémoriser l'élément focalisé (id ou en-tête de dossier) et le re-focaliser.
+  const _act = document.activeElement;
+  let _refocus = null;
+  if (el.contains(_act)) {
+    const idHost = _act.closest('[id]');
+    if (idHost?.id) _refocus = '#' + CSS.escape(idHost.id);
+    else if (_act.classList?.contains('pl-folder-h')) {
+      const fid = _act.closest('.pl-folder')?.dataset.folderId;
+      if (fid) _refocus = `.pl-folder[data-folder-id="${CSS.escape(fid)}"] .pl-folder-h`;
+    }
+  }
   el.innerHTML = parts.join('');
+  if (_refocus) el.querySelector(_refocus)?.focus();
   // Sync la grille playlists si elle est actuellement affichée
   if (get('view') === 'playlists') renderPlaylistsGrid();
 }
@@ -588,7 +707,11 @@ export function togglePlFolder(folderId) {
   f.collapsed = !f.collapsed;
   saveCfg();
   const el = document.querySelector(`.pl-folder[data-folder-id="${folderId}"]`);
-  if (el) el.classList.toggle('collapsed', f.collapsed);
+  if (el) {
+    el.classList.toggle('collapsed', f.collapsed);
+    // AUDIT-2026-07-01 C4 : refléter l'état plié/déplié pour les AT
+    el.querySelector('.pl-folder-h')?.setAttribute('aria-expanded', f.collapsed ? 'false' : 'true');
+  }
 }
 
 export function showPlFolderCtxMenu(event, folderId) {
@@ -603,30 +726,15 @@ export function showPlFolderCtxMenu(event, folderId) {
     document.body.appendChild(menu);
   }
   menu.innerHTML = `
-    <div class="ctx-item" data-action="rename-pl-folder" data-folder-id="${folderId}">
-      <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41L13.42 20.58a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><circle cx="7" cy="7" r="1.2" fill="currentColor" stroke="none"/></svg>
+    <div class="ctx-item" role="menuitem" tabindex="-1" data-action="rename-pl-folder" data-folder-id="${folderId}">
+      <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20.59 13.41L13.42 20.58a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><circle cx="7" cy="7" r="1.2" fill="currentColor" stroke="none"/></svg>
       ${i18n('pl_folder_rename')}
     </div>
-    <div class="ctx-item ctx-item--danger" data-action="delete-pl-folder" data-folder-id="${folderId}">
-      <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M9 6V4h6v2"/></svg>
+    <div class="ctx-item ctx-item--danger" role="menuitem" tabindex="-1" data-action="delete-pl-folder" data-folder-id="${folderId}">
+      <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M9 6V4h6v2"/></svg>
       ${i18n('pl_folder_delete')}
     </div>`;
-  // S157 FIX-5 : positionnement basé sur la hauteur réelle du menu (pas sur -100 fixe)
-  // Affichage temporaire hors écran pour mesurer, puis clamp dans le viewport
-  menu.style.visibility = 'hidden';
-  menu.style.left = '0px';
-  menu.style.top  = '0px';
-  menu.classList.add('on');
-  const mw = menu.offsetWidth  || 180;
-  const mh = menu.offsetHeight || 100;
-  const pad = 8;
-  const x = Math.max(pad, Math.min(event.clientX, window.innerWidth  - mw - pad));
-  const y = Math.max(pad, Math.min(event.clientY, window.innerHeight - mh - pad));
-  menu.style.left = x + 'px';
-  menu.style.top  = y + 'px';
-  menu.style.visibility = '';
-  // FIX-B9 : fermeture mousedown extérieur + Escape (LEAK-1 FIX étendu)
-  _attachPlCtxClose(menu);
+  _openPlCtxMenu(menu, event);
 }
 
 // ── Pinned ────────────────────────────────────────────────────
@@ -675,13 +783,12 @@ export function showPlQuickPop(e, trackId, triggerEl) {
   const pop = document.getElementById('pl-quick-pop');
   const playlists = get('playlists');
   if (!playlists.length) { openNewPlaylistModal(trackId); return; }
+  // AUDIT-2026-07-01 L3 : branche smart supprimée — la liste est déjà filtrée
+  // sur !pl.smart trois lignes plus haut, l'icône étoile était inatteignable.
   pop.innerHTML = `<div class="pqp-head">${i18n('pl_add_to_hd')}</div>` +
     playlists.filter(pl => !pl.smart).map(pl => `
       <div class="pqp-item" data-action="pqp-add" data-pl-id="${pl.id}">
-        ${pl.smart
-          ? `<svg viewBox="0 0 24 24" width="12" height="12" fill="currentColor" stroke="none" style="color:#f59e0b;flex-shrink:0"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>`
-          : `<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" style="flex-shrink:0"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>`
-        }
+        <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" style="flex-shrink:0"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
         <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(pl.name)}</span>
         <span style="font-size:10px;color:var(--t3)">${pl.trackIds.length}</span>
       </div>`).join('') +
@@ -730,7 +837,14 @@ export function pqpNew() {
   openNewPlaylistModal(_pqpTrackId);
 }
 export function closePlCtxMenu() {
-  document.getElementById('pl-ctx-menu')?.classList.remove('on');
+  const menu = document.getElementById('pl-ctx-menu');
+  if (!menu || !menu.classList.contains('on')) return;
+  menu.classList.remove('on');
+  // AUDIT-2026-07-01 C3 : détacher aussi les listeners document (avant : ils
+  // traînaient jusqu'au prochain mousedown extérieur) + cleanup clavier/focus.
+  if (_plCtxClose)    { document.removeEventListener('mousedown', _plCtxClose,    true); _plCtxClose    = null; }
+  if (_plCtxEscClose) { document.removeEventListener('keydown',   _plCtxEscClose, true); _plCtxEscClose = null; }
+  _plCtxKeyCleanup(menu);
 }
 
 export function getPqpTrackId() { return _pqpTrackId; }
@@ -779,8 +893,11 @@ export function movePlaylistTrack(trackId, dir) {
 
 /**
  * WCAG 2.2 SC 2.5.7 — alternative non-drag à la réorganisation des playlists dans
- * la sidebar : déplace la playlist `plId` d'un cran (dir -1 = haut, +1 = bas)
- * dans le tableau `playlists`. Persiste (savePlaylists, débouncé) puis re-render nav.
+ * la sidebar : déplace la playlist `plId` d'un cran (dir -1 = haut, +1 = bas).
+ * AUDIT-2026-07-01 M3 : le déplacement se fait par rapport au voisin du même
+ * groupe VISUEL (épinglées / même dossier / hors dossier) — un cran dans le
+ * tableau brut pouvait être un no-op à l'écran (voisin array = autre section).
+ * Persiste (savePlaylists, débouncé) puis re-render nav.
  * @param {string} plId
  * @param {-1|1}   dir
  * @returns {boolean} true si l'ordre a changé
@@ -788,7 +905,22 @@ export function movePlaylistTrack(trackId, dir) {
 export function movePlaylist(plId, dir) {
   const playlists = get('playlists');
   const idx = playlists.findIndex(p => p.id === plId);
-  if (moveByOne(playlists, idx, dir) < 0) return false;
+  if (idx < 0) return false;
+  const pl = playlists[idx];
+  const folderIds = new Set(get('plFolders').map(f => f.id));
+  const inFolder = !pl.pinned && pl.folderId && folderIds.has(pl.folderId);
+  const sameGroup = p => pl.pinned ? !!p.pinned
+    : inFolder ? (!p.pinned && p.folderId === pl.folderId)
+    : (!p.pinned && (!p.folderId || !folderIds.has(p.folderId)));
+  let nIdx = -1;
+  for (let i = idx + dir; i >= 0 && i < playlists.length; i += dir) {
+    if (sameGroup(playlists[i])) { nIdx = i; break; }
+  }
+  if (nIdx < 0) return false; // butée du groupe
+  const [moved] = playlists.splice(idx, 1);
+  // Après le splice, insérer à nIdx place l'item juste avant (dir -1) ou juste
+  // après (dir +1, le voisin ayant reculé d'un cran) le voisin de même groupe.
+  playlists.splice(nIdx, 0, moved);
   savePlaylists();
   renderPlNav();
   return true;
@@ -804,12 +936,13 @@ export function _attachPlaylistReorder(tlist) {
     if (!row || !_dragTrackId) return;
     e.preventDefault();
     e.dataTransfer.dropEffect = 'move';
-    // Clear previous indicators
+    // AUDIT-2026-07-01 : lire la géométrie AVANT les écritures de classes —
+    // l'ordre écriture→lecture→écriture forçait un reflow synchrone par événement.
+    const rect = row.getBoundingClientRect();
+    const mid  = rect.top + rect.height / 2;
     tlist.querySelectorAll('.pl-drop-above,.pl-drop-below').forEach(el => {
       el.classList.remove('pl-drop-above', 'pl-drop-below');
     });
-    const rect = row.getBoundingClientRect();
-    const mid  = rect.top + rect.height / 2;
     row.classList.add(e.clientY < mid ? 'pl-drop-above' : 'pl-drop-below');
   };
 
@@ -886,114 +1019,139 @@ export function onPlNavDragStart(e, plId) {
   if (btn) setTimeout(() => btn.classList.add('pl-dragging'), 0);
 }
 
-// setupPlNavDrop : utilise la délégation d'événements sur le conteneur nav.
-// Appelé une seule fois à l'init — idempotent grâce au flag _initialized.
+// ── setupPlNavDrop : délégation d'événements sur le conteneur nav ────────────
+// Handlers extraits en fonctions module (règle <50 lignes, §16).
+
+function _onPlNavDragOver(nav, e) {
+  // Priorité 1 : drag d'une playlist vers un dossier
+  if (_dragPlId) {
+    const folderEl = e.target.closest('[data-folder-drop-id]');
+    if (folderEl) {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      nav.querySelectorAll('.pl-folder-drop').forEach(f => f.classList.remove('pl-folder-drop'));
+      folderEl.classList.add('pl-folder-drop');
+      return;
+    }
+  }
+  const btn = e.target.closest('.ni-pl');
+  if (!btn) return;
+  e.preventDefault();
+  // S89 : si on réorganise une playlist (mode move), afficher les indicateurs above/below
+  if (_dragPlId) {
+    e.dataTransfer.dropEffect = 'move';
+    // AUDIT-2026-07-01 : lecture géométrie avant écritures (anti layout-thrash)
+    const isSelf = btn.id === 'ni-pl-' + _dragPlId;
+    const rect = isSelf ? null : btn.getBoundingClientRect();
+    nav.querySelectorAll('.ni-pl.pl-drop-above, .ni-pl.pl-drop-below, .ni-pl.drag-over')
+       .forEach(b => b.classList.remove('pl-drop-above', 'pl-drop-below', 'drag-over'));
+    // Ne pas afficher d'indicateur sur la playlist en cours de drag
+    if (isSelf) return;
+    const mid = rect.top + rect.height / 2;
+    btn.classList.add(e.clientY < mid ? 'pl-drop-above' : 'pl-drop-below');
+    return;
+  }
+  // Sinon : drop d'une piste → ajout à la playlist (comportement existant)
+  if (_dragTrackId) {
+    e.dataTransfer.dropEffect = 'copy';
+    nav.querySelectorAll('.ni-pl.drag-over').forEach(b => b.classList.remove('drag-over'));
+    btn.classList.add('drag-over');
+  }
+}
+
+function _onPlNavDragLeave(nav, e) {
+  // Retrait du highlight dossier dès qu'on quitte son en-tête
+  const folderEl = e.target.closest('[data-folder-drop-id]');
+  if (folderEl && !folderEl.contains(e.relatedTarget)) {
+    folderEl.classList.remove('pl-folder-drop');
+  }
+  if (!nav.contains(e.relatedTarget)) {
+    nav.querySelectorAll('.pl-folder-drop').forEach(f => f.classList.remove('pl-folder-drop'));
+    nav.querySelectorAll('.ni-pl.drag-over, .ni-pl.pl-drop-above, .ni-pl.pl-drop-below')
+       .forEach(b => b.classList.remove('drag-over', 'pl-drop-above', 'pl-drop-below'));
+  }
+}
+
+/** S89 : réorganisation par drop sur une ligne .ni-pl (extrait de _onPlNavDrop). */
+async function _dropReorderPlaylist(e, btn, fromId) {
+  const toId = btn.id.replace('ni-pl-', '');
+  const rect = btn.getBoundingClientRect();
+  const insertBefore = e.clientY < rect.top + rect.height / 2;
+  const playlists = get('playlists');
+  const fromIdx = playlists.findIndex(p => p.id === fromId);
+  let   toIdx   = playlists.findIndex(p => p.id === toId);
+  if (fromIdx < 0 || toIdx < 0) return;
+  // AUDIT-2026-07-01 M3 : adopter le conteneur visuel de la cible — déposer
+  // entre deux lignes d'un dossier rejoint ce dossier, déposer sur une ligne
+  // hors dossier en sort. Avant : l'array était réordonné mais l'item restait
+  // dans sa section → aucun changement visible.
+  const _fromPl = playlists[fromIdx];
+  const _toPl   = playlists[toIdx];
+  if (!_fromPl.pinned && _fromPl.folderId !== _toPl.folderId) {
+    if (_toPl.folderId) _fromPl.folderId = _toPl.folderId;
+    else delete _fromPl.folderId;
+  }
+  if (!insertBefore) toIdx++;
+  if (fromIdx < toIdx) toIdx--;
+  if (fromIdx === toIdx) return;
+  const [moved] = playlists.splice(fromIdx, 1);
+  playlists.splice(toIdx, 0, moved);
+  // BUG-M4 FIX : ne pas appeler set() ici — savePlaylists() appelle notify() qui force-notifie
+  await savePlaylists();
+  renderPlNav();
+}
+
+async function _onPlNavDrop(nav, e) {
+  e.preventDefault();
+  // Nettoyage global des highlights
+  nav.querySelectorAll('.pl-folder-drop').forEach(f => f.classList.remove('pl-folder-drop'));
+  nav.querySelectorAll('.ni-pl.drag-over, .ni-pl.pl-drop-above, .ni-pl.pl-drop-below')
+     .forEach(b => b.classList.remove('drag-over', 'pl-drop-above', 'pl-drop-below'));
+
+  // Priorité 1 : drop d'une playlist dans un dossier
+  const folderEl = e.target.closest('[data-folder-drop-id]');
+  if (folderEl && _dragPlId) {
+    e.stopPropagation();
+    const folderId = folderEl.dataset.folderDropId;
+    const pl = get('playlists').find(p => p.id === _dragPlId);
+    _dragPlId = null;
+    if (!pl || pl.folderId === folderId) return;
+    pl.folderId = folderId;
+    await savePlaylists();
+    renderPlNav();
+    // B29 FIX : passer le nom du dossier à i18n — sinon toast « … « undefined » ».
+    const folder = get('plFolders').find(f => f.id === folderId);
+    toast(i18n('t_pl_moved_to_folder', folder?.name) || 'Déplacée dans le dossier', 'success');
+    return;
+  }
+
+  const btn = e.target.closest('.ni-pl');
+
+  // S89 : réorganisation de playlists
+  if (_dragPlId) {
+    const fromId = _dragPlId;
+    _dragPlId = null;
+    if (!btn || btn.id === 'ni-pl-' + fromId) return;
+    await _dropReorderPlaylist(e, btn, fromId);
+    return;
+  }
+
+  // Drop d'une piste sur une playlist (comportement existant)
+  if (!btn || !_dragTrackId) return;
+  const plId = btn.id.replace('ni-pl-', '');
+  addTrackToPlaylist(_dragTrackId, plId);
+  _dragTrackId = null;
+}
+
+// Appelé une seule fois à l'init — idempotent grâce au flag _plNavDropInit.
 export function setupPlNavDrop() {
   const nav = document.getElementById('pl-list-nav');
   if (!nav || _plNavDropInit) return;
   _plNavDropInit = true;
 
-  nav.addEventListener('dragover', e => {
-    // Priorité 1 : drag d'une playlist vers un dossier
-    if (_dragPlId) {
-      const folderEl = e.target.closest('[data-folder-drop-id]');
-      if (folderEl) {
-        e.preventDefault();
-        e.dataTransfer.dropEffect = 'move';
-        nav.querySelectorAll('.pl-folder-drop').forEach(f => f.classList.remove('pl-folder-drop'));
-        folderEl.classList.add('pl-folder-drop');
-        return;
-      }
-    }
-    const btn = e.target.closest('.ni-pl');
-    if (!btn) return;
-    e.preventDefault();
-    // S89 : si on réorganise une playlist (mode move), afficher les indicateurs above/below
-    if (_dragPlId) {
-      e.dataTransfer.dropEffect = 'move';
-      nav.querySelectorAll('.ni-pl.pl-drop-above, .ni-pl.pl-drop-below, .ni-pl.drag-over')
-         .forEach(b => b.classList.remove('pl-drop-above', 'pl-drop-below', 'drag-over'));
-      // Ne pas afficher d'indicateur sur la playlist en cours de drag
-      if (btn.id === 'ni-pl-' + _dragPlId) return;
-      const rect = btn.getBoundingClientRect();
-      const mid  = rect.top + rect.height / 2;
-      btn.classList.add(e.clientY < mid ? 'pl-drop-above' : 'pl-drop-below');
-      return;
-    }
-    // Sinon : drop d'une piste → ajout à la playlist (comportement existant)
-    if (_dragTrackId) {
-      e.dataTransfer.dropEffect = 'copy';
-      nav.querySelectorAll('.ni-pl.drag-over').forEach(b => b.classList.remove('drag-over'));
-      btn.classList.add('drag-over');
-    }
-  });
-  nav.addEventListener('dragleave', e => {
-    // Retrait du highlight dossier dès qu'on quitte son en-tête
-    const folderEl = e.target.closest('[data-folder-drop-id]');
-    if (folderEl && !folderEl.contains(e.relatedTarget)) {
-      folderEl.classList.remove('pl-folder-drop');
-    }
-    if (!nav.contains(e.relatedTarget)) {
-      nav.querySelectorAll('.pl-folder-drop').forEach(f => f.classList.remove('pl-folder-drop'));
-      nav.querySelectorAll('.ni-pl.drag-over, .ni-pl.pl-drop-above, .ni-pl.pl-drop-below')
-         .forEach(b => b.classList.remove('drag-over', 'pl-drop-above', 'pl-drop-below'));
-    }
-  });
-  nav.addEventListener('drop', async e => {
-    e.preventDefault();
-    // Nettoyage global des highlights
-    nav.querySelectorAll('.pl-folder-drop').forEach(f => f.classList.remove('pl-folder-drop'));
-    nav.querySelectorAll('.ni-pl.drag-over, .ni-pl.pl-drop-above, .ni-pl.pl-drop-below')
-       .forEach(b => b.classList.remove('drag-over', 'pl-drop-above', 'pl-drop-below'));
-
-    // Priorité 1 : drop d'une playlist dans un dossier
-    const folderEl = e.target.closest('[data-folder-drop-id]');
-    if (folderEl && _dragPlId) {
-      e.stopPropagation();
-      const folderId = folderEl.dataset.folderDropId;
-      const pl = get('playlists').find(p => p.id === _dragPlId);
-      _dragPlId = null;
-      if (!pl || pl.folderId === folderId) return;
-      pl.folderId = folderId;
-      await savePlaylists();
-      renderPlNav();
-      // B29 FIX : passer le nom du dossier à i18n — sinon toast « … « undefined » ».
-      const folder = get('plFolders').find(f => f.id === folderId);
-      toast(i18n('t_pl_moved_to_folder', folder?.name) || 'Déplacée dans le dossier', 'success');
-      return;
-    }
-
-    const btn = e.target.closest('.ni-pl');
-
-    // S89 : réorganisation de playlists
-    if (_dragPlId) {
-      const fromId = _dragPlId;
-      _dragPlId = null;
-      if (!btn || btn.id === 'ni-pl-' + fromId) return;
-      const toId = btn.id.replace('ni-pl-', '');
-      const rect = btn.getBoundingClientRect();
-      const insertBefore = e.clientY < rect.top + rect.height / 2;
-      const playlists = get('playlists');
-      const fromIdx = playlists.findIndex(p => p.id === fromId);
-      let   toIdx   = playlists.findIndex(p => p.id === toId);
-      if (fromIdx < 0 || toIdx < 0) return;
-      if (!insertBefore) toIdx++;
-      if (fromIdx < toIdx) toIdx--;
-      if (fromIdx === toIdx) return;
-      const [moved] = playlists.splice(fromIdx, 1);
-      playlists.splice(toIdx, 0, moved);
-      // BUG-M4 FIX : ne pas appeler set() ici — savePlaylists() appelle notify() qui force-notifie
-      await savePlaylists();
-      renderPlNav();
-      return;
-    }
-
-    // Drop d'une piste sur une playlist (comportement existant)
-    if (!btn || !_dragTrackId) return;
-    const plId = btn.id.replace('ni-pl-', '');
-    addTrackToPlaylist(_dragTrackId, plId);
-    _dragTrackId = null;
-  });
+  nav.addEventListener('dragover',  e => _onPlNavDragOver(nav, e));
+  nav.addEventListener('dragleave', e => _onPlNavDragLeave(nav, e));
+  nav.addEventListener('drop',      e => { _onPlNavDrop(nav, e); });
   // dragend global — une seule fois
   if (!setupPlNavDrop._dragEndAttached) {
     setupPlNavDrop._dragEndAttached = true;
@@ -1141,82 +1299,68 @@ export function showPlCtxMenu(event, plId) {
   const _moveOpts = get('plFolders').filter(f => f.id !== pl.folderId);
   menu.innerHTML = `
     ${_hasItems ? `
-    <div class="ctx-item" data-action="ctx-play-pl" data-pl-id="${plId}">
-      <svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor" stroke="none"><polygon points="6 3 20 12 6 21"/></svg>
+    <div class="ctx-item" role="menuitem" tabindex="-1" data-action="ctx-play-pl" data-pl-id="${plId}">
+      <svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor" stroke="none" aria-hidden="true"><polygon points="6 3 20 12 6 21"/></svg>
       ${i18n('pl_play_all')}
     </div>
-    <div class="ctx-item" data-action="ctx-shuffle-pl" data-pl-id="${plId}">
-      <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M4 5h3a6 6 0 0 1 5.5 3.6"/><path d="M4 19h3a6 6 0 0 0 5.5-3.6"/><polyline points="16 3 20 7 16 11"/><polyline points="16 13 20 17 16 21"/><path d="M20 7h-3a6 6 0 0 0-5 2.7"/><path d="M20 17h-3a6 6 0 0 1-5-2.7"/></svg>
+    <div class="ctx-item" role="menuitem" tabindex="-1" data-action="ctx-shuffle-pl" data-pl-id="${plId}">
+      <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><path d="M4 5h3a6 6 0 0 1 5.5 3.6"/><path d="M4 19h3a6 6 0 0 0 5.5-3.6"/><polyline points="16 3 20 7 16 11"/><polyline points="16 13 20 17 16 21"/><path d="M20 7h-3a6 6 0 0 0-5 2.7"/><path d="M20 17h-3a6 6 0 0 1-5-2.7"/></svg>
       ${i18n('pl_shuffle')}
     </div>
     <div class="ctx-sep"></div>` : ''}
-    <div class="ctx-item" data-action="toggle-pin-pl" data-pl-id="${plId}">
-      <svg viewBox="0 0 24 24" width="13" height="13" fill="${_isPinned?'currentColor':'none'}" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l1.4 4.3h4.5l-3.6 2.6 1.4 4.3L12 10.6 8.3 13.2l1.4-4.3L6.1 6.3h4.5z"/></svg>
+    <div class="ctx-item" role="menuitem" tabindex="-1" data-action="toggle-pin-pl" data-pl-id="${plId}">
+      <svg viewBox="0 0 24 24" width="13" height="13" fill="${_isPinned?'currentColor':'none'}" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l1.4 4.3h4.5l-3.6 2.6 1.4 4.3L12 10.6 8.3 13.2l1.4-4.3L6.1 6.3h4.5z"/></svg>
       ${_isPinned ? i18n('pl_unpin') : i18n('pl_pin')}
     </div>
     <div class="ctx-sep"></div>
-    <div class="ctx-item" data-action="pl-move-up" data-pl-id="${plId}">
-      <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>
+    <div class="ctx-item" role="menuitem" tabindex="-1" data-action="pl-move-up" data-pl-id="${plId}">
+      <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>
       ${i18n('ctx_move_up')}
     </div>
-    <div class="ctx-item" data-action="pl-move-down" data-pl-id="${plId}">
-      <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><polyline points="19 12 12 19 5 12"/></svg>
+    <div class="ctx-item" role="menuitem" tabindex="-1" data-action="pl-move-down" data-pl-id="${plId}">
+      <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"/><polyline points="19 12 12 19 5 12"/></svg>
       ${i18n('ctx_move_down')}
     </div>
     ${_moveOpts.length ? `
-    <div class="ctx-item ctx-item--sub">
-      <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
+    <div class="ctx-item ctx-item--sub" role="menuitem" tabindex="-1" aria-haspopup="true">
+      <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
       ${i18n('pl_move_to_folder')}
-      <svg viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="margin-left:auto"><polyline points="9 18 15 12 9 6"/></svg>
-      <div class="ctx-submenu">
+      <svg viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="margin-left:auto" aria-hidden="true"><polyline points="9 18 15 12 9 6"/></svg>
+      <div class="ctx-submenu" role="menu">
         ${_moveOpts.map(f => `
-          <div class="ctx-item" data-action="move-pl-folder" data-pl-id="${plId}" data-folder-id="${f.id}">
-            <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
+          <div class="ctx-item" role="menuitem" tabindex="-1" data-action="move-pl-folder" data-pl-id="${plId}" data-folder-id="${f.id}">
+            <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
             ${esc(f.name)}
           </div>`).join('')}
       </div>
     </div>` : ''}
     ${_inFolder ? `
-    <div class="ctx-item" data-action="remove-pl-folder" data-pl-id="${plId}">
-      <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><line x1="9" y1="14" x2="15" y2="14"/></svg>
+    <div class="ctx-item" role="menuitem" tabindex="-1" data-action="remove-pl-folder" data-pl-id="${plId}">
+      <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><line x1="9" y1="14" x2="15" y2="14"/></svg>
       ${i18n('pl_remove_from_folder')}
     </div>` : ''}
     <div class="ctx-sep"></div>
-    <div class="ctx-item" data-action="rename-pl" data-pl-id="${plId}">
-      <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41L13.42 20.58a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><circle cx="7" cy="7" r="1.2" fill="currentColor" stroke="none"/></svg>
+    <div class="ctx-item" role="menuitem" tabindex="-1" data-action="rename-pl" data-pl-id="${plId}">
+      <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20.59 13.41L13.42 20.58a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><circle cx="7" cy="7" r="1.2" fill="currentColor" stroke="none"/></svg>
       ${i18n('pl_rename_btn')}
     </div>
-    <div class="ctx-item ctx-item--danger" data-action="delete-pl" data-pl-id="${plId}">
-      <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M9 6V4h6v2"/></svg>
+    <div class="ctx-item ctx-item--danger" role="menuitem" tabindex="-1" data-action="delete-pl" data-pl-id="${plId}">
+      <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M9 6V4h6v2"/></svg>
       ${i18n('pl_delete')}
     </div>`;
-  // S157 FIX-5 : positionnement basé sur la hauteur réelle du menu (avant : Y fixe -80px → menu pouvait sortir de l'écran)
-  menu.style.visibility = 'hidden';
-  menu.style.left = '0px';
-  menu.style.top  = '0px';
-  menu.classList.add('on');
-  const mw = menu.offsetWidth  || 200;
-  const mh = menu.offsetHeight || 200;
-  const pad = 8;
-  const x = Math.max(pad, Math.min(event.clientX, window.innerWidth  - mw - pad));
-  const y = Math.max(pad, Math.min(event.clientY, window.innerHeight - mh - pad));
-  menu.style.left = x + 'px';
-  menu.style.top  = y + 'px';
-  menu.style.visibility = '';
-  // FIX-B9 : fermeture mousedown extérieur + Escape (LEAK-1 FIX étendu)
-  _attachPlCtxClose(menu);
+  _openPlCtxMenu(menu, event);
 }
 
 /** Lire toute la playlist depuis le menu contextuel sidebar (navigue + joue). */
 export function ctxPlayPlaylist(plId) {
-  document.getElementById('pl-ctx-menu')?.classList.remove('on');
+  closePlCtxMenu();
   const niBtn = document.getElementById('ni-pl-' + plId);
   emit(EVENTS.VIEW_REQUEST, { view: 'playlist', btn: niBtn, plId });
   setTimeout(() => playPlaylistFrom(0), 80);
 }
 /** Lecture aléatoire depuis le menu contextuel sidebar. */
 export function ctxShufflePlaylist(plId) {
-  document.getElementById('pl-ctx-menu')?.classList.remove('on');
+  closePlCtxMenu();
   const niBtn = document.getElementById('ni-pl-' + plId);
   emit(EVENTS.VIEW_REQUEST, { view: 'playlist', btn: niBtn, plId });
   setTimeout(() => shufflePlaylist(), 80);

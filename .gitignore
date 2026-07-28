@@ -44,3 +44,7 @@ blob-report/
 
 # Perf benchmarks (current run artifacts, not committed)
 .perf-current.json
+
+# Session/tooling artifacts (graphify knowledge-graph cache, superpowers session state)
+graphify-out/
+.superpowers/

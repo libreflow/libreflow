@@ -17,25 +17,20 @@
 //   §20 minimalism > abstraction — surface kept to what we actually use
 //
 // Usage:
-//   import { tween, timeline, set, flip, eases } from './motion.js';
+//   import { tween, timeline, set, eases } from './motion.js';
 //
 //   tween('#pl-art', { opacity: 1, duration: 0.4, ease: eases.PREMIUM });
 //
 //   const tl = timeline({ defaults: { ease: eases.PREMIUM } });
 //   tl.to('#pl-title', { y: 0, opacity: 1, duration: 0.3 })
 //     .to('#pl-artist', { y: 0, opacity: 1, duration: 0.3 }, '-=0.15');
-//
-//   // FLIP — animate layout changes after DOM reorder
-//   const state = flip.getState('.track-row');
-//   reorderRows();                              // mutate DOM
-//   flip.from(state, { duration: 0.45, ease: eases.PREMIUM, stagger: 0.02 });
 
 import { gsap }       from 'gsap';
-import { Flip }       from 'gsap/Flip';
 import { CustomEase } from 'gsap/CustomEase';
+import { CFG }        from './cfg.js';
 
 // Register once at module load — registerPlugin is idempotent and tree-shake safe.
-gsap.registerPlugin(Flip, CustomEase);
+gsap.registerPlugin(CustomEase);
 
 // ── Reduced motion ───────────────────────────────────────────────────────────
 // Respect OS pref. Re-read on each tween call so a runtime change (rare but
@@ -44,9 +39,53 @@ const _rmQuery = typeof window !== 'undefined' && typeof window.matchMedia === '
   ? window.matchMedia('(prefers-reduced-motion: reduce)')
   : null;
 
+// Task 10 : réglage in-app à 3 états (Système/Complètes/Réduites), défaut 'full'.
+// Bug produit : sous Windows avec "Effets d'animation" désactivé, WebView2 rapporte
+// prefers-reduced-motion:reduce en permanence → tout le mode cinéma figeait sans
+// que l'utilisateur ait rien demandé. 'full' ignore désormais l'OS par défaut ;
+// 'system' restaure l'ancien comportement (consulte _rmQuery) ; 'reduce' force la
+// conformité WCAG même si l'OS ne la demande pas. Poussé depuis app.js — AUCUN
+// nouvel import ici (motion.js est importé par la quasi-totalité des modules —
+// risque de cycle si on importait cfg.js/store.js en retour).
+let _motionPref = 'system'; // AUDIT-2026-07-27 : défaut = suivre l'OS (était 'full')
+
+/**
+ * Pousse la préférence d'animation applicative. Appelé depuis app.js (boot +
+ * changement de réglage). Valeurs invalides ignorées (garde anti-corruption cfg).
+ * @param {'system'|'full'|'reduce'} pref
+ */
+export function setMotionPref(pref) {
+  if (pref !== 'system' && pref !== 'full' && pref !== 'reduce') {
+    console.warn('[motion] motionPref inconnu ignoré:', pref);
+    return;
+  }
+  _motionPref = pref;
+}
+
 /** @returns {boolean} */
 export function prefersReducedMotion() {
-  return !!(_rmQuery && _rmQuery.matches);
+  if (_motionPref === 'reduce') return true;
+  if (_motionPref === 'full')   return false;
+  return !!(_rmQuery && _rmQuery.matches); // 'system' — consulte l'OS
+}
+
+/**
+ * S'abonne aux changements OS de prefers-reduced-motion (pertinent seulement en
+ * mode 'system' — app.js recalcule l'attribut data-motion + les boucles cinéma
+ * à chaque déclenchement). No-op si matchMedia indisponible (tests Node/SSR).
+ * @param {() => void} cb
+ * @returns {() => void} désabonnement
+ */
+export function onMotionPrefChange(cb) {
+  if (!_rmQuery) return () => {};
+  _rmQuery.addEventListener('change', cb);
+  return () => _rmQuery.removeEventListener('change', cb);
+}
+
+/** Reflète la préférence effective sur <html data-motion="full|reduce">. */
+export function applyMotionAttr() {
+  if (typeof document === 'undefined') return;
+  document.documentElement.dataset.motion = prefersReducedMotion() ? 'reduce' : 'full';
 }
 
 // ── Named eases ──────────────────────────────────────────────────────────────
@@ -79,17 +118,6 @@ export function tween(target, vars) {
     return gsap.set(target, end);
   }
   return gsap.to(target, vars);
-}
-
-/**
- * Animate `target` from the given props to its current values.
- * @param {gsap.TweenTarget} target
- * @param {gsap.TweenVars}   vars
- * @returns {gsap.core.Tween}
- */
-export function from(target, vars) {
-  if (prefersReducedMotion()) return gsap.set(target, {});
-  return gsap.from(target, vars);
 }
 
 /**
@@ -126,28 +154,97 @@ export function kill(target) {
   gsap.killTweensOf(target);
 }
 
-// ── Flip plugin (layout animations) ──────────────────────────────────────────
-// Flip = First/Last/Invert/Play. Capture state, mutate DOM, animate from prior
-// position. Perfect for list reordering, view switches, expand/collapse.
+// ── Modal presets ─────────────────────────────────────────────────────────────
 
-export const flip = Object.freeze({
-  getState: (targets, opts) => Flip.getState(targets, opts),
-  /**
-   * Animate from a previously captured state to current DOM.
-   * Collapses to an instant Flip when reduced-motion is on.
-   */
-  from(state, vars) {
-    if (prefersReducedMotion()) {
-      return Flip.from(state, { ...vars, duration: 0 });
-    }
-    return Flip.from(state, vars);
-  },
-  fit: (targets, opts) => Flip.fit(targets, opts),
-});
+/**
+ * @param {Element} el — dialog element inside the backdrop
+ * @returns {gsap.core.Tween}
+ */
+export function modalOpen(el) {
+  kill(el);
+  if (prefersReducedMotion()) return gsap.set(el, { opacity: 1 });
+  return gsap.from(el, { opacity: 0, duration: 0.22, ease: eases.PREMIUM, clearProps: 'opacity' });
+}
 
-// ── Diagnostic surface ───────────────────────────────────────────────────────
-// Exposed for the perf-bundle script and devtools poking, not for app logic.
-export const _meta = Object.freeze({
-  gsapVersion: gsap.version,
-  plugins: ['Flip', 'CustomEase'],
-});
+/**
+ * @param {Element} el
+ * @returns {gsap.core.Tween}
+ */
+export function modalClose(el) {
+  kill(el);
+  if (prefersReducedMotion()) return gsap.to(el, { opacity: 0, duration: 0 });
+  return gsap.to(el, { opacity: 0, duration: 0.16, ease: 'power2.in' });
+}
+
+// ── List presets ──────────────────────────────────────────────────────────────
+
+const STAGGER_CAP = CFG.STAGGER_CAP;
+
+/**
+ * Stagger-in a NodeList/Array of elements (first render of a view list).
+ * @param {NodeList|Element[]} items
+ */
+export function staggerIn(items) {
+  const els  = Array.from(items).slice(0, STAGGER_CAP);
+  const rest = Array.from(items).slice(STAGGER_CAP);
+  kill(els);
+  if (rest.length) gsap.set(rest, { opacity: 1 });
+  if (prefersReducedMotion()) { gsap.set(els, { opacity: 1 }); return; }
+  gsap.from(els, { opacity: 0, duration: 0.20, ease: eases.PREMIUM, stagger: 0.018, clearProps: 'opacity' });
+}
+
+// ── View transition preset ────────────────────────────────────────────────────
+
+/**
+ * Transition between two top-level view panels.
+ *
+ * VT API path  → called inside document.startViewTransition; just swaps .on,
+ *                the browser handles the visual cross-fade.
+ * Fallback path → "exit on top" GSAP cross-fade: old view fades out as an
+ *                absolute overlay while new view fades in from below.
+ *
+ * @param {Element|null} prev  Currently visible .view (may be null on first load)
+ * @param {Element}      next  Target .view to show
+ */
+export function transitionViews(prev, next) {
+  if (!prev || prev === next) {
+    next.classList.add('on');
+    return;
+  }
+
+  // Kill any in-progress tweens so rapid nav doesn't stack
+  gsap.killTweensOf(prev);
+  gsap.killTweensOf(next);
+
+  // Always show the new view in normal flow first
+  next.classList.add('on');
+
+  if (prefersReducedMotion()) {
+    // Instant swap — no animation
+    prev.classList.remove('on');
+    prev.style.display = '';
+    return;
+  }
+
+  // Anchored to #main (position:relative), not .view (contain:layout ≠ containing block)
+  gsap.set(prev, { position: 'absolute', inset: 0, zIndex: 2, pointerEvents: 'none' });
+
+  // Exit: old view fades out (shorter, quieter)
+  gsap.to(prev, {
+    opacity: 0,
+    duration: 0.15,
+    ease: eases.SNAP,
+    onComplete() {
+      gsap.set(prev, { clearProps: 'position,inset,zIndex,pointerEvents,opacity' });
+      prev.classList.remove('on');
+      prev.style.display = '';
+    },
+  });
+
+  // Enter: new view fades in with upward lift (longer)
+  gsap.fromTo(
+    next,
+    { opacity: 0, y: 8 },
+    { opacity: 1, y: 0, duration: 0.22, ease: eases.PREMIUM, clearProps: 'transform,opacity' }
+  );
+}

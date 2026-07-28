@@ -88,7 +88,7 @@ pub fn write_backup_zip(dest_path: &str, payload: &ExportPayload) -> Result<(), 
 /// taille supérieure au budget restant ou en consomme effectivement plus,
 /// la lecture est rejetée. Protège contre les zip-bombs même si la taille
 /// annoncée dans l'entête ZIP est mensongère (lecture cappée via `Read::take`).
-fn _read_entry(
+fn read_entry(
     archive: &mut zip::ZipArchive<std::fs::File>,
     name: &str,
     budget: &mut u64,
@@ -105,9 +105,10 @@ fn _read_entry(
     }
     // Lit AU PLUS `budget+1` octets — un mensonge de taille (déclarée < réelle)
     // est détecté quand `take` rend des données dépassant le budget.
+    // saturating_add évite le wrap-around u64 si budget == u64::MAX.
     let mut s = String::new();
     let n = entry
-        .take(*budget + 1)
+        .take(budget.saturating_add(1))
         .read_to_string(&mut s)
         .map_err(|e| format!("backup: lecture '{name}' échouée — {e}"))? as u64;
     if n > *budget {
@@ -132,12 +133,12 @@ pub fn read_backup_zip(src_path: &str) -> Result<ImportPayload, String> {
     // dont la somme totale décompressée dépasse MAX_BACKUP_TOTAL_UNCOMPRESSED,
     // même si chaque entrée prise individuellement reste petite.
     let mut budget = MAX_BACKUP_TOTAL_UNCOMPRESSED;
-    let manifest = _read_entry(&mut archive, "manifest.json", &mut budget)?;
-    let library = _read_entry(&mut archive, "library.json", &mut budget)?;
-    let playlists = _read_entry(&mut archive, "playlists.json", &mut budget)?;
-    let playlog = _read_entry(&mut archive, "playlog.json", &mut budget)?;
-    let imports = _read_entry(&mut archive, "imports.json", &mut budget)?;
-    let config = _read_entry(&mut archive, "config.json", &mut budget)?;
+    let manifest = read_entry(&mut archive, "manifest.json", &mut budget)?;
+    let library = read_entry(&mut archive, "library.json", &mut budget)?;
+    let playlists = read_entry(&mut archive, "playlists.json", &mut budget)?;
+    let playlog = read_entry(&mut archive, "playlog.json", &mut budget)?;
+    let imports = read_entry(&mut archive, "imports.json", &mut budget)?;
+    let config = read_entry(&mut archive, "config.json", &mut budget)?;
 
     Ok(ImportPayload {
         manifest,

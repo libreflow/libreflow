@@ -1,26 +1,5 @@
 import { defineConfig }         from 'vite';
 import { resolve }              from 'path';
-import { rmSync, existsSync }   from 'fs';
-
-// Plugin : exclut les dossiers inutiles de dist/ après build de production.
-// Utilisé pour supprimer frontend/public/ort/ (fichiers ONNX Runtime — dead code
-// depuis le retrait du module genreml). Ces fichiers doivent aussi être supprimés
-// du source tree manuellement (voir CLEANUP.sh / CLEANUP.ps1).
-function excludeFromDist(patterns) {
-  return {
-    name: 'exclude-from-dist',
-    apply: 'build',
-    closeBundle() {
-      for (const pattern of patterns) {
-        const target = resolve(__dirname, 'dist', pattern);
-        if (existsSync(target)) {
-          rmSync(target, { recursive: true, force: true });
-          console.log(`[exclude-from-dist] Supprimé : dist/${pattern}`);
-        }
-      }
-    },
-  };
-}
 
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => {
@@ -29,13 +8,6 @@ export default defineConfig(({ mode }) => {
   return {
     // Vite serves frontend/ as the web root during dev
     root: 'frontend',
-
-    plugins: [
-      // Exclure les fichiers ONNX Runtime du build — feature genreml retirée (dead code)
-      // Les binaires source dans frontend/public/ort/ peuvent être supprimés manuellement
-      // via CLEANUP.sh (bash) ou CLEANUP.ps1 (PowerShell).
-      excludeFromDist(['ort']),
-    ],
 
     // Dev server: Tauri opens http://localhost:1420 in the WebView
     server: {

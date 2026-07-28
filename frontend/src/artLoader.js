@@ -11,8 +11,7 @@
 //   - Un cache LRU (MAX_ART_CACHE entrées) borne la mémoire à ~6 MB en régime normal.
 //
 // Exports :
-//   loadArt(t)            — charge et affiche l'artwork d'une piste
-//   prefetchArts(list)    — batch fire-and-forget (virtual scroll window)
+//   prefetchArts(list)    — batch fire-and-forget (virtual scroll window), appelle loadArt() en interne
 //   revokeArt(trackId)    — libère le blob: URL d'une piste supprimée
 
 import { DB, dget }    from './db.js';
@@ -52,6 +51,9 @@ function _evict() {
   const inDom = _domBlobUrls;
   for (const [id, url] of _cache) {
     if (id === curId || inDom.has(url)) continue;
+    // DOM guard : confirms no visible <img> still references the URL before revoking.
+    // _domBlobUrls only tracks list rows; grids/queue/thtml may reference URLs too.
+    if (document.querySelector(`img[src="${url}"]`)) continue;
     _domBlobUrls.delete(url);
     URL.revokeObjectURL(url);
     _cache.delete(id);
@@ -169,7 +171,7 @@ export async function getArtUrl(t) {
  *
  * @param {object} t - Track object (doit avoir _hasArt, noArt, id, art)
  */
-export async function loadArt(t) {
+async function loadArt(t) {
   if (!t._hasArt || t.noArt) return;
   const hadArt = !!t.art;
   const url = await getArtUrl(t);
@@ -221,7 +223,17 @@ export function cacheArt(t) {
   if (!t._artBuf) return null;
   // Si une entrée existe deja (rare), revoke pour eviter la fuite avant remplacement
   const existing = _cache.get(t.id);
-  if (existing) { URL.revokeObjectURL(existing); _cache.delete(t.id); }
+  if (existing) {
+    if (document.querySelector(`img[src="${existing}"]`)) {
+      // Still displayed — tell _evict() about it so it won't revoke it either,
+      // then let the cache entry be replaced; the live URL stays valid until the
+      // next _evict() cycle where the DOM guard will protect it again.
+      _domBlobUrls.add(existing);
+    } else {
+      URL.revokeObjectURL(existing);
+    }
+    _cache.delete(t.id);
+  }
   _evict();
   const url = URL.createObjectURL(new Blob([t._artBuf], { type: t._artMime || 'image/jpeg' }));
   _cache.set(t.id, url);
@@ -265,31 +277,20 @@ export async function resolveArtBuf(t) {
     t._artMime = mime;
     return { buf: t._artBuf, mime };
   }
-  // Fallback : blob: URL (ne devrait plus arriver post-migration)
+  // Fallback : blob: URL révoquée ou post-migration — aller directement en IDB (fetch interdit §15)
   if (t.art.startsWith('blob:')) {
-    try {
-      const resp = await fetch(t.art);
-      const blob = await resp.blob();
-      t._artBuf  = await blob.arrayBuffer();
-      t._artMime = ART_MIME_ALLOWLIST.includes(blob.type) ? blob.type : 'image/jpeg';
-      return { buf: t._artBuf, mime: t._artMime };
-    } catch(e) {
-      // PM-6 : le blob: URL a été révoqué par le LRU avant flushTrackBatch.
-      // Tenter une récupération depuis IDB.
-      console.warn('[resolveArtBuf] blob fetch failed (URL révoquée?), tentative IDB:', e);
-      if (t._hasArt && !t.noArt) {
-        try {
-          const rec = await dget('tracks', t.id);
-          if (rec?.artBuf) {
-            t._artBuf  = rec.artBuf;
-            t._artMime = ART_MIME_ALLOWLIST.includes(rec.artMime) ? rec.artMime : 'image/jpeg';
-            t.art      = null; // invalider l'URL révoquée pour éviter de retomber ici
-            return { buf: t._artBuf, mime: t._artMime };
-          }
-        } catch(e2) { console.warn('[resolveArtBuf] IDB fallback after blob failure failed for', t.id, e2); }
-      }
-      return null;
+    t.art = null; // invalider l'URL révoquée pour éviter de retomber ici
+    if (t._hasArt && !t.noArt) {
+      try {
+        const rec = await dget('tracks', t.id);
+        if (rec?.artBuf) {
+          t._artBuf  = rec.artBuf;
+          t._artMime = ART_MIME_ALLOWLIST.includes(rec.artMime) ? rec.artMime : 'image/jpeg';
+          return { buf: t._artBuf, mime: t._artMime };
+        }
+      } catch(e) { console.warn('[resolveArtBuf] IDB fallback for blob: failed:', t.id, e); }
     }
+    return null;
   }
   return null;
 }

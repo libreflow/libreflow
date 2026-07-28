@@ -17,7 +17,6 @@ import { VIRT }                                                   from './virt.j
 import { audio, adjustShuffleQAfterDelete }                       from './player.js';
 import { toast, toastWithAction, esc }                            from './ui.js';
 import { setCurIdx, removeTracksBatch }                           from './state.js';
-import { updateStats }                                            from './renderer.js';
 import { saveTrackNow }                                           from './library.js';
 import { CFG }                                                    from './cfg.js';
 
@@ -110,7 +109,18 @@ async function _openOrphanDialog(orphanTracks) {
 
   bg.querySelector('.orphan-close-btn').addEventListener('click', close);
   bg.addEventListener('click', e => { if (e.target === bg) close(); });
-  bg.addEventListener('keydown', e => { if (e.key === 'Escape') close(); });
+  bg.addEventListener('keydown', e => {
+    if (e.key === 'Escape') { close(); return; }
+    if (e.key === 'Tab') {
+      const focusable = [...bg.querySelectorAll(
+        'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])'
+      )];
+      if (!focusable.length) { e.preventDefault(); return; }
+      const first = focusable[0], last = focusable[focusable.length - 1];
+      if (e.shiftKey) { if (document.activeElement === first) { e.preventDefault(); last.focus(); } }
+      else            { if (document.activeElement === last)  { e.preventDefault(); first.focus(); } }
+    }
+  });
 
   bg.querySelector('.orphan-delete-btn').addEventListener('click', async () => {
     const remaining = fresh.filter(t => _missingPaths.has(t.path));
@@ -219,7 +229,6 @@ async function _deleteOrphans(orphanTracks) {
   emit(EVENTS.FILTER_CHANGED, {});
   VIRT._lastListSig = '';
   emit(EVENTS.RENDER_LIB, {});
-  updateStats();
 
   const n = idsToDelete.length;
   toast(

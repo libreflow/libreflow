@@ -8,8 +8,8 @@
 //   import  : CFG                     (cfg.js)
 //   import  : i18n                    (i18n.js)
 //   import  : VIRT                    (virt.js)
-//   window  : tracks, toast, saveCfg, updateStats, renderLib,
-//             loadTagsBg, rebuildTrackIdxMap
+//   window  : tracks, toast, saveCfg, renderLib,
+//             loadTagsBg — rebuildTrackIdxMap encapsulated by pushTracks() (state.js)
 //
 // Exports publics :
 //   initWatchPath, getWatchPath
@@ -22,11 +22,10 @@ import { i18n }                           from './i18n.js';
 import { get, notify }                    from './store.js';
 import { on, emit, EVENTS }               from './bus.js';
 import { VIRT }                           from './virt.js';
-import { rebuildTrackIdxMap, invalidateFilterCache } from './search.js';
+import { invalidateFilterCache } from './search.js';
 import { toast }                          from './ui.js';
 import { setView, showView }              from './views.js';
 import { loadTagsBg, loadTagsAndDurations } from './library.js';
-import { updateStats }                    from './renderer.js';
 import { pushTracks }                     from './state.js';
 import { isSafePath }                     from './utils.js';
 import { logImport }                                   from './imports.js';
@@ -38,15 +37,6 @@ const _AUDIO_EXTS = new Set(['mp3','flac','aac','m4a','ogg','opus','wav','wma','
 function _isAudioPath(p) {
   const ext = p.replace(/\\/g, '/').split('/').pop().split('.').pop().toLowerCase();
   return _AUDIO_EXTS.has(ext);
-}
-
-/** SEC-3 : Valide un chemin de dossier — non vide, sans traversal (..) */
-function _isValidFolderPath(p) {
-  if (!p || typeof p !== 'string') return false;
-  const norm = p.replace(/\\/g, '/');
-  // Interdire path traversal et chemins vides
-  if (norm.includes('../') || norm.includes('/..') || norm === '..') return false;
-  return norm.length > 0;
 }
 
 /**
@@ -122,7 +112,6 @@ async function _doInitialScan(files) {
     invalidateFilterCache();
     emit(EVENTS.FILTER_CHANGED, {});
     VIRT._lastListSig = '';
-    updateStats();
     setView('all', document.getElementById('ni-all'));
     loadTagsAndDurations(newTracks);
     if (newTracks.length) logImport('folder-scan', newTracks.map(t => t.path));
@@ -131,9 +120,12 @@ async function _doInitialScan(files) {
     // B6 FIX : drainer les events watcher mis en file dans _pendingPaths pendant
     // que _importing tenait le lock — sinon ces fichiers ne sont importés que si
     // un autre event watcher arrive ensuite (sinon jamais).
+    // WATCHFOLDER-2 FIX : each pending batch wrapped in its own try/catch so a
+    // drain failure cannot leave _importing=true and deadlock all future imports.
     while (_pendingPaths.length) {
       const pending = _pendingPaths.splice(0);
-      await _doImportPaths(pending);
+      try { await _doImportPaths(pending); }
+      catch(e) { console.warn('[watchfolder] pending drain failed:', e); }
     }
     _importing = false;
   }
@@ -144,9 +136,12 @@ async function _doInitialScan(files) {
 // watchSnapshot avec les chemins actuellement connus dans le store.
 on(EVENTS.FILTER_CHANGED, () => {
   if (!watchPath || !watchSnapshot.size) return;
-  const currentPaths = new Set(get('tracks').map(t => t.path).filter(Boolean));
+  // Windows : FS insensible à la casse — comparer en lowercase, sinon un chemin
+  // dont la casse diffère entre l'événement watcher et t.path serait évincé du
+  // snapshot et la piste réimportée en doublon au prochain événement.
+  const currentPaths = new Set(get('tracks').map(t => t.path?.toLowerCase()).filter(Boolean));
   for (const p of watchSnapshot) {
-    if (!currentPaths.has(p)) watchSnapshot.delete(p);
+    if (!currentPaths.has(p.toLowerCase())) watchSnapshot.delete(p);
   }
 });
 
@@ -162,9 +157,13 @@ let _idSeq        = 0;     // compteur pour UUID fallback garanti unique
 let _watchDebTimer = null;
 let _watchRawPaths = [];
 let _modUnlisten  = null; // unlistener pour 'watch-modified-files'
+let _errUnlisten  = null; // unlistener pour 'watch-error' (watcher Rust mort)
 let _modDebTimer  = null; // debounce timer pour les modifications
 let _modRawPaths  = [];   // buffer des paths de fichiers modifiés
 let _watchActive  = false; // true si le watcher natif tourne
+// MODIF-RACE FIX : paths modifiés reçus pendant que loadTagsBg tournait encore
+// pour ce fichier — rejoués dès que ce chargement se termine (_retryPendingReload).
+let _modPendingRetry = new Set();
 
 /** Initialise watchPath depuis la config au démarrage (pas de side-effects). */
 export function initWatchPath(path) { watchPath = path; }
@@ -178,12 +177,12 @@ export async function toggleWatchFolder() {
   try {
     result = await invoke('open_folder', undefined, { timeout: 0 });
   } catch(err) {
-    console.error('[watchfolder] open_folder failed:', err);
+    console.warn('[watchfolder] open_folder failed:', err);
     toast(i18n('t_scan_error', err?.message ?? String(err)), 'error');
     return;
   }
   if (!result?.folder) { updateWatchUI(); return; }
-  if (!_isValidFolderPath(result.folder)) {
+  if (!isSafePath(result.folder)) {
     console.warn('[watchfolder] Chemin de dossier invalide rejeté :', result.folder);
     return;
   }
@@ -212,10 +211,30 @@ function _reloadTagsForPaths(paths) {
   const byPath = new Map(tracks.map(t => [t.path, t]));
   for (const p of paths) {
     const t = byPath.get(p);
-    if (!t || !t.metaDone) continue; // skip if already loading
-    t.metaDone = false;
-    loadTagsBg(t);
+    if (!t) continue;
+    if (!t.metaDone) {
+      // MODIF-RACE FIX : chargement des tags encore en cours pour ce chemin —
+      // au lieu de perdre l'événement, on le mémorise pour relancer le reload
+      // dès que ce chargement se termine (voir _reloadOneTrack ci-dessous).
+      _modPendingRetry.add(p);
+      continue;
+    }
+    _reloadOneTrack(t);
   }
+}
+
+/** Relance loadTagsBg pour une piste puis rejoue tout reload en attente sur son chemin. */
+function _reloadOneTrack(t) {
+  t.metaDone = false;
+  loadTagsBg(t).then(() => _retryPendingReload(t.path));
+}
+
+/** Si un reload a été mis en attente pour ce chemin pendant le chargement précédent, le rejoue. */
+function _retryPendingReload(path) {
+  if (!_modPendingRetry.has(path)) return;
+  _modPendingRetry.delete(path);
+  const t = get('tracks').find(tr => tr.path === path);
+  if (t) _reloadOneTrack(t);
 }
 
 /**
@@ -226,6 +245,7 @@ export async function startWatchNative() {
   // Nettoyage de l'ancien listener si existant
   if (_watchUnlisten) { _watchUnlisten(); _watchUnlisten = null; }
   if (_modUnlisten) { _modUnlisten(); _modUnlisten = null; }
+  if (_errUnlisten) { _errUnlisten(); _errUnlisten = null; }
   if (_modDebTimer) { clearTimeout(_modDebTimer); _modDebTimer = null; }
   _modRawPaths = [];
   if (_starting) return; // BUG-11 FIX : éviter les appels parallèles
@@ -235,10 +255,15 @@ export async function startWatchNative() {
   _starting = true;
   try {
     // Démarrer le watcher Rust — timeout pour NAS déconnecté ou chemin invalide (IPC-1 FIX)
-    await Promise.race([
-      invoke('watch_folder_start', { path: watchPath }),
-      new Promise((_, rej) => setTimeout(() => rej(new Error('watch_folder_start timeout')), CFG.IPC_TIMEOUT_MS)),
-    ]);
+    // WATCHFOLDER-1 FIX : clearTimeout in finally so the orphaned setTimeout handle
+    // does not fire 15 s later and raise an unhandled rejection after race resolves.
+    let _wt;
+    try {
+      await Promise.race([
+        invoke('watch_folder_start', { path: watchPath }),
+        new Promise((_, rej) => { _wt = setTimeout(() => rej(new Error('[watchfolder] start timeout')), CFG.IPC_TIMEOUT_MS); }),
+      ]);
+    } finally { clearTimeout(_wt); }
 
     // Écouter les événements émis par Rust quand de nouveaux fichiers audio apparaissent
     // SEC-10 : debounce WATCH_DEBOUNCE_MS pour batcher les bursts d'événements du watcher
@@ -250,12 +275,19 @@ export async function startWatchNative() {
       if (!newFiles.length) return;
       _watchRawPaths.push(...newFiles);
       if (_watchDebTimer) clearTimeout(_watchDebTimer);
+      // WATCHFOLDER-3 FIX : async debounce body wrapped in try/catch so a rejection
+      // from importPaths does not become an unhandled promise rejection.
       _watchDebTimer = setTimeout(async () => {
         _watchDebTimer = null;
         const batch = _watchRawPaths.splice(0);
         if (!batch.length) return;
-        const added = await importPaths(batch);
-        if (added) toast(i18n('t_new_files', added), 'success');
+        try {
+          const added = await importPaths(batch);
+          if (added) toast(i18n('t_new_files', added), 'success');
+        } catch(e) {
+          console.warn('[watchfolder] importPaths from watcher failed:', e);
+          toast(i18n('t_scan_error', e?.message ?? String(e)), 'error');
+        }
       }, CFG.WATCH_DEBOUNCE_MS);
     });
 
@@ -273,8 +305,21 @@ export async function startWatchNative() {
         if (batch.length) _reloadTagsForPaths(batch);
       }, CFG.WATCH_DEBOUNCE_MS);
     });
-    _watchActive = true; // both listeners confirmed up before marking watcher active
+
+    // Watcher Rust mort (dossier supprimé, NAS éjecté…) : surfacer l'erreur au
+    // lieu de laisser croire que la surveillance tourne toujours.
+    _errUnlisten = await listen('watch-error', (event) => {
+      console.warn('[watchfolder] watcher interrompu :', event.payload);
+      _watchActive = false;
+      toast(i18n('t_watch_error'), 'error');
+    });
+    _watchActive = true; // all listeners confirmed up before marking watcher active
   } catch (e) {
+    // Nettoyer un enregistrement partiel (ex. : 1er listen OK, 2e en échec),
+    // sinon le listener Tauri orphelin ne serait jamais désinscrit.
+    if (_watchUnlisten) { _watchUnlisten(); _watchUnlisten = null; }
+    if (_modUnlisten)   { _modUnlisten();   _modUnlisten   = null; }
+    if (_errUnlisten)   { _errUnlisten();   _errUnlisten   = null; }
     // Fallback : pas de surveillance native — log silencieux
     console.warn('[watchfolder] surveillance native indisponible :', e);
   } finally {
@@ -293,8 +338,10 @@ export function stopWatchFolder(silent = false, keepPath = false) {
   if (_watchDebTimer) { clearTimeout(_watchDebTimer); _watchDebTimer = null; }
   _watchRawPaths = [];
   if (_modUnlisten) { _modUnlisten(); _modUnlisten = null; }
+  if (_errUnlisten) { _errUnlisten(); _errUnlisten = null; }
   if (_modDebTimer) { clearTimeout(_modDebTimer); _modDebTimer = null; }
   _modRawPaths = [];
+  _modPendingRetry.clear();
   invoke('watch_folder_stop').catch(e => console.warn('[watchfolder:watch_folder_stop]', e));
   _watchActive = false;
   _starting    = false;
@@ -318,13 +365,17 @@ export function updateWatchUI() {
     if (indicator)   indicator.style.display = 'flex';
     const shortName = watchPath.split('\\').pop() || watchPath.split('/').pop() || watchPath;
     const watchLabel = document.getElementById('watch-label');
-    if (watchLabel)  watchLabel.textContent = shortName;
+    // AUDIT-2026-07-01 L1 : contenu dynamique → retirer data-i18n pour que le
+    // changement de langue n'écrase pas le nom du dossier (même pattern que pathDisplay).
+    if (watchLabel)  { watchLabel.removeAttribute('data-i18n'); watchLabel.textContent = shortName; }
     if (pathDisplay) { pathDisplay.removeAttribute('data-i18n'); pathDisplay.textContent = watchPath; }
     if (chk)         chk.checked = _watchActive;
     if (changeBtn)   changeBtn.dataset.action = 'change-watch-folder';
     if (changeLbl) { changeLbl.dataset.i18n = 'set_watch_change_btn'; changeLbl.textContent = i18n('set_watch_change_btn'); }
   } else {
     if (indicator)   indicator.style.display = 'none';
+    const watchLabelOff = document.getElementById('watch-label');
+    if (watchLabelOff) { watchLabelOff.dataset.i18n = 'watch_label_default'; watchLabelOff.textContent = i18n('watch_label_default'); }
     if (pathDisplay) { pathDisplay.dataset.i18n = 'set_no_folder'; pathDisplay.textContent = i18n('set_no_folder'); }
     if (chk)         chk.checked = false;
     if (changeBtn)   changeBtn.dataset.action = 'settings-open-folder';
@@ -351,8 +402,12 @@ export function updateWatchUI() {
 
 /** Importe une liste de chemins absolus dans la bibliothèque.
  *  Déduplique via watchSnapshot. Retourne le nombre de titres ajoutés.
- *  RACE-2 FIX : si un import est en cours, paths mis en queue → zéro corruption de tracks[]. */
-export async function importPaths(paths) {
+ *  RACE-2 FIX : si un import est en cours, paths mis en queue → zéro corruption de tracks[].
+ *  @param {string[]} paths
+ *  @param {'folder-scan'|'usb'} [source='folder-scan'] — source loguée dans l'historique
+ *    des imports (imports.js) pour ce batch. Les paths mis en queue pendant un import en
+ *    cours (accumulés via watcher natif) restent logués sous 'folder-scan'. */
+export async function importPaths(paths, source = 'folder-scan') {
   // SEC : filtre défensif côté JS — Rust reste la garde finale, mais on rejette
   // les chemins évidemment dangereux (.. / null bytes / contrôle) avant l'IPC.
   const before = paths.length;
@@ -368,7 +423,7 @@ export async function importPaths(paths) {
   }
   _importing = true;
   try {
-    let added = await _doImportPaths(paths);
+    let added = await _doImportPaths(paths, source);
     // Drainer la queue accumulée pendant cet import
     while (_pendingPaths.length) {
       const pending = _pendingPaths.splice(0);
@@ -380,7 +435,7 @@ export async function importPaths(paths) {
   }
 }
 
-async function _doImportPaths(paths) {
+async function _doImportPaths(paths, source = 'folder-scan') {
   let added = 0;
   const newPaths  = [];
   const newTracks = []; // B10 : différer loadTagsBg jusqu'après rebuildTrackIdxMap
@@ -420,14 +475,15 @@ async function _doImportPaths(paths) {
     // évitant la fenêtre d'incohérence _trackIdxMap pendant la boucle (CLAUDE.md §2).
     pushTracks(newTracks);
     if (VIRT) VIRT._lastListSig = '';
-    updateStats();
     const niAll = document.getElementById('ni-all');
     setView('all', niAll ?? null);
-    logImport('folder-scan', newPaths);
+    logImport(source, newPaths);
     // B10 FIX : loadTagsBg APRÈS rebuildTrackIdxMap — sinon _trackIdxMap n'est
     // plus une projection exacte de tracks[] (CLAUDE.md §2) pendant la boucle, et
     // flushTrackBatch exclut les pistes pas encore mappées de l'écriture IDB.
-    for (const t of newTracks) loadTagsBg(t);
+    // MODIF-RACE FIX : on chaîne _retryPendingReload — si watch-modified-files
+    // arrive pour ce chemin avant la fin de ce premier chargement, il est rejoué ici.
+    for (const t of newTracks) loadTagsBg(t).then(() => _retryPendingReload(t.path));
   }
   return added;
 }

@@ -16,8 +16,8 @@ import { radioActive, stopRadioSilent }     from './radio.js';
 import { toast }                                        from './ui.js';
 import { masterGainNode, eqCtx, setMasterGain }        from './eq.js';
 
-export let sleepTimerEnd  = 0;    // timestamp (ms) when sleep fires; 0 = inactive
-export let sleepTickTimer = null; // setInterval handle
+let sleepTimerEnd  = 0;    // timestamp (ms) when sleep fires; 0 = inactive
+let sleepTickTimer = null; // setInterval handle
 export let sleepFading    = false; // true once fade-out has started
 export let sleepEndOfTrack = false; // true = stop after current track ends (no timer)
 let _sleepWarnedMin       = false; // guard for 1-min warning toast
@@ -53,7 +53,7 @@ export function setSleepTimer(minutes) {
   _sleepWarned5Min = false;
 
   const indicator = document.getElementById('sleep-indicator');
-  if (indicator) { indicator.style.display = 'flex'; indicator.classList.add('active'); }
+  if (indicator) { indicator.classList.add('active'); }
   document.getElementById('sleep-opt-cancel')?.classList.add('on');
 
   // Clear active state on all option buttons
@@ -74,7 +74,7 @@ export function setSleepEndOfTrack() {
   sleepFading     = false;
 
   const indicator = document.getElementById('sleep-indicator');
-  if (indicator) { indicator.style.display = 'flex'; indicator.classList.add('active'); }
+  if (indicator) { indicator.classList.add('active'); }
   document.getElementById('sleep-opt-cancel')?.classList.add('on');
 
   const el = document.getElementById('sleep-countdown');
@@ -111,7 +111,7 @@ export function cancelSleepTimer(silent) {
     setMasterGain(_targetVol);
   }
   const indicator = document.getElementById('sleep-indicator');
-  if (indicator) { indicator.style.display = 'none'; indicator.classList.remove('active'); }
+  if (indicator) { indicator.classList.remove('active'); }
   document.getElementById('sleep-opt-cancel')?.classList.remove('on');
   document.getElementById('sleep-menu')?.classList.remove('on');
   if (!silent) toast(i18n('t_sleep_cancel'));

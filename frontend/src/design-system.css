@@ -14,30 +14,37 @@
  * Aucune media query côté composant — les tokens font tout le travail.
  *
  * Contrainte projet (CLAUDE.md §15 / §12) :
- *   Pas d'@import url() externe. Les fonts sont déjà chargées localement
- *   par style.css via @font-face (/fonts/syne-*.woff2, /fonts/dm-sans-*.woff2).
- *   Les packages @fontsource/syne et @fontsource/dm-sans sont déclarés
- *   dans package.json — aucune connexion réseau.
+ *   Pas d'@import url() externe. Les fonts sont chargées localement
+ *   par style.css via @font-face (/fonts/syne-*.woff2, /fonts/dm-sans-*.woff2)
+ *   — fichiers auto-hébergés dans frontend/public/fonts/, aucune connexion réseau.
  *
  * Sommaire :
- *   1. Breakpoints
  *   2. Couleurs (surfaces, texte, accent, bordures, états)
- *   3. Typographie (familles, tailles fluides, weights)
+ *   3. Typographie (familles, tailles fluides)
  *   4. Spacing (échelle base 4px)
  *   5. Tailles composants audio (adaptatif PC/Mobile)
  *   6. Border radius
- *   7. Ombres
- *   8. Transitions & easings
- *   9. Z-index
- *  10. Layout grid (adaptatif PC/Mobile)
+ *   7. Ombres (renvoi §13)
+ *   8. Transitions & easings (renvoi §2bis)
  *  11. Defaults sains (sélection, scrollbars, focus, reduced-motion)
+ *  12. Light theme
+ *  13. Tokens opérationnels & alias legacy (z-index, ombres, dimensions)
  * ============================================================================ */
 
 
-/* ----------------------------------------------------- 1. Breakpoints ----- */
-:root {
-  --screen-mobile : 768px;   /* < 768px = mobile */
-  --screen-pc     : 1280px;  /* >= 1280px = pc full */
+/* ── @property — propriétés custom animables via CSS transition ──────────── */
+/* Doit précéder tout :root pour que les transitions sur ces variables soient
+   actives dès la première frame. Sans ces déclarations, transition: --art-color
+   et transition: --g sont des no-ops (les vars jumpent instantanément). */
+@property --art-color {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: transparent;
+}
+@property --g {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #8B6BFF;
 }
 
 
@@ -49,25 +56,28 @@
  * ni Twitter-blue, ni Apple-rouge), AA-validée sur toutes les surfaces.
  * ============================================================================ */
 :root {
-  /* --- Surfaces — flat-Vantablack uniforme (panneaux = base) ------------- */
-  /* Tous les paliers convergent vers #030303. Élévation perceptible via
-     ΔRGB minimal + bordures hairline renforcées (§2ter). Les modales,
-     menus, popovers et sidebar partagent désormais l'identité Vantablack. */
-  --bg-base       : #030303;   /* canonique — toutes les surfaces partent d'ici */
-  --bg-surface    : #060606;   /* cards, sidebar (Δ minimal) */
-  --bg-elevated   : #0A0A0A;   /* modales, menus contextuels */
-  --bg-raised     : #0E0E0E;   /* popovers, surfaces ultra-élevées */
-  --bg-overlay    : rgba(14, 14, 14, 0.82);
+  /* --- Surfaces — élévation tonale par paliers distincts (pas de bordures) -
+     La fenêtre/zone principale reste Vantablack (#030303, inchangé). Chaque
+     palier au-dessus (sidebar → cards/hover/flottants → popovers empilés)
+     saute d'un ΔRGB perceptible à l'œil nu (façon Spotify/Deezer) : la
+     profondeur se lit au contraste, plus besoin de hairline borders pour
+     distinguer les surfaces. Contrepartie assumée : --text-muted ne tient
+     AAA (7:1) que sur --bg-base ; sur --bg-elevated/--bg-raised il reste
+     AA (>=4.5:1) — voir calcul à jour ci-dessous. */
+  --bg-base       : #030303;   /* canonique — fenêtre, zone principale (inchangé) */
+  --bg-surface    : #121214;   /* sidebar / navigation — un cran plus clair */
+  --bg-elevated   : #1C1C20;   /* cards, survols, lignes de liste au survol, éléments flottants */
+  --bg-raised     : #1C1C20;   /* popovers empilés au-dessus d'un élevé (cas rare) — même palier que le
+                                   précédent : au-delà, le texte accent ne tient plus AA (4.5:1) (§2.9) */
+  --bg-sunken     : #000000;   /* champs "creusés" (recherche) — plus sombre que tout conteneur */
 
-  /* --- Texte — neutres calibrés AAA sur Vantablack ----------------------- */
+  /* --- Texte — neutres calibrés sur Vantablack --------------------------- */
   --text-primary   : #F5F6F8;                 /* titres — 19:1 sur #030303 */
   --text-secondary : #B4B7C2;                 /* artistes — 10.3:1 sur #030303 */
-  --text-muted     : #979CAC;                 /* metadata — 7.5:1 sur #030303, 7.05:1 sur --bg-raised (AAA SC 1.4.6) */
+  --text-muted     : #979CAC;                 /* metadata — 7.5:1 AAA sur #030303 ; 6.2:1 AA sur --bg-elevated/--bg-raised (palier le plus clair) */
 
   /* --- Accent — Electric Indigo (signature unique) ----------------------- */
-  --accent         : #8B6BFF;                 /* indigo vif — 5.2:1 sur --bg-surface */
-  --accent-hover   : #A084FF;                 /* +14% luminosité au hover */
-  --accent-active  : #6F4DEB;                 /* -16% au press, sensation tactile */
+  --accent         : #8B6BFF;                 /* indigo vif — 5.0:1 sur --bg-surface, 4.6:1 sur --bg-elevated/--bg-raised */
   --accent-glow    : rgba(139, 107, 255, 0.45);
   --accent-subtle  : rgba(139, 107, 255, 0.12);
 }
@@ -89,7 +99,7 @@
 
   /* --- Alias historiques (B1) reliés à la palette respirée (B2) --------- */
   --bg  : var(--bg-base);
-  --bg1 : #11131A;
+  --bg1 : var(--bg-surface);   /* ex #11131A (teinte bleutée à part) — unifié sur l'échelle canonique */
   --bg2 : var(--bg-surface);
   --bg3 : var(--bg-elevated);
   --bg4 : var(--bg-raised);
@@ -104,17 +114,18 @@
 
   /* Espacement / radius / typo : source unique dans leurs sections
      canoniques (§3 typo, §4 spacing, §6 radius). Les doublons §2bis
-     (morts — écrasés par la cascade) ont été retirés (S3). Les seuls tokens
-     uniques (--space-0/--space-7, --radius-xs/--radius-pill, --text-2xl) sont
-     relocalisés dans §3/§4/§6 — zéro changement de valeur calculée. */
+     (morts — écrasés par la cascade) ont été retirés (S3). Tokens morts
+     purgés à l'audit 2026-07-27 : --space-8, --text-2xl, --blur-1,
+     --card-min-w, --shadow-art-col, --shadow-pl-list (zéro consommateur). */
 
-  /* Élévations opérationnelles */
-  --elev-1 : 0 1px 3px rgba(0,0,0,.4);
-  --elev-2 : 0 6px 20px rgba(0,0,0,.30);
-  --elev-3 : 0 16px 48px rgba(0,0,0,.45);
-  --elev-4 : 0 24px 64px rgba(0,0,0,.45);
+  /* Élévations opérationnelles — aplaties style Spotify (profondeur par couleur, pas par ombre) */
+  --elev-1 : 0 0 0 0 transparent;
+  --elev-2 : 0 0 0 0 transparent;
+  --elev-3 : 0 0 0 0 transparent;
+  --elev-4 : 0 0 0 0 transparent;
 
   /* Motion opérationnel */
+  --motion-press: 70ms;   /* press feedback — retour instantané (audit 2026-07-27) */
   --motion-fast : 120ms;
   --motion-base : 200ms;
   --motion-slow : 320ms;
@@ -130,11 +141,8 @@
   /* --- Bordures — AA non-text contrast (>=3:1 sur Vantablack) ---------- */
   --border-subtle  : rgba(255, 255, 255, 0.45);   /* 3.1:1 vs #030303 */
   --border-default : rgba(255, 255, 255, 0.55);   /* 4.0:1 */
-  --border-strong  : rgba(255, 255, 255, 0.65);   /* 5.2:1 */
-  --border-focus   : var(--accent);
 
   /* --- États -------------------------------------------------------------- */
-  --state-playing  : var(--accent);
   --state-error    : #FF5A5F;
   --state-success  : #4ADE80;
 }
@@ -143,6 +151,9 @@
 /* ============================================================================
  * 3. TYPOGRAPHIE — fonts locales (déjà chargées par style.css), offline
  * Display : Syne     — caractériel, géométrique, signature premium audio.
+ *           RÈGLE (audit 2026-07-27) : Syne uniquement pour les rôles display
+ *           rendus ≥16px (titres de vue, heroes, stats, noms de panneaux).
+ *           Jamais en taille corps — elle y perd sa signature.
  * Body    : DM Sans  — humaniste moderne, ultra-lisible UI.
  * Mono    : système  — ui-monospace prioritaire, pas de fetch externe.
  * Tailles fluides via clamp(min, vw, max).
@@ -151,7 +162,6 @@
   /* --- Familles ----------------------------------------------------------- */
   --font-display : 'Syne', system-ui, -apple-system, Segoe UI, sans-serif;
   --font-body    : 'DM Sans', system-ui, -apple-system, Segoe UI, sans-serif;
-  --font-mono    : ui-monospace, 'SF Mono', 'Cascadia Mono', Consolas, Menlo, monospace;
 
   /* --- Tailles fluides ---------------------------------------------------- */
   --text-xs      : clamp(10px, 1vw,   12px);
@@ -160,24 +170,9 @@
   --text-md      : clamp(15px, 1.6vw, 18px);
   --text-lg      : clamp(18px, 2vw,   24px);
   --text-xl      : clamp(22px, 2.8vw, 32px);
-  --text-2xl     : 26px;                       /* relocalisé depuis §2bis — seul palier fixe (pas de clamp), consommé par --fs-2xl */
   --text-display : clamp(28px, 4vw,   48px);
 
-  /* --- Weights ------------------------------------------------------------ */
-  --weight-regular  : 400;
-  --weight-medium   : 500;
-  --weight-semibold : 600;
-  --weight-bold     : 700;
-
-  /* --- Line heights ------------------------------------------------------- */
-  --leading-tight   : 1.15;
-  --leading-snug    : 1.35;
-  --leading-normal  : 1.55;
-
-  /* --- Letter spacing ----------------------------------------------------- */
-  --tracking-tight  : -0.01em;
-  --tracking-normal : 0;
-  --tracking-wide   : 0.04em;
+  /* Weights / line-heights / letter-spacing : définis en §13 (--fw-*, --lh-*, --ls-*). */
 }
 
 
@@ -185,7 +180,6 @@
  * 4. SPACING — base 4px
  * ============================================================================ */
 :root {
-  --space-0  : 0;     /* relocalisé depuis §2bis — seul palier unique */
   --space-1  : 4px;
   --space-2  : 8px;
   --space-3  : 12px;
@@ -193,10 +187,6 @@
   --space-5  : 20px;
   --space-6  : 24px;
   --space-7  : 48px;  /* relocalisé depuis §2bis — consommé par --sp-10/12/15 */
-  --space-8  : 32px;
-  --space-10 : 40px;
-  --space-12 : 48px;
-  --space-16 : 64px;
 }
 
 
@@ -208,36 +198,21 @@
 
 /* --- Defaults (PC desktop) — appliqués si data-platform absent ----------- */
 :root {
-  --player-height    : 90px;
-  --sidebar-width    : 240px;
-  --track-row-height : 48px;
-  --cover-sm         : 40px;
-  --cover-md         : 56px;
-  --cover-lg         : 200px;
+  --player-height    : 80px;   /* aligné sur --pb (valeur effective du layout) */
+  --sidebar-width    : 260px;  /* aligné sur --sb (valeur effective de la grille) */
   --control-size     : 36px;
-  --tap-target       : 36px;
 }
 
 :root[data-platform="pc"] {
-  --player-height    : 90px;
-  --sidebar-width    : 240px;
-  --track-row-height : 48px;
-  --cover-sm         : 40px;
-  --cover-md         : 56px;
-  --cover-lg         : 200px;
+  --player-height    : 80px;   /* aligné sur --pb */
+  --sidebar-width    : 260px;  /* aligné sur --sb */
   --control-size     : 36px;
-  --tap-target       : 36px;
 }
 
 :root[data-platform="mobile"] {
   --player-height    : 64px;
   --sidebar-width    : 0px;       /* bottom nav remplace la sidebar */
-  --track-row-height : 64px;
-  --cover-sm         : 48px;
-  --cover-md         : 64px;
-  --cover-lg         : 100%;      /* cover full-width sur mobile */
   --control-size     : 48px;
-  --tap-target       : 48px;      /* minimum tactile WCAG */
 }
 
 
@@ -248,34 +223,20 @@
   --radius-xs   : 4px;    /* relocalisé depuis §2bis — consommé par --r-xs/sm/md */
   --radius-sm   : 6px;    /* tags, badges */
   --radius-md   : 10px;   /* boutons, inputs */
-  --radius-lg   : 14px;   /* cards, covers */
-  --radius-xl   : 20px;   /* modales, drawers */
-  --radius-full : 9999px; /* pills, avatars */
+  --radius-row  : 8px;    /* lignes de piste (survol + actif), vignettes/pochettes */
+  --radius-lg   : 16px;   /* grands panneaux et cartes (album/playlist/stats, toasts) */
   --radius-pill : 999px;  /* relocalisé depuis §2bis — consommé par --r-pill/round/full */
 }
 
 
 /* ============================================================================
- * 7. OMBRES — multicouches, tintées avec l'accent
- * --shadow-glow utilise --accent-glow pour le cover art en lecture.
+ * 7. OMBRES
+ * Définies en §13 (--shadow-sm/md/lg/xl) — les valeurs ici étaient écrasées
+ * par la cascade §13 (doublon mort supprimé, audit 2026-07-27).
+ * Doctrine : surfaces EN FLUX plates (profondeur par paliers tonals, --elev-*
+ * transparents) ; surfaces FLOTTANTES (modales, popovers, HUD, toasts)
+ * portent une vraie ombre --shadow-*.
  * ============================================================================ */
-:root {
-  --shadow-sm :
-    0 1px 2px rgba(0, 0, 0, 0.30),
-    0 1px 1px rgba(0, 0, 0, 0.20);
-
-  --shadow-md :
-    0 4px 8px  rgba(0, 0, 0, 0.32),
-    0 2px 4px  rgba(0, 0, 0, 0.20);
-
-  --shadow-lg :
-    0 12px 28px rgba(0, 0, 0, 0.45),
-    0 6px  12px rgba(0, 0, 0, 0.28);
-
-  --shadow-glow :
-    0 8px 32px var(--accent-glow),
-    0 2px 8px  rgba(0, 0, 0, 0.40);
-}
 
 
 /* ============================================================================
@@ -286,43 +247,8 @@
    consommateur) a été retiré. */
 
 
-/* ============================================================================
- * 9. Z-INDEX SYSTEM
- * Pas de magic numbers : tout passe par ces tokens.
- * --z-player toujours au-dessus de tout (le player ne disparaît jamais).
- * ============================================================================ */
-:root {
-  --z-base     : 0;
-  --z-raised   : 10;
-  --z-dropdown : 100;
-  --z-sticky   : 200;
-  --z-overlay  : 300;
-  --z-modal    : 400;
-  --z-toast    : 500;
-  --z-player   : 600;
-}
-
-
-/* ============================================================================
- * 10. LAYOUT GRID — adaptatif PC / Mobile
- * PC     : sidebar + main, player en bas full-width.
- * Mobile : main, player, bottom nav empilés.
- * ============================================================================ */
-:root[data-platform="pc"] {
-  --layout-columns  : 240px 1fr;
-  --layout-rows     : 1fr 90px;
-  --layout-areas    : "sidebar main" "player player";
-  --content-max     : 1600px;
-  --content-padding : var(--space-8);
-}
-
-:root[data-platform="mobile"] {
-  --layout-columns  : 1fr;
-  --layout-rows     : 1fr 64px 56px;
-  --layout-areas    : "main" "player" "nav";
-  --content-max     : 100%;
-  --content-padding : var(--space-4);
-}
+/* 9. Z-index / 10. Layout grid : définis en §13 (--z-*) et §5 (dimensions
+   adaptatives PC/Mobile). Sections squelettes supprimées (audit 2026-07-27). */
 
 
 /* ============================================================================
@@ -335,22 +261,9 @@
   color      : var(--text-primary);
 }
 
-/* Scrollbars (Webkit + Firefox) */
-* {
-  scrollbar-width : thin;
-  scrollbar-color : var(--border-default) transparent;
-}
-*::-webkit-scrollbar              { width: 10px; height: 10px; }
-*::-webkit-scrollbar-track        { background: transparent; }
-*::-webkit-scrollbar-thumb        { background: var(--border-default); border-radius: var(--radius-full); }
-*::-webkit-scrollbar-thumb:hover  { background: var(--text-muted); }
-
-/* Focus ring uniforme — respect du token --border-focus */
-:focus-visible {
-  outline        : 2px solid var(--border-focus);
-  outline-offset : 2px;
-  border-radius  : var(--radius-sm);
-}
+/* Scrollbars et :focus-visible définis dans style.css (implémentation
+   complète avec double-ring a11y). Les stubs ici étaient écrasés
+   par la cascade — supprimés pour éviter la confusion. */
 
 /* ============================================================================
  * 12. LIGHT THEME — palette miroir, ΔE équivalent à dark (B2)
@@ -365,7 +278,6 @@ html[data-mode="light"] {
   --bg-surface    : #E5E8EE;
   --bg-elevated   : #D9DDE6;
   --bg-raised     : #CAD0DC;
-  --bg-overlay    : rgba(217, 221, 230, 0.78);
 
   --bg  : var(--bg-base);
   --bg1 : #EEF0F4;
@@ -391,20 +303,22 @@ html[data-mode="light"] {
   /* Bordures light — alpha noir au lieu d'alpha blanc */
   --border-subtle  : rgba(0, 0, 0, 0.06);
   --border-default : rgba(0, 0, 0, 0.12);
-  --border-strong  : rgba(0,0,0,.11);   /* préserve la valeur light (ex var(--border-3)) — sinon le .65 BLANC de §2ter fuirait en clair */
 
   /* Voiles & teintes light */
-  --scrim-1 : rgba(0, 0, 0, 0.15);
   --scrim-2 : rgba(0, 0, 0, 0.22);
   --scrim-3 : rgba(0, 0, 0, 0.35);
   --tint-1  : rgba(0, 0, 0, 0.04);
   --tint-2  : rgba(0, 0, 0, 0.08);
-  --tint-3  : rgba(0, 0, 0, 0.14);
 
-  /* Halo focus — sur fond clair, blanc plutôt que noir */
-  --focus-halo : rgba(255, 255, 255, 0.55);
-  /* AAA SC 2.4.13 : anneau de contraste neutre — sombre sur fond clair. */
-  --focus-ring-contrast : rgba(0, 0, 0, 0.85);
+  /* Focus light — même logique subtile, micro-lueur accent */
+  --focus-ring-contrast : rgba(var(--g-rgb), 0.10);
+
+  /* Hover surfaces — inversées pour le mode clair (alpha noir) */
+  --row-hover  : rgba(0, 0, 0, 0.06);
+  --row-active : rgba(0, 0, 0, 0.10);
+
+  /* Séparateur light — alpha noir, visible sur fond clair (vs rgba(blanc,.04) dark) */
+  --sep: rgba(0, 0, 0, 0.10);
 }
 
 
@@ -430,14 +344,10 @@ html[data-mode="light"] {
      fait écran par écran dans les lots R2–R5, avec vérification visuelle.
      ════════════════════════════════════════════════════════════════ */
 
-  /* Typographie — tailles display (hors échelle canonique migrée vers design-system.css) */
-  --text-display: 32px;
-  --text-hero:    clamp(40px, 6vw, 80px);
+  /* Typographie — taille hero (display est défini en §3 : clamp(28px,4vw,48px)) */
 
   /* Graisses */
-  --fw-regular:  400;
   --fw-medium:   500;
-  --fw-semibold: 600;
   --fw-bold:     700;
 
   /* Élévations — migrées vers design-system.css (B1) */
@@ -452,23 +362,25 @@ html[data-mode="light"] {
   --blur-xl: 48px;
 
   /* Voiles & teintes (cible des rgba(0/255…) littéraux) */
-  --scrim-1: rgba(0,0,0,.4);
   --scrim-2: rgba(0,0,0,.30);
   --scrim-3: rgba(0,0,0,.45);
   --tint-1:  rgba(255,255,255,.06);
   --tint-2:  rgba(255,255,255,.10);
-  --tint-3:  rgba(255,255,255,.16);
 
   /* États — sémantique partagée (toasts, trends, stop/delete) */
   --red:     #e84040;
   --red-rgb: 232,64,64;
   --green:   #1db954;    /* success / up trend */
-  --amber:   #f59e0b;
+  --amber:     #f59e0b;
+  --amber-rgb: 245, 158, 11;
 
   /* Couleurs absolues — pour les rares cas où une couleur exacte est requise */
   --c-white: #ffffff;    /* blanc pur — cercle dot, eq-preset, select-input */
   --c-black: #000000;    /* noir pur — cinema bg, spl-mode active text */
   --c-1a:    #1a1a1a;    /* quasi-noir — cinema art-em fallback */
+  --c-genre-fb-1: #1e1e1e;  /* fallback gradient carte genre sans --gc (audit 2026-07-27) */
+  --c-genre-fb-2: #2a2a2a;  /* fallback gradient carte genre — palier haut */
+  --c-spectrum-bg: #0a0a12; /* fond cinéma « Spectre » — noir teinté bleu volontaire */
   --c-f0:    #f0f0f0;    /* gris clair light-mode — pl-sort-sel bg */
   --c-e4:    #e4e4e4;    /* gris clair light-mode hover — pl-sort-sel:hover */
   --c-cc:    #cccccc;    /* gris moyen light-mode border — pl-sort-sel border */
@@ -479,15 +391,30 @@ html[data-mode="light"] {
   --eq-cut:        #ff7a45;   /* valeur en coupe active */
 
   /* États sémantiques contextuels */
-  --cinema-active: #fb923c;   /* genre/tag actif dans le cinéma */
   --like-active:   #e0304a;   /* cœur like actif dans le mini-player */
 
-  /* Layout */
+  /* Layout — --sb et --pb aliasent les tokens canoniques §5 */
   --tb: 38px;
-  --sb: 260px;
-  --sb-sm: 54px;   /* sidebar compacte icônes-only (< 720px) */
-  --pb: 96px;
+  --sb: var(--sidebar-width);  /* 260px — alias de §5 --sidebar-width */
+  --sb-sm: 54px;               /* sidebar compacte icônes-only (< 720px) */
+  --pb: var(--player-height);  /* 96px — alias de §5 --player-height */
 
+  /* ════════════════════════════════════════════════════════════════════════
+     ALIAS LEGACY — à supprimer en v2
+     Ces alias ont été introduits lors de la migration R1→R5 pour ne pas
+     casser les ~200 consommateurs existants dans style.css. Ils ne doivent
+     plus être utilisés dans le nouveau code.
+
+     Tokens canoniques cibles :
+       espacement  → --space-0 … --space-16   (§4)
+       radius      → --radius-xs … --radius-pill (§6)
+       typographie → --text-xs … --text-display  (§3), --fs-f-* fluides
+       durées      → --motion-fast / --motion-base / --motion-slow (§2bis)
+
+     Retrait prévu : v2.0 — après migration complète de style.css.
+     ════════════════════════════════════════════════════════════════════════ */
+
+  /* @deprecated Utiliser --space-N directement (§4) */
   /* Spacing — recâblé sur l'échelle canonique --space-* (harmonisation, audit §2.1).
      25 paliers → 8. nano/micro/1q restent littéraux : hairlines/bordures
      sous-grille intentionnelles (les snapper à 4px casserait les séparateurs 1px). */
@@ -504,23 +431,18 @@ html[data-mode="light"] {
   --sp-3:  var(--space-3);    /* 12 */
   --sp-3h: var(--space-4);    /* 14 → 16 */
   --sp-4:  var(--space-4);    /* 16 */
-  --sp-5:  var(--space-5);    /* 20 → 24 */
-  --sp-6:  var(--space-5);    /* 24 */
-  --sp-7:  var(--space-6);    /* 28 → 32 */
+  --sp-5:  var(--space-5);    /* 20 */
+  --sp-6:  var(--space-5);    /* 24 → 20 */
+  --sp-7:  var(--space-6);    /* 28 → 24 */
   --sp-4h: var(--space-4);    /* 18 → 16 */
-  --sp-5h: var(--space-5);    /* 22 → 24 */
-  --sp-7h: var(--space-6);    /* 30 → 32 */
-  --sp-2d: var(--space-3);    /* 11 → 12 */
-  --sp-3d: var(--space-4);    /* 15 → 16 */
-  --sp-8:  var(--space-6);    /* 32 */
+  --sp-5h: var(--space-5);    /* 22 → 20 */
+  --sp-7h: var(--space-6);    /* 30 → 24 */
+  --sp-8:  var(--space-6);    /* 32 → 24 */
   --sp-10: var(--space-7);    /* 40 → 48 */
   --sp-12: var(--space-7);    /* 48 */
   --sp-15: var(--space-7);    /* 60 → 48 */
 
   /* Échelle de breakpoints canonique — 3 seuils intentionnels (voir le plan). */
-  --bp-compact: 720px;
-  --bp-wide:    1100px;
-  --bp-short:   560px;  /* seuil vertical (height) — déclaré ici pour cohérence, @media ne peut pas lire les vars CSS */
 
   /* Icônes — sous-échelle SVG resserrée (harmonisation, audit §2.7 / FND-09).
      Ancres icône : xs 12 / xl 16 / 3xl 20 / 4xl 24 / 32. Les tokens servant de
@@ -538,35 +460,40 @@ html[data-mode="light"] {
   --icon-22:   22px;   /* conteneur — gardé littéral */
   --icon-26:   26px;   /* conteneur — gardé littéral */
   --icon-32:   32px;   /* ancre display */
-  --icon-dot:   6px;   /* indicateur — gardé littéral */
   --icon-28:   28px;   /* conteneur bouton — gardé littéral */
   --icon-36:   36px;   /* conteneur — gardé littéral */
   --icon-40:   40px;   /* conteneur — gardé littéral */
   --icon-44:   44px;   /* conteneur — gardé littéral */
   --icon-4:     4px;   /* dot xs — gardé littéral */
-  --icon-9:    var(--icon-xs);   /* 9 → 12 */
   --ctrl-30:   30px;   /* conteneur — gardé littéral */
 
   /* Artwork display sizes */
   --art-cinema:    42px;   /* miniature cinéma inline */
   --art-empty:     48px;   /* icône état vide */
   --art-settings:  54px;   /* artwork panneau settings */
-  --art-player:    72px;   /* pochette player bar */
+  --art-player:    60px;   /* pochette player bar */
   --art-avatar:    58px;   /* avatar profil circulaire */
   --art-ring:      60px;   /* anneau spinner chargement */
   --art-card:      64px;   /* artwork playlist / album card */
   --art-hero-sm:   88px;   /* hero cover — responsive sm */
   --art-cover:    100px;   /* cover placeholder modal */
   --art-hero:     148px;   /* hero cover — taille pleine */
+  --art-drill:    120px;   /* artwork drill header album/artiste (audit 2026-07-27) */
+  --art-np:       320px;   /* artwork vue Now Playing (audit 2026-07-27) */
   --art-list:      56px;   /* colonne artwork dans rangée track (grid) */
-  --tr-h:          48px;   /* hauteur d'une ligne piste — pilotée par data-tlist-zoom */
+  --tr-h:          56px;   /* hauteur d'une ligne piste (défaut = Comfortable) — pilotée par data-tlist-zoom */
+  --tart-size:     40px;   /* taille pochette .tart (défaut = Comfortable) — pilotée par data-tlist-zoom */
+  /* rem (pas em) : .tr et #tlist-col-hdr n'ont pas la même taille de police —
+     un em résoudrait à une largeur différente dans chacun et désalignerait
+     la colonne album entre l'en-tête et les lignes. */
+  --tr-album-col:  12rem;   /* largeur de la colonne album dans la grille .tr */
 
   /* Éléments structurels — tracks & sliders */
   --track-h-xs: 2px;   /* indicateurs fins, tab active line */
   --track-h:    3px;   /* piste standard slider / progress */
   --track-h-md: 4px;   /* piste large — cf-slider, scan-bar, rg-bar */
   --track-h-lg: 6px;   /* piste expansée — pbar:hover, genre-bar */
-  --slider-w:  84px;   /* largeur volume slider */
+  --slider-w:  72px;   /* largeur volume slider */
   --lang-w:    24px;   /* largeur indicateur langue (non-carré) */
 
   /* Skeleton loaders */
@@ -584,7 +511,6 @@ html[data-mode="light"] {
   --orphan-list-max-h: 260px;   /* cap liste orphelins modale (scroll) */
   --spl-results-max-h: 120px;   /* cap liste résultats smart playlist (scroll) — R-L5 */
   --spl-preview-max-h: 100px;   /* cap liste preview smart playlist (scroll) — R-L5 */
-  --eq-presets-max-h:  128px;   /* cap zone presets EQ (scroll) — aligné grille 4px (UIH-eq-01) */
   --eq-spacer-min:      12px;   /* respiration min espace-courbe EQ — aligné grille 4px (UIH-eq-01) */
   --eq-spacer-max:      52px;   /* plafond espace-courbe EQ */
   --eq-bands-max-h:    280px;   /* cap panneau bandes EQ */
@@ -599,7 +525,6 @@ html[data-mode="light"] {
   --modal-pl-w:        380px;   /* modal playlist */
   --modal-bte-w:       360px;   /* modal batch tag editor */
   --modal-dupe-w:      520px;   /* modal doublons */
-  --search-input-w:    170px;   /* champ input recherche */
   --search-input-min:  120px;   /* min-width input recherche (responsive) */
   --tb-btn-min:         34px;   /* min-width boutons toolbar / track-r */
   --target-min:         24px;   /* WCAG 2.2 SC 2.5.8 — cible tactile minimale (boutons icône inline) */
@@ -615,47 +540,39 @@ html[data-mode="light"] {
   --text-empty-max:    260px;   /* max-width texte état vide */
   --text-desc-max:     320px;   /* max-width descriptions modales sm */
   --text-sf-max:       380px;   /* max-width chemin fichier, overflow ellipsis */
-  --modal-narrow-max:  360px;   /* max-width modaux étroits (radio, tags) */
-  --modal-mid-max:     440px;   /* max-width modaux medium */
+  --welcome-desc-max:  360px;   /* max-width sous-titre écran d'accueil (.wsub) */
+  --welcome-content-max: 440px; /* max-width grille features écran d'accueil (.wfeats) */
   --modal-pl-max:      480px;   /* max-width barre progression playlist */
   --modal-orphan-max:  540px;   /* max-width modale orphelins étendue */
   --cn-next-max:       270px;   /* max-width panneau cinema next */
   --cn-next-min:       180px;   /* min-width panneau cinema next */
+  --cqp-max-h:         320px;   /* max-height panneau file d'attente cinéma (Task 9) */
+  --cqp-trigger-gap:    88px;   /* écart panneau file d'attente ↔ #cinema-next (Task 9) */
 
   /* Dimensions d'alignement UI — labels & valeurs */
   --cfg-val-min:        30px;   /* min-width valeur config slider */
   --eq-note-min:        28px;   /* min-width label note EQ */
-  --rg-label-min:       80px;   /* min-width label ReplayGain */
-  --rg-value-min:       50px;   /* min-width valeur ReplayGain */
   --kbd-min:            26px;   /* min-width touche clavier */
   --stats-rank-min:     20px;   /* min-width numéro rang stats */
   --stats-count-min:    40px;   /* min-width compteur lecture stats */
   --genre-name-min:    110px;   /* min-width nom genre dans barre */
 
   /* Grilles layout — grid-template-columns */
-  --card-min-w:        170px;   /* min-width carte album/artiste (auto-fill) */
   --card-min-w-lg:     200px;   /* min-width carte large (playlist cards) */
   --pl-art-col:         72px;   /* colonne artwork dans grille playlist modale */
-  --tr-r-w:            124px;   /* section droite rangée track (dur + controls) */
+  --tr-r-w:            152px;   /* section droite rangée track (dur + like + ajout + ⋯) — élargie pour le bouton ⋯ (audit 2026-07-27) */
   --cinema-vol-w:       80px;   /* curseur volume cinéma */
-  --cinema-corner-top:  20px;   /* inset top boutons coin cinéma */
-  --cinema-corner-x:    24px;   /* inset horizontal principal coin cinéma */
-  --cinema-fs-right:    72px;   /* inset right bouton fullscreen cinéma */
-  --cinema-clock-inset: 52px;   /* position horloge idle + panneau next */
-  --sleep-menu-right:   80px;   /* offset droit du menu sleep */
+  /* Task 8 : insets responsives (clamp) — s'adaptent au viewport au lieu de px fixes. */
+  --cinema-corner-top:  clamp(16px, 2vh, 32px);   /* inset top boutons coin cinéma */
+  --cinema-corner-x:    clamp(20px, 2.5vw, 48px); /* inset horizontal principal coin cinéma */
+  --cinema-clock-inset: clamp(40px, 5vh, 80px);   /* insets bas de #cinema-overlay -- horloge (side-l) ET piste suivante/file d'attente (side-r), harmonisés (Task 2 layout grid) */
 
   /* Focus — accessibilité clavier */
   --focus-ring:    2px solid var(--g);
   --focus-offset:  2px;
-  /* A11Y-30 (UI_AUDIT 2026-05-19) : halo de contraste autour du focus ring.
-     L'accent dynamique --g peut tomber sous 3:1 contre certains backgrounds
-     (cyan/jaune vs panneaux clairs). Le halo garantit la lisibilité du ring
-     sur n'importe quel fond. Override en light mode plus bas. */
-  --focus-halo:    rgba(139, 107, 255, .35);   /* A11Y-11 : halo indigo lisible sur Vantablack (#030303) */
-  /* AAA SC 2.4.13 Focus Appearance : anneau neutre opaque ajouté en plus de
-     l'outline accent. Garantit un indicateur ≥3:1 même si l'utilisateur choisit
-     un accent --g peu contrasté. Override clair plus bas. */
-  --focus-ring-contrast: rgba(255, 255, 255, .92);
+  /* Micro-lueur subtile (style Spotify) — halo très transparent en couleur accent,
+     visible seulement au clavier. Pas de double anneau opaque. */
+  --focus-ring-contrast: rgba(var(--g-rgb), 0.12);
   --border-w-sm:   1px;    /* épaisseur border fine — bordures standard (1px hairline) */
   --border-w-md:   1.5px;  /* épaisseur border medium — inputs actifs, modal highlight */
   --border-w-lg:   2px;    /* épaisseur border forte — tabs, drag-over, queue-act */
@@ -663,7 +580,6 @@ html[data-mode="light"] {
   --border-w-2xl:  4px;    /* épaisseur border 2xl — tooltips flèche */
 
   /* Flou — recâblé sur --blur-sm/md/lg/xl (harmonisation, audit §2.7). 19 → 4. */
-  --blur-1:   var(--blur-sm);   /* 1   → 4 */
   --blur-1h:  var(--blur-sm);   /* 1.5 → 4 */
   --blur-2:   var(--blur-sm);   /* 2   → 4 */
   --blur-3:   var(--blur-sm);   /* 3   → 4 */
@@ -695,7 +611,6 @@ html[data-mode="light"] {
   --lh-comfort: var(--lh-base);     /* 1.4  → 1.5 */
   --lh-airy:    var(--lh-base);     /* 1.6  → 1.5 */
   --lh-spacious:var(--lh-loose);    /* 1.65 → 1.75 */
-  --lh-2:       var(--lh-loose);    /* 1.9  → 1.75 */
   --lh-px-14:   14px;               /* hauteur fixe badges — gardé littéral */
   /* Letter-spacing — recâblé (harmonisation, audit §2.3). 22 → 4 ancres. */
   --ls-display: -0.02em;            /* ancre — display serré */
@@ -710,11 +625,8 @@ html[data-mode="light"] {
   --ls-slight:  var(--ls-reset);    /* .01  → 0 */
   --ls-micro:   var(--ls-reset);    /* .02  → 0 */
   --ls-subtle:  var(--ls-reset);    /* .03  → 0 */
-  --ls-tag:     var(--ls-reset);    /* .3px → 0 */
   --ls-filter:  var(--ls-reset);    /* .4px → 0 */
   --ls-wide:    var(--ls-label);    /* .04  → .06 */
-  --ls-tag-meta:var(--ls-label);    /* .05  → .06 */
-  --ls-badge:   var(--ls-label);    /* .07  → .06 */
   --ls-xwide:   var(--ls-label);    /* .08  → .06 */
   --ls-cinema:  var(--ls-label);    /* .10  → .06 */
   --ls-caps:    var(--ls-label);    /* 1.2px → .06em */
@@ -729,35 +641,33 @@ html[data-mode="light"] {
 
   /* Boutons — base tokens partagés */
   --btn-h:    30px;
-  --btn-h-sm: 26px;
-  --btn-h-lg: 38px;
-  --btn-r:    var(--r);
-  --btn-pad:  0 var(--sp-3);
+  --btn-h-lg: 40px;
 
   /* Bordures — --border-subtle/default/strong NE sont volontairement PAS
      ré-aliasés ici : les valeurs AA (>=3:1 sur Vantablack, §2ter) font foi.
      Ce ré-alias vers var(--border-1/2/3) (.06/.08/.10) neutralisait
      silencieusement le correctif A11Y-03 au runtime — retiré. */
 
+  /* @deprecated Utiliser --text-xs / --text-sm / --text-base / --text-md / --text-lg / --text-xl / --text-display directement (§3).
+     Pour le nouveau code fluide : préférer --fs-f-caption / --fs-f-body / --fs-f-subhead / --fs-f-title / --fs-f-disp. */
   /* Typography — recâblé sur --text-* (harmonisation, audit §2.3). 20 tailles fixes → 7.
      3xs/2xs restent littéraux (micro-badges, sous-échelle volontaire).
      disp-md/lg/xl/hero restent littéraux (grandes tailles display rares). */
   --fs-3xs:      8px;                 /* micro-badge — gardé littéral */
   --fs-2xs:      9px;                 /* micro-badge — gardé littéral */
-  --fs-xs:      var(--text-xs);       /* 10 → 11 */
-  --fs-sm:      var(--text-xs);       /* 11 */
-  --fs-caption: var(--text-sm);       /* 12 */
-  --fs-md:      var(--text-base);     /* 13 */
-  --fs-base:    var(--text-md);       /* 14 */
-  --fs-subhead: var(--text-lg);       /* 15 → 16 */
-  --fs-body:    var(--text-lg);       /* 16 */
-  --fs-inter:   var(--text-lg);       /* 18 → 16 */
-  --fs-lg:      var(--text-lg);       /* 17 → 16 */
-  --fs-xl:      var(--text-xl);       /* 19 → 20 */
-  --fs-lg2:     var(--text-xl);       /* 20 */
-  --fs-2xl:     var(--text-2xl);      /* 26 */
-  --fs-disp:    var(--text-display);  /* 32 */
-  --fs-disp-sm: var(--text-display);  /* 36 → 32 */
+  --fs-xs:      var(--text-xs);       /* clamp 10-12 */
+  --fs-sm:      var(--text-xs);       /* clamp 10-12 */
+  --fs-caption: var(--text-sm);       /* clamp 12-14 */
+  --fs-md:      var(--text-base);     /* clamp 13-15 */
+  --fs-base:    var(--text-md);       /* clamp 15-18 */
+  --fs-subhead: var(--text-lg);       /* clamp 18-24 */
+  --fs-body:    var(--text-lg);       /* clamp 18-24 */
+  --fs-inter:   var(--text-lg);       /* clamp 18-24 */
+  --fs-lg:      var(--text-lg);       /* clamp 18-24 */
+  --fs-xl:      var(--text-xl);       /* clamp 22-32 */
+  --fs-lg2:     var(--text-xl);       /* clamp 22-32 */
+  --fs-disp:    var(--text-display);  /* clamp 28-48 */
+  --fs-disp-sm: var(--text-display);  /* clamp 28-48 */
   --fs-disp-md: 48px;                 /* display rare — gardé littéral */
   --fs-disp-lg: 52px;                 /* display rare — gardé littéral */
   --fs-disp-xl: 72px;                 /* display rare — gardé littéral */
@@ -771,8 +681,6 @@ html[data-mode="light"] {
   --fs-f-caption: clamp(0.69rem, 0.66rem + 0.15cqi, 0.78rem);
   --fs-f-body:    clamp(0.81rem, 0.77rem + 0.25cqi, 0.94rem);
   --fs-f-subhead: clamp(0.94rem, 0.88rem + 0.4cqi,  1.13rem);
-  --fs-f-title:   clamp(1.06rem, 0.95rem + 0.7cqi,  1.5rem);
-  --fs-f-disp:    clamp(1.4rem,  1.1rem + 2cqi,     2.4rem);
 
   /* Typographie responsive — clamp() fluid (px min, vw fluid, px max) */
   --fs-vw-view:      clamp(26px, 3.5vw, 40px);  /* titre de vue/section responsive */
@@ -784,6 +692,7 @@ html[data-mode="light"] {
   --fs-vw-cin-art:   clamp(11px, 1.8vw, 17px);  /* cinéma artiste responsive */
   --fs-vw-cin-alb:   clamp(9px, 1.3vw, 13px);   /* cinéma album responsive */
 
+  /* @deprecated Utiliser --radius-xs / --radius-sm / --radius-md / --radius-lg / --radius-pill directement (§6) */
   /* Rayons — recâblés sur l'échelle canonique --radius-* (harmonisation, audit §2.2).
      17 rayons → 5. --r-micro reste littéral (hairline 1px). */
   --r-micro:  1px;                 /* hairline — gardé littéral */
@@ -796,14 +705,14 @@ html[data-mode="light"] {
   --r-art:    var(--radius-sm);    /* 8 */
   --r-9:      var(--radius-sm);    /* 9  → 8 */
   --r2:       var(--radius-md);    /* 10 → 12 */
-  --r-card:   var(--radius-md);    /* 12 */
+  --r-card:   var(--radius-lg);    /* 12 → 16 — grands panneaux/cartes (album, stats, toasts) */
   --r3:       var(--radius-md);    /* 14 → 12 */
   --r-4xl:    var(--radius-lg);    /* 16 */
   --r-pill:   var(--radius-pill);  /* 20 → pilule pleine */
   --r-32:     var(--radius-lg);    /* 32 → 16 */
-  --r-round:  var(--radius-pill);  /* 50 → pilule pleine */
   --r-full:   var(--radius-pill);  /* 60 → pilule pleine */
 
+  /* @deprecated Utiliser --motion-fast (120ms) / --motion-base (200ms) / --motion-slow (320ms) directement (§2bis) */
   /* Transitions — recâblées sur --motion-* (harmonisation, audit §2.5). 19 durées → 3.
      Les durées de boucle infinie (--anim-*) et les durées fonctionnelles
      (reveal, art-color, flash) restent littérales. */
@@ -826,10 +735,9 @@ html[data-mode="light"] {
   --dur-modal:     var(--motion-slow);   /* 260 → 320 */
   --dur-card-in:   var(--motion-slow);   /* 280 → 320 */
   --dur-enter:     var(--motion-slow);   /* 300 → 320 */
-  --anim-glow:     2.6s;    /* playGlow / logopulse infinite glow */
+  --anim-glow:     2.6s;    /* playGlow infinite glow */
 
   /* Durées animations longues (infini) — gardées littérales */
-  --anim-pulse:    1.6s;    /* radio-pulse / dotpulse animation period */
   --anim-shim:     1.8s;    /* skeleton shimmer / drago border / radio-cbtn — boucles lentes */
   --anim-art:      0.8s;    /* art-color background transition */
   --ease:       var(--dur) ease;
@@ -842,66 +750,40 @@ html[data-mode="light"] {
   --accelerate:  var(--ease-standard);
 
   --font: 'DM Sans', -apple-system, 'Segoe UI', sans-serif;
-  --font-display: 'Syne', -apple-system, sans-serif;
+  /* --font-display retiré : doublon de §3 (la valeur §3 fait foi — plus de fallbacks) */
 
   /* Ombres — l'échelle de base est recâblée sur les élévations canoniques
      (harmonisation, audit §2.4 / FND-04). Les ombres spécialisées plus bas
      (insets indicateurs, anneaux d'accent, text-shadows, drop-shadows filter,
      valeurs de keyframes) ne sont PAS des élévations : elles restent inchangées
      et seront traitées au re-skin par composant. */
-  --shadow-sm:  var(--elev-1);
-  --shadow-md:  var(--elev-2);
-  --shadow-lg:  var(--elev-3);
-  --shadow-xl:  var(--elev-4);
+  /* Ombres réelles des surfaces flottantes (audit 2026-07-27 : les alias
+     --elev-* transparents neutralisaient toutes les ombres de modales).
+     Les surfaces en flux restent plates via --elev-* (doctrine Spotify). */
+  --shadow-sm:  0 1px 3px rgba(0, 0, 0, .25);
+  --shadow-md:  0 4px 12px rgba(0, 0, 0, .30);
+  --shadow-lg:  0 8px 24px rgba(0, 0, 0, .35);
+  --shadow-xl:  0 16px 48px rgba(0, 0, 0, .45);
 
   /* Ombres composants — drop-shadows recâblées sur --elev-* (audit §2.4 / FND-04).
      Les variantes thème clair (-lt / -pl) restent littérales (re-définies par mode
-     au re-skin couleur), ainsi que les composites et glows spécifiques. */
-  --shadow-xs:     var(--elev-1);               /* toolbar */
-  --shadow-sm-lt:  0 2px 8px rgba(0,0,0,.15);   /* variante claire — gardée littérale */
-  --shadow-sm-pl:  0 2px 8px rgba(0,0,0,.1);    /* variante claire — gardée littérale */
-  --shadow-sm-tip: var(--elev-1);               /* tooltip */
-  --shadow-logo:   0 3px 10px rgba(0,0,0,.12);  /* logo clair — gardée littérale */
-  --shadow-logo-d: var(--elev-1);               /* logo ctx dark */
-  --shadow-pop:    0 8px 24px rgba(0,0,0,.12);  /* quick-pop clair — gardée littérale */
-  --shadow-art:    var(--elev-1);               /* artwork thumbnail */
-  --shadow-art-hv: var(--elev-2);               /* artwork hover */
-  --shadow-card:   var(--elev-2);               /* card */
-  --shadow-card-lt:0 6px 20px rgba(0,0,0,.18);  /* variante claire — gardée littérale */
-  --shadow-card-hv:var(--elev-3);               /* card hover */
-  --shadow-pl-hv:  var(--elev-3);               /* playlist hero hover */
-  --shadow-pl-hv-lt: 0 8px 28px rgba(0,0,0,.22); /* variante de base — gardée littérale */
-  --shadow-modal2: 0 12px 48px rgba(0,0,0,.16); /* modale claire — gardée littérale */
-  --shadow-modal3: var(--elev-3);               /* search modal */
-  --shadow-cin-btn:var(--elev-2);               /* cinema corner btn */
-  --shadow-cin-vol:0 0 6px rgba(0,0,0,.4);      /* glow spécifique — gardée littérale */
-  --shadow-mp-drag:var(--elev-4);               /* mini-player dragging */
-  --shadow-tart:   var(--elev-2);               /* track art hover */
-  --shadow-sb-tip: var(--elev-2);               /* sidebar tooltip */
-  --shadow-radio:  0 8px 32px rgba(0,0,0,.14), 0 2px 6px rgba(0,0,0,.08); /* composite — gardée littérale */
-  --shadow-cin-art:var(--elev-4);  /* cinema artwork — était cyclique (var(--shadow-cin-art)) → none */
-  --shadow-ring:   var(--glow-accent);          /* pbar thumb ring → lueur accent */
+     au re-skin couleur), ainsi que les composites et glows spécifiques. */  --shadow-pop:    var(--shadow-md);  --shadow-modal2: var(--shadow-lg);
+  --shadow-modal3: var(--shadow-xl);  --shadow-cin-art:none;
   --shadow-thumb:  var(--elev-1);               /* pbar thumb shadow */
-  --shadow-big-modal: var(--elev-3);            /* big modal */
 
   /* Ombres accent — glows simples recâblés sur --glow-accent ; les anneaux
      multi-état (hover/light) et composites restent littéraux. */
   --shadow-pcplay:    var(--glow-accent);       /* pcplay ring */
-  --shadow-pcplay-hv: 0 0 0 5px rgba(var(--g-rgb),.16),  0 6px 20px rgba(var(--g-rgb),.4); /* état hover — gardé littéral */
-  --shadow-pcplay-lt: 0 0 0 5px rgba(var(--g-rgb),.18), 0 6px 20px rgba(var(--g-rgb),.4); /* variante claire — gardée littérale */
+  --shadow-pcplay-hv: 0 0 0 5px rgba(var(--g-rgb),.16);
+  --shadow-pcplay-lt: 0 0 0 5px rgba(var(--g-rgb),.18);
   --shadow-acc-glow:  var(--glow-accent);       /* accent glow doux */
-  --shadow-srch-dk:   var(--glow-accent);       /* search focus */
-  --shadow-srch-lt:   0 0 0 3px rgba(var(--g-rgb),.1);  /* variante claire — gardée littérale */
   --shadow-wbtn-hv:   var(--glow-accent);       /* wbtn hover */
-  --shadow-pbar-thumb: 0 0 0 3px rgba(var(--g-rgb),.35), 0 2px 8px rgba(0,0,0,.5); /* composite — gardé littéral */
+  --shadow-pbar-thumb: 0 0 0 3px rgba(var(--g-rgb),.35);
   --shadow-pl-icon:   var(--glow-accent);       /* pl-icon playing */
   --shadow-dot-glow:  var(--glow-accent);       /* dot glow */
-  --shadow-dot-pulse: 0 0 10px rgba(var(--g-rgb),.65), 0 0 3px rgba(var(--g-rgb),.9); /* keyframe — gardé littéral */
-  --shadow-vslider:   0 0 0 2px rgba(var(--g-rgb),.25), 0 1px 4px rgba(0,0,0,.4); /* composite — gardé littéral */
   --shadow-pbar-glow: var(--glow-accent);       /* pbar fill glow */
 
   /* Ombres inset & indicateurs */
-  --shadow-act-bar:   inset 3px 0 0 var(--g); /* barre active gauche */
   --shadow-tab-top:   inset 0 2px 0 0 var(--g); /* onglet actif haut */
   --shadow-tab-bot:   inset 0 -2px 0 0 var(--g); /* onglet actif bas */
   --shadow-tr-focus:  inset 0 0 0 2px var(--g), inset 0 0 0 4px rgba(255,255,255,0.18); /* A11Y-22: colored ring + white inner layer */
@@ -909,56 +791,26 @@ html[data-mode="light"] {
   --shadow-tr-below:  0 2px 0 var(--g); /* drag drop below */
 
   /* Ombres neutres — légères & thème clair */
-  --shadow-card-lt2:  0 4px 16px rgba(0,0,0,.08); /* card hover light */
-  --shadow-sel-lt:    0 4px 20px rgba(0,0,0,.1);  /* sel-bar light */
-  --shadow-ctx-lt:    0 8px 32px rgba(0,0,0,.14); /* ctx menu light */
-  --shadow-btn-sub:   0 1px 3px rgba(0,0,0,.06);  /* button subtle */
-  --shadow-stat-lt:   0 1px 4px rgba(0,0,0,.06);  /* stat card light */
-  --shadow-stat-hv:   0 1px 4px rgba(0,0,0,.07), 0 0 0 1px rgba(0,0,0,.04); /* stat hover */
-  --shadow-el-sm:     0 1px 5px rgba(0,0,0,.08);  /* élément léger */
-  --shadow-tab-act:   0 1px 4px rgba(0,0,0,.20);   /* pl-tab active */
-  --shadow-cf-thumb:  0 0 0 3px rgba(0,0,0,.3);   /* cf slider thumb */
-  --shadow-cn-img:    0 4px 12px rgba(0,0,0,.28);  /* cinema img */
-
   /* Ombres latérales (side panels) */
-  --shadow-queue:     -6px 0 24px var(--scrim-1), -1px 0 0 var(--sep);
-  --shadow-radio-bar: inset 3px 0 0 var(--g), 0 2px 12px rgba(var(--g-rgb),.08);
-  --shadow-radio-lt:  inset 3px 0 0 var(--g), 0 2px 8px rgba(var(--g-rgb),.06);
+  --shadow-queue:     -1px 0 0 var(--sep);
 
   /* Ombres playlist */
-  --shadow-pl-list:   0 12px 32px rgba(0,0,0,.30), 0 0 0 1px rgba(var(--g-rgb),.10);
-  --shadow-pl-list2:  0 12px 32px rgba(0,0,0,.30), 0 0 0 1px rgba(var(--g-rgb),.16);
-  --shadow-pl-card:   0 0 0 1px rgba(var(--g-rgb),.18); /* pl-card active */
+  --shadow-pl-list2:  0 0 0 1px rgba(var(--g-rgb),.16);
 
   /* Ombres texte & drop-shadow */
   --tshadow-genre:    0 1px 3px rgba(255,255,255,.5);   /* genre name light */
   --tshadow-title:    0 1px 4px rgba(0,0,0,.45);          /* track title dark */
-  --tshadow-glow:     0 0 8px rgba(var(--g-rgb),.7);    /* text glow cinéma */
-  --dropshadow-art:   0 1px 4px rgba(0,0,0,.30);         /* pochette art */
-  --dropshadow-card:  0 2px 8px rgba(0,0,0,.40);         /* card play btn */
-  --dropshadow-art-sm:0 2px 4px rgba(0,0,0,.34);         /* art sm player */
-  --dropshadow-tlk:   0 0 5px rgba(var(--g-rgb),.5);   /* tlk icon glow */
+  --dropshadow-art:   none;
+  --dropshadow-art-sm:none;
   --dropshadow-heart: 0 0 16px rgba(255,60,100,.7);     /* like heart glow */
-  --dropshadow-art-glow: 0 0 6px;                        /* art glow (color via keyframe) */
 
-  /* Ombres animation/motion (keyframes) */
-  --shadow-kbd:        0 1px 0 var(--bg6);              /* kbd bottom */
-  --shadow-pl-hero-sh: 0 8px 32px rgba(0,0,0,.30), inset 0 1px 0 var(--border-1);
-  --shadow-big-gl:     0 16px 48px rgba(0,0,0,.45), 0 0 0 0.5px rgba(0,0,0,.3);
-  --shadow-pcplay-anim:0 2px 12px rgba(var(--g-rgb),.4), 0 0 0 0 rgba(var(--g-rgb),0);
+  /* Ombres animation/motion (keyframes) */  --shadow-pcplay-anim:0 2px 12px rgba(var(--g-rgb),.4), 0 0 0 0 rgba(var(--g-rgb),0);
   --shadow-pcplay-glow:0 4px 18px rgba(var(--g-rgb),.6), 0 0 0 5px rgba(var(--g-rgb),.1);
-  --shadow-art-col:    0 0 0 1px rgba(var(--g-rgb),.20); /* art-color ring 1 */
   --shadow-art-col2:   0 0 0 1px color-mix(in srgb, var(--art-color) 40%, rgba(var(--g-rgb), .14));
-  --shadow-art-col3:   0 0 0 1px color-mix(in srgb, var(--art-color) 55%, rgba(var(--g-rgb), .22));
 
   /* Ombres keyframe pulsation — radio-pulse */
-  --shadow-pulse-start: 0 0 0 0   rgba(var(--g-rgb), .6);  /* départ (opaque) */
-  --shadow-pulse-mid:   0 0 0 6px rgba(var(--g-rgb), 0);   /* expansion 70% */
-  --shadow-pulse-zero:  0 0 0 0   rgba(var(--g-rgb), 0);   /* fin (transparent) */
 
   /* Ombres keyframe rename feedback */
-  --shadow-rename-mid:  0 0 0 4px rgba(var(--g-rgb), .12); /* flash save (35%) */
-  --shadow-rename-zero: 0 0 0 0   rgba(var(--g-rgb), 0);   /* base / fin (transparent) */
 
   /* Ombres keyframe cinema — glow art-color (valeurs dynamiques color-mix) */
   --shadow-cin-glow-lo:  0 0 40px 10px color-mix(in srgb, var(--art-color) 22%, transparent);
@@ -969,11 +821,35 @@ html[data-mode="light"] {
   /* Ombres keyframe cinema — beat-pulse (--beat-color injecté par JS) */
   --shadow-cin-beat-0:   0 0 70px 24px var(--beat-color, rgba(255,255,255,.22));
   --shadow-cin-beat-ext: 0 0 120px 48px color-mix(in srgb, var(--beat-color, rgba(255,255,255,.22)) 40%, transparent);
-  --shadow-cin-pbar:     0 0 10px var(--g);                                      /* cinema pbar fill hover glow */
-  --shadow-player-ring:  0 -1px 0 rgba(var(--g-rgb),.15);                       /* player bar top accent line */
-  --shadow-inset-hi:     inset 0 1px 0 var(--glass-hi);                         /* inset reflet top glassmorphism */
-  --shadow-eq-curve:     var(--shadow-logo-d), inset 0 1px 0 rgba(255,255,255,.05); /* eq-curve-wrap depth */
+  --shadow-cin-pbar:     0 0 10px rgba(255,255,255,.55);                         /* cinema pbar fill hover glow */
 
+  /* ── Cinema mode — durées, easings, focus ring, opacités blanches (Task 4) ──
+     Unifie JS<->CSS : --dur-cin-swap-out/-in reflètent CIN_SWAP_OUT_MS/CIN_SWAP_IN_MS
+     (cinema.js) ; --dur-cin-beat reflète BEAT_PULSE_MS (cinema-viz.js). Testé par
+     core.test.cjs (cohérence) et a11y.test.cjs (focus ring token, cooldown flash). */
+  --dur-cin-swap-out:   120ms;  /* pochette sortante — == CIN_SWAP_OUT_MS */
+  --dur-cin-swap-in:    440ms;  /* pochette entrante — == CIN_SWAP_IN_MS (fix désync 320↔440) */
+  --dur-cin-beat:       620ms;  /* pulse beat — == BEAT_PULSE_MS (fix désync 600↔620) */
+  --dur-cin-breathe:    6s;     /* respiration pochette idle */
+  --dur-cin-bg-breathe: 8s;     /* respiration fond ambient */
+  --dur-cin-float:      9s;     /* flottement pochette idle */
+  --dur-cin-glow:       5s;     /* respiration glow coloré pochette */
+
+  --ease-spring-soft:   cubic-bezier(.34,1.2,.64,1);  /* swap pochette / cinema-art-wrap */
+  --ease-spring-softer: cubic-bezier(.34,1.3,.64,1);  /* cinema-info / cinema-prog / cinema-controls */
+  --ease-kenburns:      cubic-bezier(.4,0,.6,1);      /* Ken Burns pochette (4 variantes) */
+  --ease-beat:          cubic-bezier(.22,1,.36,1);    /* beat-pulse / heart-burst */
+
+  --cin-focus-ring: 0 0 0 2px rgba(255,255,255,.8), 0 0 0 4px rgba(0,0,0,.25); /* anneau focus cinéma (dark) */
+
+  /* Échelle d'opacités blanches cinéma — usages répétés uniquement */
+  --cin-text-hi:       rgba(255,255,255,.95);  /* cinema-title */
+  --cin-text-mid:      rgba(255,255,255,.72);  /* cinema-artist */
+  --cin-surface:       rgba(255,255,255,.06);  /* cinema-next background */
+  --cin-surface-hover: rgba(255,255,255,.10);  /* cinema-corner-btn background */
+  --cin-hairline:      rgba(255,255,255,.08);  /* cinema-corner-btn border / art-img outline */
+
+  --shadow-player-ring:  0 -1px 0 rgba(var(--g-rgb),.15);                       /* player bar top accent line */
   /* Dimensions supplémentaires — layout & modales */
   --wf-max:             560px;  /* max-width modale waveform / batch-tag */
   --ctx-pane-max:       280px;  /* max-width menu contextuel */
@@ -981,10 +857,9 @@ html[data-mode="light"] {
   --panel-queue-w:      300px;  /* largeur panneau queue latéral */
   --panel-eq-w:         320px;  /* largeur panneau EQ latéral (mode simple) */
   --panel-eq-expert-w:  400px;  /* largeur panneau EQ latéral (mode expert) */
-  --sp-3q:              var(--space-3);   /* 13 → 12 (harmonisation) */
 
   /* Dimensions cinéma & artwork */
-  --art-cinema-max:     420px;  /* taille max pochette cinéma (min(46vh,46vw,N)) */
+  --art-cinema-max:     420px;  /* taille max pochette cinéma (min(46vh,46vw,N)) — 520px ≥1600px, cf. @media plus bas */
 
   /* Grilles stats & heatmap */
   --artist-month-col-min: 90px; /* min colonne nom artiste (stats month) */
@@ -1010,8 +885,15 @@ html[data-mode="light"] {
   --z-toast:    9000;
   --z-tooltip:  9999;
 
-  /* Séparateur */
+  /* Séparateur — dividers structurels inter-rangées (.grp-lbl, .tr, .ns) ;
+     distinct de --border-1 (.06) qui cerne les composants/conteneurs. */
   --sep: rgba(255,255,255,.04);
+
+  /* ── Hover surfaces — niveaux de lift pour les rangées interactives ──
+     Sur Vantablack (#030303), --bg3 (#0A0A0A) ne donne que Δ7 (~invisible).
+     Ces tokens expriment le lift en alpha blanc, comme Spotify/Deezer. */
+  --row-hover  : rgba(255,255,255,.09);  /* rangées pistes, queue, listes — Δ~20 */
+  --row-active : rgba(255,255,255,.13);  /* pressed / :active */
 
   /* ── Bordures inline — 3 niveaux (remplacent les rgba(255,255,255,X) hardcodés) ──
      Thème sombre : blanc semi-transparent. Thème clair : noir semi-transparent.
@@ -1026,7 +908,6 @@ html[data-mode="light"] {
   --glass-surface: rgba(20,20,20,.82);      /* fond modales (playlist, settings, confirm) */
   --glass-panel:   rgba(22,22,22,.88);      /* fond ctx-menu, drawers */
   --glass-toast:   rgba(22,22,22,.92);      /* fond toasts — NE PAS surcharger en light */
-  --glass-hi:      rgba(255,255,255,.07);   /* reflet inset top 1px sur surfaces glass */
 
   /* ── Scrims (overlay de fond sous les modales) ── */
   --scrim:         rgba(0,0,0,.5);          /* modal std, batch-tag, orphans */
@@ -1035,17 +916,33 @@ html[data-mode="light"] {
   /* ── Visualiseur ── */
   --blend-viz:     screen;                  /* mix-blend-mode du canvas viz player */
 
-  /* Player bar elevation */
-  --player-shadow: 0 -1px 0 rgba(255,255,255,.04), 0 -8px 32px rgba(0,0,0,.5);
+  /* Player bar elevation — séparateur hairline Spotify-style, pas de drop lourd */
+  --player-shadow: 0 -1px 0 rgba(255,255,255,.07);
 
   /* Mini-player brand glow — dynamique via --g-rgb */
-  --mini-glow: 0 0 0 1px rgba(var(--g-rgb),.20), 0 8px 40px rgba(0,0,0,.45);
+  --mini-glow: 0 0 0 1px rgba(var(--g-rgb),.20);
 
   /* Ambient art color — géré par @property ci-dessus */
   --art-color: transparent;
   /* Transition racine : tous les héritiers voient la valeur animée */
   transition: --art-color var(--dur-art-color) ease;
 }
+
+/* ── Zoom liste de pistes (tlistZoom.js) ─────────────────────────────────
+   --tr-h doit rester synchro avec TLIST_ZOOM_ROW_H (tlistZoom.js) : c'est
+   VIRT.ROW_H (le pas utilisé par le virtual scroll pour positionner les
+   lignes) qui doit correspondre à la hauteur RÉELLEMENT rendue par .tr.
+   Avant ce fix, --tr-h restait figé à 48px quel que soit data-tlist-zoom —
+   le virtual scroll croyait les lignes plus hautes/basses qu'elles ne
+   l'étaient réellement, ce qui désynchronisait le rendu de la position de
+   scroll (lignes tronquées au bord du viewport, surtout visible plein
+   écran où la fenêtre virtualisée couvre beaucoup plus de lignes).
+   "compact" est fixé à 44px (pas 36px) : c'est le plancher WCAG 2.5.8
+   (cf. .tr { min-height: 44px }, CLAUDE.md §2.9) — descendre en dessous
+   recréerait le même désaccord via min-height qui regonflerait la ligne
+   au-delà de ce que --tr-h annonce. */
+:root[data-tlist-zoom="compact"]  { --tr-h: 44px; --tart-size: 32px; }
+:root[data-tlist-zoom="spacious"] { --tr-h: 72px; --tart-size: 56px; }
 
 /* ── Thèmes couleur (accent par défaut = Electric Indigo via --accent) ─── */
 [data-theme="indigo"] { --g:#8B6BFF; --g-rgb:139,107,255; --gd:rgba(139,107,255,.14); --gg:rgba(139,107,255,.28); }
@@ -1057,10 +954,16 @@ html[data-mode="light"] {
 [data-theme="pink"]   { --g:#ec4899; --g-rgb:236,72,153;  --gd:rgba(236,72,153,.14);  --gg:rgba(236,72,153,.28); }
 [data-theme="cyan"]   { --g:#22d3ee; --g-rgb:34,211,238;  --gd:rgba(34,211,238,.14);  --gg:rgba(34,211,238,.28); }
 
-/* Respect des préférences utilisateur — anti-motion */
-@media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after {
-    animation-duration  : 0ms !important;
-    transition-duration : 0ms !important;
-  }
+/* Task 8 — responsive : grands écrans ≥1600px, pochette cinéma agrandie.
+   Override sanctionné (token-source.test.cjs) : petit bloc :root{} dans un @media. */
+@media (min-width: 1600px) {
+  :root { --art-cinema-max: 520px; }
+}
+
+/* Respect des préférences utilisateur — anti-motion.
+   Task 10 : scoping html[data-motion="reduce"] (réglage in-app, défaut 'full')
+   remplace l'ancienne media query OS prefers-reduced-motion — voir motion.js. */
+html[data-motion="reduce"] *, html[data-motion="reduce"] *::before, html[data-motion="reduce"] *::after {
+  animation-duration  : 0ms !important;
+  transition-duration : 0ms !important;
 }

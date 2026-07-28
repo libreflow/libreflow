@@ -11,7 +11,7 @@
 //   import  : pushTracks            (state.js)       ARCH-3
 //   import  : invalidateGenreGridSig (genres.js)
 //   import  : loadTagsBg            (library.js)
-//   import  : updateStats, renderLib (renderer.js)
+//   import  : renderLib             (renderer.js)
 //   import  : showView              (views.js)
 //
 // Exports publics :
@@ -26,7 +26,7 @@ import { pushTracks }                                   from './state.js';
 import { invalidateGenreGridSig }                      from './genres.js';
 import { loadTagsBg }                                  from './library.js';
 import { logImport }                                   from './imports.js';
-import { updateStats, renderLib }                      from './renderer.js';
+import { renderLib }                                   from './renderer.js';
 import { showView }                                    from './views.js';
 
 // Extensions audio acceptées — synchronisé avec watchfolder.js et le watcher Rust
@@ -178,7 +178,6 @@ async function _onDrop(e) {
   invalidateFilterCache();
   invalidateGenreGridSig();
   emit(EVENTS.FILTER_CHANGED, {});
-  updateStats();
   renderLib();
   showView('lib');
   toast(i18n('t_files_added', newTracks.length), 'success');

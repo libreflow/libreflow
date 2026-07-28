@@ -53,8 +53,9 @@ import { renderLib }                                   from './renderer.js';
 import { showView }                                    from './views.js';
 import { invalidateFilterCache }                       from './search.js';
 import { invalidateGenreGridSig }                      from './genres.js';
-import { SPEEDS }                                      from './cfg.js';
+import { SPEEDS, CFG }                                 from './cfg.js';
 import { tlistZoomIn, tlistZoomOut, tlistZoomReset }  from './tlistZoom.js';
+import { _openSearch, _closeSearch }                   from './handlers.js';
 
 // ── A11Y-10 : guard typage ────────────────────────────────────────────────
 // Vérifie si l'élément focalisé est un champ de saisie texte.
@@ -64,7 +65,8 @@ function _isTypingTarget(target) {
   const tag = target.tagName;
   if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return true;
   if (target.isContentEditable) return true;
-  if (target.getAttribute && target.getAttribute('role') === 'textbox') return true;
+  const role = target.getAttribute ? (target.getAttribute('role') || '') : '';
+  if (role === 'textbox' || role === 'searchbox' || role === 'spinbutton' || role === 'combobox') return true;
   return false;
 }
 
@@ -78,12 +80,18 @@ function _isTypingTarget(target) {
  */
 export function initShortcuts({ updateVolSlider, closeModal, cycleSpeed }) {
   document.addEventListener('keydown', e => {
-    // Ctrl+F : focus recherche — intercepté avant le guard INPUT/cinéma
+    // Ctrl+F : ouvre le loupe inline et focus recherche
     if (e.ctrlKey && e.key.toLowerCase() === 'f') {
-      e.preventDefault();
-      const srch = document.getElementById('srch');
-      if (srch) { showView('lib'); srch.focus(); srch.select(); }
-      return;
+      const toggle = document.getElementById('srch-toggle');
+      const wrap   = document.getElementById('vh-srch-wrap');
+      const input  = document.getElementById('srch');
+      if (toggle && getComputedStyle(toggle).display !== 'none') {
+        e.preventDefault();
+        showView('lib');
+        if (wrap && wrap.hidden) _openSearch(wrap, toggle, input);
+        else if (input) input.focus();
+        return;
+      }
     }
 
     // UX-Ergo : Ctrl+, ouvre/ferme les Paramètres — convention universelle (VS Code, Chrome, macOS).
@@ -114,7 +122,18 @@ export function initShortcuts({ updateVolSlider, closeModal, cycleSpeed }) {
     // Escape blure le champ et sort — n'exécute pas d'action globale.
     if (_isTypingTarget(e.target)) {
       if (e.ctrlKey || e.metaKey) return; // laisser les combos modificateurs passer
-      if (e.key === 'Escape') { e.target.blur(); return; }
+      if (e.key === 'Escape') {
+        if (e.target.id === 'srch') {
+          const wrap   = document.getElementById('vh-srch-wrap');
+          const toggle = document.getElementById('srch-toggle');
+          if (wrap && !wrap.hidden && !e.target.value) {
+            _closeSearch(wrap, toggle, e.target);
+            return;
+          }
+        }
+        e.target.blur();
+        return;
+      }
       return;
     }
 
@@ -122,13 +141,25 @@ export function initShortcuts({ updateVolSlider, closeModal, cycleSpeed }) {
     // coréen) — sinon une séquence de composition peut déclencher un raccourci.
     if (e.isComposing) return;
 
+    // BUG FIX (audit settings 2026-07-08) : le panneau raccourcis clavier (#shortcuts-panel)
+    // doit rester fermable au clavier même une fois ajouté à _anyModalOpen ci-dessous —
+    // sinon le early-return empêche toute fermeture et devient un piège clavier. Traité
+    // AVANT le guard modal générique, en miroir du reste de la cascade Escape plus bas.
+    if (e.code === 'Escape' && isShortcutsOpen()) { closeShortcuts(); return; }
+
     // A11Y : tout backdrop de modale visible (id se terminant par "modal-bg")
     // capture les raccourcis globaux — couvre modal/pl/confirm/organize/usb/cd/
     // batch-tag sans énumération fragile. NB : suffixe sans tiret pour aussi
     // matcher le backdrop générique #modal-bg (pas seulement #*-modal-bg).
+    // BUG FIX : #shortcuts-panel.open manquait ici → les raccourcis single-key
+    // (Space, flèches, S, R, F, M, I, C, D, V, X…) restaient actifs en arrière-plan
+    // pendant que l'utilisateur consultait l'aide raccourcis (violation d'inertie
+    // de fond attendue pour un role="dialog" aria-modal).
     const _anyModalOpen =
       document.querySelector('[id$="modal-bg"].on') !== null ||
       document.getElementById('settings-panel')?.classList.contains('on') ||
+      document.getElementById('shortcuts-panel')?.classList.contains('open') ||
+      document.getElementById('dupes-panel')?.classList.contains('open') ||
       document.querySelector('.orphan-modal-bg.on') !== null ||
       document.querySelector('.ctx-menu.on') !== null;
     if (_anyModalOpen) return;
@@ -176,7 +207,8 @@ export function initShortcuts({ updateVolSlider, closeModal, cycleSpeed }) {
       const _sleepMenu = document.getElementById('sleep-menu');
       if (_sleepMenu?.classList.contains('on')) { _sleepMenu.classList.remove('on'); return; }
       if (cinemaOpen)                        { closeCinema(); return; }
-      if (isShortcutsOpen())                 { closeShortcuts(); return; }
+      // NB : le cas #shortcuts-panel est traité plus haut, avant le guard _anyModalOpen
+      // (qui bloquerait sinon Escape lui-même) — inatteignable ici, non dupliqué.
       if (document.getElementById('pl-modal-bg')?.classList.contains('on'))      { closePlModal(); return; }
       if (document.getElementById('modal-bg')?.classList.contains('on'))         { closeModal(); return; }
       if (document.getElementById('confirm-modal-bg')?.classList.contains('on')) { document.querySelector('#confirm-modal .mbtn.cancel')?.click(); return; }
@@ -203,12 +235,12 @@ export function initShortcuts({ updateVolSlider, closeModal, cycleSpeed }) {
       }
     }
 
-    if (e.code === 'F11') { e.preventDefault(); if (window.__TAURI__) invoke('win_maximize'); }
-    if (e.code === 'F12' && import.meta.env.DEV) { e.preventDefault(); if (window.__TAURI__) invoke('open_devtools'); }
+    if (e.code === 'F11') { e.preventDefault(); if (window.__TAURI__) invoke('win_maximize', {}, { timeout: CFG.IPC_TIMEOUT_MS }).catch(e => console.warn('[F11]', e)); }
+    if (e.code === 'F12' && import.meta.env.DEV) { e.preventDefault(); if (window.__TAURI__) invoke('open_devtools', {}, { timeout: CFG.IPC_TIMEOUT_MS }).catch(e => console.warn('[F12]', e)); }
 
     if (e.key.toLowerCase() === 'c' && !e.ctrlKey && !e.altKey) toggleCinema();
     // Note : 'b' (cycleCinemaBg) et 'f' (toggleCinemaFullscreen) en mode cinéma sont gérés
-    // par _onCinKey dans cinema.js — ces guards `&& cinemaOpen` seraient inatteignables ici
+    // par _onCinKey dans cinema-input.js — ces guards `&& cinemaOpen` seraient inatteignables ici
     // car le `if (cinemaOpen) return` ci-dessus les bloque.
     if (e.key.toLowerCase() === 'd' && !e.ctrlKey) detectDupes();
     if (e.key.toLowerCase() === 'x' && !e.ctrlKey && !e.altKey) cycleSpeed();

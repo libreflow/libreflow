@@ -88,6 +88,29 @@ function normTag(s) {
 }());
 
 // =============================================================================
+// N. views.js -- _positionNiIndicator() position math (reproduced inline —
+// pas d'import ES module, cf. en-tête de ce fichier)
+// =============================================================================
+section('views.js -- _positionNiIndicator() position math');
+
+function computeIndicatorStyle(el) {
+  if (!el) return { opacity: '0' };
+  return { opacity: '1', transform: `translateY(${el.offsetTop}px)`, height: `${el.offsetHeight}px` };
+}
+
+(function () {
+  const fakeActive = { offsetTop: 48, offsetHeight: 36 };
+  const r1 = computeIndicatorStyle(fakeActive);
+  assert(r1.opacity === '1', '_positionNiIndicator: active item -> opacity 1');
+  assert(r1.transform === 'translateY(48px)', '_positionNiIndicator: translateY matches offsetTop');
+  assert(r1.height === '36px', '_positionNiIndicator: height matches offsetHeight');
+
+  const r2 = computeIndicatorStyle(null);
+  assert(r2.opacity === '0', '_positionNiIndicator: no active item -> opacity 0');
+  assert(r2.transform === undefined, '_positionNiIndicator: no active item -> no transform written');
+}());
+
+// =============================================================================
 // 4. Utils — mainArtist
 // =============================================================================
 section('utils.js -- mainArtist');
@@ -927,25 +950,20 @@ section('motion.js -- public surface (static source check)');
     'prefersReducedMotion',
     'eases',
     'tween',
-    'from',
     'set',
     'timeline',
     'kill',
-    'flip',
-    '_meta',
   ];
   for (const name of expectedExports) {
     const re = new RegExp('export\\s+(?:function|const|class)\\s+' + name + '\\b');
     assert(re.test(src), 'motion.js exports ' + name);
   }
 
-  assert(/gsap\.registerPlugin\(\s*Flip\s*,\s*CustomEase\s*\)/.test(src),
-    'motion.js registers Flip + CustomEase at load');
+  assert(/gsap\.registerPlugin\(\s*CustomEase\s*\)/.test(src),
+    'motion.js registers CustomEase at load');
 
   assert(/eases\s*=\s*Object\.freeze\(/.test(src),
     'eases token table is Object.freeze-d');
-  assert(/flip\s*=\s*Object\.freeze\(/.test(src),
-    'flip namespace is Object.freeze-d');
 
   for (const easeName of ['lf-premium', 'lf-snap', 'lf-overshoot']) {
     assert(src.includes("'" + easeName + "'"),
@@ -953,7 +971,6 @@ section('motion.js -- public surface (static source check)');
   }
 
   assert(/from\s+['"]gsap['"]/.test(src), 'imports from "gsap"');
-  assert(/from\s+['"]gsap\/Flip['"]/.test(src), 'imports from "gsap/Flip"');
   assert(/from\s+['"]gsap\/CustomEase['"]/.test(src), 'imports from "gsap/CustomEase"');
 
   assert(/prefers-reduced-motion/.test(src),
@@ -1413,20 +1430,116 @@ section('tlistZoom.js -- _nextZoomLevel cycling');
 
 (function () {
   // Reproduit la logique pure inline (pas d'import ESM)
-  const TLIST_ZOOM_LEVELS = ['compact', 'normal', 'comfortable'];
+  const TLIST_ZOOM_LEVELS = ['compact', 'comfortable', 'spacious'];
   function _nextZoomLevel(current, dir) {
     const idx = TLIST_ZOOM_LEVELS.indexOf(current);
-    if (idx === -1) return 'normal';
+    if (idx === -1) return 'comfortable';
     if (dir === 'in')  return TLIST_ZOOM_LEVELS[Math.min(idx + 1, TLIST_ZOOM_LEVELS.length - 1)];
     if (dir === 'out') return TLIST_ZOOM_LEVELS[Math.max(idx - 1, 0)];
     return current;
   }
 
-  assert(_nextZoomLevel('compact',     'in')  === 'normal',      'zoomIn depuis compact → normal');
-  assert(_nextZoomLevel('comfortable', 'in')  === 'comfortable', 'zoomIn depuis comfortable → reste comfortable');
-  assert(_nextZoomLevel('comfortable', 'out') === 'normal',      'zoomOut depuis comfortable → normal');
+  assert(_nextZoomLevel('compact',     'in')  === 'comfortable', 'zoomIn depuis compact → comfortable');
+  assert(_nextZoomLevel('comfortable', 'in')  === 'spacious',    'zoomIn depuis comfortable → spacious');
+  assert(_nextZoomLevel('spacious',    'in')  === 'spacious',    'zoomIn depuis spacious → reste spacious');
+  assert(_nextZoomLevel('spacious',    'out') === 'comfortable', 'zoomOut depuis spacious → comfortable');
   assert(_nextZoomLevel('compact',     'out') === 'compact',     'zoomOut depuis compact → reste compact');
-  assert(_nextZoomLevel('normal',      'out') === 'compact',     'zoomReset depuis normal → compact via zoomOut');
+  assert(_nextZoomLevel('comfortable', 'out') === 'compact',     'zoomReset depuis comfortable → compact via zoomOut');
+}());
+
+// =============================================================================
+// tlistZoom — migration des anciens noms de niveaux (_LEGACY_ZOOM_MAP)
+// =============================================================================
+section('tlistZoom.js -- legacy level name migration');
+
+(function () {
+  // Reproduit la logique pure inline (pas d'import ESM) — même map que tlistZoom.js
+  const _LEGACY_ZOOM_MAP = { normal: 'comfortable' };
+  function migrate(level) { return _LEGACY_ZOOM_MAP[level] || level; }
+
+  assert(migrate('normal')      === 'comfortable', "ancien 'normal' → nouveau 'comfortable'");
+  assert(migrate('comfortable') === 'comfortable', "'comfortable' (nouveau palier valide) inchangé — PAS coercé en 'spacious'");
+  assert(migrate('compact')     === 'compact',     "'compact' inchangé (jamais renommé)");
+  assert(migrate('spacious')    === 'spacious',    "'spacious' (déjà nouveau) inchangé — pas de double mapping");
+}());
+
+// =============================================================================
+// tlistZoom — TLIST_ZOOM_ROW_H reste synchro avec --tr-h (design-system.css)
+// =============================================================================
+section('tlistZoom.js -- TLIST_ZOOM_ROW_H matches CSS --tr-h per level');
+
+(function () {
+  const assert = require('assert');
+  const fs   = require('fs');
+  const path = require('path');
+  const jsSrc  = fs.readFileSync(path.join(__dirname, '../src/tlistZoom.js'), 'utf8');
+  const cssSrc = fs.readFileSync(path.join(__dirname, '../src/design-system.css'), 'utf8');
+
+  const rowHBlock = /TLIST_ZOOM_ROW_H = \{([^}]*)\}/.exec(jsSrc);
+  assert(rowHBlock, 'TLIST_ZOOM_ROW_H object literal found in tlistZoom.js');
+  const rowH = {};
+  const kv = /(\w+):\s*(\d+)/g;
+  let m;
+  while ((m = kv.exec(rowHBlock[1]))) rowH[m[1]] = Number(m[2]);
+
+  assert.strictEqual(rowH.compact,     44, 'TLIST_ZOOM_ROW_H.compact === 44');
+  assert.strictEqual(rowH.comfortable, 56, 'TLIST_ZOOM_ROW_H.comfortable === 56');
+  assert.strictEqual(rowH.spacious,    72, 'TLIST_ZOOM_ROW_H.spacious === 72');
+
+  // Regression guard for the exact CSS/JS desync bug fixed earlier this session:
+  // VIRT.ROW_H (this object) must always equal the real rendered --tr-h.
+  const baseTrH     = Number(/--tr-h:\s*(\d+)px/.exec(cssSrc)[1]);
+  const compactTrH  = Number(/data-tlist-zoom="compact"\]\s*\{\s*--tr-h:\s*(\d+)px/.exec(cssSrc)[1]);
+  const spaciousTrH = Number(/data-tlist-zoom="spacious"\]\s*\{\s*--tr-h:\s*(\d+)px/.exec(cssSrc)[1]);
+  assert.strictEqual(rowH.comfortable, baseTrH,     'VIRT.ROW_H.comfortable matches CSS base --tr-h');
+  assert.strictEqual(rowH.compact,     compactTrH,  'VIRT.ROW_H.compact matches CSS --tr-h override');
+  assert.strictEqual(rowH.spacious,    spaciousTrH, 'VIRT.ROW_H.spacious matches CSS --tr-h override');
+}());
+
+// =============================================================================
+// tlistZoom — --tr-h / --tart-size CSS tokens (design-system.css)
+// =============================================================================
+section('tlistZoom.js -- --tr-h / --tart-size tokens (design-system.css)');
+
+(function () {
+  const fs   = require('fs');
+  const path = require('path');
+  const css  = fs.readFileSync(path.join(__dirname, '../src/design-system.css'), 'utf8');
+
+  assert(/--tr-h:\s*56px/.test(css), 'base --tr-h (comfortable/default) = 56px');
+  assert(/--tart-size:\s*40px/.test(css), 'base --tart-size (comfortable/default) = 40px');
+  assert(
+    /:root\[data-tlist-zoom="compact"\]\s*\{\s*--tr-h:\s*44px;\s*--tart-size:\s*32px;\s*\}/.test(css),
+    'compact overrides --tr-h:44px and --tart-size:32px together'
+  );
+  assert(
+    /:root\[data-tlist-zoom="spacious"\]\s*\{\s*--tr-h:\s*72px;\s*--tart-size:\s*56px;\s*\}/.test(css),
+    'spacious overrides --tr-h:72px and --tart-size:56px together'
+  );
+  assert(
+    !/data-tlist-zoom="comfortable"/.test(css),
+    'no leftover [data-tlist-zoom="comfortable"] selector (renamed to spacious/removed)'
+  );
+}());
+
+// =============================================================================
+// tlistZoom — #zoom-hud CSS wired (style.css)
+// =============================================================================
+section('tlistZoom.js -- #zoom-hud CSS (style.css)');
+
+(function () {
+  const fs   = require('fs');
+  const path = require('path');
+  const css  = fs.readFileSync(path.join(__dirname, '../src/style.css'), 'utf8');
+
+  assert(/#zoom-hud\s*\{/.test(css), '#zoom-hud has a base rule');
+  assert(/#zoom-hud\.show\s*\{/.test(css), '#zoom-hud.show has a rule');
+  assert(/#zoom-hud\s*\{[^}]*opacity:\s*0;/.test(css), '#zoom-hud is hidden (opacity:0) by default');
+  assert(/#zoom-hud\.show\s*\{[^}]*opacity:\s*1;/.test(css), '#zoom-hud.show is visible (opacity:1)');
+  assert(
+    /html\[data-motion="reduce"\]\s*#zoom-hud\s*\{/.test(css),
+    '#zoom-hud has a data-motion="reduce" override'
+  );
 }());
 
 // =============================================================================
@@ -1639,10 +1752,16 @@ function normalizeType(t) {
  * @param {string} type
  * @param {number} [explicitDur] — only used if a strictly positive number.
  *        0 and negative values fall back to the type default duration.
+ * @param {string} [message] — A11Y-13 (SC 2.2.1): if provided the duration is
+ *        stretched based on message length (~15 chars/s + 1.5 s margin),
+ *        never below the type base. An explicitDur > 0 takes priority.
  */
-function resolveDuration(type, explicitDur) {
+function resolveDuration(type, explicitDur, message) {
   if (typeof explicitDur === 'number' && explicitDur > 0) return explicitDur;
-  return TOAST_DUR[normalizeType(type)];
+  const base = TOAST_DUR[normalizeType(type)];
+  if (!message) return base;
+  const required = Math.ceil(String(message).length / 15) * 1000 + 1500;
+  return Math.max(base, required);
 }
 
 function toastReducer(items, action) {
@@ -1700,6 +1819,18 @@ function toastReducer(items, action) {
   assert(resolveDuration('info', 0)      === 3000,   'resolveDuration: 0 → défaut');
   assert(resolveDuration('info', -1)     === 3000,   'resolveDuration: négatif → défaut');
   assert(resolveDuration('xxx', undefined) === 3000, 'resolveDuration: type inconnu → info default');
+
+  // resolveDuration: message-length scaling (A11Y SC 2.2.1)
+  // Short message (10 chars): required = ceil(10/15)*1000+1500 = 2500 → base 3000 wins
+  assert(resolveDuration('info', undefined, 'short msg') === 3000,
+    'resolveDuration: short message → base duration wins');
+  // Long message (200 chars): required = ceil(200/15)*1000+1500 = 14*1000+1500 = 15500 → 15500 > 8000 base
+  const longMsg = 'x'.repeat(200);
+  assert(resolveDuration('error', undefined, longMsg) === 15500,
+    'resolveDuration: long message → stretched duration returned');
+  // explicitDur still overrides message scaling
+  assert(resolveDuration('info', 5000, longMsg) === 5000,
+    'resolveDuration: explicitDur > 0 overrides message scaling');
 
   // reducer add
   let s = [];
@@ -1814,6 +1945,177 @@ section('organize.js -- B-2 saveTracks batches, rebuildTrackIdxMap before notify
 }());
 
 // =============================================================================
+// cinema-seek.js -- seekPosFromPointer / formatSeekTime (pure logic, Task 5 TDD)
+// Logique dupliquée inline (house style) -- cf. frontend/src/cinema-seek.js
+// =============================================================================
+section('cinema-seek.js -- seekPosFromPointer / formatSeekTime (pure logic)');
+
+(function () {
+  function seekPosFromPointer(clientX, rectLeft, rectWidth, duration) {
+    if (!duration || !isFinite(duration) || duration <= 0) return null;
+    if (!rectWidth || rectWidth <= 0) return null;
+    const ratio = Math.max(0, Math.min(1, (clientX - rectLeft) / rectWidth));
+    return ratio * duration;
+  }
+  function formatSeekTime(s) {
+    if (!s || !isFinite(s) || s < 0) return '–:––'; // !s : 0/null/undefined/NaN — parité exacte avec fmt() (utils.js)
+    const total = Math.floor(s);
+    const m  = Math.floor(total / 60);
+    const ss = total % 60;
+    return `${m}:${String(ss).padStart(2, '0')}`;
+  }
+
+  // seekPosFromPointer -- bords
+  assert(seekPosFromPointer(50, 100, 200, 180) === 0,   'seekPosFromPointer: x < left -> 0 (clamp bas)');
+  assert(seekPosFromPointer(400, 100, 200, 180) === 180, 'seekPosFromPointer: x > right -> duration (clamp haut)');
+  assert(seekPosFromPointer(200, 100, 200, 180) === 90,  'seekPosFromPointer: milieu exact -> duration/2');
+  assert(seekPosFromPointer(100, 100, 200, 180) === 0,   'seekPosFromPointer: x == left -> 0 exact');
+  assert(seekPosFromPointer(300, 100, 200, 180) === 180, 'seekPosFromPointer: x == right -> duration exact');
+  assert(seekPosFromPointer(200, 100, 200, 0)         === null, 'seekPosFromPointer: duration 0 -> null');
+  assert(seekPosFromPointer(200, 100, 200, NaN)       === null, 'seekPosFromPointer: duration NaN -> null');
+  assert(seekPosFromPointer(200, 100, 200, undefined) === null, 'seekPosFromPointer: duration undefined -> null');
+  assert(seekPosFromPointer(200, 100, 0, 180)         === null, 'seekPosFromPointer: rectWidth 0 -> null (division par zéro)');
+
+  // formatSeekTime — parité EXACTE avec fmt() (utils.js) : 0 est falsy → '–:––'
+  // (évite le flicker au début de piste : drag/Home écrit la même chose que le tick timeupdate)
+  assert(formatSeekTime(0)         === '–:––', 'formatSeekTime: 0s -> –:–– (parité fmt: !s)');
+  assert(formatSeekTime(59)        === '0:59',  'formatSeekTime: 59s -> 0:59');
+  assert(formatSeekTime(90)        === '1:30',  'formatSeekTime: 90s -> 1:30');
+  assert(formatSeekTime(3661)      === '61:01', 'formatSeekTime: 3661s -> 61:01 (M:SS, cohérent avec cinema-tc/td)');
+  assert(formatSeekTime(NaN)       === '–:––', 'formatSeekTime: NaN -> –:––');
+  assert(formatSeekTime(null)      === '–:––', 'formatSeekTime: null -> –:––');
+  assert(formatSeekTime(undefined) === '–:––', 'formatSeekTime: undefined -> –:––');
+  assert(formatSeekTime(-1)        === '–:––', 'formatSeekTime: négatif -> –:––');
+}());
+
+// =============================================================================
+// cinema-queue.js -- buildUpcoming (pure logic, Task 9 TDD)
+// Logique dupliquée inline (house style) -- cf. frontend/src/cinema-queue.js
+// Priorité IDENTIQUE à cinema.js/_updateNextTrack() : explicite > radio > shuffle-hint
+// (vide) > séquentiel.
+// =============================================================================
+section('cinema-queue.js -- buildUpcoming (pure logic)');
+
+(function () {
+  function buildUpcoming({
+    explicitQueue  = [],
+    filtered       = [],
+    curFilteredIdx = -1,
+    shuffle        = false,
+    radioActive    = false,
+    radioQueue     = [],
+    repeatAll      = false,
+    limit          = 8,
+  } = {}) {
+    if (limit <= 0) return [];
+    // Bug fix : explicitQueue est déjà validée contre la bibliothèque complète par
+    // l'appelant (peekExplicitQueue(), queue.js -- _trackIdxMap) -- filtrer en plus contre
+    // `filtered` (vue recherche/filtre courante) exclurait à tort une piste explicitement
+    // mise en file mais momentanément hors vue filtrée, alors que getNextIdx()/player.js
+    // (source de vérité réelle) la joue quand même ensuite. Seuls null/undefined (entrées
+    // défensives) sont ignorés ici.
+    const validExplicit = explicitQueue.filter(Boolean);
+    if (validExplicit.length) {
+      const out = validExplicit.slice(0, limit);
+      _fillSequential(out, filtered, curFilteredIdx, repeatAll, limit);
+      return out;
+    }
+    if (radioActive) return radioQueue.slice(0, limit);
+    if (shuffle) return [];
+    const out = [];
+    _fillSequential(out, filtered, curFilteredIdx, repeatAll, limit);
+    return out;
+  }
+  function _fillSequential(out, filtered, curFilteredIdx, repeatAll, limit) {
+    const seen = new Set(out.map(t => t.id));
+    for (let i = curFilteredIdx + 1; i < filtered.length && out.length < limit; i++) {
+      if (!seen.has(filtered[i].id)) { out.push(filtered[i]); seen.add(filtered[i].id); }
+    }
+    if (!repeatAll) return;
+    for (let i = 0; i < curFilteredIdx && out.length < limit; i++) {
+      if (!seen.has(filtered[i].id)) { out.push(filtered[i]); seen.add(filtered[i].id); }
+    }
+  }
+
+  const mk  = (id) => ({ id, name: 'T' + id, artist: 'A' + id });
+  const ids = (arr) => JSON.stringify(arr.map(t => t.id));
+  const fl8 = [mk(1), mk(2), mk(3), mk(4), mk(5), mk(6), mk(7), mk(8)];
+
+  // ── Bords : tout vide / limit ────────────────────────────────────────────
+  assert(ids(buildUpcoming()) === '[]', 'buildUpcoming(): appel sans arguments -> []');
+  assert(ids(buildUpcoming({})) === '[]', 'buildUpcoming({}): tout vide -> []');
+  assert(ids(buildUpcoming({ filtered: fl8, curFilteredIdx: -1, limit: 0 })) === '[]',
+    'limit 0 -> [] (même avec des pistes disponibles)');
+  assert(buildUpcoming({ filtered: fl8, curFilteredIdx: -1, limit: 3 }).length === 3,
+    'limit 3 -> exactement 3 pistes (séquentiel)');
+
+  // ── Séquentiel standard + fin de liste (pas de wrap — repeat n'est pas un paramètre) ──
+  assert(ids(buildUpcoming({ filtered: fl8, curFilteredIdx: -1 })) === '[1,2,3,4,5,6,7,8]',
+    'curFilteredIdx -1 (pas de piste courante) -> liste filtrée complète');
+  assert(ids(buildUpcoming({ filtered: fl8, curFilteredIdx: 2 })) === '[4,5,6,7,8]',
+    'séquentiel : suite de filtered depuis curFilteredIdx+1');
+  assert(ids(buildUpcoming({ filtered: fl8, curFilteredIdx: 6 })) === '[8]',
+    'fin de liste : une seule piste restante, pas de wrap');
+  assert(ids(buildUpcoming({ filtered: fl8, curFilteredIdx: 7 })) === '[]',
+    'fin de liste exacte (dernière piste) -> [] (pas de wrap)');
+
+  // ── File explicite : priorité 1, seuls les null/undefined sont ignorés (Bug fix) ──
+  // AVANT le fix : une entrée valide (id=99, objet non-null) mais absente de `filtered`
+  // était traitée comme "stale" au même titre qu'un null -- alors que peekExplicitQueue()
+  // (queue.js) ne valide déjà QUE contre la bibliothèque complète (_trackIdxMap), jamais
+  // contre la vue filtrée/recherche courante. Résultat : un morceau mis en "Lire ensuite"
+  // pendant qu'une recherche l'exclut de la vue filtrée disparaissait du panneau file
+  // d'attente cinéma alors que getNextIdx()/hasExplicitQueueNext() (source de vérité réelle
+  // de player.js) le jouaient bel et bien ensuite -- le panneau contredisait la lecture
+  // réelle. mk(99) représente ici ce cas (piste valide, simplement hors de `fl8`).
+  assert(ids(buildUpcoming({ explicitQueue: [mk(5), mk(2)], filtered: fl8, curFilteredIdx: 0, limit: 8 })) === '[5,2,3,4,6,7,8]',
+    'file explicite en tête (ordre préservé) + suite séquentielle dédupliquée (2 déjà en tête, sauté dans le séquentiel)');
+  assert(ids(buildUpcoming({ explicitQueue: [mk(99), mk(3), null, mk(2)], filtered: fl8, curFilteredIdx: 0, limit: 4 })) === '[99,3,2,4]',
+    'seul le null est ignoré -- id=99 (hors de `filtered`, ex. recherche active) reste dans la file explicite, ordre préservé');
+  assert(ids(buildUpcoming({ explicitQueue: [null, null], filtered: fl8, curFilteredIdx: 1 })) === '[3,4,5,6,7,8]',
+    'file explicite 100% null -> ignorée entièrement, retombe sur le séquentiel');
+  assert(ids(buildUpcoming({ explicitQueue: [null], filtered: fl8, curFilteredIdx: 1, radioActive: true, radioQueue: [mk(7)] })) === '[7]',
+    'file explicite 100% null + radio active -> retombe sur la radio (le fallback saute uniquement la branche explicite vide)');
+  assert(ids(buildUpcoming({ explicitQueue: [mk(1), mk(2), mk(3)], filtered: fl8, curFilteredIdx: 0, limit: 2 })) === '[1,2]',
+    'limit < taille file explicite -> tronque la file explicite elle-même, pas de séquentiel ajouté');
+
+  // ── Radio active (sans file explicite) : tête de la file radio, PAS de complément ──
+  assert(ids(buildUpcoming({ filtered: fl8, curFilteredIdx: 0, radioActive: true, radioQueue: [mk(50), mk(51), mk(52)], limit: 8 })) === '[50,51,52]',
+    'radio active : uniquement la file radio, aucun complément séquentiel (radioRefillQueue génère la suite dynamiquement)');
+  assert(ids(buildUpcoming({ filtered: fl8, curFilteredIdx: 0, radioActive: true, radioQueue: [mk(50)], limit: 8 })) === '[50]',
+    'radio queue plus courte que limit -> retourne ce qui est disponible, pas de padding');
+  assert(ids(buildUpcoming({ filtered: fl8, curFilteredIdx: 0, radioActive: true, radioQueue: [mk(50), mk(51), mk(52)], limit: 2 })) === '[50,51]',
+    'radio queue plus longue que limit -> tronquée à limit');
+  assert(ids(buildUpcoming({ filtered: fl8, curFilteredIdx: 0, radioActive: true, shuffle: true, radioQueue: [mk(50)] })) === '[50]',
+    'radio active a priorité sur le hint shuffle (radio vérifiée avant shuffle)');
+
+  // ── Shuffle actif sans file explicite ni radio -> imprévisible, [] (hint T6) ────
+  assert(ids(buildUpcoming({ filtered: fl8, curFilteredIdx: 0, shuffle: true })) === '[]',
+    'shuffle actif, pas de file explicite, radio inactive -> [] (le panneau affiche le hint)');
+  assert(ids(buildUpcoming({ filtered: [], curFilteredIdx: -1, shuffle: true })) === '[]',
+    'shuffle actif + bibliothèque filtrée vide -> [] (pas de crash)');
+
+  // ── Priorité explicite > radio (l'explicite gagne même si la radio est active) ──
+  assert(ids(buildUpcoming({ explicitQueue: [mk(4)], filtered: fl8, curFilteredIdx: 0, radioActive: true, radioQueue: [mk(50)], limit: 3 })) === '[4,2,3]',
+    'file explicite non vide -> priorité absolue sur radioActive (même ordre que _updateNextTrack: hasExplicitQueueNext() avant radioActive)');
+
+  // ── repeat='all' : wrap séquentiel (fix post-review — parité avec getNextIdx qui
+  //    boucle sur filtered[0] quand repeat==='all', player.js) ──────────────────────
+  assert(ids(buildUpcoming({ filtered: fl8, curFilteredIdx: 7, repeatAll: true })) === '[1,2,3,4,5,6,7]',
+    'repeat-all en fin de liste -> wrap vers le début, piste courante EXCLUE, un seul cycle');
+  assert(ids(buildUpcoming({ filtered: fl8, curFilteredIdx: 5, repeatAll: true, limit: 4 })) === '[7,8,1,2]',
+    'repeat-all mi-liste -> suite séquentielle puis wrap, tronqué à limit');
+  assert(ids(buildUpcoming({ filtered: [mk(1)], curFilteredIdx: 0, repeatAll: true })) === '[]',
+    'repeat-all avec une seule piste -> [] (jamais d\'auto-inclusion de la piste courante)');
+  assert(ids(buildUpcoming({ filtered: fl8, curFilteredIdx: 7, repeatAll: false })) === '[]',
+    'repeat off : fin de liste reste [] (comportement inchangé)');
+  assert(ids(buildUpcoming({ explicitQueue: [mk(8)], filtered: fl8, curFilteredIdx: 6, repeatAll: true, limit: 4 })) === '[8,1,2,3]',
+    'repeat-all + file explicite : le remplissage séquentiel wrappe aussi (dédupliqué, courante exclue)');
+  assert(ids(buildUpcoming({ filtered: fl8, curFilteredIdx: 0, shuffle: true, repeatAll: true })) === '[]',
+    'repeat-all ne réactive pas le séquentiel sous shuffle (hint conservé)');
+}());
+
+// =============================================================================
 // N+2. lf-toast-stack.logic — import-smoke (real ESM module surface verification)
 // =============================================================================
 // Moved to async IIFE that owns the final result printing, so the 9 import-smoke
@@ -1850,6 +2152,51 @@ section('components/lf-toast-stack.logic.js -- import-smoke');
     _ko++;
   }
 
+  // Task 7 — artcolor.js — ensureContrastOnDark (garde-fou contraste, real import —
+  // avoids drift from inline duplicate; same WCAG relative-luminance math as _wcag.cjs).
+  section('artcolor.js -- ensureContrastOnDark (import réel)');
+  try {
+    const { ensureContrastOnDark } = await import('../src/artcolor.js');
+    const { contrastRatio } = require('./_wcag.cjs');
+    const toHex = ([r, g, b]) => '#' + [r, g, b].map(v => Math.round(v).toString(16).padStart(2, '0')).join('');
+
+    // Already-conforming colour (pure red, ~5.25:1 vs black) is returned unchanged.
+    const red = ensureContrastOnDark([255, 0, 0], 4.5);
+    assert(red[0] === 255 && red[1] === 0 && red[2] === 0,
+      'ensureContrastOnDark: couleur déjà conforme (rouge pur) inchangée');
+
+    // Dark colour raised to >= 4.5:1 against pure black, only ever lightened.
+    const dark = [10, 10, 40];
+    const darkOut = ensureContrastOnDark(dark, 4.5);
+    assert(contrastRatio(toHex(darkOut), '#000000') >= 4.5 - 1e-6,
+      'ensureContrastOnDark: couleur sombre remontée à >= 4.5:1 vs noir');
+    assert(darkOut[0] >= dark[0] && darkOut[1] >= dark[1] && darkOut[2] >= dark[2],
+      'ensureContrastOnDark: éclaircissement uniquement vers le blanc (jamais assombri)');
+
+    // Pure black -> light gray (neutral channels, ratio met, not blown out to white).
+    const blackOut = ensureContrastOnDark([0, 0, 0], 4.5);
+    assert(blackOut[0] === blackOut[1] && blackOut[1] === blackOut[2],
+      'ensureContrastOnDark: noir pur -> gris neutre (r=g=b)');
+    assert(blackOut[0] > 60 && blackOut[0] < 255,
+      'ensureContrastOnDark: noir pur -> gris clair (ni noir ni blanc)');
+    assert(contrastRatio(toHex(blackOut), '#000000') >= 4.5 - 1e-6,
+      'ensureContrastOnDark: noir pur -> contraste >= 4.5:1');
+
+    // Idempotence: applying twice === applying once.
+    const once  = ensureContrastOnDark(dark, 4.5);
+    const twice = ensureContrastOnDark(once, 4.5);
+    assert(once[0] === twice[0] && once[1] === twice[1] && once[2] === twice[2],
+      'ensureContrastOnDark: idempotent (appliquer deux fois = une fois)');
+
+    // Convergence guard: white input must not loop and stays white.
+    const whiteOut = ensureContrastOnDark([255, 255, 255], 4.5);
+    assert(whiteOut[0] === 255 && whiteOut[1] === 255 && whiteOut[2] === 255,
+      'ensureContrastOnDark: blanc pur inchangé (pas de boucle infinie)');
+  } catch (e) {
+    _ko++;
+    console.error('  ✗  ensureContrastOnDark import/test crashed:', e.message);
+  }
+
   // WCAG 2.2 SC 2.5.7 — pure reorder helper moveByOne (alternative non-drag)
   try {
     const { moveByOne } = await import('../src/utils.js');
@@ -1867,6 +2214,30 @@ section('components/lf-toast-stack.logic.js -- import-smoke');
     _ko++;
   }
 
+  // cinema-queue.js — buildUpcoming (import réel — vérifie l'absence de drift avec la
+  // copie inline ci-dessus, house style) + exports du câblage (Task 9)
+  section('cinema-queue.js -- buildUpcoming (import réel)');
+  try {
+    const mod = await import('../src/cinema-queue.js');
+    assert(typeof mod.buildUpcoming === 'function',            'real module: buildUpcoming exported');
+    assert(typeof mod.initCinemaQueue === 'function',          'real module: initCinemaQueue exported');
+    assert(typeof mod.refreshCinemaQueuePanel === 'function',  'real module: refreshCinemaQueuePanel exported');
+    assert(typeof mod.closeCinemaQueuePanel === 'function',    'real module: closeCinemaQueuePanel exported');
+    const mk = (id) => ({ id, name: 'T' + id, artist: 'A' + id });
+    const fl = [mk(1), mk(2), mk(3)];
+    const seq = mod.buildUpcoming({ filtered: fl, curFilteredIdx: 0 });
+    assert(seq.length === 2 && seq[0].id === 2 && seq[1].id === 3,
+      'real module: buildUpcoming séquentiel identique à la copie inline');
+    assert(mod.buildUpcoming({ filtered: fl, curFilteredIdx: 0, shuffle: true }).length === 0,
+      'real module: buildUpcoming shuffle sans file explicite -> []');
+    const wrap = mod.buildUpcoming({ filtered: fl, curFilteredIdx: 2, repeatAll: true });
+    assert(wrap.length === 2 && wrap[0].id === 1 && wrap[1].id === 2,
+      'real module: buildUpcoming repeat-all wrappe en fin de liste (courante exclue)');
+  } catch (e) {
+    console.error('  KO  cinema-queue.js import-smoke crashed:', e.message);
+    _ko++;
+  }
+
   // Token integrity (B1)
   await require('./theme-tokens.test.cjs').run();
 
@@ -1881,6 +2252,2192 @@ section('components/lf-toast-stack.logic.js -- import-smoke');
 
   // Token single-source guard (§17)
   await require('./token-source.test.cjs').run();
+
+  // Sidebar audit guardrails (2026-07-01)
+  await require('./sidebar.test.cjs').run();
+
+  // =============================================================================
+  // cinema split — vérification statique (lignes + exports publics)
+  // cinema-viz.js / cinema-bg.js removed in 804181a (dead-module sweep);
+  // guard with try/catch so the suite doesn't crash while these tests are red.
+  // =============================================================================
+  try {
+    const fs = require('fs'), path = require('path');
+    const root = path.join(__dirname, '../..');
+    const read = f => fs.readFileSync(path.join(root, f), 'utf8');
+
+    section('cinema split — line count + public surface');
+
+    const cinLines  = read('frontend/src/cinema.js').split('\n').length;
+    const vizLines  = read('frontend/src/cinema-viz.js').split('\n').length;
+    const bgLines   = read('frontend/src/cinema-bg.js').split('\n').length;
+    const beatLines   = read('frontend/src/cinema-beat.js').split('\n').length;
+    const renderLines = read('frontend/src/cinema-render.js').split('\n').length;
+    const seekLines   = read('frontend/src/cinema-seek.js').split('\n').length;
+    const queueLines  = read('frontend/src/cinema-queue.js').split('\n').length;
+    const loopLines   = read('frontend/src/cinema-loop.js').split('\n').length;
+    const inputLines  = read('frontend/src/cinema-input.js').split('\n').length;
+
+    // Task 6 : extraction cinema-input.js (clavier/molette/dblclick/contrôles auto-masquables)
+    // -- cap cinema.js abaissé de 800 à 650 lignes (Global Constraints du plan Cycle 2).
+    assert(cinLines <= 650, `cinema.js <= 650 lignes (actual: ${cinLines})`);
+    assert(inputLines < 250, `cinema-input.js < 250 lignes (actual: ${inputLines})`);
+    assert(vizLines < 500, `cinema-viz.js < 500 lignes (actual: ${vizLines})`);
+    // Task 3 : cinema-bg.js gagne snapArtColor()/stepArtColorLerp() (état couleur privé) — cap 400→470.
+    // Task 8 : cross-fade de bascule de mode (MODE_CROSSFADE_MS, _snapshotModeCanvas) — cap 470→480
+    // (+25 lignes réelles : constante, helper snapshot, câblage applyCinemaBg, commentaires).
+    // Task 15 : fade d'entrée spectrum (_vizFadeIn + câblage) + gardes Tasks 11/14 — cap 480→495.
+    assert(bgLines  < 495, `cinema-bg.js < 495 lignes (actual: ${bgLines})`);
+    assert(beatLines   < 200, `cinema-beat.js < 200 lignes (actual: ${beatLines})`);
+    // Task 2 : cinema-loop.js — boucle rAF maître, snapshot FFT, beat unique, cadence, <200 lignes.
+    assert(loopLines   < 200, `cinema-loop.js < 200 lignes (actual: ${loopLines})`);
+    // Task 9 : getCinemaQueueUpcoming()/playCinemaQueueTrack() ajoutés — reste < 400.
+    assert(renderLines < 400, `cinema-render.js < 400 lignes (actual: ${renderLines})`);
+    // Task 5 : cinema-seek.js — scrubbing complet de la pbar (drag/hover/clavier), <300 lignes.
+    assert(seekLines   < 300, `cinema-seek.js < 300 lignes (actual: ${seekLines})`);
+    // Task 9 : cinema-queue.js — panneau file d'attente dépliable, <300 lignes.
+    assert(queueLines  < 300, `cinema-queue.js < 300 lignes (actual: ${queueLines})`);
+
+    const vizSrc  = read('frontend/src/cinema-viz.js');
+    const bgSrc   = read('frontend/src/cinema-bg.js');
+    const cinSrc  = read('frontend/src/cinema.js');
+    const seekSrc = read('frontend/src/cinema-seek.js');
+    const renderSrc = read('frontend/src/cinema-render.js');
+    const queueSrc  = read('frontend/src/cinema-queue.js');
+    const loopSrc  = read('frontend/src/cinema-loop.js');
+    const inputSrc = read('frontend/src/cinema-input.js');
+
+    // Task 6 — cinema-input.js : surface publique + zéro import cross-feature (DI pure,
+    // même discipline que cinema-seek.js : ni player.js/eq.js).
+    assert(/export function initCinemaInput/.test(inputSrc),     'cinema-input.js exports initCinemaInput');
+    assert(/export function attachCinemaInput/.test(inputSrc),   'cinema-input.js exports attachCinemaInput');
+    assert(/export function detachCinemaInput/.test(inputSrc),   'cinema-input.js exports detachCinemaInput');
+    assert(/export function showCinemaControls/.test(inputSrc),  'cinema-input.js exports showCinemaControls');
+    assert(!/from '\.\/(player|eq)\.js'/.test(inputSrc),
+      "cinema-input.js n'importe pas player.js/eq.js (DI uniquement, CLAUDE.md §6)");
+    assert(/from '.\/cinema-input.js'/.test(cinSrc),       "cinema.js importe depuis cinema-input.js");
+    assert(/initCinemaInput\(/.test(cinSrc),               "cinema.js appelle initCinemaInput()");
+    assert(/attachCinemaInput\(overlay\)/.test(cinSrc),    "cinema.js appelle attachCinemaInput(overlay) (openCinema)");
+    assert(/detachCinemaInput\(overlay\)/.test(cinSrc),    "cinema.js appelle detachCinemaInput(overlay) (closeCinema)");
+
+    assert(/export function startCinemaViz/.test(vizSrc),      'cinema-viz.js exports startCinemaViz');
+    assert(/export function stopCinemaViz/.test(vizSrc),       'cinema-viz.js exports stopCinemaViz');
+    assert(/export function initCinemaVizModule/.test(vizSrc), 'cinema-viz.js exports initCinemaVizModule');
+
+    // Task 2 — cinema-loop.js : boucle rAF maître (non câblée en T2).
+    assert(/export function initCinemaLoop/.test(loopSrc),     'cinema-loop.js exports initCinemaLoop');
+    assert(/export function startCinemaLoop/.test(loopSrc),    'cinema-loop.js exports startCinemaLoop');
+    assert(/export function stopCinemaLoop/.test(loopSrc),     'cinema-loop.js exports stopCinemaLoop');
+    assert(/export function wakeCinemaLoop/.test(loopSrc),     'cinema-loop.js exports wakeCinemaLoop');
+    assert(/export function loopCadence/.test(loopSrc),        'cinema-loop.js exports loopCadence (pure)');
+    assert(/export function computeBassEnergy/.test(loopSrc),  'cinema-loop.js exports computeBassEnergy (pure)');
+
+    assert(/export let cinemaBg/.test(bgSrc),                'cinema-bg.js exports cinemaBg');
+    assert(/export const CINEMA_BG_MODES/.test(bgSrc),       'cinema-bg.js exports CINEMA_BG_MODES');
+    assert(/export function applyCinemaBg/.test(bgSrc),      'cinema-bg.js exports applyCinemaBg');
+    assert(/export function initCinemaBgModule/.test(bgSrc), 'cinema-bg.js exports initCinemaBgModule');
+
+    // Task 5 — cinema-seek.js : surface publique + zéro import cross-feature (player.js/eq.js).
+    assert(/export function seekPosFromPointer/.test(seekSrc), 'cinema-seek.js exports seekPosFromPointer');
+    assert(/export function formatSeekTime/.test(seekSrc),     'cinema-seek.js exports formatSeekTime');
+    assert(/export function isSeekDragging/.test(seekSrc),     'cinema-seek.js exports isSeekDragging');
+    assert(/export function initCinemaSeek/.test(seekSrc),     'cinema-seek.js exports initCinemaSeek');
+    assert(/export function resetCinemaSeek/.test(seekSrc),    'cinema-seek.js exports resetCinemaSeek');
+    assert(!/from '\.\/player\.js'/.test(seekSrc) && !/from '\.\/eq\.js'/.test(seekSrc),
+      'cinema-seek.js n\'importe pas player.js/eq.js (DI uniquement, CLAUDE.md §6)');
+
+    assert(/from '.\/cinema-viz.js'/.test(cinSrc),         "cinema.js importe depuis cinema-viz.js");
+    assert(/from '.\/cinema-bg.js'/.test(cinSrc),          "cinema.js importe depuis cinema-bg.js");
+    assert(/from '.\/cinema-seek.js'/.test(cinSrc),        "cinema.js importe depuis cinema-seek.js");
+    assert(/initCinemaSeek\(/.test(cinSrc),                "cinema.js appelle initCinemaSeek()");
+    assert(/from '.\/cinema-seek.js'/.test(renderSrc),     "cinema-render.js importe isSeekDragging depuis cinema-seek.js");
+    assert(/export \{[\s\S]*?cinemaBg/.test(cinSrc),       "cinema.js re-exporte cinemaBg");
+    assert(/export let cinemaOpen/.test(cinSrc),            "cinema.js exporte toujours cinemaOpen");
+    assert(/export function updateCinema/.test(cinSrc),     "cinema.js exporte toujours updateCinema");
+
+    // Task 9 — cinema-queue.js : surface publique + zéro import cross-feature (DI pure,
+    // même discipline que cinema-seek.js : ni player/queue/search/radio/i18n/store).
+    assert(/export function buildUpcoming/.test(queueSrc),           'cinema-queue.js exports buildUpcoming');
+    assert(/export function initCinemaQueue/.test(queueSrc),         'cinema-queue.js exports initCinemaQueue');
+    assert(/export function refreshCinemaQueuePanel/.test(queueSrc), 'cinema-queue.js exports refreshCinemaQueuePanel');
+    assert(/export function closeCinemaQueuePanel/.test(queueSrc),   'cinema-queue.js exports closeCinemaQueuePanel');
+    assert(!/from '\.\/(player|queue|search|radio|i18n|store|cfg)\.js'/.test(queueSrc),
+      "cinema-queue.js n'importe aucun module cross-feature (DI uniquement, CLAUDE.md §6)");
+
+    assert(/from '.\/cinema-render.js'/.test(cinSrc) && /getCinemaQueueUpcoming/.test(cinSrc),
+      "cinema.js importe getCinemaQueueUpcoming depuis cinema-render.js");
+    assert(/from '.\/cinema-queue.js'/.test(cinSrc),       "cinema.js importe depuis cinema-queue.js");
+    assert(/initCinemaQueue\(/.test(cinSrc),               "cinema.js appelle initCinemaQueue()");
+    assert(/closeCinemaQueuePanel\(\)/.test(cinSrc),       "cinema.js appelle closeCinemaQueuePanel() dans closeCinema()");
+    assert(/refreshCinemaQueuePanel\(\)/.test(cinSrc),     "cinema.js appelle refreshCinemaQueuePanel() dans updateCinema()");
+    assert(/from '\.\/cinema-queue\.js'/.test(renderSrc) && /buildUpcoming/.test(renderSrc),
+      "cinema-render.js importe buildUpcoming depuis cinema-queue.js");
+  } catch (e) {
+    console.error('  KO  cinema split crashed:', e.message);
+    _ko++;
+  }
+
+  // =============================================================================
+  // Cinema Polish Cycle 2, Task 6 — extraction cinema-input.js + 4 bugs d'input
+  // (scans statiques, house style). NB : distinct de l'ancienne numérotation
+  // "cinema Task 6" (text swap sync, plus bas) — plan différent.
+  // =============================================================================
+  try {
+    const fs = require('fs'), path = require('path');
+    const root = path.join(__dirname, '../..');
+    const read = f => fs.readFileSync(path.join(root, f), 'utf8');
+
+    section('cinema-input.js split (Cycle 2 Task 6) -- extraction + 4 bugs input');
+
+    const inputSrc = read('frontend/src/cinema-input.js');
+    const cinSrc   = read('frontend/src/cinema.js');
+
+    const onCinKeyBody = /function _onCinKey\(e\)\s*\{[\s\S]*?\n\}\n/.exec(inputSrc)?.[0] || '';
+    assert(onCinKeyBody.length > 0, 'cinema-input.js : _onCinKey() trouvée');
+
+    // (b) KeyC ferme le cinéma — la tooltip promet « Fermer [C / Échap] » (i18n
+    // t_cinema_close) mais seul Escape était géré avant ce fix.
+    const keyCBlock = /case 'KeyC':([\s\S]*?)break;/.exec(onCinKeyBody)?.[1] || '';
+    assert(keyCBlock.length > 0 && /closeCinema\(\)/.test(keyCBlock),
+      "cinema-input.js : case 'KeyC' présent et appelle deps.closeCinema() (fix tooltip « Fermer [C / Échap] »)");
+
+    // Audit fix : KeyR/KeyF/KeyB n'avaient pas de garde e.repeat -- une touche maintenue
+    // ré-entre l'action à chaque tick de répétition OS. Pour KeyR (radio), la répétition
+    // peut ré-appeler toggleCinemaRadio() avant que le premier appel n'ait fini son await
+    // buildRadioQueue(), désynchronisant radioActive de l'état visible/en file (radio.js).
+    for (const key of ['KeyR', 'KeyF', 'KeyB']) {
+      const block = new RegExp(`case '${key}':([\\s\\S]*?)break;`).exec(onCinKeyBody)?.[1] || '';
+      assert(block.length > 0 && /if \(e\.repeat\) return;/.test(block),
+        `cinema-input.js : case '${key}' doit garder e.repeat (ignorer l'auto-répétition clavier)`);
+    }
+
+    // (c) _onCinWheel : early-return AVANT preventDefault quand la molette cible le
+    // panneau file d'attente — le scroll natif du panneau reprend ses droits.
+    const onCinWheelBody = /function _onCinWheel\(e\)\s*\{[\s\S]*?\n\}\n/.exec(inputSrc)?.[0] || '';
+    assert(onCinWheelBody.length > 0, 'cinema-input.js : _onCinWheel() trouvée');
+    const closestIdx = onCinWheelBody.indexOf("closest('#cinema-queue-panel')");
+    const preventIdx = onCinWheelBody.indexOf('preventDefault('); // forme appel — évite un faux négatif si un commentaire mentionne le mot sans parenthèse
+    assert(closestIdx > -1 && preventIdx > -1 && closestIdx < preventIdx,
+      "cinema-input.js : _onCinWheel() early-return closest('#cinema-queue-panel') AVANT preventDefault");
+
+    // (d) seek clavier ArrowLeft/ArrowRight gardé par isFinite(audio.duration) — sans
+    // la garde, une durée NaN faisait `audio.duration || 0` -> 0 et ArrowRight ramenait
+    // la lecture au tout début du morceau (Math.min(0, currentTime+5) === 0).
+    const arrowLeftBlock  = /case 'ArrowLeft':([\s\S]*?)break;/.exec(onCinKeyBody)?.[1] || '';
+    const arrowRightBlock = /case 'ArrowRight':([\s\S]*?)break;/.exec(onCinKeyBody)?.[1] || '';
+    assert(arrowLeftBlock.length > 0 && /isFinite\(audio\.duration\)/.test(arrowLeftBlock),
+      'cinema-input.js : ArrowLeft gardé par isFinite(audio.duration) (miroir ArrowRight)');
+    assert(arrowRightBlock.length > 0 && /isFinite\(audio\.duration\)/.test(arrowRightBlock)
+        && /Math\.min\(audio\.duration,/.test(arrowRightBlock),
+      'cinema-input.js : ArrowRight gardé par isFinite(audio.duration) (fix NaN -> seek forcé à 0)');
+
+    // (e) les deux callbacks rAF d'ouverture (cinema.js/openCinema) doivent vérifier
+    // cinemaOpen avant d'agir — un close() survenu entre l'appel et l'exécution de la
+    // frame ne doit pas focaliser/animer un overlay déjà refermé (race rAF).
+    const openCinemaBody = /export function openCinema\(\)\s*\{[\s\S]*?\n\}\n/.exec(cinSrc)?.[0] || '';
+    assert(openCinemaBody.length > 0, 'cinema.js : openCinema() trouvée');
+    const rafGuardCount = (openCinemaBody.match(/requestAnimationFrame\(\(\)\s*=>\s*\{\s*if \(!cinemaOpen\) return;/g) || []).length;
+    assert(rafGuardCount === 2,
+      `cinema.js : les deux callbacks rAF de openCinema() contiennent if (!cinemaOpen) return (fix races rAF, actual: ${rafGuardCount})`);
+
+    // (f) _onArtDblClick : clearTimeout(_heartTimer) AVANT réassignation — un
+    // double-double-clic rapide laissait sinon le premier timer orphelin.
+    const onArtDblClickBody = /function _onArtDblClick\(e\)\s*\{[\s\S]*?\n\}\n/.exec(inputSrc)?.[0] || '';
+    assert(onArtDblClickBody.length > 0, 'cinema-input.js : _onArtDblClick() trouvée');
+    const clearIdx = onArtDblClickBody.indexOf('clearTimeout(_heartTimer)');
+    const reassignIdx = onArtDblClickBody.indexOf('_heartTimer = setTimeout');
+    assert(clearIdx > -1 && reassignIdx > -1 && clearIdx < reassignIdx,
+      'cinema-input.js : clearTimeout(_heartTimer) avant réassignation dans _onArtDblClick (fix timer orphelin)');
+  } catch (e) {
+    console.error('  KO  cinema Task 6 scans crashed:', e.message);
+    _ko++;
+  }
+
+  // =============================================================================
+  // Post-review (final whole-branch findings 1/3/4) — scans bon marché, house style.
+  // =============================================================================
+  try {
+    const fs = require('fs'), path = require('path');
+    const root = path.join(__dirname, '../..');
+    const read = f => fs.readFileSync(path.join(root, f), 'utf8');
+
+    section('cinema post-review -- findings 1/3/4');
+
+    const cinSrc    = read('frontend/src/cinema.js');
+    const renderSrc = read('frontend/src/cinema-render.js');
+    const playerSrc = read('frontend/src/player.js');
+    const queueQSrc = read('frontend/src/cinema-queue.js');
+
+    // Finding 1 — les branches shuffle et !tracks/curIdx<0 de _updateNextTrack ne doivent
+    // plus manipuler .cin-has-next à la main (seul renderCinNextPanel(panel, hint, ...) le
+    // fait) : sinon #cinema-next reste focalisable (pas de .disabled) sous shuffle/no-track.
+    const nextBody = /function _updateNextTrack\(\)\s*\{[\s\S]*?\n\}\n/.exec(cinSrc)?.[0] || '';
+    assert(nextBody.length > 0, 'cinema.js : _updateNextTrack() trouvée');
+    assert(!/panel\.classList\.(remove|add)\('cin-has-next'\)/.test(nextBody),
+      'cinema.js : _updateNextTrack() ne manipule plus panel.classList directement (route via renderCinNextPanel)');
+    assert((nextBody.match(/renderCinNextPanel\(panel, hint, null, shuffle\)/g) || []).length === 2,
+      'cinema.js : les branches shuffle ET !tracks/curIdx<0 appellent renderCinNextPanel(…, null, shuffle) — #cinema-next reste disabled (Finding 1)');
+
+    // Finding 3 — le cluster cinéma ne réimporte jamais queue.js directement (façade
+    // player.js) : cinema-render.js doit importer peekExplicitQueue/removeFromQueue
+    // depuis player.js, et player.js doit les réexporter.
+    assert(!/from '\.\/queue\.js'/.test(renderSrc),
+      "cinema-render.js n'importe plus queue.js directement (Finding 3)");
+    assert(/peekExplicitQueue[\s\S]*?from '\.\/player\.js'/.test(renderSrc) &&
+      /removeFromQueue/.test(renderSrc),
+      'cinema-render.js importe peekExplicitQueue/removeFromQueue depuis player.js');
+    assert(/export \{ peekExplicitQueue, removeFromQueue \}/.test(playerSrc),
+      'player.js réexporte peekExplicitQueue/removeFromQueue (façade queue.js, §6)');
+
+    // Finding 4 — quand le panneau ouvert se vide alors qu'une rangée était focalisée,
+    // le focus ne doit jamais retomber silencieusement sur <body> (fuite du Tab-trap
+    // overlay) : bascule vers le déclencheur focalisable, sinon ferme le panneau.
+    const renderBody = /function _render\(\)\s*\{[\s\S]*?\n\}\n/.exec(queueQSrc)?.[0] || '';
+    assert(renderBody.length > 0, 'cinema-queue.js : _render() trouvée');
+    assert(/_isTriggerFocusable/.test(renderBody) && /_closePanel\(\)/.test(renderBody),
+      'cinema-queue.js : _render() gère le cas liste-vidée-focus-perdu (trigger focalisable sinon _closePanel)');
+  } catch (e) {
+    console.error('  KO  cinema post-review scans crashed:', e.message);
+    _ko++;
+  }
+
+  // =============================================================================
+  // Task 3 — santé du code : beat partagé (cinema-beat.js), état couleur privé
+  // (cinema-bg.js), split des fonctions géantes (updateCinema). Refactor pur.
+  // Logique beat reproduite inline (style maison — pas d'import ESM) + scans.
+  // =============================================================================
+  try {
+    const fs = require('fs'), path = require('path');
+    const root = path.join(__dirname, '../..');
+    const read = f => fs.readFileSync(path.join(root, f), 'utf8');
+
+    section('cinema Task 3 -- beat partagé + état couleur privé + split');
+
+    const beatSrc   = read('frontend/src/cinema-beat.js');
+    const cinVizSrc = read('frontend/src/cinema-viz.js');
+    const canvasSrc = read('frontend/src/cinema-canvas.js');
+    const bgSrc     = read('frontend/src/cinema-bg.js');
+    const cinSrc    = read('frontend/src/cinema.js');
+
+    // (a) cinema-beat.js existe, <200 lignes, exporte la factory createBeatDetector
+    assert(beatSrc.split('\n').length < 200, 'cinema-beat.js < 200 lignes');
+    assert(/export function createBeatDetector/.test(beatSrc),
+      'cinema-beat.js exporte la factory createBeatDetector');
+
+    // (a bis) logique beat reproduite inline — énergie > moyenne×seuil, cooldown, historique borné
+    function createBeatDetector({ history = 0, threshold, cooldownMs }) {
+      const buf = history > 0 ? new Float32Array(history) : null;
+      let idx = 0, sum = 0, lastBeat = 0;
+      return {
+        sample(energy, nowMs, baseline) {
+          let avg;
+          if (buf) {
+            const slot = idx % history;
+            sum -= buf[slot]; buf[slot] = energy; sum += energy; idx++;
+            if (idx < history) return false;                    // warm-up
+            if (idx % history === 0) { sum = 0; for (let i = 0; i < history; i++) sum += buf[i]; }
+            avg = sum / history;
+          } else { avg = baseline; }
+          if (energy > avg * threshold && nowMs - lastBeat > cooldownMs) { lastBeat = nowMs; return true; }
+          return false;
+        },
+      };
+    }
+    const d1 = createBeatDetector({ history: 4, threshold: 1.35, cooldownMs: 0 });
+    let warm = false;
+    for (let i = 0; i < 3; i++) if (d1.sample(1000, i)) warm = true;
+    assert(warm === false, 'beat: aucun beat pendant le warm-up (buffer non plein)');
+    const d2 = createBeatDetector({ history: 4, threshold: 1.35, cooldownMs: 100 });
+    for (let i = 0; i < 4; i++) d2.sample(10, i);               // remplir l'historique (moyenne basse)
+    assert(d2.sample(1000, 1000) === true, 'beat: pic d\'énergie > moyenne×seuil → beat');
+    assert(d2.sample(1000, 1050) === false, 'beat: cooldown supprime un beat trop rapproché');
+    const d3 = createBeatDetector({ history: 4, threshold: 1.5, cooldownMs: 0 });
+    for (let i = 0; i < 8; i++) d3.sample(500, i);              // moyenne stabilisée == énergie
+    assert(d3.sample(500, 100) === false, 'beat: énergie == moyenne → pas de beat (historique borné)');
+    // Mode baseline externe (history=0) — vagues/étoiles (EMA fournie par l'appelant)
+    const d4 = createBeatDetector({ history: 0, threshold: 1.55, cooldownMs: 650 });
+    assert(d4.sample(200, 1000, 100) === true, 'beat: mode baseline externe (EMA) → beat si energy > baseline×seuil');
+    assert(d4.sample(200, 1100, 100) === false, 'beat: mode baseline externe respecte le cooldown');
+    assert(d4.sample(200, 2000, 100) === true, 'beat: mode baseline externe → nouveau beat une fois le cooldown écoulé');
+
+    // (b) cinema-viz.js ne détecte PLUS le beat depuis Task 4 (cycle 2) : le beat
+    // arrive en paramètre de drawVizFrame(dt, fft, beat), calculé une seule fois par
+    // frame dans cinema-loop.js (même config createBeatDetector, partagée) — cf. Task 4
+    // cycle 2 ci-dessous pour la vérification positive de ce nouveau contrat.
+    assert(!/from '.\/cinema-beat.js'/.test(cinVizSrc), 'cinema-viz.js n\'importe plus cinema-beat.js (Task 4)');
+    assert(!/createBeatDetector/.test(cinVizSrc),       'cinema-viz.js n\'utilise plus createBeatDetector (Task 4)');
+    assert(!/_beatHistorySum/.test(cinVizSrc),
+      'cinema-viz.js ne réimplémente plus le running-sum de beat (déplacé dans cinema-beat.js)');
+    // cinema-canvas.js, lui, ne détecte PLUS le beat depuis Task 5 (cycle 2 polish) :
+    // drawWavesFrame/drawStarfieldFrame reçoivent le beat déjà calculé en paramètre
+    // (même snapshot partagé bg+viz+vol-vis) — même contrat que cinema-viz.js ci-dessus.
+    assert(!/from '.\/cinema-beat.js'/.test(canvasSrc), 'cinema-canvas.js n\'importe plus cinema-beat.js (Task 5)');
+    assert(!/createBeatDetector/.test(canvasSrc),       'cinema-canvas.js n\'utilise plus createBeatDetector (Task 5)');
+
+    // (c) cinema-bg.js : état couleur privé — plus d'arrays exportés par référence
+    assert(!/export const _cinArtRGBCur/.test(bgSrc),     'cinema-bg.js n\'exporte plus _cinArtRGBCur (array par réf)');
+    assert(!/export const _cinArtRGBTarget/.test(bgSrc),  'cinema-bg.js n\'exporte plus _cinArtRGBTarget (array par réf)');
+    assert(/export function snapArtColor/.test(bgSrc),    'cinema-bg.js exporte snapArtColor()');
+    assert(/export function stepArtColorLerp/.test(bgSrc),'cinema-bg.js exporte stepArtColorLerp()');
+    assert(!/export function getArtColorStr/.test(bgSrc),
+      'cinema-bg.js n\'exporte plus getArtColorStr()/setArtColorStr() (dead code, jamais appelees hors du module)');
+    assert(!/_cinArtRGBCur/.test(cinVizSrc),
+      'cinema-viz.js n\'accède plus à _cinArtRGBCur (passe par stepArtColorLerp)');
+    assert(!/_cinArtRGBCur/.test(cinSrc),
+      'cinema.js n\'accède plus à _cinArtRGBCur (passe par snapArtColor)');
+
+    // (e) updateCinema devient un orchestrateur court (<= 50 lignes) — finding 131 lignes
+    const uc = cinSrc.split('\n');
+    const s = uc.findIndex(l => /^export function updateCinema\(/.test(l));
+    let e2 = s + 1; while (e2 < uc.length && !/^\}/.test(uc[e2])) e2++;
+    assert(s >= 0 && (e2 - s + 1) <= 50,
+      `cinema.js : updateCinema = ${s >= 0 ? e2 - s + 1 : '?'} lignes (<= 50, orchestrateur court)`);
+  } catch (e) {
+    console.error('  KO  cinema Task 3 crashed:', e.message);
+    _ko++;
+  }
+
+  // =============================================================================
+  // Task 3 (cycle 2) — cinema-bg.js devient renderer passif : plus de rAF local
+  // (la boucle MAÎTRE vit dans cinema-loop.js), stepArtColorLerp(dtN) devient
+  // framerate-indépendant (k = 1 - (1-K)^dtN), isArtColorConverged()/drawBgFrame()
+  // exportées. cinema.js n'est PAS câblé dans ce cycle (T4 le fait, une fois
+  // drawVizFrame disponible) — cf. brief Task 3, scope change.
+  // =============================================================================
+  section('Task 3 cycle 2 -- cinema-bg.js renderer passif (drawBgFrame, stepArtColorLerp dtN)');
+
+  try {
+    const fs = require('fs'), path = require('path');
+    const root = path.join(__dirname, '../..');
+    const read = f => fs.readFileSync(path.join(root, f), 'utf8');
+    const bgSrc = read('frontend/src/cinema-bg.js');
+
+    // (a) scan : aucun requestAnimationFrame dans cinema-bg.js — la boucle vit
+    // désormais dans cinema-loop.js (renderer passif).
+    assert(!/requestAnimationFrame/.test(bgSrc),
+      'cinema-bg.js: aucun requestAnimationFrame (renderer passif, Task 3)');
+
+    // (b) scan : cinema-bg.js ne référence plus getByteFrequencyData ni
+    // document.hasFocus() — FFT et cadence/focus sont la responsabilité de
+    // cinema-loop.js (déjà mergé, Task 2).
+    assert(!/getByteFrequencyData/.test(bgSrc),
+      'cinema-bg.js: aucun getByteFrequencyData (FFT lue par cinema-loop.js)');
+    assert(!/document\.hasFocus\(\)/.test(bgSrc),
+      'cinema-bg.js: aucun document.hasFocus() (cadence décidée par cinema-loop.js)');
+
+    // (d) drawBgFrame(dt, fft, beat)/isArtColorConverged() exportées — vérifié par
+    // scan (drawBgFrame touche document.getElementById ; pas de DOM dans ce runner
+    // Node, cf. (c) ci-dessous pour l'exercice réel des fonctions pure-numériques).
+    assert(/export function drawBgFrame\(dt, fft, beat\)/.test(bgSrc),
+      'cinema-bg.js exporte drawBgFrame(dt, fft, beat)');
+    assert(/export function isArtColorConverged/.test(bgSrc),
+      'cinema-bg.js exporte isArtColorConverged()');
+  } catch (e) {
+    console.error('  KO  cinema Task 3 cycle 2 scans crashed:', e.message);
+    _ko++;
+  }
+
+  // (c) stepArtColorLerp(dtN) : NB — import ESM réel impossible ici (cinema-bg.js
+  // importe ui.js -> composants Lit -> lit-html, qui exige un vrai DOM au chargement
+  // du module, ex: `TypeError: l.createTreeWalker is not a function` sous Node nu ;
+  // ce runner est "zero deps" et n'embarque pas jsdom). Même pattern que le beat
+  // detector plus haut dans ce fichier (section "cinema Task 3") : logique reproduite
+  // inline (house style) + garde anti-drift qui vérifie la formule EXACTE dans la
+  // source réelle. Converge vers la cible ; dtN=2 converge strictement plus vite que
+  // dtN=1 sur une frame (k = 1 - (1-K)^dtN) ; idempotent une fois convergé.
+  try {
+    const K = 0.06; // == _LERP_K dans cinema-bg.js (vérifié par la garde anti-drift ci-dessous)
+    function stepInline(cur, target, dtN) {
+      if (Math.abs(cur[0] - target[0]) < 0.5 && Math.abs(cur[1] - target[1]) < 0.5 && Math.abs(cur[2] - target[2]) < 0.5) {
+        cur[0] = target[0]; cur[1] = target[1]; cur[2] = target[2];
+        return true;
+      }
+      const k = 1 - Math.pow(1 - K, dtN || 1);
+      cur[0] += (target[0] - cur[0]) * k;
+      cur[1] += (target[1] - cur[1]) * k;
+      cur[2] += (target[2] - cur[2]) * k;
+      return false;
+    }
+
+    // dtN=1 vs dtN=2 depuis la même distance de départ (noir → blanc)
+    const target = [255, 255, 255];
+    const cur1 = [0, 0, 0];
+    stepInline(cur1, target, 1);
+    const cur2 = [0, 0, 0];
+    stepInline(cur2, target, 2);
+    assert(cur2[0] > cur1[0],
+      `stepArtColorLerp: dtN=2 converge plus vite que dtN=1 en une frame (r1=${cur1[0].toFixed(3)}, r2=${cur2[0].toFixed(3)})`);
+
+    // convergence complète après suffisamment de frames
+    const cur3 = [0, 0, 0];
+    let iter = 0, converged = false;
+    while (!converged && iter < 2000) { converged = stepInline(cur3, target, 1); iter++; }
+    assert(converged, `stepArtColorLerp: converge vers la cible en ${iter} frames`);
+    assert(cur3[0] === target[0] && cur3[1] === target[1] && cur3[2] === target[2],
+      'stepArtColorLerp: snap exact sur la cible une fois convergé');
+
+    // idempotent une fois convergé (rappel ne s'éloigne pas de la cible)
+    const before = [...cur3];
+    stepInline(cur3, target, 1);
+    assert(cur3[0] === before[0] && cur3[1] === before[1] && cur3[2] === before[2],
+      "stepArtColorLerp: idempotent une fois convergé (rappel ne s'éloigne pas de la cible)");
+
+    // garde anti-drift : la formule ET _LERP_K réels dans cinema-bg.js correspondent
+    // exactement à la copie inline ci-dessus.
+    const fs = require('fs'), path = require('path');
+    const bgSrc = fs.readFileSync(path.join(__dirname, '../../frontend/src/cinema-bg.js'), 'utf8');
+    assert(/const k = 1 - Math\.pow\(1 - _LERP_K, dtN \|\| 1\)/.test(bgSrc),
+      'cinema-bg.js: stepArtColorLerp() implémente k = 1 - (1-K)^dtN (formule framerate-indépendante)');
+    assert(new RegExp(`_LERP_K\\s*=\\s*${K}[^0-9]`).test(bgSrc),
+      `cinema-bg.js: _LERP_K vaut ${K} (cohérent avec la copie inline du test)`);
+  } catch (e) {
+    console.error('  KO  cinema-bg.js stepArtColorLerp (logique inline) crashed:', e.message);
+    _ko++;
+  }
+
+  // =============================================================================
+  // cinema perf — boucles rAF, allocations, fuites GSAP (audit perf 2026-07-02)
+  // P1 : viz.js (player bar) rend sous l'overlay cinéma — doit se suspendre.
+  // P2 : viz.js sans garde document.hidden.
+  // P4 : tweens GSAP _waveBeatTw/_shootTweens jamais tués (fuite cinema-canvas.js).
+  // P3 : window.innerWidth/innerHeight relu chaque frame dans cinema-bg.js.
+  // Allocations de strings couleur par frame : cinema-viz.js / cinema-canvas.js.
+  // =============================================================================
+  {
+    const fs   = require('fs');
+    const path = require('path');
+    const root = path.join(__dirname, '../..');
+    const read = f => fs.readFileSync(path.join(root, f), 'utf8');
+
+    section('cinema perf -- boucles rAF, allocations, fuites GSAP');
+
+    const vizSrc    = read('frontend/src/viz.js');
+    const cinSrc    = read('frontend/src/cinema.js');
+    const canvasSrc = read('frontend/src/cinema-canvas.js');
+    const cinVizSrc = read('frontend/src/cinema-viz.js');
+    const bgSrc     = read('frontend/src/cinema-bg.js');
+
+    // (a) viz.js : garde document.hidden dans la boucle de rendu _draw()
+    const drawBody = /function _draw\(\)[\s\S]*?\n\/\* ── Mode bars/.exec(vizSrc)?.[0] || '';
+    assert(drawBody.length > 0, 'viz.js : fonction _draw() trouvée');
+    assert(/document\.hidden/.test(drawBody),
+      'viz.js : _draw() contient une garde document.hidden (P2 fix)');
+
+    // (b) viz.js exporte suspendViz/resumeViz
+    assert(/export function suspendViz/.test(vizSrc), 'viz.js exporte suspendViz()');
+    assert(/export function resumeViz/.test(vizSrc),  'viz.js exporte resumeViz()');
+
+    // (c) cinema.js câble la suspension à l'ouverture/fermeture (openCinema/closeCinema)
+    const openBody  = /export function openCinema\(\)[\s\S]*?\n\}\n/.exec(cinSrc)?.[0]  || '';
+    const closeBody = /export function closeCinema\(\)[\s\S]*?\n\}\n/.exec(cinSrc)?.[0] || '';
+    assert(openBody.length  > 0, 'cinema.js : openCinema() trouvée');
+    assert(closeBody.length > 0, 'cinema.js : closeCinema() trouvée');
+    assert(/_suspendViz\(\)/.test(openBody),
+      'openCinema() suspend le viz player-bar (P1 fix)');
+    assert(/_resumeViz\(\)/.test(closeBody),
+      'closeCinema() reprend le viz player-bar');
+    assert(/export function initCinemaVizSuspend/.test(cinSrc),
+      'cinema.js expose un point de câblage pour suspendViz/resumeViz (pas d\'import direct viz.js)');
+
+    // (d) cinema-canvas.js exporte un kill des tweens GSAP, appelé dans le chemin de fermeture
+    assert(/export function killCanvasTweens/.test(canvasSrc),
+      'cinema-canvas.js exporte killCanvasTweens() (P4 fix)');
+    assert(/motionKill\(_waveBeatObj\)/.test(canvasSrc) && /motionKill\(_shootPool\[i\]\)/.test(canvasSrc),
+      'killCanvasTweens() tue le tween _waveBeatObj et tous les _shootTweens via motionKill (kill by target, pas de handle)');
+    assert(/killCanvasTweens\(\)/.test(bgSrc),
+      'cinema-bg.js appelle killCanvasTweens() dans le chemin de fermeture (_stopAmbientAnim → closeCinema)');
+
+    // (e) zéro allocation : les strings couleur par frame doivent être mises en cache,
+    // pas reconstruites inconditionnellement à chaque frame (cinema-viz.js:201,240,273 ;
+    // cinema-canvas.js:117,260-264).
+    // Task 3 : le cache de la string _lerpRGB a migré dans stepArtColorLerp() (cinema-bg.js).
+    assert(/_lerpRGBCache/.test(bgSrc),
+      'cinema-bg.js : stepArtColorLerp() met en cache la string couleur (rebuild seulement si composantes arrondies changent)');
+    assert(/stepArtColorLerp/.test(cinVizSrc),
+      'cinema-viz.js : LERP couleur délégué à stepArtColorLerp (cinema-bg.js)');
+    assert(/_glowFillCache/.test(cinVizSrc),
+      'cinema-viz.js : rgb(${_lerpRGB}) (glow/ligne centrale) mis en cache');
+    assert(/_stdFillCache/.test(cinVizSrc),
+      'cinema-viz.js : rgb(${_lerpRGB}) du mode standard mis en cache');
+    assert(/_waveLerpRGBCache/.test(canvasSrc),
+      'cinema-canvas.js : lerpRGB de drawWavesFrame mis en cache');
+    assert(/_starFillCache/.test(canvasSrc) && /_starGlowFillCache/.test(canvasSrc),
+      'cinema-canvas.js : starFill/glowFill de drawStarfieldFrame mis en cache');
+    assert(/_starBgFillCache/.test(canvasSrc),
+      'cinema-canvas.js : fond teinté de drawStarfieldFrame mis en cache');
+
+    // (bonus P3) cinema-bg.js : innerWidth/innerHeight mis en cache. Task 3 : plus de
+    // boucle RAF locale — drawBgFrame() (renderer passif appelé par cinema-loop.js)
+    // reprend la garantie : elle ne relit pas window.innerWidth/innerHeight par frame.
+    const drawBgBody = /export function drawBgFrame\([^)]*\)\s*\{[\s\S]*?\n\}\n/.exec(bgSrc)?.[0] || '';
+    assert(drawBgBody.length > 0, 'cinema-bg.js : drawBgFrame() trouvée');
+    assert(!/window\.innerWidth|window\.innerHeight/.test(drawBgBody),
+      'cinema-bg.js : drawBgFrame() ne lit plus window.innerWidth/innerHeight (P3 fix)');
+    assert(/export function updateCachedWinSize/.test(bgSrc),
+      'cinema-bg.js exporte updateCachedWinSize() (mise à jour par le handler resize de cinema.js)');
+    assert(/updateCachedWinSize\(\)/.test(read('frontend/src/cinema.js')),
+      'cinema.js appelle updateCachedWinSize() dans son handler resize');
+
+    // Audit fix : un resize survenant PENDANT un cross-fade de bascule de mode (600ms,
+    // _ambientCross) redessinait le snapshot -- dimensionné pour l'ANCIENNE taille -- étiré
+    // aux NOUVELLES _winW/_winH (drawBgFrame les lit à chaque frame), déformant l'image
+    // sortante jusqu'à 200ms (durée du debounce resize -> applyCinemaBg() qui, lui,
+    // régénère tout proprement). updateCachedWinSize() tourne SYNCHRONE dès le resize
+    // (pas debounced) -- c'est le seul point qui peut couper le cross-fade à temps.
+    const updateCachedWinSizeBody = /export function updateCachedWinSize\(\)\s*\{[\s\S]*?\}/.exec(bgSrc)?.[0] || '';
+    assert(updateCachedWinSizeBody.length > 0, 'cinema-bg.js : updateCachedWinSize() trouvée');
+    assert(/_ambientCross\s*=\s*null/.test(updateCachedWinSizeBody),
+      'updateCachedWinSize() doit couper un cross-fade en vol (_ambientCross = null) -- sinon le snapshot ancien-format se redessine étiré à la nouvelle taille');
+
+    // (f) Task 1 : suspendViz stoppe aussi l'oscilloscope premium (rAF autonome)
+    const suspendBody = /export function suspendViz\(\)[\s\S]*?\n\}/.exec(vizSrc)?.[0] || '';
+    const resumeBody  = /export function resumeViz\(\)[\s\S]*?\n\}/.exec(vizSrc)?.[0] || '';
+    assert(suspendBody.length > 0, 'viz.js : suspendViz() trouvée');
+    assert(resumeBody.length > 0,  'viz.js : resumeViz() trouvée');
+    assert(/_premiumOsc/.test(suspendBody) && /\.stop\(\)/.test(suspendBody),
+      'suspendViz() stoppe _premiumOsc.stop() (P-H3 fix: oscilloscope premium a son propre rAF)');
+    assert(/vizMode\s*===\s*['"]oscilloscope['"]/.test(resumeBody) && /_ensurePremiumOsc/.test(resumeBody) && /\.start\(\)/.test(resumeBody),
+      'resumeViz() redémarre l\'oscilloscope premium conditionnellement (vizMode === "oscilloscope")');
+
+    // (g) Bug utilisateur : "mini oscilloscope" qui apparaît dans la barre de volume
+    // après une session cinéma. Root cause : _startEngine() (point de démarrage commun
+    // à startViz() ET setVizMode()) ignorait _vizSuspended -- un pause/resume (stopViz()
+    // au pause remet running=false) ou le premier setBootVizState() consommé PENDANT
+    // que le cinéma est ouvert redémarrait l'oscilloscope premium sur #pl-viz sans
+    // condition. Invisible tant que l'overlay reste ouvert (z-index/fond opaque), mais
+    // le rAF autonome d'oscPremium.js tourne déjà -- visible dès la fermeture du cinéma.
+    const startEngineBody = /function _startEngine\(\)[\s\S]*?\n\}/.exec(vizSrc)?.[0] || '';
+    assert(startEngineBody.length > 0, 'viz.js : fonction _startEngine() trouvée');
+    assert(/_vizSuspended/.test(startEngineBody),
+      '_startEngine() doit vérifier _vizSuspended avant de démarrer un moteur (bars/circle OU oscilloscope) -- sinon resumeViz() redémarre en double un moteur déjà relancé en douce pendant le cinéma');
+
+    // (h) Bug utilisateur (audit) : extractColor() (playerbar.js) résout de façon asynchrone
+    // -- si la boucle cinéma est déjà endormie (convergée / lecture en pause) au moment de
+    // la résolution, rien ne la réveillait pour avancer le LERP vers la nouvelle couleur
+    // cible -- le fond restait figé sur l'ancienne couleur jusqu'à un évènement sans rapport
+    // (reprise lecture, resize, switch de mode) qui réveille la boucle par ailleurs.
+    const updateCinArtColorBody = /export function updateCinArtColor\(hex\)[\s\S]*?\n\}/.exec(bgSrc)?.[0] || '';
+    assert(updateCinArtColorBody.length > 0, 'cinema-bg.js : updateCinArtColor() trouvée');
+    assert(/_getCinemaOpen\(\)/.test(updateCinArtColorBody) && /wakeCinemaLoop\(\)/.test(updateCinArtColorBody),
+      'updateCinArtColor() doit réveiller la boucle cinéma (wakeCinemaLoop, si _getCinemaOpen()) après avoir poussé la nouvelle cible -- sinon le fond reste figé si extractColor() résout boucle endormie');
+  }
+
+  // =============================================================================
+  // cinema Task 8 — cross-fade entre modes (touche B), cap amoled 30fps, responsive.
+  // UX audit : bascule de fond = cut sec ; amoled tourne à 60fps sans raison ;
+  // insets de coin en px fixes ; un seul breakpoint 600px ; chevauchements possibles
+  // sur petites hauteurs (horloge/next qui se superposent à la pill de contrôles).
+  // =============================================================================
+  {
+    const fs = require('fs'), path = require('path');
+    const root = path.join(__dirname, '../..');
+    const read = f => fs.readFileSync(path.join(root, f), 'utf8');
+
+    section('cinema Task 8 -- cross-fade modes + cap amoled + responsive');
+
+    const bgSrc = read('frontend/src/cinema-bg.js');
+    const dsSrc = read('frontend/src/design-system.css');
+    const ssSrc = read('frontend/src/style.css');
+
+    // (a) constante MODE_CROSSFADE_MS (house pattern comme AMBIENT_CROSSFADE_MS) +
+    // applyCinemaBg() déclenche le mécanisme de cross-fade à la bascule de mode.
+    assert(/MODE_CROSSFADE_MS\s*=\s*600/.test(bgSrc),
+      'cinema-bg.js déclare la constante MODE_CROSSFADE_MS = 600');
+    const applyBody = /export function applyCinemaBg\(\)[\s\S]*?\n\}\n/.exec(bgSrc)?.[0] || '';
+    assert(applyBody.length > 0, 'cinema-bg.js : applyCinemaBg() trouvée');
+    assert(/MODE_CROSSFADE_MS/.test(applyBody),
+      'applyCinemaBg() déclenche le cross-fade de bascule de mode (réutilise MODE_CROSSFADE_MS)');
+    // Fix post-review (Finding 5) — l'ancienne assertion testait prefersReducedMotion()
+    // deux fois contre le fichier ENTIER (conjoints identiques, passe trivialement même
+    // si le dry-cut disparaît). On isole le corps de _snapshotModeCanvas (la garde qui
+    // fait réellement la bascule sèche) et on vérifie qu'il appelle prefersReducedMotion()
+    // ET retourne bien `null` dans le même garde — la garantie de dry-cut elle-même.
+    const snapshotBody = /function _snapshotModeCanvas\([^)]*\)\s*\{[\s\S]*?\n\}\n/.exec(bgSrc)?.[0] || '';
+    assert(snapshotBody.length > 0, 'cinema-bg.js : _snapshotModeCanvas() trouvée');
+    assert(/if\s*\([^)]*prefersReducedMotion\(\)[^)]*\)\s*return null;/.test(snapshotBody),
+      'cinema-bg.js : _snapshotModeCanvas() retourne null sous reduced-motion (dry-cut garanti, pas de snapshot cross-fade)');
+
+    // (b) amoled soumis au même cap 30fps que les autres modes — l'exemption a disparu.
+    // Task 3 : le frame-skip 30fps/60fps a migré dans cinema-loop.js (loopCadence),
+    // qui traite déjà amoled sans exemption (cf. Task 2 test : loopCadence('amoled',
+    // true) === 2, section "cinema-loop.js"). cinema-bg.js n'a plus de cadence
+    // propre — on vérifie juste qu'aucun résidu local (_frameCount) ne subsiste.
+    assert(!/_frameCount/.test(bgSrc),
+      'cinema-bg.js : plus de _frameCount local (cadence déléguée à cinema-loop.js)');
+
+    // (c) design-system.css : tokens de coin/horloge cinéma en clamp() (plus de px fixes)
+    for (const tok of ['--cinema-corner-top', '--cinema-corner-x', '--cinema-clock-inset']) {
+      assert(new RegExp(`${tok}\\s*:\\s*clamp\\(`).test(dsSrc),
+        `design-system.css : ${tok} utilise clamp()`);
+    }
+
+    // (d) breakpoint ≥1600px : --art-cinema-max agrandi (design-system.css, override sanctionné)
+    assert(/@media\s*\(min-width:\s*1600px\)[\s\S]*?--art-cinema-max:\s*520px/.test(dsSrc),
+      'design-system.css : @media (min-width:1600px) porte --art-cinema-max: 520px');
+
+    // (e) style.css : anti-chevauchement sur petites hauteurs (horloge masquée seule).
+    // Fix post-review (Critical finding) — #cinema-next/#cinema-queue-panel n'étaient
+    // plus censés disparaître ici depuis l'ajout du mode compact-icône (Task 3, cf.
+    // section "cinema legacy display:none override" plus bas) : ce bloc ne masque
+    // plus que l'horloge, purement décorative.
+    const shortHeightBlock = /@media\s*\(max-height:\s*640px\)\s*\{[\s\S]*?\n\}/.exec(ssSrc)?.[0] || '';
+    assert(shortHeightBlock.length > 0, 'style.css : @media (max-height: 640px) trouvé');
+    assert(/#cinema-clock/.test(shortHeightBlock) && !/#cinema-next/.test(shortHeightBlock),
+      'style.css : @media (max-height: 640px) masque #cinema-clock seule (next/queue-access iconifient au lieu de disparaître)');
+
+    // (f) breakpoint intermédiaire 601-1023px : pill compacte, volume conservé, vol-vis masqué
+    const midBlock = /@media\s*\(min-width:\s*601px\)\s*and\s*\(max-width:\s*1023px\)\s*\{[\s\S]*?\n\}/.exec(ssSrc)?.[0] || '';
+    assert(midBlock.length > 0, 'style.css : @media (min-width:601px) and (max-width:1023px) trouvé');
+    assert(!/\.cinema-vol-wrap\s*\{[^}]*display:\s*none/.test(midBlock),
+      'breakpoint intermédiaire : le volume reste visible (.cinema-vol-wrap non masqué)');
+    assert(/#cinema-vol-vis\s*\{[^}]*display:\s*none/.test(midBlock),
+      'breakpoint intermédiaire : #cinema-vol-vis masqué (visualiseur ambient dans le volume)');
+
+    // (g) le breakpoint 600px existant n'est pas cassé par le nouveau breakpoint intermédiaire
+    assert(/@media\s*\(max-width:\s*600px\)/.test(ssSrc),
+      'style.css : le breakpoint @media (max-width: 600px) existant est toujours présent');
+  }
+
+  // =============================================================================
+  // app.js — régression pochette : .playing-row après changement de piste
+  // PLAY_STATE (qui pose .playing-row) est émis pendant audio.play(), AVANT
+  // TRACK_CHANGE (qui déplace .act). patchActiveTrack() strippe .playing-row de
+  // l'ancienne ligne et pose .act nu sur la nouvelle → l'icône de la pochette
+  // reste ▶ pendant la lecture. Le handler TRACK_CHANGE doit donc restaurer
+  // l'état via patchPlayState(!audio.paused) APRÈS patchActiveTrack().
+  // =============================================================================
+  {
+    const fs = require('fs'), path = require('path');
+    const root = path.join(__dirname, '../..');
+    const read = f => fs.readFileSync(path.join(root, f), 'utf8');
+
+    section('app.js -- TRACK_CHANGE restaure .playing-row (icône pochette)');
+
+    const appSrc = read('frontend/src/app.js');
+    const m = /on\(EVENTS\.TRACK_CHANGE[\s\S]*?\}\);/.exec(appSrc);
+    assert(!!m, 'handler TRACK_CHANGE présent dans app.js');
+    const handler = m ? m[0] : '';
+    const iActive = handler.indexOf('patchActiveTrack()');
+    const iPlay   = handler.indexOf('patchPlayState(!audio.paused)');
+    assert(iActive >= 0, 'TRACK_CHANGE appelle patchActiveTrack()');
+    assert(iPlay > iActive,
+      'TRACK_CHANGE appelle patchPlayState(!audio.paused) après patchActiveTrack()');
+  }
+
+  // =============================================================================
+  // artLoader — pochettes qui disparaissent / n'apparaissent pas (2026-06-11)
+  // _domBlobUrls n'est alimentée que par _patchArtDOM (chemin liste/prefetch) ;
+  // les grilles (renderer-grids), la file (queue.js, <img src=t.art> inline),
+  // le drill et les rows re-rendues par thtml affichent des blob: URLs hors Set.
+  // À saturation du cache (MAX_ART_CACHE), _evict révoquait une URL pourtant
+  // affichée → <img> cassée. Idem cacheArt() qui révoquait l'entrée existante.
+  // Garde requise : confirmation DOM réelle (img[src=...]) avant TOUTE révocation.
+  // =============================================================================
+  {
+    const fs = require('fs'), path = require('path');
+    const root = path.join(__dirname, '../..');
+    const read = f => fs.readFileSync(path.join(root, f), 'utf8');
+
+    section('artLoader -- aucune révocation de blob: URL encore affichée');
+
+    const alSrc = read('frontend/src/artLoader.js');
+
+    const evictBody = /function _evict\(\)[\s\S]*?\n\}/.exec(alSrc)?.[0] || '';
+    assert(evictBody.length > 0, '_evict présent dans artLoader.js');
+    assert(/querySelector\(\s*`img\[src="/.test(evictBody),
+      '_evict confirme contre le DOM réel (img[src=...]) avant de révoquer — la Set _domBlobUrls ne voit pas les grilles/queue/thtml');
+
+    const cacheArtBody = /export function cacheArt[\s\S]*?\n\}/.exec(alSrc)?.[0] || '';
+    assert(cacheArtBody.length > 0, 'cacheArt présent dans artLoader.js');
+    assert(/querySelector\(\s*`img\[src="/.test(cacheArtBody),
+      'cacheArt ne révoque pas une URL existante encore affichée (re-scan/tag-edit)');
+  }
+
+  // =============================================================================
+  // Cards Albums — uniformité (audit 2026-06-11, AC1-AC8)
+  // renderer-grids.js / i18n.fr.js / i18n.en.js removed (dead-module sweep);
+  // guard with try/catch so the suite doesn't crash while these tests are red.
+  // =============================================================================
+  try {
+    const fs = require('fs'), path = require('path');
+    const root = path.join(__dirname, '../..');
+    const read = f => fs.readFileSync(path.join(root, f), 'utf8');
+
+    section('cards Albums -- uniformité (AC1-AC8)');
+
+    const rgSrc = read('frontend/src/renderer-grids.js');
+    const ssSrc = read('frontend/src/style.css');
+    const frSrc = read('frontend/src/i18n.fr.js');
+    const enSrc = read('frontend/src/i18n.en.js');
+
+    // AC1 : .card-info en colonne flex (blockifie les spans → ellipsis effectifs)
+    assert(/\.card-info\s*\{[^}]*flex-direction:\s*column/.test(ssSrc),
+      '.card-info est une colonne flex (ellipsis/marges des spans effectifs)');
+
+    // AC2 : plus de clé fantôme — sans_album (existante) utilisée
+    assert(!/i18n\('unknown_album'/.test(rgSrc),
+      "renderer-grids n'utilise plus la clé fantôme 'unknown_album'");
+    assert(/i18n\('sans_album'\)/.test(rgSrc),
+      'card Albums : fallback nom via sans_album');
+
+    // AC3 : artiste échappé dans l aria-label
+    assert(/esc\(' — ' \+ a\.artist\)/.test(rgSrc),
+      'aria-label de la card : artiste passé par esc() (§13)');
+
+    // AC4 : réconciliation multi-artistes + fallback artiste
+    for (const k of ['multi_artists', 'n_albums', 'dur_min']) {
+      assert(new RegExp(`${k}:`).test(frSrc), `i18n.fr possède ${k}`);
+      assert(new RegExp(`${k}:`).test(enSrc), `i18n.en possède ${k}`);
+    }
+    assert(/isMulti/.test(rgSrc) && /unknown_artist/.test(rgSrc),
+      'card Albums : sub jamais vide (Multi-artistes / Artiste inconnu)');
+
+    // AC6 : drill header sans pluriels hardcodés FR
+    assert(!/titre\$\{/.test(rgSrc) && !/album\$\{/.test(rgSrc),
+      'drill header : pluriels via i18n (plus de hardcode FR)');
+    assert(!/Lire tout|Mélanger/.test(rgSrc),
+      'drill header : libellés boutons via i18n');
+  } catch (e) {
+    console.error('  KO  cards Albums crashed:', e.message);
+    _ko++;
+  }
+
+  // =============================================================================
+  // queue.js — logique peekFirstExplicit / consumeFirstExplicit
+  // =============================================================================
+  section('queue.js -- peekFirstExplicit / consumeFirstExplicit (logique inline)');
+
+  (function () {
+    // Simulation légère de _trackIdxMap + tracks[]
+    const _tmap = new Map([['t1', 0], ['t2', 1], ['t3', 2]]);
+    const _tr   = [{ id: 't1', name: 'A' }, { id: 't2', name: 'B' }, { id: 't3', name: 'C' }];
+
+    function _peek(q) {
+      if (!q?.length) return null;
+      for (const id of q) {
+        if (_tmap.has(id)) return _tr[_tmap.get(id)];
+      }
+      return null;
+    }
+
+    function _consume(q) {
+      if (!q?.length) return { track: null, remaining: null };
+      const track = _peek(q);
+      if (!track) return { track: null, remaining: null };
+      const fi  = q.findIndex(id => _tmap.has(id));
+      const rem = q.slice(fi + 1);
+      return { track, remaining: rem.length ? rem : null };
+    }
+
+    assert(_peek(null)      === null, 'peekFirstExplicit: queue null → null');
+    assert(_peek([])        === null, 'peekFirstExplicit: queue vide → null');
+    assert(_peek(['t1']).id === 't1', 'peekFirstExplicit: retourne le premier track');
+    assert(_peek(['dead', 't2']).id === 't2', 'peekFirstExplicit: saute les IDs obsolètes');
+
+    const r1 = _consume(['t1', 't2', 't3']);
+    assert(r1.track.id === 't1',      'consumeFirstExplicit: retourne le premier track');
+    assert(r1.remaining.length === 2, 'consumeFirstExplicit: remaining a 2 items');
+
+    const r2 = _consume(['t1']);
+    assert(r2.track.id   === 't1', 'consumeFirstExplicit: retourne le dernier track');
+    assert(r2.remaining  === null, 'consumeFirstExplicit: remaining null quand vide');
+
+    const r3 = _consume(['dead1', 'dead2', 't2']);
+    assert(r3.track.id  === 't2', 'consumeFirstExplicit: saute stale IDs en tête');
+    assert(r3.remaining === null, 'consumeFirstExplicit: remaining null après stale purge');
+  }());
+
+  // =============================================================================
+  // design-system.css -- cohérence tokens cinéma JS<->CSS (Task 4 design system)
+  // =============================================================================
+  section('design-system.css -- cinema tokens JS<->CSS coherence');
+
+  (function () {
+    const fs   = require('fs');
+    const path = require('path');
+    const DS  = fs.readFileSync(path.join(__dirname, '..', 'src', 'design-system.css'), 'utf8');
+    const CIN = fs.readFileSync(path.join(__dirname, '..', 'src', 'cinema.js'), 'utf8');
+    const VIZ = fs.readFileSync(path.join(__dirname, '..', 'src', 'cinema-viz.js'), 'utf8');
+
+    function cssTokenMs(name) {
+      const m = new RegExp(`--${name}\\s*:\\s*(\\d+)ms`).exec(DS);
+      return m ? parseInt(m[1], 10) : null;
+    }
+    function jsConst(src, name) {
+      const m = new RegExp(`${name}\\s*=\\s*(\\d+)`).exec(src);
+      return m ? parseInt(m[1], 10) : null;
+    }
+
+    const durSwapOut = cssTokenMs('dur-cin-swap-out');
+    const durSwapIn  = cssTokenMs('dur-cin-swap-in');
+    const durBeat     = cssTokenMs('dur-cin-beat');
+    const jsSwapOut  = jsConst(CIN, 'CIN_SWAP_OUT_MS');
+    const jsSwapIn   = jsConst(CIN, 'CIN_SWAP_IN_MS');
+    const jsBeat      = jsConst(VIZ, 'BEAT_PULSE_MS');
+
+    assert(durSwapOut !== null, '--dur-cin-swap-out defined in design-system.css');
+    assert(durSwapIn  !== null, '--dur-cin-swap-in defined in design-system.css');
+    assert(durBeat    !== null, '--dur-cin-beat defined in design-system.css');
+    assert(jsSwapOut  !== null, 'CIN_SWAP_OUT_MS found in cinema.js');
+    assert(jsSwapIn   !== null, 'CIN_SWAP_IN_MS found in cinema.js');
+    assert(jsBeat     !== null, 'BEAT_PULSE_MS found in cinema-viz.js');
+
+    assert(durSwapOut === jsSwapOut,
+      `--dur-cin-swap-out (${durSwapOut}ms) === CIN_SWAP_OUT_MS (${jsSwapOut}ms)`);
+    assert(durSwapIn === jsSwapIn,
+      `--dur-cin-swap-in (${durSwapIn}ms) === CIN_SWAP_IN_MS (${jsSwapIn}ms) -- fixes the 320/440 swap desync`);
+    assert(durBeat === jsBeat,
+      `--dur-cin-beat (${durBeat}ms) === BEAT_PULSE_MS (${jsBeat}ms) -- unifies the 600/620 beat desync`);
+  }());
+
+  // =============================================================================
+  // Task 6 — transitions de piste (texte), état pause, skeleton pochette (TDD)
+  // Step 1 : scans statiques (RED avant implémentation).
+  // =============================================================================
+  section('cinema Task 6 -- text swap sync + pause state + skeleton/fallback + shuffle hint');
+
+  (function () {
+    const fs   = require('fs');
+    const path = require('path');
+    const root = path.join(__dirname, '../..');
+    const read = f => fs.readFileSync(path.join(root, f), 'utf8');
+
+    const CSS = read('frontend/src/style.css');
+    const CIN = read('frontend/src/cinema.js');
+    const CIN_RENDER = read('frontend/src/cinema-render.js');
+    const FR  = read('frontend/src/i18n.fr.js');
+    const EN  = read('frontend/src/i18n.en.js');
+
+    // (a) .cin-txt-swap-out/-in présentes avec durées tokenisées (pas de ms littéral)
+    assert(/\.cin-txt-swap-out\s*\{[^}]*var\(--dur-cin-swap-out\)/.test(CSS),
+      'style.css: .cin-txt-swap-out utilise var(--dur-cin-swap-out) (durée tokenisée, == pochette sortante)');
+    assert(/\.cin-txt-swap-in\s*\{[^}]*var\(--dur-cin-swap-in\)/.test(CSS),
+      'style.css: .cin-txt-swap-in utilise var(--dur-cin-swap-in) (durée tokenisée, == pochette entrante)');
+    assert(/\.cin-txt-swap-in\s*\{[^}]*var\(--ease-spring-soft\)/.test(CSS),
+      'style.css: .cin-txt-swap-in utilise var(--ease-spring-soft)');
+    assert(/html\[data-motion="reduce"\][^{]*\.cin-txt-swap/.test(CSS),
+      'style.css: html[data-motion="reduce"] neutralise .cin-txt-swap-out/-in (remplacement sec, Task 10)');
+    // (a-fix, review) : le swap-in retire les DEUX classes texte (miroir de artWrap) —
+    // sans retrait de cin-txt-swap-in, un rapid-skip interrompant un in en vol laisse la
+    // classe en place et le re-add ne redémarre jamais l'animation (texte qui saute sec).
+    assert(/classList\.remove\(\s*'cin-txt-swap-out'\s*,\s*'cin-txt-swap-in'\s*\)/.test(CIN_RENDER),
+      "cinema-render.js: beginCinSwapIn retire cin-txt-swap-out ET cin-txt-swap-in (restart d'animation garanti)");
+    // (a-fix, review) : le début du swap-out retire une cin-txt-swap-in en vol — déclarée
+    // après l'out dans style.css (spécificité égale), elle gagnerait la cascade sinon.
+    assert(/classList\.remove\(\s*'cin-txt-swap-in'\s*\)[\s\S]{0,80}classList\.add\(\s*'cin-txt-swap-out'\s*\)/.test(CIN),
+      "cinema.js: le swap-out retire une cin-txt-swap-in en vol avant de poser cin-txt-swap-out");
+
+    // (b) le cluster cinéma référence img.decode() — skeleton/fallback pochette (Step 4).
+    // Vit dans cinema-render.js (stateless, cf. applyCinText/decodeArtImage/beginCinSwapIn) :
+    // cinema.js reste sous 800 lignes (§16) — cinema.js orchestre seulement les timers.
+    assert(/img\.decode\(\)/.test(CIN + CIN_RENDER),
+      'cinema.js/cinema-render.js référence img.decode() (fondu/fallback décodage pochette)');
+
+    // (c) overlay bascule une classe pause + CSS gèle les animations idle sous cette classe
+    assert(/is-paused/.test(CIN), "cinema.js bascule la classe 'is-paused' sur l'overlay");
+    assert(/\.is-paused[^{]*\{[^}]*animation-play-state\s*:\s*paused/.test(CSS),
+      'style.css: animation-play-state: paused sous .is-paused (Ken Burns/float/glow/breathe/ambient gelés)');
+
+    // (d) clés i18n cinema_shuffle_on présentes fr + en (Step 5 — hint shuffle)
+    assert(/cinema_shuffle_on\s*:/.test(FR), "i18n.fr.js: clé cinema_shuffle_on présente");
+    assert(/cinema_shuffle_on\s*:/.test(EN), "i18n.en.js: clé cinema_shuffle_on présente");
+  }());
+
+  // =============================================================================
+  // Task 10 — Réglage d'animations in-app (Système/Complètes/Réduites, défaut Complètes)
+  // Step 1 (TDD) : truth-table pure + scans statiques.
+  // =============================================================================
+  section('Task 10 -- in-app motion setting (Système/Complètes/Réduites)');
+
+  (function () {
+    // (a) table de vérité de la préférence effective (pure, sans DOM — mirror de
+    // prefersReducedMotion() dans motion.js). full -> false, reduce -> true,
+    // system -> consulte l'OS. Défaut app : 'full'.
+    function _effectiveReducedMotion(pref, osReduce) {
+      if (pref === 'reduce') return true;
+      if (pref === 'full')   return false;
+      return !!osReduce; // 'system'
+    }
+    assert(_effectiveReducedMotion('full', true)    === false, "pref='full' ignore l'OS (true)");
+    assert(_effectiveReducedMotion('full', false)   === false, "pref='full' ignore l'OS (false)");
+    assert(_effectiveReducedMotion('reduce', true)  === true,  "pref='reduce' force true, OS=true");
+    assert(_effectiveReducedMotion('reduce', false) === true,  "pref='reduce' force true, OS=false");
+    assert(_effectiveReducedMotion('system', true)  === true,  "pref='system' suit l'OS (true)");
+    assert(_effectiveReducedMotion('system', false) === false, "pref='system' suit l'OS (false)");
+    const DEFAULT_MOTION_PREF = 'full';
+    assert(DEFAULT_MOTION_PREF === 'full', "défaut app : motionPref = 'full' (profil vierge, sans clé cfg)");
+
+    const fs   = require('fs');
+    const path = require('path');
+    const root = path.join(__dirname, '../..');
+    const read = f => fs.readFileSync(path.join(root, f), 'utf8');
+
+    const MOTION = read('frontend/src/motion.js');
+    const APP    = read('frontend/src/app.js');
+    const CSS    = read('frontend/src/style.css');
+    const DS     = read('frontend/src/design-system.css');
+    const FR     = read('frontend/src/i18n.fr.js');
+    const EN     = read('frontend/src/i18n.en.js');
+
+    // (b) motion.js exporte setMotionPref ; prefersReducedMotion() consulte la
+    // préférence app (_motionPref) AVANT le media query OS (_rmQuery).
+    assert(/export\s+function\s+setMotionPref\s*\(/.test(MOTION),
+      'motion.js exporte setMotionPref(pref)');
+    const prBody = /export function prefersReducedMotion\(\)\s*\{[\s\S]*?\n\}/.exec(MOTION);
+    assert(!!prBody, 'motion.js: prefersReducedMotion() trouvée (corps de fonction extrait pour scan)');
+    if (prBody) {
+      const idxMotionPref = prBody[0].indexOf('_motionPref');
+      const idxRmQuery    = prBody[0].indexOf('_rmQuery');
+      assert(idxMotionPref !== -1 && idxRmQuery !== -1 && idxMotionPref < idxRmQuery,
+        'prefersReducedMotion() consulte _motionPref AVANT _rmQuery (préférence app prioritaire sur le media query OS)');
+    }
+
+    // (c) plus aucun bloc @media (prefers-reduced-motion dans style.css/design-system.css
+    // (remplacés par le scoping html[data-motion="reduce"], app-wide).
+    assert((CSS.match(/@media\s*\(prefers-reduced-motion/g) || []).length === 0,
+      'style.css ne contient plus aucun @media (prefers-reduced-motion (remplacé par html[data-motion="reduce"])');
+    assert((DS.match(/@media\s*\(prefers-reduced-motion/g) || []).length === 0,
+      'design-system.css ne contient plus aucun @media (prefers-reduced-motion');
+    assert(/html\[data-motion="reduce"\]/.test(CSS), 'style.css utilise le scoping html[data-motion="reduce"]');
+
+    // (d) app.js pose data-motion sur <html> au boot (via applyMotionAttr, motion.js) et
+    // écoute le changement du media query OS (onMotionPrefChange, mode 'system').
+    assert(/dataset\.motion\s*=/.test(MOTION),
+      'motion.js: applyMotionAttr() pose document.documentElement.dataset.motion');
+    assert(/applyMotionAttr\(\)/.test(APP), 'app.js appelle applyMotionAttr() au boot');
+    assert(/setMotionPref\(/.test(APP), 'app.js appelle setMotionPref() au boot (lecture cfg.motionPref)');
+    assert(/onMotionPrefChange\(/.test(APP),
+      "app.js s'abonne à onMotionPrefChange() (recalcul quand l'OS change en mode 'system')");
+
+    // (e) parité i18n fr/en des nouvelles clés
+    for (const k of ['settings_motion', 'motion_system', 'motion_full', 'motion_reduce']) {
+      assert(new RegExp(`${k}\\s*:`).test(FR), `i18n.fr.js: clé ${k} présente`);
+      assert(new RegExp(`${k}\\s*:`).test(EN), `i18n.en.js: clé ${k} présente`);
+    }
+
+    // Anti flash-of-frozen-motion : <html> porte data-motion="full" statiquement dans
+    // index.html (avant 1er paint), défaut app 'full' — corrigé après lecture cfg si besoin.
+    const HTML = read('frontend/index.html');
+    assert(/<html[^>]*\sdata-motion="full"/.test(HTML),
+      'index.html: <html data-motion="full"> posé statiquement (avant 1er paint, défaut motionPref)');
+
+    // Fix post-review — anti flash d'animations NON réduites au boot : la cfg IDB est
+    // async, donc un mirror localStorage synchrone (lf-motion) est lu par un script
+    // classique render-blocking AVANT le premier paint (pattern boot-theme.js ;
+    // CSP script-src 'self' interdit l'inline → fichier dans public/).
+    const BOOT = read('frontend/public/boot-motion.js');
+    assert(/localStorage\.getItem\(\s*'lf-motion'\s*\)/.test(BOOT),
+      'boot-motion.js lit le mirror localStorage lf-motion');
+    assert(/matchMedia\(\s*'\(prefers-reduced-motion:\s*reduce\)'\s*\)/.test(BOOT),
+      "boot-motion.js consulte matchMedia (cas pref='system')");
+    assert(/data-motion/.test(BOOT) && /try\s*\{/.test(BOOT),
+      'boot-motion.js pose data-motion, protégé par try/catch (localStorage peut throw)');
+    const headEnd = HTML.indexOf('</head>');
+    const bootRef = HTML.indexOf('src="/boot-motion.js"');
+    assert(bootRef !== -1 && headEnd !== -1 && bootRef < headEnd,
+      'index.html charge /boot-motion.js dans <head> (render-blocking, avant <body>)');
+    // Le chemin d'écriture du réglage ET le boot (cfg = source de vérité) tiennent le mirror à jour.
+    const SET = read('frontend/src/settings.js');
+    assert(/localStorage\.setItem\(\s*'lf-motion'/.test(SET),
+      'settings.js: setMotionPrefSetting écrit le mirror lf-motion');
+    assert(/localStorage\.setItem\(\s*'lf-motion'/.test(APP),
+      'app.js: le boot ré-écrit le mirror lf-motion depuis la cfg (cfg gagne, seed des profils existants)');
+  }());
+
+  // =============================================================================
+  // Task 11 — Défrizz : 60fps en cinéma focalisé, cross-fade spectrum, compositing
+  // Step 1 (TDD) : scans statiques.
+  // =============================================================================
+  section('Task 11 -- défrizz (60fps focus, snapshot spectrum, will-change)');
+
+  (function () {
+    const fs   = require('fs');
+    const path = require('path');
+    const root = path.join(__dirname, '../..');
+    const read = f => fs.readFileSync(path.join(root, f), 'utf8');
+    const BG  = read('frontend/src/cinema-bg.js');
+    const CSS = read('frontend/src/style.css');
+
+    // (a) le frame-skip 30fps dépend du focus fenêtre — fenêtre focalisée → 60fps
+    // pour tous les modes (le viz player-bar est suspendu sous l'overlay depuis T1).
+    // Task 3 : cette logique a migré dans cinema-loop.js (loopCadence, testée dans
+    // la section "Task 2 -- cinema-loop.js" : loopCadence('waves', true) === 1,
+    // loopCadence('waves', false) === 2). cinema-bg.js n'a plus de boucle ni de
+    // check hasFocus locaux (renderer passif).
+    assert(!/document\.hasFocus/.test(BG),
+      'cinema-bg.js: plus de check document.hasFocus local (délégué à cinema-loop.js)');
+    assert(!/requestAnimationFrame/.test(BG),
+      'cinema-bg.js: plus de requestAnimationFrame local (Task 3 -- renderer passif)');
+
+    // (b) bascule VERS spectrum : le snapshot de cross-fade de mode n'est jamais
+    // retenu — la boucle rAF ambient ne tourne pas dans ce mode (rendu par
+    // cinema-viz sur son propre canvas), donc un snapshot plein écran (multi-Mo)
+    // ne serait jamais consommé ni libéré. Bascule sèche vers spectrum.
+    const snapAssign = /const\s+modeSnapshot\s*=([^;]+);/.exec(BG);
+    assert(!!snapAssign, 'cinema-bg.js: assignation modeSnapshot trouvée (applyCinemaBg)');
+    assert(snapAssign && /spectrum/.test(snapAssign[1]),
+      "cinema-bg.js: snapshot de bascule court-circuité vers 'spectrum' (jamais retenu)");
+
+    // (c) compositing : will-change: transform sur la pochette animée en continu
+    // (float + breathe + Ken Burns enfant), scopé à l'overlay actif (pas de layer
+    // GPU résident hors cinéma), et libéré sous reduced-motion (animations coupées).
+    assert(/#cinema-overlay\.active\s+\.cinema-art-wrap\s*\{[^}]*will-change\s*:\s*transform/.test(CSS),
+      'style.css: will-change: transform sur .cinema-art-wrap, scopé #cinema-overlay.active');
+    // Fix revue : le sélecteur de libération DOIT contenir l'ID #cinema-overlay —
+    // sans lui (0,2,1) il perd au cascade contre la promotion (1,2,0) et le layer
+    // GPU reste résident sous reduced-motion (présence seule = test tautologique).
+    assert(/html\[data-motion="reduce"\]\s+#cinema-overlay\s+\.cinema-art-wrap\s*\{[^}]*will-change\s*:\s*auto/.test(CSS),
+      'style.css: will-change libéré (auto) sous reduce via un sélecteur à ID (bat la promotion 1,2,0 au cascade)');
+  }());
+
+  // =============================================================================
+  // Task 12 — Vagues : refonte qualité (profondeur cohérente, palette ambient,
+  // dynamique par bande de fréquences). Module pur cinema-waves.js.
+  // =============================================================================
+  section('Task 12 -- cinema-waves.js (profondeur, palette, bandes)');
+
+  await (async function () {
+    const { waveLayerGeom, waveLayerPalette, computeBandEnergies } =
+      await import('../src/cinema-waves.js');
+    const LAYERS = 7;
+
+    // (a) waveLayerGeom — modèle de profondeur COHÉRENT : l=0 arrière (haut, plat,
+    // discret), l=6 avant (bas, ample, lumineux). Monotonicité stricte des champs.
+    const geoms = Array.from({ length: LAYERS }, (_, l) => waveLayerGeom(l, LAYERS));
+    for (let l = 1; l < LAYERS; l++) {
+      assert(geoms[l].yBase      > geoms[l - 1].yBase,      `geom: yBase croissant vers l'avant (l=${l})`);
+      assert(geoms[l].ampBase    > geoms[l - 1].ampBase,    `geom: amplitude croissante vers l'avant (l=${l})`);
+      assert(geoms[l].fillAlpha  > geoms[l - 1].fillAlpha,  `geom: remplissage plus dense vers l'avant (l=${l})`);
+      assert(geoms[l].crestAlpha > geoms[l - 1].crestAlpha, `geom: crête plus lumineuse vers l'avant (l=${l})`);
+      assert(geoms[l].lineWidth  > geoms[l - 1].lineWidth,  `geom: crête plus épaisse vers l'avant (l=${l})`);
+    }
+    assert(geoms[0].yBase >= 0.2 && geoms[LAYERS - 1].yBase <= 0.95,
+      'geom: bandes yBase dans l\'écran (arrière ≥0.2h, avant ≤0.95h)');
+    assert(geoms[LAYERS - 1].crestAlpha <= 1 && geoms[LAYERS - 1].fillAlpha <= 1,
+      'geom: alphas ≤ 1');
+
+    // (b) waveLayerPalette — palette par couche : luminance croissante arrière→avant,
+    // plancher pour pochettes sombres, teintes distinctes (hue-shift progressif).
+    const lum = ([r, g, b]) => 0.2126 * r + 0.7152 * g + 0.0722 * b; // approx suffisante pour l'ordre
+    const palDark = waveLayerPalette(30, 30, 30, LAYERS);
+    assert(palDark.length === LAYERS, 'palette: une couleur par couche');
+    for (let l = 1; l < LAYERS; l++) {
+      assert(lum(palDark[l]) > lum(palDark[l - 1]),
+        `palette: luminance croissante vers l'avant (l=${l}, art sombre)`);
+    }
+    assert(lum(palDark[LAYERS - 1]) >= 90,
+      'palette: plancher de luminance — la vague AVANT reste lisible sur fond noir avec un art gris sombre (30,30,30)');
+    const palSat = waveLayerPalette(200, 40, 60, LAYERS);
+    for (let l = 1; l < LAYERS; l++) {
+      assert(lum(palSat[l]) > lum(palSat[l - 1]),
+        `palette: luminance croissante vers l'avant (l=${l}, art saturé)`);
+    }
+    // hue-shift : la teinte arrière et la teinte avant diffèrent sensiblement
+    const hueOf = ([r, g, b]) => {
+      const mx = Math.max(r, g, b), mn = Math.min(r, g, b), d = mx - mn;
+      if (!d) return 0;
+      let h;
+      if (mx === r)      h = ((g - b) / d) % 6;
+      else if (mx === g) h = (b - r) / d + 2;
+      else               h = (r - g) / d + 4;
+      return (h * 60 + 360) % 360;
+    };
+    const hueDiff = Math.abs(hueOf(palSat[0]) - hueOf(palSat[LAYERS - 1]));
+    const hueDist = Math.min(hueDiff, 360 - hueDiff);
+    assert(hueDist >= 15, `palette: hue-shift arrière↔avant ≥ 15° (actual: ${hueDist.toFixed(1)}°)`);
+
+    // (c) computeBandEnergies — bandes log-espacées, EMA in-place (zéro allocation).
+    const buf = new Uint8Array(1024);
+    const out = new Float32Array(LAYERS);
+    const ret = computeBandEnergies(buf, out, 1);
+    assert(ret === out, 'bandes: retourne le même Float32Array (zéro allocation)');
+    for (let k = 0; k < LAYERS; k++) assert(out[k] === 0, `bandes: silence → 0 (k=${k})`);
+    // Impulsion basses : seuls les premiers bins pleins → bande 0 dominante
+    buf.fill(0); buf[0] = buf[1] = 255;
+    out.fill(0);
+    computeBandEnergies(buf, out, 1);
+    assert(out[0] > 0.4, `bandes: impulsion basses → bande 0 dominante (actual: ${out[0].toFixed(2)})`);
+    assert(out[LAYERS - 1] < 0.05, 'bandes: impulsion basses → bande aiguë quasi nulle');
+    // Aigus : bins hauts pleins → dernière bande dominante
+    buf.fill(0);
+    for (let i = 300; i < 700; i++) buf[i] = 255;
+    out.fill(0);
+    computeBandEnergies(buf, out, 1);
+    assert(out[LAYERS - 1] > out[0], 'bandes: énergie aiguë → dernière bande > bande 0');
+    // EMA : smooth 0.5 converge en deux passes vers 0.75×cible
+    buf.fill(255);
+    out.fill(0);
+    computeBandEnergies(buf, out, 0.5);
+    const after1 = out[0];
+    computeBandEnergies(buf, out, 0.5);
+    assert(after1 > 0.4 && after1 < 0.6, `bandes: EMA passe 1 ≈ 0.5 (actual: ${after1.toFixed(2)})`);
+    assert(out[0] > 0.7 && out[0] < 0.8, `bandes: EMA passe 2 ≈ 0.75 (actual: ${out[0].toFixed(2)})`);
+    // Bornes défensives (fix revue) : buffer plus court que bands+1 → jamais de NaN
+    // (l'ancien code lisait hors du buffer → undefined → NaN silencieux).
+    const tiny = new Uint8Array(4).fill(255);
+    out.fill(0);
+    computeBandEnergies(tiny, out, 1);
+    for (let k = 0; k < LAYERS; k++) {
+      assert(Number.isFinite(out[k]), `bandes: buffer minuscule (4 bins, 7 bandes) → pas de NaN (k=${k})`);
+    }
+
+    // (d) scans d'intégration — cinema-canvas consomme le module pur ; fallback sans
+    // analyser (plus d'écran noir avant la première lecture) ; buffer y partagé
+    // remplissage/crête (sin calculé une seule fois par couche).
+    const fs   = require('fs');
+    const path = require('path');
+    const root = path.join(__dirname, '../..');
+    const CANVAS = fs.readFileSync(path.join(root, 'frontend/src/cinema-canvas.js'), 'utf8');
+    assert(/from\s+'\.\/cinema-waves\.js'/.test(CANVAS),
+      'cinema-canvas.js importe cinema-waves.js (géométrie/palette/bandes pures)');
+    assert(/computeBandEnergies\(/.test(CANVAS),
+      'cinema-canvas.js: amplitude/vitesse par couche pilotées par bande de fréquence');
+    const wavesBody = /export function drawWavesFrame[\s\S]*?\n\}/.exec(CANVAS);
+    assert(wavesBody && !/if\s*\(\s*!eqAnalyser\s*\)\s*return/.test(wavesBody[0]),
+      'drawWavesFrame: plus de return à vide sans analyser (fallback statique, pas d\'écran noir)');
+    assert(/_waveY\b/.test(CANVAS),
+      'cinema-canvas.js: buffer y partagé pré-alloué (remplissage + crête sans double calcul sin)');
+    const wavesLines = fs.readFileSync(path.join(root, 'frontend/src/cinema-waves.js'), 'utf8').split('\n').length;
+    assert(wavesLines < 200, `cinema-waves.js < 200 lignes (actual: ${wavesLines})`);
+  }());
+
+  // =============================================================================
+  // Task 13 — Ambient/AMOLED : zéro allocation par frame (§10, audit findings #7/#8)
+  // =============================================================================
+  section('Task 13 -- ambient/amoled zéro allocation par frame');
+
+  (function () {
+    const fs   = require('fs');
+    const path = require('path');
+    const root = path.join(__dirname, '../..');
+    const read = f => fs.readFileSync(path.join(root, f), 'utf8');
+    const AMB = read('frontend/src/ambientRenderer.js');
+
+    // (a) plus de getter DOM par frame — W/H sont des paramètres
+    assert(!/window\.innerWidth|window\.innerHeight/.test(AMB),
+      'ambientRenderer.js ne lit plus window.innerWidth/innerHeight (W/H en paramètres)');
+    assert(/export function renderAmbientFrame\(t, canvas, ctx, mode, colorStr, ambientColors, W, H\)/.test(AMB),
+      'renderAmbientFrame: signature étendue (…, W, H)');
+
+    // (b) gradients cachés derrière une clé d'invalidation ; le drift/respiration
+    // passe par le transform (translate/scale) — AUCUN createRadialGradient dans le
+    // corps par-frame de renderAmbientFrame (tous dans des helpers gated).
+    const frameBody = /export function renderAmbientFrame[\s\S]*?\n\}/.exec(AMB);
+    assert(!!frameBody, 'renderAmbientFrame trouvé');
+    assert(frameBody && !/createRadialGradient/.test(frameBody[0]),
+      'renderAmbientFrame: zéro createRadialGradient dans le corps par-frame (§10)');
+    assert(/ctx\.translate\(/.test(AMB) && /ctx\.scale\(/.test(AMB),
+      'ambientRenderer.js: drift/respiration via ctx.translate/scale (gradients construits à l\'origine)');
+
+    // (c) les deux appelants passent leurs dimensions cachées
+    const BG2 = read('frontend/src/cinema-bg.js');
+    assert(/renderAmbientFrame\([^)]*_winW,\s*_winH\)/.test(BG2),
+      'cinema-bg.js passe _winW/_winH à renderAmbientFrame');
+    const NP = read('frontend/src/nowplaying.js');
+    assert(/renderAmbientFrame\([^)]*,\s*W,\s*H\)/.test(NP),
+      'nowplaying.js passe W/H à renderAmbientFrame');
+  }());
+
+  // =============================================================================
+  // Task 14 — Cohérence : gel en pause pour tous les fonds + teinte starfield
+  // 3 canaux (audit findings #9/#10)
+  // =============================================================================
+  section('Task 14 -- gel en pause + teinte starfield 3 canaux');
+
+  (function () {
+    const fs   = require('fs');
+    const path = require('path');
+    const root = path.join(__dirname, '../..');
+    const read = f => fs.readFileSync(path.join(root, f), 'utf8');
+
+    // (a) l'accumulation du temps d'animation est conditionnée à la lecture —
+    // en pause, ambient (drift), amoled (halo) et starfield (scintillement)
+    // gèlent comme les vagues (qui passent déjà par isPlaying).
+    const BG3 = read('frontend/src/cinema-bg.js');
+    // Task 3 : _ambientT avance de dt (fourni par cinema-loop.js) au lieu de now-last
+    // (plus de timestamp local) -- même invariant : gel en pause pour les 4 modes canvas.
+    assert(/if\s*\(\s*isPlaying\s*\)\s*_ambientT\s*\+=\s*dt/.test(BG3),
+      'cinema-bg.js: _ambientT n\'avance que si isPlaying (gel en pause pour les 4 modes canvas)');
+
+    // (b) le fond starfield est teinté depuis les 3 canaux de la couleur d'art
+    // (plus de rgba(0,0,<bleu seul>) — un album rouge teintait un ciel noir pur).
+    const CANVAS2 = read('frontend/src/cinema-canvas.js');
+    assert(!/rgba\(0,0,\$\{/.test(CANVAS2),
+      'cinema-canvas.js: plus de teinte starfield mono-canal bleu');
+    assert(/_starBgFillCache\s*=\s*`rgba\(\$\{[^}]+\},\$\{[^}]+\},\$\{[^}]+\},/.test(CANVAS2),
+      'cinema-canvas.js: fond starfield teinté sur les 3 canaux (r,g,b) de la couleur d\'art');
+  }());
+
+  // =============================================================================
+  // Task 15 — Spectrum : mapping log monotone (plus de barres jumelles dans les
+  // graves) + fade d'entrée du viz à la bascule (audit findings #11/#12)
+  // =============================================================================
+  section('Task 15 -- spectrum: bins monotones + fade d\'entrée');
+
+  (function () {
+    const fs   = require('fs');
+    const path = require('path');
+    const root = path.join(__dirname, '../..');
+    const read = f => fs.readFileSync(path.join(root, f), 'utf8');
+
+    // (a) les 3 renderers de barres (spectrum, standard, vol-vis) passent par le
+    // helper de bins strictement croissants — le mapping log arrondi faisait
+    // pointer les premières barres sur les mêmes bins 1-2 (colonnes jumelles).
+    const VIZ = read('frontend/src/cinema-viz.js');
+    assert(/function _monotonicBin\(/.test(VIZ),
+      'cinema-viz.js: helper _monotonicBin défini');
+    const uses = (VIZ.match(/_monotonicBin\(/g) || []).length;
+    assert(uses >= 4, `cinema-viz.js: _monotonicBin utilisé par les 3 renderers de barres (def + 3 usages, actual: ${uses})`);
+
+    // (b) bascule VERS spectrum : fade d'entrée du canvas viz (remplace le cut sec
+    // documenté en Task 11), tokenisé, inerte sous reduced-motion.
+    const BG4 = read('frontend/src/cinema-bg.js');
+    assert(/viz-fade-in/.test(BG4) && /cinemaBg\s*===\s*'spectrum'/.test(BG4),
+      'cinema-bg.js: bascule vers spectrum → classe viz-fade-in sur #cinema-viz');
+    const CSS2 = read('frontend/src/style.css');
+    assert(/\.cinema-viz\.viz-fade-in\s*\{[^}]*animation[^}]*var\(--dur-/.test(CSS2),
+      'style.css: animation viz-fade-in tokenisée (--dur-*)');
+    // filter:opacity() et non opacity — .bg-spectrum .cinema-viz force opacity:1
+    // !important, qui écraserait des keyframes opacity (les animations perdent
+    // contre !important dans la cascade).
+    assert(/@keyframes cin-viz-fade-in[^}]*filter\s*:\s*opacity/.test(CSS2),
+      'style.css: keyframes viz-fade-in animent filter:opacity() (opacity est verrouillée en !important)');
+    assert(/html\[data-motion="reduce"\]\s+\.cinema-viz\.viz-fade-in\s*\{[^}]*animation\s*:\s*none/.test(CSS2),
+      'style.css: viz-fade-in neutralisé sous html[data-motion="reduce"]');
+  }());
+
+  // =============================================================================
+  // Task 16 — Vagues : cohérence visuelle position/taille (audit chiffré 2026-07-04).
+  // Invariants NUMÉRIQUES purs — pas des scans : mer sous la zone contenu,
+  // excursion bornée par construction, perspective des longueurs d'onde à l'endroit.
+  // =============================================================================
+  section('Task 16 -- vagues: position/taille bornées (invariants numériques)');
+
+  await (async function () {
+    const { waveLayerGeom, waveY, WAVE_BEAT_BOOST_MAX } =
+      await import('../src/cinema-waves.js');
+    const LAYERS = 7;
+    const geoms = Array.from({ length: LAYERS }, (_, l) => waveLayerGeom(l, LAYERS));
+
+    // (a) position : la mer vit dans la bande basse de l'écran (la zone
+    // pochette/titre occupe ~0.20h-0.65h) ; espacement uniforme entre couches.
+    assert(geoms[0].yBase >= 0.55, `horizon (l=0) sous la zone contenu (yBase=${geoms[0].yBase.toFixed(2)}h ≥ 0.55h)`);
+    assert(geoms[LAYERS - 1].yBase <= 0.92, `premier plan (l=6) dans l'écran (yBase=${geoms[LAYERS - 1].yBase.toFixed(2)}h ≤ 0.92h)`);
+    const spacing0 = geoms[1].yBase - geoms[0].yBase;
+    for (let l = 2; l < LAYERS; l++) {
+      const sp = geoms[l].yBase - geoms[l - 1].yBase;
+      assert(Math.abs(sp - spacing0) < 1e-9, `espacement uniforme entre couches (l=${l})`);
+    }
+
+    // (b) perspective des longueurs d'onde À L'ENDROIT : fréquence STRICTEMENT
+    // décroissante vers l'avant — houle large devant, frémissement fin au loin
+    // (le flip de profondeur T12 avait laissé la progression inversée).
+    for (let l = 1; l < LAYERS; l++) {
+      assert(geoms[l].freq < geoms[l - 1].freq, `freq décroissante vers l'avant (l=${l}: ${geoms[l].freq} < ${geoms[l - 1].freq})`);
+    }
+
+    // (c) waveY : harmoniques à poids NORMALISÉS (somme = 1) — amp est
+    // l'excursion maximale réelle, plus de facteur caché ×1.67.
+    for (let pi = 0; pi <= 12; pi++) {
+      const ph = pi * 1.07;
+      for (let s = 0; s <= 40; s++) {
+        const y = waveY(s / 40, ph, 2.6, 1);
+        assert(Math.abs(y) <= 1 + 1e-9, `|waveY| ≤ amp (nx=${(s / 40).toFixed(2)}, ph=${ph.toFixed(2)}, y=${y.toFixed(3)})`);
+      }
+    }
+
+    // (d) invariant PIRE CAS : bande saturée + beat max → la crête de la vague
+    // AVANT reste sous l'horizon avec 0.10h de marge. L'étagement arrière/avant
+    // survit donc à n'importe quelle musique (l'ancien modèle montait à 0.27h).
+    assert(WAVE_BEAT_BOOST_MAX <= 1.3, `boost beat contenu (${WAVE_BEAT_BOOST_MAX} ≤ 1.3 — le punch visuel reste porté par le halo/crête)`);
+    const front = geoms[LAYERS - 1];
+    const worstCrest = front.yBase - (front.ampBase + front.ampEnergy) * WAVE_BEAT_BOOST_MAX;
+    assert(worstCrest >= geoms[0].yBase + 0.10,
+      `crête avant pire-cas (${worstCrest.toFixed(3)}h) ≥ horizon + 0.10h (${(geoms[0].yBase + 0.10).toFixed(2)}h)`);
+
+    // (e) scans d'intégration : _drawWaveLayer consomme waveY + geo.freq ; le
+    // terme d'énergie globale est retiré de l'amplitude (triple comptage) ; le
+    // boost beat dérive de WAVE_BEAT_BOOST_MAX (plus de 1.65 littéral).
+    const fs   = require('fs');
+    const path = require('path');
+    const root = path.join(__dirname, '../..');
+    const CANVAS = fs.readFileSync(path.join(root, 'frontend/src/cinema-canvas.js'), 'utf8');
+    assert(/waveY\(/.test(CANVAS), 'cinema-canvas.js: courbe des couches via waveY() (harmoniques normalisées)');
+    assert(/geo\.freq/.test(CANVAS), 'cinema-canvas.js: fréquence par couche depuis geo.freq');
+    assert(/WAVE_BEAT_BOOST_MAX/.test(CANVAS), 'cinema-canvas.js: boost beat dérivé de WAVE_BEAT_BOOST_MAX');
+    assert(!/_waveBeatObj\.v \* 0\.65/.test(CANVAS), 'cinema-canvas.js: plus de boost beat 1.65 littéral');
+    assert(!/_waveEnergy \* 0\.03/.test(CANVAS), 'cinema-canvas.js: plus de terme énergie globale dans l\'amplitude (triple comptage retiré)');
+    // Fix revue : le gradient de remplissage démarre à l'excursion max de la
+    // couche — la crête ne peut jamais dépasser le stop-0 (aplat au sommet sinon).
+    assert(/yBase\s*-\s*\(geo\.ampBase\s*\+\s*geo\.ampEnergy\)\s*\*\s*WAVE_BEAT_BOOST_MAX/.test(CANVAS),
+      'cinema-canvas.js: départ du gradient = excursion max de la couche (couvre le pire cas par construction)');
+  }());
+
+  // =============================================================================
+  // Task 17 — Vagues : finitions premium (AGC par bande, écume au beat, reflet
+  // d'horizon, courbes lissées)
+  // =============================================================================
+  section('Task 17 -- vagues premium (AGC, écume, reflet, courbes)');
+
+  await (async function () {
+    const { agcNormalize } = await import('../src/cinema-waves.js');
+
+    // (a) AGC pur — normalisation par pic glissant, zéro allocation.
+    const bands = new Float32Array(7);
+    const peaks = new Float32Array(7);
+    const out   = new Float32Array(7);
+    assert(agcNormalize(bands, peaks, out) === out, 'agc: retourne le même Float32Array out (zéro allocation)');
+    for (let k = 0; k < 7; k++) assert(out[k] === 0, `agc: silence → 0 (k=${k})`);
+    // Bande au pic → 1 (une bande faible en absolu devient pleinement visible)
+    bands.fill(0.08);
+    agcNormalize(bands, peaks, out);
+    for (let k = 0; k < 7; k++) assert(out[k] === 1, `agc: bande à son pic → 1 (k=${k}, out=${out[k]})`);
+    // Plancher anti-bruit : pic sous floor → 0 (pas d'amplification du silence)
+    const b2 = new Float32Array([0.02]), p2 = new Float32Array(1), o2 = new Float32Array(1);
+    agcNormalize(b2, p2, o2, 0.995, 0.04);
+    assert(o2[0] === 0, `agc: pic (0.02) < floor (0.04) → 0 (pas de bruit amplifié, out=${o2[0]})`);
+    // Décroissance du pic : après un pic fort, une bande moyenne remonte vers 1
+    const b3 = new Float32Array([1]), p3 = new Float32Array(1), o3 = new Float32Array(1);
+    agcNormalize(b3, p3, o3, 0.9);
+    b3[0] = 0.5;
+    for (let i = 0; i < 60; i++) agcNormalize(b3, p3, o3, 0.9);
+    assert(o3[0] > 0.95, `agc: le pic décroît (decay) → une bande moyenne redevient pleine (out=${o3[0].toFixed(3)})`);
+    assert(o3[0] <= 1, 'agc: sortie toujours ≤ 1');
+
+    // (b) scans d'intégration cinema-canvas.js
+    const fs   = require('fs');
+    const path = require('path');
+    const root = path.join(__dirname, '../..');
+    const CANVAS = fs.readFileSync(path.join(root, 'frontend/src/cinema-canvas.js'), 'utf8');
+    // AGC câblé : les couches consomment les bandes NORMALISÉES
+    assert(/agcNormalize\(/.test(CANVAS), 'cinema-canvas.js: agcNormalize câblé après computeBandEnergies');
+    assert(/_waveBandsNorm\[/.test(CANVAS), 'cinema-canvas.js: les couches lisent les bandes normalisées (AGC)');
+    // Écume : pool pré-alloué, spawn dans la branche beat (déjà gated reduced-motion)
+    assert(/_FOAM_MAX/.test(CANVAS) && /_foamPool/.test(CANVAS),
+      'cinema-canvas.js: pool d\'écume pré-alloué (zéro allocation par frame)');
+    // Task 5 : plus de détecteur local _waveBeat — la branche beat consomme le
+    // paramètre partagé `beat` (cf. section Task 5 cycle 2 ci-dessous pour le scan positif).
+    assert(/prefersReducedMotion\(\)\s*&&\s*beat\)\s*\{[\s\S]{0,400}_spawnFoam\(/.test(CANVAS),
+      'cinema-canvas.js: écume spawnée dans la branche beat partagée (héritée du gate reduced-motion)');
+    // Reflet d'horizon : gradient caché + fillRect borné à la bande sous l'horizon
+    assert(/_waveHorizonGrad/.test(CANVAS),
+      'cinema-canvas.js: reflet d\'horizon caché avec les styles (clé couleur+h)');
+    // Courbes : tracé quadratique partagé fill/crête
+    assert(/quadraticCurveTo\(/.test(CANVAS), 'cinema-canvas.js: chemin de vague lissé (quadratiques points milieux)');
+    assert(/function _traceWavePath\(/.test(CANVAS), 'cinema-canvas.js: tracé partagé remplissage/crête (_traceWavePath)');
+  }());
+
+  // =============================================================================
+  // Task 2 — Cinema Loop (boucle maître rAF)
+  // =============================================================================
+  section('Task 2 -- cinema-loop.js (loopCadence, computeBassEnergy)');
+
+  await (async function () {
+    const { loopCadence, computeBassEnergy } = await import('../src/cinema-loop.js');
+
+    // (a) loopCadence pure — 1 = 60fps, 2 = 30fps
+    assert(loopCadence('waves', true) === 1, 'loopCadence: waves + focus → 1 (60fps)');
+    assert(loopCadence('ambient', true) === 2, 'loopCadence: ambient + focus → 2 (30fps)');
+    assert(loopCadence('amoled', true) === 2, 'loopCadence: amoled + focus → 2 (30fps)');
+    assert(loopCadence('waves', false) === 2, 'loopCadence: waves + no focus → 2 (30fps)');
+    assert(loopCadence('spectrum', true) === 1, 'loopCadence: spectrum + focus → 1 (60fps)');
+
+    // (b) computeBassEnergy pure — moyenne des carrés des 10% premiers bins
+    const silence = new Uint8Array(1024);
+    assert(computeBassEnergy(silence) === 0, 'computeBassEnergy: silence → 0');
+    const impulse = new Uint8Array(1024);
+    for (let i = 0; i < 102; i++) impulse[i] = 255; // 10% of 1024 = 102.4
+    const energy = computeBassEnergy(impulse);
+    assert(energy > 0, `computeBassEnergy: impulse (255 @ first 10%) → >0 (got ${energy})`);
+
+    // (c) scan: exactly one getByteFrequencyData call
+    const fs   = require('fs');
+    const path = require('path');
+    const root = path.join(__dirname, '../..');
+    const LOOP = fs.readFileSync(path.join(root, 'frontend/src/cinema-loop.js'), 'utf8');
+    const getByteFreqMatches = (LOOP.match(/getByteFrequencyData/g) || []).length;
+    assert(getByteFreqMatches === 1, `cinema-loop.js: exactly 1 getByteFrequencyData (got ${getByteFreqMatches})`);
+
+    // (d) scan: createBeatDetector with exact config (history: 43, threshold: 1.35, cooldownMs: 650)
+    assert(/createBeatDetector\(\s*\{\s*history:\s*43,\s*threshold:\s*1\.35,\s*cooldownMs:\s*650\s*\}/.test(LOOP),
+      'cinema-loop.js: createBeatDetector config (history: 43, threshold: 1.35, cooldownMs: 650)');
+  }());
+
+  // =============================================================================
+  // Task 4 (cycle 2) Part A — cinema-viz.js devient renderer passif : plus de rAF ni
+  // de lecture analyser locale (le FFT/beat arrivent en paramètres depuis
+  // cinema-loop.js, même snapshot que drawBgFrame). drawVizFrame(dt, fft, beat)
+  // exportée ; le beat pochette ne fait plus que l'effet visuel (_pulseBeat), la
+  // détection d'énergie a migré dans cinema-loop.js (Task 2). Le câblage cinema.js →
+  // cinema-loop.js (Part B) est testé dans la section suivante, commit séparé.
+  // =============================================================================
+  section('Task 4 cycle 2 Part A -- cinema-viz.js renderer passif (drawVizFrame, beat partagé)');
+
+  {
+    const fs   = require('fs');
+    const path = require('path');
+    const root = path.join(__dirname, '../..');
+    const read = f => fs.readFileSync(path.join(root, f), 'utf8');
+    const cinVizSrc = read('frontend/src/cinema-viz.js');
+
+    // (a) scan : aucun requestAnimationFrame planifié en boucle dans cinema-viz.js —
+    // seul le pulse pochette (_pulseBeat) utilise encore un requestAnimationFrame
+    // ONE-SHOT pour rejouer la classe .beat (pas une auto-replanification de frame).
+    // On vérifie donc l'absence du pattern d'auto-replanification `= requestAnimationFrame(`
+    // (assignation à une variable de handle, signature du rAF-loop), pas l'absence totale
+    // du mot-clé.
+    assert(!/=\s*requestAnimationFrame\(/.test(cinVizSrc),
+      'cinema-viz.js: aucune auto-replanification de rAF (renderer passif, Task 4)');
+    assert(!/_cinVizRaf/.test(cinVizSrc),
+      'cinema-viz.js: plus de handle rAF local (_cinVizRaf supprimé)');
+
+    // (b) scan : cinema-viz.js ne lit plus l'analyser lui-même (FFT reçu en paramètre)
+    assert(!/getByteFrequencyData/.test(cinVizSrc),
+      'cinema-viz.js: aucun getByteFrequencyData (FFT lu par cinema-loop.js)');
+    assert(!/_vizBuf/.test(cinVizSrc),
+      'cinema-viz.js: plus de buffer FFT local (_vizBuf supprimé, fft vient en paramètre)');
+    assert(!/createBeatDetector/.test(cinVizSrc) && !/from '.\/cinema-beat.js'/.test(cinVizSrc),
+      'cinema-viz.js: plus de détecteur de beat local (beat vient en paramètre)');
+
+    // (c) scan cluster (renderers déjà passivés) : parmi les modules migrés vers le
+    // pattern renderer-passif à ce jour (cinema-bg.js par Task 3, cinema-viz.js par
+    // Task 4), seul cinema-loop.js lit encore getByteFrequencyData — la lecture FFT
+    // est strictement centralisée pour bg+viz+vol-vis. cinema-canvas.js (waves/
+    // starfield) a rejoint ce cluster en Task 5 (cycle 2 polish) — sa propre lecture
+    // analyser/détecteurs de beat locaux ont été retirés (cf. section Task 5 cycle 2
+    // dédiée ci-dessus pour le scan positif détaillé) ; inclus ici désormais.
+    const passiveRenderers = ['cinema-bg.js', 'cinema-viz.js', 'cinema-canvas.js'];
+    const filesWithGetByteFreq = passiveRenderers.filter(f => /getByteFrequencyData/.test(read('frontend/src/' + f)));
+    assert(filesWithGetByteFreq.length === 0,
+      `renderers passifs (cinema-bg.js, cinema-viz.js, cinema-canvas.js): aucun getByteFrequencyData (trouvé dans: ${filesWithGetByteFreq.join(', ') || 'aucun'})`);
+    const loopSrc = read('frontend/src/cinema-loop.js');
+    assert(/getByteFrequencyData/.test(loopSrc),
+      'cinema-loop.js: lit bien le FFT (seul propriétaire pour bg+viz+vol-vis)');
+
+    // (d) drawVizFrame(dt, fft, beat) exportée ; _drawSpectrumBars/_drawStandardBars
+    // n'ont plus le paramètre `analyser` (dropped — data.length remplace
+    // analyser.frequencyBinCount, cf. brief).
+    assert(/export function drawVizFrame\(dt, fft, beat\)/.test(cinVizSrc),
+      'cinema-viz.js exporte drawVizFrame(dt, fft, beat)');
+    assert(/function _drawSpectrumBars\(ctx, data, w, h, lerpRGB, sg\)/.test(cinVizSrc),
+      'cinema-viz.js: _drawSpectrumBars sans paramètre analyser (data.length remplace frequencyBinCount)');
+    assert(/function _drawStandardBars\(ctx, data, w, h, lerpRGB\)/.test(cinVizSrc),
+      'cinema-viz.js: _drawStandardBars sans paramètre analyser');
+
+    // (e) startCinemaViz/stopCinemaViz restent exportées (contrat inchangé pour cinema.js)
+    assert(/export function startCinemaViz/.test(cinVizSrc), 'cinema-viz.js exporte startCinemaViz()');
+    assert(/export function stopCinemaViz/.test(cinVizSrc),  'cinema-viz.js exporte stopCinemaViz()');
+  }
+
+  // =============================================================================
+  // Task 4 (cycle 2) Part B — cinema.js câblé sur cinema-loop.js (boucle maître).
+  // Reassigné depuis Task 3 "Step 5" : nécessitait drawBgFrame (T3) ET drawVizFrame
+  // (T4) — les deux existent maintenant, donc le câblage complet vit ici.
+  // =============================================================================
+  section('Task 4 cycle 2 Part B -- cinema.js cablé sur cinema-loop.js');
+
+  {
+    const fs   = require('fs');
+    const path = require('path');
+    const root = path.join(__dirname, '../..');
+    const read = f => fs.readFileSync(path.join(root, f), 'utf8');
+    const cinSrc = read('frontend/src/cinema.js');
+
+    // cinema.js câblé sur cinema-loop.js : import + initCinemaLoop + startCinemaLoop()/
+    // stopCinemaLoop() aux bons endroits + wakeCinemaLoop() au réveil.
+    assert(/from '.\/cinema-loop.js'/.test(cinSrc), 'cinema.js importe cinema-loop.js');
+    assert(/initCinemaLoop\(\s*\{/.test(cinSrc), 'cinema.js appelle initCinemaLoop({...})');
+    assert(/drawBg:\s*drawBgFrame/.test(cinSrc) && /drawViz:\s*drawVizFrame/.test(cinSrc),
+      'cinema.js câble drawBg/drawViz sur drawBgFrame/drawVizFrame dans initCinemaLoop');
+
+    const openBody  = /export function openCinema\(\)[\s\S]*?\n\}\n/.exec(cinSrc)?.[0]  || '';
+    const closeBody = /export function closeCinema\(\)[\s\S]*?\n\}\n/.exec(cinSrc)?.[0] || '';
+    assert(openBody.length > 0, 'cinema.js: openCinema() trouvée');
+    assert(closeBody.length > 0, 'cinema.js: closeCinema() trouvée');
+    assert(/startCinemaViz\(\);\s*\n\s*startCinemaLoop\(\);/.test(openBody),
+      'openCinema(): startCinemaLoop() appelé juste après startCinemaViz()');
+    assert(/stopCinemaLoop\(\);\s*\n\s*stopAmbientAnim\(\);/.test(closeBody),
+      'closeCinema(): stopCinemaLoop() appelé juste avant stopAmbientAnim()');
+
+    assert(/if \(!document\.hidden && cinemaOpen\) wakeCinemaLoop\(\);/.test(cinSrc),
+      'cinema.js: visibilitychange réveille la boucle via wakeCinemaLoop() (condition simplifiée)');
+
+    // Audit fix : les câblages getIsPlaying (cinema-bg.js/cinema-loop.js) lisaient
+    // audio.paused sans garde, contrairement à updateCinema() ("Bug 4 fix" documenté --
+    // audio a déjà été null en pratique avant l'init du player). Un audio null ferait
+    // planter silencieusement la boucle rAF cinéma (exception non rattrapée dans _tick()).
+    const getIsPlayingOccurrences = cinSrc.match(/getIsPlaying:\s*\(\)\s*=>\s*[^,\n]+/g) || [];
+    assert(getIsPlayingOccurrences.length >= 2,
+      `attendu >=2 câblages getIsPlaying dans cinema.js, trouvé ${getIsPlayingOccurrences.length}`);
+    assert(getIsPlayingOccurrences.every(o => /audio\s*&&/.test(o)),
+      `chaque câblage getIsPlaying doit garder audio contre null avant .paused : ${getIsPlayingOccurrences.join(' | ')}`);
+
+    const updateCinemaBody = /export function updateCinema\(\)[\s\S]*?\n\}\n/.exec(cinSrc)?.[0] || '';
+    assert(updateCinemaBody.length > 0, 'cinema.js: updateCinema() trouvée');
+    assert(/if \(!cinemaOpen\) return;\s*\n\s*wakeCinemaLoop\(\);/.test(updateCinemaBody),
+      'updateCinema(): wakeCinemaLoop() appelé juste après la garde !cinemaOpen (réveil sur changement de piste en pause)');
+
+    assert(/on\(EVENTS\.PLAY_STATE,\s*\(\)\s*=>\s*\{\s*if \(cinemaOpen\) wakeCinemaLoop\(\);\s*\}\);/.test(cinSrc),
+      'cinema.js: listener EVENTS.PLAY_STATE réveille la boucle si le cinéma est ouvert');
+
+    // Audit fix : un drag de scrub en cours au moment d'un changement de piste (auto-avance,
+    // radio, fin de piste) doit être annulé -- sinon pointerup (cinema-seek.js) commit un
+    // seek sur la NOUVELLE piste avec la position pointeur calculée pour l'ANCIENNE (durée
+    // différente). resetCinemaSeek() n'était appelé qu'à la fermeture du cinéma (closeCinema).
+    const trackChangeIdx = updateCinemaBody.indexOf('_trackChanged = curIdx');
+    const resetSeekIdx   = updateCinemaBody.indexOf('resetCinemaSeek()');
+    const renderColorIdx = updateCinemaBody.indexOf('renderCinColor(');
+    assert(trackChangeIdx > -1, 'updateCinema(): détection _trackChanged introuvable');
+    assert(resetSeekIdx > trackChangeIdx,
+      'updateCinema(): resetCinemaSeek() doit apparaître après la détection de _trackChanged');
+    assert(renderColorIdx > -1 && resetSeekIdx < renderColorIdx,
+      'updateCinema(): resetCinemaSeek() doit être appelé AVANT renderCinColor() (couper le drag périmé avant tout rendu qui en dépend)');
+    assert(/if \(_trackChanged\)\s*resetCinemaSeek\(\);/.test(updateCinemaBody),
+      'updateCinema(): resetCinemaSeek() doit être conditionné par _trackChanged (pas à chaque appel)');
+  }
+
+  // =============================================================================
+  // Task 5 (cycle 2 polish) — dt propagé dans cinema-canvas.js (vagues, écume,
+  // étoiles) : drawWavesFrame/drawStarfieldFrame consomment le snapshot FFT/beat
+  // partagé (cinema-loop.js) et des couleurs LERP scalaires — plus d'eqAnalyser
+  // importé ni de détecteurs de beat locaux. _wavePhases/écume avancent selon dtN
+  // (framerate-indépendant). getMaxBandEnergy() affine la garde de sommeil de
+  // cinema-bg.js (drawBgFrame).
+  // =============================================================================
+  section('Task 5 cycle 2 -- cinema-canvas.js dt/FFT/beat partagés (waves/starfield)');
+
+  await (async function () {
+    const fs   = require('fs');
+    const path = require('path');
+    const root = path.join(__dirname, '../..');
+    const read = f => fs.readFileSync(path.join(root, f), 'utf8');
+    const CANVAS = read('frontend/src/cinema-canvas.js');
+    const BG     = read('frontend/src/cinema-bg.js');
+
+    // (a) scan : cinema-canvas.js n'importe plus eqAnalyser ni createBeatDetector —
+    // le FFT/beat arrivent en paramètres (même contrat que cinema-bg.js/cinema-viz.js).
+    assert(!/from '.\/eq\.js'/.test(CANVAS) && !/\beqAnalyser\b/.test(CANVAS),
+      'cinema-canvas.js n\'importe plus eqAnalyser (fft reçu en paramètre)');
+    assert(!/from '.\/cinema-beat\.js'/.test(CANVAS) && !/createBeatDetector/.test(CANVAS),
+      'cinema-canvas.js n\'importe plus createBeatDetector (beat reçu en paramètre)');
+
+    // (b) scan : _wavePhases[l] += et f.life -= sont bien multipliés par un facteur
+    // dtN — framerate-indépendance (regex ciblée sur les lignes concernées, pas un
+    // sondage global "dtN existe quelque part").
+    assert(/_wavePhases\[l\]\s*\+=\s*\([^)]*\)\s*\*\s*boostMult\s*\*\s*dtN;/.test(CANVAS),
+      'cinema-canvas.js: _wavePhases[l] += … est multiplié par dtN (avance framerate-indépendante)');
+    assert(/f\.life\s*-=\s*0\.035\s*\*\s*dtN;/.test(CANVAS),
+      'cinema-canvas.js: f.life -= 0.035 * dtN (fondu écume framerate-indépendant)');
+
+    // (c) signatures publiques exactes — consommées par cinema-bg.js (drawBgFrame).
+    assert(/export function drawWavesFrame\(ctx, w, h, r, g, b, isPlaying, dtN, fft, beat\)/.test(CANVAS),
+      'cinema-canvas.js exporte drawWavesFrame(ctx, w, h, r, g, b, isPlaying, dtN, fft, beat)');
+    assert(/export function drawStarfieldFrame\(ctx, w, h, r, g, b, ambientT, dtN, fft, beat\)/.test(CANVAS),
+      'cinema-canvas.js exporte drawStarfieldFrame(ctx, w, h, r, g, b, ambientT, dtN, fft, beat)');
+    assert(/export function getMaxBandEnergy\(\)/.test(CANVAS),
+      'cinema-canvas.js exporte getMaxBandEnergy()');
+
+    // (d) cinema-bg.js : les deux sites d'appel passent des scalaires r/g/b (plus de
+    // tableau cinArtRGBCur par référence) + dtN/fft/beat ; getMaxBandEnergy() consommé
+    // dans le return de drawBgFrame (raffinement du "toujours actif" T3 conservateur).
+    assert(/drawWavesFrame\(_cinBgCtx, _winW, _winH, _lerpRLast, _lerpGLast, _lerpBLast, isPlaying, dtN, fft, beat\)/.test(BG),
+      'cinema-bg.js: drawBgFrame appelle drawWavesFrame avec r/g/b scalaires + dtN/fft/beat');
+    assert(/drawStarfieldFrame\(_cinBgCtx, _winW, _winH, _lerpRLast, _lerpGLast, _lerpBLast, _ambientT, dtN, fft, beat\)/.test(BG),
+      'cinema-bg.js: drawBgFrame appelle drawStarfieldFrame avec r/g/b scalaires + dtN/fft/beat');
+    assert(/getMaxBandEnergy\(\)\s*>\s*_EPS_BAND/.test(BG),
+      'cinema-bg.js: drawBgFrame consomme getMaxBandEnergy() > _EPS_BAND (raffinement T5 de la garde de sommeil)');
+    assert(/import \{[^}]*getMaxBandEnergy[^}]*\}\s*from '.\/cinema-canvas\.js'/.test(BG),
+      'cinema-bg.js importe getMaxBandEnergy depuis cinema-canvas.js');
+
+    // (e) edge case _lerpRLast/_lerpGLast/_lerpBLast : sentinelle initiale 255 (blanc),
+    // pas -1 — sinon le tout premier drawBgFrame() (avant tout stepArtColorLerp())
+    // peindrait waves/starfield en noir au lieu du blanc neutre attendu.
+    assert(/let _lerpRLast = 255, _lerpGLast = 255, _lerpBLast = 255;/.test(BG),
+      'cinema-bg.js: _lerpRLast/_lerpGLast/_lerpBLast initialisés à 255 (cohérent avec _cinArtRGBCur initial)');
+
+    // (f) invariant pur d'accumulation de phase linéaire — _wavePhases est privé à
+    // cinema-canvas.js (pas d'export), donc on vérifie l'invariant mathématique dont
+    // dépend la multiplication par dtN via waveY (import ESM réel, pure) : avancer une
+    // phase d'un pas à dtN=2 doit produire EXACTEMENT le même y qu'avancer deux pas à
+    // dtN=1 chacun (accumulation linéaire — même principe que stepArtColorLerp dtN plus
+    // haut dans ce fichier, mais ici sur l'incrément de phase des vagues plutôt que le LERP couleur).
+    const { waveY } = await import('../src/cinema-waves.js');
+    const speed = 0.005 + 3 * 0.0018 + 0.4 * 0.020; // incrément représentatif d'une couche
+    const freq = 2.6, amp = 1;
+    // 1 pas à dtN=2
+    const phaseA = 0 + speed * 1 * 2;
+    // 2 pas à dtN=1
+    let phaseB = 0;
+    phaseB += speed * 1 * 1;
+    phaseB += speed * 1 * 1;
+    assert(Math.abs(phaseA - phaseB) < 1e-12,
+      'dtN linéarité: phase accumulée identique (1 pas dtN=2 == 2 pas dtN=1)');
+    const yA = waveY(0.37, phaseA, freq, amp);
+    const yB = waveY(0.37, phaseB, freq, amp);
+    assert(yA === yB,
+      `dtN linéarité: waveY(phase) identique pour les deux trajectoires (yA=${yA}, yB=${yB})`);
+
+    // (g) fix revue (post-review) : getMaxBandEnergy() ne doit pas rester figé sur une
+    // valeur périmée de l'ancien mode bg (ex. starfield visité puis switch vers waves —
+    // _starBassSmooth ne décroît plus car _updateStarAudio ne tourne plus). resetBandEnergy()
+    // remet les deux traceurs à zéro. Exercice réel (pas de réimplémentation de la logique
+    // testée) : import ESM réel de cinema-canvas.js — possible en Node sans jsdom (motion.js
+    // garde `typeof window !== 'undefined'`, cf. sondage préalable) — + un ctx 2D minimal
+    // qui STUBS uniquement la surface Canvas utilisée par drawWavesFrame (fillRect/beginPath/
+    // moveTo/lineTo/quadraticCurveTo/closePath/fill/stroke/gradients) sans jamais reproduire le
+    // calcul d'énergie/bandes de cinema-canvas.js lui-même, qui reste exercé pour de vrai.
+    const { getMaxBandEnergy, resetBandEnergy, drawWavesFrame } = await import('../src/cinema-canvas.js');
+
+    const mockCtx2D = () => {
+      const grad = { addColorStop() {} };
+      return {
+        fillStyle: '', strokeStyle: '', lineWidth: 1, globalAlpha: 1,
+        fillRect() {}, beginPath() {}, moveTo() {}, lineTo() {}, quadraticCurveTo() {},
+        closePath() {}, fill() {}, stroke() {}, arc() {}, save() {}, restore() {},
+        translate() {}, rotate() {},
+        createLinearGradient() { return grad; },
+        createRadialGradient() { return grad; },
+      };
+    };
+
+    assert(getMaxBandEnergy() === 0,
+      'getMaxBandEnergy(): 0 avant toute injection d\'énergie (état initial du module)');
+
+    // FFT fort (basses saturées) → une seule frame suffit à pousser _waveBandsNorm bien
+    // au-dessus de _EPS_BAND (AGC : peaks[k] = bands[k] au tout premier appel ⇒ ratio 1).
+    const loudFft = new Uint8Array(256).fill(220);
+    drawWavesFrame(mockCtx2D(), 800, 450, 200, 150, 100, true, 1, loudFft, false);
+    assert(getMaxBandEnergy() > 0,
+      'getMaxBandEnergy(): > 0 après une frame de vagues avec FFT fort (bandes normalisées poussées au-dessus de _EPS_BAND)');
+
+    resetBandEnergy();
+    assert(getMaxBandEnergy() === 0,
+      'resetBandEnergy(): remet getMaxBandEnergy() à 0 (fix revue -- évite un traceur figé sur l\'ancien mode bg)');
+  }());
+
+  // =============================================================================
+  // Cinema Polish Cycle 2, Task 7 — cycle player<->cinema cassé via bus
+  // CINEMA_PROGRESS + purge imports morts (scans statiques, house style).
+  // =============================================================================
+  try {
+    const fs = require('fs'), path = require('path');
+    const root = path.join(__dirname, '../..');
+    const read = f => fs.readFileSync(path.join(root, f), 'utf8');
+
+    section('cinema Task 7 -- cycle player<->cinema casse + purge imports morts');
+
+    const playerSrc = read('frontend/src/player.js');
+    const busSrc     = read('frontend/src/bus.js');
+    const cinSrc     = read('frontend/src/cinema.js');
+    const renderSrc  = read('frontend/src/cinema-render.js');
+    const appSrc     = read('frontend/src/app.js');
+
+    // (a) player.js n'importe plus depuis cinema.js (cycle casse par le bus).
+    assert(!/from '\.\/cinema\.js'/.test(playerSrc),
+      "player.js n'importe plus depuis cinema.js (cycle casse)");
+    assert(/emit\(EVENTS\.CINEMA_PROGRESS,\s*\{\s*p,\s*cur,\s*dur\s*\}\)/.test(playerSrc),
+      'player.js emet EVENTS.CINEMA_PROGRESS { p, cur, dur } sur timeupdate');
+
+    // (b) bus.js declare CINEMA_PROGRESS avec la forme de payload documentee.
+    assert(/CINEMA_PROGRESS:\s*'cinema:progress',\s*\/\/\s*\{\s*p,\s*cur,\s*dur\s*\}/.test(busSrc),
+      "bus.js declare CINEMA_PROGRESS: 'cinema:progress' // { p, cur, dur }");
+
+    // cinema.js s'abonne a CINEMA_PROGRESS et route vers updateCinemaProgress (interne).
+    assert(/on\(EVENTS\.CINEMA_PROGRESS,\s*\(\{\s*p,\s*cur,\s*dur\s*\}\)\s*=>\s*updateCinemaProgress\(p,\s*cur,\s*dur\)\)/.test(cinSrc),
+      'cinema.js: on(EVENTS.CINEMA_PROGRESS, ...) route vers updateCinemaProgress(p, cur, dur)');
+
+    // app.js n'importe plus updateCinemaProgress (mort : plus utilise depuis la purge cycle).
+    assert(!/updateCinemaProgress/.test(appSrc),
+      "app.js n'importe plus updateCinemaProgress (mort, remplace par le bus)");
+
+    // (c) cinema.js purge de ses imports morts : artcolor (groupe complet), tween (motion.js),
+    // eqCtx (eq.js — eqAnalyser reste, consomme par initCinemaLoop), set de store.js (get reste).
+    assert(!/rgbToHsl|hslToRgb|boostSat|regionAvg|sampleArtColors/.test(cinSrc),
+      "cinema.js n'importe plus le groupe artcolor (rgbToHsl/hslToRgb/boostSat/regionAvg/sampleArtColors)");
+    assert(!/\btween\b/.test(cinSrc),
+      "cinema.js n'importe plus tween depuis motion.js");
+    assert(!/\beqCtx\b/.test(cinSrc),
+      "cinema.js n'importe plus eqCtx depuis eq.js");
+    assert(/\beqAnalyser\b/.test(cinSrc),
+      'cinema.js conserve eqAnalyser (consomme par initCinemaLoop getAnalyser)');
+    const storeImportMatch = /import\s*\{([^}]*)\}\s*from '\.\/store\.js'/.exec(cinSrc);
+    assert(storeImportMatch && /\bget\b/.test(storeImportMatch[1]),
+      'cinema.js importe toujours get depuis store.js');
+    assert(!storeImportMatch || !/\bset\b/.test(storeImportMatch[1]),
+      "cinema.js n'importe plus set depuis store.js");
+
+    // (d) _readVol/_syncCinVol disparaissent de cinema.js au profit des exports renommes
+    // de cinema-render.js (readCinVolDom/setCinVolSliders) -- deps de initCinemaInput (Task 6)
+    // pointent dessus.
+    assert(!/function _readVol\(/.test(cinSrc),
+      "cinema.js: _readVol() supprimee (deleguee a cinema-render.js)");
+    assert(!/function _syncCinVol\(/.test(cinSrc),
+      "cinema.js: _syncCinVol() supprimee (deleguee a cinema-render.js)");
+    assert(/from '\.\/cinema-render\.js'/.test(cinSrc) && /readCinVolDom/.test(cinSrc) && /setCinVolSliders/.test(cinSrc),
+      'cinema.js importe readCinVolDom/setCinVolSliders depuis cinema-render.js');
+    assert(/readVol:\s*readCinVolDom/.test(cinSrc) && /syncVol:\s*setCinVolSliders/.test(cinSrc),
+      'cinema.js: deps initCinemaInput pointent sur readCinVolDom/setCinVolSliders');
+
+    assert(/export function readCinVolDom/.test(renderSrc),
+      'cinema-render.js exporte readCinVolDom (renomme depuis _readVolDom)');
+    assert(/export function setCinVolSliders/.test(renderSrc),
+      'cinema-render.js exporte setCinVolSliders (renomme depuis _setVolSliders)');
+
+    // cinema.js reste sous le cap 650 lignes (§16, abaisse au Task 6).
+    const cinLines7 = cinSrc.split('\n').length;
+    assert(cinLines7 <= 650, `cinema.js <= 650 lignes apres purge Task 7 (actual: ${cinLines7})`);
+  } catch (e) {
+    console.error('  KO  cinema Task 7 scans crashed:', e.message);
+    _ko++;
+  }
+
+  // =============================================================================
+  // cinema layout grid — repositionnement en grille (2026-07-05)
+  // =============================================================================
+  try {
+    const fs = require('fs'), path = require('path');
+    const root = path.join(__dirname, '../..');
+    const read = f => fs.readFileSync(path.join(root, f), 'utf8');
+
+    section('cinema layout grid Task 1 -- wrappers corner-r / hero / side-r');
+
+    const HTML1 = read('frontend/index.html');
+    const iClock      = HTML1.indexOf('id="cinema-clock"');
+    const iSideR      = HTML1.indexOf('class="cinema-side-r"');
+    const iNext       = HTML1.indexOf('id="cinema-next"');
+    const iQueuePanel = HTML1.indexOf('id="cinema-queue-panel"');
+    const iShuffle    = HTML1.indexOf('id="cinema-shuffle-hint"');
+    const iBgBtn      = HTML1.indexOf('id="cinema-bg-btn"');
+    const iCornerR    = HTML1.indexOf('class="cinema-corner-r"');
+    const iFsBtn      = HTML1.indexOf('id="cinema-fs-btn"');
+    const iClose      = HTML1.indexOf('cinema-close');
+    const iHero       = HTML1.indexOf('class="cinema-hero"');
+    const iArtWrap    = HTML1.indexOf('id="cinema-art-wrap"');
+    const iInfo       = HTML1.indexOf('id="cinema-info"');
+    const iProg       = HTML1.indexOf('class="cinema-prog"');
+    const iControls   = HTML1.indexOf('id="cinema-controls"');
+
+    const allFound = [iClock, iSideR, iNext, iQueuePanel, iShuffle, iBgBtn, iCornerR,
+      iFsBtn, iClose, iHero, iArtWrap, iInfo, iProg, iControls].every(i => i !== -1);
+    assert(allFound,
+      'index.html: horloge, les 3 wrappers et tous leurs enfants existent');
+
+    assert(allFound && iClock < iSideR && iSideR < iNext && iNext < iQueuePanel && iQueuePanel < iShuffle,
+      '.cinema-side-r precede piste-suivante < panneau-file-d\'attente < hint-shuffle, apres l\'horloge');
+    assert(allFound && iShuffle < iBgBtn && iBgBtn < iCornerR && iCornerR < iFsBtn && iFsBtn < iClose,
+      '#cinema-bg-btn reste hors wrapper, suivi de .cinema-corner-r contenant fs-btn < close');
+    assert(allFound && iClose < iHero && iHero < iArtWrap && iArtWrap < iInfo && iInfo < iProg && iProg < iControls,
+      '.cinema-hero contient art-wrap < info < prog < controls, apres .cinema-corner-r');
+  } catch (e) {
+    console.error('  KO  cinema layout grid Task 1 scans crashed:', e.message);
+    _ko++;
+  }
+
+  try {
+    const fs = require('fs'), path = require('path');
+    const root = path.join(__dirname, '../..');
+    const read = f => fs.readFileSync(path.join(root, f), 'utf8');
+
+    section('cinema layout grid Task 2 -- #cinema-overlay grid + zones nommees');
+
+    const CSS2 = read('frontend/src/style.css');
+    const DS2  = read('frontend/src/design-system.css');
+
+    assert(/#cinema-overlay \{[\s\S]{0,500}display: grid;/.test(CSS2),
+      '#cinema-overlay passe en display:grid');
+    assert(/"corner-l\s+\.\s+corner-r"/.test(CSS2) && /"side-l\s+hero\s+side-r"/.test(CSS2),
+      '#cinema-overlay declare les 5 zones (corner-l/corner-r/side-l/hero/side-r) dans le bon ordre');
+    assert(/padding:\s*var\(--cinema-corner-top\)\s*var\(--cinema-corner-x\)\s*var\(--cinema-clock-inset\);/.test(CSS2),
+      '#cinema-overlay applique les insets harmonises via padding (corner-top/corner-x/clock-inset)');
+
+    for (const zone of ['corner-l', 'corner-r', 'side-l', 'hero', 'side-r']) {
+      const n = (CSS2.match(new RegExp(`grid-area:\\s*${zone}\\b`, 'g')) || []).length;
+      assert(n === 1, `zone '${zone}' assignee exactement une fois (trouve ${n})`);
+    }
+
+    assert(/#cinema-bg-btn \{\s*\n\s*grid-area: corner-l; justify-self: start; align-self: start;/.test(CSS2),
+      '#cinema-bg-btn place en corner-l (start/start)');
+    assert(/\.cinema-corner-r \{\s*\n\s*grid-area: corner-r; justify-self: end; align-self: start;/.test(CSS2),
+      '.cinema-corner-r place en corner-r (end/start)');
+    assert(/#cinema-clock \{\s*\n\s*grid-area: side-l; justify-self: start; align-self: end;/.test(CSS2),
+      '#cinema-clock place en side-l, ancre au bas de sa cellule (align-self:end)');
+    assert(/\.cinema-hero \{\s*\n\s*grid-area: hero; justify-self: center; align-self: center;/.test(CSS2),
+      '.cinema-hero centre vraiment (justify-self/align-self: center)');
+    assert(/\.cinema-side-r \{\s*\n\s*grid-area: side-r; justify-self: end; align-self: end;/.test(CSS2),
+      '.cinema-side-r place en side-r (end/end)');
+
+    const sideRIdx = CSS2.indexOf('.cinema-side-r {');
+    assert(sideRIdx !== -1 && /position: relative;/.test(CSS2.slice(sideRIdx, sideRIdx + 200)),
+      '.cinema-side-r est position:relative (ancre #cinema-queue-panel)');
+
+    assert(/\.cinema-shuffle-hint \{ position: absolute; inset: 0; \}/.test(CSS2),
+      '.cinema-shuffle-hint se superpose exactement a #cinema-next (inset:0)');
+
+    assert(!/\.cinema-corner-btn \{\s*\n\s*position: absolute;/.test(CSS2),
+      '.cinema-corner-btn ne porte plus position:absolute (place par grid/flex desormais)');
+    assert(!/\.cinema-close\s*\{\s*top:/.test(CSS2), "l'ancienne regle .cinema-close { top:...; right:...; } est retiree");
+    assert(!/#cinema-bg-btn\s*\{\s*top:/.test(CSS2), "l'ancienne regle #cinema-bg-btn { top:...; left:...; } est retiree");
+    assert(!/#cinema-fs-btn\s*\{\s*top:/.test(CSS2), "l'ancienne regle #cinema-fs-btn { top:...; right:...; } est retiree");
+
+    const nextIdx = CSS2.indexOf('.cinema-next {');
+    assert(nextIdx !== -1 && !/position: absolute; bottom: var\(--sp-8\)/.test(CSS2.slice(nextIdx, nextIdx + 150)),
+      '.cinema-next ne porte plus bottom/right en dur relatif au viewport');
+
+    const qpIdx = CSS2.indexOf('.cinema-queue-panel {');
+    assert(qpIdx !== -1 && /position: absolute; bottom: calc\(100% \+ var\(--cqp-trigger-gap\)\); right: 0;/.test(CSS2.slice(qpIdx, qpIdx + 300)),
+      '.cinema-queue-panel ancre a 100% (haut de .cinema-side-r) + right:0 -- decouple du viewport');
+
+    assert(!/--cinema-fs-right/.test(DS2), 'token --cinema-fs-right retire de design-system.css (mort)');
+    assert(!/--cinema-fs-right/.test(CSS2), 'token --cinema-fs-right plus reference dans style.css');
+  } catch (e) {
+    console.error('  KO  cinema layout grid Task 2 scans crashed:', e.message);
+    _ko++;
+  }
+
+  try {
+    const fs = require('fs'), path = require('path');
+    const root = path.join(__dirname, '../..');
+    const read = f => fs.readFileSync(path.join(root, f), 'utf8');
+
+    section('cinema layout grid Task 3 -- next/queue-access compact icon-only');
+
+    const CSS3 = read('frontend/src/style.css');
+    const HTML3 = read('frontend/index.html');
+
+    const nextBtnIdx = HTML3.indexOf('id="cinema-next"');
+    const nextBtnEnd = HTML3.indexOf('</button>', nextBtnIdx);
+    assert(nextBtnIdx !== -1 && nextBtnEnd !== -1,
+      '#cinema-next: bouton localise (ouverture + fermeture)');
+    const nextBtnBody = HTML3.slice(nextBtnIdx, nextBtnEnd);
+    assert(/class="cn-icon"/.test(nextBtnBody),
+      '#cinema-next contient une icone .cn-icon (mode compact) avant sa fermeture');
+    assert(/aria-hidden="true"/.test(nextBtnBody.slice(nextBtnBody.indexOf('class="cn-icon"'))),
+      '.cn-icon est aria-hidden (decorative, le nom accessible reste porte par le bouton)');
+    assert(/aria-expanded="false"/.test(nextBtnBody) && /aria-controls="cinema-queue-panel"/.test(nextBtnBody) &&
+      /aria-label="Afficher la file d'attente"/.test(nextBtnBody),
+      '#cinema-next conserve aria-expanded/aria-controls/aria-label apres ajout de .cn-icon');
+
+    assert(/\.cn-icon \{ display: none;/.test(CSS3),
+      '.cn-icon masquee par defaut (pleine taille)');
+    assert(/@media \(max-width: 700px\), \(max-height: 640px\) \{/.test(CSS3),
+      'media query compacte next/queue-access (700px largeur OU 640px hauteur)');
+    assert(/\.cinema-next \.cn-icon \{ display: block; \}/.test(CSS3),
+      '.cinema-next .cn-icon visible en mode compact');
+    const compactMQAnchor = '@media (max-width: 700px), (max-height: 640px) {';
+    const compactMQIdx = CSS3.indexOf(compactMQAnchor);
+    assert(/border-radius: 50%;/.test(CSS3.slice(compactMQIdx, compactMQIdx + 500)),
+      'le bloc compact force un bouton rond (border-radius:50%)');
+  } catch (e) {
+    console.error('  KO  cinema layout grid Task 3 scans crashed:', e.message);
+    _ko++;
+  }
+
+  // ===========================================================================
+  // N+2. view-transition.js -- triggerNavWipe() structural checks
+  // ===========================================================================
+  try {
+    const fs = require('fs'), path = require('path');
+    const root = path.join(__dirname, '..');
+    const VT = fs.readFileSync(path.join(root, 'src/view-transition.js'), 'utf8');
+
+    section('view-transition.js -- triggerNavWipe()');
+
+    assert(/export function triggerNavWipe\s*\(\s*\)/.test(VT),
+      'triggerNavWipe() is exported');
+    assert(/dataset\.motion === 'reduce'\)\s*return;/.test(VT),
+      'triggerNavWipe() short-circuits under data-motion="reduce"');
+    assert(/getElementById\(WIPE_ID\)/.test(VT) || /getElementById\('nav-eq-wipe'\)/.test(VT),
+      'triggerNavWipe() targets #nav-eq-wipe');
+    assert(/classList\.add\(WIPE_CLASS\)/.test(VT) || /classList\.add\('wiping'\)/.test(VT),
+      'triggerNavWipe() adds the wiping class');
+  } catch (e) {
+    console.error('  KO  view-transition.js triggerNavWipe scan crashed:', e.message);
+    _ko++;
+  }
+
+  // ===========================================================================
+  // N+3. views.js -- fine + coarse nav-direction wiring (structural)
+  // ===========================================================================
+  try {
+    const fs = require('fs'), path = require('path');
+    const root = path.join(__dirname, '..');
+    const VJS = fs.readFileSync(path.join(root, 'src/views.js'), 'utf8');
+
+    section('views.js -- nav-direction + wipe wiring');
+
+    assert(/import\s*\{\s*runViewTransition,\s*triggerNavWipe\s*\}\s*from\s*'\.\/view-transition\.js'/.test(VJS),
+      'views.js imports triggerNavWipe from view-transition.js');
+
+    // Fine layer: setView()'s existing data-nav-dir block also fires the wipe.
+    const setViewBlock = /export function setView[\s\S]*?_withVT\(\(\) => \{/.exec(VJS);
+    assert(setViewBlock, 'setView() body located');
+    assert(/setAttribute\('data-nav-dir'/.test(setViewBlock[0]),
+      'setView() still sets data-nav-dir (fine layer untouched)');
+    assert(/triggerNavWipe\(\)/.test(setViewBlock[0]),
+      'setView() calls triggerNavWipe() in the fine-grained direction block');
+
+    // Fine layer's _NAV_ORDER must NOT include 'radio' -- '#vradio' is its own top-level
+    // container (exactly like stats/now-playing), not a sub-view of the library grid the
+    // way all/liked/recent/artists/albums/genres/playlists are. Radio transitions must be
+    // handled solely by the coarse layer (_CONTAINER_TO_COARSE.vradio = 'radio'); leaving
+    // 'radio' in _NAV_ORDER too made both layers fire triggerNavWipe() for one transition
+    // (task-2 review finding, fixed by removing it from this array).
+    const navOrderMatch = /const _NAV_ORDER = \[([^\]]*)\]/.exec(VJS);
+    assert(navOrderMatch, '_NAV_ORDER array literal located');
+    const navOrderEntries = navOrderMatch[1].match(/'[^']+'/g).map(s => s.slice(1, -1));
+    assert(!navOrderEntries.includes('radio'),
+      "_NAV_ORDER no longer contains 'radio' (radio is its own coarse container, not a fine sub-view)");
+    ['all', 'liked', 'recent', 'artists', 'albums', 'genres', 'playlists'].forEach(k => {
+      assert(navOrderEntries.includes(k), `_NAV_ORDER still contains '${k}'`);
+    });
+
+    // Coarse layer: _showViewRaw() gets its own order + tracking + detection.
+    assert(/_COARSE_NAV_ORDER\s*=\s*\[\s*'welcome',\s*'lib',\s*'stats',\s*'radio',\s*'now-playing'\s*\]/.test(VJS),
+      '_COARSE_NAV_ORDER defines the 5 coarse view keys in the expected order');
+    assert(/let _lastCoarseView/.test(VJS), '_lastCoarseView module-level tracking var declared');
+    const rawBlock = /export function _showViewRaw[\s\S]*?\n\}/.exec(VJS);
+    assert(rawBlock, '_showViewRaw() body located');
+    assert(/triggerNavWipe\(\)/.test(rawBlock[0]),
+      '_showViewRaw() calls triggerNavWipe() in the coarse direction block');
+  } catch (e) {
+    console.error('  KO  views.js nav-direction wiring scan crashed:', e.message);
+    _ko++;
+  }
+
+  try {
+    const fs = require('fs'), path = require('path');
+    const root = path.join(__dirname, '../..');
+    const read = f => fs.readFileSync(path.join(root, f), 'utf8');
+
+    section('cinema legacy display:none override -- fix: compact-icon collapse must not be overridden');
+
+    const CSS4 = read('frontend/src/style.css');
+
+    // Bloc @media (max-width: 600px) -- borné par le prochain @media (breakpoint
+    // tablette, quelques lignes plus bas) pour éviter les faux positifs ailleurs
+    // dans le fichier.
+    const mw600Anchor = '@media (max-width: 600px) {';
+    const mw600Idx = CSS4.indexOf(mw600Anchor);
+    assert(mw600Idx !== -1, '@media (max-width: 600px) localise');
+    const mw600NextMQ = CSS4.indexOf('@media', mw600Idx + mw600Anchor.length);
+    const mw600Body = CSS4.slice(mw600Idx, mw600NextMQ);
+    assert(!/\.cinema-next\b/.test(mw600Body),
+      '@media (max-width: 600px) ne masque plus .cinema-next (le mode compact-icone prend le relais)');
+    assert(!/\.cinema-queue-panel\b/.test(mw600Body),
+      '@media (max-width: 600px) ne masque plus .cinema-queue-panel (le mode compact-icone prend le relais)');
+    assert(/\.cinema-vol-wrap \{ display: none; \}/.test(mw600Body),
+      '@media (max-width: 600px) masque toujours le volume (comportement preexistant conserve)');
+
+    // Bloc @media (max-height: 640px) -- borné par la fermeture de bloc ('\n}\n'),
+    // ce bloc ne contient qu'une seule règle donc pas de risque de faux négatif.
+    const mh640Anchor = '@media (max-height: 640px) {';
+    const mh640Idx = CSS4.indexOf(mh640Anchor);
+    assert(mh640Idx !== -1, '@media (max-height: 640px) localise');
+    const mh640Close = CSS4.indexOf('\n}\n', mh640Idx);
+    const mh640Body = CSS4.slice(mh640Idx, mh640Close + 3);
+    assert(/#cinema-clock\b/.test(mh640Body),
+      '@media (max-height: 640px) masque toujours #cinema-clock (decoratif, aucune perte fonctionnelle)');
+    assert(!/#cinema-next\b/.test(mh640Body),
+      '@media (max-height: 640px) ne masque plus #cinema-next (le mode compact-icone prend le relais)');
+    assert(!/#cinema-queue-panel\b/.test(mh640Body),
+      '@media (max-height: 640px) ne masque plus #cinema-queue-panel (le mode compact-icone prend le relais)');
+  } catch (e) {
+    console.error('  KO  cinema legacy display:none override scans crashed:', e.message);
+    _ko++;
+  }
+
+  try {
+    const fs = require('fs'), path = require('path');
+    const root = path.join(__dirname, '../..');
+    const read = f => fs.readFileSync(path.join(root, f), 'utf8');
+
+    section('settings.js/shortcuts.js/style.css/index.html -- audit fixes 2026-07-08');
+
+    const SETJS = read('frontend/src/settings.js');
+    const SCJS  = read('frontend/src/shortcuts.js');
+    const CSS5  = read('frontend/src/style.css');
+    const IDX   = read('frontend/index.html');
+
+    // -- Bug: mini-player never received theme/dynColor changes -------------
+    // setTheme()/setDynColor()/initSettingsVars() must sync store.js so
+    // miniplayer.js's get('theme')/get('dynColor') (used to build the IPC
+    // mini_update payload) reflect the real persisted setting, not the
+    // store's static defaults ('blue'/true) forever.
+    const initVarsBody = /function initSettingsVars\([\s\S]*?\n\}/.exec(SETJS);
+    assert(initVarsBody, 'initSettingsVars() body located');
+    assert(/set\(\s*'theme'\s*,\s*theme\s*\)/.test(initVarsBody[0]),
+      "initSettingsVars() syncs store: set('theme', theme)");
+    assert(/set\(\s*'dynColor'\s*,\s*dynColor\s*\)/.test(initVarsBody[0]),
+      "initSettingsVars() syncs store: set('dynColor', dynColor)");
+
+    const setThemeBody = /export function setTheme\([\s\S]*?\n\}/.exec(SETJS);
+    assert(setThemeBody, 'setTheme() body located');
+    assert(/set\(\s*'theme'\s*,\s*t\s*\)/.test(setThemeBody[0]),
+      "setTheme() syncs store: set('theme', t)");
+
+    const setDynColorBody = /export function setDynColor\([\s\S]*?\n\}/.exec(SETJS);
+    assert(setDynColorBody, 'setDynColor() body located');
+    assert(/set\(\s*'dynColor'\s*,\s*_dynColor\s*\)/.test(setDynColorBody[0]),
+      "setDynColor() syncs store: set('dynColor', _dynColor)");
+
+    // -- Bug: rapid Settings toggle could force-hide a just-reopened panel --
+    // and yank focus, because closeSettings()'s animationend/400ms-fallback
+    // pair wasn't cancelled when openSettings() interrupted it.
+    assert(/function _cancelPendingClose\(/.test(SETJS),
+      '_cancelPendingClose() helper exists');
+    const openSettingsBody = /export function openSettings\([\s\S]*?\n\}/.exec(SETJS);
+    assert(openSettingsBody, 'openSettings() body located');
+    assert(/_cancelPendingClose\(panel\)/.test(openSettingsBody[0]),
+      'openSettings() cancels a close cycle still in flight before reopening');
+    const closeSettingsBody = /export function closeSettings\([\s\S]*?\n\}/.exec(SETJS);
+    assert(closeSettingsBody, 'closeSettings() body located');
+    assert(/_cancelPendingClose\(panel\)/.test(closeSettingsBody[0]),
+      'closeSettings() cancels any previous close cycle before scheduling a new one');
+    assert(/_closeTimer\s*=\s*setTimeout\(_onClose, 400\)/.test(closeSettingsBody[0]),
+      'closeSettings() stores its fallback timer id (cancellable) instead of a bare setTimeout');
+    // Review fix: closeSettings(true) must skip the closing-transition entirely
+    // and remove .on synchronously — otherwise closing Settings as a side effect
+    // of opening Shortcuts (toggleShortcuts()) leaves its full-viewport scrim
+    // (pointer-events active, higher z-index) blocking the freshly-opened panel
+    // for the ~200ms closing-animation duration.
+    assert(/export function closeSettings\(immediate = false\)/.test(SETJS),
+      'closeSettings() accepts an immediate flag');
+    assert(/if\s*\(immediate\)\s*\{\s*panel\.classList\.remove\('on', 'closing'\);/.test(closeSettingsBody[0]),
+      "closeSettings(true) removes .on synchronously, skipping the animated 'closing' transition");
+
+    // -- Bug: Settings + Shortcuts-help could be open simultaneously (2 ------
+    // stacked focus-trapped dialogs), and global single-key shortcuts leaked
+    // through the background while the shortcuts-help overlay was open.
+    assert(/if\s*\(_shortcutsOpen\)\s*closeShortcuts\(\)/.test(openSettingsBody[0]),
+      'openSettings() closes the shortcuts panel first (mutual exclusion)');
+    const toggleShortcutsBody = /export function toggleShortcuts\([\s\S]*?\n\}/.exec(SETJS);
+    assert(toggleShortcutsBody, 'toggleShortcuts() body located');
+    assert(/closeSettings\(true\)/.test(toggleShortcutsBody[0]),
+      'toggleShortcuts() closes the settings panel immediately when opening (mutual exclusion, no lingering scrim over the freshly-opened panel)');
+    assert(/document\.getElementById\('shortcuts-panel'\)\?\.classList\.contains\('open'\)/.test(SCJS),
+      "shortcuts.js: _anyModalOpen includes #shortcuts-panel.open (background inertness)");
+    // Escape must still close the shortcuts panel even though it's now part of
+    // _anyModalOpen — must be handled BEFORE the _anyModalOpen early-return,
+    // else it becomes an unclosable keyboard trap.
+    const anyModalIdx = SCJS.indexOf('_anyModalOpen =');
+    const escapeGuardIdx = SCJS.indexOf("e.code === 'Escape' && isShortcutsOpen()");
+    assert(escapeGuardIdx !== -1 && anyModalIdx !== -1 && escapeGuardIdx < anyModalIdx,
+      'shortcuts.js: Escape-closes-shortcuts-panel guard sits before the _anyModalOpen early-return');
+
+    // -- Latent gap: initSettingsKeynav() claimed idempotency but had no guard
+    const keynavBody = /export function initSettingsKeynav\([\s\S]*?\n\}/.exec(SETJS);
+    assert(keynavBody, 'initSettingsKeynav() body located');
+    assert(/_settingsKeynavInit/.test(keynavBody[0]),
+      'initSettingsKeynav() has an anti-double-call guard (matches initSettingsListeners() pattern)');
+
+    // -- Bug: .toggle-wrap (4 settings switches) was 22px tall, under the ----
+    // WCAG 2.5.8 24px target-size floor (--target-min).
+    const toggleWrapRule = /\.toggle-wrap\s*\{([^}]*)\}/.exec(CSS5);
+    assert(toggleWrapRule, '.toggle-wrap base rule located');
+    assert(/height:\s*var\(--target-min\)/.test(toggleWrapRule[1]),
+      '.toggle-wrap height uses var(--target-min) (24px WCAG 2.5.8 floor), not a hardcoded 22px');
+
+    // -- Bug: keyboard focus was invisible on the list-density radio group --
+    // (native input display:none, no :focus-visible + span rule existed).
+    assert(/\.tlist-zoom-radio input\[type="radio"\]:focus-visible \+ span/.test(CSS5),
+      '.tlist-zoom-radio has a :focus-visible + span rule (visible keyboard focus ring)');
+
+    // -- Dead wiring: data-action="tlist-zoom" / data-input-action="auto-update"
+    // had no dispatcher case (console-spammed "Action inconnue" on every use);
+    // the actual functionality is driven by dedicated listeners, so the
+    // attributes were purely misleading dead markup.
+    assert(!/data-action="tlist-zoom"/.test(IDX),
+      'index.html: orphaned data-action="tlist-zoom" removed (dead wiring, no handlers.js case)');
+    assert(!/data-input-action="auto-update"/.test(IDX),
+      'index.html: orphaned data-input-action="auto-update" removed (dead wiring, no handlers.js case)');
+
+    // -- Gap: toggle-switch visible label text wasn't clickable (only the ---
+    // small 40x22 switch itself was) — each row's text now sits in a
+    // <label class="set-toggle-label" for="...">, widening the click target.
+    for (const id of ['dyn-color-chk', 'rg-enabled', 'set-viz-toggle', 'watch-folder-chk', 'auto-update-chk']) {
+      assert(new RegExp(`<label class="[^"]*set-toggle-label[^"]*" for="${id}"`).test(IDX),
+        `index.html: #${id}'s row label is a <label class="set-toggle-label" for="${id}"> (bigger click target)`);
+    }
+  } catch (e) {
+    console.error('  KO  settings audit-fixes scan crashed:', e.message);
+    _ko++;
+  }
+
+  // ===========================================================================
+  // Dead-code / incomplete-feature audit fixes (devices.js, watchfolder.js,
+  // backup.js, genres.js) — 2026-07-14
+  // ===========================================================================
+  section('devices.js/watchfolder.js/backup.js/genres.js -- dead-code audit fixes');
+  try {
+    const fs   = require('fs');
+    const path = require('path');
+    const DEVJS = fs.readFileSync(path.join(__dirname, '../src/devices.js'), 'utf8');
+    const WFJS  = fs.readFileSync(path.join(__dirname, '../src/watchfolder.js'), 'utf8');
+    const BKJS  = fs.readFileSync(path.join(__dirname, '../src/backup.js'), 'utf8');
+    const GNJS  = fs.readFileSync(path.join(__dirname, '../src/genres.js'), 'utf8');
+    const HDJS  = fs.readFileSync(path.join(__dirname, '../src/handlers.js'), 'utf8');
+
+    // -- Fix 1 : USB imports never logged (devices.js) — importFromDrive() now
+    // tags its batch with source 'usb' so imports.js history distinguishes it
+    // from a plain folder-scan, and only on actual success (added > 0).
+    assert(/importPaths\(files,\s*'usb'\)/.test(DEVJS),
+      "devices.js: importFromDrive() calls importPaths(files, 'usb')");
+    const importFromDriveBody = /export async function importFromDrive[\s\S]*?\n\}/.exec(DEVJS);
+    assert(importFromDriveBody, 'devices.js: importFromDrive() body located');
+    assert(/if \(added > 0\)/.test(importFromDriveBody[0]),
+      'devices.js: importFromDrive() only reports success when added > 0 (no log on cancel/0-added)');
+
+    assert(/export async function importPaths\(paths, source = 'folder-scan'\)/.test(WFJS),
+      "watchfolder.js: importPaths() accepts an optional source param (default 'folder-scan')");
+    assert(/logImport\(source, newPaths\)/.test(WFJS),
+      'watchfolder.js: _doImportPaths() forwards the caller-supplied source to logImport() (usb vs folder-scan)');
+
+    // -- Fix 2 : watchfolder modify-during-load race (watchfolder.js) — a
+    // watch-modified-files event for a track whose tags are still loading no
+    // longer gets silently dropped; it is queued in _modPendingRetry and
+    // replayed once that load completes.
+    assert(/let _modPendingRetry = new Set\(\)/.test(WFJS),
+      'watchfolder.js: _modPendingRetry Set declared at module scope');
+    assert(!/TODO: track in _modPendingRetry set/.test(WFJS),
+      'watchfolder.js: the modify-during-load TODO is resolved (no longer just a comment)');
+    const reloadTagsBody = /function _reloadTagsForPaths[\s\S]*?\n\}/.exec(WFJS);
+    assert(reloadTagsBody, 'watchfolder.js: _reloadTagsForPaths() body located');
+    assert(/_modPendingRetry\.add\(p\)/.test(reloadTagsBody[0]),
+      '_reloadTagsForPaths(): a still-loading track (!metaDone) is queued in _modPendingRetry instead of dropped');
+    assert(/function _retryPendingReload\(path\)/.test(WFJS),
+      'watchfolder.js: _retryPendingReload() helper exists');
+    const retryBody = /function _retryPendingReload[\s\S]*?\n\}/.exec(WFJS);
+    assert(retryBody && /_modPendingRetry\.delete\(path\)/.test(retryBody[0]),
+      '_retryPendingReload(): removes the path from the pending set before replaying it');
+    assert(/loadTagsBg\(t\)\.then\(\(\) => _retryPendingReload\(t\.path\)\)/.test(WFJS),
+      'watchfolder.js: at least one loadTagsBg() call chains _retryPendingReload() on completion');
+    assert(/_modPendingRetry\.clear\(\)/.test(WFJS),
+      'watchfolder.js: stopWatchFolder() clears _modPendingRetry (no stale retries across watch restarts)');
+
+    // -- Fix 3 : backup.js includeFiles YAGNI stub removed — exportBackup()
+    // takes no parameter; includes_files stays hardcoded false in the manifest.
+    assert(/export async function exportBackup\(\)/.test(BKJS),
+      'backup.js: exportBackup() no longer takes an includeFiles parameter');
+    assert(!/@param \{boolean\} \[includeFiles/.test(BKJS),
+      'backup.js: stale @param includeFiles JSDoc removed');
+    assert(/\/\/\s+exportBackup\(\)$/m.test(BKJS),
+      'backup.js: header comment updated to exportBackup() (no more includeFiles?)');
+    assert(/includes_files:\s*false/.test(BKJS),
+      'backup.js: manifest still hardcodes includes_files: false');
+    assert(/await exportBackup\(\);/.test(HDJS) && !/exportBackup\(false\)/.test(HDJS),
+      "handlers.js: 'backup-export' calls exportBackup() with no argument");
+
+    // -- Fix 4 : genres.js dead exports — _genreGetEmoji/_genreGetColor are
+    // only used inside genres.js (by renderGenresGrid), so they are now
+    // module-private, matching the '_'-prefixed private-helper convention.
+    assert(/\nfunction _genreGetEmoji\(key\)/.test(GNJS) && !/export function _genreGetEmoji/.test(GNJS),
+      'genres.js: _genreGetEmoji() is module-private (export removed)');
+    assert(/\nfunction _genreGetColor\(key\)/.test(GNJS) && !/export function _genreGetColor/.test(GNJS),
+      'genres.js: _genreGetColor() is module-private (export removed)');
+  } catch (e) {
+    console.error('  KO  dead-code audit fixes scan crashed:', e.message);
+    _ko++;
+  }
 
   // -- Résultat -----------------------------------------------------------
   console.log('\n═══════════════════════════════════════════════════════════');

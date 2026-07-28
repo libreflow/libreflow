@@ -14,7 +14,8 @@ const SS = fs.readFileSync(path.join(__dirname, '../src/style.css'), 'utf8');
 const CANONICAL = [
   '--space-1', '--space-2', '--space-3', '--space-4', '--space-5', '--space-6', '--space-7',
   '--radius-xs', '--radius-sm', '--radius-md', '--radius-lg', '--radius-pill',
-  '--text-xs', '--text-sm', '--text-base', '--text-md', '--text-lg', '--text-xl', '--text-2xl',
+  // --text-2xl retiré (audit 2026-07-27) : token mort, zéro consommateur — purgé du design-system.
+  '--text-xs', '--text-sm', '--text-base', '--text-md', '--text-lg', '--text-xl',
   '--motion-fast', '--motion-base', '--motion-slow',
   '--ease-standard', '--ease-spring',
   '--elev-1', '--elev-2', '--elev-3', '--elev-4',

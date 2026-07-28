@@ -12,7 +12,7 @@
 //   import  : guessGenre               (tags.js)
 //   import  : saveTracks               (library.js)
 //   import  : toast                    (ui.js)
-//   window  : updateBreadcrumb, updateStats, saveCfg (app.js — circulaire)
+//   window  : updateBreadcrumb, saveCfg (app.js — circulaire)
 //
 // Exports publics :
 //   renderGenresGrid, drillGenre, setContentView, rescanGenres
@@ -25,7 +25,7 @@ import { _normalizeGenre, _coll, invalidateFilterCache }   from './search.js';
 import { guessGenre }                                      from './tags.js';
 import { saveTracks }                                      from './library.js';
 import { toast }                                           from './ui.js';
-import { updateBreadcrumb, updateStats }                    from './renderer.js';
+import { updateBreadcrumb }                                 from './renderer.js';
 
 // ── Cache de signature ────────────────────────────────────────────────────────
 let _genreGridSig = null;
@@ -116,7 +116,7 @@ const GENRE_DISPLAY_NAMES = {
  * @param {string} key - Clé canonique (ex: "rap", "phonk")
  * @returns {string} Emoji
  */
-export function _genreGetEmoji(key) {
+function _genreGetEmoji(key) {
   const n = key.toLowerCase();
   if (_emojiCache.has(n)) return _emojiCache.get(n);
   let result;
@@ -136,7 +136,7 @@ export function _genreGetEmoji(key) {
  * @param {string} key - Clé canonique (ex: "rap", "phonk")
  * @returns {string} Valeur CSS de background (linear-gradient)
  */
-export function _genreGetColor(key) {
+function _genreGetColor(key) {
   const n = key.toLowerCase();
   if (_colorCache.has(n)) return _colorCache.get(n);
   let result;
@@ -342,7 +342,7 @@ export async function rescanGenres(force = false, silent = false) {
     await new Promise(r => setTimeout(r, 0));
   }
   if (genreModified.length) saveTracks(...genreModified);
-  invalidateFilterCache(); emit(EVENTS.FILTER_CHANGED, {}); emit(EVENTS.RENDER_LIB, {}); updateStats();
+  invalidateFilterCache(); emit(EVENTS.FILTER_CHANGED, {}); emit(EVENTS.RENDER_LIB, {});
 
   if (!silent && countHeuristic > 0) {
     toast(i18n('t_genre_done', countHeuristic), 'success');

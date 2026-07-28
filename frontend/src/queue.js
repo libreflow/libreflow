@@ -5,12 +5,13 @@
 // Remaining window.* : closeSettings (app.js — pas encore extrait).
 //
 // Exports publics (utilisés par app.js + HTML) :
-//   queueOpen
-//   toggleQueue, closeQueue, renderQueue, refreshQueueBadge
+//   queueOpen, queuePinned
+//   toggleQueue, closeQueue, toggleQueuePin, renderQueue, refreshQueueBadge
 //   getQueueState, restoreQueueState, clearQueueOverride
 //   removeFromQueue, clearExplicitQueue
 //   addToQueueNext, addToQueueEnd, playQueueItem
 //   initQueueDrag (Task 4)
+//   peekFirstExplicit, consumeFirstExplicit, peekExplicitQueue (Task 9)
 
 import { esc, extEmoji, fmtd, moveByOne }  from './utils.js';
 import { CFG }                            from './cfg.js';
@@ -19,13 +20,19 @@ import { i18n }                           from './i18n.js';
 import { get, set }                       from './store.js';
 import { getFiltered, filteredIdx, _trackIdxMap,
          invalidateFilterCache }          from './search.js';
-import { playAt, togglePlay, isCurrentTrack, audio } from './player.js';
+// NOTE: seuls playAt + togglePlay sont importés de player.js.
+// `audio` et `isCurrentTrack` ont été retirés pour réduire le couplage circulaire
+// player.js ↔ queue.js (§6 CLAUDE.md). `audio` est accédé via le DOM ;
+// `isCurrentTrack` est réimplémenté localement via get('curIdx')/get('tracks').
+import { playAt, togglePlay } from './player.js';
 import { patchPlayState } from './renderer.js';
 import { emit, on, EVENTS } from './bus.js';
 import { toast, toastWithAction } from './ui.js';
 
 // Fermeture via bus — évite les cycles d'import avec views.js et settings.js.
-on(EVENTS.PANEL_CLOSE_QUEUE, () => { if (queueOpen) closeQueue(); });
+// Épinglée (queuePinned), la file d'attente ignore ces fermetures forcées : elle
+// reste ouverte (état + DOM) et réapparaît telle quelle une fois l'autre panneau fermé.
+on(EVENTS.PANEL_CLOSE_QUEUE, () => { if (queueOpen && !queuePinned) closeQueue(); });
 
 // ── Focus trap ──────────────────────────────────────────────
 // FOCUS-1 FIX : trap Tab/Shift+Tab dans #queue-panel quand ouvert.
@@ -54,6 +61,7 @@ function _setupQueueFocusTrap(panel) {
 
 // ── State ────────────────────────────────────────────────────
 export let queueOpen  = false;
+export let queuePinned = false;
 // BUG FIX : mémoriser l'ordre de la queue après un drag-drop utilisateur.
 // On stocke les IDs + le curIdx au moment du reorder pour détecter un changement de piste.
 let _queueOverride        = null; // null | Array<string> (IDs dans l'ordre voulu)
@@ -224,6 +232,16 @@ export function toggleQueue() {
   }
 }
 
+/** Épingle/désépingle la file d'attente : épinglée, elle ignore panel:close_queue
+ *  (émis quand un autre panneau modal/latéral s'ouvre) et reste affichée. */
+export function toggleQueuePin() {
+  queuePinned = !queuePinned;
+  const btn = document.querySelector('[data-action="toggle-queue-pin"]');
+  btn?.classList.toggle('on', queuePinned);
+  btn?.setAttribute('aria-pressed', String(queuePinned));
+  document.getElementById('queue-panel')?.classList.toggle('pinned', queuePinned);
+}
+
 export function closeQueue() {
   if (_springBackTimer) {
     clearTimeout(_springBackTimer);
@@ -265,7 +283,7 @@ export function renderQueue() {
     const artHTML = t?.art
       ? `<img src="${esc(t.art)}" alt="">`
       : extEmoji(t?.ext ?? '');
-    const row = `<div class="queue-item queue-item--loop" data-action="play-queue-item" data-track-id="${t?.id}">
+    const row = `<div class="queue-item queue-item--loop" role="listitem" tabindex="0" aria-label="${esc((t?.name ?? '') + ' — ' + (t?.artistFull || t?.artist || '') + ' (en boucle)')}" data-action="play-queue-item" data-track-id="${t?.id}">
       <div class="q-art q-art--loop">${artHTML}
         <button class="q-art-hover-play" data-action="toggle-play" tabindex="-1" aria-hidden="true">
           <svg class="icon-play" viewBox="0 0 24 24" width="12" height="12" fill="currentColor" aria-hidden="true"><polygon points="5,3 19,12 5,21"/></svg>
@@ -276,17 +294,23 @@ export function renderQueue() {
         <div class="q-name">${esc(t?.name ?? '')}</div>
         <div class="q-artist">${esc(t?.artistFull || t?.artist || '–')}</div>
       </div>
-      <div class="q-dur">${fmtd(t?.duration ?? 0)}</div>
+      <div class="q-dur">${fmtd(t?.duration)}</div>
     </div>`;
     el.innerHTML = Array(5).fill(row).join('');
-    patchPlayState(!audio.paused);
+    // Accès DOM local — évite l'import circulaire depuis player.js (§6)
+    const _audioEl = /** @type {HTMLAudioElement|null} */ (document.getElementById('audio'));
+    patchPlayState(_audioEl ? !_audioEl.paused : false);
     return;
   }
 
-  // Invalider l'override si la piste a changé depuis le reorder
-  if (_queueOverride && curIdx >= 0 && tracks[curIdx]?.id !== _queueOverrideTrackId) {
-    _queueOverride = null; _queueOverrideTrackId = null;
-  }
+  // AUDIT CINÉMA 2026-07-20 (P1) : l'ancienne invalidation par ancre (`curIdx.id !==
+  // _queueOverrideTrackId → override anéanti`) détruisait le RESTE de la file explicite
+  // dès que la première piste en file démarrait (consumeFirstExplicit ne réécrivait pas
+  // l'ancre), et contredisait next() qui, lui, consomme toujours l'explicite en priorité.
+  // Les lectures « naturelles » vident déjà la file via playAt() → clearQueueOverride()
+  // (player.js, sauf keepQueue) : ce second mécanisme ne se déclenchait QUE dans les
+  // chemins où la file doit survivre (consommation, clic dans la file). Supprimé —
+  // l'affichage suit désormais exactement ce que next() jouera.
 
   const explicit = _buildExplicitQueue();
   const natural  = _buildNaturalUpcoming();
@@ -307,18 +331,50 @@ export function renderQueue() {
 
   _updateQueueBadge(explicit.length + natural.length);
 
-  if (!explicit.length && !natural.length) {
-    el.innerHTML = `<div class="queue-empty">${i18n('queue_empty')}</div>`;
-    return;
+  let html = '';
+
+  // ── Section "En cours" ──────────────────────────────────────────────────
+  const curTrack = (curIdx >= 0 && tracks[curIdx]) ? tracks[curIdx] : null;
+  if (curTrack) {
+    const artNow = curTrack.art
+      ? `<img src="${esc(curTrack.art)}" alt="">`
+      : extEmoji(curTrack.ext ?? '');
+    html += `<div class="queue-now-playing">
+      <div class="queue-now-playing__label">${esc(i18n('queue_now_playing'))}</div>
+      <div class="queue-item queue-item--now" data-action="play-queue-item" data-track-id="${curTrack.id}" tabindex="0" aria-label="${esc((curTrack.name ?? '') + ' — ' + (curTrack.artistFull || curTrack.artist || '') + ' — ' + i18n('queue_now_playing'))}">
+        <div class="q-art q-art--now" aria-hidden="true">${artNow}
+          <button class="q-art-hover-play" data-action="toggle-play" tabindex="-1" aria-hidden="true">
+            <svg class="icon-play" viewBox="0 0 24 24" width="12" height="12" fill="currentColor" aria-hidden="true"><polygon points="5,3 19,12 5,21"/></svg>
+            <svg class="icon-pause" viewBox="0 0 24 24" width="12" height="12" fill="currentColor" aria-hidden="true"><rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/></svg>
+          </button>
+        </div>
+        <div class="q-info">
+          <div class="q-name">${esc(curTrack.name ?? '')}</div>
+          <div class="q-artist">${esc(curTrack.artistFull || curTrack.artist || '–')}</div>
+        </div>
+        <div class="q-dur" aria-hidden="true">${fmtd(curTrack.duration)}</div>
+      </div>
+    </div>`;
   }
 
-  let html = '';
+  if (!explicit.length && !natural.length) {
+    // État vide au standard maison (.empty) — icône + titre + invite,
+    // cohérent avec les autres vues (audit 2026-07-27).
+    el.innerHTML = html + `<div class="empty queue-empty">
+      <div class="empty-ico" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><line x1="9" y1="6" x2="21" y2="6"/><line x1="9" y1="12" x2="21" y2="12"/><line x1="9" y1="18" x2="21" y2="18"/><circle cx="3.5" cy="6" r="1.2" fill="currentColor" stroke="none"/><circle cx="3.5" cy="12" r="1.2" fill="currentColor" stroke="none"/><circle cx="3.5" cy="18" r="1.2" fill="currentColor" stroke="none"/></svg></div>
+      <div class="empty-h">${i18n('queue_empty')}</div>
+      <div class="empty-s">${i18n('queue_empty_hint')}</div>
+    </div>`;
+    const _ael = /** @type {HTMLAudioElement|null} */ (document.getElementById('audio'));
+    patchPlayState(_ael ? !_ael.paused : false);
+    return;
+  }
 
   // ── Section "Prochainement" (queue explicite) ─────────────
   if (explicit.length) {
     html += `<div class="queue-section-header" role="presentation">
       <span class="queue-section-label">${esc(i18n('queue_upcoming', explicit.length))}</span>
-      <button class="queue-clear-btn" data-action="clear-queue" aria-label="${esc(i18n('queue_clear_all'))}" title="${esc(i18n('queue_clear_all'))}">✕ tout</button>
+      <button class="queue-clear-btn" data-action="clear-queue" aria-label="${esc(i18n('queue_clear_all') || 'Vider la file d\'attente')}" title="${esc(i18n('queue_clear_all'))}">✕ tout</button>
     </div>`;
     // A11Y-03: role=listitem + aria-label pour chaque item (remove button labeled)
     html += explicit.map((t, i) => {
@@ -369,7 +425,9 @@ export function renderQueue() {
 
   el.innerHTML = html;
   // innerHTML wipes .playing-row -> restore from audio state.
-  patchPlayState(!audio.paused);
+  // Accès DOM local — évite l'import circulaire depuis player.js (§6)
+  const _audioEl2 = /** @type {HTMLAudioElement|null} */ (document.getElementById('audio'));
+  patchPlayState(_audioEl2 ? !_audioEl2.paused : false);
 }
 
 // ── Drag helpers ─────────────────────────────────────────────
@@ -585,7 +643,9 @@ export function playQueueItem(id) {
   const t = (_trackIdxMap.has(id) ? get('tracks')[_trackIdxMap.get(id)] : undefined);
   if (!t) return;
   // repeat=one : toggle au lieu de redémarrer la piste courante.
-  if (isCurrentTrack(id)) { togglePlay(); return; }
+  // Réimplémentation locale de isCurrentTrack — évite l'import depuis player.js (§6)
+  const _ci = get('curIdx');
+  if (_ci >= 0 && get('tracks')[_ci]?.id === id) { togglePlay(); return; }
   const fi = filteredIdx(t);
   if (fi >= 0) { removeFromQueue(id); playAt(fi, { keepQueue: true }); return; }
   // UX-QUEUE-1 FIX : piste hors vue courante → basculer vers 'all' et jouer
@@ -645,4 +705,57 @@ export function addToQueueEnd(trackId) {
   _updateQueueBadge(_buildUpcoming().length);
   if (queueOpen) renderQueue();
   return true;
+}
+
+/**
+ * Retourne le premier track valide de la queue explicite sans le consommer.
+ * Saute silencieusement les IDs dont la piste a été supprimée de la bibliothèque.
+ * @returns {object|null}
+ */
+export function peekFirstExplicit() {
+  const ex = _buildExplicitQueue(); // filtre déjà les IDs invalides
+  return ex.length ? ex[0] : null;
+}
+
+/**
+ * Retourne la file explicite ENTIÈRE (Track[], IDs déjà validés via _trackIdxMap) —
+ * lecture seule, ne consomme rien. Miroir de peekFirstExplicit() mais pour la liste
+ * complète : utilisé par le panneau file d'attente du mode cinéma (cinema-render.js/
+ * cinema-queue.js, Task 9) qui a besoin de plus d'un item pour construire son aperçu.
+ * @returns {object[]}
+ */
+export function peekExplicitQueue() {
+  return _buildExplicitQueue();
+}
+
+/**
+ * Retire et retourne le premier track valide de la queue explicite.
+ * Met à jour le badge et re-rend le panneau si ouvert.
+ * Saute et purge les IDs obsolètes en tête de queue.
+ * @returns {object|null}
+ */
+export function consumeFirstExplicit() {
+  if (!_queueOverride?.length) return null;
+  const track = peekFirstExplicit();
+  if (!track) {
+    // Tous les IDs restants sont obsolètes — vider
+    _queueOverride        = null;
+    _queueOverrideTrackId = null;
+    refreshQueueBadge();
+    if (queueOpen) renderQueue();
+    return null;
+  }
+  const fi = _queueOverride.findIndex(id => _trackIdxMap?.has(id));
+  _queueOverride = _queueOverride.slice(fi + 1);
+  if (!_queueOverride.length) {
+    _queueOverride        = null;
+    _queueOverrideTrackId = null;
+  } else {
+    // AUDIT CINÉMA 2026-07-20 : la piste consommée devient la piste en cours — réancrer
+    // pour que l'état persisté (getQueueState) reste cohérent avec la lecture.
+    _queueOverrideTrackId = track.id;
+  }
+  refreshQueueBadge();
+  if (queueOpen) renderQueue();
+  return track;
 }

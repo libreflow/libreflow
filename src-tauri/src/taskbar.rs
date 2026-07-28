@@ -178,8 +178,8 @@ fn rebuild_image_lists(old_play: isize, old_pause: isize) -> (isize, isize) {
             let _ = ImageList_Destroy(HIMAGELIST(old_pause));
         }
     }
-    let il_play_raw = build_image_list(false).0 as isize;
-    let il_pause_raw = build_image_list(true).0 as isize;
+    let il_play_raw = build_image_list(false).0;
+    let il_pause_raw = build_image_list(true).0;
     (il_play_raw, il_pause_raw)
 }
 
@@ -595,6 +595,11 @@ fn bgra_to_hicon(bgra: &[u8], sz: i32) -> HICON {
         };
         std::ptr::copy_nonoverlapping(bgra.as_ptr(), bits.cast::<u8>(), bgra.len());
         let mask_bm = CreateBitmap(sz, sz, 1, 1, None);
+        if mask_bm.0.is_null() {
+            eprintln!("[taskbar] CreateBitmap failed (GDI OOM?)");
+            let _ = DeleteObject(HGDIOBJ(color_bm.0));
+            return HICON(std::ptr::null_mut());
+        }
         let ii = ICONINFO {
             fIcon: BOOL(1),
             xHotspot: 0,
@@ -684,7 +689,9 @@ unsafe extern "system" fn subclass_proc(
         if let Some(k) = key {
             dlog!("[taskbar] WM_COMMAND btn={btn_id:#x} → '{k}'");
             if let Some(tx) = BTN_TX.get() {
-                let _ = tx.try_send(k.to_string());
+                if let Err(e) = tx.try_send(k.to_string()) {
+                    dlog!("[taskbar] btn '{k}' dropped (channel full): {e}");
+                }
             }
             return LRESULT(0);
         }

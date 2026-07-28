@@ -38,8 +38,9 @@ import { rgEnabled, analyzeAndApplyRG,
 import { updateMiniProgress }                     from './miniplayer.js';
 import { updateMiniOverlayProgress } from './minioverlay.js';
 import { clearQueueOverride, queueOpen,
-         renderQueue }                            from './queue.js';
-import { updateCinemaProgress }                   from './cinema.js';
+         renderQueue,
+         peekFirstExplicit, consumeFirstExplicit,
+         peekExplicitQueue, removeFromQueue }      from './queue.js';
 import { CFG, SPEEDS, SPEED_LBLS }                from './cfg.js';
 import { getFiltered, filteredIdx, trackIdx, _trackIdxMap, invalidateFilterCache } from './search.js';
 import { toast }                                        from './ui.js';
@@ -205,7 +206,7 @@ let _cfRafId       = null;
 let _cfGen         = 0; // token anti-race incrémenté à chaque clearCrossfadeTimers()
 let _cfPending     = false; // guard anti-race pendant l'await ensureUrl dans checkCrossfade()
 /** @type {HTMLAudioElement | null} */
-export let audioNext       = null;
+let audioNext       = null;
 /** @type {MediaElementAudioSourceNode | null} */
 let audioNextSource        = null;
 /** @type {GainNode | null} */
@@ -270,14 +271,15 @@ export async function ensureUrl(t) {
  */
 export function setIcon(playing) {
   invoke('taskbar_set_playing', { playing }).catch((e) => console.warn('[taskbar_set_playing]', e));
-  // @ts-ignore — audio element guaranteed present in LibreFlow DOM (index.html)
-  document.getElementById('ico-play').style.display  = playing ? 'none' : '';
-  // @ts-ignore — audio element guaranteed present in LibreFlow DOM (index.html)
-  document.getElementById('ico-pause').style.display = playing ? ''     : 'none';
-  const ci = document.getElementById('cinema-ico-play');
-  const cp = document.getElementById('cinema-ico-pause');
-  if (ci) ci.style.display = playing ? 'none'  : 'block';
-  if (cp) cp.style.display = playing ? 'block' : 'none';
+  // Cross-fade play/pause : l'état visuel des icônes est piloté par la classe
+  // .playing sur les boutons (#pcplay / #cinema-play) — CSS opacity/scale,
+  // plus de toggle display brut (audit flagship 2026-07-27).
+  document.getElementById('cinema-play')?.classList.toggle('playing', playing);
+  // Task 6 : geler les animations idle pochette/fond en pause — setIcon() est le seul
+  // point appelé sur CHAQUE événement 'play'/'pause' natif (media keys, bouton cinéma,
+  // sleep timer…), contrairement à updateCinema()/_syncCinButtons (cinema.js) qui ne
+  // tournent qu'à l'ouverture du cinéma ou au changement de piste.
+  document.getElementById('cinema-overlay')?.classList.toggle('is-paused', !playing);
   document.querySelector('.pcplay')?.classList.toggle('playing', playing);
   document.querySelector('.pcplay')?.setAttribute('aria-pressed', String(playing));
   document.querySelector('.sb-dot')?.classList.toggle('playing', playing);
@@ -324,7 +326,7 @@ function _playDirect(track, idx) {
     if (radioActive) radioRefillQueue().catch(e => console.warn('[radio] refill failed:', e));
     _postPlaySideEffects(track);
     emit(EVENTS.TRACK_CHANGE, { track, idx: curIdx });
-    setTimeout(() => scrollToCurrentTrack(), 50);
+    setTimeout(() => scrollToCurrentTrack(), CFG.SCROLL_TO_TRACK_DELAY);
     if (rgEnabled) analyzeAndApplyRG();
   } finally {
     _playLock = false;
@@ -376,7 +378,7 @@ export async function playAt(filteredIdx, { skipScroll = false, keepQueue = fals
     // @ts-ignore — filter(Boolean) narrows to string[] at runtime; join returns string
     const _wTitle = [t.name, t.artistFull || t.artist].filter(Boolean).join(' — ');
     invoke('win_set_title', { title: _wTitle ? `${_wTitle} | LibreFlow` : 'LibreFlow' }).catch((e) => console.warn('[win_set_title]', e));
-    if (!skipScroll) setTimeout(() => scrollToCurrentTrack(), 50);
+    if (!skipScroll) setTimeout(() => scrollToCurrentTrack(), CFG.SCROLL_TO_TRACK_DELAY);
     if (rgEnabled) analyzeAndApplyRG();
   } finally {
     _playLock = false;
@@ -474,7 +476,11 @@ export function peekNext() {
   const tracks = get('tracks');
   if (!tracks?.length || curIdx < 0) return null;
 
-  // File manuelle (priorité maximale)
+  // Queue explicite (priorité 1)
+  const _epn = peekFirstExplicit();
+  if (_epn) return _epn;
+
+  // File manuelle (priorité 2)
   if (manualQueue.length) {
     const ni = /** @type {number} */ (manualQueue[0]); // peek, pas shift
     return tracks[ni] ?? null;
@@ -529,6 +535,23 @@ export function next(manual = false) {
 
   const tracks = get('tracks'); // Phase 4
 
+  // ── Queue explicite (priorité 1) ──────────────────────────────────────────
+  const _explicitNext = peekFirstExplicit();
+  if (_explicitNext) {
+    consumeFirstExplicit();
+    // Queue épuisée si peekFirstExplicit() est maintenant null
+    if (peekFirstExplicit() === null && !radioActive && !_queueEndedToastShown) {
+      _queueEndedToastShown = true;
+      setTimeout(() => toast(i18n('t_queue_ended'), 'info'), 400);
+    }
+    getFiltered(); // warm cache pour filteredIdx O(1)
+    const fi = filteredIdx(_explicitNext);
+    if (fi >= 0) { playAt(fi, { keepQueue: true }); return; }
+    // Fallback : piste hors vue filtrée → lecture directe
+    _playDirect(_explicitNext, trackIdx(_explicitNext));
+    return;
+  }
+
   // ── File manuelle ─────────────────────────────────────────────────────────
   if (manualQueue.length) {
     const _wasLastInQueue = manualQueue.length === 1;
@@ -548,7 +571,6 @@ export function next(manual = false) {
 
   // ── Radio active, file vide → recharger ──────────────────────────────────
   if (radioActive) {
-    radioRefillQueue().catch(e => console.warn('[radio] refill failed:', e));
     if (manualQueue.length) {
       // @ts-ignore — manualQueue stores numeric indices; store type says Track[] but runtime is number[]
       const ni = /** @type {number} */ (manualQueue.shift());
@@ -632,6 +654,9 @@ export function toggleShuffle() {
   if (shuffle) buildQ();
   toast(shuffle ? i18n('t_shuffle_on') : i18n('t_shuffle_off'));
   _allPlayerUI();
+  // AUDIT CINÉMA 2026-07-20 (P1) : le cinéma re-rend panneau « Suivant » + file d'attente
+  // (l'état shuffle change la piste prévisible) — via bus, pas d'import cinema.js (§6).
+  emit(EVENTS.PLAYBACK_MODE_CHANGED, {});
 }
 
 /** @returns {void} */
@@ -656,6 +681,7 @@ export function toggleRepeat() {
   cinRep?.setAttribute('aria-label', lbl);
   toast(lbl); // toast aria-live=polite — annonce dynamique du nouvel état (3 distincts)
   _allPlayerUI();
+  emit(EVENTS.PLAYBACK_MODE_CHANGED, {}); // cf. toggleShuffle — re-rend les panneaux cinéma
 }
 
 /** @returns {void} */
@@ -822,9 +848,9 @@ export function initCrossfadeAudio() {
     try {
       audioNextSource = eqCtx.createMediaElementSource(audioNext);
       audioNextRgGain = eqCtx.createGain();
-      audioNextRgGain.gain.value = 1.0; // neutre par défaut
+      audioNextRgGain.gain.setValueAtTime(1.0, eqCtx.currentTime);
       audioNextGain   = eqCtx.createGain();
-      audioNextGain.gain.value = 0;     // muet au départ — sera 0→1 pendant le fondu
+      audioNextGain.gain.setValueAtTime(0, eqCtx.currentTime);     // muet au départ — sera 0→1 pendant le fondu
       // @ts-ignore — audioNextSource just assigned above, guaranteed non-null here
       audioNextSource.connect(audioNextRgGain);
       audioNextRgGain.connect(audioNextGain);
@@ -853,12 +879,13 @@ export function clearCrossfadeTimers() {
   cancelRgAnalysis();
   if (audioNextGain && eqCtx) {
     audioNextGain.gain.cancelScheduledValues(eqCtx.currentTime);
-    audioNextGain.gain.value = 0;
+    // §9: ramp court pour éviter le zipper noise (jump direct interdit sur nœud actif)
+    audioNextGain.gain.setTargetAtTime(0, eqCtx.currentTime, 0.01);
   }
   // DSP-7: reset du nœud RG dédié
   if (audioNextRgGain && eqCtx) {
     audioNextRgGain.gain.cancelScheduledValues(eqCtx.currentTime);
-    audioNextRgGain.gain.value = 1.0;
+    audioNextRgGain.gain.setTargetAtTime(1.0, eqCtx.currentTime, 0.01);
   }
   // DSP-6: reset audioOutGain (fade-out source primaire)
   if (audioOutGain && eqCtx) {
@@ -873,7 +900,6 @@ export function clearCrossfadeTimers() {
     // @ts-ignore — vol is an input[type=range] with .value property
     setMasterGain(vel ? parseFloat(vel.value) : (masterGainNode ? masterGainNode.gain.value : 1));
   }
-  if (audioNextGain && !eqCtx) audioNextGain.gain.value = 0;
   if (audioNext) { audioNext.pause(); audioNext.src = ''; }
   try { audioNextSource?.disconnect(); } catch {}
   try { audioNextGain?.disconnect(); } catch {}
@@ -907,7 +933,7 @@ function _commitGapless() {
   if (radioActive) radioRefillQueue().catch(e => console.warn('[radio] refill failed:', e));
   _postPlaySideEffects(nt);
   emit(EVENTS.TRACK_CHANGE, { track: nt, idx: curIdx });
-  setTimeout(() => scrollToCurrentTrack(), 50);
+  setTimeout(() => scrollToCurrentTrack(), CFG.SCROLL_TO_TRACK_DELAY);
   if (rgEnabled) analyzeAndApplyRG();
 }
 
@@ -959,7 +985,10 @@ export function checkCrossfade() {
 
     // @ts-ignore — audioNext guaranteed by initCrossfadeAudio(); url guaranteed by ensureUrl(ok)
     audioNext.src = nextTrack.url;
-    if (audioNextGain) audioNextGain.gain.value = 0;
+    if (audioNextGain && eqCtx) {
+      audioNextGain.gain.cancelScheduledValues(eqCtx.currentTime);
+      audioNextGain.gain.setValueAtTime(0, eqCtx.currentTime);
+    }
 
     const startDelay = 80;
     const _genAtStart = _cfGen;
@@ -1011,10 +1040,11 @@ export function checkCrossfade() {
 
       // Helper local : reset des nœuds de gain après transition
       function _resetGains() {
-        if (audioNextGain && eqCtx) { audioNextGain.gain.cancelScheduledValues(eqCtx.currentTime); audioNextGain.gain.value = 0; }
-        if (audioNextRgGain && eqCtx) { audioNextRgGain.gain.cancelScheduledValues(eqCtx.currentTime); audioNextRgGain.gain.value = 1.0; }
+        // §9: setTargetAtTime — direct .value= interdit sur nœud actif (zipper noise)
+        if (audioNextGain && eqCtx) { audioNextGain.gain.cancelScheduledValues(eqCtx.currentTime); audioNextGain.gain.setTargetAtTime(0, eqCtx.currentTime, 0.01); }
+        if (audioNextRgGain && eqCtx) { audioNextRgGain.gain.cancelScheduledValues(eqCtx.currentTime); audioNextRgGain.gain.setTargetAtTime(1.0, eqCtx.currentTime, 0.01); }
         // DSP-6 : restaurer audioOutGain à 1.0 pour la nouvelle piste principale
-        if (audioOutGain && eqCtx) { audioOutGain.gain.cancelScheduledValues(eqCtx.currentTime); audioOutGain.gain.value = 1.0; }
+        if (audioOutGain && eqCtx) { audioOutGain.gain.cancelScheduledValues(eqCtx.currentTime); audioOutGain.gain.setTargetAtTime(1.0, eqCtx.currentTime, 0.01); }
         // DSP-5 : restaurer audio.volume depuis le slider DOM (JAMAIS hardcoder 1.0)
         // @ts-ignore — vol is an input[type=range] with .value property
         if (!sleepFading) { const _vel = document.getElementById('vol'); setMasterGain(_vel ? parseFloat(_vel.value) : (masterGainNode ? masterGainNode.gain.value : 1)); }
@@ -1048,7 +1078,7 @@ export function checkCrossfade() {
       if (radioActive) radioRefillQueue().catch(e => console.warn('[radio] refill failed:', e)); // DOIT précéder TRACK_CHANGE (règle critique)
       _postPlaySideEffects(nextTrack);
       emit(EVENTS.TRACK_CHANGE, { track: nextTrack, idx: curIdx });
-      setTimeout(() => scrollToCurrentTrack(), 50);
+      setTimeout(() => scrollToCurrentTrack(), CFG.SCROLL_TO_TRACK_DELAY);
       if (queueOpen) renderQueue();
       // Avancer shuffleQ si la piste suivante en est issue
       if (shuffle && shuffleQ.length > 0 && shuffleQ[0] === validNextIdx) {
@@ -1062,6 +1092,14 @@ export function checkCrossfade() {
 /** @returns {number} */
 export function getNextIdx() {
   if (repeat === 'one') return -1;
+
+  // Queue explicite (priorité 1 — avant radio, shuffle, naturel)
+  const _egn = peekFirstExplicit();
+  if (_egn) {
+    const idx = trackIdx(_egn);
+    if (idx >= 0) return idx;
+  }
+
   if (radioActive) {
     const rq = getRadioQueue();
     if (rq && rq.length > 0) return trackIdx(rq[0]);
@@ -1069,12 +1107,48 @@ export function getNextIdx() {
   }
   if (shuffle && shuffleQ.length > 0) return shuffleQ[0];
   const tracks = get('tracks'); // Phase 4
+  // AUDIT CINÉMA 2026-07-20 (P2) : cas spécial sort:recent — même branche que next()/
+  // peekNext() (ordre stable de tracks[]) ; sans elle le panneau « Suivant » du cinéma
+  // et l'avance gapless annonçaient une piste différente de celle que next() joue.
+  if (get('sort') === 'recent' && get('view') === 'all') {
+    const ni = curIdx + 1;
+    if (ni < tracks.length) return ni;
+    return (repeat === 'all' && tracks.length > 0) ? 0 : -1;
+  }
   const fl     = getFiltered();
   const pos    = filteredIdx(tracks[curIdx]); // P4 — O(1) via posMap
   if (pos >= 0 && pos < fl.length - 1) return trackIdx(fl[pos + 1]);
   if (repeat === 'all' && fl.length > 0) return trackIdx(fl[0]);
   return -1;
 }
+
+/**
+ * AUDIT CINÉMA 2026-07-20 (P2) : lecture directe d'une piste HORS vue filtrée — façade
+ * publique sur _playDirect pour le panneau file d'attente du cinéma (cinema-render.js) :
+ * une entrée explicite volontairement affichée hors filtre restait sinon un no-op au clic,
+ * alors que next() la joue (même fallback _playDirect que la branche explicite de next()).
+ * @param {Track} t
+ * @returns {void}
+ */
+export function playTrackDirect(t) {
+  if (!t) return;
+  const i = trackIdx(t);
+  if (i >= 0) _playDirect(t, i);
+}
+
+/**
+ * Task 6 — vrai si la file explicite (queue.js, "lire ensuite") a un item prêt à jouer.
+ * Façade réexposée par player.js : cinema.js n'importe jamais queue.js directement
+ * (CLAUDE.md §6, modules feature-à-feature) — il passe par ce module dont il dépend déjà.
+ * Sert à ne pas masquer la piste suivante sous le hint shuffle du panneau cinéma quand
+ * un "lire ensuite" manuel est planifié malgré le shuffle actif.
+ * @returns {boolean}
+ */
+export function hasExplicitQueueNext() { return !!peekFirstExplicit(); }
+
+// Finding 3 (post-review) — réexportées pour cinema-render.js (panneau file d'attente),
+// même façade anti-queue.js-direct que hasExplicitQueueNext ci-dessus (§6).
+export { peekExplicitQueue, removeFromQueue };
 
 /**
  * Vide la file de shuffle (appelé par dupes.js / selection.js après suppression).
@@ -1259,7 +1333,11 @@ audio.addEventListener('timeupdate', () => {
   const dur = fmt(audio.duration);
   if (_DOM.pfill) _DOM.pfill.style.transform = 'scaleX(' + p + ')';
   if (_DOM.tc) _DOM.tc.textContent = cur;
-  if (_DOM.td) _DOM.td.textContent = dur;
+  // Temps restant cliquable (audit 2026-07-27) : #td affiche « -M:SS » si l'option
+  // showRemaining est active (toggle-remaining, handlers.js).
+  if (_DOM.td) _DOM.td.textContent = get('showRemaining')
+    ? '-' + fmt(Math.max(0, audio.duration - audio.currentTime))
+    : dur;
   // A11Y : mettre à jour le slider ARIA (#pbar role=slider)
   if (pbar) {
     const pNow = Math.round(p * 100);
@@ -1267,7 +1345,7 @@ audio.addEventListener('timeupdate', () => {
     pbar.setAttribute('aria-valuenow', pNow);
     pbar.setAttribute('aria-valuetext', `${cur} / ${dur}`);
   }
-  updateCinemaProgress(p, cur, dur);
+  emit(EVENTS.CINEMA_PROGRESS, { p, cur, dur });
   // Sauvegarde de position throttlée — évite l'IDB flood à 60fps
   const now = Date.now();
   if (now - _lastPosSave > 5000) { _lastPosSave = now; saveCfg(); }

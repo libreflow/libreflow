@@ -13,6 +13,13 @@
 
 import { LitElement, html, css } from 'lit';
 import { toastReducer, resolveDuration, normalizeType } from './lf-toast-stack.logic.js';
+// i18n import: leaf lookup only (called lazily inside render(), never at module
+// top-level), so it is safe despite the i18n.js -> player.js -> ui.js ->
+// lf-toast-stack.js cycle this creates — function-declaration exports are bound
+// during ESM instantiation, before any module's body evaluates, and `i18n()`
+// reads the live `lang` value at call time. See CLAUDE.md §18: a leaf i18n
+// lookup is treated differently from importing another feature module's state.
+import { i18n } from '../i18n.js';
 
 const MAX_TOASTS = 5;
 
@@ -35,16 +42,44 @@ export class LfToastStack extends LitElement {
     /* Google Material Snackbar look — single dark slab, accent via icon + thin progress bar. */
     :host {
       position: fixed;
-      bottom: calc(var(--pb, 96px) + 16px);
-      left: 50%;
-      transform: translateX(-50%);
+      bottom: calc(var(--pb) + var(--sp-2));
+      left: var(--sp-2);
+      width: calc(var(--sb) - var(--sp-4));
       display: flex;
       flex-direction: column-reverse;
-      align-items: center;
+      align-items: stretch;
       gap: 8px;
       z-index: 9999;
       pointer-events: none;
       font-family: var(--lf-font-ui, var(--font-body));
+    }
+    /* Corner fallback — same values as the previous default :host rule,
+       restored whenever the sidebar isn't a normal full-height column. */
+    :host-context(body.np-full),
+    :host-context(html[data-platform="mobile"]) {
+      bottom: auto;
+      left: auto;
+      width: auto;
+      top: calc(var(--tb, 32px) + 12px);
+      right: var(--sp-4, 16px);
+      align-items: flex-end;
+    }
+    @media (max-width: 719px) {
+      :host {
+        bottom: auto;
+        left: auto;
+        width: auto;
+        top: calc(var(--tb, 32px) + 12px);
+        right: var(--sp-4, 16px);
+        align-items: flex-end;
+      }
+    }
+    /* Corner fallback floor for .t-item — mirrors the same three conditions
+       :host uses above; the default docked .t-item has no floor (min-width: 0)
+       so it stretches to fill whatever width :host computes from --sb. */
+    :host-context(body.np-full) .t-item,
+    :host-context(html[data-platform="mobile"]) .t-item {
+      min-width: 260px;
     }
     .t-item {
       pointer-events: auto;
@@ -54,12 +89,12 @@ export class LfToastStack extends LitElement {
       -webkit-backdrop-filter: blur(var(--blur-lg)) saturate(1.2);
       color: var(--lf-toast-fg, var(--text-primary));
       padding: 14px 16px;
-      border-radius: var(--radius-md);
-      box-shadow: var(--shadow-lg);
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow-lg), 0 0 0 1px color-mix(in srgb, var(--lf-toast-accent) 35%, transparent);
       display: flex;
       align-items: center;
       gap: 12px;
-      min-width: 288px;
+      min-width: 0;
       max-width: 568px;
       font-size: 14px;
       line-height: 20px;
@@ -69,8 +104,16 @@ export class LfToastStack extends LitElement {
       cursor: pointer;
       transition: transform var(--motion-fast) var(--ease-standard), box-shadow var(--motion-base) var(--ease-standard);
     }
+    /* Placed AFTER the base .t-item rule (same tie-break the :host media
+       block above relies on) — @media (max-width: 719px) { .t-item { ... } }
+       has identical specificity to the base rule, so it only wins because
+       it comes later in source order. Moving it earlier would silently
+       disable this fallback again. */
+    @media (max-width: 719px) {
+      .t-item { min-width: 260px; }
+    }
     .t-item.t-out { animation: t-out var(--motion-fast) cubic-bezier(.4, 0, 1, 1) forwards; }
-    .t-item:hover  { transform: translateY(-1px); box-shadow: var(--shadow-xl, var(--shadow-lg)); }
+    .t-item:hover  { transform: translateY(-1px); box-shadow: var(--shadow-xl, var(--shadow-lg)), 0 0 0 1px color-mix(in srgb, var(--lf-toast-accent) 55%, transparent); }
     .t-item:active { transform: scale(.985); transition-duration: var(--motion-fast); }
 
     /* Per-type accent — applied to the icon glyph and the thin bottom bar only. */
@@ -104,6 +147,10 @@ export class LfToastStack extends LitElement {
       letter-spacing: .0892857em;
     }
     .t-action:hover { background: rgba(255, 255, 255, .08); }
+    .t-action:focus-visible {
+      outline: var(--focus-ring);
+      outline-offset: 1px;
+    }
 
     .t-close {
       flex: 0 0 auto;
@@ -117,6 +164,10 @@ export class LfToastStack extends LitElement {
       border-radius: 4px;
     }
     .t-close:hover { color: rgba(255, 255, 255, .92); background: rgba(255, 255, 255, .08); }
+    .t-close:focus-visible {
+      outline: var(--focus-ring);
+      outline-offset: 1px;
+    }
 
     .t-bar {
       position: absolute;
@@ -129,8 +180,8 @@ export class LfToastStack extends LitElement {
       transform: scaleX(1);
     }
 
-    @keyframes t-in  { from { transform: translateY(20px); opacity: 0; } }
-    @keyframes t-out { to   { transform: translateY(20px); opacity: 0; } }
+    @keyframes t-in  { from { transform: translateX(24px); opacity: 0; } }
+    @keyframes t-out { to   { transform: translateX(24px); opacity: 0; } }
 
     :host-context(html[data-mode="light"]) .t-item {
       background: var(--lf-toast-bg, rgba(255, 255, 255, 0.92));
@@ -138,7 +189,15 @@ export class LfToastStack extends LitElement {
       box-shadow:
         0 6px 10px rgba(0, 0, 0, .10),
         0 1px 18px rgba(0, 0, 0, .08),
-        0 3px 5px rgba(0, 0, 0, .14);
+        0 3px 5px rgba(0, 0, 0, .14),
+        0 0 0 1px color-mix(in srgb, var(--lf-toast-accent) 35%, transparent);
+    }
+    :host-context(html[data-mode="light"]) .t-item:hover {
+      box-shadow:
+        0 6px 10px rgba(0, 0, 0, .10),
+        0 1px 18px rgba(0, 0, 0, .08),
+        0 3px 5px rgba(0, 0, 0, .14),
+        0 0 0 1px color-mix(in srgb, var(--lf-toast-accent) 55%, transparent);
     }
     :host-context(html[data-mode="light"]) .t-action {
       color: var(--lf-toast-action, var(--lf-toast-accent, #2563eb));
@@ -274,7 +333,6 @@ export class LfToastStack extends LitElement {
     this._timers.clear();
   }
 
-  // LOW: aria-label hardcoded FR — to be parameterized via prop when WC i18n strategy is finalized.
   render() {
     return html`
       ${this._items.map(t => html`
@@ -294,7 +352,7 @@ export class LfToastStack extends LitElement {
             </button>
           ` : null}
           ${t.closable ? html`
-            <button class="t-close" aria-label="Fermer"
+            <button class="t-close" aria-label=${i18n('toast_close')}
                     @click=${(ev) => this._onCloseClick(ev, t.id)}>×</button>
           ` : null}
           <span class="t-bar" aria-hidden="true"

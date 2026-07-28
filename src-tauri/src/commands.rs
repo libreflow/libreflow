@@ -51,7 +51,22 @@ pub struct WriteTagsData {
 pub struct NotifyTrackData {
     pub title: String,
     pub artist: String,
-    #[allow(dead_code)] // reçu depuis le frontend mais non utilisé côté Rust (pas d'icône notif)
+    // Reçu depuis le frontend (data: URL base64) mais non exploitable côté Rust :
+    // limitation confirmée de tauri-plugin-notification 2.3.3 (pas un bug LibreFlow).
+    // `NotificationBuilder::icon()` existe bien et descend jusqu'à
+    // `notify_rust::Notification::icon()`, MAIS le backend Windows de notify-rust
+    // 4.17.0 (src/windows.rs::show_notification) ne lit *jamais* le champ `icon` —
+    // il ne lit que `path_to_image`, renseigné uniquement par
+    // `Notification::image_path()`. Or `tauri_plugin_notification::desktop::imp::
+    // Notification` (le wrapper interne utilisé par `.builder()...show()`)
+    // n'expose aucune méthode `image`/`image_path` : seul `.icon()` est câblé,
+    // et il route vers le champ ignoré sur Windows. Résultat : passer un chemin
+    // de fichier via `.icon()` sur Windows (plateforme primaire de LibreFlow)
+    // ne fait rien — silencieusement. Implémenter l'icône art nécessiterait de
+    // contourner tauri-plugin-notification et d'appeler notify-rust directement
+    // (ou un autre crate de notification) — décision à prendre par un humain,
+    // hors scope de ce fix.
+    #[allow(dead_code)]
     pub art: Option<String>,
 }
 
@@ -202,7 +217,7 @@ pub(crate) fn is_safe_dir(path: &Path) -> bool {
         ];
         if win_blocked
             .iter()
-            .any(|b| check_str == *b || check_str.starts_with(&format!("{}\\", b)))
+            .any(|b| check_str == *b || (check_str.starts_with(b) && matches!(check_str.as_bytes().get(b.len()), Some(&b'\\'))))
         {
             return false;
         }
@@ -341,7 +356,14 @@ pub fn check_paths(paths: Vec<String>) -> Vec<String> {
     paths
         .into_par_iter()
         .filter(|p| {
+            // Rejeter tout chemin contenant '..' (traversal) ou null bytes
+            // avant d'appeler is_safe_dir, qui opère sur le chemin brut non-canonicalisé.
+            if p.contains('\0') { return true; }
             let path = Path::new(p);
+            use std::path::Component;
+            if path.components().any(|c| c == Component::ParentDir) {
+                return true; // non conforme → orphelin
+            }
             let parent_safe = path
                 .parent()
                 .map(|parent| parent.as_os_str().is_empty() || is_safe_dir(parent))
@@ -399,7 +421,69 @@ pub async fn read_audio_props(path: String) -> Option<AudioProps> {
         })
     })
     .await
-    .unwrap_or(None)
+    .ok()
+    .flatten()
+}
+
+/// Lit les octets bruts d'un fichier audio pour décodage côté JS (analyse ReplayGain
+/// via OfflineAudioContext.decodeAudioData). Plafonné à 30 Mo — le JS estime déjà la
+/// taille avant d'appeler (CFG.RG_MAX_FILE_BYTES) mais on revalide côté Rust en défense
+/// en profondeur, l'estimation JS étant basée sur la durée et pouvant sous-évaluer.
+/// Async avec spawn_blocking pour éviter de bloquer le thread Tauri sur les gros fichiers.
+#[tauri::command]
+pub async fn read_audio_bytes(path: String) -> Option<Vec<u8>> {
+    const MAX_BYTES: u64 = 31_457_280; // 30 Mo — même plafond que CFG.RG_MAX_FILE_BYTES (JS)
+    tokio::task::spawn_blocking(move || {
+        let p = Path::new(&path);
+        if !is_audio(p) {
+            return None;
+        }
+        let canon = std::fs::canonicalize(p).ok()?;
+        if !is_audio(&canon) {
+            return None;
+        }
+        // Même garde is_safe_dir que read_tags/read_audio_props.
+        if let Some(parent) = canon.parent() {
+            if !is_safe_dir(parent) {
+                return None;
+            }
+        }
+        let meta = std::fs::metadata(&canon).ok()?;
+        if meta.len() > MAX_BYTES {
+            return None;
+        }
+        std::fs::read(&canon).ok()
+    })
+    .await
+    .ok()
+    .flatten()
+}
+
+/// Résout le dossier Musique de l'OS et crée `LibreFlow/` dedans si absent.
+/// Retourne le chemin canonique du sous-dossier créé.
+/// Windows : %USERPROFILE%\Music\LibreFlow
+/// macOS   : ~/Music/LibreFlow
+/// Linux   : répertoire audio XDG (ou ~/Music) + LibreFlow
+#[tauri::command]
+pub fn get_or_create_default_music_dir(app: AppHandle) -> Result<String, String> {
+    let base = app
+        .path()
+        .audio_dir()
+        .map_err(|e| format!("audio_dir failed: {}", e))?;
+    let dir = base.join("LibreFlow");
+    fs::create_dir_all(&dir)
+        .map_err(|e| format!("Impossible de créer le dossier LibreFlow : {}", e))?;
+    let canon = fs::canonicalize(&dir).map_err(|e| format!("Canonicalisation échouée : {}", e))?;
+    if !is_safe_dir(&canon) {
+        return Err(format!(
+            "Dossier refusé par la politique de sécurité : {}",
+            canon.display()
+        ));
+    }
+    canon
+        .into_os_string()
+        .into_string()
+        .map_err(|s| format!("Chemin non-UTF8 : {:?}", s))
 }
 
 /// Autorise l'accès au protocole asset:// pour un dossier donné à l'exécution.
@@ -454,7 +538,6 @@ pub fn pick_audio_file(app: AppHandle) -> Option<String> {
 /// Un timeout de 8 s protège contre les fichiers corrompus qui bloquent Probe::open().
 #[tauri::command]
 pub async fn read_tags(path: String) -> Result<Option<TrackTags>, String> {
-    let path_clone = path.clone();
     let result = timeout(
         Duration::from_secs(8),
         tokio::task::spawn_blocking(move || {
@@ -554,7 +637,7 @@ pub async fn read_tags(path: String) -> Result<Option<TrackTags>, String> {
     .await;
 
     match result {
-        Err(_elapsed) => Err(format!("read_tags timeout: {:?}", path_clone)),
+        Err(_elapsed) => Err("read_tags: timeout (file may be corrupt or too large)".to_string()),
         Ok(Err(join_err)) => Err(format!("read_tags join error: {join_err}")),
         Ok(Ok(inner)) => Ok(inner),
     }
@@ -579,6 +662,11 @@ pub async fn write_tags(data: WriteTagsData) -> Result<(), String> {
                 "write_tags: extension non autorisée après résolution — {}",
                 data.path
             ));
+        }
+        if let Some(parent) = canon.parent() {
+            if !is_safe_dir(parent) {
+                return Err(format!("write_tags: chemin système refusé — {}", data.path));
+            }
         }
         let mut tagged_file = Probe::open(&canon)
             .map_err(|e| format!("Probe::open: {e}"))?
@@ -626,6 +714,11 @@ pub async fn write_cover(data: WriteCoverData) -> Result<(), String> {
                 "write_cover: extension audio non autorisée après résolution — {}",
                 data.audio_path
             ));
+        }
+        if let Some(parent) = canon_audio.parent() {
+            if !is_safe_dir(parent) {
+                return Err(format!("write_cover: chemin système refusé — {}", data.audio_path));
+            }
         }
         const IMAGE_EXTS: &[&str] = &["png", "jpg", "jpeg", "webp", "bmp", "gif", "tiff", "tif"];
         let image_path_raw = Path::new(&data.image_path);
@@ -748,6 +841,11 @@ pub async fn write_replaygain_tags(data: WriteReplaygainData) -> Result<(), Stri
                 "write_replaygain_tags: extension non autorisée après résolution — {}",
                 data.path
             ));
+        }
+        if let Some(parent) = canon.parent() {
+            if !is_safe_dir(parent) {
+                return Err(format!("write_replaygain_tags: chemin système refusé — {}", data.path));
+            }
         }
         let mut tagged_file = Probe::open(&canon)
             .map_err(|e| format!("Probe::open: {e}"))?
@@ -999,6 +1097,24 @@ pub async fn organize_files(
             // completed: (new_path, original_path) for rollback
             let mut completed: Vec<(String, String)> = Vec::new();
 
+            fn rollback(
+                completed: &[(String, String)],
+                results: &mut Vec<OrganizeMoveResult>,
+                error_count: &mut usize,
+            ) {
+                for (done_to, done_from) in completed.iter().rev() {
+                    if let Err(re) = fs::rename(done_to, done_from) {
+                        *error_count += 1;
+                        results.push(OrganizeMoveResult {
+                            from: done_to.clone(),
+                            to: done_from.clone(),
+                            ok: false,
+                            error: Some(format!("rollback failed: {re}")),
+                        });
+                    }
+                }
+            }
+
             'outer: for m in &moves {
                 let from = Path::new(&m.from);
                 let to = Path::new(&m.to);
@@ -1023,14 +1139,7 @@ pub async fn organize_files(
                                 ok: false,
                                 error: Some(format!("Création dossier échouée : {e}")),
                             });
-                            for (done_to, done_from) in completed.iter().rev() {
-                                if let Err(e) = fs::rename(done_to, done_from) {
-                                    eprintln!(
-                                        "[organize] rollback rename failed: {} -> {}: {e}",
-                                        done_to, done_from
-                                    );
-                                }
-                            }
+                            rollback(&completed, &mut results, &mut error_count);
                             break 'outer;
                         }
                     }
@@ -1053,14 +1162,7 @@ pub async fn organize_files(
                                 m.from
                             )),
                         });
-                        for (done_to, done_from) in completed.iter().rev() {
-                            if let Err(e) = fs::rename(done_to, done_from) {
-                                eprintln!(
-                                    "[organize] rollback rename failed: {} -> {}: {e}",
-                                    done_to, done_from
-                                );
-                            }
-                        }
+                        rollback(&completed, &mut results, &mut error_count);
                         break 'outer;
                     }
                 }
@@ -1077,14 +1179,7 @@ pub async fn organize_files(
                                     m.to
                                 )),
                             });
-                            for (done_to, done_from) in completed.iter().rev() {
-                                if let Err(e) = fs::rename(done_to, done_from) {
-                                    eprintln!(
-                                        "[organize] rollback rename failed: {} -> {}: {e}",
-                                        done_to, done_from
-                                    );
-                                }
-                            }
+                            rollback(&completed, &mut results, &mut error_count);
                             break 'outer;
                         }
                     }
@@ -1140,17 +1235,7 @@ pub async fn organize_files(
                         });
                         // Rollback : tracker les échecs au lieu de les avaler
                         // silencieusement, pour que le frontend voie l'état réel.
-                        for (done_to, done_from) in completed.iter().rev() {
-                            if let Err(re) = fs::rename(done_to, done_from) {
-                                error_count += 1;
-                                results.push(OrganizeMoveResult {
-                                    from: done_to.clone(),
-                                    to: done_from.clone(),
-                                    ok: false,
-                                    error: Some(format!("rollback failed: {re}")),
-                                });
-                            }
-                        }
+                        rollback(&completed, &mut results, &mut error_count);
                         break 'outer;
                     }
                 }
@@ -1252,7 +1337,7 @@ fn _list_drives_impl() -> Vec<DriveInfo> {
 
     let mut buf = vec![0u16; 256];
     let len = unsafe { GetLogicalDriveStringsW(Some(&mut buf)) } as usize;
-    if len == 0 {
+    if len == 0 || len > buf.len() {
         return vec![];
     }
 

@@ -12,6 +12,8 @@ import { fmt }                   from './utils.js';
 import { get, subscribe }        from './store.js';
 import { audio }                 from './player.js';
 import { radioActive }           from './radio.js';
+import { dget }                  from './db.js';
+import { ART_MIME_ALLOWLIST }    from './artLoader.js';
 
 // Position du mini-player (remplace window._miniPos du BOOT-2)
 let _miniPos = null;
@@ -118,25 +120,33 @@ export async function updateMiniPlayer() {
   } else if (t.art && !t.art.startsWith('blob:')) {
     artForMini = t.art; // asset:// URLs → OK cross-window
   } else if (t.art && t.art.startsWith('blob:')) {
-    // Convertir blob: en base64 à la volée
+    // blob: URLs inaccessibles cross-window — convertir en base64 via _artBuf ou IDB (fetch interdit §15)
     try {
-      const resp = await fetch(t.art);
-      const buf  = await resp.arrayBuffer();
-      // BUG FIX F4 : btoa(String.fromCharCode(...new Uint8Array(buf))) provoque un
-      // "Maximum call stack size exceeded" pour les pochettes > ~250 Ko car le spread
-      // operator passe chaque octet comme argument de fonction (limite ~65 000 args).
-      // Solution : encoder par chunks de 8 192 octets.
-      const u8 = new Uint8Array(buf);
-      // Détecter le MIME réel depuis les magic bytes (PNG: 89 50 4E 47, sinon JPEG)
-      const isPNG = u8.length >= 4 && u8[0] === 0x89 && u8[1] === 0x50 && u8[2] === 0x4E && u8[3] === 0x47;
-      const mime  = isPNG ? 'image/png' : 'image/jpeg';
-      let binary = '';
-      const CHUNK = 8192;
-      for (let i = 0; i < u8.length; i += CHUNK) {
-        binary += String.fromCharCode(...u8.subarray(i, i + CHUNK));
+      let buf = t._artBuf || null;
+      let mimeHint = t._artMime || 'image/jpeg';
+      if (!buf) {
+        const rec = await dget('tracks', t.id).catch(() => null);
+        if (rec?.artBuf) {
+          buf = rec.artBuf;
+          const rawMime = rec.artMime || 'image/jpeg';
+          mimeHint = ART_MIME_ALLOWLIST.includes(rawMime) ? rawMime : 'image/jpeg';
+          t._artBuf  = buf;
+          t._artMime = mimeHint;
+        }
       }
-      artForMini = `data:${mime};base64,${btoa(binary)}`;
-      t._b64 = artForMini;
+      if (buf) {
+        const u8 = new Uint8Array(buf);
+        // Détecter le MIME depuis les magic bytes (PNG: 89 50 4E 47, sinon JPEG)
+        const isPNG = u8.length >= 4 && u8[0] === 0x89 && u8[1] === 0x50 && u8[2] === 0x4E && u8[3] === 0x47;
+        const mime  = isPNG ? 'image/png' : 'image/jpeg';
+        let binary = '';
+        const CHUNK = 8192;
+        for (let i = 0; i < u8.length; i += CHUNK) {
+          binary += String.fromCharCode(...u8.subarray(i, i + CHUNK));
+        }
+        artForMini = `data:${mime};base64,${btoa(binary)}`;
+        t._b64 = artForMini;
+      }
     } catch(e) { console.warn('[miniplayer] art base64 conversion failed:', e); artForMini = null; }
   }
   // await garantit que le mutex Rust est écrit avant que toggleMiniPlayer continue

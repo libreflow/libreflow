@@ -42,6 +42,7 @@ function _waitTauriReady() {
 /** @overload @param {'open_folder'} cmd @returns {Promise<OpenFolderResult | null>} */
 /** @overload @param {'check_paths'} cmd @param {{ paths: string[] }} args @returns {Promise<string[]>} */
 /** @overload @param {'read_audio_props'} cmd @param {{ path: string }} args @returns {Promise<AudioProps>} */
+/** @overload @param {'read_audio_bytes'} cmd @param {{ path: string }} args @returns {Promise<number[]>} */
 /** @overload @param {'write_tags'} cmd @param {{ data: { path: string, title: string, artist: string, album: string, genre: string, year: number|null, track_number: number|null } }} args @returns {Promise<void>} */
 /** @overload @param {'write_cover'} cmd @param {{ data: { audio_path: string, image_path: string } }} args @returns {Promise<void>} */
 /** @overload @param {'write_replaygain_tags'} cmd @param {{ data: { path: string, gain_db: number, peak: number } }} args @returns {Promise<void>} */
@@ -49,6 +50,7 @@ function _waitTauriReady() {
 /** @overload @param {'win_set_title'} cmd @param {{ title: string }} args @returns {Promise<void>} */
 /** @overload @param {'taskbar_set_playing'} cmd @param {{ playing: boolean }} args @returns {Promise<void>} */
 /** @overload @param {'taskbar_set_has_tracks'} cmd @param {{ hasTracks: boolean }} args @returns {Promise<void>} */
+/** @overload @param {'mini_get_state'} cmd @returns {Promise<Record<string, unknown>>} */
 /** @overload @param {'mini_update'} cmd @param {{ data: Record<string, unknown> }} args @returns {Promise<void>} */
 /** @overload @param {'mini_progress'} cmd @param {{ data: Record<string, unknown> }} args @returns {Promise<void>} */
 /** @overload @param {'allow_asset_dir'} cmd @param {{ path: string }} args @returns {Promise<void>} */
@@ -56,6 +58,17 @@ function _waitTauriReady() {
 /** @overload @param {'pick_audio_file'} cmd @returns {Promise<string | null>} */
 /** @overload @param {'pick_image'} cmd @returns {Promise<string | null>} */
 /** @overload @param {'win_close'|'win_minimize'|'win_maximize'|'mini_toggle'|'mini_close'|'watch_folder_stop'|'open_devtools'} cmd @returns {Promise<void>} */
+/** @overload @param {'get_or_create_default_music_dir'} cmd @returns {Promise<string>} */
+/** @overload @param {'organize_files'} cmd @param {{ moves: Array<{ from: string, to: string }>, dryRun: boolean }} args @returns {Promise<{ moves: Array<{ from: string, to: string, ok: boolean, error?: string }>, error_count: number }>} */
+/** @overload @param {'export_backup'} cmd @param {{ payload: { manifest: string, library: string, playlists: string, playlog: string, imports: string, config: string } }} args @returns {Promise<string | null>} */
+/** @overload @param {'import_backup'} cmd @returns {Promise<{ manifest: string, library: string, playlists: string, playlog: string, imports: string, config: string } | null>} */
+/** @overload @param {'list_drives'} cmd @returns {Promise<Array<{ path: string, label: string, kind: string, audio_cd: boolean, track_count: number }>>} */
+/** @overload @param {'open_folder_at'} cmd @param {{ startPath: string }} args @returns {Promise<OpenFolderResult | null>} */
+/** @overload @param {'cd_read_toc'} cmd @param {{ drive: string }} args @returns {Promise<{ drive: string, tracks: Array<{ idx: number, lba_start: number, frames: number, duration_sec: number }>, total_duration_sec: number }>} */
+/** @overload @param {'cd_rip_track'} cmd @param {{ drive: string, trackIdx: number, destPath: string, ripId: string }} args @returns {Promise<void>} */
+/** @overload @param {'cd_cancel_rip'} cmd @param {{ ripId: string }} args @returns {Promise<void>} */
+/** @overload @param {'cd_cache_dir'} cmd @returns {Promise<string>} */
+/** @overload @param {'cd_purge_cache'} cmd @returns {Promise<void>} */
 /**
  * @param {string} cmd
  * @param {Record<string, unknown>} [args]
@@ -70,8 +83,12 @@ async function invoke(cmd, args, opts) {
   if (!timeout) return window.__TAURI__.core.invoke(cmd, args);
   let _timerId;
   // @ts-ignore — __TAURI__ injected at runtime by Tauri, not in Window type
+  const _invokeP = window.__TAURI__.core.invoke(cmd, args).finally(() => clearTimeout(_timerId));
+  // Suppress late Rust rejections that arrive after the race resolves — without this,
+  // an error from the losing arm fires an unhandledrejection event.
+  _invokeP.catch(() => {});
   return Promise.race([
-    window.__TAURI__.core.invoke(cmd, args).finally(() => clearTimeout(_timerId)),
+    _invokeP,
     new Promise((_, fail) => {
       _timerId = setTimeout(
         () => {

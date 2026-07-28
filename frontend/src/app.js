@@ -1,58 +1,58 @@
 // @ts-nocheck
 // LibreFlow — Main application
 import { invoke, invokeRetry, listen, convertFileSrc } from './ipc.js';
-import { audio, playAt, prev, next, togglePlay, buildQ,
+import { audio, playAt, prev, next, togglePlay,
          toggleShuffle, toggleRepeat, toggleLike, likeat,
          setIcon, setSpeed, setCrossfade, initCrossfadeAudio,
          clearCrossfadeTimers, getNextIdx, ensureUrl,
-         initMediaSession, updateMediaSession, updateMediaSessionState,
-         checkCrossfade, setManualQueue, resetShuffleQ,
+         initMediaSession,
+         resetShuffleQ,
          adjustShuffleQAfterDelete, setBootVizState }       from './player.js';
 import { emit, on, EVENTS }                                from './bus.js';
-import { get, set, notify, subscribe, setBatch }           from './store.js';
+import { get, set, notify, subscribe }                     from './store.js';
 // Side-effect import: registers GSAP core + Flip + CustomEase once at boot.
 // Consumers import named primitives from './motion.js' as needed.
-import './motion.js';
-import { CFG, SORTS, SLBLS, SPEEDS, SPEED_LBLS } from './cfg.js';
+import { setMotionPref, onMotionPrefChange, applyMotionAttr } from './motion.js'; // Task 10
+import { CFG, SPEEDS } from './cfg.js';
 import { openDB, tx, dget, dall, dput, ddel, DB, getStorageEstimate } from './db.js';
-import { readTags, extractColor, GENRE_ARTISTS, GENRE_KEYWORDS, guessGenre } from './tags.js';
-import { LANGS, i18n, initLang, getLang, applyLang, setLang } from './i18n.js';
-import { cinemaOpen, cinemaBg, initCinemaBg, toggleCinema, openCinema, closeCinema, updateCinema, updateCinemaProgress, setCinemaBg, cycleCinemaBg, applyCinemaBg, syncCinemaBgSettings, updateCinemaBgBtn, toggleCinemaFullscreen, CINEMA_BG_MODES, CINEMA_BG_LABELS, updateCinArtColor } from './cinema.js';
-import { queueOpen, toggleQueue, closeQueue, renderQueue, playQueueItem, clearQueueOverride, addToQueueNext, addToQueueEnd, refreshQueueBadge, getQueueState, restoreQueueState } from './queue.js';
+import { i18n, initLang, getLang, applyLang, setLang } from './i18n.js';
+import { cinemaOpen, initCinemaBg, toggleCinema, openCinema, closeCinema, setCinemaBg, cycleCinemaBg, applyCinemaBg, toggleCinemaFullscreen, updateCinArtColor, initCinemaVizSuspend, startCinemaViz } from './cinema.js';
+import { syncCinVolumeUI } from './cinema-render.js'; // Task 7 fix : chemin volume mini-player → état mute cinéma cohérent
+import { toggleQueue, closeQueue, renderQueue, playQueueItem, clearQueueOverride, addToQueueNext, addToQueueEnd, getQueueState, restoreQueueState } from './queue.js';
 import { exportM3U, importM3U } from './m3u.js';
-import { VIRT } from './virt.js';
-import { playLog, setPlayLog, logPlay, flushPlayLog, cancelPlayLogFlush } from './playlog.js';
-import { eqCtx, eqSource, eqNodes, eqEnabled, eqOpen, initEQ, ensureEQResumed, toggleEQ, closeEQ, renderEQBands, setEQBand, applyEQPreset, eqAutoMode, setEQAutoMode, toggleEQAutoMode, loadEQProfiles, getEQProfiles, applyGenreEQ, startSmartEQ, stopSmartEQ, updateSmartEQLoudness, updateSmartEQGenre, filterEQPresets, initBootEQ, getActiveEqPreset, masterGainNode, setMasterGain, setEQExpert } from './eq.js';
+import { setPlayLog, flushPlayLog, cancelPlayLogFlush } from './playlog.js';
+import { initEQ, toggleEQ, closeEQ, applyEQPreset, eqAutoMode, setEQAutoMode, toggleEQAutoMode, loadEQProfiles, getEQProfiles, initBootEQ, getActiveEqPreset, masterGainNode, setMasterGain, setEQExpert } from './eq.js';
 import { initDeviceEQ }                                from './eqdevice.js';
 import { initDevices }                                 from './devices.js';
 import { cleanupCdCache }                              from './cdaudio.js';
-import { initViz, startViz, stopViz, updateVizColor, setVizMode, getVizMode, setVizEnabled, getVizEnabled } from './viz.js';
-import { sleepFading, setSleepFading, sleepEndOfTrack, toggleSleepMenu, setSleepTimer, setSleepEndOfTrack, setSleepCustom, cancelSleepTimer } from './sleep.js';
-import { esc, fmt, fmtd, extEmoji, normTag, mainArtist, validYear } from './utils.js';
-import { radioActive, startRadio, stopRadio, resetRadio, radioRefillQueue, toggleRadio, ctxStartRadio, radioRegenerateFromCurrent, radioSaveAsPlaylist, getRadioQueue, renderRadioView, openRadioView, syncRadioLibBar, getRadioSeedId, initRadioSeedId } from './radio.js';
+import { initViz, setVizMode, getVizMode, setVizEnabled, getVizEnabled, suspendViz, resumeViz } from './viz.js';
+import { setSleepFading, sleepEndOfTrack, toggleSleepMenu, setSleepTimer, setSleepEndOfTrack, setSleepCustom, cancelSleepTimer } from './sleep.js';
+import { esc, fmt, fmtd, extEmoji, normTag, fmtArtists, mainArtist, validYear } from './utils.js';
+import { radioActive, startRadio, stopRadio, resetRadio, radioRefillQueue, ctxStartRadio, radioRegenerateFromCurrent, radioSaveAsPlaylist, renderRadioView, openRadioView, getRadioSeedId, initRadioSeedId, initRadioPlCallbacks } from './radio.js';
 import { initWatchPath, getWatchPath, stopWatchFolder, updateWatchUI, importPaths, startWatchNative } from './watchfolder.js'; // Bug #7 fix : startWatchNative ajouté
 import { renderStats, getHeatPeriod, initHeatPeriod } from './stats.js';
 import { switchPlTab, openSmartPlaylistModal, _setSmartSeed, smartSeedSearch, smartPreview, confirmSmartPlaylist, regenerateSmartPlaylist } from './smartplaylist.js';
 import { detectDupes, removeDupeTrack, deleteAllDupes, closeDupes } from './dupes.js';
 import { checkOrphans } from './orphans.js';
 import { selection, selectionMode, clearSelection, toggleTrackSelection, selAddToPlaylist, selAddBatch, selToggleLike, selRemove, selBatchTagEdit, closeBatchTagModal, confirmBatchTagEdit } from './selection.js';
-import { toggleMiniPlayer, updateMiniPlayer, updateMiniProgress, resetMiniProgressThrottle, setMiniPos, getMiniPos } from './miniplayer.js';
-import { toggleMiniOverlay, syncMiniOverlay, updateMiniOverlayProgress, initMiniOverlayDrag, reclampMiniOverlay } from './minioverlay.js';
-import { rgEnabled, rgTargetLUFS, initRgState, initRG, setReplayGain, setRGTarget, analyzeAndApplyRG, applyRGGain, cancelRgAnalysis } from './replaygain.js';
+import { resetMiniProgressThrottle, setMiniPos, getMiniPos } from './miniplayer.js';
+import { toggleMiniOverlay, initMiniOverlayDrag, reclampMiniOverlay } from './minioverlay.js';
+import { rgEnabled, rgTargetLUFS, initRgState, initRG, setReplayGain, setRGTarget, analyzeAndApplyRG } from './replaygain.js';
 import { openTagEditor, saveTagEdit, cancelTagEdit } from './tagedit.js';
 import { toast, toastWithAction, confirmAction, resolveConfirm, initRipple } from './ui.js';
 import { checkForUpdate, checkForUpdateManual, initAppVersion } from './updater.js';
-import { getFiltered, filteredIdx, rebuildTrackIdxMap, trackIdx, invalidateFilterCache,
+import { getFiltered, rebuildTrackIdxMap, trackIdx, invalidateFilterCache,
          _trackIdxMap }    from './search.js';
 import { loadTagsAndDurations, loadTagsBg,
          saveTrack, saveTracks, saveTrackNow, flushTrackBatch,
          cancelTrackBatch }                                           from './library.js';
-import { renderGenresGrid, drillGenre, setContentView, rescanGenres, invalidateGenreGridSig } from './genres.js';
+import { revokeArt } from './artLoader.js';
+import { renderGenresGrid, drillGenre, rescanGenres, invalidateGenreGridSig } from './genres.js';
 import {
-  savePlaylists, renderPlNav, setupPlNavDrop,
-  renderPlHero, setPlSort, setPlModalMode,
+  savePlaylists, savePlaylistsNow, renderPlNav, setupPlNavDrop,
+  renderPlHero, setPlSort,
   openNewPlaylistModal, openRenamePlaylistModal, closePlModal, confirmPlaylistModal,
-  deletePlaylist, addTrackToPlaylist, removeTrackFromPlaylist, movePlaylistTrack,
+  deletePlaylist, movePlaylistTrack,
   showPlCtxMenu, ctxPlayPlaylist, ctxShufflePlaylist,
   showPlQuickPop, closePlQuickPop, pqpAdd, pqpNew,
   onTrackDragStart, onPlNavDragStart,
@@ -61,100 +61,60 @@ import {
   // S157 FIX-1 : onPlFolderDragOver/Leave/Drop retirés des imports — code mort.
   // Le drag-drop folder est entièrement géré par event delegation dans setupPlNavDrop()
   // (cf. data-folder-drop-id sur .pl-folder-h). Plus aucun handler inline ondragover=…
-  onPlCoverSelected, clearPlCover, trapFocus,
+  onPlCoverSelected, clearPlCover,
   _plHeroInlineRename, _plNavInlineRename,
-  _attachPlaylistReorder, _detachPlaylistReorder,
   playPlaylistFrom, playPlaylistDirect, shufflePlaylist,
 } from './playlists.js';
 export { playPlaylistFrom, playPlaylistDirect, shufflePlaylist }; // re-export (handlers.js backward compat)
 
 import { toggleNowPlaying, closeNowPlaying, updateNowPlaying, initNpBg, onResizeNowPlaying } from './nowplaying.js';
 import {
-  initSettingsVars, getTheme, getDynColor, getDisplayMode, isShortcutsOpen,
+  initSettingsVars, getTheme, getDynColor, getDisplayMode,
   switchSetTab, openSettings, closeSettings,
-  setTheme, applyTheme, setDynColor,
+  setTheme, setDynColor,
   applyArtColor, clearArtColor, animateArtChange, _updateArtBlur,
   closeShortcuts, toggleShortcuts,
   setMode, toggleMode,
   _syncVizBtns,
 } from './settings.js';
 import {
-  _showViewRaw, showView, goHome, setView, onSearch, nextSort,
-  nextAlbumSort, nextArtistSort, nextGenreSort,
+  showView, goHome, setView, onSearch, nextSort,
+  nextAlbumSort,
   statsGoToGenre, statsGoToArtist, statsGoToAlbum,
   updateClearFiltersBtn, clearAllFilters,
 } from './views.js';
 import { _showSkeletonRows,
          virtRenderWindow, virtAttachScroll,
          renderLib, renderAlbumsGrid, renderArtistsGrid, renderPlaylistsGrid,
-         drillDown, updatePlActionBar, updateBreadcrumb,
-         makeLikeBtn, makeAddBtn, makeEqHTML, artPlaceholder, hlText, thtml,
-         playById, patchActiveTrack, patchPlayState, patchTrackEl,
-         scheduleStatsUpdate, updateStats, updateSidebarCounts,
-         _withVT, animateViewChange, scrollToCurrentTrack } from './renderer.js';
+         drillDown, updatePlActionBar,
+         playById, patchActiveTrack, patchPlayState,
+         _withVT, scrollToCurrentTrack } from './renderer.js';
 // ── allplayerui.js (ARCH-1) ──────────────────────────────────────────────────
 import { _allPlayerUI } from './allplayerui.js';
 import { showCtxMenu, closeCtxMenu, ctxToggleLike, ctxDeleteTrack, ctxEditTags, ctxGoToArtist, ctxGoToAlbum, ctxNewPlaylist, ctxRemoveFromPlaylist, ctxSmartPlaylist, ctxPlayNext, ctxAddToQueueEnd, ctxCopyInfo } from './ctxmenu.js';
 import { initDrop } from './dropin.js';
 import { initKeyNav } from './keynav.js';
+import { initSbResize } from './sbresize.js';
 import { initShortcuts } from './shortcuts.js';
 import { setTlistZoom, initTlistZoomWheel } from './tlistZoom.js';
 import { confirmClear, closeModal } from './modal.js';
 export { confirmClear, closeModal }; // re-export pour handlers.js
 import { updateBar, updateVolSlider, setupMarquee, reflowMarquee } from './playerbar.js';
-export { updateBar, updateVolSlider }; // re-exports pour library.js, selection.js, tagedit.js, handlers.js
+export { updateVolSlider }; // re-export pour handlers.js
 // ── cfgsave.js (ARCH-1) ──────────────────────────────────────────────────────
 import { saveCfg, saveCfgNow } from './cfgsave.js';
-export { saveCfg, saveCfgNow }; // re-exports pour cinema.js, ctxmenu.js, player.js, etc.
+export { saveCfg }; // re-export pour cinema.js, ctxmenu.js, player.js, etc.
 // ── state.js (ARCH-1) ────────────────────────────────────────────────────────
-import { setCurIdx, setTracks, setLiked, setCtxTrackId, replaceTracks } from './state.js';
+import { setCurIdx, setLiked, setCtxTrackId, replaceTracks } from './state.js';
 import { setAriaValueText }                                    from './a11y.js';
 
+// CLAUDE.md §6: câbler les fonctions playlists dans radio.js via app.js (pas d'import direct)
+initRadioPlCallbacks({ savePlaylists: savePlaylistsNow, renderPlNav, setupPlNavDrop });
+// CLAUDE.md §6: câbler la suspension du viz player-bar dans cinema.js via app.js
+// (openCinema/closeCinema suspendent/reprennent viz.js sans import direct — P1 fix)
+initCinemaVizSuspend({ suspendViz, resumeViz });
+
 // ── Helpers ──────────────────────────────────────────────────────────────────
-
-// ── JSDoc type definitions ────────────────────────────────────────────────────
-
-/**
- * A music track stored in the 'tracks' IDB store.
- * @typedef {object} Track
- * @property {string}       id          - Unique ID (hash of path)
- * @property {string}       name        - Track title
- * @property {string}       artist      - Main artist (first before feat./&)
- * @property {string}       artistFull  - Full artist string incl. featuring
- * @property {string}       album       - Album name
- * @property {string}       path        - Absolute OS path
- * @property {string}       ext         - File extension (flac, mp3, …)
- * @property {number}       duration    - Duration in seconds
- * @property {number}       dateAdded   - Unix timestamp (ms) when added
- * @property {string|null}  art         - Base64-encoded album art (JPEG/PNG) or null
- * @property {string|null}  artColor    - Dominant colour hex extracted from art
- * @property {string|null}  genre       - Guessed or tagged genre
- * @property {boolean}      liked       - In-memory liked flag (rebuilt from IDB on load)
- * @property {boolean}      metaDone    - True once tags have been fully loaded
- * @property {string|null}  url         - asset:// URL (set on first play, null until then)
- * @property {File|null}    file        - Temporary File object during tag loading, null afterward
- * @property {number|undefined} rgGain  - ReplayGain track gain in dB, if analysed
- */
-
-/**
- * A user-created playlist.
- * @typedef {object} Playlist
- * @property {string}   id        - UUID
- * @property {string}   name      - Display name
- * @property {string[]} trackIds  - Ordered array of Track ids
- * @property {boolean}  [smart]   - True if this is a smart playlist
- * @property {object}   [rules]   - Smart playlist filter rules
- */
-
-/**
- * A play-log entry persisted in the 'playlog' IDB store.
- * @typedef {object} PlaylogEntry
- * @property {number} ts   - Timestamp of play start (Date.now())
- * @property {string} id   - Track id
- * @property {number} dur  - Seconds actually played
- */
-
-
 
 
 // ══ State ══════════════════════════════════════
@@ -185,39 +145,15 @@ let ctxTrackId  = null; // track id for context menu
 let query   = '';
 // _recentFilterToastShown et _queueEndedToastShown → player.js
 
-// ══ Variables déclarées ici pour éviter ReferenceError (utilisées avant leur section) ══
-// _coll → search.js (importé ci-dessus)
-// radioActive, radioSeedId, radioQueue, _radioPlayedIds → radio.js
-// _lastNotifTrackId → playerbar.js (moved CQ-2)
-// _saveCfgTimer → cfgsave.js (moved ARCH-1)
 let _retryArtTimer    = null; // FIX #21 — annulable dans clearLibrary()
 let _orphansTimer     = null; // FIX #22 — annulable dans clearLibrary()
-// _pqpTrackId, _dragTrackId → playlists.js
-// _smartSeedId → smartplaylist.js
-// lang → i18n.js (initLang / getLang)
 let crossfadeDur = 0;
-// cfFadeTimer, cfNextTimer, _cfRafId, _cfGen, audioNext, audioNextSource,
-// audioNextGain, _gaplessNextIdx → player.js
-// queueOpen, _ptrState → queue.js
 let manualQueue       = [];
-// eqOpen, eqCtx, eqSource, eqNodes → eq.js
-// cinemaOpen, cinemaBg, cinemaHideTimer → cinema.js
-// eqEnabled → eq.js
-// rgEnabled, rgTargetLUFS, rgGainNode → replaygain.js
-// watchPath, watchInterval, watchSnapshot → watchfolder.js
 let albumSort         = 'name';   // 'name' | 'count' | 'duration'
 let artistSort        = 'name';   // 'name' | 'count'
 let genreSort         = 'count';  // 'count' | 'name'
-const _unlisteners    = [];        // Tauri listeners — collected for cleanup on pagehide
-// Signatures de cache pour les grilles — évite de recalculer si rien n'a changé
-// _genreGridSig → genres.js (Jalon 5)
-
-// _PSC, _albumMapCache, _artistMapCache → search.js (importés ci-dessus)
-// _saveTrackBatch, _saveTrackTimer, _scanInProgress → library.js
+const _unlisteners    = [];       // Tauri listeners — collected for cleanup on pagehide
 let albumDetailSort   = 'track';  // 'track' | 'az' — tri dans la vue détail album
-// dupesGroups → dupes.js
-// sleepTimerEnd, sleepTickTimer, sleepFading → sleep.js
-// _playLogFlushTimer → playlog.js
 let playbackSpeed     = 1;
 
 // ── Sync des vars locales depuis le store (mises à jour par player.js) ────────
@@ -255,7 +191,7 @@ subscribe('albumDetailSort',  v => { albumDetailSort  = v; });
 // ── Bus event handlers ────────────────────────────────────────────────────────
 // TRACK_CHANGE : player.js a démarré une nouvelle piste → mettre à jour l'UI
 on(EVENTS.TRACK_CHANGE, ({ track, idx }) => {
-  updateBar(); patchActiveTrack(); _allPlayerUI();
+  updateBar(); patchActiveTrack(); patchPlayState(!audio.paused); _allPlayerUI();
 });
 // PLAY_STATE : play ou pause → mettre à jour la ligne active + widgets
 on(EVENTS.PLAY_STATE, ({ playing }) => {
@@ -269,10 +205,36 @@ on(EVENTS.FILTER_CHANGED, () => { renderLib(); updateClearFiltersBtn(); });
 // LIBRARY_UPDATED : enable/disable taskbar thumbnail buttons based on track count
 on(EVENTS.LIBRARY_UPDATED, ({ tracks }) => {
   invoke('taskbar_set_has_tracks', { hasTracks: tracks.length > 0 }).catch(e => { console.warn('[taskbar] taskbar_set_has_tracks failed:', e); });
-  updateSidebarCounts();
 });
-// ERG-P2 : RENDER_LIB couvre toggle like / playlog update / suppressions → re-calcul léger
-on(EVENTS.RENDER_LIB, () => updateSidebarCounts());
+// REWORK-5 : les pilules de compteurs en nav ont été supprimées.
+// VIEW_REQUEST : navigation demandée par un satellite (playlists, radio, queue,
+// smartplaylist) — seul app.js a le droit d'appeler setView (§6). Le listener
+// avait été perdu au merge a11y (8e70a17) : 14 émissions étaient des no-op.
+on(EVENTS.VIEW_REQUEST, ({ view: v, btn, plId }) => setView(v, btn || undefined, plId));
+// TRACK_SAVE_REQUEST : replaygain.js a calculé rgGain/rgGainDB/rgPeak pour la piste
+// courante — persister via saveTracks() (IDB, debounced) pour éviter de refaire
+// l'analyse RG complète (décodage + LUFS) à chaque lecture future de cette piste.
+on(EVENTS.TRACK_SAVE_REQUEST, ({ track }) => saveTracks(track));
+// STATS_DRILL_ARTIST / STATS_DRILL_GENRE : clic sur une ligne artiste/genre dans le
+// panneau Stats → naviguer vers la vue détail correspondante (statsGoToArtist/Genre,
+// déjà implémentées dans views.js mais jamais câblées à ces émissions).
+on(EVENTS.STATS_DRILL_ARTIST, ({ displayName }) => statsGoToArtist(displayName));
+on(EVENTS.STATS_DRILL_GENRE, ({ key, displayName }) => statsGoToGenre(key, displayName));
+// TRACK_REMOVED : state.js a retiré une/des piste(s) de tracks[] — libérer leur
+// blob: URL d'artwork en cache (artLoader.js), sinon elles ne sont récupérées que
+// de façon incidente par l'éviction LRU sous pression cache.
+on(EVENTS.TRACK_REMOVED, ({ ids }) => { ids.forEach(id => revokeArt(id)); });
+
+// Task 10 — préférence d'animation : recalcule data-motion + relance les boucles
+// canvas cinéma (applyCinemaBg + startCinemaViz, cf. Task 2) si le mode cinéma est
+// ouvert. Déclenché par un changement de réglage (settings.js, via le bus — évite
+// un import cross-module) OU par l'OS en mode 'system' (onMotionPrefChange, motion.js).
+function _refreshMotion() {
+  applyMotionAttr();
+  if (cinemaOpen) { applyCinemaBg(); startCinemaViz(); }
+}
+on(EVENTS.MOTION_PREF_CHANGED, ({ pref }) => { setMotionPref(pref); _refreshMotion(); });
+onMotionPrefChange(_refreshMotion);
 
 // ══ Boot ═══════════════════════════════════════
 
@@ -438,6 +400,8 @@ async function boot() {
     if (cfg.artistSort      && ['name','count'].includes(cfg.artistSort))              { artistSort      = cfg.artistSort;      set('artistSort',      artistSort); }
     if (cfg.genreSort       && ['count','name'].includes(cfg.genreSort))               { genreSort       = cfg.genreSort;       set('genreSort',       genreSort); }
     if (cfg.albumDetailSort && ['track','az'].includes(cfg.albumDetailSort))           { albumDetailSort = cfg.albumDetailSort; set('albumDetailSort', albumDetailSort); }
+    if (cfg.plGridSort      && ['manual','az','recent'].includes(cfg.plGridSort))      { set('plGridSort', cfg.plGridSort); }
+    if (Number.isFinite(cfg.sbWidth) && cfg.sbWidth >= 200 && cfg.sbWidth <= 420)      { set('sbWidth', cfg.sbWidth); }
     // EQ : sera appliqué après initEQ() (les nodes n'existent pas encore)
     initBootEQ(cfg.eqGains, cfg.eqEnabled, cfg.eqPreset);
     setBootVizState(cfg.vizMode, cfg.vizEnabled === false);
@@ -481,7 +445,18 @@ async function boot() {
     }
   }
   // Zoom liste de pistes — appliquer AVANT le premier rendu (tlistZoom.js)
-  setTlistZoom((cfg && cfg.tlistZoom) || 'normal');
+  setTlistZoom((cfg && cfg.tlistZoom) || 'comfortable', { silent: true });
+  // Temps restant cliquable sur #td (audit 2026-07-27)
+  set('showRemaining', !!(cfg && cfg.showRemaining));
+  // Task 10 — préférence d'animation : data-motion déjà posé avant le 1er paint par
+  // public/boot-motion.js (mirror localStorage lf-motion, fallback statique "full") ;
+  // la cfg IDB reste la source de vérité — on corrige ici attribut ET mirror si divergents
+  // (couvre aussi les profils existants d'avant l'introduction du mirror).
+  const motionPref = (cfg && cfg.motionPref) || 'system'; // AUDIT-2026-07-27 : défaut = prefers-reduced-motion OS
+  set('motionPref', motionPref);
+  setMotionPref(motionPref);
+  applyMotionAttr();
+  try { localStorage.setItem('lf-motion', motionPref); } catch (e) { console.warn('[boot] mirror lf-motion non écrit:', e); }
   // Ctrl/Cmd + molette → cycle le niveau de zoom sur #tlist (throttle 150ms).
   initTlistZoomWheel();
   // PERF : charger playlists, playlog et tracks EN PARALLÈLE (était séquentiel → 3× plus lent)
@@ -508,13 +483,12 @@ async function boot() {
     // We store them but flag them as needing file load
     // PERF-BOOT : traitement par tranches — évite le blocage main-thread sur grandes bibliothèques.
     // BOOT-2 FIX : cadence réduite à 10-20 yields pour 50k pistes (était 100 yields × setTimeout(0) ≈ +400ms).
-    const _BOOT_CHUNK = 5000;
     const _tracksArr = [];
-    for (let _bi = 0; _bi < saved.length; _bi += _BOOT_CHUNK) {
-      const _slice = saved.slice(_bi, _bi + _BOOT_CHUNK);
+    for (let _bi = 0; _bi < saved.length; _bi += CFG.BOOT_CHUNK) {
+      const _slice = saved.slice(_bi, _bi + CFG.BOOT_CHUNK);
       for (const r of _slice) {
-        // Re-apply mainArtist on load to fix any old bad data in DB
-        const artistFull = r.artistFull || r.artist || i18n('unknown_artist');
+        // Re-apply fmtArtists + mainArtist on load to fix any old bad data in DB
+        const artistFull = fmtArtists(r.artistFull || r.artist) || i18n('unknown_artist');
         const artist     = mainArtist(artistFull) || artistFull;
         _tracksArr.push({
           id: r.id, name: r.name,
@@ -545,12 +519,11 @@ async function boot() {
           bitDepth:   r.bitDepth   != null ? r.bitDepth   : null,
         });
       }
-      if (_bi + _BOOT_CHUNK < saved.length) await new Promise(res => setTimeout(res, 0));
+      if (_bi + CFG.BOOT_CHUNK < saved.length) await new Promise(res => setTimeout(res, 0));
     }
-    tracks = _tracksArr;
     // RACE-1 FIX : replaceTracks() atomically does set('tracks') + rebuildTrackIdxMap()
     // so subscribers that call trackIdx() during the set notification see a consistent map.
-    replaceTracks(tracks); // Jalon 3/4
+    replaceTracks(_tracksArr); // Jalon 3/4
     emit(EVENTS.LIBRARY_UPDATED, { tracks });
 
     // IPC-ASSET : restaurer l'accès asset:// pour chaque dossier parent unique des pistes
@@ -562,7 +535,6 @@ async function boot() {
     )];
     _assetDirs.forEach(dir => invoke('allow_asset_dir', { path: dir }).catch(e => console.warn('[app:allow_asset_dir]', dir, e)));
     // Reconstruire liked par IDs si disponible (robuste aux réordres)
-    updateStats();
     renderLib();
     // UX-3 : masquer le spinner de boot après le premier rendu de la bibliothèque
     const _bootSpinner = document.getElementById('boot-spinner');
@@ -600,13 +572,12 @@ async function boot() {
         dismissSpinner();
         const loaded = _retryList.filter(t => t.art).length;
         if (loaded) toast(i18n('t_artwork_retry_done', loaded), 'success');
-        scheduleStatsUpdate();
       }, 3000); // 3s après boot pour ne pas concurrencer le rendu initial
     }
 
     // C-2 : vérification des fichiers orphelins — 6s après boot, non-bloquant
     // (après l'artwork retry pour ne pas cumuler les I/O au démarrage)
-    _orphansTimer = setTimeout(() => checkOrphans(), 6000); // FIX #22 — stocker le timer
+    _orphansTimer = setTimeout(() => checkOrphans(), CFG.ORPHAN_START_DELAY_MS); // FIX #22 — stocker le timer
 
     // MINOR-1 FIX : applyLang() / setMode() / sync UI AVANT le await BOOT-1.
     // Avant ce fix, ces appels venaient après le bloc if/else → bloqués jusqu'à 5s
@@ -640,6 +611,8 @@ async function boot() {
           if (cfg.curPos && cfg.curPos > 0 && cfg.curPos < (audio.duration - 2)) {
             audio.currentTime = cfg.curPos;
           }
+          // CLAUDE.md §2 invariant 7: radioRefillQueue() BEFORE any UI update tied to the track
+          radioRefillQueue();
           updateBar();
           patchActiveTrack();
           // UX-5: toast de session restaurée
@@ -722,7 +695,7 @@ async function boot() {
 // openFolder, loadTagsAndDurations, loadTagsBg → library.js
 // getFiltered, rebuildTrackIdxMap, trackIdx, _trackIdxMap → search.js (imports directs)
 
-export function invalidateFilter() {
+function invalidateFilter() {
   invalidateFilterCache();    // search.js : _GF, _PSC, _albumMapCache, _artistMapCache
   invalidateGenreGridSig();   // genres.js (Jalon 5)
   emit(EVENTS.FILTER_CHANGED, {}); // Jalon 4 — signal "dirty" : subscribers appellent getFiltered()
@@ -748,7 +721,7 @@ export function invalidateFilter() {
 // Imported at the top of this file and re-exported as saveCfg / saveCfgNow.
 
 // ══ PLAYLISTS → playlists.js ══════════════════════════════════════════════
-// savePlaylists, trapFocus, renderPlHero, setPlSort,
+// savePlaylists, renderPlHero, setPlSort,
 // _plHeroInlineRename, _plNavInlineRename, _plNavItemHTML, renderPlNav,
 // renamePlFolder, deletePlFolder, togglePlFolder, showPlFolderCtxMenu,
 // onPlFolderDragOver/Leave/Drop, togglePinPlaylist, movePlToFolder,
@@ -841,6 +814,7 @@ waitForTauri(() => {
   initMiniOverlayDrag(); // Drag du mini-player overlay in-page
   initRipple(); // Ripple feedback sur boutons et lignes
   initKeyNav({ reorderTrack: movePlaylistTrack }); // A11Y: roving tabindex arrow-key nav + Alt+↑/↓ reorder (SC 2.5.7)
+  initSbResize(); // QUALITÉ-1 : sidebar redimensionnable (largeur restaurée depuis cfg.sbWidth)
 
   // Commandes depuis le mini-player (fenêtre séparée)
   // BUG FIX F6 : stocker l'unlistener mini-cmd avec les autres (voir boot())
@@ -853,9 +827,13 @@ waitForTauri(() => {
     else if (cmd === 'toggle-shuffle') toggleShuffle();
     else if (cmd === 'toggle-repeat')  toggleRepeat();
     else if (cmd === 'go-home')        goHome();
-    else if (cmd === 'volume-down') { const _c=masterGainNode?masterGainNode.gain.value:audio.volume; const v=Math.max(0,_c-0.05); setMasterGain(v); const vel=document.getElementById('vol'); if(vel){vel.value=v; updateVolSlider(vel); setAriaValueText(vel, _v => `${Math.round(_v * 100)} pour cent`, v);} saveCfg(); _allPlayerUI(); }
-    else if (cmd === 'volume-up')   { const _c=masterGainNode?masterGainNode.gain.value:audio.volume; const v=Math.min(1,_c+0.05); setMasterGain(v); const vel=document.getElementById('vol'); if(vel){vel.value=v; updateVolSlider(vel); setAriaValueText(vel, _v => `${Math.round(_v * 100)} pour cent`, v);} saveCfg(); _allPlayerUI(); }
-    else if (cmd === 'volume-set' && data != null) { const v=Math.max(0,Math.min(1,data)); setMasterGain(v); const vel=document.getElementById('vol'); if(vel){vel.value=v; updateVolSlider(vel); setAriaValueText(vel, _v => `${Math.round(_v * 100)} pour cent`, v);} saveCfg(); _allPlayerUI(); } // QW-10
+    // Task 7 fix : `if(cinemaOpen) syncCinVolumeUI(v)` — _allPlayerUI() ne touche que le
+    // mini-player/overlay, jamais le cinéma ; sans ce sync, un changement de volume depuis
+    // la fenêtre mini-player laisserait le bouton mute cinéma (aria-pressed/icône X) périmé.
+    // syncCinVolumeUI dérive l'état muet du volume réel (v==0 ⟺ muet) — cohérent partout.
+    else if (cmd === 'volume-down') { const _c=masterGainNode?masterGainNode.gain.value:parseFloat(document.getElementById('vol')?.value??'1'); const v=Math.max(0,_c-0.05); setMasterGain(v); const vel=document.getElementById('vol'); if(vel){vel.value=v; updateVolSlider(vel); setAriaValueText(vel, _v => `${Math.round(_v * 100)} pour cent`, v);} saveCfg(); _allPlayerUI(); if(cinemaOpen) syncCinVolumeUI(v); }
+    else if (cmd === 'volume-up')   { const _c=masterGainNode?masterGainNode.gain.value:parseFloat(document.getElementById('vol')?.value??'1'); const v=Math.min(1,_c+0.05); setMasterGain(v); const vel=document.getElementById('vol'); if(vel){vel.value=v; updateVolSlider(vel); setAriaValueText(vel, _v => `${Math.round(_v * 100)} pour cent`, v);} saveCfg(); _allPlayerUI(); if(cinemaOpen) syncCinVolumeUI(v); }
+    else if (cmd === 'volume-set' && data != null) { const v=Math.max(0,Math.min(1,data)); setMasterGain(v); const vel=document.getElementById('vol'); if(vel){vel.value=v; updateVolSlider(vel); setAriaValueText(vel, _v => `${Math.round(_v * 100)} pour cent`, v);} saveCfg(); _allPlayerUI(); if(cinemaOpen) syncCinVolumeUI(v); } // QW-10
     else if (cmd === 'seek' && data != null && audio.duration) {
       audio.currentTime = data * audio.duration;
       resetMiniProgressThrottle(); // le prochain timeupdate passe immédiatement
@@ -966,7 +944,7 @@ export async function clearLibrary() {
     if (t.url && t.url.startsWith('blob:'))  try { URL.revokeObjectURL(t.url);  } catch(e) { console.warn('[app:revokeObjectURL url]', e); }
     if (t.art && t.art.startsWith('blob:'))  try { URL.revokeObjectURL(t.art);  } catch(e) { console.warn('[app:revokeObjectURL art]', e); }
   }
-  tracks  = []; set('tracks', tracks); rebuildTrackIdxMap(); notify('tracks'); invalidateFilter(); // INVARIANT : map must stay in sync; store gets same ref as local var so openFolder mutations stay visible to updateBar()
+  replaceTracks([]); invalidateFilter();
   liked   = new Set(); set('liked', liked);
   playlists = []; set('playlists', playlists); recentPlays = []; set('recentPlays', recentPlays);
   curPlId = null; set('curPlId', null);
@@ -1016,8 +994,6 @@ export async function clearLibrary() {
   const _srchClr = document.getElementById('srch-clear');
   if (_srchClr) _srchClr.style.display = 'none';
   document.getElementById('srch-badge')?.remove();
-  // Stats sidebar
-  document.getElementById('sb-stats').innerHTML  = i18n('sb_empty');
   const _btnClear = document.getElementById('btn-clear');
   if (_btnClear) _btnClear.disabled = true;
   // Vider IndexedDB
@@ -1066,5 +1042,5 @@ export async function clearLibrary() {
 }
 
 // ── State mutation helpers → state.js (ARCH-1) ────────────────────────────────
-// setCurIdx / setLiked / setTracks / setCtxTrackId imported from state.js + re-exported above.
+// setCurIdx / setLiked / setCtxTrackId imported from state.js + re-exported above.
 // app.js local vars stay in sync via subscribe() callbacks (lines above).

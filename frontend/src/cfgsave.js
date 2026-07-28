@@ -13,8 +13,8 @@
 //   import  : getTheme, getDynColor, getDisplayMode (settings.js)
 //   import  : rgEnabled, rgTargetLUFS (replaygain.js)
 //   store   : cinemaBg — synced by cinema.js via set('cinemaBg',…)
-//   import  : eqEnabled, eqNodes, eqAutoMode,
-//             getActiveEqPreset, getEQProfiles (eq.js)
+//   import  : eqEnabled, eqAutoMode,
+//             getActiveEqPreset, getEQProfiles, getEQGains (eq.js)
 //   import  : getVizMode, getVizEnabled (viz.js)
 //   import  : getWatchPath (watchfolder.js)
 //   import  : getMiniPos (miniplayer.js)
@@ -34,8 +34,8 @@ import { getTheme, getDynColor, getDisplayMode }      from './settings.js';
 import { rgEnabled, rgTargetLUFS }                    from './replaygain.js';
 // cinemaBg is read from the store (set by cinema.js via set('cinemaBg',…))
 // to avoid a cinema.js ↔ cfgsave.js circular dependency.
-import { eqEnabled, eqNodes, eqAutoMode, eqExpert,
-         getActiveEqPreset, getEQProfiles }            from './eq.js';
+import { eqEnabled, eqAutoMode, eqExpert,
+         getActiveEqPreset, getEQProfiles, getEQGains } from './eq.js';
 import { getVizMode, getVizEnabled }                  from './viz.js';
 import { getWatchPath }                               from './watchfolder.js';
 import { getMiniPos }                                 from './miniplayer.js';
@@ -91,6 +91,8 @@ async function _doSaveCfg() {
     const artistSort    = get('artistSort') ?? 'name';
     const genreSort     = get('genreSort') ?? 'count';
     const albumDetailSort = get('albumDetailSort') ?? 'track';
+    const plGridSort    = get('plGridSort') ?? 'manual';
+    const sbWidth       = get('sbWidth') ?? null;
     const curPlId       = get('curPlId') ?? null;
     const drillKey      = get('drillKey') ?? '';
     const drillFrom     = get('drillFrom') ?? '';
@@ -101,9 +103,12 @@ async function _doSaveCfg() {
     const formatFilter  = get('formatFilter') || '';
     const cdCopyrightAck = get('cdCopyrightAck') === true; // CONFORMITÉ-CD
     const lastSettingsTab = get('lastSettingsTab') || 'appearance'; // UX-Ergo : mémoire onglet
-    const tlistZoom      = get('tlistZoom') || 'normal';            // zoom liste pistes
+    const tlistZoom      = get('tlistZoom') || 'comfortable';       // zoom liste pistes
+    const motionPref     = get('motionPref') || 'system';             // Task 10 : Système/Complètes/Réduites
+    const showRemaining  = get('showRemaining') === true;           // temps restant cliquable (#td)
 
     const likedIds    = liked instanceof Set ? [...liked] : [];
+    const _audioEl    = /** @type {HTMLAudioElement|null} */ (document.getElementById('audio'));
     const curTrackId  = curIdx >= 0 && tracks[curIdx] ? tracks[curIdx].id : null;
     const curPos      = curTrackId && (_audioEl?.duration ?? 0) > 0
       ? Math.floor(_audioEl?.currentTime ?? 0)
@@ -130,9 +135,9 @@ async function _doSaveCfg() {
       crossfadeDur, displayMode: getDisplayMode(), rgEnabled, rgTargetLUFS,
       playbackSpeed, cinemaBg: get('cinemaBg') ?? 'ambient',
       npBg: get('npBg') ?? 'blur',
-      shuffle, repeat, albumSort, artistSort, genreSort, albumDetailSort,
+      shuffle, repeat, albumSort, artistSort, genreSort, albumDetailSort, plGridSort, sbWidth,
       eqEnabled, eqExpert,
-      eqGains: eqNodes.length ? eqNodes.map(n => n.gain.value) : null,
+      eqGains: getEQGains(),
       eqPreset: getActiveEqPreset(),
       vizMode: getVizMode(), vizEnabled: getVizEnabled(),
       eqAutoMode, eqProfiles: getEQProfiles(),
@@ -152,6 +157,8 @@ async function _doSaveCfg() {
       cdCopyrightAck,
       lastSettingsTab,
       tlistZoom,
+      motionPref,
+      showRemaining,
     }, 'state');
   } catch (e) {
     if (isQuotaError(e)) {

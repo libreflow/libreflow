@@ -14,16 +14,21 @@ export let DB = null;
 
 // ══ IndexedDB ══════════════════════════════════
 
+/** @type {Promise<void>|null} In-flight openDB() promise — prevents double-open race. */
+let _openingPromise = null;
+
 /**
  * Open (or reuse) the 'lp4' IndexedDB database.
  * Must be called once at boot before any IDB helpers are used.
- * Safe to call multiple times — returns immediately if already open.
+ * Safe to call multiple times — returns immediately if already open,
+ * or awaits the in-flight open if a concurrent call is in progress.
  *
  * @returns {Promise<void>}
  */
 async function openDB() {
   if (DB) return;
-  DB = await new Promise((ok, fail) => {
+  if (_openingPromise) { await _openingPromise; return; }
+  _openingPromise = new Promise((ok, fail) => {
     const r = indexedDB.open('lp4', 5); // v5 : ajout du store imports
     r.onupgradeneeded = e => {
       const d = e.target.result;
@@ -37,6 +42,11 @@ async function openDB() {
     r.onerror   = () => fail(r.error);
     r.onblocked = () => fail(new Error('IDB bloqué — fermer les autres instances de LibreFlow'));
   });
+  try {
+    DB = await _openingPromise;
+  } finally {
+    _openingPromise = null;
+  }
 }
 
 /**
@@ -117,7 +127,7 @@ const dput = (s,v,k) => {
     const r = k !== undefined ? tx(s,'readwrite').put(v,k) : tx(s,'readwrite').put(v);
     r.onsuccess = () => ok();
     r.onerror   = () => fail(r.error);
-  }), 8000);
+  }), CFG.IDB_TIMEOUT_DEFAULT);
 };
 
 /**
@@ -131,7 +141,7 @@ const ddel = (s,k) => _raceWithTimeout(new Promise((ok,fail) => {
   const r = tx(s,'readwrite').delete(k);
   r.onsuccess = () => ok();
   r.onerror   = () => fail(r.error);
-}), 8000);
+}), CFG.IDB_TIMEOUT_DEFAULT);
 
 // ── Storage quota ─────────────────────────────────────────────
 

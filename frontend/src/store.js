@@ -50,6 +50,8 @@
  * @property {string|null}      curPlId
  * @property {PlaylistFolder[]} plFolders
  * @property {string[]}         recentPls
+ * @property {'manual'|'az'|'recent'} plGridSort
+ * @property {number|null}      sbWidth
  * @property {PlSortKey}        plSort
  * @property {string|null}      ctxTrackId
  * @property {string}           formatFilter
@@ -91,6 +93,8 @@ const _state = {
   curPlId:           null,      // string | null — currently viewed playlist id
   plFolders:         [],        // { id, name, collapsed, order }[]
   recentPls:         [],        // string[] — playlist IDs, most recent first (max 5)
+  plGridSort:        'manual',  // 'manual' | 'az' | 'recent' — tri de la grille playlists (REWORK-1)
+  sbWidth:           null,      // number | null — largeur sidebar custom (null = token --sidebar-width)
   plSort:            'manual',  // 'manual' | 'az' | 'za' | 'artist' | 'album' | 'duration'
 
   // ── Misc ─────────────────────────────────────────────────────────────
@@ -156,19 +160,6 @@ export function subscribe(key, cb) {
   if (!_subs.has(key)) _subs.set(key, new Set());
   _subs.get(key).add(cb);
   return () => _subs.get(key)?.delete(cb);
-}
-
-/**
- * @param {Partial<AppState>} updates
- */
-export function setBatch(updates) {
-  const toNotify = [];
-  for (const [key, val] of Object.entries(updates)) {
-    if (_state[key] === val) continue;
-    _state[key] = val;
-    toNotify.push(key);
-  }
-  for (const key of toNotify) _notify(key, _state[key]);
 }
 
 /**

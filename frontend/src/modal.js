@@ -99,7 +99,8 @@ export function installAutoFocusTrap() {
   // `shortcuts-panel` est inclus : le panel lui-même porte `role="dialog"` (pas de wrapper).
   const autoIds = [
     'confirm-modal-bg', 'organize-modal-bg', 'usb-modal-bg', 'cd-modal-bg',
-    'pl-modal-bg',      'batch-tag-modal-bg', 'smart-pl-modal-bg',
+    'pl-modal-bg',      'batch-tag-modal-bg',
+    'dupes-panel',
     'shortcuts-panel',
     // A11Y-14 : sleep-menu se déclare role=dialog aria-modal — il porte le rôle
     // lui-même (comme shortcuts-panel) et bascule `.on`. La fermeture clavier
@@ -116,8 +117,8 @@ export function installAutoFocusTrap() {
     );
     if (!dialog) continue;
     const obs = new MutationObserver(() => {
-      if (bg.classList.contains('on')) trapFocus(dialog);
-      else                              releaseFocus(dialog);
+      if (bg.classList.contains('on') || bg.classList.contains('open')) trapFocus(dialog);
+      else releaseFocus(dialog);
     });
     obs.observe(bg, { attributes: true, attributeFilter: ['class'] });
   }

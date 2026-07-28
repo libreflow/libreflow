@@ -23,7 +23,7 @@
 
 import { togglePlay, prev, next, toggleShuffle, toggleRepeat, toggleLike,
          likeat, playAt, isCurrentTrack, audio }              from './player.js';
-import { toggleQueue, closeQueue, playQueueItem,
+import { toggleQueue, closeQueue, toggleQueuePin, playQueueItem,
          addToQueueNext, addToQueueEnd,
          removeFromQueue, clearExplicitQueue, moveQueueItem }  from './queue.js';
 import { toggleEQ, closeEQ, applyEQPreset,
@@ -58,6 +58,7 @@ import { showCtxMenu, closeCtxMenu,
          ctxMoveTrackUp, ctxMoveTrackDown } from './ctxmenu.js';
 import { toggleCinema, closeCinema, cycleCinemaBg,
          toggleCinemaFullscreen }                              from './cinema.js';
+import { syncCinVolumeUI, toggleCinemaMute }                   from './cinema-render.js';
 import { openRadioView, ctxStartRadio,
          radioSaveAsPlaylist, radioRegenerateFromCurrent,
          stopRadio, playRadioTrackAt, removeRadioTrack }       from './radio.js';
@@ -67,20 +68,17 @@ import { resolveConfirm }                                      from './ui.js';
 import { setCrossfade }                                        from './player.js';
 import { importM3U, exportM3U, exportXSPF }                    from './m3u.js';
 import { invoke }                                              from './ipc.js';
+import { CFG }                                                from './cfg.js';
 import { setAriaValueText }                                    from './a11y.js';
 import { cycleSpeed, closeModal, clearLibrary, confirmClear, clearAppCache, updateVolSlider, playPlaylistFrom, shufflePlaylist, playPlaylistDirect, playCardByKey, saveCfg } from './app.js';
-import { _syncVizBtns, openSettings, closeSettings, toggleSettings, toggleMode, toggleShortcuts, closeShortcuts, setTheme, setMode, switchSetTab, syncMiniSettingsBtn } from './settings.js';
-import { goHome, setView, nextSort, nextAlbumSort, onSearch, clearAllFilters } from './views.js';
+import { _syncVizBtns, closeSettings, toggleSettings, toggleMode, toggleShortcuts, closeShortcuts, setTheme, setMode, switchSetTab, syncMiniSettingsBtn } from './settings.js';
+import { goHome, setView, nextSort, nextAlbumSort, onSearch, clearAllFilters, sortByColumn } from './views.js';
 import { setCinemaBg, toggleCinemaRadio }                      from './cinema.js';
 import { rescanGenres, drillGenre }                            from './genres.js';
 import { setLang }                                             from './i18n.js';
 import { playById, scrollToCurrentTrack, drillDown,
          renderImportHistory }                                 from './renderer.js';
 import { getFiltered, invalidateFilterCache }                  from './search.js';
-
-// ── Module state ──────────────────────────────────────────────────────────
-let _registered = false;  // Guard against double-registration during HMR
-
 import { closePlModal, clearPlCover,
          confirmPlaylistModal, onPlCoverSelected,
          openNewPlaylistModal, openRenamePlaylistModal,
@@ -108,6 +106,10 @@ import { toggleNowPlaying, closeNowPlaying,
          toggleNowPlayingFullscreen, cycleNpBg }              from './nowplaying.js';
 import { emit, EVENTS }                                        from './bus.js';
 
+// ── Module state ──────────────────────────────────────────────────────────
+let _registered = false;  // Guard against double-registration during HMR
+let _preMuteVol = 1;      // Volume before mute — restored on unmute
+
 // ── Registre d'actions ────────────────────────────────────────────────────
 
 const _ACTIONS = {
@@ -119,6 +121,23 @@ const _ACTIONS = {
   'toggle-repeat':         ()    => toggleRepeat(),
   'toggle-like':           ()    => toggleLike(),
   'cycle-speed':           ()    => cycleSpeed(),
+  'toggle-mute':           ()    => {
+    const volEl = document.getElementById('vol');
+    if (!volEl) return;
+    const current = parseFloat(volEl.value);
+    if (current > 0) {
+      _preMuteVol = current;
+      volEl.value = 0;
+      setMasterGain(0);
+    } else {
+      const restore = _preMuteVol > 0 ? _preMuteVol : 1;
+      volEl.value = restore;
+      setMasterGain(restore);
+    }
+    updateVolSlider(volEl);
+    setAriaValueText(volEl, _v => `${Math.round(_v * 100)} pour cent`, parseFloat(volEl.value));
+    saveCfg();
+  },
 
   // ── Mini-player / overlay ─────────────────────────────────
   'toggle-mini-player':    async () => { await toggleMiniPlayer(); syncMiniSettingsBtn(); },
@@ -126,6 +145,12 @@ const _ACTIONS = {
 
   // ── Now Playing ───────────────────────────────────────────
   'toggle-now-playing':    ()    => toggleNowPlaying(),
+  // Temps restant ↔ durée totale sur #td (audit 2026-07-27) — persistant (cfg)
+  'toggle-remaining':      (btn, e) => {
+    e.stopPropagation();
+    set('showRemaining', !get('showRemaining'));
+    saveCfg();
+  },
   'close-now-playing':     ()    => closeNowPlaying(),
   'toggle-np-full':        ()    => toggleNowPlayingFullscreen(),
   'cycle-np-bg':           ()    => cycleNpBg(),
@@ -141,6 +166,7 @@ const _ACTIONS = {
   // ── Queue ─────────────────────────────────────────────────
   'toggle-queue':          ()    => { closeNowPlaying(); toggleQueue(); },
   'close-queue':           ()    => closeQueue(),
+  'toggle-queue-pin':      ()    => toggleQueuePin(),
   'clear-queue':           ()    => clearExplicitQueue(),
   'remove-from-queue':     btn  => { removeFromQueue(btn.dataset.trackId); },
   'queue-move-up':         btn  => moveQueueItem(btn.dataset.id, -1),
@@ -170,12 +196,38 @@ const _ACTIONS = {
   'sleep-custom':          ()    => setSleepCustom(),
   'cancel-sleep':          ()    => cancelSleepTimer(),
 
+  // ── More popover ──────────────────────────────────────────
+  'toggle-sb-more': (btn) => {
+    const pop = document.getElementById('sb-more-pop');
+    if (!pop) return;
+    const willOpen = pop.hidden;
+    pop.hidden = !willOpen;
+    btn.setAttribute('aria-expanded', String(willOpen));
+    if (!willOpen) return;
+    const first = pop.querySelector('[role="menuitem"]');
+    if (first) first.focus();
+    const onClose = (e) => {
+      if (e.type === 'keydown' && e.key !== 'Escape') return;
+      if (e.type === 'click' && btn.contains(e.target)) return;
+      pop.hidden = true;
+      btn.setAttribute('aria-expanded', 'false');
+      if (e.key === 'Escape') btn.focus();
+      document.removeEventListener('click', onClose, true);
+      document.removeEventListener('keydown', onClose, true);
+    };
+    setTimeout(() => {
+      document.addEventListener('click', onClose, true);
+      document.addEventListener('keydown', onClose, true);
+    }, 0);
+  },
+
   // ── Cinema ────────────────────────────────────────────────
   'toggle-cinema':         ()    => toggleCinema(),
   'close-cinema':          ()    => closeCinema(),
   'cinema-fullscreen':     ()    => toggleCinemaFullscreen(),
   'cycle-cinema-bg':       ()    => cycleCinemaBg(),
   'toggle-cinema-radio':   ()    => toggleCinemaRadio(),
+  'cinema-mute':           ()    => toggleCinemaMute(),
 
   // ── Radio ─────────────────────────────────────────────────
   'open-radio':            (btn) => openRadioView(btn),
@@ -249,8 +301,8 @@ const _ACTIONS = {
 
   // ── Window controls ───────────────────────────────────────
   'win-minimize':    ()    => openMiniAndMinimize(),
-  'win-maximize':    ()    => invoke('win_maximize'),
-  'win-close':       ()    => invoke('win_close'),
+  'win-maximize':    ()    => invoke('win_maximize', {}, { timeout: CFG.IPC_TIMEOUT_MS }).catch(e => console.warn('[win_maximize]', e)),
+  'win-close':       ()    => invoke('win_close',    {}, { timeout: CFG.IPC_TIMEOUT_MS }).catch(e => console.warn('[win_close]', e)),
 
   // ── Settings — appearance ─────────────────────────────────
   'set-lang':              btn  => { setLang(btn.dataset.lang); saveCfg(); },
@@ -284,7 +336,7 @@ const _ACTIONS = {
   },
 
   'backup-export': async () => {
-    await exportBackup(false);
+    await exportBackup();
   },
 
   'backup-import': async () => {
@@ -359,6 +411,7 @@ const _ACTIONS = {
     setView(btn.dataset.view, niEl, btn.dataset.plId || undefined);
   },
   'next-sort':             ()    => nextSort(),
+  'sort-col':              btn  => sortByColumn(btn.dataset.col), // colonnes cliquables (audit 2026-07-27)
   'next-album-sort':       ()    => nextAlbumSort(),
   'filter-format': (btn) => {
     const fmt = btn.dataset.fmt ?? '';
@@ -462,6 +515,9 @@ const _ACTIONS = {
     showPlCtxMenu(fakeEvent, plId);
   },
   'show-pl-qpop':          (btn, e) => showPlQuickPop(e, btn.dataset.trackId, btn), // B16 : passer le bouton déclencheur
+  // AUDIT-2026-07-27 : bouton ⋯ visible au hover — même menu que le clic droit,
+  // découvrable par tous (le contextmenu seul est un pattern invisible).
+  'tr-more':               (btn, e) => { e.stopPropagation(); showCtxMenu(e, btn.dataset.trackId); },
   'pqp-add':               btn  => pqpAdd(btn.dataset.plId),
   'pqp-new':               ()   => pqpNew(),
   'pqp-smart':             ()   => { closePlQuickPop(); openSmartPlaylistModal(getPqpTrackId()); },
@@ -474,7 +530,36 @@ const _ACTIONS = {
 
   // Smart playlist
   'set-smart-seed':        btn  => _setSmartSeed(btn.dataset.trackId),
+
+  // ── Inline search toggle ──────────────────────────────────
+  'toggle-search': () => {
+    const wrap   = document.getElementById('vh-srch-wrap');
+    const toggle = document.getElementById('srch-toggle');
+    const input  = document.getElementById('srch');
+    if (!wrap || !toggle || !input) return;
+    if (!wrap.hidden) {
+      _closeSearch(wrap, toggle, input);
+    } else {
+      _openSearch(wrap, toggle, input);
+    }
+  },
 };
+
+// ── Inline search helpers ─────────────────────────────────────────────────
+
+export function _openSearch(wrap, toggle, input) {
+  wrap.hidden = false;
+  toggle.setAttribute('aria-expanded', 'true');
+  input.focus();
+}
+
+export function _closeSearch(wrap, toggle, input) {
+  wrap.hidden = true;
+  toggle.setAttribute('aria-expanded', 'false');
+  input.value = '';
+  input.dispatchEvent(new Event('input', { bubbles: true }));
+  toggle.focus();
+}
 
 // ── A11Y-10 : guard typage ────────────────────────────────────────────────
 // Vérifie si l'élément focalisé est un champ de saisie texte.
@@ -497,7 +582,8 @@ function _handleClick(e) {
   const handler = _ACTIONS[action];
   if (handler) {
     e._lfActionHandled = true; // B25 FIX : marqueur — empêche _handleBackdropClick de re-déclencher
-    handler(btn, e);
+    const _p = handler(btn, e);
+    if (_p instanceof Promise) _p.catch(err => console.warn('[handlers] action', action, 'rejected:', err));
   } else {
     console.warn('[handlers] Action inconnue :', action);
   }
@@ -540,6 +626,9 @@ function _handleInput(e) {
       if (main) { main.value = el.value; updateVolSlider(main); }
       setAriaValueText(el,   _v => `${Math.round(_v * 100)} pour cent`, v);
       if (main) setAriaValueText(main, _v => `${Math.round(_v * 100)} pour cent`, v);
+      // Task 7 — mouvement manuel du slider : re-dérive l'état muet/icône barrée
+      // depuis le volume réel (pas de flag séparé — cohérent avec le bouton mute).
+      syncCinVolumeUI(v);
       break;
     }
 
@@ -699,7 +788,7 @@ export function registerHandlers() {
   document.addEventListener('keydown',     _handleKeydown,      { signal });
   document.addEventListener('dragstart',   _handleDragStart,    { signal });
 
-  // Wheel volume — molette sur #vol → ±2% par tick (même pattern que cinema.js _onCinWheel)
+  // Wheel volume — molette sur #vol → ±2% par tick (même pattern que cinema-input.js _onCinWheel)
   const _volEl = document.getElementById('vol');
   if (_volEl) {
     _volEl.addEventListener('wheel', e => {

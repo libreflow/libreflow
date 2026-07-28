@@ -10,7 +10,6 @@
 // Exports :
 //   initDeviceEQ(savedProfiles)    — boot : charge profils + écoute devicechange
 //   getDeviceProfiles()            — { [deviceId]: { bands, label } }
-//   getActiveDeviceId()            — deviceId courant ('' = défaut OS)
 //   getActiveDeviceLabel()         — label lisible ou fallback
 //   saveCurrentDeviceProfile()     — enregistre les gains actuels pour l'appareil courant
 //   deleteDeviceProfile(deviceId)  — supprime un profil
@@ -48,11 +47,6 @@ export async function initDeviceEQ(savedProfiles) {
 /** @returns {{ [deviceId: string]: { bands: number[], label: string } }} */
 export function getDeviceProfiles() {
   return { ..._deviceProfiles };
-}
-
-/** @returns {string} deviceId courant ('' = sortie par défaut OS) */
-export function getActiveDeviceId() {
-  return _activeId;
 }
 
 /** @returns {string} Label lisible ou fallback */

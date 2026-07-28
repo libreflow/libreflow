@@ -10,6 +10,7 @@
 // Exports publics :
 //   exportM3U, exportXSPF, importM3U
 
+import { CFG } from './cfg.js';
 import { i18n } from './i18n.js';
 import { get, set, notify }  from './store.js'; // Phase 4
 import { _trackIdxMap, getFiltered } from './search.js';
@@ -53,7 +54,7 @@ export function exportM3U() {
   const plName = (view === 'playlist' && pl) ? pl.name : 'libreflow';
   a.download = plName + '.m3u';
   a.click();
-  setTimeout(() => URL.revokeObjectURL(url), 10000);
+  setTimeout(() => URL.revokeObjectURL(url), CFG.URL_REVOKE_DELAY_MS);
   toast(i18n('t_m3u_exported'), 'success');
 }
 
@@ -112,7 +113,7 @@ export function exportXSPF() {
   a.href = url;
   a.download = plName + '.xspf';
   a.click();
-  setTimeout(() => URL.revokeObjectURL(url), 10000);
+  setTimeout(() => URL.revokeObjectURL(url), CFG.URL_REVOKE_DELAY_MS);
   toast(i18n('t_xspf_exported'), 'success');
 }
 

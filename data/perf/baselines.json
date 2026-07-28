@@ -1,0 +1,12 @@
+{
+  "_note": "Baseline établi le 2026-06-03, branche feat/search-mode-premium, node v24.14.0, N=50k tracks.",
+  "filterExact_empty_ms": 0.0,
+  "filterExact_shadow_ms": 173.91,
+  "filterExact_multiword_ms": 156.76,
+  "filterExact_cache_hit_ms": 3.21,
+  "filterFuzzy_ms": 174.46,
+  "virtBuildRows_az_ms": 9.78,
+  "virtBuildRows_artist_ms": 1.74,
+  "virtBuildRows_date_ms": 1.07,
+  "last_updated": "2026-06-03"
+}

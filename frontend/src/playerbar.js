@@ -55,6 +55,26 @@ export function updateVolSlider(el) {
     clearTimeout(_volHideTimer);
     _volHideTimer = setTimeout(() => tip.classList.remove('on'), 1200);
   }
+  _syncVolIcon(+vel.value);
+}
+
+function _syncVolIcon(vol) {
+  const muted = vol <= 0;
+  const low   = vol > 0 && vol < 0.5;
+  const w1 = document.getElementById('vol-wave1');
+  const w2 = document.getElementById('vol-wave2');
+  const x1 = document.getElementById('vol-x1');
+  const x2 = document.getElementById('vol-x2');
+  const btn = document.getElementById('btn-vol-mute');
+  if (w1) w1.style.display = muted ? 'none' : '';
+  if (w2) w2.style.display = (muted || low) ? 'none' : '';
+  if (x1) x1.style.display = muted ? '' : 'none';
+  if (x2) x2.style.display = muted ? '' : 'none';
+  if (btn) {
+    btn.setAttribute('aria-pressed', String(muted));
+    btn.setAttribute('aria-label', muted ? i18n('vol_unmute') : i18n('vol_mute'));
+    btn.title = muted ? i18n('vol_unmute') : i18n('vol_mute');
+  }
 }
 
 // ── Marquee ───────────────────────────────────────────────────────────────────

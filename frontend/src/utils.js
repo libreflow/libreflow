@@ -5,12 +5,13 @@
 // Exports:
 //   esc(s)           Escape HTML special characters
 //   fmt(s)           Format seconds as M:SS (e.g. "3:45")
-//   fmtd(s)          Like fmt(), but returns '' for invalid/falsy values
+//   fmtd(s)          Like fmt(), with hour support; "–:––" for invalid values
 //   extEmoji(ext)    SVG music-note icon for audio file entries
 //   fmtDuration(s)   Format seconds as "Xh Ym", "Xm", or "Xs"
 //   normTag(s)       Normalize a metadata tag string (trim, NFC, collapse spaces)
-//   mainArtist(raw)  Extract primary artist, stripping feat./collab suffixes
-//   moveByOne(a,i,d) Move array item one step (single-pointer reorder, WCAG 2.2 SC 2.5.7)
+//   fmtArtists(raw)              Display form of a multi-artist tag ("A/B" → "A, B")
+//   mainArtist(raw)              Extract primary artist, stripping feat./collab suffixes
+//   moveByOne(a,i,d)             Move array item one step (single-pointer reorder, WCAG 2.2 SC 2.5.7)
 
 /** Escape a string for safe insertion into HTML. */
 export function esc(s = '') {
@@ -28,10 +29,16 @@ export function fmt(s) {
   return `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
 }
 
-/** Like fmt(), but returns an empty string for falsy / non-finite values. */
+/** Like fmt(), but with hour support ("1:02:03") and "–:––" for missing/invalid
+ *  values (0 stays "0:00") — matches the reference contract in core.test.cjs. */
 export function fmtd(s) {
-  if (!s || !isFinite(s)) return '';
-  return fmt(s);
+  if ((!s && s !== 0) || !isFinite(s)) return '–:––';
+  s = Math.round(s);
+  const h  = Math.floor(s / 3600);
+  const m  = Math.floor((s % 3600) / 60);
+  const ss = s % 60;
+  if (h > 0) return h + ':' + String(m).padStart(2, '0') + ':' + String(ss).padStart(2, '0');
+  return m + ':' + String(ss).padStart(2, '0');
 }
 
 /** Returns a uniform SVG music-note icon for any audio file extension. */
@@ -75,6 +82,19 @@ export function isSafePath(p) {
   return true;
 }
 
+/** Normalise les séparateurs multi-artistes pour l'affichage : "A/B;C" → "A, B, C".
+ *  Le slash n'est coupé que si chaque segment fait ≥3 caractères (préserve "AC/DC"). */
+export function fmtArtists(raw) {
+  if (!raw) return '';
+  const out = [];
+  for (const part of normTag(raw).split(/\s*;\s*/)) {
+    const segs = part.split('/').map(x => x.trim());
+    if (segs.length > 1 && segs.every(x => x.length >= 3)) out.push(...segs);
+    else out.push(part.trim());
+  }
+  return out.filter(Boolean).join(', ');
+}
+
 /** Extract the primary artist from a raw tag, stripping feat./collab suffixes. */
 export function mainArtist(raw) {
   if (!raw) return '';
@@ -83,7 +103,8 @@ export function mainArtist(raw) {
     .replace(/\s*[(/]\s*(?:feat\.?|ft\.?|featuring|avec|with|vs\.?)\s+.*/i, '')
     .replace(/\s*,\s*(?:feat\.?|ft\.?|featuring)\s+.*/i, '')
     .replace(/\s+(?:feat\.?|ft\.?|featuring|avec|with)\s+.*/i, '')
-    .replace(/\s*\/\s*.+$/, '')
+    // Slash = séparateur seulement si les deux côtés font ≥3 caractères ("AC/DC" intact)
+    .replace(/^(.{3,}?)\s*\/\s*.{3}.*$/, '$1')
     .replace(/\s*,\s*.+$/, '')
     .trim();
   return s || normTag(raw);

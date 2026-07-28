@@ -90,7 +90,7 @@ fn encode_toc(first: u8, last: u8, entries: &[(u8, u8, u32)]) -> Vec<u8> {
 
 proptest! {
     /// A valid-looking TOC must parse Ok with at most num_tracks parsed tracks.
-    /// Verify : every parsed track has frames > 0 (LBAs were monotonic), is_audio = true,
+    /// Verify : every parsed track has frames > 0 (LBAs were monotonic)
     /// and idx is in [first_track, last_track].
     #[test]
     fn valid_toc_parses_with_bounded_output((first, last, entries) in arb_valid_toc()) {
@@ -104,7 +104,6 @@ proptest! {
         prop_assert_eq!(parsed.len(), expected_audio_count);
 
         for t in &parsed {
-            prop_assert!(t.is_audio, "is_audio must be true for parsed tracks");
             prop_assert!(t.idx >= first && t.idx <= last,
                          "idx {} out of [first={}, last={}]", t.idx, first, last);
             prop_assert!(t.frames > 0, "frames must be > 0");

@@ -17,7 +17,6 @@ fn parses_three_audio_tracks_plus_leadout() {
             idx: 1,
             lba_start: 0,
             frames: 20000,
-            is_audio: true
         }
     );
     assert_eq!(
@@ -26,7 +25,6 @@ fn parses_three_audio_tracks_plus_leadout() {
             idx: 2,
             lba_start: 20000,
             frames: 20000,
-            is_audio: true
         }
     );
     assert_eq!(
@@ -35,7 +33,6 @@ fn parses_three_audio_tracks_plus_leadout() {
             idx: 3,
             lba_start: 40000,
             frames: 20000,
-            is_audio: true
         }
     );
 }

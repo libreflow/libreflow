@@ -24,7 +24,7 @@ import { saveCfg }                            from './cfgsave.js';
 import { rebuildTrackIdxMap, trackIdx, filteredIdx, getFiltered,
          invalidateFilterCache }              from './search.js';
 import { VIRT }                               from './virt.js';
-import { getWatchPath, importPaths }          from './watchfolder.js';
+import { getWatchPath, importPaths, initWatchPath, startWatchNative } from './watchfolder.js';
 import { playAt }                             from './player.js';
 import {
   detectNewAudioCds,
@@ -33,8 +33,6 @@ import {
   extractDestPath,
   calculateRipPercent,
 } from './cdaudio_pure.js';
-
-export { detectNewAudioCds };
 
 // ── État module ───────────────────────────────────────────────────────────────
 
@@ -121,8 +119,8 @@ export async function playCdTrack(drivePath, idx) {
   const bg  = document.getElementById('cd-modal-bg');
   const toc = bg?._toc;
   if (!toc) { toast('TOC perdu — réessayer', 'error'); return; }
-  const tocTrack = toc.tracks.find(t => t.idx === idx) || toc.tracks[0];
-  if (!tocTrack) return;
+  const tocTrack = toc.tracks.find(t => t.idx === idx);
+  if (!tocTrack) { toast(`Piste ${idx} introuvable dans le TOC`, 'error'); return; }
   // CONFORMITÉ-CD : avertissement copyright one-shot (DMCA / EUCD).
   if (!(await _ensureCdCopyrightAck())) return;
 
@@ -139,12 +137,12 @@ export async function playCdTrack(drivePath, idx) {
       _currentRipId = rip_id;
       await invoke('cd_rip_track', {
         drive: drivePath, trackIdx: tocTrack.idx, destPath: tempPath, ripId: rip_id,
-      });
+      }, { timeout: 0 });
     } catch (e) {
       _unsubscribeProgress();
       if (String(e) === 'cancelled') { _resetProgressUi(); return; }
       console.warn('[cdaudio] cd_rip_track failed:', e);
-      toast(i18n('cd_err_rip'), 'error'); // M-02 : message localisé, erreur IPC en console.warn
+      toast(i18n('cd_err_rip'), 'error');
       _resetProgressUi();
       return;
     } finally {
@@ -188,10 +186,21 @@ export async function extractCd(drivePath) {
   const toc = bg?._toc;
   if (!toc) { toast('TOC perdu — réessayer', 'error'); return; }
 
-  const watchPath = getWatchPath();
+  let watchPath = getWatchPath();
   if (!watchPath) {
-    toast('Aucun dossier de surveillance configuré', 'error');
-    return;
+    let defaultDir;
+    try {
+      defaultDir = await invoke('get_or_create_default_music_dir');
+    } catch (e) {
+      console.warn('[cdaudio] get_or_create_default_music_dir failed:', e);
+      toast(i18n('cd_err_auto_folder'), 'error');
+      return;
+    }
+    initWatchPath(defaultDir);
+    await startWatchNative();
+    watchPath = defaultDir;
+    saveCfg();
+    toast(i18n('cd_auto_folder'), 'info');
   }
   // CONFORMITÉ-CD : avertissement copyright one-shot (DMCA / EUCD).
   if (!(await _ensureCdCopyrightAck())) return;
@@ -217,7 +226,7 @@ export async function extractCd(drivePath) {
       _currentRipId = rip_id;
       await invoke('cd_rip_track', {
         drive: drivePath, trackIdx: tocTrack.idx, destPath: dest, ripId: rip_id,
-      });
+      }, { timeout: 0 });
       written.push(dest);
     } catch (e) {
       _unsubscribeProgress();
@@ -234,8 +243,13 @@ export async function extractCd(drivePath) {
   }
 
   if (written.length) {
-    await importPaths(written);
-    toast(`${written.length} piste(s) extraite(s) et ajoutée(s)`, 'success');
+    try {
+      await importPaths(written);
+      toast(`${written.length} piste(s) extraite(s) et ajoutée(s)`, 'success');
+    } catch (e) {
+      console.warn('[cdaudio] importPaths failed:', e);
+      toast('Extraction terminée mais import échoué', 'error');
+    }
   }
 
   _resetProgressUi();
@@ -249,6 +263,13 @@ export async function cancelCurrentRip() {
 }
 
 export async function cleanupCdCache(drivePath) {
+  // Annuler le listener de prefetch en attente — sinon il déclencherait un
+  // cd_rip_track sur le lecteur éjecté à la fin de la prochaine piste.
+  if (_prefetchAudioListener) {
+    const { audio, fn } = _prefetchAudioListener;
+    audio.removeEventListener('timeupdate', fn);
+    _prefetchAudioListener = null;
+  }
   // B22 : les rips anticipés vivent dans cd-cache/ — invalidés par le purge disque ci-dessous.
   _prefetchedRips.clear();
   _prefetchDrive = null;
@@ -318,7 +339,7 @@ function _resetProgressUi() {
 
 function _setProgressFill(percent) {
   const fill = document.getElementById('cd-progress-fill');
-  if (fill) fill.style.width = `${percent}%`;
+  if (fill) fill.style.transform = `scaleX(${percent / 100})`; // scaleX : compositor-only (audit 2026-07-27)
 }
 
 function _setProgressText(t) {
@@ -327,6 +348,7 @@ function _setProgressText(t) {
 }
 
 function _formatDuration(sec) {
+  if (!Number.isFinite(sec) || sec < 0) return '?:??';
   const m = Math.floor(sec / 60), s = Math.floor(sec % 60);
   return `${m}:${String(s).padStart(2, '0')}`;
 }
@@ -365,7 +387,7 @@ function _schedulePrefetch(drivePath, nextIdx, totalTracks) {
       const tempPath = await _tempPathForRip(rip_id);
       await invoke('cd_rip_track', {
         drive: drivePath, trackIdx: nextIdx, destPath: tempPath, ripId: rip_id,
-      });
+      }, { timeout: 0 });
       // B22 FIX : mémoriser le rip anticipé pour réutilisation par playCdTrack —
       // sans ça le FLAC est rippé puis jamais référencé (re-rip + orphelin).
       _prefetchDrive = drivePath;

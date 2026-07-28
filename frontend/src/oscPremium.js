@@ -3,10 +3,12 @@
 // Apple Music / Spotify-grade waveform renderer. Standalone, reusable.
 //
 //   const osc = createPremiumOscilloscope(canvas, analyserNode, opts?);
-//   osc.start();                 // begin rAF loop
-//   osc.stop();                  // cancel + clear
-//   osc.setColor(h, s, l);       // pin static HSL; pass (null) to re-enable dynamic hue
-//   osc.destroy();               // stop + disconnect ResizeObserver
+//   osc.start();                        // begin rAF loop
+//   osc.stop();                         // cancel + clear
+//   osc.setStaticColor({ h, s, l });    // override the energy-driven hue (or null to resume)
+//
+// opts.staticColor seeds the same override at creation time — shape { h, s, l }
+// (hue in degrees, saturation/luminosity in percent), matching what draw() consumes.
 //
 // Hard requirements satisfied:
 //   • bezierCurveTo path (Catmull-Rom → cubic Bezier, k = 1/6)
@@ -31,7 +33,7 @@ const GHOST_ALPHA  = 0.18;
 const ENERGY_GAIN  = 3;
 const CR_K         = 1 / 6;
 
-export function createPremiumOscilloscope(canvas, analyser) {
+export function createPremiumOscilloscope(canvas, analyser, opts = {}) {
   if (!canvas)   throw new Error('createPremiumOscilloscope: canvas required');
   if (!analyser) throw new Error('createPremiumOscilloscope: analyser required');
 
@@ -52,7 +54,7 @@ export function createPremiumOscilloscope(canvas, analyser) {
   let dpr = 1;
   let raf = null;
   let running = false;
-  let staticColor = null;
+  let staticColor = opts.staticColor ?? null;
 
   function resize() {
     const rect = canvas.getBoundingClientRect();
@@ -151,17 +153,13 @@ export function createPremiumOscilloscope(canvas, analyser) {
       raf = null;
       ctx.clearRect(0, 0, canvas.width, canvas.height);
     },
-    setColor(h, s, l) {
-      if (h == null) { staticColor = null; return; }
-      staticColor = { h, s: s == null ? SAT : s, l: l == null ? LUM : l };
+    /**
+     * Override the energy-driven hue/saturation/luminosity with a fixed color.
+     * Pass `null` to resume the default energy-driven hue.
+     * @param {{h: number, s: number, l: number}|null} color
+     */
+    setStaticColor(color) {
+      staticColor = color ?? null;
     },
-    destroy() {
-      running = false;
-      if (raf) cancelAnimationFrame(raf);
-      raf = null;
-      ro.disconnect();
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-    },
-    _meta: { sampleCount, hasOffscreen },
   };
 }

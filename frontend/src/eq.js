@@ -22,7 +22,7 @@
 //   renderEQBands, filterEQPresets, toggleEQAB
 //   setMasterGain
 
-import { get, set } from './store.js';
+import { get } from './store.js';
 import { emit, EVENTS } from './bus.js';
 import { i18n } from './i18n.js';
 
@@ -56,6 +56,11 @@ let _bootEnabled    = false;
 let _bootPreset     = null;
 let _eqInitialized  = false;  // R6 — singleton guard : empêche createMediaElementSource × N
 let _eqInitFailed   = false;  // B30 — true si new AudioContext() a échoué : court-circuite les retries
+// Valeurs cibles (pas les valeurs interpolées des AudioParam live) — source de vérité pour la persistence.
+let _targetGains    = new Array(EQ_BAND_COUNT).fill(0);
+
+/** Retourne une copie des gains cibles actuels (indépendant des ramps AudioParam en cours). */
+export function getEQGains() { return [..._targetGains]; }
 
 // ── Presets ───────────────────────────────────────────────────────────────────
 // Gains en dB pour [32,64,125,250,500,1k,2k,4k,8k,16k]
@@ -166,7 +171,7 @@ export function initEQ() {
 
   // ── audioOutGain : point d'injection pour ReplayGain ──────────────────────
   audioOutGain = eqCtx.createGain();
-  audioOutGain.gain.value = 1.0;
+  audioOutGain.gain.setValueAtTime(1.0, eqCtx.currentTime);
 
   // ── 10 biquad filters ─────────────────────────────────────────────────────
   eqNodes = EQ_FREQS.map((freq, i) => {
@@ -174,9 +179,9 @@ export function initEQ() {
     if (i === 0)               f.type = 'lowshelf';
     else if (i === EQ_BAND_COUNT - 1) f.type = 'highshelf';
     else                       f.type = 'peaking';
-    f.frequency.value = freq;
-    f.Q.value         = 1.4;
-    f.gain.value      = 0;
+    f.frequency.setValueAtTime(freq, eqCtx.currentTime);
+    f.Q.setValueAtTime(1.4, eqCtx.currentTime);
+    f.gain.setValueAtTime(0, eqCtx.currentTime);
     return f;
   });
 
@@ -187,17 +192,17 @@ export function initEQ() {
 
   // ── Limiter (DynamicsCompressor) ──────────────────────────────────────────
   eqLimiter = eqCtx.createDynamicsCompressor();
-  eqLimiter.threshold.value = -1;
-  eqLimiter.knee.value      =  0;
-  eqLimiter.ratio.value     = 20;
-  eqLimiter.attack.value    =  0.003;
-  eqLimiter.release.value   =  0.25;
+  eqLimiter.threshold.setValueAtTime(-1,     eqCtx.currentTime);
+  eqLimiter.knee.setValueAtTime(0,           eqCtx.currentTime);
+  eqLimiter.ratio.setValueAtTime(20,         eqCtx.currentTime);
+  eqLimiter.attack.setValueAtTime(0.003,     eqCtx.currentTime);
+  eqLimiter.release.setValueAtTime(0.25,     eqCtx.currentTime);
 
   // ── masterGainNode ────────────────────────────────────────────────────────
   masterGainNode = eqCtx.createGain();
   // Lire le volume depuis le slider DOM (JAMAIS hardcoder 1.0)
   const _volEl = document.getElementById('vol');
-  masterGainNode.gain.value = _volEl ? parseFloat(_volEl.value) : 1;
+  masterGainNode.gain.setValueAtTime(_volEl ? parseFloat(_volEl.value) : 1, eqCtx.currentTime);
 
   // ── Câblage du graphe ─────────────────────────────────────────────────────
   // eqSource → audioOutGain → eqNodes[0..9] → eqAnalyser → eqLimiter → masterGainNode → destination
@@ -217,15 +222,15 @@ export function initEQ() {
   // ── Appliquer la config boot ──────────────────────────────────────────────
   if (_bootPreset && EQ_PRESETS[_bootPreset]) {
     _activePreset = _bootPreset;
-    _applyGains(EQ_PRESETS[_bootPreset], true);
+    _applyGains(EQ_PRESETS[_bootPreset]);
   } else if (_bootGains && _bootGains.length === EQ_BAND_COUNT) {
-    _applyGains(Array.from(_bootGains), true);
+    _applyGains(Array.from(_bootGains));
   }
 
   eqEnabled = _bootEnabled;
   if (!eqEnabled) {
     // Bypass : remettre toutes les bandes à 0
-    _applyGains(new Array(EQ_BAND_COUNT).fill(0), true);
+    _applyGains(new Array(EQ_BAND_COUNT).fill(0));
   }
 
   renderEQBands();
@@ -245,14 +250,10 @@ export function ensureEQResumed() {
 // ── setMasterGain ─────────────────────────────────────────────────────────────
 /** Met à jour le gain principal.
  *  Si EQ non encore initialisé, met audio.volume comme fallback. */
-export function setMasterGain(v, immediate = false) {
+export function setMasterGain(v) {
   const val = Math.max(0, Math.min(1, v));
   if (masterGainNode && eqCtx) {
-    if (immediate) {
-      masterGainNode.gain.value = val;
-    } else {
-      masterGainNode.gain.setTargetAtTime(val, eqCtx.currentTime, 0.01);
-    }
+    masterGainNode.gain.setTargetAtTime(val, eqCtx.currentTime, 0.01);
   } else {
     // Fallback avant initEQ() — lire depuis le slider DOM (R1 : jamais hardcoder audio.volume)
     const _audio = document.getElementById('audio');
@@ -331,6 +332,7 @@ export function setEQBand(idx, db) {
   if (!eqCtx) initEQ();
   if (!eqNodes[idx]) return;
   const val = Math.max(-12, Math.min(12, db));
+  _targetGains[idx] = val;
   eqNodes[idx].gain.setTargetAtTime(val, eqCtx.currentTime, 0.01);
   // Mettre à jour l'affichage du slider. Le libellé visible n'affiche plus « dB »
   // (l'échelle l'implique, ça évite le retour à la ligne) ; aria-valuetext le garde.
@@ -357,16 +359,13 @@ export function setEQBand(idx, db) {
 }
 
 // ── _applyGains ───────────────────────────────────────────────────────────────
-/** Applique un tableau de 10 gains aux noeuds EQ (sans interpolation si immediate). */
-function _applyGains(gains, immediate = false) {
+/** Applique un tableau de 10 gains aux noeuds EQ via setTargetAtTime (§9). */
+function _applyGains(gains) {
   if (!eqCtx || !eqNodes.length) return;
   for (let i = 0; i < EQ_BAND_COUNT; i++) {
     const val = gains[i] ?? 0;
-    if (immediate) {
-      eqNodes[i].gain.value = val;
-    } else {
-      eqNodes[i].gain.setTargetAtTime(val, eqCtx.currentTime, 0.02);
-    }
+    _targetGains[i] = val;
+    eqNodes[i].gain.setTargetAtTime(val, eqCtx.currentTime, 0.02);
   }
 }
 
@@ -461,7 +460,7 @@ function _setEQEnabled(val) {
   const zeros = new Array(EQ_BAND_COUNT).fill(0);
   if (!eqEnabled) {
     // Bypass : mémoriser les gains courants (custom inclus) puis aplatir (audio + visuel).
-    _preBypassGains = eqNodes.length ? eqNodes.map(n => n.gain.value) : null;
+    _preBypassGains = [..._targetGains];
     _applyGains(zeros);
     _animateSlidersTo(zeros);
   } else if (_preBypassGains) {
@@ -856,7 +855,6 @@ export function setEQExpert(val) {
   _drawEQCurve();          // redessine (appelle _updateCurveHeight en fin)
 }
 
-export function toggleEQExpert() { setEQExpert(!eqExpert); }
 
 // ── _syncEQUI ─────────────────────────────────────────────────────────────────
 function _syncEQUI() {

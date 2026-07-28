@@ -3,7 +3,7 @@
 // Extrait de app.js.
 //
 // Remaining window.* : toast, confirmAction, savePlaylists, invalidateFilter, renderLib,
-//   updateStats, openTagEditor, openNewPlaylistModal, openSmartPlaylistModal,
+//   openTagEditor, openNewPlaylistModal, openSmartPlaylistModal,
 //   addTrackToPlaylist, removeTrackFromPlaylist, drillDown, addToQueueNext, addToQueueEnd.
 //
 // Exports publics :
@@ -25,7 +25,7 @@ import { toast, confirmAction, toastWithAction }                        from './
 import { saveCfg }                  from './cfgsave.js';
 import { setCurIdx, setCtxTrackId, removeTrackAt, replaceTracks } from './state.js';
 import { adjustShuffleQAfterDelete, resetShuffleQ } from './player.js';
-import { updateStats, drillDown } from './renderer.js';
+import { drillDown } from './renderer.js';
 import { openNewPlaylistModal, removeTrackFromPlaylist, savePlaylists, movePlaylistTrack } from './playlists.js';
 import { openSmartPlaylistModal } from './smartplaylist.js';
 import { openTagEditor } from './tagedit.js';
@@ -55,6 +55,9 @@ function _setupCtxKeyNav(menu) {
       const cur = document.activeElement;
       if (cur && cur.closest('#ctx-menu') && cur.getAttribute('role') === 'menuitem') {
         e.preventDefault();
+        // AUDIT-2026-07-01 : stopPropagation — sans lui, _handleKeydown (handlers.js)
+        // simule un second click sur le même [data-action] → action exécutée deux fois.
+        e.stopPropagation();
         cur.click();
       }
     }
@@ -336,7 +339,7 @@ export async function ctxDeleteTrack() {
     pl.trackIds = pl.trackIds.filter(id => id !== t.id);
   });
   saveCfg(); // persiste curIdx + liked immédiatement
-  invalidateFilterCache(); emit(EVENTS.FILTER_CHANGED, {}); emit(EVENTS.RENDER_LIB, {}); updateStats();
+  invalidateFilterCache(); emit(EVENTS.FILTER_CHANGED, {}); emit(EVENTS.RENDER_LIB, {});
 
   // ── Différer la suppression IDB pour permettre l'annulation ────────────────
   const UNDO_MS = 5000;
@@ -351,7 +354,7 @@ export async function ctxDeleteTrack() {
   }, UNDO_MS);
 
   toastWithAction(
-    i18n('ctx_deleted_toast', t.name) || `🗑 « ${t.name} » supprimé`,
+    i18n('ctx_deleted_toast', t.name) || `« ${t.name} » supprimé`,
     'info',
     i18n('te_cancel') || 'Annuler',
     () => {
@@ -364,7 +367,7 @@ export async function ctxDeleteTrack() {
       // Restaurer les playlists dans leur état original (ordre préservé)
       for (const { pl, ids } of affectedPlSnapshots) pl.trackIds = ids;
       resetShuffleQ();
-      invalidateFilterCache(); emit(EVENTS.FILTER_CHANGED, {}); emit(EVENTS.RENDER_LIB, {}); updateStats();
+      invalidateFilterCache(); emit(EVENTS.FILTER_CHANGED, {}); emit(EVENTS.RENDER_LIB, {});
       saveCfg();
       if (playlistsChanged) savePlaylists();
       toast(i18n('t_sel_undo_delete') || 'Suppression annulée', 'info');
