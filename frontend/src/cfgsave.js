@@ -45,6 +45,8 @@ import { radioActive, getRadioSeedId }               from './radio.js';
 import { getDeviceProfiles }                            from './eqdevice.js';
 import { toast }                                      from './ui.js';
 
+const _audioEl = /** @type {HTMLAudioElement|null} */ (document.getElementById('audio'));
+
 // ── Debounce timer (module-local) ─────────────────────────────────────────────
 let _saveCfgTimer = null;
 

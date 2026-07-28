@@ -8,7 +8,11 @@
  */
 
 import { _trackIdxMap, trackIdx, invalidateFilterCache } from './search.js';
-import { emit, EVENTS }                                from './bus.js';
+import { emit, on, EVENTS }                            from './bus.js';
+
+// Persiste une piste depuis replaygain.js sans cycle d'import.
+on(EVENTS.TRACK_SAVE_REQUEST, ({ track }) => saveTrack(track));
+
 import { DB, dput, dget, isQuotaError }               from './db.js';
 import { invoke, invokeRetry }                        from './ipc.js';
 import { i18n }                                       from './i18n.js';

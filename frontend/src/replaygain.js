@@ -160,7 +160,7 @@ export async function analyzeAndApplyRG() {
       srcBuf = null;
     }
     applyRGGain(t.rgGain);
-    emit(EVENTS.TRACK_SAVE_REQUEST, { track: t });
+    emit(EVENTS.TRACK_SAVE_REQUEST, { track: t }); // library.js écoute et persiste en IDB
   } catch(e) {
     console.warn('[replaygain] analyzeAndApplyRG failed (format non décodable ou interrompu):', e);
     if (_rgAnalysisId === myId) {
