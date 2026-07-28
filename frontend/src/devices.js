@@ -157,7 +157,7 @@ export async function importFromDrive(drivePath) {
     return;
   }
 
-  const added = await importPaths(files);
+  const added = await importPaths(files, 'usb');
   if (added > 0) {
     toast(`${added} piste(s) importée(s) depuis le lecteur USB`, 'success');
   } else {

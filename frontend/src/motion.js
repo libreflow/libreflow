@@ -47,7 +47,7 @@ const _rmQuery = typeof window !== 'undefined' && typeof window.matchMedia === '
 // conformité WCAG même si l'OS ne la demande pas. Poussé depuis app.js — AUCUN
 // nouvel import ici (motion.js est importé par la quasi-totalité des modules —
 // risque de cycle si on importait cfg.js/store.js en retour).
-let _motionPref = 'full';
+let _motionPref = 'system'; // AUDIT-2026-07-27 : défaut = suivre l'OS (était 'full')
 
 /**
  * Pousse la préférence d'animation applicative. Appelé depuis app.js (boot +

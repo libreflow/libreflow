@@ -72,7 +72,7 @@ import { CFG }                                                from './cfg.js';
 import { setAriaValueText }                                    from './a11y.js';
 import { cycleSpeed, closeModal, clearLibrary, confirmClear, clearAppCache, updateVolSlider, playPlaylistFrom, shufflePlaylist, playPlaylistDirect, playCardByKey, saveCfg } from './app.js';
 import { _syncVizBtns, closeSettings, toggleSettings, toggleMode, toggleShortcuts, closeShortcuts, setTheme, setMode, switchSetTab, syncMiniSettingsBtn } from './settings.js';
-import { goHome, setView, nextSort, nextAlbumSort, onSearch, clearAllFilters } from './views.js';
+import { goHome, setView, nextSort, nextAlbumSort, onSearch, clearAllFilters, sortByColumn } from './views.js';
 import { setCinemaBg, toggleCinemaRadio }                      from './cinema.js';
 import { rescanGenres, drillGenre }                            from './genres.js';
 import { setLang }                                             from './i18n.js';
@@ -145,6 +145,12 @@ const _ACTIONS = {
 
   // ── Now Playing ───────────────────────────────────────────
   'toggle-now-playing':    ()    => toggleNowPlaying(),
+  // Temps restant ↔ durée totale sur #td (audit 2026-07-27) — persistant (cfg)
+  'toggle-remaining':      (btn, e) => {
+    e.stopPropagation();
+    set('showRemaining', !get('showRemaining'));
+    saveCfg();
+  },
   'close-now-playing':     ()    => closeNowPlaying(),
   'toggle-np-full':        ()    => toggleNowPlayingFullscreen(),
   'cycle-np-bg':           ()    => cycleNpBg(),
@@ -330,7 +336,7 @@ const _ACTIONS = {
   },
 
   'backup-export': async () => {
-    await exportBackup(false);
+    await exportBackup();
   },
 
   'backup-import': async () => {
@@ -405,6 +411,7 @@ const _ACTIONS = {
     setView(btn.dataset.view, niEl, btn.dataset.plId || undefined);
   },
   'next-sort':             ()    => nextSort(),
+  'sort-col':              btn  => sortByColumn(btn.dataset.col), // colonnes cliquables (audit 2026-07-27)
   'next-album-sort':       ()    => nextAlbumSort(),
   'filter-format': (btn) => {
     const fmt = btn.dataset.fmt ?? '';
@@ -508,6 +515,9 @@ const _ACTIONS = {
     showPlCtxMenu(fakeEvent, plId);
   },
   'show-pl-qpop':          (btn, e) => showPlQuickPop(e, btn.dataset.trackId, btn), // B16 : passer le bouton déclencheur
+  // AUDIT-2026-07-27 : bouton ⋯ visible au hover — même menu que le clic droit,
+  // découvrable par tous (le contextmenu seul est un pattern invisible).
+  'tr-more':               (btn, e) => { e.stopPropagation(); showCtxMenu(e, btn.dataset.trackId); },
   'pqp-add':               btn  => pqpAdd(btn.dataset.plId),
   'pqp-new':               ()   => pqpNew(),
   'pqp-smart':             ()   => { closePlQuickPop(); openSmartPlaylistModal(getPqpTrackId()); },

@@ -354,7 +354,7 @@ export async function ctxDeleteTrack() {
   }, UNDO_MS);
 
   toastWithAction(
-    i18n('ctx_deleted_toast', t.name) || `🗑 « ${t.name} » supprimé`,
+    i18n('ctx_deleted_toast', t.name) || `« ${t.name} » supprimé`,
     'info',
     i18n('te_cancel') || 'Annuler',
     () => {

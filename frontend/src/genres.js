@@ -116,7 +116,7 @@ const GENRE_DISPLAY_NAMES = {
  * @param {string} key - Clé canonique (ex: "rap", "phonk")
  * @returns {string} Emoji
  */
-export function _genreGetEmoji(key) {
+function _genreGetEmoji(key) {
   const n = key.toLowerCase();
   if (_emojiCache.has(n)) return _emojiCache.get(n);
   let result;
@@ -136,7 +136,7 @@ export function _genreGetEmoji(key) {
  * @param {string} key - Clé canonique (ex: "rap", "phonk")
  * @returns {string} Valeur CSS de background (linear-gradient)
  */
-export function _genreGetColor(key) {
+function _genreGetColor(key) {
   const n = key.toLowerCase();
   if (_colorCache.has(n)) return _colorCache.get(n);
   let result;

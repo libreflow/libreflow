@@ -123,6 +123,7 @@
  * @property {string}              [albumDetailSort]  — tri détail album ('track', 'az')
  * @property {string}              [formatFilter]     — filtre format actif (ex: 'flac', 'mp3', '')
  * @property {ZoomLevel}           [tlistZoom]        — niveau de zoom de la liste de pistes
+ * @property {boolean}             [showRemaining]    — #td affiche le temps restant (toggle clic)
  * @property {boolean}             [cdCopyrightAck]   — accord copyright CD accepté
  * @property {boolean}             [autoUpdate]       — mises à jour automatiques activées
  * @property {string}              [lastSettingsTab]  — dernier onglet Settings visité

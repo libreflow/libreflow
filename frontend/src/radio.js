@@ -7,7 +7,7 @@
 //   import  : esc            (utils.js)
 //   import  : CFG            (cfg.js)
 //   window  : tracks, curIdx, liked, recentPlays, _trackIdxMap  (getters)
-//             confirmAction, closeCtxMenu, getFiltered, playAt, setView
+//             confirmAction, closeCtxMenu, playAt, setView
 //             setManualQueue, toast, ctxTrackId  (callbacks / getter)
 //
 // Exports publics :
@@ -20,7 +20,7 @@ import { esc, fmt }                           from './utils.js';
 import { CFG }                                from './cfg.js';
 import { i18n }                               from './i18n.js';
 import { get, notify }                        from './store.js';
-import { getFiltered, filteredIdx, _trackIdxMap } from './search.js';
+import { filteredIdx, _trackIdxMap } from './search.js';
 import { audio, playAt }                      from './player.js';
 import { toast, toastWithAction, confirmAction }                       from './ui.js';
 import { setManualQueue } from './player.js';
@@ -569,6 +569,12 @@ export function playRadioTrackAt(idx) {
   for (let i = 0; i < idx; i++) _radioPlayedIds.add(radioQueue[i].id);
   const fi = filteredIdx(t);
   if (fi >= 0) {
+    // AUDIT CINÉMA 2026-07-20 (P1) : retirer immédiatement les titres sautés de la file et
+    // resynchroniser manualQueue (miroir consommé par next() AVANT la branche radio) —
+    // sinon next() rejouait un titre sauté et le panneau « Suivant » du cinéma affichait
+    // une piste différente de celle réellement jouée.
+    radioQueue.splice(0, idx);
+    _radioSyncManualQueue();
     playAt(fi);
     if (get('view') === 'radio') renderRadioView();
   } else {
@@ -581,6 +587,9 @@ export function removeRadioTrack(idx) {
   if (idx < 0 || idx >= radioQueue.length) return;
   const removed = radioQueue[idx];
   radioQueue.splice(idx, 1);
+  // AUDIT CINÉMA 2026-07-20 (P1) : resynchroniser le miroir manualQueue — next() le
+  // consomme avant la branche radio ; sans ce sync, une piste retirée restait jouable.
+  _radioSyncManualQueue();
   if (get('view') === 'radio') renderRadioView();
   _syncRadioLibBar(true);
   // Bug #15 fix : feedback utilisateur manquant — la suppression était silencieuse.
@@ -713,7 +722,9 @@ export function renderRadioView() {
 /** Ouvre la vue radio (démarre si nécessaire). Appelé depuis la sidebar ou la bannière. */
 export async function openRadioView(btn) {
   // Si en mode cinéma → toggle via bus (cinema.js répond et vérifie cinemaOpen localement)
-  if (document.getElementById('cinema-overlay')?.classList.contains('on')) {
+  // AUDIT CINÉMA 2026-07-20 : l'overlay pose la classe 'active', pas 'on' — l'ancien
+  // test 'on' rendait cette route morte (le toggle bus n'était jamais émis).
+  if (document.getElementById('cinema-overlay')?.classList.contains('active')) {
     emit(EVENTS.CINEMA_RADIO_TOGGLE, {}); return;
   }
 

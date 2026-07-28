@@ -5,7 +5,7 @@
 // Remaining window.* : window.innerWidth/Height (DOM).
 //
 // Exports publics :
-//   miniOvOpen, toggleMiniOverlay, syncMiniOverlay,
+//   toggleMiniOverlay, syncMiniOverlay,
 //   updateMiniOverlayProgress, initMiniOverlayDrag
 
 import { get }   from './store.js';
@@ -16,7 +16,7 @@ const SVG_PLAY  = `<svg viewBox="0 0 24 24"><polygon points="6 3 20 12 6 21" fil
 const SVG_PAUSE = `<svg viewBox="0 0 24 24"><rect x="5.5" y="4" width="4" height="16" rx="1.5" fill="currentColor"/><rect x="14.5" y="4" width="4" height="16" rx="1.5" fill="currentColor"/></svg>`;
 
 // ── État ──────────────────────────────────────────────────────────
-export let miniOvOpen = false;
+let miniOvOpen = false;
 
 // ── Toggle ────────────────────────────────────────────────────────
 export function toggleMiniOverlay() {
@@ -97,7 +97,7 @@ export function updateMiniOverlayProgress() {
   _lastOvProg = now;
   if (!_audio || !_audio.duration) return;
   const fill = document.getElementById('mp-ov-fill');
-  if (fill) fill.style.width = (_audio.currentTime / _audio.duration * 100).toFixed(1) + '%';
+  if (fill) fill.style.transform = 'scaleX(' + (_audio.currentTime / _audio.duration).toFixed(3) + ')'; // scaleX : compositor-only (audit 2026-07-27)
 }
 
 // ── R-M6 : re-clamp au resize ──────────────────────────────────────

@@ -20,7 +20,9 @@ async function run() {
   const PL   = readRepoFile('frontend/src/playlists.js');
   const APP  = readRepoFile('frontend/src/app.js');
   const SS   = stripCssComments(readRepoFile('frontend/src/style.css'));
-  const SP   = stripCssComments(readRepoFile('frontend/src/style-polish.css'));
+  // style-polish.css fusionné dans style.css (audit 2026-07-27) — SP conservé
+  // comme alias pour les assertions existantes.
+  const SP   = SS;
   const HTML = readRepoFile('frontend/index.html');
   const RAD  = readRepoFile('frontend/src/radio.js');
   const REN  = readRepoFile('frontend/src/renderer.js');

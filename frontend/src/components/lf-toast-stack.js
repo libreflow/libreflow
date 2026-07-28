@@ -13,6 +13,13 @@
 
 import { LitElement, html, css } from 'lit';
 import { toastReducer, resolveDuration, normalizeType } from './lf-toast-stack.logic.js';
+// i18n import: leaf lookup only (called lazily inside render(), never at module
+// top-level), so it is safe despite the i18n.js -> player.js -> ui.js ->
+// lf-toast-stack.js cycle this creates — function-declaration exports are bound
+// during ESM instantiation, before any module's body evaluates, and `i18n()`
+// reads the live `lang` value at call time. See CLAUDE.md §18: a leaf i18n
+// lookup is treated differently from importing another feature module's state.
+import { i18n } from '../i18n.js';
 
 const MAX_TOASTS = 5;
 
@@ -82,7 +89,7 @@ export class LfToastStack extends LitElement {
       -webkit-backdrop-filter: blur(var(--blur-lg)) saturate(1.2);
       color: var(--lf-toast-fg, var(--text-primary));
       padding: 14px 16px;
-      border-radius: var(--radius-md);
+      border-radius: var(--radius-lg);
       box-shadow: var(--shadow-lg), 0 0 0 1px color-mix(in srgb, var(--lf-toast-accent) 35%, transparent);
       display: flex;
       align-items: center;
@@ -140,6 +147,10 @@ export class LfToastStack extends LitElement {
       letter-spacing: .0892857em;
     }
     .t-action:hover { background: rgba(255, 255, 255, .08); }
+    .t-action:focus-visible {
+      outline: var(--focus-ring);
+      outline-offset: 1px;
+    }
 
     .t-close {
       flex: 0 0 auto;
@@ -153,6 +164,10 @@ export class LfToastStack extends LitElement {
       border-radius: 4px;
     }
     .t-close:hover { color: rgba(255, 255, 255, .92); background: rgba(255, 255, 255, .08); }
+    .t-close:focus-visible {
+      outline: var(--focus-ring);
+      outline-offset: 1px;
+    }
 
     .t-bar {
       position: absolute;
@@ -318,7 +333,6 @@ export class LfToastStack extends LitElement {
     this._timers.clear();
   }
 
-  // LOW: aria-label hardcoded FR — to be parameterized via prop when WC i18n strategy is finalized.
   render() {
     return html`
       ${this._items.map(t => html`
@@ -338,7 +352,7 @@ export class LfToastStack extends LitElement {
             </button>
           ` : null}
           ${t.closable ? html`
-            <button class="t-close" aria-label="Fermer"
+            <button class="t-close" aria-label=${i18n('toast_close')}
                     @click=${(ev) => this._onCloseClick(ev, t.id)}>×</button>
           ` : null}
           <span class="t-bar" aria-hidden="true"

@@ -15,7 +15,7 @@ import { i18n }                                       from './i18n.js';
 import { extractColor, guessGenre }                   from './tags.js';
 import { rgEnabled }                                  from './replaygain.js';
 import { CFG }                                        from './cfg.js';
-import { normTag, mainArtist, fmtd, validYear }       from './utils.js';
+import { normTag, fmtArtists, mainArtist, fmtd, validYear } from './utils.js';
 
 import { adjustShuffleQAfterDelete }                  from './player.js';
 import { VIRT }                                       from './virt.js';
@@ -198,7 +198,8 @@ export async function loadTagsBg(t, rustTags = null) {
     let changed = false;
     // SEC-5 : valider et tronquer les champs textuels avant tout traitement
     const ntitle      = normTag(_sanitizeTagStr(rustTags.title));
-    const nartistFull = normTag(_sanitizeTagStr(rustTags.artist));
+    // fmtArtists : "A/B;C" → "A, B, C" à l'affichage (garde AC/DC), normTag inclus
+    const nartistFull = fmtArtists(_sanitizeTagStr(rustTags.artist));
     const nartist     = mainArtist(nartistFull);
     const nalbum      = normTag(_sanitizeTagStr(rustTags.album));
     if (ntitle      && ntitle      !== t.name)       { t.name       = ntitle;       changed = true; delete t._nlc; }

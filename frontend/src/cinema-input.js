@@ -82,22 +82,31 @@ function _onCinKey(e) {
       if (audio) { const v = Math.max(0, _deps.readVol() - 0.05); _deps.setMasterGain(v); _deps.syncVol(v); _deps.updateCinema(); }
       break;
     case 'KeyN': case 'KeyL':
+      if (e.repeat) return; // même classe de race que KeyR : next() ré-entrant avant la fin
+                             // du changement de piste async désynchroniserait la file/radio.
       e.preventDefault();
       _deps.next();
       break;
     case 'KeyP':
+      if (e.repeat) return;
       e.preventDefault();
       _deps.prev();
       break;
     case 'KeyF':
+      if (e.repeat) return; // touche maintenue -- ignorer l'auto-répétition OS
       e.preventDefault();
       _deps.toggleCinemaFullscreen();
       break;
     case 'KeyB':
+      if (e.repeat) return;
       e.preventDefault();
       _deps.cycleCinemaBg();
       break;
     case 'KeyR':
+      // Bug fix : sans cette garde, une répétition avant la fin du buildRadioQueue() async
+      // du premier appel pouvait ré-entrer toggleCinemaRadio() et désynchroniser
+      // radioActive de l'état visible/en file (radio.js).
+      if (e.repeat) return;
       e.preventDefault();
       _deps.toggleCinemaRadio().catch(err => console.warn('[cinema] radio toggle:', err));
       break;

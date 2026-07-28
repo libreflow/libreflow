@@ -11,7 +11,7 @@
 (function () {
   try {
     var p = localStorage.getItem('lf-motion');
-    if (p !== 'system' && p !== 'full' && p !== 'reduce') p = 'full';
+    if (p !== 'system' && p !== 'full' && p !== 'reduce') p = 'system'; /* AUDIT-2026-07-27 : défaut = respecter l'OS */
     var reduce = p === 'reduce' ||
       (p === 'system' && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
     document.documentElement.setAttribute('data-motion', reduce ? 'reduce' : 'full');

@@ -77,7 +77,9 @@ export function artPlaceholder(t) {
   if (t.artColor && ART_COLOR_RE.test(t.artColor)) {
     return `<div class="tart-ph" aria-hidden="true" style="background:${esc(t.artColor)}"><span class="tart-init">${extEmoji(t.ext) || letter}</span></div>`;
   }
-  const seed = t.artist || t.album || t.name || '';
+  // Album d'abord : les pistes d'un même album partagent la même couleur
+  // (les crédits "feat." varient par piste et fragmenteraient la teinte).
+  const seed = t.album || t.artist || t.name || '';
   const hue  = _djb2(seed) % 360;
   const bg   = `hsl(${hue},32%,26%)`;
   const fg   = `hsl(${hue},55%,72%)`;
@@ -101,6 +103,12 @@ export function makeAddBtn(t) {
 
 export function makeEqHTML(_t) {
   return '<span class="eq-bars" aria-hidden="true"><span></span><span></span><span></span></span>';
+}
+
+// AUDIT-2026-07-27 : ⋯ au hover — ouvre le même menu que le clic droit (tr-more, handlers.js)
+export function makeMoreBtn(t) {
+  const lbl = i18n('tr_more') || "Plus d'actions";
+  return `<button class="tr-more-btn" data-action="tr-more" data-track-id="${esc(t.id)}" title="${esc(lbl)}" aria-label="${esc(lbl)}" aria-haspopup="menu" tabindex="-1"><svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg></button>`;
 }
 
 // A11Y-3: role="listitem" tabindex="0" aria-label; P6: classes dynamiques
@@ -148,6 +156,7 @@ export function thtml(t, fi, { active = false, liked = false, likedSet, query = 
     <span class="tdur">${fmtd(t.duration)}</span>
     ${makeLikeBtn(t, likedSet)}
     ${makeAddBtn(t)}
+    ${makeMoreBtn(t)}
   </div>
 </div>`;
 }
@@ -395,13 +404,19 @@ export function renderLib() {
       const _curPl = _view === 'playlist'
         ? (get('playlists') || []).find(p => p.id === get('curPlId'))
         : null;
+      // AUDIT-2026-07-27 : chaque état vide se termine par un bouton (règle
+      // flagship) — recherche → effacer, favoris/récents → explorer la biblio.
       const _cta = _libEmpty
         ? `<button class="empty-cta" data-action="open-folder">${esc(i18n('empty_cta_scan') || 'Scanner un dossier')}</button>`
-        : (_view === 'playlist' && !_query && _curPl?.smart)
-          ? `<button class="empty-cta" data-action="regen-cur-pl">${esc(i18n('pl_regen_btn') || 'Régénérer')}</button>`
-          : (_view === 'playlist' && !_query)
-            ? `<button class="empty-cta" data-action="set-view" data-view="all" data-ni-id="ni-all">${esc(i18n('empty_cta_add') || 'Ajouter des titres')}</button>`
-            : '';
+        : _query
+          ? `<button class="empty-cta" data-action="clear-search">${esc(i18n('aria_srch_clear') || 'Effacer la recherche')}</button>`
+          : (_view === 'playlist' && _curPl?.smart)
+            ? `<button class="empty-cta" data-action="regen-cur-pl">${esc(i18n('pl_regen_btn') || 'Régénérer')}</button>`
+            : (_view === 'playlist')
+              ? `<button class="empty-cta" data-action="set-view" data-view="all" data-ni-id="ni-all">${esc(i18n('empty_cta_add') || 'Ajouter des titres')}</button>`
+              : (_view === 'liked' || _view === 'recent')
+                ? `<button class="empty-cta" data-action="set-view" data-view="all" data-ni-id="ni-all">${esc(i18n('empty_cta_explore') || 'Explorer la bibliothèque')}</button>`
+                : '';
       listEl.innerHTML = `<div class="empty"><div class="empty-ico">${_ico}</div>`
         + `<div class="empty-h">${esc(_h)}</div><div class="empty-s">${esc(_s)}</div>${_cta}</div>`;
     }
@@ -515,13 +530,25 @@ export function updatePlActionBar() {
     `<option value="${s.v}"${plSort === s.v ? ' selected' : ''}>${esc(s.l)}</option>`
   ).join('');
 
+  const playLbl = i18n('pl_play_all') || 'Tout lire';
+  const shufLbl = i18n('pl_shuffle')  || 'Aléatoire';
+  const moreLbl = i18n('pl_more')     || 'Plus';
+  // FAB Play accentué + SVG (audit 2026-07-27 : les glyphes Unicode ▶ ⇀ •••
+  // cassaient le langage d'icônes SVG de l'app, et l'action primaire n'était
+  // pas saillante). Ordre Spotify : Play, Shuffle, méta, puis outils à droite.
   const html = `<div id="pl-action-bar" class="pl-action-bar">
+    <button class="fab-play fab-play--sm" data-action="play-pl-from" data-idx="0" aria-label="${playLbl}" title="${playLbl}">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><polygon points="7 4 21 12 7 20" fill="currentColor"/></svg>
+    </button>
+    <button class="lib-shuf-btn" data-action="shuffle-cur-pl" aria-label="${shufLbl}" title="${shufLbl}">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m18 14 4 4-4 4"/><path d="m18 2 4 4-4 4"/><path d="M2 18h1.973a4 4 0 0 0 3.3-1.7l5.454-8.6A4 4 0 0 1 16.027 6H22"/><path d="M2 6h1.972a4 4 0 0 1 3.6 2.2"/><path d="M22 18h-6.041a4 4 0 0 1-3.3-1.8l-.359-.45"/></svg>
+    </button>
     <span class="pl-bar-count">${count} ${i18n('n_tracks') || 'titres'}${totalDur > 0 ? ' · ' + fmtd(totalDur) : ''}</span>
     <span class="pl-bar-spacer"></span>
-    <button class="pl-act-btn" data-action="play-pl-from" data-idx="0">▶ ${i18n('pl_play_all') || 'Tout lire'}</button>
-    <button class="pl-act-btn" data-action="shuffle-cur-pl">⇀ ${i18n('pl_shuffle') || 'Aléatoire'}</button>
     <select class="pl-sort-sel" data-input-action="pl-sort" aria-label="${i18n('sort') || 'Tri'}">${sortOptions}</select>
-    <button class="pl-act-btn icon-btn" data-action="show-cur-pl-menu" aria-label="${i18n('pl_more') || 'Plus'}">•••</button>
+    <button class="pl-act-btn icon-btn" data-action="show-cur-pl-menu" aria-label="${moreLbl}" title="${moreLbl}">
+      <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg>
+    </button>
   </div>`;
 
   // FIX-B2 : insérer après #pl-hero, pas dans un slot pré-existant
@@ -638,22 +665,6 @@ export function _withVT(fn) {
   } else {
     fn();
   }
-}
-
-export function animateViewChange() {
-  const ca = document.getElementById('content-area');
-  if (!ca) return;
-  ca.classList.remove('view-in');
-  // C-4: double-rAF — évite le reflow synchrone forcé; re-query dans l'inner rAF
-  // pour ne pas agir sur un nœud détaché si une transition DOM survient entre les deux ticks
-  requestAnimationFrame(() => {
-    requestAnimationFrame(() => {
-      const live = document.getElementById('content-area');
-      if (!live) return;
-      live.classList.add('view-in');
-      live.addEventListener('animationend', () => live.classList.remove('view-in'), { once: true });
-    });
-  });
 }
 
 export function scrollToCurrentTrack() {

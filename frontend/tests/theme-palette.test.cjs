@@ -9,13 +9,15 @@ const assert = require('assert');
 const { contrastRatio } = require('./_wcag.cjs');
 
 const DS = fs.readFileSync(path.join(__dirname, '../src/design-system.css'), 'utf8');
+const STYLE = fs.readFileSync(path.join(__dirname, '../src/style.css'), 'utf8');
+const STYLE_JS_SETTINGS = fs.readFileSync(path.join(__dirname, '../src/settings.js'), 'utf8');
 
 // Cible : palette dark à 5 paliers, ΔRGB total >= 35 entre --bg et --bg5.
 const DARK_TARGET = {
   '--bg-base'      : '#030303',
-  '--bg-surface'   : '#060606',
-  '--bg-elevated'  : '#0A0A0A',
-  '--bg-raised'    : '#0E0E0E',
+  '--bg-surface'   : '#121214',
+  '--bg-elevated'  : '#1C1C20',
+  '--bg-raised'    : '#1C1C20',
 };
 
 function extractRoot(css) {
@@ -121,12 +123,12 @@ async function run() {
   });
 
   await t('cyan accent on dark bg-surface passes AA (4.5:1)', () => {
-    const ratio = contrastRatio('#22d3ee', '#060606');
+    const ratio = contrastRatio('#22d3ee', '#121214');
     assert.ok(ratio >= 4.5, `cyan on bg-surface = ${ratio.toFixed(2)}:1`);
   });
 
   await t('green accent on dark bg-surface passes AA (4.5:1)', () => {
-    const ratio = contrastRatio('#34d399', '#060606');
+    const ratio = contrastRatio('#34d399', '#121214');
     assert.ok(ratio >= 4.5, `green on bg-surface = ${ratio.toFixed(2)}:1`);
   });
 
@@ -140,7 +142,6 @@ async function run() {
   const pairs = [
     ['--bg-base', '--bg-surface'],
     ['--bg-surface','--bg-elevated'],
-    ['--bg-elevated','--bg-raised'],
   ];
   for (const [a, b] of pairs) {
     await t(`dark elevation ${a} -> ${b} has ΔRGB >= 8`, () => {
@@ -150,6 +151,12 @@ async function run() {
       assert.ok(d >= 8, `${a}→${b} ΔRGB = ${d} (need 8)`);
     });
   }
+
+  // --bg-raised == --bg-elevated by design (2026-07): a real 4th tonal step would
+  // push accent-as-text below AA (4.5:1) on Vantablack — see CLAUDE.md §2.9.
+  await t('dark --bg-raised equals --bg-elevated (AA budget exhausted, see CLAUDE.md §2.9)', () => {
+    assert.strictEqual((root['--bg-raised'] || '').toUpperCase(), (root['--bg-elevated'] || '').toUpperCase());
+  });
 
   // ── AAA SC 1.4.6 Contrast Enhanced — texte normal >=7:1 sur --bg ──────────
   const AAA_TOKENS = [['--t', 'primary'], ['--t2', 'secondary'], ['--t3', 'muted']];
@@ -170,9 +177,27 @@ async function run() {
     });
   }
 
+  // --- Scoped AA exception (tonal elevation, 2026-07, CLAUDE.md §2.9) ---
+  // --text-muted only guarantees AAA (7:1) on --bg-base/--bg-surface. On the
+  // lightest tiers (--bg-elevated, --bg-raised) it must still clear AA (4.5:1).
+  await t('dark --t3 (muted) on --bg-raised passes AA (4.5:1)', () => {
+    const fg = resolveVar(root, null, '--t3');
+    const bg = resolveVar(root, null, '--bg-raised');
+    assert.ok(fg && bg, `cannot resolve --t3 (${fg}) or --bg-raised (${bg})`);
+    const r = contrastRatio(fg, bg);
+    assert.ok(r >= 4.5, `--t3 on --bg-raised = ${r.toFixed(2)}:1 (need 4.5)`);
+  });
+
+  await t('dark accent (indigo default #8B6BFF) on --bg-raised passes AA (4.5:1)', () => {
+    const bg = resolveVar(root, null, '--bg-raised');
+    assert.ok(bg, `cannot resolve --bg-raised`);
+    const r = contrastRatio('#8B6BFF', bg);
+    assert.ok(r >= 4.5, `accent on --bg-raised = ${r.toFixed(2)}:1 (need 4.5)`);
+  });
+
   // --- SC 1.4.11 All [data-theme] accent swatches >= 4.5:1 on --bg-surface (GAP-T01) ---
   // design-system.css declares [data-theme="..."] { --g:#hex }. Each --g must pass AA (4.5:1) on dark bg-surface.
-  const BG_SURFACE_DARK = '#060606';
+  const BG_SURFACE_DARK = '#121214';
   const accentRe = /\[data-theme="[^"]+"\]\s*\{[^}]*--g\s*:\s*(#[0-9a-fA-F]{6})/g;
   let am2;
   while ((am2 = accentRe.exec(DS)) !== null) {
@@ -182,6 +207,63 @@ async function run() {
       assert.ok(r >= 4.5, `accent ${hex} on ${BG_SURFACE_DARK}: ${r.toFixed(2)}:1 (need 4.5)`);
     });
   }
+
+  // --- Settings > Appearance theme swatches must paint their own accent color ---
+  // Each swatch carries data-theme="X" which locally overrides --g via the
+  // [data-theme] map above; .theme-swatch must consume it as `background`,
+  // otherwise every swatch renders as a blank/white circle (regression 2026-07-01,
+  // commit 8e70a175 dropped `background: var(--g)` during an a11y-branch merge).
+  await t('.theme-swatch paints background: var(--g)', () => {
+    const m = /\.theme-swatch\s+\{([^}]*)\}/.exec(STYLE);
+    assert.ok(m, '.theme-swatch base rule not found in style.css');
+    assert.ok(/background\s*:\s*var\(--g\)/.test(m[1]), `.theme-swatch has no background: var(--g) — swatches will render blank/white. Rule: ${m[1]}`);
+  });
+
+  // --- Each [data-theme] block's --g hex must match its own --g-rgb triplet ---
+  // Regression 2026-07-08: settings.js used to inline-override --g-rgb from a
+  // hardcoded THEME_RGB table that drifted from this map for green/blue/cyan,
+  // so every rgba(var(--g-rgb),…) glow/hover/shadow (~90 usages) rendered a
+  // mismatched hue vs. the solid var(--g) accent. Fix removed the JS override
+  // entirely — this test guards design-system.css's own internal consistency,
+  // the single source of truth both --g and --g-rgb must now come from.
+  function hexToRgbTriplet(hex) {
+    const h = hex.replace('#', '');
+    const r = parseInt(h.slice(0, 2), 16);
+    const g = parseInt(h.slice(2, 4), 16);
+    const b = parseInt(h.slice(4, 6), 16);
+    return `${r},${g},${b}`;
+  }
+  const themeBlockRe = /\[data-theme="([^"]+)"\]\s*\{([^}]*)\}/g;
+  let tbm;
+  while ((tbm = themeBlockRe.exec(DS)) !== null) {
+    const [, themeName, body] = tbm;
+    const gHex = /--g\s*:\s*(#[0-9a-fA-F]{6})/.exec(body);
+    const gRgb = /--g-rgb\s*:\s*([\d]+,\s*[\d]+,\s*[\d]+)/.exec(body);
+    await t(`[data-theme="${themeName}"] --g-rgb matches its own --g hex`, () => {
+      assert.ok(gHex, `[data-theme="${themeName}"] has no --g hex`);
+      assert.ok(gRgb, `[data-theme="${themeName}"] has no --g-rgb`);
+      const expected = hexToRgbTriplet(gHex[1]);
+      const actual = gRgb[1].replace(/\s+/g, '');
+      assert.strictEqual(actual, expected, `--g:${gHex[1]} implies --g-rgb:${expected}, but found ${actual}`);
+    });
+  }
+
+  // --- _applyThemeVars() must not duplicate --g-rgb from a hardcoded JS table ---
+  // design-system.css's [data-theme] map (tested above) is the single source of
+  // truth for the per-theme --g-rgb; _applyThemeVars() (setTheme/applyTheme's
+  // shared helper) must let it cascade rather than overriding it inline — that's
+  // exactly how the THEME_RGB drift bug happened. NB: applyArtColor()/
+  // clearArtColor() legitimately DO set/remove --g-rgb inline elsewhere in this
+  // file (dynamic accent extracted from album art has no CSS rule to derive it
+  // from) — this check is scoped to _applyThemeVars() only, not the whole file.
+  await t('_applyThemeVars() does not inline-override --g-rgb', () => {
+    const fn = /function _applyThemeVars\([\s\S]*?\n\}/.exec(STYLE_JS_SETTINGS);
+    assert.ok(fn, '_applyThemeVars() body not found in settings.js');
+    assert.ok(!/setProperty\(\s*'--g-rgb'/.test(fn[0]),
+      '_applyThemeVars() sets --g-rgb via inline style — reintroduces the THEME_RGB drift class of bug');
+    assert.ok(!/(?:const|let|var)\s+THEME_RGB\b/.test(STYLE_JS_SETTINGS),
+      'settings.js reintroduces a THEME_RGB-style hardcoded rgb table (drift risk vs design-system.css)');
+  });
 
   if (fail) { console.log(`\nTHEME-PALETTE FAIL: ${fail}/${pass + fail}`); process.exit(1); }
   console.log(`\nTHEME-PALETTE OK: ${pass}/${pass}`);

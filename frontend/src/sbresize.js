@@ -18,9 +18,9 @@
 import { get, set } from './store.js';
 import { saveCfg }  from './cfgsave.js';
 
-export const SB_MIN     = 200;
-export const SB_MAX     = 420;
-export const SB_DEFAULT = 260;
+const SB_MIN     = 200;
+const SB_MAX     = 420;
+const SB_DEFAULT = 260;
 const STEP = 8;
 
 let _handle = null;

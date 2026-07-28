@@ -71,6 +71,18 @@ function _syncSortBtns(v) {
 // S'abonner au store — déclenché par set('view') quel que soit l'appelant
 subscribe('view', _syncSortBtns);
 
+// ── Barre d'action Play/Shuffle (audit 2026-07-27) ───────────────────────────
+// Visible sur les vues liste principales ; les vues playlist/drill ont déjà
+// leur propre barre (#pl-action-bar / .dh-actions), les grilles n'en ont pas.
+const _ACTION_BAR_VIEWS = new Set(['all', 'liked', 'recent', 'genre-detail']);
+
+function _syncLibActionBar(v) {
+  const bar = document.getElementById('lib-action-bar');
+  if (bar) bar.hidden = !_ACTION_BAR_VIEWS.has(v);
+}
+
+subscribe('view', _syncLibActionBar);
+
 // ── INP — Renders de grilles différés ─────────────────────────────────────────
 // renderAlbumsGrid / renderArtistsGrid / renderGenresGrid / renderPlaylistsGrid
 // construisent la totalité du HTML synchronement (O(n_tracks) + O(m log m) sort
@@ -197,7 +209,7 @@ let _navDirTimer = null;
 const _NAV_ORDER = ['all', 'liked', 'recent', 'artists', 'albums', 'genres', 'playlists'];
 
 /** Annule le debounce de recherche en cours (ex: drill-down depuis renderer.js). */
-export function cancelSearchDebounce() {
+function cancelSearchDebounce() {
   if (_searchDebounceTimer) { clearTimeout(_searchDebounceTimer); _searchDebounceTimer = null; }
 }
 // drillDown() (renderer.js) émet SEARCH_DEBOUNCE_CANCEL avant de naviguer, pour éviter
@@ -297,6 +309,42 @@ export function onSearch(q) {
 }
 
 // ══ TRI PRINCIPAL ═════════════════════════════════════════════════════════════
+
+// ── Colonnes cliquables (audit 2026-07-27) ────────────────────────────────────
+// Titre : bascule A–Z ↔ Z–A ; Album / Durée : tri simple. Le bouton cyclique
+// #main-sort-btn reste le chemin clavier (l'en-tête est aria-hidden).
+
+/** Synchronise l'état visuel des boutons colonnes avec le tri courant. */
+function _syncColHdrSort(sort) {
+  const s = sort || _s();
+  const state = { title: null, album: null, duration: null };
+  if (s === 'az') state.title = 'asc';
+  else if (s === 'za') state.title = 'desc';
+  else if (s === 'album') state.album = 'asc';
+  else if (s === 'duration') state.duration = 'asc';
+  document.querySelectorAll('#tlist-col-hdr .col-btn').forEach(b => {
+    const col = b.dataset.col;
+    const dir = state[col];
+    b.classList.toggle('on', !!dir);
+    if (dir) b.dataset.dir = dir; else delete b.dataset.dir;
+  });
+}
+subscribe('sort', _syncColHdrSort);
+
+export function sortByColumn(col) {
+  const cur = _s();
+  let next = null;
+  if (col === 'title')    next = cur === 'az' ? 'za' : 'az';
+  if (col === 'album')    next = 'album';
+  if (col === 'duration') next = 'duration';
+  if (!next || next === cur) return;
+  set('sort', next);
+  const _lbl = document.getElementById('sort-lbl');
+  const _key = SLBLS[next] || 'sort_az';
+  if (_lbl) _lbl.textContent = i18n(_key);
+  document.getElementById('main-sort-btn')?.setAttribute('aria-label', `${i18n('pl_sort_label')}: ${i18n(_key)}`);
+  invalidateFilter(); renderLib(); saveCfg();
+}
 
 export function nextSort() {
   const view = _v();
@@ -439,16 +487,21 @@ function _svMarkNav(v, btn) {
     b.classList.remove('on');
     b.removeAttribute('aria-current');
   });
-  // Library sub-views keep #ni-all active in sidebar; tabs handle sub-view distinction
-  const _LIB_VIEWS = ['all', 'artists', 'albums', 'radio'];
-  if (_LIB_VIEWS.includes(v)) {
-    const _niAll = document.getElementById('ni-all');
-    if (_niAll) { _niAll.classList.add('on'); _niAll.setAttribute('aria-current', 'page'); }
-  }
-  if (btn && !btn.classList.contains('lib-tab')) {
+  // AUDIT-2026-07-27 : les onglets sont des facettes de la bibliothèque
+  // (Titres/Artistes/Albums/Genres) ; Radio et Stats ont leur item sidebar dédié.
+  const _LIB_VIEWS = ['all', 'artists', 'albums', 'genres'];
+  const _NI_BY_VIEW = { liked: 'ni-liked', recent: 'ni-recent', radio: 'ni-radio', stats: 'ni-stats' };
+  const _niId = _LIB_VIEWS.includes(v) ? 'ni-all' : _NI_BY_VIEW[v];
+  if (_niId) {
+    const _ni = document.getElementById(_niId);
+    if (_ni) { _ni.classList.add('on'); _ni.setAttribute('aria-current', 'page'); }
+  } else if (btn && !btn.classList.contains('lib-tab')) {
     btn.classList.add('on'); btn.setAttribute('aria-current', 'page');
   }
-  // Sync lib-tab underline indicators
+  // Sync lib-tab underline indicators + visibilité : la rangée d'onglets ne
+  // s'affiche que sur les vues facettes (sinon : onglets tous éteints = confus).
+  const _tabsBar = document.querySelector('.lib-tabs');
+  if (_tabsBar) _tabsBar.hidden = !_LIB_VIEWS.includes(v);
   document.querySelectorAll('.lib-tab').forEach(t => { t.classList.remove('on'); t.setAttribute('aria-selected', 'false'); });
   if (_LIB_VIEWS.includes(v)) {
     const _tab = document.querySelector(`.lib-tab[data-view="${v}"]`);
@@ -677,3 +730,8 @@ export function statsGoToAlbum(albumKey, displayName) {
     requestAnimationFrame(() => drillDown('albums', albumKey, displayName));
   });
 }
+// Note : STATS_DRILL_ARTIST / STATS_DRILL_GENRE sont câblés dans app.js (wiring
+// cross-module, cf. CLAUDE.md §6). STATS_DRILL_ALBUM est câblé ici (et non dans
+// app.js) pour rester dans le scope de cet audit — même pattern « emit depuis
+// stats.js → listener qui appelle le helper views.js ».
+on(EVENTS.STATS_DRILL_ALBUM, ({ key, displayName }) => statsGoToAlbum(key, displayName));

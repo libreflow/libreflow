@@ -29,7 +29,6 @@
 //   togglePlFolder, showPlFolderCtxMenu, renamePlFolder, deletePlFolder
 //   onPlFolderDragOver, onPlFolderDragLeave, onPlFolderDrop
 //   onPlCoverSelected, clearPlCover
-//   trapFocus
 
 import { esc, moveByOne }       from './utils.js';
 import { CFG }                   from './cfg.js';
@@ -272,37 +271,6 @@ export function savePlaylists() {
 export async function savePlaylistsNow() {
   clearTimeout(_savePlTimer);
   await _flushPlaylists();
-}
-
-// ══ Focus trap (WCAG 2.1.2) ══════════════════════════════════════════════════
-// Confine le focus clavier à l'intérieur d'un modal tant qu'il est visible.
-// Retourne une fonction de cleanup pour retirer le listener.
-export function trapFocus(containerEl) {
-  const FOCUSABLE = [
-    'a[href]', 'button:not([disabled])', 'input:not([disabled])',
-    'select:not([disabled])', 'textarea:not([disabled])', '[tabindex]:not([tabindex="-1"])'
-  ].join(',');
-  function handler(e) {
-    if (e.code !== 'Tab') return;
-    const visible = containerEl.classList.contains('on') ||
-                    containerEl.style.display === 'flex';
-    if (!visible) return;
-    const els = [...containerEl.querySelectorAll(FOCUSABLE)]
-      .filter(el => el.offsetParent !== null && !el.closest('[hidden]'));
-    if (!els.length) { e.preventDefault(); return; }
-    const first = els[0], last = els[els.length - 1];
-    if (e.shiftKey) {
-      if (!containerEl.contains(document.activeElement) || document.activeElement === first) {
-        e.preventDefault(); last.focus();
-      }
-    } else {
-      if (!containerEl.contains(document.activeElement) || document.activeElement === last) {
-        e.preventDefault(); first.focus();
-      }
-    }
-  }
-  containerEl.addEventListener('keydown', handler);
-  return () => containerEl.removeEventListener('keydown', handler);
 }
 
 // ══ PLAYLISTS ════════════════════════════════════════════════════════════════

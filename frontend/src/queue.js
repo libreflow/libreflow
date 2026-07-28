@@ -294,7 +294,7 @@ export function renderQueue() {
         <div class="q-name">${esc(t?.name ?? '')}</div>
         <div class="q-artist">${esc(t?.artistFull || t?.artist || '–')}</div>
       </div>
-      <div class="q-dur">${fmtd(t?.duration ?? 0)}</div>
+      <div class="q-dur">${fmtd(t?.duration)}</div>
     </div>`;
     el.innerHTML = Array(5).fill(row).join('');
     // Accès DOM local — évite l'import circulaire depuis player.js (§6)
@@ -303,10 +303,14 @@ export function renderQueue() {
     return;
   }
 
-  // Invalider l'override si la piste a changé depuis le reorder
-  if (_queueOverride && curIdx >= 0 && tracks[curIdx]?.id !== _queueOverrideTrackId) {
-    _queueOverride = null; _queueOverrideTrackId = null;
-  }
+  // AUDIT CINÉMA 2026-07-20 (P1) : l'ancienne invalidation par ancre (`curIdx.id !==
+  // _queueOverrideTrackId → override anéanti`) détruisait le RESTE de la file explicite
+  // dès que la première piste en file démarrait (consumeFirstExplicit ne réécrivait pas
+  // l'ancre), et contredisait next() qui, lui, consomme toujours l'explicite en priorité.
+  // Les lectures « naturelles » vident déjà la file via playAt() → clearQueueOverride()
+  // (player.js, sauf keepQueue) : ce second mécanisme ne se déclenchait QUE dans les
+  // chemins où la file doit survivre (consommation, clic dans la file). Supprimé —
+  // l'affichage suit désormais exactement ce que next() jouera.
 
   const explicit = _buildExplicitQueue();
   const natural  = _buildNaturalUpcoming();
@@ -348,13 +352,19 @@ export function renderQueue() {
           <div class="q-name">${esc(curTrack.name ?? '')}</div>
           <div class="q-artist">${esc(curTrack.artistFull || curTrack.artist || '–')}</div>
         </div>
-        <div class="q-dur" aria-hidden="true">${fmtd(curTrack.duration ?? 0)}</div>
+        <div class="q-dur" aria-hidden="true">${fmtd(curTrack.duration)}</div>
       </div>
     </div>`;
   }
 
   if (!explicit.length && !natural.length) {
-    el.innerHTML = html + `<div class="queue-empty">${i18n('queue_empty')}</div>`;
+    // État vide au standard maison (.empty) — icône + titre + invite,
+    // cohérent avec les autres vues (audit 2026-07-27).
+    el.innerHTML = html + `<div class="empty queue-empty">
+      <div class="empty-ico" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><line x1="9" y1="6" x2="21" y2="6"/><line x1="9" y1="12" x2="21" y2="12"/><line x1="9" y1="18" x2="21" y2="18"/><circle cx="3.5" cy="6" r="1.2" fill="currentColor" stroke="none"/><circle cx="3.5" cy="12" r="1.2" fill="currentColor" stroke="none"/><circle cx="3.5" cy="18" r="1.2" fill="currentColor" stroke="none"/></svg></div>
+      <div class="empty-h">${i18n('queue_empty')}</div>
+      <div class="empty-s">${i18n('queue_empty_hint')}</div>
+    </div>`;
     const _ael = /** @type {HTMLAudioElement|null} */ (document.getElementById('audio'));
     patchPlayState(_ael ? !_ael.paused : false);
     return;
@@ -740,6 +750,10 @@ export function consumeFirstExplicit() {
   if (!_queueOverride.length) {
     _queueOverride        = null;
     _queueOverrideTrackId = null;
+  } else {
+    // AUDIT CINÉMA 2026-07-20 : la piste consommée devient la piste en cours — réancrer
+    // pour que l'état persisté (getQueueState) reste cohérent avec la lecture.
+    _queueOverrideTrackId = track.id;
   }
   refreshQueueBadge();
   if (queueOpen) renderQueue();

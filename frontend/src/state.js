@@ -9,7 +9,6 @@
 //
 // Exports publics :
 //   setCurIdx(v)                  — met à jour curIdx dans app.js + store
-//   setTracks(v)                  — met à jour tracks dans app.js + store
 //   setLiked(v)                   — met à jour liked dans app.js + store
 //   setCtxTrackId(v)              — met à jour ctxTrackId dans app.js + store
 //
@@ -39,22 +38,6 @@ export function setCurIdx(v)     { set('curIdx',     v); }
  * @param {Set<string>} v
  */
 export function setLiked(v)      { set('liked',      v); }
-
-/**
- * Sync tracks dans app.js et dans le store réactif.
- * Utilisé par : selection.js.
- * Applique l'invariant ARCH-3 : rebuildTrackIdxMap() est garanti en interne.
- * @param {object[]} v
- */
-export function setTracks(v) {
-  // In-place mutation keeps the same reference → store's same-ref guard skips notify.
-  // rebuildTrackIdxMap() runs BEFORE notify('tracks') so subscribers calling trackIdx() see a consistent map.
-  const arr = get('tracks');
-  arr.length = 0;
-  for (let i = 0; i < v.length; i++) arr[i] = v[i];
-  rebuildTrackIdxMap();
-  notify('tracks');
-}
 
 /**
  * Sync ctxTrackId (cible du menu contextuel) dans app.js et dans le store.

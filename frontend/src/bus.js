@@ -71,11 +71,14 @@ export const EVENTS = Object.freeze({
   // Stats navigation
   STATS_DRILL_GENRE:    'nav:stats_genre',           // { key, displayName }
   STATS_DRILL_ARTIST:   'nav:stats_artist',          // { displayName }
+  STATS_DRILL_ALBUM:    'nav:stats_album',           // { key, displayName }
   // Search
   SEARCH_DEBOUNCE_CANCEL: 'search:debounce_cancel',  // {}
   // Cinema
   CINEMA_RADIO_TOGGLE:  'cinema:radio_toggle',       // {}
   CINEMA_PROGRESS:      'cinema:progress',           // { p, cur, dur }
+
+  PLAYBACK_MODE_CHANGED: 'player:mode_changed',      // {} — shuffle/repeat basculés (cinéma re-rend ses panneaux)
   // Smart playlist
   SMART_PLAYLIST_SWITCH_TAB: 'smartplaylist:switch_tab', // { tab: string }
   // Player bar update (from artLoader)

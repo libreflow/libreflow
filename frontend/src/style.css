@@ -307,10 +307,13 @@
   margin: var(--sp-1) 0 var(--sp-2);
 }
 #cd-progress-fill {
+  /* scaleX au lieu de width : compositor-only, pas de reflow (audit 2026-07-27) */
   height: 100%;
-  width: 0%;
+  width: 100%;
+  transform: scaleX(0);
+  transform-origin: left center;
   background: var(--accent);
-  transition: width 200ms ease-out;
+  transition: transform var(--motion-base) var(--ease-standard);
 }
 #cd-progress-text {
   font-size: 12px;
@@ -341,8 +344,8 @@ html[data-mode="light"] #pl {
   backdrop-filter: none !important; -webkit-backdrop-filter: none !important;
 }
 html[data-mode="light"] .pl-art {
-  box-shadow: var(--shadow-sm-lt);
 }
+html[data-mode="light"] .pl-art-expand { background: rgba(0,0,0,.38); }
 html[data-mode="light"] .pbar         { background:var(--bg5); }
 html[data-mode="light"] .pfill        { background:var(--g); }
 html[data-mode="light"] .pbar:hover .pfill { background:var(--g); filter:brightness(1.1); }
@@ -444,7 +447,7 @@ html[data-mode="light"] .bc-cur       { color:var(--t); }
 
 /* ── Grilles albums / artistes / genres ── */
 html[data-mode="light"] .card         { background:var(--bg2); border:var(--border-w-sm) solid var(--bg5); }
-html[data-mode="light"] .card:hover   { background:var(--bg3); border-color:var(--bg6); box-shadow:var(--shadow-card-lt2); transform:translateY(calc(-1 * var(--sp-1))) scale(1.02); }
+html[data-mode="light"] .card:hover   { background:var(--bg3); border-color:var(--bg6); transform:translateY(calc(-1 * var(--sp-1))) scale(1.02); }
 html[data-mode="light"] .card-art     { background:var(--bg4); }
 html[data-mode="light"] .card-name    { color:var(--t); }
 html[data-mode="light"] .card-sub     { color:var(--t3); }
@@ -456,7 +459,7 @@ html[data-mode="light"] .genre-badge { background:var(--row-active); border-colo
 /* ── Menu contextuel ── */
 /* background/border automatiques via --glass-panel / --border-3 */
 html[data-mode="light"] #ctx-menu,
-html[data-mode="light"] #pl-ctx-menu  { backdrop-filter:none; -webkit-backdrop-filter:none; box-shadow:var(--shadow-ctx-lt); }
+html[data-mode="light"] #pl-ctx-menu  { backdrop-filter:none; -webkit-backdrop-filter:none; }
 html[data-mode="light"] .ctx-item                { color:var(--t2); }
 html[data-mode="light"] .ctx-item:hover          { background:var(--bg4); color:var(--t); }
 html[data-mode="light"] .ctx-item svg            { stroke:var(--t3); }
@@ -506,12 +509,23 @@ html[data-mode="light"] #cd-modal .modal-s {
 
 /* ── Organize modal — light scrim override (B3) ─────────────────────────── */
 html[data-mode="light"] #organize-modal-bg {
-  background: rgba(0, 0, 0, 0.35);
+  background: var(--scrim-3); /* AUDIT-2026-07-27 : le token light (§12) existe — plus de littéral dupliqué */
 }
 
 /* ── USB modal — light scrim override (B3) ──────────────────────────────── */
 html[data-mode="light"] #usb-modal-bg {
-  background: rgba(0, 0, 0, 0.35);
+  background: var(--scrim-3);
+}
+
+/* ── Genre cards — gaps light (audit 2026-07-27) ────────────────────────── */
+/* .genre-meta était rgba(blanc,.45) sans override light → quasi illisible sur
+   les gradients pastel des cartes genres en mode clair. */
+html[data-mode="light"] .genre-meta { color: rgba(0, 0, 0, .55); }
+html[data-mode="light"] .genre-meta-sep { opacity: .5; }
+html[data-mode="light"] .genre-variants-badge {
+  background: rgba(255, 255, 255, .55);
+  border-color: rgba(0, 0, 0, .12);
+  color: var(--text-primary);
 }
 
 /* ── Settings ── */
@@ -541,14 +555,14 @@ html[data-mode="light"] .queue-item:hover { background:var(--bg3); }
 html[data-mode="light"] .queue-item.act  { color:var(--t); background:rgba(var(--g-rgb),.08); border-left:var(--border-w-lg) solid var(--g); }
 
 /* ── Barre de sélection multiple ── */
-html[data-mode="light"] #sel-bar              { background:var(--bg2); border:var(--border-w-sm) solid var(--bg5); box-shadow:var(--shadow-sel-lt); }
+html[data-mode="light"] #sel-bar              { background:var(--bg2); border:var(--border-w-sm) solid var(--bg5); }
 html[data-mode="light"] #sel-bar .sel-action  { color:var(--t2); }
 html[data-mode="light"] #sel-bar .sel-action:hover { background:var(--bg4); color:var(--t); border-color:var(--bg5); }
 html[data-mode="light"] #sel-bar .sel-divider { background:var(--bg5); }
 
 /* ── Action bar (Lire tout / Mélanger) ── */
 html[data-mode="light"] .pl-action-bar { background:var(--bg); border-bottom:var(--border-w-sm) solid var(--sep); }
-html[data-mode="light"] .pl-act-btn    { color:var(--t2); border:var(--border-w-sm) solid var(--bg5); background:var(--bg2); box-shadow:var(--shadow-btn-sub); }
+html[data-mode="light"] .pl-act-btn    { color:var(--t2); border:var(--border-w-sm) solid var(--bg5); background:var(--bg2); }
 html[data-mode="light"] .pl-act-btn:hover { background:var(--bg4); color:var(--t); border-color:var(--bg6); }
 html[data-mode="light"] .ni-pl.on      { background: var(--bg4); }
 html[data-mode="light"] .ni-pl.on::before { background:var(--g); box-shadow: none; }
@@ -581,7 +595,7 @@ html[data-mode="light"] .dupe-group-head { background:var(--bg4); color:var(--t)
 
 /* ── Raccourcis clavier ── */
 html[data-mode="light"] .shortcuts-box { background:var(--bg2); border:var(--border-w-sm) solid var(--bg5); }
-html[data-mode="light"] kbd            { background:var(--bg3); border:var(--border-w-sm) solid var(--bg5); color:var(--t); box-shadow:var(--shadow-kbd); }
+html[data-mode="light"] kbd            { background:var(--bg3); border:var(--border-w-sm) solid var(--bg5); color:var(--t); }
 
 /* ── Scrollbars ── */
 html[data-mode="light"] ::-webkit-scrollbar-thumb { background:rgba(0,0,0,.18); }
@@ -601,16 +615,14 @@ html[data-mode="light"] .wbtn-m3u {
   background: var(--bg2) !important;
   color: var(--t2) !important;
   border: var(--border-w-sm) solid var(--bg5) !important;
-  box-shadow: var(--shadow-stat-hv);
 }
 html[data-mode="light"] .wbtn-m3u:hover {
   background: var(--bg3) !important;
   border-color: var(--bg6) !important;
-  box-shadow: var(--shadow-sm-pl);
 }
 
 /* ── Logo LibreFlow — ombre adoucie sur fond sidebar blanc ── */
-html[data-mode="light"] .wl-logo { box-shadow: var(--shadow-logo); }
+html[data-mode="light"] .wl-logo { }
 
 /* ── Gradient de fond ── */
 html[data-mode="light"] #vw {
@@ -640,7 +652,7 @@ html[data-mode="light"] .empty svg    { stroke:var(--t4); }
 
 /* ── Statistiques (uniquement dans ce bloc) ── */
 html[data-mode="light"] .stats-heading { color:var(--t); border-bottom:var(--border-w-sm) solid var(--sep); padding-bottom:var(--sp-2); }
-html[data-mode="light"] .stat-card     { background:var(--bg2); border:var(--border-w-sm) solid var(--bg5); box-shadow:var(--shadow-stat-lt); }
+html[data-mode="light"] .stat-card     { background:var(--bg2); border:var(--border-w-sm) solid var(--bg5); }
 html[data-mode="light"] .stat-card-val { color:var(--t); }
 html[data-mode="light"] .stat-card-lbl { color:var(--t3); }
 html[data-mode="light"] .hm-cell                { background:var(--bg4) !important; }
@@ -658,7 +670,7 @@ html[data-mode="light"] .hm-legend-cell[data-n="4"] { background:var(--g); }
 html[data-mode="light"] #seek-tip  { background:var(--bg-elevated); color:var(--text-primary); border-color:var(--border-default); box-shadow:var(--elev-2); }
 
 /* ── Context submenu (B3.7) ── */
-html[data-mode="light"] .ctx-submenu { background:var(--bg2); border-color:var(--bg5); box-shadow:var(--shadow-ctx-lt); }
+html[data-mode="light"] .ctx-submenu { background:var(--bg2); border-color:var(--bg5); }
 
 /* ── Smart-playlist rule row (B3.7) ── */
 html[data-mode="light"] .spl-rule-row { background:var(--bg3); border-color:var(--bg5); color:var(--t); }
@@ -872,7 +884,7 @@ body.sb-resizing { cursor: col-resize; user-select: none; }
   transition: background var(--ease), color var(--ease);
 }
 .vh-srch-toggle:hover { background: var(--bg4); color: var(--t); }
-.vh-srch-toggle:active { transform: scale(.92); transition-duration: 70ms; }
+.vh-srch-toggle:active { transform: scale(.92); transition-duration: var(--motion-press); }
 .vh-srch-toggle:focus-visible { outline: none; box-shadow: 0 0 0 2px var(--g), 0 0 0 4px rgba(var(--g-rgb), 0.12); border-radius: var(--r); }
 .vh-srch-toggle svg { width: var(--icon-sm); height: var(--icon-sm); }
 .vh-srch-toggle[aria-expanded="true"] { color: var(--g); background: var(--bg3); transition: background var(--dur-fast) ease, color var(--dur-fast) ease; }
@@ -965,7 +977,7 @@ body.sb-resizing { cursor: col-resize; user-select: none; }
   pointer-events: auto;
   transform: translateY(0) scale(1);
   transform-origin: top left;
-  box-shadow: 0 4px 16px rgba(0,0,0,.32), 0 0 0 1px var(--sep);
+  box-shadow: var(--shadow-pop), 0 0 0 1px var(--sep);
   transition: opacity var(--dur-fast) var(--ease), transform var(--dur-fast) var(--ease), visibility var(--dur-fast);
 }
 .sb-more-pop[hidden] {
@@ -1121,7 +1133,7 @@ body.sb-resizing { cursor: col-resize; user-select: none; }
   transition: background var(--dur-fast) ease, color var(--dur-fast) ease, border-color var(--dur-fast) ease, transform var(--dur-fast) ease;
 }
 .sort-btn:hover { background: var(--bg3); color: var(--t); border-color: var(--bg5); }
-.sort-btn:active { transform: scale(.97); transition-duration: 70ms; }
+.sort-btn:active { transform: scale(.97); transition-duration: var(--motion-press); }
 .sort-btn:focus-visible { outline: var(--focus-ring); outline-offset: var(--focus-offset); }
 .sort-btn svg   { width: var(--icon-2xs); height: var(--icon-2xs); fill: currentColor; }
 
@@ -1142,7 +1154,7 @@ body.sb-resizing { cursor: col-resize; user-select: none; }
   transition: background var(--dur-fast) ease, color var(--dur-fast) ease, border-color var(--dur-fast) ease, transform var(--dur-fast) ease;
 }
 .fmt-chip:hover { background: var(--bg3); color: var(--t); border-color: var(--bg5); }
-.fmt-chip:active { transform: scale(.97); transition-duration: 70ms; }
+.fmt-chip:active { transform: scale(.97); transition-duration: var(--motion-press); }
 .fmt-chip:focus-visible { outline: var(--focus-ring); outline-offset: var(--focus-offset); }
 .fmt-chip.active { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
 
@@ -1176,24 +1188,20 @@ body.sb-resizing { cursor: col-resize; user-select: none; }
   contain: layout style;
 }
 .tr:hover        { background: var(--row-hover); }
-.tr:active       { background: var(--row-active); transform: scale(.993) scaleY(.97); transition-duration: 70ms; }
+.tr:active       { background: var(--row-active); transform: scale(.993) scaleY(.97); transition-duration: var(--motion-press); }
 .tr:focus-visible { background: var(--bg3); box-shadow: var(--shadow-tr-focus); outline: none; }
 .tr.act      {
   background: rgba(var(--g-rgb), .07);
   box-shadow: none;
 }
-.tr.act::before {
-  content: '';
-  position: absolute;
-  left: 0; top: 0; bottom: 0;
-  width: 3px;
-  background: var(--g);
-}
-.tr.act .tn  { color: var(--g); font-weight: 600; }
+/* .tr.act::before (pilule animée) et .tr.act .tn : définis dans la section
+   POLISH (≈ :6150) — les doublons ici étaient entièrement écrasés par la
+   cascade (audit 2026-07-27). */
 
 /* Artwork track — légèrement plus grand */
 .tart {
-  width: var(--tart-size); height: var(--tart-size); border-radius: var(--radius-row);
+  /* Radius concentrique : rangée 8px − padding 8px → 4px intérieur (audit 2026-07-27) */
+  width: var(--tart-size); height: var(--tart-size); border-radius: var(--r-xs);
   background: var(--bg4);
   display: flex; align-items: center; justify-content: center;
   overflow: hidden; flex-shrink: 0; position: relative;
@@ -1222,11 +1230,12 @@ html[data-mode="light"] .tart img,
 html[data-mode="light"] .pl-art img,
 html[data-mode="light"] .q-art img { outline-color: var(--tint-2); }
 .tart-ph  { display: flex; align-items: center; justify-content: center; width: 100%; height: 100%; color: var(--t3); }
-.tart-init { font-size: var(--fs-sm); font-weight: 700; letter-spacing: var(--ls-micro); user-select: none;
-             font-family: var(--font-display); }
+/* Règle Syne (audit 2026-07-27) : initiales 10-12px = taille corps → font-body */
+.tart-init { font-size: var(--fs-sm); font-weight: 700; letter-spacing: var(--ls-micro); user-select: none; }
 .tr.act .tart::after {
   content: ''; position: absolute; inset: 0;
-  border-radius: var(--radius-row); border: var(--border-w-md) solid var(--g);
+  border-radius: var(--r-xs); /* suit le radius concentrique de .tart (audit 2026-07-27) */
+  border: var(--border-w-md) solid var(--g);
 }
 
 /* ── Skeleton shimmer ────────────────────────────────────── */
@@ -1294,7 +1303,7 @@ html[data-mode="light"] .q-art img { outline-color: var(--tint-2); }
 }
 .tart-hover-play:hover svg,
 .tart-hover-play:focus-visible svg { transform: scale(1.2); }
-.tart-hover-play:active svg        { transform: scale(.88); transition-duration: 70ms; }
+.tart-hover-play:active svg        { transform: scale(.88); transition-duration: var(--motion-press); }
 .tr:hover .tart-hover-play         { opacity: 1; }
 /* Icône pause masquée par défaut sur toutes les lignes */
 .tart-hover-play .icon-pause                     { display: none; }
@@ -1465,9 +1474,13 @@ html[data-motion="reduce"] .eq-bars span { animation: none; height: 8px; }
   /* WCAG 2.2 SC 2.5.8 : cible tactile >=24px (l'icône reste à --icon-sm). */
   min-width: var(--target-min); min-height: var(--target-min);
   transition: color var(--dur-fast) ease, transform var(--dur-fast) ease, opacity var(--dur-fast) ease;
+  /* SC 1.4.11 (a11y.test.cjs) : le cœur porte un état liké/non-liké — il doit
+     rester perceptible au repos (plancher 0.45). Les actions sans état
+     (.tr-add-btn/.tr-more-btn) sont elles révélées au hover/focus uniquement. */
   opacity: 0.45;
 }
-.tr:hover .tlk    { opacity: 1; color: var(--t3); }
+.tr:hover .tlk,
+.tr:focus-within .tlk { opacity: 1; color: var(--t3); }
 .tlk:hover        { color: var(--g) !important; opacity: 1 !important; }
 .tlk.on {
   color           : var(--g);
@@ -1487,20 +1500,27 @@ html[data-motion="reduce"] .eq-bars span { animation: none; height: 8px; }
 .tlk:focus-visible { opacity: 1; color: var(--t3); box-shadow: 0 0 0 2px var(--g), 0 0 0 3px var(--focus-ring-contrast); }
 .tlk svg          { width: var(--icon-sm); height: var(--icon-sm); fill: currentColor; }
 
-/* Bouton ajouter à playlist — visible seulement au hover */
+/* Boutons rangée (ajouter à playlist / ⋯ plus d'actions) — visibles au hover */
+.tr-more-btn,
 .tr-add-btn {
   background: none; border: none; color: var(--t3); padding: var(--sp-1p);
   border-radius: 50%; display: flex; align-items: center; justify-content: center;
   /* WCAG 2.2 SC 2.5.8 : cible tactile >=24px. */
   min-width: var(--target-min); min-height: var(--target-min);
   transition: color var(--dur-fast) ease, background var(--dur-fast) ease, opacity var(--dur-fast) ease;
-  opacity: 0.45;
+  opacity: 0; /* AUDIT-2026-07-27 : révélés au hover/focus de la ligne */
 }
-.tr:hover .tr-add-btn    { color: var(--t3); opacity: 1; }
-.tr-add-btn:hover        { color: var(--g) !important; background: var(--bg4); opacity: 1 !important; }
+.tr:hover .tr-add-btn,
+.tr:hover .tr-more-btn,
+.tr:focus-within .tr-add-btn,
+.tr:focus-within .tr-more-btn { color: var(--t3); opacity: 1; }
+.tr-add-btn:hover,
+.tr-more-btn:hover        { color: var(--g) !important; background: var(--bg4); opacity: 1 !important; }
 /* A11Y — visible au focus clavier */
+.tr-more-btn:focus-visible,
 .tr-add-btn:focus-visible { opacity: 1; color: var(--t3); background: var(--bg4); box-shadow: 0 0 0 2px var(--g), 0 0 0 3px var(--focus-ring-contrast); }
 .tr-add-btn svg          { width: var(--icon-sm); height: var(--icon-sm); stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; }
+.tr-more-btn svg         { width: var(--icon-sm); height: var(--icon-sm); }
 
 /* AUDIT-2026-07-29 : .tr-edit-btn supprimé — le bouton édition de ligne a été
    remplacé par le menu ⋯ de la ligne ; plus aucun producteur JS. */
@@ -1532,7 +1552,6 @@ html[data-motion="reduce"] .eq-bars span { animation: none; height: 8px; }
 .card {
   background: var(--bg-elevated); border: var(--border-w-sm) solid transparent; border-radius: var(--r-card);
   padding: var(--sp-3); cursor: pointer;
-  box-shadow: var(--shadow-card);
   transition: background var(--dur-fast) ease, transform var(--dur-mid) var(--spring-soft), box-shadow var(--dur-mid) ease, border-color var(--dur-fast) ease;
   /* PERF : will-change retiré du base — créait un layer GPU pour chaque carte visible en
      permanence. Déplacé dans :hover pour n'allouer le layer qu'au moment pertinent. */
@@ -1543,21 +1562,20 @@ html[data-motion="reduce"] .eq-bars span { animation: none; height: 8px; }
      plus bas (accent diagonal) — c'est elle qui gagne la cascade, pas de redéclaration ici. */
   border-color: rgba(var(--g-rgb),.2);
   transform: translateY(calc(-1 * var(--sp-1))) scale(1.02);
-  box-shadow: var(--shadow-card-hv);
 }
 /* FIX-A1 : cartes playlist navigables clavier (role=button + tabindex=0 posés dans le HTML) */
 .card:focus-visible {
   outline: var(--focus-ring); outline-offset: var(--focus-offset);
   transform: translateY(calc(-1 * var(--sp-1)));
 }
-.card:hover .card-art { box-shadow: var(--shadow-art-hv); }
-.card:active { transform: scale(.96) translateY(0); transition-duration: 70ms; }
+.card:hover .card-art { }
+.card:active { transform: scale(.96) translateY(0); transition-duration: var(--motion-press); }
 .card-art {
-  width: 100%; aspect-ratio: 1; border-radius: var(--r-card);
+  /* Radius concentrique : carte 16px − padding 12px → ~8px intérieur (audit 2026-07-27) */
+  width: 100%; aspect-ratio: 1; border-radius: var(--r);
   background: var(--bg4); overflow: hidden; position: relative;
   display: flex; align-items: center; justify-content: center;
   font-size: var(--fs-disp-sm); margin-bottom: var(--sp-2h); flex-shrink: 0;
-  box-shadow: var(--shadow-art);
 }
 .card-art img { width: 100%; height: 100%; object-fit: cover; display: block; }
 /* Gradient overlay on card artwork hover */
@@ -1735,7 +1753,7 @@ html[data-motion="reduce"] .eq-bars span { animation: none; height: 8px; }
 .genre-card::before {
   content: '';
   position: absolute; inset: 0;
-  background: var(--gc, linear-gradient(135deg, #1e1e1e, #2a2a2a));
+  background: var(--gc, linear-gradient(135deg, var(--c-genre-fb-1), var(--c-genre-fb-2)));
   z-index: 0;
 }
 
@@ -1747,7 +1765,7 @@ html[data-motion="reduce"] .eq-bars span { animation: none; height: 8px; }
   z-index: 1;
 }
 
-.genre-card:hover  { transform: translateY(calc(-1 * var(--sp-1))) scale(1.02); box-shadow: var(--shadow-card-hv); filter: brightness(1.08); }
+.genre-card:hover  { transform: translateY(calc(-1 * var(--sp-1))) scale(1.02); filter: brightness(1.08); }
 .genre-card:active { transform: scale(.97); filter: brightness(.95); }
 
 /* Contenu positionné au-dessus des overlays */
@@ -1953,7 +1971,6 @@ html[data-motion="reduce"] #vw::before, html[data-motion="reduce"] #vw::after { 
   width: var(--art-settings); height: var(--art-settings);
   border-radius: var(--r3);
   display: block; flex-shrink: 0;
-  box-shadow: var(--shadow-card);
   image-rendering: -webkit-optimize-contrast;
 }
 .wl .wh1 { margin-bottom: 0; }
@@ -2102,7 +2119,9 @@ html[data-motion="reduce"] #vw::before, html[data-motion="reduce"] #vw::after { 
      via clamp(), éliminant les overrides @media sur #pl lui-même.
      Left shelf : clamp(160px, 22vw, 280px) → 280px à ≥1273px, 160px à ≤727px.
      Right shelf : clamp(88px, 18vw, 280px) → 280px à ≥1556px, 88px à ≤489px. */
-  display: grid; grid-template-columns: minmax(0, clamp(180px, 28vw, 340px)) minmax(0, 1fr) minmax(0, clamp(120px, 16vw, 240px));
+  /* AUDIT-2026-07-27 : étagères symétriques — le bouton play tombe au centre
+     exact de la fenêtre (l'œil l'attend là sur une barre pleine largeur). */
+  display: grid; grid-template-columns: minmax(0, clamp(160px, 24vw, 300px)) minmax(0, 1fr) minmax(0, clamp(160px, 24vw, 300px));
   align-items: center; padding: 0 clamp(var(--sp-2), 2vw, var(--sp-5)); gap: clamp(var(--sp-1h), 1.5vw, var(--sp-4));
   transition: background 1.2s ease;
   view-transition-name: player-bar; contain: layout;
@@ -2129,7 +2148,6 @@ html[data-motion="reduce"] #vw::before, html[data-motion="reduce"] #vw::after { 
   flex-shrink: 0; background: var(--bg4);
   overflow: hidden; display: flex; align-items: center; justify-content: center;
   font-size: var(--fs-inter); position: relative; z-index: 1;
-  box-shadow: var(--shadow-art-hv);
   /* Tilt 3D — transition rapide au move, retour spring au leave */
   transition: transform var(--dur-fast) var(--smooth), box-shadow var(--dur-mid) var(--smooth);
   will-change: transform;
@@ -2137,6 +2155,19 @@ html[data-motion="reduce"] #vw::before, html[data-motion="reduce"] #vw::after { 
 }
 /* hover CSS supprimé — géré par le tilt JS pour éviter le conflit de transform */
 .pl-art img { width: 100%; height: 100%; object-fit: cover; display: block; }
+/* Affordance Now Playing (audit 2026-07-27) : chevron d'expansion révélé au
+   hover/focus de .pl-info — signale que le clic ouvre la vue En cours. */
+.pl-art-expand {
+  position: absolute; inset: 0; z-index: 2;
+  display: grid; place-items: center;
+  background: rgba(0, 0, 0, .45);
+  color: var(--c-white);
+  opacity: 0;
+  transition: opacity var(--dur-fast) ease;
+  pointer-events: none;
+}
+.pl-info:hover .pl-art-expand,
+.pl-info:focus-visible .pl-art-expand { opacity: 1; }
 .pl-tr  {
   min-width: 0; flex: 1;
   display: flex; flex-direction: column; justify-content: center;
@@ -2276,7 +2307,8 @@ html[data-motion="reduce"] #vw::before, html[data-motion="reduce"] #vw::after { 
 .pcplay {
   width: var(--icon-40); height: var(--icon-40); border-radius: 50%;
   background: var(--g); border: none;
-  display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+  /* grid 1/1 : les SVG play/pause s'empilent pour le cross-fade (audit 2026-07-27) */
+  display: grid; place-items: center; flex-shrink: 0;
   box-shadow: var(--shadow-pcplay-anim);
   transition: transform var(--dur-fast) var(--spring), box-shadow var(--dur-mid) ease, filter var(--dur-fast) ease, background var(--dur-card) ease;
   margin: 0 var(--sp-2h);
@@ -2293,23 +2325,50 @@ html[data-motion="reduce"] #vw::before, html[data-motion="reduce"] #vw::after { 
 }
 .pcplay:hover  { will-change: transform; filter: brightness(1.12); transform: scale(1.07); box-shadow: var(--shadow-pcplay-hv); }
 .pcplay:hover::after { opacity: .5; transform: scale(1); }
-.pcplay:active { transform: scale(.93); transition-duration: 70ms; }
+.pcplay:active { transform: scale(.93); transition-duration: var(--motion-press); }
 .pcplay svg    { width: var(--icon-md); height: var(--icon-md); fill: var(--text-on-accent); }
-#ico-play      { margin-left: var(--sp-micro); }
+/* #ico-play : pas de margin — le polygon (x 6→20, centre 13) est déjà décalé de +1 unité viewBox, compensation optique suffisante (audit 2026-07-27, un seul mécanisme) */
+
+/* Cross-fade play/pause — piloté par la classe .playing (setIcon, player.js).
+   Les deux SVG occupent la même cellule ; l'icône inactive s'efface en
+   opacity + scale au lieu d'un toggle display brut. */
+.pcplay > svg,
+.cbtn-play > svg {
+  grid-area: 1 / 1;
+  transition: opacity var(--dur-fast) ease, transform var(--dur-fast) var(--spring);
+}
+.pcplay:not(.playing) #ico-pause,
+.pcplay.playing       #ico-play,
+.cbtn-play:not(.playing) #cinema-ico-pause,
+.cbtn-play.playing       #cinema-ico-play {
+  opacity: 0;
+  transform: scale(.55);
+  pointer-events: none;
+}
 
 /* Progression */
 .pl-prog { display: flex; align-items: center; gap: var(--sp-2); width: 100%; }
 .pt      { font-size: var(--fs-xs); color: var(--t3); min-width: var(--time-min-w); font-variant-numeric: tabular-nums; font-feature-settings: "tnum" 1; font-weight: 500; }
 .pt.r    { text-align: right; }
+/* #td est un bouton (toggle durée totale / temps restant — audit 2026-07-27) */
+#td { background: none; border: none; padding: 0; font: inherit; cursor: pointer; transition: color var(--dur-fast) ease; }
+#td:hover { color: var(--t2); }
+#td:focus-visible { outline: var(--focus-ring); outline-offset: var(--focus-offset); border-radius: var(--r-xs); }
 
 /* Progress bar — raffinée */
 .pbar    {
   flex: 1; height: var(--track-h); background: rgba(var(--g-rgb), 0.12); border-radius: var(--r-xs);
-  cursor: pointer; position: relative; overflow: hidden;
+  cursor: pointer; position: relative;
+  /* overflow visible : le clip du fill passe par son border-radius (identique) ;
+     nécessaire pour la zone de clic étendue ::before (audit 2026-07-27) */
+  overflow: visible;
   /* expansion instantanée, retour doux */
   transition: height var(--dur-fast) var(--spring-soft);
 }
-.pbar:hover { height: var(--track-h-lg); overflow: visible; }
+/* Zone de clic étendue — viser 3px pour seeker était l'irritant n°1 :
+   ~23px cliquables sans changement visuel. */
+.pbar::before { content: ''; position: absolute; inset: -10px 0; }
+.pbar:hover { height: var(--track-h-lg); }
 .pbar:focus-visible { outline: none; box-shadow: 0 0 0 2px rgba(var(--g-rgb), 0.35); border-radius: var(--r-xs); }
 .pbar:hover .pfill::after {
   content: ''; position: absolute; right: calc(-1 * var(--sp-1h)); top: 50%;
@@ -2353,6 +2412,7 @@ html[data-motion="reduce"] #vw::before, html[data-motion="reduce"] #vw::after { 
   border: var(--border-w-sm) solid var(--sep);
   font-size: var(--fs-sm); font-weight: 700;
   letter-spacing: var(--ls-subtle);
+  font-variant-numeric: tabular-nums; /* le temps ne tremble pas pendant le scrub */
   padding: var(--sp-1q) var(--sp-2q);
   border-radius: var(--r-lg);
   white-space: nowrap;
@@ -2393,7 +2453,7 @@ html[data-motion="reduce"] #vw::before, html[data-motion="reduce"] #vw::after { 
   background: var(--bg3); color: var(--t);
   font-size: var(--fs-sm); font-weight: 600; border-radius: var(--r);
   padding: var(--sp-1q) var(--sp-1d); opacity: 0; pointer-events: none;
-  white-space: nowrap; box-shadow: var(--shadow-sm-tip);
+  white-space: nowrap;
   max-width: min(220px, 90vw); /* R-M2 : ne déborde pas près d'un bord */
   transition: opacity var(--dur-tooltip) var(--smooth), transform var(--dur-tooltip) var(--spring-soft);
 }
@@ -2406,9 +2466,13 @@ html[data-motion="reduce"] #vw::before, html[data-motion="reduce"] #vw::after { 
   border: var(--border-w-2xl) solid transparent;
   border-top-color: var(--bg3);
 }
-.vslider { -webkit-appearance: none; width: var(--slider-w); height: var(--track-h); border-radius: var(--r-xs); background: rgba(var(--g-rgb), 0.12); outline: none; cursor: pointer; transition: height var(--dur-fast) var(--spring-soft); }
-.vslider:hover { height: var(--track-h-lg); }
-.vslider::-webkit-slider-thumb { -webkit-appearance: none; width: var(--icon-xs); height: var(--icon-xs); border-radius: 50%; background: var(--g); box-shadow: var(--shadow-vslider); transition: transform var(--ease), background var(--ease); }
+/* Piste fine (3px) mais zone interactive ~23px : padding vertical transparent,
+   la piste visible est peinte via background-clip content-box (audit 2026-07-27). */
+.vslider { -webkit-appearance: none; width: var(--slider-w); height: calc(var(--track-h) + 2 * var(--sp-2h)); padding-block: var(--sp-2h); border-radius: var(--r-xs); background: rgba(var(--g-rgb), 0.12); background-clip: content-box; outline: none; cursor: pointer; transition: height var(--dur-fast) var(--spring-soft), padding var(--dur-fast) var(--spring-soft); }
+.vslider:hover { height: calc(var(--track-h-lg) + 2 * var(--sp-2h)); }
+/* AUDIT-2026-07-27 : thumb accent invisible sur la portion remplie (accent sur
+   accent) — passé en blanc avec ombre + liseré, lisible sur piste pleine et vide. */
+.vslider::-webkit-slider-thumb { -webkit-appearance: none; width: var(--icon-xs); height: var(--icon-xs); border-radius: 50%; background: #fff; box-shadow: 0 1px 4px rgba(0,0,0,.45), 0 0 0 1px rgba(0,0,0,.12); transition: transform var(--ease), background var(--ease); }
 .vslider:hover::-webkit-slider-thumb { transform: scale(1.25); }
 /* Mute button — reuses .pl-queue-btn base; muted state tints accent */
 .vol-mute-btn { flex-shrink: 0; }
@@ -2435,7 +2499,6 @@ html[data-motion="reduce"] #vw::before, html[data-motion="reduce"] #vw::after { 
   pointer-events: none;
   transition: opacity var(--dur-tooltip) var(--smooth),
               transform var(--dur-tooltip) var(--spring-soft);
-  box-shadow: var(--shadow-sm-tip);
   z-index: var(--z-tooltip);
   white-space: nowrap;
 }
@@ -2483,7 +2546,8 @@ html[data-motion="reduce"] #vw::before, html[data-motion="reduce"] #vw::after { 
 }
 .pl-queue-btn:hover  { color: var(--t); background: var(--bg4); transform: scale(1.08); }
 .pl-queue-btn:active { transform: scale(.92); }
-.pl-queue-btn.active { color: var(--g); background: var(--accent-subtle); }
+.pl-queue-btn.active,
+.pl-queue-btn.on     { color: var(--g); background: var(--accent-subtle); } /* .on : #tbt-cinema (cinema.js) */
 .pl-queue-btn svg    { width: var(--icon-lg); height: var(--icon-lg); stroke: currentColor; fill: none; stroke-width: 2; }
 /* Speed-cycle button — icône gauge + label valeur */
 .pl-speed-btn {
@@ -2729,7 +2793,9 @@ html[data-mode="light"] .sleep-custom-inp:focus { border-color: var(--g); backgr
 #confirm-modal-bg.on #confirm-modal { animation: modalBoxIn var(--dur-nav) var(--spring-soft) both; }
 
 .modal-ico  { font-size: var(--fs-disp); margin-bottom: var(--sp-2h); }
-.modal-h    { font-size: var(--fs-base); font-weight: 700; font-family: var(--font-display); letter-spacing: var(--ls-tight); border-bottom: 1px solid var(--tint-1, rgba(255,255,255,.06)); padding-bottom: var(--space-3); margin-bottom: var(--space-3); }
+/* Règle Syne (audit 2026-07-27) : Syne à taille corps (~15px) perd sa signature
+   display — .modal-h repasse en font-body, graisse 700 conservée. */
+.modal-h    { font-size: var(--fs-base); font-weight: 700; letter-spacing: var(--ls-tight); border-bottom: 1px solid var(--tint-1, rgba(255,255,255,.06)); padding-bottom: var(--space-3); margin-bottom: var(--space-3); }
 html[data-mode="light"] .modal-h {
   border-bottom-color: var(--border-subtle);
 }
@@ -3049,7 +3115,7 @@ html[data-mode="light"] .bte-cover-clear    { background: var(--bg3); border-col
   transition: background var(--dur-fast) ease, color var(--dur-fast) ease;
   cursor: pointer;
 }
-.pl-tab.active { background: var(--bg2); color: var(--t); box-shadow: var(--shadow-tab-act); }
+.pl-tab.active { background: var(--bg2); color: var(--t); }
 .pl-tab:not(.active):hover { background: var(--bg5); color: var(--t2); }
 .pl-tab:active { transform: scale(.97); }
 .pl-tab:focus-visible { outline: var(--focus-ring); outline-offset: calc(-1 * var(--sp-micro)); }
@@ -3411,6 +3477,9 @@ html[data-mode="light"] .bte-cover-clear    { background: var(--bg3); border-col
   overflow-x: auto;
   scrollbar-width: none;
 }
+/* Masquée hors vues facettes (liked/recent/playlist/drill) — display:flex
+   au-dessus écraserait l'attribut hidden sans cette règle. */
+.lib-tabs[hidden] { display: none; }
 .lib-tabs::-webkit-scrollbar { display: none; }
 .lib-tab {
   background: none; border: none; cursor: pointer;
@@ -3471,6 +3540,39 @@ html[data-mode="light"] .bte-cover-clear    { background: var(--bg3); border-col
    s'applique. SC 2.5.8 : cible portée au plancher 24px via --target-min. */
 .sb-lib-add { min-width: var(--target-min); min-height: var(--target-min); }
 .sb-lib-add svg { width: var(--icon-sm); height: var(--icon-sm); }
+
+/* ── Barre d'action bibliothèque + FAB Play (audit 2026-07-27) ──────────────
+   Le geste n°1 d'un lecteur (Tout lire / Aléatoire) a un bouton saillant sur
+   chaque vue liste — pattern flagship Spotify/Deezer. */
+.lib-action-bar {
+  display: flex; align-items: center; gap: var(--sp-3);
+  padding: var(--sp-2) var(--sp-5) var(--sp-1);
+  flex-shrink: 0;
+}
+.lib-action-bar[hidden] { display: none; }
+.fab-play {
+  width: var(--icon-44); height: var(--icon-44); border-radius: 50%;
+  background: var(--g); color: var(--text-on-accent); border: none;
+  display: grid; place-items: center; cursor: pointer; flex-shrink: 0;
+  box-shadow: 0 2px 12px rgba(var(--g-rgb), .35);
+  transition: transform var(--dur-fast) var(--spring), filter var(--dur-fast) ease, box-shadow var(--dur-mid) ease;
+}
+.fab-play:hover  { transform: scale(1.05); filter: brightness(1.1); box-shadow: 0 4px 18px rgba(var(--g-rgb), .5); }
+.fab-play:active { transform: scale(.94); transition-duration: var(--motion-press); }
+.fab-play:focus-visible { outline: var(--focus-ring); outline-offset: var(--focus-offset); box-shadow: 0 0 0 4px var(--focus-ring-contrast); }
+.fab-play svg { width: var(--icon-3xl); height: var(--icon-3xl); fill: currentColor; /* centrage optique : polygon déjà décalé (+2 unités viewBox) */ }
+.fab-play--sm { width: var(--icon-40); height: var(--icon-40); }
+.fab-play--sm svg { width: var(--icon-xl); height: var(--icon-xl); }
+.lib-shuf-btn {
+  width: var(--icon-36); height: var(--icon-36); border-radius: 50%;
+  background: transparent; color: var(--t2); border: none;
+  display: grid; place-items: center; cursor: pointer; flex-shrink: 0;
+  transition: color var(--dur-fast) ease, background var(--dur-fast) ease, transform var(--dur-fast) var(--spring);
+}
+.lib-shuf-btn:hover  { color: var(--t); background: var(--row-hover); }
+.lib-shuf-btn:active { transform: scale(.94); transition-duration: var(--motion-press); }
+.lib-shuf-btn:focus-visible { outline: var(--focus-ring); outline-offset: var(--focus-offset); }
+.lib-shuf-btn svg { width: var(--icon-2xl); height: var(--icon-2xl); }
 
 /* Barre d'actions playlist (Lire tout / Mélanger / Supprimer) */
 .pl-action-bar {
@@ -3542,10 +3644,9 @@ html[data-motion="reduce"] #pl-hero.leaving { animation: none; display: none; }
   overflow: hidden;
   cursor: pointer;
   background: var(--bg4);
-  box-shadow: var(--shadow-pl-hv-lt);
   transition: transform var(--dur-card) var(--smooth), box-shadow var(--dur-card) var(--smooth);
 }
-.pl-hero-cover:hover { transform: scale(1.03); box-shadow: var(--shadow-pl-hv); }
+.pl-hero-cover:hover { transform: scale(1.03); }
 .pl-hero-cover:focus-visible { outline: var(--focus-ring); outline-offset: var(--sp-1q); }
 
 .pl-hero-cover-img  { width: 100%; height: 100%; object-fit: cover; display: block; }
@@ -3641,7 +3742,7 @@ html[data-motion="reduce"] #pl-hero.leaving { animation: none; display: none; }
 
 /* ── Light mode overrides — playlists ─ */
 html[data-mode="light"] #pl-hero        { background: linear-gradient(160deg, color-mix(in srgb, var(--art-color) 14%, #e8e8e8) 0%, color-mix(in srgb, var(--art-color) 5%, var(--bg2)) 55%, var(--bg) 100%); border-bottom-color: var(--sep); }
-html[data-mode="light"] .pl-hero-cover  { box-shadow: var(--shadow-card-lt); }
+html[data-mode="light"] .pl-hero-cover  { }
 html[data-mode="light"] .pl-hero-name:hover { background: rgba(0,0,0,.05); }
 html[data-mode="light"] .pl-sort-sel    { background: var(--c-f0); border-color: var(--c-cc); color: var(--t); }
 html[data-mode="light"] .pl-sort-sel:hover { background: var(--c-e4); }
@@ -3765,18 +3866,27 @@ html[data-mode="light"] .pl-folder-h:hover .pl-folder-count { background: var(--
 .set-row:last-child { margin-bottom: 0; }
 .set-row-label   { font-size: var(--fs-md); color: var(--t); line-height: var(--lh-comfort); }
 .set-row-sub     { font-size: var(--fs-sm); color: var(--t3); margin-top: var(--sp-micro); text-wrap: pretty; }
+/* BUG FIX (audit settings 2026-07-08) : sur les lignes à toggle, le libellé texte
+   (set-row-label/set-row-sub) était un <div> hors du <label> du switch — seul le
+   petit switch de 40x22 était cliquable. Wrappé dans un <label for="…"> (voir
+   index.html) pour étendre la cible cliquable au texte, sans dupliquer le nom
+   accessible (les inputs gardent leur aria-label explicite, prioritaire). */
+.set-toggle-label { cursor: pointer; }
 
 /* ─── Toggle switch (ReplayGain, settings) ─── */
-.toggle-wrap   { position: relative; display: inline-block; width: 40px; height: 22px; flex-shrink: 0; cursor: pointer; }
+/* BUG FIX (audit settings 2026-07-08, WCAG 2.5.8) : hauteur 22px < --target-min
+   (24px) sur les 4 switches du panneau Settings (dyn-color, rg-enabled,
+   set-viz-toggle, watch-folder-chk). Bump à --target-min, knob recentré. */
+.toggle-wrap   { position: relative; display: inline-block; width: 40px; height: var(--target-min); flex-shrink: 0; cursor: pointer; }
 .toggle-wrap input { opacity: 0; width: 0; height: 0; position: absolute; }
 .toggle-slider {
   position: absolute; inset: 0;
-  background: var(--bg5); border-radius: 22px;
+  background: var(--bg5); border-radius: var(--target-min);
   transition: background var(--ease);
 }
 .toggle-slider::before {
   content: ''; position: absolute;
-  width: 16px; height: 16px; left: 3px; bottom: 3px;
+  width: 16px; height: 16px; left: 3px; bottom: 4px;
   background: var(--t3); border-radius: 50%;
   transition: transform var(--ease), background var(--ease);
 }
@@ -3806,6 +3916,11 @@ html[data-mode="light"] .pl-folder-h:hover .pl-folder-count { background: var(--
 .tlist-zoom-radio input[type="radio"]:checked + span { background: var(--g); color: var(--text-on-accent); }
 .tlist-zoom-radio input[type="radio"]:not(:checked) + span:hover { background: var(--border-2); color: var(--t2); }
 .tlist-zoom-radio input[type="radio"]:active + span { transform: scale(.97); }
+/* BUG FIX (audit settings 2026-07-08) : l'input radio natif est display:none,
+   donc :focus-visible sur l'input lui-même ne peint rien — un utilisateur clavier
+   tabulant jusqu'à Compact/Confortable/Spacieux n'avait aucune indication visuelle
+   de focus. Reporté sur le <span> visible, même token que .lang-btn:focus-visible. */
+.tlist-zoom-radio input[type="radio"]:focus-visible + span { outline: var(--focus-ring); outline-offset: var(--focus-offset); }
 
 /* ── HUD feedback zoom liste de pistes ────────────────────
    #zoom-hud (index.html) existe déjà en markup (role=status,
@@ -3825,14 +3940,17 @@ html[data-mode="light"] .pl-folder-h:hover .pl-folder-count { background: var(--
 html[data-motion="reduce"] #zoom-hud { transition: opacity var(--dur-fast) ease; }
 
 .theme-swatches   { display: flex; gap: var(--sp-2); flex-wrap: wrap; }
-.theme-swatch     { width: var(--icon-28); height: var(--icon-28); border-radius: 50%; border: var(--border-w-lg) solid transparent; transition: transform var(--ease), border-color var(--ease), outline-color var(--ease); flex-shrink: 0; padding: 0; cursor: pointer; }
+/* Le swatch porte data-theme="X" : la map [data-theme] de design-system.css
+   redéfinit --g DANS l'élément → background = l'accent réel du thème, source
+   unique. (Les hex inline dans index.html driftaient vs la map — audit 2026-06-11.) */
+.theme-swatch     { width: var(--icon-28); height: var(--icon-28); border-radius: 50%; border: var(--border-w-lg) solid transparent; background: var(--g); transition: transform var(--ease), border-color var(--ease), outline-color var(--ease); flex-shrink: 0; padding: 0; cursor: pointer; }
 .theme-swatch:focus-visible { outline: var(--border-w-lg) solid var(--t); outline-offset: var(--sp-1q); }
 .theme-swatch:hover { transform: scale(1.15); }
 .theme-swatch.on    { border-color: var(--t); transform: scale(1.1); }
 
 .crossfade-row   { display: flex; align-items: center; gap: var(--sp-2h); }
 .cf-slider       { -webkit-appearance: none; appearance: none; flex: 1; height: var(--track-h-md); border-radius: var(--r-xs); background: linear-gradient(to right, var(--g) 0%, var(--g) var(--cf-pct, 0%), rgba(var(--g-rgb), 0.12) var(--cf-pct, 0%)); outline: none; }
-.cf-slider::-webkit-slider-thumb { -webkit-appearance: none; width: var(--icon-md); height: var(--icon-md); border-radius: 50%; background: var(--g); box-shadow: var(--shadow-cf-thumb); transition: transform var(--ease); }
+.cf-slider::-webkit-slider-thumb { -webkit-appearance: none; width: var(--icon-md); height: var(--icon-md); border-radius: 50%; background: var(--g); transition: transform var(--ease); }
 /* CONSISTENCY-1 — hover thumb manquant (vslider l'avait, cf-slider non) */
 .cf-slider:hover::-webkit-slider-thumb { transform: scale(1.2); }
 /* A11Y-SLIDER-2 — focus clavier crossfade */
@@ -3958,7 +4076,8 @@ html[data-motion="reduce"] #zoom-hud { transition: opacity var(--dur-fast) ease;
   display: flex; align-items: center; justify-content: space-between;
   border-bottom: var(--border-w-sm) solid var(--sep);
 }
-.queue-head h3 { font-size: var(--fs-md); font-weight: 700; color: var(--t); letter-spacing: var(--ls-slight); }
+/* Valeurs finales après fusion des 3 définitions dupliquées (audit 2026-07-27) */
+.queue-head h3 { font-family: var(--font-display); font-size: var(--fs-md); font-weight: 600; color: var(--t); letter-spacing: var(--ls-display); }
 
 /* ── EQ header — titre à gauche, ✕ à droite ────────────────────────────── */
 .eq-head {
@@ -3991,7 +4110,9 @@ html[data-motion="reduce"] #zoom-hud { transition: opacity var(--dur-fast) ease;
 .queue-item:hover     { background: var(--row-hover); }
 .queue-item:active    { background: var(--row-active); transform: scale(.98); transition-duration: var(--dur-fast); }
 .queue-item.active    { background: var(--accent-subtle); }
-.queue-empty          { padding: var(--sp-10) var(--sp-5); text-align: center; color: var(--t3); font-size: var(--fs-caption); }
+/* État vide queue — pattern .empty maison, ajusté à la largeur du panneau */
+.queue-empty          { padding: var(--sp-10) var(--sp-5); }
+.queue-empty .empty-h { font-size: var(--fs-base); }
 .q-art    { width: var(--icon-36); height: var(--icon-36); border-radius: var(--sp-1); background: var(--bg4); flex-shrink: 0; overflow: hidden; display: flex; align-items: center; justify-content: center; font-size: var(--fs-base); position: relative; }
 .q-art img { width: 100%; height: 100%; object-fit: cover; }
 /* Overlay play/pause sur l'artwork queue */
@@ -4012,7 +4133,7 @@ html[data-motion="reduce"] #zoom-hud { transition: opacity var(--dur-fast) ease;
 }
 .q-art-hover-play:hover svg,
 .q-art-hover-play:focus-visible svg { transform: scale(1.2); }
-.q-art-hover-play:active svg        { transform: scale(.88); transition-duration: 70ms; }
+.q-art-hover-play:active svg        { transform: scale(.88); transition-duration: var(--motion-press); }
 .queue-item:hover .q-art-hover-play  { opacity: 1; }
 .q-art-hover-play:focus-visible     { opacity: 1; background: rgba(0,0,0,.48); }
 /* Loop item (piste courante en repeat=one) : swap play/pause selon .playing-row */
@@ -4186,7 +4307,6 @@ html[data-motion="reduce"] #zoom-hud { transition: opacity var(--dur-fast) ease;
   z-index: var(--z-tooltip);
   border-radius: var(--r-art);
   background: var(--bg4);
-  box-shadow: var(--shadow-mp-drag);
   opacity: .88;
   display: flex;
   align-items: center;
@@ -4313,12 +4433,10 @@ html[data-motion="reduce"] #zoom-hud { transition: opacity var(--dur-fast) ease;
   overflow: hidden;
   border: var(--border-w-sm) solid var(--border-2);
   background: linear-gradient(to bottom, rgba(0,0,0,.26), rgba(0,0,0,.10));
-  box-shadow: var(--shadow-eq-curve);
 }
 html[data-mode="light"] #eq-curve-wrap {
   background: linear-gradient(to bottom, rgba(0,0,0,.05), rgba(0,0,0,.01));
   border-color: var(--sep);
-  box-shadow: var(--shadow-el-sm);
 }
 .eq-curve-canvas { display: block; width: 100%; height: 100%; }
 
@@ -4764,7 +4882,7 @@ html[data-motion="reduce"] .eq-slider::-moz-range-thumb { transition: none; }
 /* spectrum — viz plein écran, fond sombre dégradé */
 #cinema-overlay.bg-spectrum {
   background: radial-gradient(ellipse 120% 100% at 50% 50%,
-    #0a0a12 0%, var(--c-black) 70%);
+    var(--c-spectrum-bg) 0%, var(--c-black) 70%);
 }
 #cinema-overlay.bg-spectrum .cinema-bg { opacity: 0; }
 #cinema-overlay.bg-spectrum .cinema-viz {
@@ -4901,7 +5019,7 @@ html[data-motion="reduce"] .cinema-viz.viz-fade-in { animation: none !important;
   margin-bottom: var(--sp-2q); font-weight: 600;
 }
 .cn-body { display: flex; align-items: center; gap: var(--sp-2h); }
-.cn-img  { width: var(--art-cinema); height: var(--art-cinema); object-fit: cover; border-radius: var(--r-badge); flex-shrink: 0; box-shadow: var(--shadow-cn-img); }
+.cn-img  { width: var(--art-cinema); height: var(--art-cinema); object-fit: cover; border-radius: var(--r-badge); flex-shrink: 0; }
 .cn-info { min-width: 0; }
 .cn-title  { font-size: var(--fs-md); font-weight: 600; color: rgba(255,255,255,.88); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .cn-artist { font-size: var(--fs-sm); color: rgba(255,255,255,.65); margin-top: var(--sp-1q); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -5385,7 +5503,8 @@ html[data-motion="reduce"] .cin-txt-swap-out, html[data-motion="reduce"] .cin-tx
 .cbtn-play {
   width: var(--art-avatar); height: var(--art-avatar); border-radius: 50%;
   background: var(--c-white); color: var(--c-black);
-  box-shadow: var(--shadow-cin-btn);
+  /* grid 1/1 : empilement play/pause pour le cross-fade (cf. .pcplay) */
+  display: grid; place-items: center;
   transition: transform var(--dur-fast) var(--spring), filter var(--dur-fast) ease;
 }
 .cbtn-play:hover  { filter: brightness(.9); transform: scale(1.06); }
@@ -5453,7 +5572,6 @@ html[data-motion="reduce"] .cin-txt-swap-out, html[data-motion="reduce"] .cin-tx
   -webkit-appearance: none; appearance: none;
   width: var(--icon-sm); height: var(--icon-sm); border-radius: 50%;
   background: rgb(var(--cin-rgb-ui, 255,255,255));
-  box-shadow: var(--shadow-cin-vol);
   cursor: pointer;
   transition: transform var(--dur-fast) var(--spring);
 }
@@ -5640,7 +5758,7 @@ html[data-mode="light"] #cinema-overlay::after {
 .shortcuts-title { font-size: var(--fs-subhead); font-weight: 700; margin-bottom: var(--sp-5); color: var(--t); display: flex; align-items: center; gap: var(--sp-2); }
 .shortcuts-grid  { display: grid; grid-template-columns: auto 1fr; gap: var(--sp-2h) var(--sp-5); }
 .sc-key          { display: flex; gap: var(--sp-1); align-items: center; }
-kbd              { display: inline-flex; align-items: center; justify-content: center; background: var(--bg4); border: var(--border-w-sm) solid var(--bg6); border-radius: var(--r-lg); padding: var(--sp-1q) var(--sp-2); font-size: var(--fs-sm); font-weight: 600; color: var(--t); min-width: var(--kbd-min); font-family: var(--font); box-shadow: var(--shadow-kbd); }
+kbd              { display: inline-flex; align-items: center; justify-content: center; background: var(--bg4); border: var(--border-w-sm) solid var(--bg6); border-radius: var(--r-lg); padding: var(--sp-1q) var(--sp-2); font-size: var(--fs-sm); font-weight: 600; color: var(--t); min-width: var(--kbd-min); font-family: var(--font); }
 .sc-desc         { font-size: var(--fs-caption); color: var(--t2); display: flex; align-items: center; gap: var(--sp-1); }
 .sc-ctx          { color: var(--t3); font-size: var(--fs-xs); }
 .shortcuts-close { margin-top: var(--sp-5h); width: 100%; background: var(--bg3); border: var(--border-w-sm) solid var(--bg5); border-radius: var(--r); padding: var(--sp-2); font-size: var(--fs-caption); color: var(--t2); transition: background var(--ease), color var(--ease); }
@@ -5839,6 +5957,8 @@ kbd              { display: inline-flex; align-items: center; justify-content: c
   transform: scale(0);
   animation: ripple-expand 550ms cubic-bezier(0,.6,.4,1) forwards;
 }
+/* Gap light (audit 2026-07-27) : encre blanche invisible sur boutons clairs */
+html[data-mode="light"] .rpl { background: rgba(0,0,0,0.10); }
 @keyframes ripple-expand {
   to { transform: scale(1); opacity: 0; }
 }
@@ -5995,8 +6115,8 @@ html[data-nav-dir="back"] #nav-eq-wipe { flex-direction: row-reverse; }
 
 /* ══ POLISH SUPPLÉMENTAIRE ══════════════════════════════════ */
 
-/* Track row — accent sur le titre actif */
-.tr.act .tn { color: var(--t); }
+/* Track row — accent sur le titre actif (valeur finale : style-polish accent/500,
+   fusion audit 2026-07-27 — les 3 définitions concurrentes sont réduites ici) */
 .tr.act::before {
   content: '';
   position: absolute; left: 0; top: 50%;
@@ -6033,8 +6153,7 @@ html[data-nav-dir="back"] #nav-eq-wipe { flex-direction: row-reverse; }
 }
 
 
-/* Queue panel — polish (.eq-head h3 est défini canoniquement ligne ~2751) */
-.queue-head h3 { font-size: var(--fs-md); font-weight: 600; color: var(--t); }
+/* Queue panel — .queue-head h3 : fusionné dans la définition canonique (~:4107) */
 
 
 /* viewIn removed (Task 3) — replaced by GSAP transitionViews */
@@ -6145,8 +6264,7 @@ html[data-mode="light"] .tn { color: var(--t); font-weight: 500; }
 /* Cartes genres */
 .genre-name { font-family: var(--font-display); letter-spacing: var(--ls-display); }
 
-/* Panneaux EQ / file d'attente / settings (.eq-head h3 = défini canoniquement ligne ~2751) */
-.queue-head h3 { font-family: var(--font-display); letter-spacing: var(--ls-display); }
+/* Panneaux settings (.queue-head h3 : fusionné dans la définition canonique ~:4107) */
 .set-head-title { font-family: var(--font-display); letter-spacing: var(--ls-display); }
 
 /* Modals — .modal-h Syne → fusionné dans .modal-h principal */
@@ -6178,7 +6296,7 @@ html[data-mode="light"] .tn { color: var(--t); font-weight: 500; }
 #mp-ov.on       { display: flex; animation: mpOvIn var(--dur-card) var(--spring-soft) both; }
 /* P3-5 : sortie animée — display reste flex le temps de l'animation */
 #mp-ov.closing  { display: flex; animation: mpOvOut .15s var(--accelerate) both; pointer-events: none; }
-#mp-ov.dragging { cursor: grabbing; box-shadow: var(--shadow-mp-drag); }
+#mp-ov.dragging { cursor: grabbing; }
 /* Teinte ambiante depuis la couleur de pochette — suit --art-color (900ms transition) */
 #mp-ov::before {
   content: '';
@@ -6254,7 +6372,7 @@ html[data-mode="light"] .tn { color: var(--t); font-weight: 500; }
 }
 .mp-ov-close:hover { background: var(--bg4); color: var(--t); }
 .mp-ov-bar  { height: var(--track-h); background: var(--bg5); }
-.mp-ov-fill { height: 100%; width: 0; background: var(--g); transition: width .5s linear; }
+.mp-ov-fill { height: 100%; width: 100%; transform: scaleX(0); transform-origin: left center; background: var(--g); transition: transform .5s linear; /* scaleX : compositor-only (audit 2026-07-27) */ }
 /* Like button dans le mini overlay */
 .mp-ov-like.on { color: var(--like-active); }
 .mp-ov-like.on svg { fill: currentColor; }
@@ -6263,7 +6381,6 @@ html[data-mode="light"] .tn { color: var(--t); font-weight: 500; }
 html[data-mode="light"] #mp-ov {
   background:var(--bg2);
   border: var(--border-w-sm) solid var(--bg5);
-  box-shadow: var(--shadow-radio);
 }
 /* ══════════════════════════════════════════════════════════════
    Session 52 — UI Modernization (5 features)
@@ -6598,7 +6715,6 @@ html[data-mode="light"] .rv-start-btn  { background: var(--g); }
     padding: var(--sp-1p) var(--sp-2h);
     border-radius: var(--r-badge);
     white-space: nowrap;
-    box-shadow: var(--shadow-sb-tip);
     border: var(--border-w-sm) solid var(--border-2);
     transition: opacity var(--dur-micro) var(--smooth), transform var(--dur-micro) var(--spring-soft);
     z-index: var(--z-tooltip);
@@ -6841,6 +6957,9 @@ html[data-motion="reduce"] .card { transition: background var(--dur-fast) ease, 
 }
 
 #vnp {
+  /* Palette locale sur fond pochette (audit 2026-07-27) : valeurs documentées
+     ici car dérivées du contraste sur artwork, pas de la palette thème.
+     art-light inverse (pochettes claires). */
   --vnp-text:  #f0ece4;
   --vnp-text2: rgba(240,236,228,.7);
 }
@@ -6952,8 +7071,8 @@ html[data-motion="reduce"] .card { transition: background var(--dur-fast) ease, 
 }
 
 .vnp-art {
-  width: 320px;
-  height: 320px;
+  width: var(--art-np);
+  height: var(--art-np);
   max-width: 70vw;
   max-height: 40vh;
   aspect-ratio: 1;
@@ -6962,8 +7081,8 @@ html[data-motion="reduce"] .card { transition: background var(--dur-fast) ease, 
 }
 
 .vnp-art-ph {
-  width: 320px;
-  height: 320px;
+  width: var(--art-np);
+  height: var(--art-np);
   max-width: 70vw;
   max-height: 40vh;
   aspect-ratio: 1;
@@ -6980,11 +7099,13 @@ html[data-motion="reduce"] .card { transition: background var(--dur-fast) ease, 
 }
 
 .vnp-title {
+  /* Règle Syne (audit 2026-07-27) : surface display ≥16px → font-display */
+  font-family: var(--font-display);
   font-size: var(--fs-lg2);
   font-weight: 700;
-  line-height: 1.2;
+  line-height: var(--lh-tight);
   color: var(--vnp-text);
-  letter-spacing: -0.01em;
+  letter-spacing: var(--ls-tight);
 }
 
 .vnp-artist {
@@ -7106,22 +7227,21 @@ html[data-motion="reduce"] .card { transition: background var(--dur-fast) ease, 
 }
 
 /* ── Drill Header (album-detail / artist-detail) ─────────────────────────── */
-/* R-M10 : px sur la grille 4px recâblés sur tokens exacts (--sp-2/3/4,
-   --border-w-sm, --r-pill). Les valeurs off-grid (20px → aucun token exact ;
-   --sp-5 vaut 24px et changerait le rendu), les tailles de police et
-   l'artwork restent littérales — recabler décalerait le rendu. */
+/* AUDIT-2026-07-27 : tokenisation de la poche hors-système. L'ancien commentaire
+   R-M10 affirmait « --sp-5 vaut 24px » — faux : --sp-5 → --space-5 = 20px,
+   correspondance exacte avec les littéraux 20px d'origine. */
 #drill-header {
   container: drill / inline-size;
   display: flex;
   align-items: flex-start;
-  gap: 20px;
-  padding: 20px 20px var(--sp-4);
+  gap: var(--sp-5);
+  padding: var(--sp-5) var(--sp-5) var(--sp-4);
   background: linear-gradient(to bottom, var(--bg2), transparent);
   flex-shrink: 0;
 }
 .dh-art {
-  width: 120px;
-  height: 120px;
+  width: var(--art-drill);
+  height: var(--art-drill);
   border-radius: var(--r);
   object-fit: cover;
   flex-shrink: 0;
@@ -7136,8 +7256,11 @@ html[data-motion="reduce"] .card { transition: background var(--dur-fast) ease, 
   gap: var(--sp-1);
 }
 .dh-name {
-  font-size: 22px;
+  /* Règle Syne (audit 2026-07-27) : titre display du drill header → font-display */
+  font-family: var(--font-display);
+  font-size: 22px; /* littéral assumé — entre --fs-lg2 (32) et --fs-base (18), palier dédié drill */
   font-weight: 800;
+  letter-spacing: var(--ls-display);
   color: var(--t); /* R-L1 : --t1 inexistant → --t (texte primaire) */
   white-space: nowrap;
   overflow: hidden;
@@ -7147,7 +7270,7 @@ html[data-motion="reduce"] .card { transition: background var(--dur-fast) ease, 
   display: flex;
   flex-wrap: wrap;
   gap: var(--sp-1h);
-  font-size: 12px;
+  font-size: var(--fs-caption);
   color: var(--t2);
   align-items: center;
 }
@@ -7158,7 +7281,7 @@ html[data-motion="reduce"] .card { transition: background var(--dur-fast) ease, 
   border: none;
   padding: 0;
   color: var(--t); /* R-L1 : --t1 inexistant → --t */
-  font-size: 13px;
+  font-size: var(--fs-md);
   font-weight: 600;
   cursor: pointer;
   text-decoration: underline;
@@ -7171,16 +7294,18 @@ html[data-motion="reduce"] .card { transition: background var(--dur-fast) ease, 
   margin-top: 10px;
 }
 .dh-btn {
-  padding: var(--sp-2) 18px;
+  padding: var(--sp-2) var(--sp-4);
   border-radius: var(--r-pill);
-  font-size: 13px;
+  font-size: var(--fs-md);
   font-weight: 700;
   cursor: pointer;
   border: none;
-  transition: opacity .15s;
+  display: inline-flex; align-items: center; gap: var(--sp-1h);
+  transition: opacity var(--motion-fast) ease;
 }
 .dh-btn:hover { opacity: .85; }
-.dh-play { background: var(--g); color: var(--text-on-accent); } /* R-L2 : #fff → token */
+.dh-btn svg { width: var(--icon-md); height: var(--icon-md); flex-shrink: 0; }
+.dh-actions .fab-play { align-self: center; }
 .dh-shuf { background: var(--bg3); color: var(--t); border: var(--border-w-sm) solid var(--bg5); } /* R-L1 */
 
 /* Artist drill: albums section */
@@ -7320,3 +7445,189 @@ html[data-motion="reduce"] #main.view-fade { animation: none; }
 .pl-art-glow:active {
   cursor: grabbing;
 }
+
+
+/* ═══════════════════════════════════════════════════════════════════════
+ * VISUAL POLISH — ex style-polish.css, fusionné ici (audit 2026-07-27).
+ * Ces règles ÉCRASENT volontairement des déclarations plus haut (elles
+ * étaient chargées après style.css) ; leur position en fin de fichier
+ * préserve exactement la cascade d'origine.
+ * ═══════════════════════════════════════════════════════════════════════ */
+
+/* ── SIDEBAR ─────────────────────────────────────────────────────────── */
+/* AUDIT-2026-07-01 :
+   - .sb-section-lbl supprimé (sélecteur mort — aucun usage DOM/JS ; dupliquait
+     style.css avec un 0.07em littéral et --t4 sous-contraste).
+   - .ni { color: var(--t3) } supprimé : --t3 mesure ≈6,8:1 sur --bg1 (la sidebar
+     n'est pas sur --bg-base) — sous l'engagement AAA 7:1 (SC 1.4.6, CLAUDE.md §2.9).
+     Les labels nav restent sur --t2 (style.css). Les icônes (non-texte, seuil 3:1)
+     gardent l'atténuation --t3. */
+
+.ni svg { color: var(--t3); }
+
+
+/* ── TRACK LIST — en-tête de colonnes ────────────────────────────────── */
+
+#tlist-col-hdr {
+  display: none;
+  flex-shrink: 0;
+}
+
+#content-area[data-view="list"] #tlist-col-hdr {
+  display: grid;
+  grid-template-columns:
+    var(--art-list)
+    minmax(0, 1fr)
+    minmax(0, var(--tr-album-col))
+    var(--tr-r-w);
+  gap: var(--sp-3);
+  padding: var(--sp-1q)
+    calc(var(--sp-2h) + var(--sp-2h) + var(--scrollbar-w))
+    var(--sp-1q)
+    calc(var(--sp-2h) + var(--sp-2));
+  border-bottom: 1px solid var(--sep);
+}
+
+#tlist-col-hdr span,
+#tlist-col-hdr .col-btn {
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--t4);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Colonnes cliquables (audit 2026-07-27) — tri au clic, flèche sur la colonne
+   active. Souris uniquement (tabindex=-1, l'en-tête est aria-hidden) ; le
+   clavier garde #main-sort-btn. */
+#tlist-col-hdr .col-btn {
+  background: none; border: none; padding: 0; cursor: pointer;
+  display: inline-flex; align-items: center; gap: var(--sp-1);
+  transition: color var(--dur-fast) ease;
+}
+#tlist-col-hdr .col-btn:hover { color: var(--t2); }
+#tlist-col-hdr .col-btn.on    { color: var(--t2); }
+#tlist-col-hdr .col-btn .col-arrow { font-size: var(--fs-3xs); line-height: var(--lh-1); }
+#tlist-col-hdr .col-btn.on[data-dir="asc"]  .col-arrow::before { content: '▲'; }
+#tlist-col-hdr .col-btn.on[data-dir="desc"] .col-arrow::before { content: '▼'; }
+#tlist-col-hdr .col-dur { justify-content: flex-end; }
+
+/* Le libellé "Durée" doit surplomber les chiffres de durée (.tdur), pas le
+   cluster d'icônes like/ajout qui partage la même colonne .tr-r — sans ce
+   padding, le texte s'aligne sur le bord droit de la colonne (les icônes),
+   décalé par rapport aux valeurs qu'il légende. */
+#tlist-col-hdr .col-dur {
+  text-align: right;
+  /* 3 boutons inline à droite des durées (like + ajout + ⋯) — audit 2026-07-27 */
+  padding-right: calc(3 * var(--target-min) + 3 * var(--sp-1h) + var(--sp-micro));
+}
+
+@container main (max-width: 820px) {
+  #content-area[data-view="list"] #tlist-col-hdr {
+    grid-template-columns:
+      var(--art-list)
+      minmax(0, 1fr)
+      minmax(0, 7rem)
+      var(--tr-r-w);
+  }
+}
+
+@container main (max-width: 680px) {
+  #content-area[data-view="list"] #tlist-col-hdr {
+    grid-template-columns:
+      var(--art-list)
+      minmax(0, 1fr)
+      var(--tr-r-w);
+  }
+  #tlist-col-hdr .col-album { display: none; }
+}
+
+
+/* ── TRACK LIST — hiérarchie titre / artiste / album ────────────────── */
+
+.tn { font-size: var(--fs-md); font-weight: 500; color: var(--t); }
+.ts { font-size: var(--fs-xs); color: var(--t3); }
+.ta { font-size: var(--fs-xs); color: var(--t3); }
+
+
+/* ── TRACK LIST — piste en cours ─────────────────────────────────────── */
+
+.tr.act {
+  background: rgba(var(--g-rgb), 0.07);
+  box-shadow: none;
+}
+
+.tr.act.playing-row {
+  animation: rowBreath 3.2s ease-in-out infinite;
+}
+
+@keyframes rowBreath {
+  0%, 100% { background: rgba(var(--g-rgb), 0.07); }
+  50%       { background: rgba(var(--g-rgb), 0.13); }
+}
+
+.tr.act .tn        { color: var(--g); font-weight: 500; }
+.tr.act .tart::after { border-color: var(--g); }
+
+
+/* ── SÉPARATEURS ALPHABÉTIQUES ───────────────────────────────────────── */
+
+/* AUDIT-2026-07-27 : --t4 (≈1.5:1) rendait les lettres quasi invisibles —
+   remontées à --t3 (AAA) avec un poids affirmé pour ancrer le scan alphabétique. */
+.tr-grp--alpha { color: var(--t3); font-weight: 600; }
+
+
+/* ── PLAYER BAR — séparateur haut ────────────────────────────────────── */
+
+#pl {
+  border-top-color: var(--sep);
+  border-top-width: 1px;
+}
+
+
+/* ── PLAYER BAR — bouton play principal ──────────────────────────────── */
+
+.pcplay {
+  width: 32px;
+  height: 32px;
+  margin: 0 var(--sp-1h); /* réduit de 12px → 8px pour coller le play aux boutons adj. */
+  background: var(--g);
+  box-shadow: 0 2px 10px rgba(var(--g-rgb), 0.40);
+}
+/* Cible tactile : 32px visuels mais ~44px cliquables (WCAG 2.5.8 / audit 2026-07-27).
+   ::after est décoratif (anneau hover) — la zone de clic passe par ::before. */
+.pcplay::before {
+  content: '';
+  position: absolute;
+  inset: calc(-1 * var(--sp-1h));
+  border-radius: 50%;
+}
+
+.pcplay::after {
+  border-color: var(--g);
+  inset: calc(-1 * var(--sp-2));
+}
+
+.pcplay:hover {
+  filter: brightness(1.08);
+  box-shadow: 0 4px 18px rgba(var(--g-rgb), 0.55);
+}
+
+.pcplay:hover::after {
+  opacity: 0.45;
+  transform: scale(1);
+}
+
+.pcplay svg { fill: var(--text-on-accent, #fff); }
+
+/* #ico-play : margin retiré — double compensation avec le viewBox décalé (audit 2026-07-27) */
+
+/* ── PLAYER BAR — espacement boutons contrôles (style Spotify) ───────── */
+
+.pl-btns { gap: 4px; }          /* 8px → 4px : boutons plus serrés */
+.pl-r    { gap: 6px; }          /* 8px → 6px : section droite plus compacte */
+.vol     { gap: 4px; }          /* 8px → 4px : icône mute + slider plus proches */
+

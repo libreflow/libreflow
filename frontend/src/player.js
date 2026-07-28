@@ -271,14 +271,10 @@ export async function ensureUrl(t) {
  */
 export function setIcon(playing) {
   invoke('taskbar_set_playing', { playing }).catch((e) => console.warn('[taskbar_set_playing]', e));
-  // @ts-ignore — audio element guaranteed present in LibreFlow DOM (index.html)
-  document.getElementById('ico-play').style.display  = playing ? 'none' : '';
-  // @ts-ignore — audio element guaranteed present in LibreFlow DOM (index.html)
-  document.getElementById('ico-pause').style.display = playing ? ''     : 'none';
-  const ci = document.getElementById('cinema-ico-play');
-  const cp = document.getElementById('cinema-ico-pause');
-  if (ci) ci.style.display = playing ? 'none'  : 'block';
-  if (cp) cp.style.display = playing ? 'block' : 'none';
+  // Cross-fade play/pause : l'état visuel des icônes est piloté par la classe
+  // .playing sur les boutons (#pcplay / #cinema-play) — CSS opacity/scale,
+  // plus de toggle display brut (audit flagship 2026-07-27).
+  document.getElementById('cinema-play')?.classList.toggle('playing', playing);
   // Task 6 : geler les animations idle pochette/fond en pause — setIcon() est le seul
   // point appelé sur CHAQUE événement 'play'/'pause' natif (media keys, bouton cinéma,
   // sleep timer…), contrairement à updateCinema()/_syncCinButtons (cinema.js) qui ne
@@ -658,6 +654,9 @@ export function toggleShuffle() {
   if (shuffle) buildQ();
   toast(shuffle ? i18n('t_shuffle_on') : i18n('t_shuffle_off'));
   _allPlayerUI();
+  // AUDIT CINÉMA 2026-07-20 (P1) : le cinéma re-rend panneau « Suivant » + file d'attente
+  // (l'état shuffle change la piste prévisible) — via bus, pas d'import cinema.js (§6).
+  emit(EVENTS.PLAYBACK_MODE_CHANGED, {});
 }
 
 /** @returns {void} */
@@ -682,6 +681,7 @@ export function toggleRepeat() {
   cinRep?.setAttribute('aria-label', lbl);
   toast(lbl); // toast aria-live=polite — annonce dynamique du nouvel état (3 distincts)
   _allPlayerUI();
+  emit(EVENTS.PLAYBACK_MODE_CHANGED, {}); // cf. toggleShuffle — re-rend les panneaux cinéma
 }
 
 /** @returns {void} */
@@ -1107,11 +1107,33 @@ export function getNextIdx() {
   }
   if (shuffle && shuffleQ.length > 0) return shuffleQ[0];
   const tracks = get('tracks'); // Phase 4
+  // AUDIT CINÉMA 2026-07-20 (P2) : cas spécial sort:recent — même branche que next()/
+  // peekNext() (ordre stable de tracks[]) ; sans elle le panneau « Suivant » du cinéma
+  // et l'avance gapless annonçaient une piste différente de celle que next() joue.
+  if (get('sort') === 'recent' && get('view') === 'all') {
+    const ni = curIdx + 1;
+    if (ni < tracks.length) return ni;
+    return (repeat === 'all' && tracks.length > 0) ? 0 : -1;
+  }
   const fl     = getFiltered();
   const pos    = filteredIdx(tracks[curIdx]); // P4 — O(1) via posMap
   if (pos >= 0 && pos < fl.length - 1) return trackIdx(fl[pos + 1]);
   if (repeat === 'all' && fl.length > 0) return trackIdx(fl[0]);
   return -1;
+}
+
+/**
+ * AUDIT CINÉMA 2026-07-20 (P2) : lecture directe d'une piste HORS vue filtrée — façade
+ * publique sur _playDirect pour le panneau file d'attente du cinéma (cinema-render.js) :
+ * une entrée explicite volontairement affichée hors filtre restait sinon un no-op au clic,
+ * alors que next() la joue (même fallback _playDirect que la branche explicite de next()).
+ * @param {Track} t
+ * @returns {void}
+ */
+export function playTrackDirect(t) {
+  if (!t) return;
+  const i = trackIdx(t);
+  if (i >= 0) _playDirect(t, i);
 }
 
 /**
@@ -1311,7 +1333,11 @@ audio.addEventListener('timeupdate', () => {
   const dur = fmt(audio.duration);
   if (_DOM.pfill) _DOM.pfill.style.transform = 'scaleX(' + p + ')';
   if (_DOM.tc) _DOM.tc.textContent = cur;
-  if (_DOM.td) _DOM.td.textContent = dur;
+  // Temps restant cliquable (audit 2026-07-27) : #td affiche « -M:SS » si l'option
+  // showRemaining est active (toggle-remaining, handlers.js).
+  if (_DOM.td) _DOM.td.textContent = get('showRemaining')
+    ? '-' + fmt(Math.max(0, audio.duration - audio.currentTime))
+    : dur;
   // A11Y : mettre à jour le slider ARIA (#pbar role=slider)
   if (pbar) {
     const pNow = Math.round(p * 100);

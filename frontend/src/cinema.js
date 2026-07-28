@@ -326,6 +326,10 @@ export function updateCinema() {
   // ARCH-5 : détecter le changement de piste avant tout rendu qui en dépend.
   const _trackChanged = curIdx !== _lastCinIdx;
   _lastCinIdx = curIdx;
+  // Bug fix : un drag de scrub en cours au moment d'un changement de piste (auto-avance,
+  // radio, fin de piste) doit être annulé -- sinon pointerup (cinema-seek.js) commit un
+  // seek sur la NOUVELLE piste avec la position pointeur calculée pour l'ANCIENNE durée.
+  if (_trackChanged) resetCinemaSeek();
 
   renderCinColor(t, _trackChanged);                    // canvas clear + couleur + snap + reduced-motion + --cin-rgb
   _renderCinMeta(title, artist, _trackChanged);         // annonce a11y (immédiate, découplée du swap visuel)
@@ -421,10 +425,9 @@ function _cinSwapIn(art, t, title, artist, artWrap, img, em) {
 // ── Synchro boutons/états : play/pause + shuffle/repeat/like/radio (aria-pressed A1/A2) ──
 function _syncCinButtons(curIdx) {
   const playing = !audio.paused;
-  const iplay  = document.getElementById('cinema-ico-play');
-  const ipause = document.getElementById('cinema-ico-pause');
-  if (iplay)  iplay.style.display  = playing ? 'none'  : 'block';
-  if (ipause) ipause.style.display = playing ? 'block' : 'none';
+  // Cross-fade play/pause : classe .playing sur le bouton, icônes en CSS
+  // (opacity/scale) — cohérent avec setIcon() de player.js.
+  document.getElementById('cinema-play')?.classList.toggle('playing', playing);
   // Task 6 : geler les animations idle (Ken Burns/float/glow/breathe/ambient) en pause —
   // basculée ici, là où l'état play/pause est déjà lu depuis audio.paused.
   document.getElementById('cinema-overlay')?.classList.toggle('is-paused', !playing);
@@ -452,9 +455,9 @@ function _syncCinButtons(curIdx) {
 }
 
 // ── Init sub-modules (posé ici : cinemaOpen et updateCinema sont désormais déclarés) ──
-initCinemaBgModule({ getCinemaOpen: () => cinemaOpen, onUpdateCinema: () => updateCinema(), getIsPlaying: () => !audio.paused });
+initCinemaBgModule({ getCinemaOpen: () => cinemaOpen, onUpdateCinema: () => updateCinema(), getIsPlaying: () => audio && !audio.paused });
 initCinemaVizModule({ getCinemaOpen: () => cinemaOpen });
-initCinemaLoop({ getCinemaOpen: () => cinemaOpen, getIsPlaying: () => !audio.paused, getBgMode: () => cinemaBg, getAnalyser: () => eqAnalyser, drawBg: drawBgFrame, drawViz: drawVizFrame });
+initCinemaLoop({ getCinemaOpen: () => cinemaOpen, getIsPlaying: () => audio && !audio.paused, getBgMode: () => cinemaBg, getAnalyser: () => eqAnalyser, drawBg: drawBgFrame, drawViz: drawVizFrame });
 // Task 6 — cinema-input.js : clavier/molette/dblclick/contrôles auto-masquables.
 initCinemaInput({
   getCinemaOpen: () => cinemaOpen,

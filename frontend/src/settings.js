@@ -34,6 +34,15 @@ let _currentArtColor = null;
 // A11Y-05: focus management + focus trap pour le panneau settings
 let _settingsTrigger   = null; // élément qui a ouvert le panneau (restauré au close)
 let _settingsFocusTrap = null; // handler Tab trap dans #settings-box
+// BUG FIX (audit settings 2026-07-08) : la fermeture programme un fallback
+// (animationend OU 400ms) pour restaurer le focus. Un toggle rapide (ex.
+// Ctrl+, x2, cf. shortcuts.js) rouvrait le panneau AVANT ce fallback, qui se
+// déclenchait quand même ~400ms plus tard : il masquait le panneau tout juste
+// rouvert (classList.remove('on')) et volait le focus vers le trigger PÉRIMÉ.
+// _closeTimer/_closeAnimHandler permettent à openSettings() d'annuler ce cycle
+// de fermeture encore en vol avant qu'il ne s'exécute.
+let _closeTimer       = null;
+let _closeAnimHandler = null;
 
 /** Sélecteur d'éléments focusables pertinents dans le panneau settings. */
 const _FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
@@ -72,6 +81,13 @@ export function initSettingsVars({ theme, dynColor, displayMode }) {
   _theme       = theme;
   _dynColor    = dynColor;
   _displayMode = displayMode;
+  // BUG FIX (audit settings 2026-07-08) : sync store → miniplayer.js lit
+  // get('theme')/get('dynColor') pour construire le payload IPC mini_update de
+  // la fenêtre mini-lecteur Tauri. Sans ceci ces clés restaient bloquées sur
+  // les défauts statiques de store.js ('blue'/true), ignorant le cfg persistant
+  // dès le boot — la mini-fenêtre ne reflétait jamais le vrai thème/dynColor.
+  set('theme', theme);
+  set('dynColor', dynColor);
 }
 
 // ── Getters (utilisés par _doSaveCfg dans app.js) ────────────────────────────
@@ -150,10 +166,15 @@ function _handleTabKeydown(e) {
   if (tabKey) switchSetTab(tabKey);
 }
 
-/** Initialise la navigation clavier de la tablist. Appelé une seule fois au boot. */
+// Garde anti-double-appel — même pattern que _settingsListenersInit (initSettingsListeners).
+let _settingsKeynavInit = false;
+
+/** Initialise la navigation clavier de la tablist. Idempotent — appelée une seule fois au boot. */
 export function initSettingsKeynav() {
+  if (_settingsKeynavInit) { console.warn('[settings] initSettingsKeynav() called more than once'); return; }
   const tablist = $id('set-tabs');
   if (!tablist) return;
+  _settingsKeynavInit = true;
   tablist.addEventListener('keydown', _handleTabKeydown);
 }
 
@@ -170,11 +191,19 @@ export function toggleSettings() {
   else                                  openSettings();
 }
 
+/** Annule un cycle de fermeture encore en vol (animationend + fallback 400ms). */
+function _cancelPendingClose(panel) {
+  if (_closeTimer)       { clearTimeout(_closeTimer); _closeTimer = null; }
+  if (_closeAnimHandler) { panel.removeEventListener('animationend', _closeAnimHandler); _closeAnimHandler = null; }
+}
+
 export function openSettings() {
-  if (eqOpen)    closeEQ();
+  if (eqOpen)         closeEQ();
+  if (_shortcutsOpen)  closeShortcuts(); // mutual exclusion — évite l'empilement de 2 dialogs trappés
   emit(EVENTS.PANEL_CLOSE_QUEUE, {});
   const panel = $id('settings-panel');
   if (!panel) return;
+  _cancelPendingClose(panel); // BUG FIX : annule un close() encore en vol (cf. commentaire plus haut)
   // A11Y-05: sauvegarder l'élément qui a déclenché l'ouverture pour le restaurer à la fermeture
   _settingsTrigger = document.activeElement instanceof HTMLElement ? document.activeElement : null;
   panel.classList.remove('closing');
@@ -210,14 +239,31 @@ export function openSettings() {
   }, 50);
 }
 
-export function closeSettings() {
+/**
+ * @param {boolean} immediate — saute la transition de fermeture. BUG FIX (audit
+ * settings 2026-07-08, review) : sans ceci, fermer Settings comme effet de bord
+ * de l'ouverture d'un autre dialog (toggleShortcuts(), mutual exclusion)
+ * laissait le scrim plein-écran de #settings-panel (pointer-events actif,
+ * z-index au-dessus de #shortcuts-panel) visible/cliquable pendant les ~200ms
+ * de transition, bloquant le dialog qui vient tout juste de s'ouvrir dessous.
+ */
+export function closeSettings(immediate = false) {
   const panel = $id('settings-panel');
   if (!panel) return;
+  _cancelPendingClose(panel); // un close() précédent encore en vol ne doit pas doubler le cycle
   // A11Y-05: supprimer le piège de focus avant l'animation
   const box = $id('settings-box');
   if (_settingsFocusTrap && box) {
     box.removeEventListener('keydown', _settingsFocusTrap);
     _settingsFocusTrap = null;
+  }
+  const trigger = $id('tbt-settings');
+  trigger?.classList.remove('active');
+  trigger?.setAttribute('aria-expanded', 'false');
+  if (immediate) {
+    panel.classList.remove('on', 'closing');
+    _settingsTrigger = null;
+    return;
   }
   panel.classList.add('closing');
   // BUG-M3 FIX : animationend peut ne jamais se déclencher si l'animation est désactivée
@@ -226,6 +272,8 @@ export function closeSettings() {
   const _onClose = () => {
     if (_closeHandled) return;
     _closeHandled = true;
+    if (_closeTimer) { clearTimeout(_closeTimer); _closeTimer = null; }
+    _closeAnimHandler = null;
     panel.classList.remove('on', 'closing');
     // A11Y-05: restaurer le focus à l'élément déclencheur après la fermeture de l'animation
     if (_settingsTrigger) {
@@ -233,11 +281,9 @@ export function closeSettings() {
       _settingsTrigger = null;
     }
   };
+  _closeAnimHandler = _onClose;
   panel.addEventListener('animationend', _onClose, { once: true });
-  setTimeout(_onClose, 400); // fallback si animationend ne se déclenche jamais
-  const trigger = $id('tbt-settings');
-  trigger?.classList.remove('active');
-  trigger?.setAttribute('aria-expanded', 'false');
+  _closeTimer = setTimeout(_onClose, 400); // fallback si animationend ne se déclenche jamais
 }
 
 // BUG-AUDIT HIGH : listeners document/window encapsulés dans initSettingsListeners()
@@ -280,15 +326,16 @@ export function initSettingsListeners() {
 }
 
 // ══ THEMES ════════════════════════════════════════════════════════════════════
-// BUG FIX: --g-rgb était jamais défini → tous les rgba(var(--g-rgb,...)) tombaient sur le vert
-export const THEME_RGB = {
-  green: '29,185,84', blue: '59,130,246', purple: '168,85,247',
-  red: '239,68,68', orange: '249,115,22', pink: '236,72,153', cyan: '6,182,212',
-};
 
 function _applyThemeVars(t) {
   document.documentElement.setAttribute('data-theme', t);
-  document.documentElement.style.setProperty('--g-rgb', THEME_RGB[t] || '59,130,246');
+  // --g / --g-rgb / --gd / --gg viennent tous du même bloc [data-theme="X"] de
+  // design-system.css (source unique, CLAUDE.md §17) — ne JAMAIS dupliquer
+  // --g-rgb ici en JS. BUG FIX (audit settings 2026-07-08) : un ancien
+  // THEME_RGB codait en dur un --g-rgb obsolète pour green/blue/cyan,
+  // désynchronisé du --g réel de ces thèmes → tous les rgba(var(--g-rgb),…)
+  // (glows, hovers, shadows — ~90 usages) rendaient une teinte différente du
+  // reste de l'UI dès que l'un de ces 3 thèmes était actif.
   // Mirror localStorage synchrone — lu par public/boot-theme.js AVANT le premier
   // paint au prochain boot (la cfg IDB est async, trop tard pour l'attribut initial).
   // Couvre à la fois le changement utilisateur (setTheme) et la correction au boot
@@ -298,6 +345,7 @@ function _applyThemeVars(t) {
 
 export function setTheme(t) {
   _theme = t;
+  set('theme', t); // sync store → miniplayer.js (cf. initSettingsVars)
   _applyThemeVars(t);
   document.querySelectorAll('.theme-swatch').forEach(s => {
     const on = s.dataset.theme === t;
@@ -331,7 +379,7 @@ export function setMotionPrefSetting(pref) {
 
 function _syncMotionPrefSelect() {
   const sel = $select('set-motion-pref');
-  if (sel) sel.value = get('motionPref') || 'full';
+  if (sel) sel.value = get('motionPref') || 'system';
 }
 
 function _syncTlistZoomRadios() {
@@ -361,6 +409,7 @@ function _applyDynColorUI() {
 
 export function setDynColor(v) {
   _dynColor = !!v;
+  set('dynColor', _dynColor); // sync store → miniplayer.js (cf. initSettingsVars)
   _applyDynColorUI();
   saveCfg();
 }
@@ -456,7 +505,11 @@ export function closeShortcuts() {
 export function toggleShortcuts() {
   _shortcutsOpen = !_shortcutsOpen;
   if (_shortcutsOpen) {
-    if (eqOpen)    closeEQ();
+    if (eqOpen) closeEQ();
+    // mutual exclusion — évite l'empilement de 2 dialogs trappés (cf. openSettings).
+    // Fermeture immédiate (sans transition) : #shortcuts-panel s'ouvre tout de
+    // suite après, sous le scrim de Settings si celui-ci continuait de fader.
+    if ($id('settings-panel')?.classList.contains('on')) closeSettings(true);
     emit(EVENTS.PANEL_CLOSE_QUEUE, {});
   }
   $id('shortcuts-panel')?.classList.toggle('open', _shortcutsOpen);

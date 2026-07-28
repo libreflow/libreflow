@@ -339,7 +339,7 @@ function _resetProgressUi() {
 
 function _setProgressFill(percent) {
   const fill = document.getElementById('cd-progress-fill');
-  if (fill) fill.style.width = `${percent}%`;
+  if (fill) fill.style.transform = `scaleX(${percent / 100})`; // scaleX : compositor-only (audit 2026-07-27)
 }
 
 function _setProgressText(t) {

@@ -11,7 +11,7 @@
 // les nouveaux sont ajoutés. La config locale n'est jamais remplacée.
 //
 // Exports :
-//   exportBackup(includeFiles?)
+//   exportBackup()
 //   importBackup()
 
 import { dall, dget, DB }                            from './db.js';
@@ -46,9 +46,8 @@ async function _batchPut(storeName, records) {
 /**
  * Sérialise tous les stores IDB et exporte via la commande Rust export_backup.
  * Ouvre un dialog de sauvegarde côté Rust.
- * @param {boolean} [includeFiles=false] — non utilisé (métadonnées uniquement pour l'instant)
  */
-export async function exportBackup(includeFiles = false) {
+export async function exportBackup() {
   const btn = document.getElementById('backup-export-btn');
   if (btn) { btn.disabled = true; btn.textContent = 'Export en cours…'; }
 

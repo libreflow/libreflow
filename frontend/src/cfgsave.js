@@ -102,7 +102,8 @@ async function _doSaveCfg() {
     const cdCopyrightAck = get('cdCopyrightAck') === true; // CONFORMITÉ-CD
     const lastSettingsTab = get('lastSettingsTab') || 'appearance'; // UX-Ergo : mémoire onglet
     const tlistZoom      = get('tlistZoom') || 'comfortable';       // zoom liste pistes
-    const motionPref     = get('motionPref') || 'full';             // Task 10 : Système/Complètes/Réduites
+    const motionPref     = get('motionPref') || 'system';             // Task 10 : Système/Complètes/Réduites
+    const showRemaining  = get('showRemaining') === true;           // temps restant cliquable (#td)
 
     const likedIds    = liked instanceof Set ? [...liked] : [];
     const _audioEl    = /** @type {HTMLAudioElement|null} */ (document.getElementById('audio'));
@@ -155,6 +156,7 @@ async function _doSaveCfg() {
       lastSettingsTab,
       tlistZoom,
       motionPref,
+      showRemaining,
     }, 'state');
   } catch (e) {
     if (isQuotaError(e)) {

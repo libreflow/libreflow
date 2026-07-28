@@ -26,7 +26,7 @@ import { audio, resetShuffleQ, clearCrossfadeTimers }   from './player.js';
 import { saveTrackNow }                                 from './library.js';
 import { toast, toastWithAction }                                        from './ui.js';
 import { saveCfg }                        from './cfgsave.js';
-import { setCurIdx, setTracks, setLiked, replaceTracks } from './state.js';
+import { setCurIdx, setLiked, replaceTracks } from './state.js';
 import { updateBar }                       from './playerbar.js';
 import { savePlaylists, renderPlNav, openNewPlaylistModal } from './playlists.js';
 // Playlists demande l'effacement de la sélection — évite le cycle playlists.js ↔ selection.js.

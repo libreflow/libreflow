@@ -2008,8 +2008,13 @@ section('cinema-queue.js -- buildUpcoming (pure logic)');
     limit          = 8,
   } = {}) {
     if (limit <= 0) return [];
-    const filteredIds   = new Set(filtered.map(t => t.id));
-    const validExplicit = explicitQueue.filter(t => t && filteredIds.has(t.id));
+    // Bug fix : explicitQueue est déjà validée contre la bibliothèque complète par
+    // l'appelant (peekExplicitQueue(), queue.js -- _trackIdxMap) -- filtrer en plus contre
+    // `filtered` (vue recherche/filtre courante) exclurait à tort une piste explicitement
+    // mise en file mais momentanément hors vue filtrée, alors que getNextIdx()/player.js
+    // (source de vérité réelle) la joue quand même ensuite. Seuls null/undefined (entrées
+    // défensives) sont ignorés ici.
+    const validExplicit = explicitQueue.filter(Boolean);
     if (validExplicit.length) {
       const out = validExplicit.slice(0, limit);
       _fillSequential(out, filtered, curFilteredIdx, repeatAll, limit);
@@ -2054,15 +2059,23 @@ section('cinema-queue.js -- buildUpcoming (pure logic)');
   assert(ids(buildUpcoming({ filtered: fl8, curFilteredIdx: 7 })) === '[]',
     'fin de liste exacte (dernière piste) -> [] (pas de wrap)');
 
-  // ── File explicite : priorité 1, IDs stale ignorés, complétée par le séquentiel ──
+  // ── File explicite : priorité 1, seuls les null/undefined sont ignorés (Bug fix) ──
+  // AVANT le fix : une entrée valide (id=99, objet non-null) mais absente de `filtered`
+  // était traitée comme "stale" au même titre qu'un null -- alors que peekExplicitQueue()
+  // (queue.js) ne valide déjà QUE contre la bibliothèque complète (_trackIdxMap), jamais
+  // contre la vue filtrée/recherche courante. Résultat : un morceau mis en "Lire ensuite"
+  // pendant qu'une recherche l'exclut de la vue filtrée disparaissait du panneau file
+  // d'attente cinéma alors que getNextIdx()/hasExplicitQueueNext() (source de vérité réelle
+  // de player.js) le jouaient bel et bien ensuite -- le panneau contredisait la lecture
+  // réelle. mk(99) représente ici ce cas (piste valide, simplement hors de `fl8`).
   assert(ids(buildUpcoming({ explicitQueue: [mk(5), mk(2)], filtered: fl8, curFilteredIdx: 0, limit: 8 })) === '[5,2,3,4,6,7,8]',
     'file explicite en tête (ordre préservé) + suite séquentielle dédupliquée (2 déjà en tête, sauté dans le séquentiel)');
-  assert(ids(buildUpcoming({ explicitQueue: [mk(99), mk(3), null, mk(2)], filtered: fl8, curFilteredIdx: 0, limit: 4 })) === '[3,2,4,5]',
-    'IDs stale (99 absent de filtered, null) ignorés silencieusement -- ordre des entrées valides préservé');
-  assert(ids(buildUpcoming({ explicitQueue: [mk(99), null], filtered: fl8, curFilteredIdx: 1 })) === '[3,4,5,6,7,8]',
-    'file explicite 100% stale (IDs absents/null) -> ignorée entièrement, retombe sur le séquentiel');
-  assert(ids(buildUpcoming({ explicitQueue: [mk(99)], filtered: fl8, curFilteredIdx: 1, radioActive: true, radioQueue: [mk(7)] })) === '[7]',
-    'file explicite 100% stale + radio active -> retombe sur la radio (le fallback saute uniquement la branche explicite vide)');
+  assert(ids(buildUpcoming({ explicitQueue: [mk(99), mk(3), null, mk(2)], filtered: fl8, curFilteredIdx: 0, limit: 4 })) === '[99,3,2,4]',
+    'seul le null est ignoré -- id=99 (hors de `filtered`, ex. recherche active) reste dans la file explicite, ordre préservé');
+  assert(ids(buildUpcoming({ explicitQueue: [null, null], filtered: fl8, curFilteredIdx: 1 })) === '[3,4,5,6,7,8]',
+    'file explicite 100% null -> ignorée entièrement, retombe sur le séquentiel');
+  assert(ids(buildUpcoming({ explicitQueue: [null], filtered: fl8, curFilteredIdx: 1, radioActive: true, radioQueue: [mk(7)] })) === '[7]',
+    'file explicite 100% null + radio active -> retombe sur la radio (le fallback saute uniquement la branche explicite vide)');
   assert(ids(buildUpcoming({ explicitQueue: [mk(1), mk(2), mk(3)], filtered: fl8, curFilteredIdx: 0, limit: 2 })) === '[1,2]',
     'limit < taille file explicite -> tronque la file explicite elle-même, pas de séquentiel ajouté');
 
@@ -2387,6 +2400,16 @@ section('components/lf-toast-stack.logic.js -- import-smoke');
     const keyCBlock = /case 'KeyC':([\s\S]*?)break;/.exec(onCinKeyBody)?.[1] || '';
     assert(keyCBlock.length > 0 && /closeCinema\(\)/.test(keyCBlock),
       "cinema-input.js : case 'KeyC' présent et appelle deps.closeCinema() (fix tooltip « Fermer [C / Échap] »)");
+
+    // Audit fix : KeyR/KeyF/KeyB n'avaient pas de garde e.repeat -- une touche maintenue
+    // ré-entre l'action à chaque tick de répétition OS. Pour KeyR (radio), la répétition
+    // peut ré-appeler toggleCinemaRadio() avant que le premier appel n'ait fini son await
+    // buildRadioQueue(), désynchronisant radioActive de l'état visible/en file (radio.js).
+    for (const key of ['KeyR', 'KeyF', 'KeyB']) {
+      const block = new RegExp(`case '${key}':([\\s\\S]*?)break;`).exec(onCinKeyBody)?.[1] || '';
+      assert(block.length > 0 && /if \(e\.repeat\) return;/.test(block),
+        `cinema-input.js : case '${key}' doit garder e.repeat (ignorer l'auto-répétition clavier)`);
+    }
 
     // (c) _onCinWheel : early-return AVANT preventDefault quand la molette cible le
     // panneau file d'attente — le scroll natif du panneau reprend ses droits.
@@ -2755,6 +2778,17 @@ section('components/lf-toast-stack.logic.js -- import-smoke');
     assert(/updateCachedWinSize\(\)/.test(read('frontend/src/cinema.js')),
       'cinema.js appelle updateCachedWinSize() dans son handler resize');
 
+    // Audit fix : un resize survenant PENDANT un cross-fade de bascule de mode (600ms,
+    // _ambientCross) redessinait le snapshot -- dimensionné pour l'ANCIENNE taille -- étiré
+    // aux NOUVELLES _winW/_winH (drawBgFrame les lit à chaque frame), déformant l'image
+    // sortante jusqu'à 200ms (durée du debounce resize -> applyCinemaBg() qui, lui,
+    // régénère tout proprement). updateCachedWinSize() tourne SYNCHRONE dès le resize
+    // (pas debounced) -- c'est le seul point qui peut couper le cross-fade à temps.
+    const updateCachedWinSizeBody = /export function updateCachedWinSize\(\)\s*\{[\s\S]*?\}/.exec(bgSrc)?.[0] || '';
+    assert(updateCachedWinSizeBody.length > 0, 'cinema-bg.js : updateCachedWinSize() trouvée');
+    assert(/_ambientCross\s*=\s*null/.test(updateCachedWinSizeBody),
+      'updateCachedWinSize() doit couper un cross-fade en vol (_ambientCross = null) -- sinon le snapshot ancien-format se redessine étiré à la nouvelle taille');
+
     // (f) Task 1 : suspendViz stoppe aussi l'oscilloscope premium (rAF autonome)
     const suspendBody = /export function suspendViz\(\)[\s\S]*?\n\}/.exec(vizSrc)?.[0] || '';
     const resumeBody  = /export function resumeViz\(\)[\s\S]*?\n\}/.exec(vizSrc)?.[0] || '';
@@ -2764,6 +2798,28 @@ section('components/lf-toast-stack.logic.js -- import-smoke');
       'suspendViz() stoppe _premiumOsc.stop() (P-H3 fix: oscilloscope premium a son propre rAF)');
     assert(/vizMode\s*===\s*['"]oscilloscope['"]/.test(resumeBody) && /_ensurePremiumOsc/.test(resumeBody) && /\.start\(\)/.test(resumeBody),
       'resumeViz() redémarre l\'oscilloscope premium conditionnellement (vizMode === "oscilloscope")');
+
+    // (g) Bug utilisateur : "mini oscilloscope" qui apparaît dans la barre de volume
+    // après une session cinéma. Root cause : _startEngine() (point de démarrage commun
+    // à startViz() ET setVizMode()) ignorait _vizSuspended -- un pause/resume (stopViz()
+    // au pause remet running=false) ou le premier setBootVizState() consommé PENDANT
+    // que le cinéma est ouvert redémarrait l'oscilloscope premium sur #pl-viz sans
+    // condition. Invisible tant que l'overlay reste ouvert (z-index/fond opaque), mais
+    // le rAF autonome d'oscPremium.js tourne déjà -- visible dès la fermeture du cinéma.
+    const startEngineBody = /function _startEngine\(\)[\s\S]*?\n\}/.exec(vizSrc)?.[0] || '';
+    assert(startEngineBody.length > 0, 'viz.js : fonction _startEngine() trouvée');
+    assert(/_vizSuspended/.test(startEngineBody),
+      '_startEngine() doit vérifier _vizSuspended avant de démarrer un moteur (bars/circle OU oscilloscope) -- sinon resumeViz() redémarre en double un moteur déjà relancé en douce pendant le cinéma');
+
+    // (h) Bug utilisateur (audit) : extractColor() (playerbar.js) résout de façon asynchrone
+    // -- si la boucle cinéma est déjà endormie (convergée / lecture en pause) au moment de
+    // la résolution, rien ne la réveillait pour avancer le LERP vers la nouvelle couleur
+    // cible -- le fond restait figé sur l'ancienne couleur jusqu'à un évènement sans rapport
+    // (reprise lecture, resize, switch de mode) qui réveille la boucle par ailleurs.
+    const updateCinArtColorBody = /export function updateCinArtColor\(hex\)[\s\S]*?\n\}/.exec(bgSrc)?.[0] || '';
+    assert(updateCinArtColorBody.length > 0, 'cinema-bg.js : updateCinArtColor() trouvée');
+    assert(/_getCinemaOpen\(\)/.test(updateCinArtColorBody) && /wakeCinemaLoop\(\)/.test(updateCinArtColorBody),
+      'updateCinArtColor() doit réveiller la boucle cinéma (wakeCinemaLoop, si _getCinemaOpen()) après avoir poussé la nouvelle cible -- sinon le fond reste figé si extractColor() résout boucle endormie');
   }
 
   // =============================================================================
@@ -2943,29 +2999,6 @@ section('components/lf-toast-stack.logic.js -- import-smoke');
       'drill header : libellés boutons via i18n');
   } catch (e) {
     console.error('  KO  cards Albums crashed:', e.message);
-    _ko++;
-  }
-
-  // lf-modal reducer (Phase 1)
-  section('components/lf-modal.logic.js -- modalReducer');
-  try {
-    const mod = await import('../src/components/lf-modal.logic.js');
-    assert(typeof mod.modalReducer === 'function', 'real module: modalReducer exported');
-
-    const s0 = { isOpen: false };
-    let s = mod.modalReducer(s0, { type: 'open' });
-    assert(s.isOpen === true, 'open sets isOpen true');
-
-    s = mod.modalReducer(s, { type: 'close' });
-    assert(s.isOpen === false, 'close sets isOpen false');
-
-    s = mod.modalReducer(s0, { type: 'unknown' });
-    assert(s.isOpen === false, 'unknown action is no-op');
-
-    s = mod.modalReducer({ isOpen: true }, { type: 'open' });
-    assert(s.isOpen === true, 'open on already-open preserves state');
-  } catch (e) {
-    console.error('  KO  lf-modal import/test crashed:', e.message);
     _ko++;
   }
 
@@ -3729,6 +3762,16 @@ section('components/lf-toast-stack.logic.js -- import-smoke');
     assert(/if \(!document\.hidden && cinemaOpen\) wakeCinemaLoop\(\);/.test(cinSrc),
       'cinema.js: visibilitychange réveille la boucle via wakeCinemaLoop() (condition simplifiée)');
 
+    // Audit fix : les câblages getIsPlaying (cinema-bg.js/cinema-loop.js) lisaient
+    // audio.paused sans garde, contrairement à updateCinema() ("Bug 4 fix" documenté --
+    // audio a déjà été null en pratique avant l'init du player). Un audio null ferait
+    // planter silencieusement la boucle rAF cinéma (exception non rattrapée dans _tick()).
+    const getIsPlayingOccurrences = cinSrc.match(/getIsPlaying:\s*\(\)\s*=>\s*[^,\n]+/g) || [];
+    assert(getIsPlayingOccurrences.length >= 2,
+      `attendu >=2 câblages getIsPlaying dans cinema.js, trouvé ${getIsPlayingOccurrences.length}`);
+    assert(getIsPlayingOccurrences.every(o => /audio\s*&&/.test(o)),
+      `chaque câblage getIsPlaying doit garder audio contre null avant .paused : ${getIsPlayingOccurrences.join(' | ')}`);
+
     const updateCinemaBody = /export function updateCinema\(\)[\s\S]*?\n\}\n/.exec(cinSrc)?.[0] || '';
     assert(updateCinemaBody.length > 0, 'cinema.js: updateCinema() trouvée');
     assert(/if \(!cinemaOpen\) return;\s*\n\s*wakeCinemaLoop\(\);/.test(updateCinemaBody),
@@ -3736,6 +3779,21 @@ section('components/lf-toast-stack.logic.js -- import-smoke');
 
     assert(/on\(EVENTS\.PLAY_STATE,\s*\(\)\s*=>\s*\{\s*if \(cinemaOpen\) wakeCinemaLoop\(\);\s*\}\);/.test(cinSrc),
       'cinema.js: listener EVENTS.PLAY_STATE réveille la boucle si le cinéma est ouvert');
+
+    // Audit fix : un drag de scrub en cours au moment d'un changement de piste (auto-avance,
+    // radio, fin de piste) doit être annulé -- sinon pointerup (cinema-seek.js) commit un
+    // seek sur la NOUVELLE piste avec la position pointeur calculée pour l'ANCIENNE (durée
+    // différente). resetCinemaSeek() n'était appelé qu'à la fermeture du cinéma (closeCinema).
+    const trackChangeIdx = updateCinemaBody.indexOf('_trackChanged = curIdx');
+    const resetSeekIdx   = updateCinemaBody.indexOf('resetCinemaSeek()');
+    const renderColorIdx = updateCinemaBody.indexOf('renderCinColor(');
+    assert(trackChangeIdx > -1, 'updateCinema(): détection _trackChanged introuvable');
+    assert(resetSeekIdx > trackChangeIdx,
+      'updateCinema(): resetCinemaSeek() doit apparaître après la détection de _trackChanged');
+    assert(renderColorIdx > -1 && resetSeekIdx < renderColorIdx,
+      'updateCinema(): resetCinemaSeek() doit être appelé AVANT renderCinColor() (couper le drag périmé avant tout rendu qui en dépend)');
+    assert(/if \(_trackChanged\)\s*resetCinemaSeek\(\);/.test(updateCinemaBody),
+      'updateCinema(): resetCinemaSeek() doit être conditionné par _trackChanged (pas à chaque appel)');
   }
 
   // =============================================================================
@@ -4185,6 +4243,199 @@ section('components/lf-toast-stack.logic.js -- import-smoke');
       '@media (max-height: 640px) ne masque plus #cinema-queue-panel (le mode compact-icone prend le relais)');
   } catch (e) {
     console.error('  KO  cinema legacy display:none override scans crashed:', e.message);
+    _ko++;
+  }
+
+  try {
+    const fs = require('fs'), path = require('path');
+    const root = path.join(__dirname, '../..');
+    const read = f => fs.readFileSync(path.join(root, f), 'utf8');
+
+    section('settings.js/shortcuts.js/style.css/index.html -- audit fixes 2026-07-08');
+
+    const SETJS = read('frontend/src/settings.js');
+    const SCJS  = read('frontend/src/shortcuts.js');
+    const CSS5  = read('frontend/src/style.css');
+    const IDX   = read('frontend/index.html');
+
+    // -- Bug: mini-player never received theme/dynColor changes -------------
+    // setTheme()/setDynColor()/initSettingsVars() must sync store.js so
+    // miniplayer.js's get('theme')/get('dynColor') (used to build the IPC
+    // mini_update payload) reflect the real persisted setting, not the
+    // store's static defaults ('blue'/true) forever.
+    const initVarsBody = /function initSettingsVars\([\s\S]*?\n\}/.exec(SETJS);
+    assert(initVarsBody, 'initSettingsVars() body located');
+    assert(/set\(\s*'theme'\s*,\s*theme\s*\)/.test(initVarsBody[0]),
+      "initSettingsVars() syncs store: set('theme', theme)");
+    assert(/set\(\s*'dynColor'\s*,\s*dynColor\s*\)/.test(initVarsBody[0]),
+      "initSettingsVars() syncs store: set('dynColor', dynColor)");
+
+    const setThemeBody = /export function setTheme\([\s\S]*?\n\}/.exec(SETJS);
+    assert(setThemeBody, 'setTheme() body located');
+    assert(/set\(\s*'theme'\s*,\s*t\s*\)/.test(setThemeBody[0]),
+      "setTheme() syncs store: set('theme', t)");
+
+    const setDynColorBody = /export function setDynColor\([\s\S]*?\n\}/.exec(SETJS);
+    assert(setDynColorBody, 'setDynColor() body located');
+    assert(/set\(\s*'dynColor'\s*,\s*_dynColor\s*\)/.test(setDynColorBody[0]),
+      "setDynColor() syncs store: set('dynColor', _dynColor)");
+
+    // -- Bug: rapid Settings toggle could force-hide a just-reopened panel --
+    // and yank focus, because closeSettings()'s animationend/400ms-fallback
+    // pair wasn't cancelled when openSettings() interrupted it.
+    assert(/function _cancelPendingClose\(/.test(SETJS),
+      '_cancelPendingClose() helper exists');
+    const openSettingsBody = /export function openSettings\([\s\S]*?\n\}/.exec(SETJS);
+    assert(openSettingsBody, 'openSettings() body located');
+    assert(/_cancelPendingClose\(panel\)/.test(openSettingsBody[0]),
+      'openSettings() cancels a close cycle still in flight before reopening');
+    const closeSettingsBody = /export function closeSettings\([\s\S]*?\n\}/.exec(SETJS);
+    assert(closeSettingsBody, 'closeSettings() body located');
+    assert(/_cancelPendingClose\(panel\)/.test(closeSettingsBody[0]),
+      'closeSettings() cancels any previous close cycle before scheduling a new one');
+    assert(/_closeTimer\s*=\s*setTimeout\(_onClose, 400\)/.test(closeSettingsBody[0]),
+      'closeSettings() stores its fallback timer id (cancellable) instead of a bare setTimeout');
+    // Review fix: closeSettings(true) must skip the closing-transition entirely
+    // and remove .on synchronously — otherwise closing Settings as a side effect
+    // of opening Shortcuts (toggleShortcuts()) leaves its full-viewport scrim
+    // (pointer-events active, higher z-index) blocking the freshly-opened panel
+    // for the ~200ms closing-animation duration.
+    assert(/export function closeSettings\(immediate = false\)/.test(SETJS),
+      'closeSettings() accepts an immediate flag');
+    assert(/if\s*\(immediate\)\s*\{\s*panel\.classList\.remove\('on', 'closing'\);/.test(closeSettingsBody[0]),
+      "closeSettings(true) removes .on synchronously, skipping the animated 'closing' transition");
+
+    // -- Bug: Settings + Shortcuts-help could be open simultaneously (2 ------
+    // stacked focus-trapped dialogs), and global single-key shortcuts leaked
+    // through the background while the shortcuts-help overlay was open.
+    assert(/if\s*\(_shortcutsOpen\)\s*closeShortcuts\(\)/.test(openSettingsBody[0]),
+      'openSettings() closes the shortcuts panel first (mutual exclusion)');
+    const toggleShortcutsBody = /export function toggleShortcuts\([\s\S]*?\n\}/.exec(SETJS);
+    assert(toggleShortcutsBody, 'toggleShortcuts() body located');
+    assert(/closeSettings\(true\)/.test(toggleShortcutsBody[0]),
+      'toggleShortcuts() closes the settings panel immediately when opening (mutual exclusion, no lingering scrim over the freshly-opened panel)');
+    assert(/document\.getElementById\('shortcuts-panel'\)\?\.classList\.contains\('open'\)/.test(SCJS),
+      "shortcuts.js: _anyModalOpen includes #shortcuts-panel.open (background inertness)");
+    // Escape must still close the shortcuts panel even though it's now part of
+    // _anyModalOpen — must be handled BEFORE the _anyModalOpen early-return,
+    // else it becomes an unclosable keyboard trap.
+    const anyModalIdx = SCJS.indexOf('_anyModalOpen =');
+    const escapeGuardIdx = SCJS.indexOf("e.code === 'Escape' && isShortcutsOpen()");
+    assert(escapeGuardIdx !== -1 && anyModalIdx !== -1 && escapeGuardIdx < anyModalIdx,
+      'shortcuts.js: Escape-closes-shortcuts-panel guard sits before the _anyModalOpen early-return');
+
+    // -- Latent gap: initSettingsKeynav() claimed idempotency but had no guard
+    const keynavBody = /export function initSettingsKeynav\([\s\S]*?\n\}/.exec(SETJS);
+    assert(keynavBody, 'initSettingsKeynav() body located');
+    assert(/_settingsKeynavInit/.test(keynavBody[0]),
+      'initSettingsKeynav() has an anti-double-call guard (matches initSettingsListeners() pattern)');
+
+    // -- Bug: .toggle-wrap (4 settings switches) was 22px tall, under the ----
+    // WCAG 2.5.8 24px target-size floor (--target-min).
+    const toggleWrapRule = /\.toggle-wrap\s*\{([^}]*)\}/.exec(CSS5);
+    assert(toggleWrapRule, '.toggle-wrap base rule located');
+    assert(/height:\s*var\(--target-min\)/.test(toggleWrapRule[1]),
+      '.toggle-wrap height uses var(--target-min) (24px WCAG 2.5.8 floor), not a hardcoded 22px');
+
+    // -- Bug: keyboard focus was invisible on the list-density radio group --
+    // (native input display:none, no :focus-visible + span rule existed).
+    assert(/\.tlist-zoom-radio input\[type="radio"\]:focus-visible \+ span/.test(CSS5),
+      '.tlist-zoom-radio has a :focus-visible + span rule (visible keyboard focus ring)');
+
+    // -- Dead wiring: data-action="tlist-zoom" / data-input-action="auto-update"
+    // had no dispatcher case (console-spammed "Action inconnue" on every use);
+    // the actual functionality is driven by dedicated listeners, so the
+    // attributes were purely misleading dead markup.
+    assert(!/data-action="tlist-zoom"/.test(IDX),
+      'index.html: orphaned data-action="tlist-zoom" removed (dead wiring, no handlers.js case)');
+    assert(!/data-input-action="auto-update"/.test(IDX),
+      'index.html: orphaned data-input-action="auto-update" removed (dead wiring, no handlers.js case)');
+
+    // -- Gap: toggle-switch visible label text wasn't clickable (only the ---
+    // small 40x22 switch itself was) — each row's text now sits in a
+    // <label class="set-toggle-label" for="...">, widening the click target.
+    for (const id of ['dyn-color-chk', 'rg-enabled', 'set-viz-toggle', 'watch-folder-chk', 'auto-update-chk']) {
+      assert(new RegExp(`<label class="[^"]*set-toggle-label[^"]*" for="${id}"`).test(IDX),
+        `index.html: #${id}'s row label is a <label class="set-toggle-label" for="${id}"> (bigger click target)`);
+    }
+  } catch (e) {
+    console.error('  KO  settings audit-fixes scan crashed:', e.message);
+    _ko++;
+  }
+
+  // ===========================================================================
+  // Dead-code / incomplete-feature audit fixes (devices.js, watchfolder.js,
+  // backup.js, genres.js) — 2026-07-14
+  // ===========================================================================
+  section('devices.js/watchfolder.js/backup.js/genres.js -- dead-code audit fixes');
+  try {
+    const fs   = require('fs');
+    const path = require('path');
+    const DEVJS = fs.readFileSync(path.join(__dirname, '../src/devices.js'), 'utf8');
+    const WFJS  = fs.readFileSync(path.join(__dirname, '../src/watchfolder.js'), 'utf8');
+    const BKJS  = fs.readFileSync(path.join(__dirname, '../src/backup.js'), 'utf8');
+    const GNJS  = fs.readFileSync(path.join(__dirname, '../src/genres.js'), 'utf8');
+    const HDJS  = fs.readFileSync(path.join(__dirname, '../src/handlers.js'), 'utf8');
+
+    // -- Fix 1 : USB imports never logged (devices.js) — importFromDrive() now
+    // tags its batch with source 'usb' so imports.js history distinguishes it
+    // from a plain folder-scan, and only on actual success (added > 0).
+    assert(/importPaths\(files,\s*'usb'\)/.test(DEVJS),
+      "devices.js: importFromDrive() calls importPaths(files, 'usb')");
+    const importFromDriveBody = /export async function importFromDrive[\s\S]*?\n\}/.exec(DEVJS);
+    assert(importFromDriveBody, 'devices.js: importFromDrive() body located');
+    assert(/if \(added > 0\)/.test(importFromDriveBody[0]),
+      'devices.js: importFromDrive() only reports success when added > 0 (no log on cancel/0-added)');
+
+    assert(/export async function importPaths\(paths, source = 'folder-scan'\)/.test(WFJS),
+      "watchfolder.js: importPaths() accepts an optional source param (default 'folder-scan')");
+    assert(/logImport\(source, newPaths\)/.test(WFJS),
+      'watchfolder.js: _doImportPaths() forwards the caller-supplied source to logImport() (usb vs folder-scan)');
+
+    // -- Fix 2 : watchfolder modify-during-load race (watchfolder.js) — a
+    // watch-modified-files event for a track whose tags are still loading no
+    // longer gets silently dropped; it is queued in _modPendingRetry and
+    // replayed once that load completes.
+    assert(/let _modPendingRetry = new Set\(\)/.test(WFJS),
+      'watchfolder.js: _modPendingRetry Set declared at module scope');
+    assert(!/TODO: track in _modPendingRetry set/.test(WFJS),
+      'watchfolder.js: the modify-during-load TODO is resolved (no longer just a comment)');
+    const reloadTagsBody = /function _reloadTagsForPaths[\s\S]*?\n\}/.exec(WFJS);
+    assert(reloadTagsBody, 'watchfolder.js: _reloadTagsForPaths() body located');
+    assert(/_modPendingRetry\.add\(p\)/.test(reloadTagsBody[0]),
+      '_reloadTagsForPaths(): a still-loading track (!metaDone) is queued in _modPendingRetry instead of dropped');
+    assert(/function _retryPendingReload\(path\)/.test(WFJS),
+      'watchfolder.js: _retryPendingReload() helper exists');
+    const retryBody = /function _retryPendingReload[\s\S]*?\n\}/.exec(WFJS);
+    assert(retryBody && /_modPendingRetry\.delete\(path\)/.test(retryBody[0]),
+      '_retryPendingReload(): removes the path from the pending set before replaying it');
+    assert(/loadTagsBg\(t\)\.then\(\(\) => _retryPendingReload\(t\.path\)\)/.test(WFJS),
+      'watchfolder.js: at least one loadTagsBg() call chains _retryPendingReload() on completion');
+    assert(/_modPendingRetry\.clear\(\)/.test(WFJS),
+      'watchfolder.js: stopWatchFolder() clears _modPendingRetry (no stale retries across watch restarts)');
+
+    // -- Fix 3 : backup.js includeFiles YAGNI stub removed — exportBackup()
+    // takes no parameter; includes_files stays hardcoded false in the manifest.
+    assert(/export async function exportBackup\(\)/.test(BKJS),
+      'backup.js: exportBackup() no longer takes an includeFiles parameter');
+    assert(!/@param \{boolean\} \[includeFiles/.test(BKJS),
+      'backup.js: stale @param includeFiles JSDoc removed');
+    assert(/\/\/\s+exportBackup\(\)$/m.test(BKJS),
+      'backup.js: header comment updated to exportBackup() (no more includeFiles?)');
+    assert(/includes_files:\s*false/.test(BKJS),
+      'backup.js: manifest still hardcodes includes_files: false');
+    assert(/await exportBackup\(\);/.test(HDJS) && !/exportBackup\(false\)/.test(HDJS),
+      "handlers.js: 'backup-export' calls exportBackup() with no argument");
+
+    // -- Fix 4 : genres.js dead exports — _genreGetEmoji/_genreGetColor are
+    // only used inside genres.js (by renderGenresGrid), so they are now
+    // module-private, matching the '_'-prefixed private-helper convention.
+    assert(/\nfunction _genreGetEmoji\(key\)/.test(GNJS) && !/export function _genreGetEmoji/.test(GNJS),
+      'genres.js: _genreGetEmoji() is module-private (export removed)');
+    assert(/\nfunction _genreGetColor\(key\)/.test(GNJS) && !/export function _genreGetColor/.test(GNJS),
+      'genres.js: _genreGetColor() is module-private (export removed)');
+  } catch (e) {
+    console.error('  KO  dead-code audit fixes scan crashed:', e.message);
     _ko++;
   }
 

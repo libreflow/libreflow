@@ -44,7 +44,7 @@ function hlText(text, query, re) {
   return text.replace(r, '\x00$1\x01').split('\x00').map((seg, i) => {
     if (i === 0) return esc(seg);
     const parts = seg.split('\x01');
-    return `<mark>${esc(parts[0])}</mark>${esc(parts[1] || '')}`;
+    return `<mark class="srch-hl">${esc(parts[0])}</mark>${esc(parts[1] || '')}`;
   }).join('');
 }
 
@@ -199,8 +199,8 @@ export function renderDrillHeader(view, key) {
           ${mins > 0 ? `<span>${i18n('dur_min', mins)}</span>` : ''}
         </div>
         <div class="dh-actions">
-          <button class="dh-btn dh-play" data-action="dh-play-all" aria-label="${playLbl}"><span aria-hidden="true">▶</span> ${playLbl}</button>
-          <button class="dh-btn dh-shuf" data-action="dh-shuffle-all" aria-label="${shufLbl}"><span aria-hidden="true">⤮</span> ${shufLbl}</button>
+          <button class="fab-play fab-play--sm" data-action="dh-play-all" aria-label="${playLbl}" title="${playLbl}"><svg viewBox="0 0 24 24" aria-hidden="true"><polygon points="7 4 21 12 7 20" fill="currentColor"/></svg></button>
+          <button class="dh-btn dh-shuf" data-action="dh-shuffle-all" aria-label="${shufLbl}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m18 14 4 4-4 4"/><path d="m18 2 4 4-4 4"/><path d="M2 18h1.973a4 4 0 0 0 3.3-1.7l5.454-8.6A4 4 0 0 1 16.027 6H22"/><path d="M2 6h1.972a4 4 0 0 1 3.6 2.2"/><path d="M22 18h-6.041a4 4 0 0 1-3.3-1.8l-.359-.45"/></svg> ${shufLbl}</button>
         </div>
       </div>`;
     _hydrateArtPlaceholders(el);
@@ -252,8 +252,8 @@ export function renderDrillHeader(view, key) {
           <span>${i18n('track_count', entry.count)}</span>
         </div>
         <div class="dh-actions">
-          <button class="dh-btn dh-play" data-action="dh-play-all" aria-label="${playLbl}"><span aria-hidden="true">▶</span> ${playLbl}</button>
-          <button class="dh-btn dh-shuf" data-action="dh-shuffle-all" aria-label="${shufLbl}"><span aria-hidden="true">⤮</span> ${shufLbl}</button>
+          <button class="fab-play fab-play--sm" data-action="dh-play-all" aria-label="${playLbl}" title="${playLbl}"><svg viewBox="0 0 24 24" aria-hidden="true"><polygon points="7 4 21 12 7 20" fill="currentColor"/></svg></button>
+          <button class="dh-btn dh-shuf" data-action="dh-shuffle-all" aria-label="${shufLbl}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m18 14 4 4-4 4"/><path d="m18 2 4 4-4 4"/><path d="M2 18h1.973a4 4 0 0 0 3.3-1.7l5.454-8.6A4 4 0 0 1 16.027 6H22"/><path d="M2 6h1.972a4 4 0 0 1 3.6 2.2"/><path d="M22 18h-6.041a4 4 0 0 1-3.3-1.8l-.359-.45"/></svg> ${shufLbl}</button>
         </div>
       </div>
       ${albums.length > 0 ? `
@@ -480,7 +480,9 @@ export function renderPlaylistsGrid() {
     const ico = `<svg viewBox="0 0 24 24" fill="none" style="fill:none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="6" x2="14" y2="6"/><line x1="3" y1="12" x2="14" y2="12"/><line x1="3" y1="18" x2="10" y2="18"/><polygon points="17 10 23 14 17 18"/></svg>`;
     grid.innerHTML = `<div class="pl-grid-empty"><div class="empty-ico">${ico}</div>`
       + `<div class="empty-h">${esc(i18n('pl_empty'))}</div>`
-      + `<div class="empty-s">${esc(i18n('pl_empty_s'))}</div></div>`;
+      + `<div class="empty-s">${esc(i18n('pl_empty_s'))}</div>`
+      // AUDIT-2026-07-27 : état vide actionnable — l'action existe à un clic
+      + `<button class="empty-cta" data-action="new-playlist">${esc(i18n('pl_new') || 'Nouvelle playlist')}</button></div>`;
     return;
   }
 
