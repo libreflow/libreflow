@@ -25,11 +25,9 @@ FONTS (SIL Open Font License 1.1)
 
 DM Sans — Copyright (c) 2014, The DM Sans Project Authors
 Syne — Copyright (c) 2019, The Syne Project Authors
-Inter — Copyright (c) 2020, The Inter Project Authors
 
 Full license text for each font is in the LICENSES/ directory:
   LICENSES/dm-sans.txt
-  LICENSES/inter.txt
   LICENSES/syne.txt
 
 The SIL Open Font License 1.1 permits use, study, modification, and

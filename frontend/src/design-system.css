@@ -14,10 +14,9 @@
  * Aucune media query côté composant — les tokens font tout le travail.
  *
  * Contrainte projet (CLAUDE.md §15 / §12) :
- *   Pas d'@import url() externe. Les fonts sont déjà chargées localement
- *   par style.css via @font-face (/fonts/syne-*.woff2, /fonts/dm-sans-*.woff2).
- *   Les packages @fontsource/syne et @fontsource/dm-sans sont déclarés
- *   dans package.json — aucune connexion réseau.
+ *   Pas d'@import url() externe. Les fonts sont chargées localement
+ *   par style.css via @font-face (/fonts/syne-*.woff2, /fonts/dm-sans-*.woff2)
+ *   — fichiers auto-hébergés dans frontend/public/fonts/, aucune connexion réseau.
  *
  * Sommaire :
  *   1. Breakpoints
@@ -766,7 +765,7 @@ html[data-mode="light"] {
   --dur-modal:     var(--motion-slow);   /* 260 → 320 */
   --dur-card-in:   var(--motion-slow);   /* 280 → 320 */
   --dur-enter:     var(--motion-slow);   /* 300 → 320 */
-  --anim-glow:     2.6s;    /* playGlow / logopulse infinite glow */
+  --anim-glow:     2.6s;    /* playGlow infinite glow */
 
   /* Durées animations longues (infini) — gardées littérales */
   --anim-shim:     1.8s;    /* skeleton shimmer / drago border / radio-cbtn — boucles lentes */

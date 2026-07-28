@@ -361,8 +361,6 @@ html[data-mode="light"] .pl-a:hover   { color:var(--g); text-decoration: underli
 html[data-mode="light"] #pl-art       { background:var(--bg4); }
 html[data-mode="light"] .pl-lk svg    { stroke:var(--t2); }
 html[data-mode="light"] .pl-lk.on svg { stroke:var(--g); fill:var(--g); }
-html[data-mode="light"] .btn-scan     { color:var(--t2); border-color:var(--bg5); }
-html[data-mode="light"] .btn-scan:hover { background:rgba(var(--g-rgb),.08); border-color:rgba(var(--g-rgb),.3); color:var(--g); }
 /* Bouton play — couleur d'accent sur fond blanc */
 html[data-mode="light"] .pcplay {
   background: var(--g) !important;
@@ -375,12 +373,10 @@ html[data-mode="light"] .pcplay:hover  { filter:brightness(1.08); transform:scal
 html[data-mode="light"] .pc           { color:var(--t2); }
 html[data-mode="light"] .pc:hover     { color:var(--t); background:var(--bg4); transform:scale(1.08); }
 html[data-mode="light"] .pc.on        { color:var(--g); background:var(--accent-subtle); }
-html[data-mode="light"] #pl-n-time    { color:var(--t3); }
 
 /* ── Titlebar ── */
 html[data-mode="light"] .tbt          { color:var(--t3); }
 html[data-mode="light"] .tbt:hover    { background:var(--bg4); color:var(--t); }
-html[data-mode="light"] #vhlogo       { color:var(--t); }
 
 /* ── Navigation sidebar — item actif plus marqué ── */
 html[data-mode="light"] .ni           { color:var(--t3); }
@@ -477,20 +473,12 @@ html[data-mode="light"] .ctx-kbd { background:var(--bg4); color:var(--t3); borde
 /* background/border/scrim désormais automatiques via --glass-surface / --border-X / --scrim */
 html[data-mode="light"] #modal,
 html[data-mode="light"] #pl-modal,
-html[data-mode="light"] #smart-modal,
 html[data-mode="light"] #confirm-modal,
 html[data-mode="light"] #batch-tag-modal {
   backdrop-filter: none; -webkit-backdrop-filter: none;
   box-shadow: var(--shadow-modal2);
 }
 html[data-mode="light"] .modal-title   { color:var(--t); }
-html[data-mode="light"] .modal-inp     { background:var(--bg4); border-color:var(--bg5); color:var(--t); }
-html[data-mode="light"] .modal-inp:focus { border-color:var(--g); background:var(--bg2); }
-html[data-mode="light"] .modal-tab     { color:var(--t3); border-color:var(--bg5); }
-html[data-mode="light"] .modal-tab.on  { color:var(--t); border-color:var(--g); }
-html[data-mode="light"] .modal-btn     { background:var(--bg3); color:var(--t2); border:var(--border-w-sm) solid var(--bg5); }
-html[data-mode="light"] .modal-btn:hover { background:var(--bg4); }
-html[data-mode="light"] .modal-btn.primary { background:var(--g); color: var(--text-on-accent); border:none; }
 html[data-mode="light"] .mbtn.cancel  { background:var(--bg4); color:var(--t2); }
 html[data-mode="light"] #organize-modal { background: var(--bg2); }
 html[data-mode="light"] .organize-move-row { border-color: rgba(0,0,0,0.06); }
@@ -1024,22 +1012,8 @@ body.sb-resizing { cursor: col-resize; user-select: none; }
 /* AUDIT-2026-07-01 M8 : cluster .sb-foot* supprimé — aucun élément .sb-foot
    n'existe (le footer sidebar a été remplacé par #sb-more-pop dans la titlebar). */
 
-/* Bouton sidebar — Scanner un dossier */
-.btn-scan {
-  width: 100%; padding: var(--sp-2) var(--sp-3);
-  background: transparent; color: var(--t2);
-  border: var(--border-w-sm) solid var(--sep); border-radius: var(--r);
-  font-size: var(--fs-caption); font-weight: 500;
-  display: flex; align-items: center; justify-content: center; gap: var(--sp-1d);
-  transition: background var(--dur-fast) var(--smooth),
-              border-color var(--dur-fast) var(--smooth),
-              color var(--dur-fast) var(--smooth),
-              transform var(--dur-fast) var(--smooth);
-  letter-spacing: var(--ls-tight);
-}
-.btn-scan:hover  { background: rgba(var(--g-rgb),.08); border-color: rgba(var(--g-rgb),.3); color: var(--g); }
-.btn-scan:active { transform: scale(.97); }
-.btn-scan svg { width: var(--icon-sm); height: var(--icon-sm); stroke: currentColor; fill: none; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+/* AUDIT-2026-07-29 : cluster .btn-scan supprimé — orphelin du renommage vers
+   .wbtn / .wbtn-scan (index.html), stylé entièrement par .wbtn. */
 
 /* ═══ MAIN ═══════════════════════════════════════════════════ */
 #main {
@@ -1081,11 +1055,6 @@ body.sb-resizing { cursor: col-resize; user-select: none; }
   font-size: var(--fs-md); font-weight: 600; color: var(--t3);
   letter-spacing: 0; font-family: inherit;
 }
-.vh-count {
-  font-size: var(--fs-caption); color: var(--t3); flex-shrink: 0; /* A11Y: --t4 (1.5:1) → --t3 (7:1) */
-  letter-spacing: var(--ls-micro);
-}
-
 /* ── Dupes badge (header bibliothèque) ─────────────── */
 /* R-L3 : valeurs sur la grille recâblées (--r-pill, --border-w-sm, --fs-sm,
    --sp-1q=3px). 5/7/9px sans token exact — laissés littéraux. */
@@ -1533,20 +1502,8 @@ html[data-motion="reduce"] .eq-bars span { animation: none; height: 8px; }
 .tr-add-btn:focus-visible { opacity: 1; color: var(--t3); background: var(--bg4); box-shadow: 0 0 0 2px var(--g), 0 0 0 3px var(--focus-ring-contrast); }
 .tr-add-btn svg          { width: var(--icon-sm); height: var(--icon-sm); stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; }
 
-/* Bouton édition tags — visible au hover */
-.tr-edit-btn {
-  background: none; border: none; color: var(--t3); padding: var(--sp-1p);
-  border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0;
-  /* WCAG 2.2 SC 2.5.8 : cible tactile >=24px. */
-  min-width: var(--target-min); min-height: var(--target-min);
-  transition: color var(--dur-fast) ease, background var(--dur-fast) ease, opacity var(--dur-fast) ease;
-  opacity: 0.45;
-}
-.tr:hover .tr-edit-btn   { color: var(--t3); opacity: 1; }
-.tr-edit-btn:hover       { color: var(--g) !important; background: var(--bg4); opacity: 1 !important; }
-/* A11Y — visible au focus clavier */
-.tr-edit-btn:focus-visible { opacity: 1; color: var(--t3); background: var(--bg4); box-shadow: 0 0 0 2px var(--g), 0 0 0 3px var(--focus-ring-contrast); }
-.tr-edit-btn svg         { width: var(--icon-xs); height: var(--icon-xs); stroke: currentColor; }
+/* AUDIT-2026-07-29 : .tr-edit-btn supprimé — le bouton édition de ligne a été
+   remplacé par le menu ⋯ de la ligne ; plus aucun producteur JS. */
 
 /* Drag & drop */
 .tr[draggable]   { cursor: pointer; }
@@ -6652,17 +6609,6 @@ html[data-mode="light"] .rv-start-btn  { background: var(--g); }
     transform: translateY(-50%) translateX(0);
   }
 
-  /* Bouton Scan — texte = text node → font-size:0 pour le masquer */
-  .btn-scan {
-    flex-direction: column;
-    padding: var(--sp-2h) 0;
-    justify-content: center;
-    align-items: center;
-    border: none;
-    font-size: 0;
-  }
-  .btn-scan svg { margin: 0; width: var(--icon-xl); height: var(--icon-xl); }
-
   /* R-H3 : .vh tient sur une seule ligne — le libellé texte des .sort-btn
      (text node) est masqué via font-size:0, seule l'icône SVG reste. */
   .sort-btn { font-size: 0; gap: 0; padding: var(--sp-1h) var(--sp-1h); }
@@ -6779,9 +6725,6 @@ html[data-platform="mobile"] #sb-resize { display: none; }
 
 /* AUDIT-2026-07-01 M8 : blocs mobile .sb-foot / .sb-foot-icon-btn supprimés
    (aucun élément .sb-foot dans le DOM). */
-/* Hide scan button in mobile (no folder picker on mobile Tauri) */
-html[data-platform="mobile"] .btn-scan { display: none; }
-
 /* Titlebar drag region + window controls hidden on mobile (Tauri mobile has none) */
 html[data-platform="mobile"] .tb-drag-spacer,
 html[data-platform="mobile"] .tb-btns { display: none; }

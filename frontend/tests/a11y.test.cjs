@@ -174,7 +174,7 @@ async function run() {
     const tm = /--target-min\s*:\s*(\d+)px/.exec(DS);   // §17: token defs live in design-system.css
     assert.ok(tm && parseInt(tm[1], 10) >= 24,
       `--target-min doit être >=24px (trouvé ${tm ? tm[1] : 'aucun'})`);
-    for (const sel of ['\\.tlk', '\\.tr-add-btn', '\\.tr-edit-btn']) {
+    for (const sel of ['\\.tlk', '\\.tr-add-btn']) {
       const m = new RegExp(`${sel}\\s*\\{[^}]*\\}`).exec(SS);
       assert.ok(m, `règle de base ${sel} introuvable`);
       assert.ok(/min-width\s*:\s*var\(--target-min\)/.test(m[0])
@@ -202,7 +202,7 @@ async function run() {
     assert.ok(occ >= 2, `--focus-ring-contrast doit être défini pour les deux thèmes dans design-system.css (trouvé ${occ})`);
   });
   await t('icon buttons show a focus ring on :focus-visible (SC 2.4.13)', () => {
-    for (const sel of ['\\.tlk', '\\.tr-add-btn', '\\.tr-edit-btn']) {
+    for (const sel of ['\\.tlk', '\\.tr-add-btn']) {
       const m = new RegExp(`${sel}:focus-visible\\s*\\{[^}]*\\}`).exec(SS);
       assert.ok(m, `règle ${sel}:focus-visible introuvable`);
       assert.ok(/box-shadow\s*:[^;}]*var\(--g\)/.test(m[0]),
@@ -213,7 +213,7 @@ async function run() {
   // --- SC 1.4.3/1.4.6 : le texte de contenu n'utilise pas --t4 (~1.5:1) ------
   // --t4 est réservé aux icônes/placeholders/séparateurs (exemptés de contraste).
   await t('content text selectors avoid --t4 (use --t3)', () => {
-    for (const sel of ['\\.grp-artist', '\\.eq-val--flat', '\\.vh-count', '\\.tr-grp', '\\.pl-folder-empty']) {
+    for (const sel of ['\\.grp-artist', '\\.eq-val--flat', '\\.tr-grp', '\\.pl-folder-empty']) {
       const m = new RegExp(`${sel}\\s*\\{[^}]*\\}`).exec(SS);
       assert.ok(m, `règle ${sel} introuvable`);
       assert.ok(!/var\(--t4\)/.test(m[0]), `${sel} ne doit pas utiliser --t4 (~1.5:1) pour du texte`);
