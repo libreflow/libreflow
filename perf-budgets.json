@@ -3,26 +3,26 @@
   "_unknownBucketPolicy": "warn",
   "_note": "Edited by `npm run perf:baseline`. Manual overrides preserved.",
   "buckets": {
+    "gsap": {
+      "rawBytes": 76106
+    },
     "libreflow-core": {
-      "rawBytes": 4183
+      "rawBytes": 4567
     },
     "libreflow-extras": {
-      "rawBytes": 358916
+      "rawBytes": 436145
     },
     "_css": {
-      "rawBytes": 226207
+      "rawBytes": 237958
     },
     "main": {
-      "rawBytes": 50860
+      "rawBytes": 56896
     },
     "mini": {
-      "rawBytes": 10938
+      "rawBytes": 9591
     },
     "modulepreload-polyfill": {
       "rawBytes": 698
-    },
-    "gsap": {
-      "rawBytes": 100540
     }
   }
 }
