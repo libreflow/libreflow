@@ -53,7 +53,15 @@ pub fn watch_folder_start(app: AppHandle, path: String) -> Result<(), String> {
             let event = match res {
                 Ok(e) => e,
                 Err(e) => {
+                    // Watcher mort (dossier supprimé, NAS éjecté…) : prévenir le
+                    // frontend — watchfolder.js écoute "watch-error" et coupe l'UI
+                    // de surveillance au lieu de la laisser croire active.
                     eprintln!("[watch] watcher error: {:?}", e);
+                    if let Some(win) = app_clone.get_webview_window("main") {
+                        if let Err(e2) = win.emit("watch-error", e.to_string()) {
+                            eprintln!("[watch] emit watch-error failed: {e2}");
+                        }
+                    }
                     return;
                 }
             };
