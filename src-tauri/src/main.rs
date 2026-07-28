@@ -20,7 +20,6 @@ static MINI_CLOSE_SEQ: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU
 fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
-        .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .plugin(WindowStateBuilder::default().build())
