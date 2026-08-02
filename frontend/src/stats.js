@@ -210,7 +210,7 @@ export function renderStats(tracks, trackIdxMap) {
         ${topTracks.map(({ t, n }, i) => `
         <div class="stats-top-row" data-action="play-track" data-track-id="${t.id}">
           <span class="stats-rank${i < 3 ? ' top3' : ''}">${i + 1}</span>
-          ${t.art ? `<img class="stats-top-art" src="${esc(t.art)}" alt="">` : `<div class="stats-top-art" style="display:flex;align-items:center;justify-content:center;font-size:var(--fs-base)">${extEmoji(t.ext)}</div>`}
+          ${t.art ? `<img class="stats-top-art" src="${esc(t.art)}" alt="">` : `<div class="stats-top-art" style="display:flex;align-items:center;justify-content:center;font-size:var(--text-md)">${extEmoji(t.ext)}</div>`}
           <div class="stats-top-info">
             <div class="stats-top-name">${esc(t.name)}</div>
             <div class="stats-top-artist">${esc(t.artistFull || t.artist || '')}</div>
@@ -235,7 +235,7 @@ export function renderStats(tracks, trackIdxMap) {
   </div>
 
   <div>
-    <div class="stats-heading" style="display:flex;align-items:center;gap:var(--sp-2)">
+    <div class="stats-heading" style="display:flex;align-items:center;gap:var(--space-2)">
       ${i18n('stats_activity', _heatPeriod)}
       <div class="heat-filters">
         <button class="heat-filter-btn${_heatPeriod===7?' on':''}" data-action="heat-period" data-days="7">7j</button>
@@ -347,7 +347,7 @@ export function renderStats(tracks, trackIdxMap) {
               <span class="stats-rank${i < 3 ? ' top3' : ''}">${i + 1}</span>
               ${t.art
                 ? `<img class="stats-top-art" src="${esc(t.art)}" alt="">`
-                : `<div class="stats-top-art" style="display:flex;align-items:center;justify-content:center;font-size:var(--fs-base)">${extEmoji(t.ext)}</div>`}
+                : `<div class="stats-top-art" style="display:flex;align-items:center;justify-content:center;font-size:var(--text-md)">${extEmoji(t.ext)}</div>`}
               <div class="stats-top-info">
                 <div class="stats-top-name">${esc(t.name)}</div>
                 <div class="stats-top-artist">${esc(t.artistFull || t.artist || '')}</div>

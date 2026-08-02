@@ -3495,8 +3495,10 @@ section('components/lf-toast-stack.logic.js -- import-smoke');
     assert(/viz-fade-in/.test(BG4) && /cinemaBg\s*===\s*'spectrum'/.test(BG4),
       'cinema-bg.js: bascule vers spectrum → classe viz-fade-in sur #cinema-viz');
     const CSS2 = read('frontend/src/style.css');
-    assert(/\.cinema-viz\.viz-fade-in\s*\{[^}]*animation[^}]*var\(--dur-/.test(CSS2),
-      'style.css: animation viz-fade-in tokenisée (--dur-*)');
+    // Migration 2026-08-02 : tokens motion canoniques (--motion-*, CLAUDE.md §17) —
+    // les alias --dur-* restent acceptés le temps du cycle de dépréciation.
+    assert(/\.cinema-viz\.viz-fade-in\s*\{[^}]*animation[^}]*var\(--(motion|dur)-/.test(CSS2),
+      'style.css: animation viz-fade-in tokenisée (--motion-*/--dur-*)');
     // filter:opacity() et non opacity — .bg-spectrum .cinema-viz force opacity:1
     // !important, qui écraserait des keyframes opacity (les animations perdent
     // contre !important dans la cascade).

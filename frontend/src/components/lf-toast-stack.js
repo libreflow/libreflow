@@ -42,14 +42,16 @@ export class LfToastStack extends LitElement {
     /* Google Material Snackbar look — single dark slab, accent via icon + thin progress bar. */
     :host {
       position: fixed;
-      bottom: calc(var(--pb) + var(--sp-2));
-      left: var(--sp-2);
-      width: calc(var(--sb) - var(--sp-4));
+      bottom: calc(var(--pb) + var(--space-2));
+      left: var(--space-2);
+      width: calc(var(--sb) - var(--space-4));
       display: flex;
       flex-direction: column-reverse;
       align-items: stretch;
-      gap: 8px;
-      z-index: 9999;
+      gap: var(--space-2, 8px);
+      /* --z-toast (9000) : les toasts restent SOUS les tooltips (9999) — hiérarchie
+         documentée dans design-system.css. 9999 en dur la violait. */
+      z-index: var(--z-toast, 9000);
       pointer-events: none;
       font-family: var(--lf-font-ui, var(--font-body));
     }
@@ -60,8 +62,8 @@ export class LfToastStack extends LitElement {
       bottom: auto;
       left: auto;
       width: auto;
-      top: calc(var(--tb, 32px) + 12px);
-      right: var(--sp-4, 16px);
+      top: calc(var(--tb, 38px) + 12px);
+      right: var(--space-4, 16px);
       align-items: flex-end;
     }
     @media (max-width: 719px) {
@@ -69,8 +71,8 @@ export class LfToastStack extends LitElement {
         bottom: auto;
         left: auto;
         width: auto;
-        top: calc(var(--tb, 32px) + 12px);
-        right: var(--sp-4, 16px);
+        top: calc(var(--tb, 38px) + 12px);
+        right: var(--space-4, 16px);
         align-items: flex-end;
       }
     }

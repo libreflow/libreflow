@@ -333,7 +333,8 @@ html[data-mode="light"] {
 /* ── Variables ───────────────────────────────────────────── */
 :root {
   /* R1 tokens canoniques + palette dark migrés vers design-system.css (B1). */
-  transition: --g var(--anim-art) ease;
+  /* NOTE : la transition de --g est déclarée en fin de bloc, fusionnée avec
+     --art-color — deux `transition` dans le même bloc :root s'écrasent. */
 
   /* ════════════════════════════════════════════════════════════════
      R1 — ÉCHELLES CANONIQUES D'HARMONISATION (audit 2026-05-21)
@@ -573,6 +574,9 @@ html[data-mode="light"] {
   /* Micro-lueur subtile (style Spotify) — halo très transparent en couleur accent,
      visible seulement au clavier. Pas de double anneau opaque. */
   --focus-ring-contrast: rgba(var(--g-rgb), 0.12);
+  /* Glow de focus des champs texte/select — recette unique (lot 3, audit 2026-08-02),
+     remplace 4 copies inline de `0 0 0 2px color-mix(...)` dans style.css. */
+  --input-focus-ring: 0 0 0 2px color-mix(in srgb, var(--g) 35%, transparent);
   --border-w-sm:   1px;    /* épaisseur border fine — bordures standard (1px hairline) */
   --border-w-md:   1.5px;  /* épaisseur border medium — inputs actifs, modal highlight */
   --border-w-lg:   2px;    /* épaisseur border forte — tabs, drag-over, queue-act */
@@ -848,6 +852,11 @@ html[data-mode="light"] {
   --cin-surface:       rgba(255,255,255,.06);  /* cinema-next background */
   --cin-surface-hover: rgba(255,255,255,.10);  /* cinema-corner-btn background */
   --cin-hairline:      rgba(255,255,255,.08);  /* cinema-corner-btn border / art-img outline */
+  /* Now Playing overlay (#vnp) — même famille de surfaces flottantes sur artwork,
+     paliers plus visibles que --cin-surface car boutons ronds isolés (lot 3 audit 2026-08-02). */
+  --cin-surface-2:       rgba(255,255,255,.12); /* vnp icon buttons / badge resting bg */
+  --cin-surface-2-hover: rgba(255,255,255,.22); /* vnp icon buttons hover */
+  --cin-border-2:        rgba(255,255,255,.20); /* vnp-link border */
 
   --shadow-player-ring:  0 -1px 0 rgba(var(--g-rgb),.15);                       /* player bar top accent line */
   /* Dimensions supplémentaires — layout & modales */
@@ -924,8 +933,10 @@ html[data-mode="light"] {
 
   /* Ambient art color — géré par @property ci-dessus */
   --art-color: transparent;
-  /* Transition racine : tous les héritiers voient la valeur animée */
-  transition: --art-color var(--dur-art-color) ease;
+  /* Transition racine : tous les héritiers voient la valeur animée.
+     --g fusionné ici : une seconde déclaration `transition` dans ce même bloc
+     écraserait la première (bug audit 2026-08-02 — l'accent snappait). */
+  transition: --g var(--anim-art) ease, --art-color var(--dur-art-color) ease;
 }
 
 /* ── Zoom liste de pistes (tlistZoom.js) ─────────────────────────────────
