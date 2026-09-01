@@ -14,7 +14,7 @@ import { invoke, convertFileSrc }                                 from './ipc.js
 import { emit, EVENTS }                                           from './bus.js';
 import { trackIdx, rebuildTrackIdxMap, invalidateFilterCache }    from './search.js';
 import { VIRT }                                                   from './virt.js';
-import { audio, adjustShuffleQAfterDelete }                       from './player.js';
+import { audio, adjustShuffleQAfterDelete, clearCrossfadeTimers } from './player.js';
 import { toast, toastWithAction, esc }                            from './ui.js';
 import { setCurIdx, removeTracksBatch }                           from './state.js';
 import { saveTrackNow }                                           from './library.js';
@@ -211,7 +211,8 @@ async function _deleteOrphans(orphanTracks) {
   // Pré-passe : ajuster shuffle queue + curIdx AVANT splice (idx encore valides).
   for (const idx of toRemove) {
     adjustShuffleQAfterDelete(idx);
-    if (get('curIdx') === idx)    { audio.pause(); setCurIdx(-1); }
+    // BUG-D2-8-class FIX: annuler tout crossfade en vol avant de pauser (cf. selection.js)
+    if (get('curIdx') === idx)    { clearCrossfadeTimers(); audio.pause(); setCurIdx(-1); }
     else if (get('curIdx') > idx) { setCurIdx(get('curIdx') - 1); }
   }
 

@@ -1241,6 +1241,80 @@ section('motion.js -- public surface (static source check)');
   console.log('backup.js — logic: 9/9 OK');
 }
 
+// ─── backup.js — restoreTrackRecord() (import hydration) ─────────────────────
+// Régression : importBackup() poussait le RECORD IDB brut (artBuf/artMime,
+// sans préfixe _) directement dans tracks[]. artLoader.js/getArtUrl() lit
+// t._hasArt (booléen) et t._artMime (préfixé _) — jamais posés sur le record
+// brut → une piste restaurée depuis un .libreflow n'affichait plus jamais sa
+// pochette, même quand l'artwork était bien présente dans l'archive.
+// Ce bloc réplique restoreTrackRecord() — le même mapping record→Track que
+// le boot (app.js) — et vérifie que les champs runtime attendus par
+// artLoader.js sont bien posés, sans dépendre de _hasArt existant côté IDB.
+{
+  const assert = require('assert');
+
+  // Réplique de la logique d'hydratation ajoutée à backup.js#importBackup().
+  function restoreTrackRecord(r) {
+    return {
+      id: r.id, name: r.name,
+      artist: r.artist, artistFull: r.artistFull || r.artist,
+      album: r.album,
+      ext: r.ext, path: r.path, duration: r.duration,
+      dateAdded: r.dateAdded,
+      art:      null,
+      _hasArt:  !!(r.artBuf || r.artB64),
+      _artBuf:  null,
+      _artMime: r.artMime || null,
+      artColor: r.artColor || null,
+      metaDone: true,
+      noArt:    r.noArt || false,
+    };
+  }
+
+  // 1. Record avec artBuf (schéma courant) → _hasArt = true, _artMime propagé
+  const withArtBuf = restoreTrackRecord({ id: 't1', artBuf: new ArrayBuffer(8), artMime: 'image/png' });
+  assert.strictEqual(withArtBuf._hasArt, true,        '1. artBuf present -> _hasArt true');
+  assert.strictEqual(withArtBuf._artMime, 'image/png', '1. artMime propagated to _artMime');
+  assert.strictEqual(withArtBuf.art, null,             '1. art starts null (lazy-loaded by artLoader)');
+
+  // 2. Record legacy avec artB64 (migration) → _hasArt = true également
+  const withArtB64 = restoreTrackRecord({ id: 't2', artB64: 'data:image/jpeg;base64,AAAA' });
+  assert.strictEqual(withArtB64._hasArt, true, '2. legacy artB64 present -> _hasArt true');
+
+  // 3. Record sans artwork → _hasArt = false, jamais true par défaut
+  const noArt = restoreTrackRecord({ id: 't3' });
+  assert.strictEqual(noArt._hasArt, false, '3. no artBuf/artB64 -> _hasArt false');
+
+  // 4. artistFull retombe sur artist si absent (cohérence avec le boot)
+  const noArtistFull = restoreTrackRecord({ id: 't4', artist: 'Solo' });
+  assert.strictEqual(noArtistFull.artistFull, 'Solo', '4. artistFull falls back to artist');
+
+  console.log('backup.js — restoreTrackRecord: 4/4 OK');
+}
+
+// ─── backup.js — importBackup() hydrates records before pushing to tracks[] ──
+// Vérification statique du code réel (pas d'une réplique) : le fix pose
+// _hasArt/_artMime sur les objets poussés dans tracks[], et persiste toujours
+// les records BRUTS (artBuf/artMime, schéma IDB) en IDB — pas les objets
+// hydratés (qui n'ont plus de champ artBuf).
+{
+  const assert = require('assert');
+  const fs   = require('fs');
+  const path = require('path');
+  const BKJS = fs.readFileSync(path.join(__dirname, '../src/backup.js'), 'utf8');
+
+  assert(/_hasArt:\s*!!\(r\.artBuf \|\| r\.artB64\)/.test(BKJS),
+    'backup.js: importBackup() sets _hasArt from r.artBuf/r.artB64 on restored tracks');
+  assert(/_artMime:\s*r\.artMime \|\| null/.test(BKJS),
+    'backup.js: importBackup() sets _artMime from r.artMime on restored tracks');
+  assert(/_batchPut\('tracks',\s*addedTracks\)/.test(BKJS),
+    'backup.js: _batchPut persists raw addedTracks records (IDB schema), not hydrated runtime objects');
+  assert(/get\('tracks'\)\.push\(\.\.\.addedRuntime\)/.test(BKJS),
+    'backup.js: tracks[] receives hydrated addedRuntime objects (with _hasArt), not raw records');
+
+  console.log('backup.js — importBackup hydration: 4/4 OK');
+}
+
 // ─── devices.js — pure logic ──────────────────────────────────────────────────
 {
   const assert = require('assert');
@@ -4438,6 +4512,227 @@ section('components/lf-toast-stack.logic.js -- import-smoke');
       'genres.js: _genreGetColor() is module-private (export removed)');
   } catch (e) {
     console.error('  KO  dead-code audit fixes scan crashed:', e.message);
+    _ko++;
+  }
+
+  // ─── Full Bug Audit and patch (2026-09-01) — régressions ciblées ───────────
+  try {
+    const fs   = require('fs');
+    const path = require('path');
+    const APPJS   = fs.readFileSync(path.join(__dirname, '../src/app.js'), 'utf8');
+    const CTXJS   = fs.readFileSync(path.join(__dirname, '../src/ctxmenu.js'), 'utf8');
+    const DUPJS   = fs.readFileSync(path.join(__dirname, '../src/dupes.js'), 'utf8');
+    const ORPJS   = fs.readFileSync(path.join(__dirname, '../src/orphans.js'), 'utf8');
+    const UIJS    = fs.readFileSync(path.join(__dirname, '../src/ui.js'), 'utf8');
+    const IPCJS   = fs.readFileSync(path.join(__dirname, '../src/ipc.js'), 'utf8');
+
+    // -- Bug A : suppression d'une piste EN COURS DE LECTURE pendant un
+    // crossfade en vol ne coupait pas le timer programmé (cfFadeTimer via
+    // setTimeout dans player.js) → la lecture repartait toute seule quelques
+    // secondes plus tard sur une piste supprimée/qui n'est plus curIdx.
+    // selection.js avait déjà le fix (BUG-D2-8) ; 4 autres call sites en
+    // étaient dépourvus : media-key 'stop' (app.js), suppression individuelle
+    // (ctxmenu.js), suppression doublons (dupes.js x2), suppression orphelins
+    // (orphans.js). Le fix : appeler clearCrossfadeTimers() AVANT audio.pause().
+    assert(/clearCrossfadeTimers\(\); audio\.pause\(\); audio\.currentTime = 0/.test(APPJS),
+      "app.js: media-key 'stop' clears crossfade timers before pausing");
+
+    assert(/import \{ audio, clearCrossfadeTimers \}\s+from '\.\/player\.js'/.test(CTXJS),
+      'ctxmenu.js: imports clearCrossfadeTimers from player.js');
+    const ctxDeleteBody = /if \(get\('curIdx'\) === ti\) \{[\s\S]*?\}/.exec(CTXJS);
+    assert(ctxDeleteBody && /clearCrossfadeTimers\(\)/.test(ctxDeleteBody[0]),
+      'ctxmenu.js: single-track delete clears crossfade timers before pausing the playing track');
+
+    assert(/import \{ audio, adjustShuffleQAfterDelete, clearCrossfadeTimers \}/.test(DUPJS),
+      'dupes.js: imports clearCrossfadeTimers from player.js');
+    const dupCrossfadeGuards = DUPJS.match(/clearCrossfadeTimers\(\); audio\.pause\(\)/g) || [];
+    assert(dupCrossfadeGuards.length === 2,
+      'dupes.js: both duplicate-removal paths (single track-group + bulk removeAllDupes) clear crossfade timers before pausing');
+
+    assert(/import \{ audio, adjustShuffleQAfterDelete, clearCrossfadeTimers \}/.test(ORPJS),
+      'orphans.js: imports clearCrossfadeTimers from player.js');
+    assert(/clearCrossfadeTimers\(\); audio\.pause\(\); setCurIdx\(-1\)/.test(ORPJS),
+      'orphans.js: bulk orphan removal clears crossfade timers before pausing the playing track');
+
+    // -- Bug B : toast(m, type, dur) — le 3e paramètre dur était accepté par la
+    // signature de toastWithAction() mais silencieusement ignoré par toast() :
+    // stack.push() ne recevait jamais de champ `duration`. Tout appelant passant
+    // une durée explicite à toast() (ex: updater.js: toast(msg,'success',3000))
+    // se voyait donc imposer la durée par défaut du type, sans erreur ni warning.
+    const toastFnBody = /export function toast\(m, type = 'info'[^)]*\) \{[\s\S]*?\n\}/.exec(UIJS);
+    assert(toastFnBody, 'ui.js: toast() function body located');
+    assert(/export function toast\(m, type = 'info', dur\)/.test(UIJS),
+      'ui.js: toast() accepts an explicit dur parameter');
+    assert(toastFnBody && /stack\.push\(\{ message: m, type, duration: dur \}\)/.test(toastFnBody[0]),
+      'ui.js: toast() forwards dur as `duration` to stack.push() (regression: was silently dropped)');
+
+    // -- Bug C : invoke() overloads en JSDoc n'incluaient pas le 3e paramètre
+    // `opts` (timeout) — tsc ne pouvait donc plus vérifier aucun appel invoke(cmd,
+    // args, { timeout }) dans toute la codebase (12+ call sites dans 8 fichiers),
+    // cassant silencieusement la garantie statique de l'invariant CLAUDE.md §4
+    // ("JS callers always set a timeout"). Chaque @overload doit désormais
+    // documenter les 3 paramètres.
+    const overloadLines = IPCJS.match(/\/\*\* @overload[^\n]*\*\//g) || [];
+    assert(overloadLines.length > 20, 'ipc.js: invoke() overload count sane (>20 commands documented)');
+    const overloadsMissingOpts = overloadLines.filter(l => !/\{\{ timeout\?: number \}\}/.test(l));
+    assert(overloadsMissingOpts.length === 0,
+      `ipc.js: every invoke() @overload documents the opts (timeout) parameter (${overloadsMissingOpts.length} missing)`);
+  } catch (e) {
+    console.error('  KO  Full Bug Audit and patch (2026-09-01) scan crashed:', e.message);
+    _ko++;
+  }
+
+  // ─── Dead-code cleanup (2026-09-01) — régressions ciblées ──────────────────
+  try {
+    const fs   = require('fs');
+    const path = require('path');
+    const CRJS  = fs.readFileSync(path.join(__dirname, '../src/cinema-render.js'), 'utf8');
+    const PLJS  = fs.readFileSync(path.join(__dirname, '../src/playlists.js'), 'utf8');
+    const EQJS  = fs.readFileSync(path.join(__dirname, '../src/eq.js'), 'utf8');
+    const CINJS = fs.readFileSync(path.join(__dirname, '../src/cinema.js'), 'utf8');
+    const MOJS  = fs.readFileSync(path.join(__dirname, '../src/motion.js'), 'utf8');
+    const PKG   = fs.readFileSync(path.join(__dirname, '../../package.json'), 'utf8');
+
+    // -- Bug D : playCinemaQueueTrack() ignorait silencieusement un clic sur une
+    // piste de la file explicite hors de la vue filtrée (filteredIdx() < 0), alors
+    // que playTrackDirect() (player.js) existe précisément pour ce cas depuis
+    // l'AUDIT CINÉMA 2026-07-20 (P2) mais n'était jamais appelée. Fix : fallback
+    // sur playTrackDirect() quand la piste n'est pas dans la vue filtrée.
+    assert(/import \{ audio, playAt, playTrackDirect,/.test(CRJS),
+      'cinema-render.js: imports playTrackDirect from player.js');
+    const playCinQueueBody = /export function playCinemaQueueTrack\(t\) \{[\s\S]*?\n\}/.exec(CRJS);
+    assert(playCinQueueBody, 'cinema-render.js: playCinemaQueueTrack() body located');
+    assert(playCinQueueBody && /if \(fi < 0\) \{ playTrackDirect\(t\); return; \}/.test(playCinQueueBody[0]),
+      'cinema-render.js: playCinemaQueueTrack() falls back to playTrackDirect() when the track is outside the filtered view (was a silent no-op)');
+
+    // -- Dead code confirmé (jamais appelé depuis le commit initial, alternative
+    // clavier Alt+↑/↓ déjà fonctionnelle via movePlaylistTrack) : supprimé.
+    assert(!/_attachPlaylistReorder/.test(PLJS) && !/_detachPlaylistReorder/.test(PLJS),
+      'playlists.js: dead _attachPlaylistReorder/_detachPlaylistReorder removed');
+
+    // -- Dead code confirmé (aucune mesure de loudness live à brancher,
+    // contrairement à sa jumelle updateSmartEQGenre qui reste câblée) : supprimé.
+    assert(!/updateSmartEQLoudness/.test(EQJS) && !/_smartLoudness/.test(EQJS),
+      'eq.js: dead updateSmartEQLoudness()/_smartLoudness removed');
+
+    // -- Dead re-exports (CINEMA_BG_MODES/CINEMA_BG_LABELS/updateCinemaBgBtn restent
+    // utilisées EN INTERNE par cinema-bg.js — seul le re-export superflu depuis
+    // cinema.js, jamais consommé ailleurs, était mort) : re-exports retirés.
+    assert(!/CINEMA_BG_MODES/.test(CINJS) && !/CINEMA_BG_LABELS/.test(CINJS) && !/updateCinemaBgBtn/.test(CINJS),
+      'cinema.js: dead CINEMA_BG_MODES/CINEMA_BG_LABELS/updateCinemaBgBtn re-exports removed');
+
+    // -- Dead code confirmé (vestige de l'ancien lf-modal component, retiré au
+    // commit 215c4ca ; ui.js gère les modals via CSS + _trapFocus, sans GSAP) : supprimé.
+    assert(!/modalOpen/.test(MOJS) && !/modalClose/.test(MOJS),
+      'motion.js: dead modalOpen()/modalClose() removed');
+
+    // -- devDependencies inutilisées (aucun import dans src/, scripts/, tests/,
+    // ni dans la config knip elle-même) : retirées de package.json.
+    assert(!/"acorn"/.test(PKG) && !/"js-yaml"/.test(PKG),
+      'package.json: unused acorn/js-yaml devDependencies removed');
+  } catch (e) {
+    console.error('  KO  Dead-code cleanup (2026-09-01) scan crashed:', e.message);
+    _ko++;
+  }
+
+  // ─── UI audit fix — crossfade metadata lag (2026-09-01) ─────────────────────
+  // Gap identifié : audioNext.play() démarre ~80ms après le lancement du fondu
+  // (checkCrossfade), mais curIdx/TRACK_CHANGE (→ titre/pochette/OS media session)
+  // n'arrivaient qu'à la fin du fondu — jusqu'à 12s plus tard (#cf-slider max=12).
+  // Fix : EVENTS.TRACK_PREVIEW avance l'affichage au moment où l'audio bascule
+  // réellement, sans toucher curIdx (qui reste la source de vérité navigation).
+  try {
+    const fs   = require('fs');
+    const path = require('path');
+    const BUSJS = fs.readFileSync(path.join(__dirname, '../src/bus.js'), 'utf8');
+    const PLRJS = fs.readFileSync(path.join(__dirname, '../src/player.js'), 'utf8');
+    const PBJS  = fs.readFileSync(path.join(__dirname, '../src/playerbar.js'), 'utf8');
+
+    assert(/TRACK_PREVIEW:\s*'track:preview'/.test(BUSJS),
+      'bus.js: EVENTS.TRACK_PREVIEW declared');
+
+    // audioNext.play() et emit(TRACK_PREVIEW) doivent être dans le MÊME setTimeout
+    // (startDelay=80ms) — sinon le gap persiste entre le son et l'affichage.
+    const startDelayBody = /const startDelay = 80;[\s\S]*?\}, startDelay\);/.exec(PLRJS);
+    assert(startDelayBody, 'player.js: startDelay=80 setTimeout body located');
+    assert(startDelayBody && /audioNext\.play\(\)/.test(startDelayBody[0]) && /emit\(EVENTS\.TRACK_PREVIEW, \{ track: nextTrack \}\)/.test(startDelayBody[0]),
+      'player.js: TRACK_PREVIEW is emitted in the same 80ms timer as audioNext.play() (no added lag)');
+
+    // La transition finale (curIdx bascule) doit réinitialiser le flag AVANT tout
+    // early-return (_cfGen mismatch) — sinon clearCrossfadeTimers() ré-émettrait
+    // TRACK_PREVIEW(null) après coup et re-casserait l'affichage déjà à jour.
+    const finalTransition = /cfFadeTimer = setTimeout\(\(\) => \{[\s\S]*?_cfPreviewActive = false;[\s\S]*?if \(_cfGen !== _genAtStart\) return;/.exec(PLRJS);
+    assert(finalTransition, 'player.js: _cfPreviewActive reset precedes the _cfGen guard in the final transition timer');
+
+    // Un crossfade annulé en vol (skip manuel, suppression de piste, sleep…) doit
+    // rendre l'affichage à curIdx — sinon l'UI reste bloquée sur une piste dont
+    // l'audio vient d'être coupé.
+    const clearFnBody = /export function clearCrossfadeTimers\(\) \{[\s\S]*?\n\}/.exec(PLRJS);
+    assert(clearFnBody, 'player.js: clearCrossfadeTimers() body located');
+    assert(clearFnBody && /if \(_cfPreviewActive\) \{ _cfPreviewActive = false; emit\(EVENTS\.TRACK_PREVIEW, \{ track: null \}\); \}/.test(clearFnBody[0]),
+      'player.js: clearCrossfadeTimers() reverts the preview to the real curIdx track when cancelled mid-fade');
+
+    // playerbar.js : la barre doit écouter TRACK_PREVIEW et le préférer à curIdx
+    // dans les deux phases de updateBar() (feedback immédiat + notif OS différée).
+    assert(/on\(EVENTS\.TRACK_PREVIEW, \(\{ track \}\) => \{ _previewTrack = track; updateBar\(\); \}\)/.test(PBJS),
+      'playerbar.js: subscribes to TRACK_PREVIEW and re-renders the bar');
+    assert(/function _displayTrack\(\) \{\s*if \(_previewTrack\) return _previewTrack;/.test(PBJS),
+      'playerbar.js: _displayTrack() prioritizes the crossfade preview over curIdx');
+    const updateBarBody = /export function updateBar\(\) \{[\s\S]*?\n\}\n\n\/\/ ── Next-preview/.exec(PBJS);
+    assert(updateBarBody && /const t = _displayTrack\(\);/.test(updateBarBody[0]),
+      'playerbar.js: updateBar() Phase 1 reads the display track (preview-aware)');
+    assert(updateBarBody && /const t = _displayTrack\(\);\s*\n\s*if \(!t\) return;\s*\n\s*if \(t\.artColor\)/.test(updateBarBody[0]),
+      'playerbar.js: updateBar() Phase 2 (art color / OS notify / MediaSession) also reads the preview-aware display track');
+  } catch (e) {
+    console.error('  KO  UI audit fix — crossfade metadata lag (2026-09-01) scan crashed:', e.message);
+    _ko++;
+  }
+
+  // ─── Perf audit — read_audio_bytes raw IPC Response (2026-09-01) ────────────
+  // Gap identifié : read_audio_bytes retournait Option<Vec<u8>> sérialisé en JSON
+  // number[] par le pont IPC par défaut (~3-4x la taille réelle en transit, coût
+  // de parse JSON), déclenché à CHAQUE lecture de piste si ReplayGain est activé.
+  // Fix : tauri::ipc::Response (bytes bruts, pas de JSON) + ArrayBuffer côté JS.
+  try {
+    const fs   = require('fs');
+    const path = require('path');
+    const CMDSRS = fs.readFileSync(path.join(__dirname, '../../src-tauri/src/commands.rs'), 'utf8');
+    const RGJS   = fs.readFileSync(path.join(__dirname, '../src/replaygain.js'), 'utf8');
+    const IPCJS  = fs.readFileSync(path.join(__dirname, '../src/ipc.js'), 'utf8');
+
+    assert(/pub async fn read_audio_bytes\(path: String\) -> Result<tauri::ipc::Response, String>/.test(CMDSRS),
+      'commands.rs: read_audio_bytes returns tauri::ipc::Response, not Option<Vec<u8>> (avoids JSON number[] serialization)');
+    assert(/Some\(bytes\) => Ok\(tauri::ipc::Response::new\(bytes\)\)/.test(CMDSRS),
+      'commands.rs: read_audio_bytes wraps the raw bytes in Response::new on success');
+    assert(!/pub async fn read_audio_bytes\(path: String\) -> Option<Vec<u8>>/.test(CMDSRS),
+      'commands.rs: old Option<Vec<u8>> signature fully replaced (no stale duplicate)');
+
+    assert(/@overload @param \{'read_audio_bytes'\}.*@returns \{Promise<ArrayBuffer>\}/.test(IPCJS),
+      'ipc.js: read_audio_bytes overload declares Promise<ArrayBuffer>, not Promise<number[]>');
+
+    assert(/await invoke\('read_audio_bytes', \{ path: t\.path \}\)/.test(RGJS),
+      'replaygain.js: still calls read_audio_bytes with the same args shape');
+    assert(!/new Uint8Array\(bytes\)\.buffer/.test(RGJS),
+      'replaygain.js: no longer manually converts a number[] to Uint8Array (invoke resolves ArrayBuffer directly)');
+    assert(/decodeAudioData\(arrayBuf\)/.test(RGJS),
+      'replaygain.js: decodeAudioData still fed the (now directly IPC-provided) ArrayBuffer');
+  } catch (e) {
+    console.error('  KO  Perf audit — read_audio_bytes raw IPC Response (2026-09-01) scan crashed:', e.message);
+    _ko++;
+  }
+
+  // ─── UX audit — backup export/import contextual progress text (2026-09-01) ──
+  try {
+    const fs   = require('fs');
+    const path = require('path');
+    const BAKJS = fs.readFileSync(path.join(__dirname, '../src/backup.js'), 'utf8');
+
+    assert(/btn\.textContent = `Export de \$\{\(tracks \?\? \[\]\)\.length\} piste\(s\)…`/.test(BAKJS),
+      'backup.js: exportBackup() shows track count once known (post IDB read), not a static string throughout');
+    assert(/btn\.textContent = `Restauration de \$\{manifest\.track_count\} piste\(s\)…`/.test(BAKJS),
+      'backup.js: importBackup() shows track count once the manifest is parsed, not a static string throughout');
+  } catch (e) {
+    console.error('  KO  UX audit — backup export/import contextual progress text (2026-09-01) scan crashed:', e.message);
     _ko++;
   }
 

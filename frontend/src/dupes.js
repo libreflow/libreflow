@@ -13,7 +13,7 @@ import { i18n }                                      from './i18n.js';
 import { get, notify }                               from './store.js';
 import { emit, on, EVENTS }                          from './bus.js';
 import { trackIdx, _trackIdxMap, rebuildTrackIdxMap, invalidateFilterCache } from './search.js';
-import { audio, adjustShuffleQAfterDelete }           from './player.js';
+import { audio, adjustShuffleQAfterDelete, clearCrossfadeTimers } from './player.js';
 import { toast, confirmAction }                                        from './ui.js';
 import { setCurIdx, removeTrackAt, removeTracksBatch } from './state.js';
 
@@ -101,7 +101,8 @@ export async function removeDupeTrack(id, gi, ti) {
     // adjustShuffleQAfterDelete + setCurIdx (l'idx est encore valide avant splice).
     adjustShuffleQAfterDelete(idx); // BUG-D2-2 FIX: sync shuffle queue
     get('liked').delete(t.id);
-    if (get('curIdx') === idx) { audio.pause(); setCurIdx(-1); }
+    // BUG-D2-8-class FIX: annuler tout crossfade en vol avant de pauser (cf. selection.js)
+    if (get('curIdx') === idx) { clearCrossfadeTimers(); audio.pause(); setCurIdx(-1); }
     else if (get('curIdx') > idx) setCurIdx(get('curIdx') - 1);
     removeTrackAt(idx); // splice + rebuildTrackIdxMap + notify('tracks')
   }
@@ -147,7 +148,8 @@ export async function deleteAllDupes() {
     if (tracks[idx]?.art?.startsWith?.('blob:')) try { URL.revokeObjectURL(tracks[idx].art); } catch {}
     if (tracks[idx]?.url?.startsWith?.('blob:')) try { URL.revokeObjectURL(tracks[idx].url); } catch {}
     adjustShuffleQAfterDelete(idx);
-    if (get('curIdx') === idx) { audio.pause(); setCurIdx(-1); }
+    // BUG-D2-8-class FIX: annuler tout crossfade en vol avant de pauser (cf. selection.js)
+    if (get('curIdx') === idx) { clearCrossfadeTimers(); audio.pause(); setCurIdx(-1); }
     else if (get('curIdx') > idx) setCurIdx(get('curIdx') - 1);
     removed++;
   }

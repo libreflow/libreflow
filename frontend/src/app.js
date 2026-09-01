@@ -643,7 +643,7 @@ async function boot() {
     if      (cmd === 'toggle-play') togglePlay();
     else if (cmd === 'next')        next(true);
     else if (cmd === 'prev')        prev();
-    else if (cmd === 'stop')        { audio.pause(); audio.currentTime = 0; setIcon(false); patchPlayState(false); }
+    else if (cmd === 'stop')        { clearCrossfadeTimers(); audio.pause(); audio.currentTime = 0; setIcon(false); patchPlayState(false); } // BUG-D2-8-class FIX: annuler le crossfade en vol avant stop (sinon cfFadeTimer relance la lecture plus tard)
   }).then(u => _unlisteners.push(u));
   window.addEventListener('pagehide', () => { _unlisteners.forEach(u => { try { u(); } catch(e) { console.warn('[app:unlisten]', e); } }); });
 
@@ -726,7 +726,7 @@ function invalidateFilter() {
 // renamePlFolder, deletePlFolder, togglePlFolder, showPlFolderCtxMenu,
 // onPlFolderDragOver/Leave/Drop, togglePinPlaylist, movePlToFolder,
 // removePlFromFolder, showPlQuickPop, pqpAdd/pqpNew/closePlQuickPop,
-// onTrackDragStart, _attachPlaylistReorder, _detachPlaylistReorder,
+// onTrackDragStart,
 // onPlNavDragStart, setupPlNavDrop,
 // _resizeImageToBase64, _renderPlCoverPreview, onPlCoverSelected, clearPlCover,
 // openNewPlaylistModal, showPlCtxMenu, ctxPlayPlaylist, ctxShufflePlaylist,

@@ -20,7 +20,7 @@ import { get }                                          from './store.js';
 import { emit, on, EVENTS }                             from './bus.js';
 import { trackIdx, _trackIdxMap, invalidateFilterCache } from './search.js';
 import { addToQueueNext, addToQueueEnd }                        from './queue.js';
-import { audio }                                        from './player.js';
+import { audio, clearCrossfadeTimers }                  from './player.js';
 import { toast, confirmAction, toastWithAction }                        from './ui.js';
 import { saveCfg }                  from './cfgsave.js';
 import { setCurIdx, setCtxTrackId, removeTrackAt, replaceTracks } from './state.js';
@@ -330,7 +330,10 @@ export async function ctxDeleteTrack() {
   // NE PAS révoquer les blob URLs maintenant — différé après la fenêtre undo (MEM-1/MEM-2)
   // ⚠ adjustShuffleQAfterDelete et setCurIdx AVANT removeTrackAt — utilisent l'index original
   adjustShuffleQAfterDelete(ti);
-  if (get('curIdx') === ti) { audio.pause(); setCurIdx(-1); emit(EVENTS.TRACK_CHANGE, { track: null, idx: -1 }); }
+  // BUG-D2-8-class FIX: annuler tout crossfade en vol avant de pauser — sinon cfFadeTimer
+  // (déjà programmé via setTimeout dans player.js) relance la lecture sur une autre piste
+  // quelques secondes plus tard, ignorant la suppression (même bug déjà corrigé dans selection.js).
+  if (get('curIdx') === ti) { clearCrossfadeTimers(); audio.pause(); setCurIdx(-1); emit(EVENTS.TRACK_CHANGE, { track: null, idx: -1 }); }
   else if (get('curIdx') > ti) setCurIdx(get('curIdx') - 1);
   removeTrackAt(ti); // ARCH-3 : splice + rebuildTrackIdxMap + notify (rebuild avant notify ✓)
   // Retirer le titre de toutes les playlists qui le référencent

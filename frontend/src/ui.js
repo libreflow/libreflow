@@ -45,12 +45,17 @@ function _getStack() {
  * Affiche une notification temporaire.
  * @param {string} m    Message
  * @param {string} type 'info' | 'success' | 'error' | 'warning' | 'loading'
+ * @param {number} [dur] Durée ms explicite (0/absent = durée par défaut du type,
+ *        cf. resolveDuration() dans lf-toast-stack.logic.js).
+ *        BUG-FBA-1 FIX : ce paramètre existait chez plusieurs appelants
+ *        (updater.js) mais n'était jamais transmis à push() → silencieusement
+ *        ignoré, le toast retombait toujours sur la durée par défaut du type.
  * @returns {Function & { update: Function }} Fonction remove() — ferme le toast manuellement.
  *          La fonction expose aussi remove.update(newMsg) pour modifier le message.
  */
-export function toast(m, type = 'info') {
+export function toast(m, type = 'info', dur) {
   const stack = _getStack();
-  const handle = stack.push({ message: m, type });
+  const handle = stack.push({ message: m, type, duration: dur });
   const remove = () => handle.remove();
   remove.update = (newMsg) => handle.update(newMsg);
   return remove;
@@ -104,7 +109,7 @@ function _trapFocus(containerEl) {
 
 // ── Confirm modal ─────────────────────────────────────────────────────────
 
-/** Callback interne résolvant la Promise en cours. */
+/** Callback interne résolvant la Promise en cours. @type {(result?: boolean) => void} */
 let _confirmResolve = () => {};
 /** Cleanup du focus trap de la modal confirm. */
 let _confirmTrapCleanup = () => {};

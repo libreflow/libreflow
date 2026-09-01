@@ -20,6 +20,8 @@ import { toast }                                      from './ui.js';
 import { get, set, notify }                          from './store.js';
 import { rebuildTrackIdxMap, invalidateFilterCache } from './search.js';
 import { VIRT }                                      from './virt.js';
+import { i18n }                                       from './i18n.js';
+import { fmtArtists, mainArtist, validYear }          from './utils.js';
 
 // Version du format .libreflow (incrémentée si schéma incompatible)
 const BACKUP_FORMAT_VERSION = 1;
@@ -60,6 +62,15 @@ export async function exportBackup() {
       dall('imports').catch(() => []),
       dget('cfg', 'state').catch(() => ({})),
     ]);
+
+    // UX FIX (2026-09-01) : le compte de pistes n'est connu qu'après cette lecture IDB —
+    // on affiche un texte contextualisé pendant la phase la plus longue (stringify +
+    // écriture ZIP côté Rust) plutôt qu'un texte générique statique. Pas de vraie barre
+    // de progression segmentée : l'écriture ZIP elle-même n'a que 6 entrées JSON qui
+    // s'enchaînent en quelques ms chacune (pas de boucle fichier par fichier comme le
+    // scan watchfolder) — une barre y sauterait de 0 à 100% instantanément, ce serait
+    // du théâtre plutôt qu'une info utile.
+    if (btn) btn.textContent = `Export de ${(tracks ?? []).length} piste(s)…`;
 
     const manifest = {
       version:        BACKUP_FORMAT_VERSION,
@@ -120,6 +131,14 @@ export async function importBackup() {
       return;
     }
 
+    // UX FIX (2026-09-01) : même principe que exportBackup() — le manifest donne le
+    // compte de pistes AVANT la phase potentiellement longue (merge + IDB batch write
+    // + rebuildTrackIdxMap sur tracks[]), donc on contextualise le texte du bouton ici
+    // plutôt que de garder "Restauration…" statique jusqu'à la fin.
+    if (btn && typeof manifest.track_count === 'number') {
+      btn.textContent = `Restauration de ${manifest.track_count} piste(s)…`;
+    }
+
     // Parsing
     const backupTracks    = _safeJsonParse(payload.library,   []);
     const backupPlaylists = _safeJsonParse(payload.playlists, []);
@@ -130,21 +149,52 @@ export async function importBackup() {
     // INVARIANT : toute mutation de tracks[] → rebuildTrackIdxMap() AVANT notify()
     const currentTracks = get('tracks') ?? [];
     const existingIds   = new Set(currentTracks.map(t => t.id));
-    const addedTracks   = [];
+    const addedTracks   = []; // records IDB bruts (persistés tels quels)
+    const addedRuntime  = []; // objets Track hydratés (poussés dans tracks[])
 
-    for (const t of backupTracks) {
-      if (!existingIds.has(t.id)) {
-        addedTracks.push(t);
-        existingIds.add(t.id); // évite les doublons si le backup contient des ids dupliqués
+    for (const r of backupTracks) {
+      if (!existingIds.has(r.id)) {
+        addedTracks.push(r);
+        existingIds.add(r.id); // évite les doublons si le backup contient des ids dupliqués
+        // BUG FIX : hydrater le record brut en objet Track runtime — même mapping
+        // que le boot (app.js) : sans _hasArt/_artMime (préfixés _) posés ici,
+        // getArtUrl() (artLoader.js) ne charge jamais l'artwork restaurée
+        // (elle lit t._hasArt, pas t.artBuf/r.artMime du record IDB brut).
+        const artistFull = fmtArtists(r.artistFull || r.artist) || i18n('unknown_artist');
+        const artist     = mainArtist(artistFull) || artistFull;
+        addedRuntime.push({
+          id: r.id, name: r.name,
+          artist, artistFull,
+          album: r.album,
+          ext: r.ext, path: r.path, duration: r.duration,
+          dateAdded: r.dateAdded,
+          art:      null,
+          _hasArt:  !!(r.artBuf || r.artB64),
+          _artBuf:  null,
+          _artMime: r.artMime || null,
+          artColor: r.artColor || null,
+          url: null, file: null,
+          genre: r.genre || null,
+          year:  validYear(r.year),
+          track: r.track || null,
+          metaDone: true,
+          noArt:      r.noArt     || false,
+          rgGain:     r.rgGain    != null ? r.rgGain    : undefined,
+          bitrate:    r.bitrate    != null ? r.bitrate    : null,
+          sampleRate: r.sampleRate != null ? r.sampleRate : null,
+          channels:   r.channels   != null ? r.channels   : null,
+          bitDepth:   r.bitDepth   != null ? r.bitDepth   : null,
+        });
       }
     }
 
     if (addedTracks.length) {
       // Une seule transaction IDB pour tout le lot (vs un dput par piste).
+      // Persister les records BRUTS (schéma IDB : artBuf/artMime), pas les objets hydratés.
       await _batchPut('tracks', addedTracks);
       // Mutation in-place du tableau du store : pas de set() (qui notifierait
       // AVANT rebuildTrackIdxMap, exposant un _trackIdxMap stale aux subscribers).
-      get('tracks').push(...addedTracks);
+      get('tracks').push(...addedRuntime);
       rebuildTrackIdxMap();
       invalidateFilterCache();
       if (VIRT) VIRT._lastListSig = '';

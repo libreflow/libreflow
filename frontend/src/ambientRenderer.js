@@ -141,7 +141,7 @@ function _drawVignette(ctx, W, H) {
  * @param {CanvasRenderingContext2D} ctx
  * @param {'ambient'|'amoled'} mode
  * @param {string}  colorStr      - "r,g,b" — dominant art colour (used by amoled halo)
- * @param {{cT:[r,g,b], cL:[r,g,b], cR:[r,g,b]}|null} ambientColors
+ * @param {{cT:[number,number,number], cL:[number,number,number], cR:[number,number,number]}|null} ambientColors
  * @param {number}  W             - largeur CSS px (cache de l'appelant — pas de getter DOM ici)
  * @param {number}  H             - hauteur CSS px
  * @precondition The caller must apply `ctx.setTransform(dpr, 0, 0, dpr, 0, 0)` for HiDPI,
