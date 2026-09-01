@@ -79,7 +79,7 @@ const _state = {
   drillKey:          '',
   drillFrom:         '',
   drillDisplayName:  '',
-  theme:             'blue',
+  theme:             'amber',
   dynColor:          true,
   displayMode:       'dark',    // 'dark' | 'light'
   currentArtColor:   null,      // string | null — extracted from current artwork

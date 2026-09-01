@@ -16,8 +16,8 @@
   } catch (e) { /* localStorage indisponible — fallback statique (CSS: dark par défaut) */ }
   try {
     var theme = localStorage.getItem('lf-theme');
-    var VALID = ['green', 'blue', 'purple', 'red', 'orange', 'pink', 'cyan'];
-    if (VALID.indexOf(theme) === -1) theme = 'blue';
+    var VALID = ['amber', 'green', 'blue', 'purple', 'red', 'orange', 'pink', 'cyan'];
+    if (VALID.indexOf(theme) === -1) theme = 'amber';
     document.documentElement.setAttribute('data-theme', theme);
-  } catch (e) { /* localStorage indisponible — fallback statique (CSS: blue par défaut) */ }
+  } catch (e) { /* localStorage indisponible — fallback statique (CSS: amber par défaut) */ }
 })();

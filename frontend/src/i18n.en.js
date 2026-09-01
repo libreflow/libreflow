@@ -270,6 +270,7 @@ export default {
   aria_close_queue:        'Close queue',
   aria_eq_mode_group:      'EQ mode',
   aria_repeat:             'Repeat mode',
+  aria_theme_amber:        'Amber',
   aria_theme_green:        'Green',
   aria_theme_blue:         'Blue',
   aria_theme_purple:       'Purple',

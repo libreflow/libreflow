@@ -188,10 +188,10 @@ async function run() {
     assert.ok(r >= 4.5, `--t3 on --bg-raised = ${r.toFixed(2)}:1 (need 4.5)`);
   });
 
-  await t('dark accent (indigo default #8B6BFF) on --bg-raised passes AA (4.5:1)', () => {
+  await t('dark accent (amber default #E7A33D) on --bg-raised passes AA (4.5:1)', () => {
     const bg = resolveVar(root, null, '--bg-raised');
     assert.ok(bg, `cannot resolve --bg-raised`);
-    const r = contrastRatio('#8B6BFF', bg);
+    const r = contrastRatio('#E7A33D', bg);
     assert.ok(r >= 4.5, `accent on --bg-raised = ${r.toFixed(2)}:1 (need 4.5)`);
   });
 

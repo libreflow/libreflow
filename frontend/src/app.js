@@ -371,7 +371,7 @@ async function boot() {
     if (cfg.radioSeedId) initRadioSeedId(cfg.radioSeedId);
     initLang(cfg.lang||'fr');
     initSettingsVars({
-      theme:       cfg.theme || 'blue',
+      theme:       cfg.theme || 'amber',
       dynColor:    cfg.dynColor !== false,
       displayMode: cfg.displayMode || 'dark',
     });

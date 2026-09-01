@@ -210,6 +210,17 @@ async function run() {
     }
   });
 
+  // --- SC 1.4.6 : l'accent sert de texte pour l'état "en lecture" — doit tenir AAA (7:1) ---
+  await t('accent (amber) as playing-state text passes AAA on --bg-base and --bg-surface', () => {
+    const m = /--accent\s*:\s*(#[0-9a-fA-F]{6})/.exec(DS);
+    assert.ok(m, '--accent hex not found in design-system.css');
+    const hex = m[1];
+    for (const [bg, label] of [['#030303', '--bg-base'], ['#121214', '--bg-surface']]) {
+      const r = contrastRatio(hex, bg);
+      assert.ok(r >= 7.0, `accent ${hex} on ${label} = ${r.toFixed(2)}:1 (need 7.0)`);
+    }
+  });
+
   // --- SC 1.4.3/1.4.6 : le texte de contenu n'utilise pas --t4 (~1.5:1) ------
   // --t4 est réservé aux icônes/placeholders/séparateurs (exemptés de contraste).
   await t('content text selectors avoid --t4 (use --t3)', () => {

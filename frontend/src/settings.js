@@ -25,7 +25,7 @@ on(EVENTS.PANEL_CLOSE_SETTINGS, () => { if ($id('settings-panel')?.classList.con
 on(EVENTS.THEME_APPLY_REQUEST, () => applyTheme());
 
 // ── État local ────────────────────────────────────────────────────────────────
-let _theme          = 'blue';
+let _theme          = 'amber';
 let _dynColor       = true;
 let _displayMode    = 'dark';
 let _shortcutsOpen  = false;
@@ -84,7 +84,7 @@ export function initSettingsVars({ theme, dynColor, displayMode }) {
   // BUG FIX (audit settings 2026-07-08) : sync store → miniplayer.js lit
   // get('theme')/get('dynColor') pour construire le payload IPC mini_update de
   // la fenêtre mini-lecteur Tauri. Sans ceci ces clés restaient bloquées sur
-  // les défauts statiques de store.js ('blue'/true), ignorant le cfg persistant
+  // les défauts statiques de store.js ('amber'/true), ignorant le cfg persistant
   // dès le boot — la mini-fenêtre ne reflétait jamais le vrai thème/dynColor.
   set('theme', theme);
   set('dynColor', dynColor);

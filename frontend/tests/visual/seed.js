@@ -85,7 +85,7 @@ export function seedScript() {
         view:        'all',
         sort:        'az',
         lang:        'fr',
-        theme:       'blue',
+        theme:       'amber',
         displayMode: 'dark',
         dynColor:    true,
         volume:      1,

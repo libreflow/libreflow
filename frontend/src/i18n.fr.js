@@ -270,6 +270,7 @@ export default {
   aria_close_queue:        "Fermer la file d'attente",
   aria_eq_mode_group:      'Mode EQ',
   aria_repeat:             'Mode répétition',
+  aria_theme_amber:        'Ambre',
   aria_theme_green:        'Vert',
   aria_theme_blue:         'Bleu',
   aria_theme_purple:       'Violet',

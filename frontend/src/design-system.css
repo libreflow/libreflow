@@ -44,16 +44,16 @@
 @property --g {
   syntax: '<color>';
   inherits: true;
-  initial-value: #8B6BFF;
+  initial-value: #E7A33D;
 }
 
 
 /* ============================================================================
- * 2. COULEURS — Thème dark premium audio (B2-revision : Vantablack + Indigo)
+ * 2. COULEURS — Thème dark premium audio (Vantablack + Brass Amber)
  * Surfaces : Vantablack-inspired #030303 (texture conservée, pas de "vide infini"
  * du #000 pur) + 4 paliers gris neutres respirés. Zéro cast chromatique.
- * Accent : Electric Indigo #8B6BFF — signature distinctive (ni Spotify-vert,
- * ni Twitter-blue, ni Apple-rouge), AA-validée sur toutes les surfaces.
+ * Accent : Brass Amber #E7A33D — signature éditoriale chaude (ni Spotify-vert,
+ * ni Twitter-blue, ni Apple-rouge), AAA-validée sur toutes les surfaces.
  * ============================================================================ */
 :root {
   /* --- Surfaces — élévation tonale par paliers distincts (pas de bordures) -
@@ -76,10 +76,10 @@
   --text-secondary : #B4B7C2;                 /* artistes — 10.3:1 sur #030303 */
   --text-muted     : #979CAC;                 /* metadata — 7.5:1 AAA sur #030303 ; 6.2:1 AA sur --bg-elevated/--bg-raised (palier le plus clair) */
 
-  /* --- Accent — Electric Indigo (signature unique) ----------------------- */
-  --accent         : #8B6BFF;                 /* indigo vif — 5.0:1 sur --bg-surface, 4.6:1 sur --bg-elevated/--bg-raised */
-  --accent-glow    : rgba(139, 107, 255, 0.45);
-  --accent-subtle  : rgba(139, 107, 255, 0.12);
+  /* --- Accent — Brass Amber (signature éditoriale) --------------------- */
+  --accent         : #E7A33D;                 /* laiton chaud — 9.5:1 sur --bg-base, 8.6:1 sur --bg-surface, 7.9:1 sur --bg-elevated/--bg-raised (AAA partout) */
+  --accent-glow    : rgba(231, 163, 61, 0.45);
+  --accent-subtle  : rgba(231, 163, 61, 0.12);
 }
 
 
@@ -90,12 +90,12 @@
  * cohérents avec la palette --accent / --bg-* / --text-* officielle.
  * ============================================================================ */
 :root {
-  /* Accent opérationnel (alias du --accent Electric Indigo défini en §2) */
+  /* Accent opérationnel (alias du --accent Brass Amber défini en §2) */
   --g       : var(--accent);
-  --g-rgb   : 139, 107, 255;
+  --g-rgb   : 231, 163, 61;
   --gd      : var(--accent-subtle);
   --gg      : var(--accent-glow);
-  --text-on-accent : #050505;             /* noir sur indigo brillant — 5.5:1 AA */
+  --text-on-accent : #050505;             /* quasi-noir sur ambre brillant — 9.4:1 AAA */
 
   /* --- Alias historiques (B1) reliés à la palette respirée (B2) --------- */
   --bg  : var(--bg-base);
@@ -294,9 +294,9 @@ html[data-mode="light"] {
   --t3  : var(--text-muted);
   --t4  : #95A0B4;
 
-  /* Accent Electric Indigo : --accent reste constant sur dark et light.
+  /* Accent Brass Amber : --accent reste constant sur dark et light.
      Seul --accent-subtle est ajusté pour la lisibilité sur fond clair. */
-  --accent-subtle : rgba(139, 107, 255, 0.14);
+  --accent-subtle : rgba(231, 163, 61, 0.14);
 
   /* Bordures light — alpha noir au lieu d'alpha blanc */
   --border-subtle  : rgba(0, 0, 0, 0.06);
@@ -953,7 +953,8 @@ html[data-mode="light"] {
 :root[data-tlist-zoom="compact"]  { --tr-h: 44px; --tart-size: 32px; }
 :root[data-tlist-zoom="spacious"] { --tr-h: 72px; --tart-size: 56px; }
 
-/* ── Thèmes couleur (accent par défaut = Electric Indigo via --accent) ─── */
+/* ── Thèmes couleur (accent par défaut = Brass Amber via --accent) ─── */
+[data-theme="amber"]  { --g:#E7A33D; --g-rgb:231,163,61;  --gd:rgba(231,163,61,.14); --gg:rgba(231,163,61,.28); }
 [data-theme="indigo"] { --g:#8B6BFF; --g-rgb:139,107,255; --gd:rgba(139,107,255,.14); --gg:rgba(139,107,255,.28); }
 [data-theme="green"]  { --g:#34d399; --g-rgb:52,211,153;  --gd:rgba(52,211,153,.14);  --gg:rgba(52,211,153,.28); }
 [data-theme="blue"]   { --g:#1D9BF0; --g-rgb:29,155,240;  --gd:rgba(29,155,240,.14);  --gg:rgba(29,155,240,.28); }
