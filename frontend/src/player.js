@@ -205,6 +205,10 @@ let cfNextTimer    = null;
 let _cfRafId       = null;
 let _cfGen         = 0; // token anti-race incrémenté à chaque clearCrossfadeTimers()
 let _cfPending     = false; // guard anti-race pendant l'await ensureUrl dans checkCrossfade()
+// BUG-FBA-3 FIX : true dès que audioNext.play() démarre réellement pendant un
+// crossfade (avant le swap de curIdx) — évite d'émettre TRACK_PREVIEW(null) en
+// double dans clearCrossfadeTimers() quand aucun preview n'était affiché.
+let _cfPreviewActive = false;
 /** @type {HTMLAudioElement | null} */
 let audioNext       = null;
 /** @type {MediaElementAudioSourceNode | null} */
@@ -876,6 +880,11 @@ export function clearCrossfadeTimers() {
   if (cfNextTimer) { clearTimeout(cfNextTimer);      cfNextTimer = null; }
   _cfGen++;      // invalide toutes les closures en vol
   _cfPending = false;
+  // BUG-FBA-3 FIX : un crossfade annulé en vol (skip manuel, suppression de la
+  // piste, sleep timer…) doit rendre l'UI à la piste RÉELLEMENT en cours (curIdx)
+  // si un preview de la piste entrante était affiché — sinon titre/pochette/OS
+  // media session restent bloqués sur une piste dont l'audio vient d'être coupé.
+  if (_cfPreviewActive) { _cfPreviewActive = false; emit(EVENTS.TRACK_PREVIEW, { track: null }); }
   cancelRgAnalysis();
   if (audioNextGain && eqCtx) {
     audioNextGain.gain.cancelScheduledValues(eqCtx.currentTime);
@@ -998,6 +1007,13 @@ export function checkCrossfade() {
       ensureEQResumed();
       // @ts-ignore — audioNext guaranteed by initCrossfadeAudio()
       audioNext.play().catch(e => { if (e?.name !== 'AbortError') console.warn('[crossfade] audioNext.play() failed:', e); });
+      // BUG-FBA-3 FIX : la piste entrante s'entend à partir d'ici — avancer le
+      // preview visuel (titre/artiste/pochette/like/OS media session) au même
+      // instant plutôt que d'attendre le swap de curIdx en fin de fondu (jusqu'à
+      // 12s plus tard). curIdx reste inchangé : getNextIdx()/checkCrossfade()
+      // continuent de raisonner sur l'ancienne piste tant que le fondu tourne.
+      _cfPreviewActive = true;
+      emit(EVENTS.TRACK_PREVIEW, { track: nextTrack });
     }, startDelay);
 
     const durationMs = crossfadeDur * 1000;
@@ -1029,6 +1045,11 @@ export function checkCrossfade() {
     // ── Transition finale ─────────────────────────────────────────────────
     cfFadeTimer = setTimeout(() => {
       cfFadeTimer = null;
+      // BUG-FBA-3 FIX : curIdx bascule ci-dessous → TRACK_CHANGE prend le relais
+      // du preview. Reset le flag pour que clearCrossfadeTimers() (appelé plus
+      // bas dans _resetGains-adjacent flows) n'émette pas un TRACK_PREVIEW(null)
+      // inutile après coup.
+      _cfPreviewActive = false;
       // M-05 : revérifier la génération crossfade — clearCrossfadeTimers() a pu
       // être appelé pendant le fondu (skip manuel, sleep, suppression de piste).
       if (_cfGen !== _genAtStart) return;

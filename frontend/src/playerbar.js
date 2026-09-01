@@ -132,6 +132,21 @@ export function reflowMarquee() {
 // ── Now-playing bar update ────────────────────────────────────────────────────
 // Tracking de la dernière notification envoyée (évite les doublons).
 let _lastNotifTrackId = null;
+// BUG-FBA-3 FIX : piste ENTRANTE affichée pendant un crossfade, avant que curIdx
+// ne bascule (cf. EVENTS.TRACK_PREVIEW, player.js). null = afficher tracks[curIdx]
+// normalement. N'affecte QUE l'affichage (titre/artiste/pochette/like/OS media
+// session) — curIdx reste la source de vérité pour la navigation (skip, surlignage
+// de la ligne active dans la liste, historique).
+let _previewTrack = null;
+on(EVENTS.TRACK_PREVIEW, ({ track }) => { _previewTrack = track; updateBar(); });
+
+/** Piste actuellement affichée dans la barre — preview crossfade en priorité sur curIdx. */
+function _displayTrack() {
+  if (_previewTrack) return _previewTrack;
+  const curIdx = get('curIdx');
+  if (curIdx < 0) return null;
+  return get('tracks')[curIdx] || null;
+}
 
 /**
  * Met à jour le panneau inférieur "Now Playing" (titre, artiste, pochette, like,
@@ -139,10 +154,7 @@ let _lastNotifTrackId = null;
  * cinéma, notification OS, MediaSession).
  */
 export function updateBar() {
-  const curIdx = get('curIdx');
-  if (curIdx < 0) return;
-  const tracks = get('tracks');
-  const t = tracks[curIdx];
+  const t = _displayTrack();
   if (!t) return; // guard : curIdx hors bornes (ex. clearLibrary pendant un event en queue)
 
   // Phase 1 : feedback visuel critique — même frame que l'event (INP-1)
@@ -182,13 +194,10 @@ export function updateBar() {
   if (_shouldNotify) _lastNotifTrackId = t.id;
 
   // Phase 2 : opérations lourdes — différées après le premier paint.
-  // RACE-3 FIX : re-lire curIdx depuis le store — la closure `t` peut être périmée
-  // si un changement de piste rapide survient entre Phase 1 et Phase 2.
+  // RACE-3 FIX : re-lire depuis le store/preview — la closure `t` peut être périmée
+  // si un changement de piste rapide (ou un preview crossfade) survient entre Phase 1 et Phase 2.
   requestAnimationFrame(() => setTimeout(() => {
-    const _p2Idx = get('curIdx');
-    if (_p2Idx < 0) return;
-    const _p2Tracks = get('tracks');
-    const t = _p2Tracks[_p2Idx]; // re-read — may differ from Phase-1 t if track changed
+    const t = _displayTrack();
     if (!t) return;
     if (t.artColor) applyArtColor(t.artColor);
     else if (t.art) extractColor(t.art).then(c => { if (c) { t.artColor = c; applyArtColor(c); } }).catch(e => console.warn('[playerbar:extractColor]', e));

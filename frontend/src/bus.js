@@ -46,6 +46,14 @@ export function on(event, fn) {
 export const EVENTS = Object.freeze({
   // Player
   TRACK_CHANGE:     'track:change',       // { track, idx }
+  // BUG-FBA-3 FIX : preview visuel de la piste ENTRANTE pendant un crossfade —
+  // audioNext.play() démarre ~80ms après le lancement du fondu (checkCrossfade,
+  // player.js) mais curIdx/TRACK_CHANGE n'arrivent qu'à la fin du fondu (jusqu'à
+  // 12s plus tard, cf. #cf-slider max=12). Sans ce preview, titre/pochette/OS media
+  // session restaient figés sur l'ancienne piste pendant toute cette fenêtre, alors
+  // que l'utilisateur entend déjà la nouvelle. { track: Track|null } — null = revenir
+  // à l'affichage réel (curIdx courant), ex. si le crossfade est annulé en vol.
+  TRACK_PREVIEW:    'track:preview',      // { track: Track|null }
   PLAY_STATE:       'player:state',       // { playing }
   // Library
   LIBRARY_UPDATED:  'library:updated',   // { tracks }
