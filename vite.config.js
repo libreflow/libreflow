@@ -4,6 +4,9 @@ import { resolve }              from 'path';
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => {
   const isProd = mode === 'production';
+  // Vite 8 native config loader (ESM, no CJS interop) doesn't polyfill __dirname —
+  // import.meta.dirname is the standard replacement (Node 20.11+, matches CLAUDE.md's Node 20 target).
+  const __dirname = import.meta.dirname;
 
   return {
     // Vite serves frontend/ as the web root during dev
