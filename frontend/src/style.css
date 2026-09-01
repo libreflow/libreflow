@@ -329,7 +329,7 @@ html[data-mode="light"] body          { background:var(--bg); color:var(--t); }
 
 /* ── Layout structural ── */
 html[data-mode="light"] #tb           { background:color-mix(in srgb, var(--art-color) 8%, var(--c-white)); border-bottom:var(--border-w-sm) solid var(--bg5); }
-html[data-mode="light"] #sb           { background:var(--bg2); border-right:var(--border-w-sm) solid var(--bg5); }
+html[data-mode="light"] #sb           { background:var(--bg2); }
 html[data-mode="light"] #main         { background:var(--bg); }
 html[data-mode="light"] .vh           { background:var(--bg2); border-bottom:var(--border-w-sm) solid var(--bg5); }
 html[data-mode="light"] #vlib .vh    { border-bottom: none; }
@@ -383,10 +383,9 @@ html[data-mode="light"] .tbt:hover    { color:var(--t); }
 html[data-mode="light"] .ni           { color:var(--t3); }
 html[data-mode="light"] .ni:hover     { color:var(--t2); }
 html[data-mode="light"] .ni.on        {
-  background: var(--bg4);
   color: var(--t);
 }
-html[data-mode="light"] .ni.on svg    { opacity:1; color:var(--g); }
+html[data-mode="light"] .ni.on svg    { opacity:1; }
 /* Icônes nav inactives — opacity 0.55 trop faible sur fond clair */
 html[data-mode="light"] .ni svg       { opacity: 0.72; }
 /* AUDIT-2026-07-01 M8 : règles .pl-nav-item supprimées — la classe n'existe
@@ -928,34 +927,37 @@ body.sb-resizing { cursor: col-resize; user-select: none; }
   padding: var(--space-2) var(--space-3);
   border-radius: var(--radius-sm);
   border: none; background: transparent;
-  color: var(--t2); font-size: var(--text-base); font-weight: 500;
+  color: var(--text-secondary); font-size: var(--text-sm); font-weight: 500;
   text-align: left; width: 100%;
   transition: background var(--motion-fast) ease, color var(--motion-fast) ease, opacity var(--motion-fast) ease, transform var(--motion-fast) var(--ease-spring);
   letter-spacing: var(--ls-display-fine);
   position: relative; overflow: hidden;
   cursor: pointer;
 }
-.ni:hover  { background: var(--row-hover); color: var(--t); }
+.ni:hover  { background: var(--row-hover); color: var(--text-primary); }
 .ni:active { transform: scale(.97); transition-duration: var(--motion-fast); }
+/* Éditorial : état actif porté par le poids typographique + #ni-indicator (barre
+   ambre 2px). Aucune pastille de fond — l'ambre ne vit que dans l'indicateur. */
 .ni.on     {
-  background: rgba(var(--g-rgb), .12); color: var(--t);
+  color: var(--text-primary);
   position: relative;
 }
 /* Active-item bar is now #ni-indicator (a shared sibling in .sb-nav, positioned
    from views.js _positionNiIndicator()) so it can glide between items instead
    of popping — a per-item ::before has no shared identity to animate between. */
 #ni-indicator {
-  position: absolute; left: 0; top: 0; width: var(--sp-micro);
+  position: absolute; left: 0; top: 0; width: var(--sp-micro); /* 2px */
   border-radius: 0 var(--radius-xs) var(--radius-xs) 0;
-  background: var(--g);
+  background: var(--accent);
   opacity: 0;
-  transition: transform var(--motion-fast) var(--ease-spring), height var(--motion-fast) var(--ease-spring);
+  transition: transform var(--motion-base) var(--ease-standard), height var(--motion-base) var(--ease-standard);
 }
 /* AUDIT-2026-07-01 M2 : ne pas forcer fill — le CSS battait le fill="none" des
    icônes stroke (cœur Favoris rempli en permanence, hack inline sur #ni-recent). */
 .ni svg    { width: var(--icon-lg); height: var(--icon-lg); flex-shrink: 0; opacity: .80; transition: opacity var(--motion-fast) ease, color var(--motion-fast) ease; }
 .ni:hover svg { opacity: .9; }
-.ni.on svg { opacity: 1; color: var(--g); }
+/* Icône active neutre (hérite --t3 de `.ni svg`) — l'ambre ne vit que dans #ni-indicator. */
+.ni.on svg { opacity: 1; }
 
 
 /* ── More popover ────────────────────────────────────────── */
@@ -1033,9 +1035,18 @@ body.sb-resizing { cursor: col-resize; user-select: none; }
   grid-area: main; display: flex; flex-direction: column; overflow: hidden;
   position: relative;
   min-width: 0; /* R-M5 : défense en profondeur — un descendant nowrap large ne gonfle pas la piste grid */
+  /* Éditorial : respiration en tête de vue (titrage magazine). Déclaration
+     dédiée — le shorthand casserait les overrides padding-right (panels). */
+  padding-top: var(--space-8);
   background: var(--bg);
   transition: padding-right var(--motion-base) var(--snappy), background var(--anim-art) ease;
 }
+/* Exception : la vue Now Playing (#vnp, enfant direct de #main, en flux normal)
+   est full-bleed — l'artwork flou doit affleurer sous la titlebar. Sans ce reset,
+   la respiration éditoriale de 64px laisse une bande --bg au-dessus, en NP normal
+   comme en mode immersif .np-full (qui conserve #vnp.on). Pas de compound id+classe
+   sur #main ; :has() est supporté par le runtime WebView2/Chromium. */
+#main:has(> #vnp.on) { padding-top: 0; }
 .view     { display: none; flex-direction: column; flex: 1; overflow: hidden;
             contain: layout; } /* CLS fix : chaque vue est un bloc de containment — les shifts internes ne se propagent pas aux mesures parentes */
 /* View entry animation now handled by View Transitions API (GSAP transitionViews). */
@@ -3574,11 +3585,14 @@ html[data-mode="light"] .bte-cover-clear    { background: var(--bg3); border-col
 .sb-lib-header {
   display: flex; align-items: center; justify-content: space-between;
   padding: var(--space-4) var(--space-3) var(--space-2) var(--space-3);
-  margin-top: var(--space-2);
+  margin-top: var(--space-6);
 }
+/* Éditorial : en-têtes de section discrets — poids 500, casse naturelle, pas de
+   letter-spacing caps. (Le texte vit dans .sb-lib-title, enfant de
+   .sb-lib-header / .sb-pl-header.) */
 .sb-lib-title {
-  font-size: var(--text-xs); font-weight: 700;
-  color: var(--t3); letter-spacing: var(--ls-caps); text-transform: uppercase;
+  font-size: var(--text-xs); font-weight: 500;
+  color: var(--text-muted); letter-spacing: var(--ls-reset); text-transform: none;
 }
 .sb-lib-add {
   background: none; border: none; color: var(--t3); cursor: pointer;
@@ -3591,7 +3605,7 @@ html[data-mode="light"] .bte-cover-clear    { background: var(--bg3); border-col
 .sb-lib-add:hover  { background: var(--row-hover); color: var(--t); }
 .sb-lib-add:active { transform: scale(.9); transition-duration: var(--motion-press); }
 /* REWORK-2 : en-tête de section PLAYLISTS (mêmes fondations que .sb-lib-header) */
-.sb-pl-header { margin-top: var(--space-3); }
+.sb-pl-header { margin-top: var(--space-6); }
 .sb-pl-header-actions { display: flex; align-items: center; gap: var(--space-1); }
 /* Bouton grille actif quand la vue playlists est ouverte (marqué par _svMarkNav) */
 .sb-lib-add.on { color: var(--g); background: rgba(var(--g-rgb), .12); }
@@ -6961,18 +6975,12 @@ html[data-platform="mobile"] .ni:hover {
   box-shadow: none;
 }
 
-/* 2. Navigation — dégradé directionnel au hover ─────────────────
-   Surcharge le `background: var(--row-hover)` de base par un gradient
-   avec teinte accentuée sur le bord gauche : directionnalité + énergie.
-   AUDIT-2026-07-01 M5 : le stop 60% retombe sur var(--row-hover) (avant :
-   var(--sep), un token de BORDURE — changer --row-hover n'avait plus d'effet).
-   NB : `html[data-mode="light"] .ni:hover` garde sa valeur plate. */
+/* 2. Navigation — hover plat (éditorial) ────────────────────────
+   REDESIGN 2026-09 : l'ancien dégradé directionnel teintait le hover en ambre
+   sur le bord gauche. La direction éditoriale réserve l'ambre à #ni-indicator ;
+   le hover retombe sur un simple wash neutre var(--row-hover). */
 .ni:hover {
-  background: linear-gradient(
-    90deg,
-    rgba(var(--g-rgb), .10) 0%,
-    var(--row-hover) 60%
-  );
+  background: var(--row-hover);
 }
 
 /* 3. Cartes album / artiste — accent diagonal au hover ──────────
@@ -7553,8 +7561,8 @@ html[data-motion="reduce"] #main.view-fade { animation: none; }
      style.css avec un 0.07em littéral et --t4 sous-contraste).
    - .ni { color: var(--t3) } supprimé : --t3 mesure ≈6,8:1 sur --bg1 (la sidebar
      n'est pas sur --bg-base) — sous l'engagement AAA 7:1 (SC 1.4.6, CLAUDE.md §2.9).
-     Les labels nav restent sur --t2 (style.css). Les icônes (non-texte, seuil 3:1)
-     gardent l'atténuation --t3. */
+     Les labels nav restent sur --text-secondary (style.css .ni ; ≥7:1 sur la
+     surface sidebar). Les icônes (non-texte, seuil 3:1) gardent l'atténuation --t3. */
 
 .ni svg { color: var(--t3); }
 

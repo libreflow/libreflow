@@ -258,6 +258,23 @@ async function run() {
       '#app.np-full mélange id et classe sur le même élément — interdit §13');
   });
 
+  // --- REDESIGN 2026-09 : l'item nav actif n'a PAS de pastille de fond ----------
+  // L'état actif se lit au poids typographique + la barre ambre #ni-indicator ;
+  // l'ambre ne vit QUE dans l'indicateur. Toute règle .ni.on (base ou thème light)
+  // ne doit déclarer aucun background opaque — une pastille masquerait l'indicateur
+  // et casserait la direction éditoriale.
+  await t('.ni.on declares no opaque background pill (editorial active state)', () => {
+    const re = /\.ni\.on\s*\{([^}]*)\}/g;
+    let m, found = 0;
+    while ((m = re.exec(SS))) {
+      found++;
+      const bg = /background(?:-color)?\s*:\s*([^;]+)/i.exec(m[1]);
+      assert.ok(!bg || /^(transparent|none|unset|inherit)\s*$/i.test(bg[1].trim()),
+        `.ni.on { ${m[1].trim()} } déclare un background — l'état actif éditorial n'a pas de pastille (ambre réservé à #ni-indicator)`);
+    }
+    assert.ok(found > 0, 'règle .ni.on introuvable — le sélecteur a-t-il été renommé ?');
+  });
+
   // --- M-CSS : CSS mort de la sidebar purgé --------------------------------------
   await t('dead sidebar CSS removed (.sb-foot*, #ni-radio, .pl-nav-item…)', () => {
     for (const dead of ['\\.sb-foot', '#ni-radio', '\\.ni-radio-live', '#ni-stats', '\\.sb-search']) {
