@@ -101,10 +101,12 @@ export async function analyzeAndApplyRG() {
       return;
     }
 
-    /** @type {number[]} */
-    const bytes = /** @type {number[]} */ (await invoke('read_audio_bytes', { path: t.path }));
-    if (_rgAnalysisId !== myId) return;
-    let arrayBuf = new Uint8Array(bytes).buffer;
+    // PERF FIX (2026-09-01) : read_audio_bytes retourne désormais un tauri::ipc::Response
+    // (bytes bruts, pas de sérialisation JSON number[]) — invoke() le résout directement
+    // en ArrayBuffer côté JS. Un fichier invalide/absent/trop gros rejette maintenant la
+    // promesse (Err côté Rust) au lieu de résoudre `null` — absorbé par le catch global
+    // ci-dessous (même comportement de fallback rgGain=1.0 qu'avant).
+    let arrayBuf = /** @type {ArrayBuffer} */ (await invoke('read_audio_bytes', { path: t.path }));
     if (_rgAnalysisId !== myId) return;
 
     const _dur = isFinite(t.duration) && t.duration > 0 ? t.duration : 30;

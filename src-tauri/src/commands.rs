@@ -430,10 +430,20 @@ pub async fn read_audio_props(path: String) -> Option<AudioProps> {
 /// taille avant d'appeler (CFG.RG_MAX_FILE_BYTES) mais on revalide côté Rust en défense
 /// en profondeur, l'estimation JS étant basée sur la durée et pouvant sous-évaluer.
 /// Async avec spawn_blocking pour éviter de bloquer le thread Tauri sur les gros fichiers.
+///
+/// PERF FIX (2026-09-01) : retourne `tauri::ipc::Response` (bytes bruts) au lieu de
+/// `Option<Vec<u8>>` (sérialisé en JSON `number[]` par le pont IPC par défaut). Pour
+/// un fichier de quelques Mo, le tableau JSON `[137,80,78,...]` pèse ~3-4x la taille
+/// réelle des données en transit (virgules + chiffres décimaux vs 1 octet binaire) et
+/// coûte un parse JSON supplémentaire — déclenché à CHAQUE lecture de piste si
+/// ReplayGain est activé. `Response::new` transfère les octets bruts sans passer par
+/// serde_json ; le JS les reçoit directement en `ArrayBuffer` (voir ipc.js).
+/// `Err(String)` signale "pas de données" (fichier invalide/absent/trop gros) —
+/// le JS le traite comme un cas normal de fallback, pas une erreur logguée.
 #[tauri::command]
-pub async fn read_audio_bytes(path: String) -> Option<Vec<u8>> {
+pub async fn read_audio_bytes(path: String) -> Result<tauri::ipc::Response, String> {
     const MAX_BYTES: u64 = 31_457_280; // 30 Mo — même plafond que CFG.RG_MAX_FILE_BYTES (JS)
-    tokio::task::spawn_blocking(move || {
+    let data = tokio::task::spawn_blocking(move || -> Option<Vec<u8>> {
         let p = Path::new(&path);
         if !is_audio(p) {
             return None;
@@ -456,7 +466,12 @@ pub async fn read_audio_bytes(path: String) -> Option<Vec<u8>> {
     })
     .await
     .ok()
-    .flatten()
+    .flatten();
+
+    match data {
+        Some(bytes) => Ok(tauri::ipc::Response::new(bytes)),
+        None => Err("read_audio_bytes: file not found, not audio, or too large".into()),
+    }
 }
 
 /// Résout le dossier Musique de l'OS et crée `LibreFlow/` dedans si absent.
@@ -1509,4 +1524,158 @@ pub fn open_folder_at(
         folder: canon_str,
         files,
     }))
+}
+
+// ── Tests unitaires ────────────────────────────────────────────────────────────
+//
+// Portée : les helpers purs (pas de #[tauri::command] async, pas d'AppHandle)
+// qui constituent les gardes de sécurité critiques du backend — is_safe_dir
+// est le filtre central référencé par 8+ commandes + watch.rs + cdaudio.rs ;
+// validate_organize_path et is_cross_device_error protègent organize_files.
+// Avant cet ajout, AUCUN de ces helpers n'avait de couverture (seul
+// cdaudio_toc.rs était testé) malgré leur rôle de garde-fou sécurité.
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // ── is_audio ────────────────────────────────────────────────────────────
+
+    #[test]
+    fn is_audio_accepts_known_extensions() {
+        for ext in AUDIO_EXTS {
+            let p = PathBuf::from(format!("track.{ext}"));
+            assert!(is_audio(&p), "expected '{ext}' to be recognized as audio");
+        }
+    }
+
+    #[test]
+    fn is_audio_is_case_insensitive() {
+        assert!(is_audio(&PathBuf::from("track.MP3")));
+        assert!(is_audio(&PathBuf::from("track.Flac")));
+    }
+
+    #[test]
+    fn is_audio_rejects_non_audio_and_no_extension() {
+        assert!(!is_audio(&PathBuf::from("cover.jpg")));
+        assert!(!is_audio(&PathBuf::from("readme")));
+        assert!(!is_audio(&PathBuf::from("archive.zip")));
+    }
+
+    // ── is_safe_dir ─────────────────────────────────────────────────────────
+
+    #[test]
+    #[cfg(target_os = "windows")]
+    fn is_safe_dir_rejects_drive_root() {
+        assert!(!is_safe_dir(Path::new("C:\\")));
+        assert!(!is_safe_dir(Path::new("D:\\")));
+    }
+
+    #[test]
+    #[cfg(target_os = "windows")]
+    fn is_safe_dir_rejects_windows_system_dirs() {
+        assert!(!is_safe_dir(Path::new("C:\\Windows")));
+        assert!(!is_safe_dir(Path::new("C:\\Windows\\System32")));
+        assert!(!is_safe_dir(Path::new("C:\\Program Files")));
+        assert!(!is_safe_dir(Path::new("C:\\Program Files (x86)")));
+        assert!(!is_safe_dir(Path::new("C:\\Program Files (x86)\\SomeApp")));
+    }
+
+    #[test]
+    #[cfg(target_os = "windows")]
+    fn is_safe_dir_does_not_false_positive_on_prefix_match() {
+        // "C:\WindowsFoo" must NOT be rejected just because it starts with the
+        // "C:\Windows" string — only exact segment matches are blocked.
+        assert!(is_safe_dir(Path::new("C:\\WindowsFoo")));
+        assert!(is_safe_dir(Path::new("C:\\Program Files Extra")));
+    }
+
+    #[test]
+    #[cfg(target_os = "windows")]
+    fn is_safe_dir_rejects_unc_network_paths() {
+        assert!(!is_safe_dir(Path::new("\\\\server\\share")));
+    }
+
+    #[test]
+    #[cfg(target_os = "windows")]
+    fn is_safe_dir_allows_extended_length_prefix() {
+        // \\?\ is the local extended-length prefix (added by canonicalize),
+        // not a network UNC path — must not be blocked by the UNC guard.
+        assert!(is_safe_dir(Path::new("\\\\?\\C:\\Users\\someone\\Music")));
+    }
+
+    #[test]
+    #[cfg(target_os = "windows")]
+    fn is_safe_dir_accepts_ordinary_user_dir() {
+        assert!(is_safe_dir(Path::new("C:\\Users\\someone\\Music")));
+    }
+
+    #[test]
+    fn is_safe_dir_rejects_unix_root_and_system_dirs() {
+        assert!(!is_safe_dir(Path::new("/")));
+        assert!(!is_safe_dir(Path::new("/etc")));
+        assert!(!is_safe_dir(Path::new("/etc/passwd")));
+        assert!(!is_safe_dir(Path::new("/usr/bin")));
+    }
+
+    // ── is_cross_device_error ───────────────────────────────────────────────
+
+    #[test]
+    fn is_cross_device_error_detects_platform_code() {
+        #[cfg(target_os = "windows")]
+        let code = 17;
+        #[cfg(not(target_os = "windows"))]
+        let code = 18;
+        let e = std::io::Error::from_raw_os_error(code);
+        assert!(is_cross_device_error(&e));
+    }
+
+    #[test]
+    fn is_cross_device_error_rejects_other_codes() {
+        let e = std::io::Error::from_raw_os_error(2); // ENOENT / file not found
+        assert!(!is_cross_device_error(&e));
+    }
+
+    #[test]
+    fn is_cross_device_error_false_for_non_os_error() {
+        let e = std::io::Error::other("generic error");
+        assert!(!is_cross_device_error(&e));
+    }
+
+    // ── validate_organize_path ──────────────────────────────────────────────
+
+    #[test]
+    fn validate_organize_path_rejects_empty() {
+        assert!(validate_organize_path("").is_err());
+    }
+
+    #[test]
+    fn validate_organize_path_rejects_null_byte_and_control_chars() {
+        assert!(validate_organize_path("foo\0bar").is_err());
+        assert!(validate_organize_path("foo\nbar").is_err());
+        assert!(validate_organize_path("foo\tbar").is_err());
+    }
+
+    #[test]
+    fn validate_organize_path_rejects_parent_dir_traversal() {
+        let base = std::env::temp_dir();
+        let raw = base.join("..").join("evil.mp3");
+        assert!(validate_organize_path(&raw.to_string_lossy()).is_err());
+    }
+
+    #[test]
+    fn validate_organize_path_accepts_path_in_safe_temp_dir() {
+        let dir = std::env::temp_dir().join("libreflow_test_validate_organize_path");
+        let _ = fs::create_dir_all(&dir);
+        let raw = dir.join("track.mp3");
+        let res = validate_organize_path(&raw.to_string_lossy());
+        assert!(res.is_ok(), "expected ok, got {:?}", res);
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    #[cfg(target_os = "windows")]
+    fn validate_organize_path_rejects_windows_dir_target() {
+        let raw = "C:\\Windows\\evil.mp3";
+        assert!(validate_organize_path(raw).is_err());
+    }
 }

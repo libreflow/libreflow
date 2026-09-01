@@ -62,6 +62,23 @@ export default defineConfig(({ mode }) => {
           // pas résoudre proprement entre chunks séparés.
           // Vite 8 / Rolldown impose la forme fonction (l'ancienne forme objet de
           // Rollup n'est plus supportée).
+          //
+          // DETTE CONNUE (2026-09-01, audit perf via context7) : la forme fonction de
+          // manualChunks est dépréciée par Vite 8/Rolldown au profit de
+          // `codeSplitting.groups` (voir migration guide officiel). Non migré ici
+          // délibérément : la doc Rolldown consultée via context7 ne montre que des
+          // exemples `groups[].test` sur un SEUL pattern de nom de fichier simple
+          // (ex: /\/static\.js$/) — jamais un cas avec plusieurs modules sources
+          // arbitraires comme ici (18 fichiers répartis en 2 chunks nommés). La
+          // sémantique exacte de `test` (chemin du module source, comme l'`id` reçu
+          // ici, vs. nom du chunk de sortie déjà généré) n'a pas pu être confirmée.
+          // Migrer à l'aveugle risquerait de casser silencieusement ce regroupement
+          // (gain de ~150ms de boot perceived + résolution de dépendances circulaires
+          // entre cinema/nowplaying/settings/replaygain). `manualChunks` fonction reste
+          // pleinement supporté ("accepted for backward compatibility" par Vite lui-même)
+          // — pas de warning émis en pratique sur ce projet à ce jour. À ré-évaluer
+          // quand la doc Rolldown documentera un exemple multi-module explicite, ou
+          // si Vite retire effectivement le support (pas encore le cas en 8.2.x).
           manualChunks(id) {
             const p = id.replace(/\\/g, '/');
             // Isole GSAP (core + Flip + CustomEase) dans son propre chunk.

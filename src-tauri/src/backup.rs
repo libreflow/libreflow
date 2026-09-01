@@ -149,3 +149,138 @@ pub fn read_backup_zip(src_path: &str) -> Result<ImportPayload, String> {
         config,
     })
 }
+
+// ── Tests unitaires ────────────────────────────────────────────────────────────
+//
+// Portée : le format d'archive .libreflow lui-même (write→read roundtrip) et
+// la garde anti zip-bomb de read_entry/read_backup_zip, qui n'avait aucune
+// couverture avant cet ajout malgré son rôle de défense contre une archive
+// malveillante fournie par l'utilisateur (import_backup ouvre un fichier
+// arbitraire choisi via un file picker).
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn sample_payload() -> ExportPayload {
+        ExportPayload {
+            manifest: r#"{"version":1}"#.to_string(),
+            library: r#"[{"id":"t1"}]"#.to_string(),
+            playlists: "[]".to_string(),
+            playlog: "[]".to_string(),
+            imports: "[]".to_string(),
+            config: r#"{"theme":"dark"}"#.to_string(),
+        }
+    }
+
+    fn tmp_path(name: &str) -> String {
+        let dir = std::env::temp_dir().join("libreflow_backup_tests");
+        let _ = std::fs::create_dir_all(&dir);
+        dir.join(name).to_string_lossy().to_string()
+    }
+
+    #[test]
+    fn write_then_read_roundtrip_preserves_all_fields() {
+        let dest = tmp_path("roundtrip.libreflow");
+        let payload = sample_payload();
+        write_backup_zip(&dest, &payload).expect("write should succeed");
+
+        let imported = read_backup_zip(&dest).expect("read should succeed");
+        assert_eq!(imported.manifest, payload.manifest);
+        assert_eq!(imported.library, payload.library);
+        assert_eq!(imported.playlists, payload.playlists);
+        assert_eq!(imported.playlog, payload.playlog);
+        assert_eq!(imported.imports, payload.imports);
+        assert_eq!(imported.config, payload.config);
+
+        let _ = std::fs::remove_file(&dest);
+    }
+
+    #[test]
+    fn write_backup_zip_leaves_no_tmp_file_on_success() {
+        let dest = tmp_path("no_tmp_leftover.libreflow");
+        write_backup_zip(&dest, &sample_payload()).expect("write should succeed");
+        assert!(std::path::Path::new(&dest).exists());
+        assert!(!std::path::Path::new(&format!("{dest}.tmp")).exists());
+        let _ = std::fs::remove_file(&dest);
+    }
+
+    #[test]
+    fn read_backup_zip_rejects_missing_file() {
+        let dest = tmp_path("does_not_exist.libreflow");
+        let _ = std::fs::remove_file(&dest);
+        assert!(read_backup_zip(&dest).is_err());
+    }
+
+    #[test]
+    fn read_backup_zip_rejects_corrupted_archive() {
+        let dest = tmp_path("corrupted.libreflow");
+        std::fs::write(&dest, b"not a real zip file").unwrap();
+        assert!(read_backup_zip(&dest).is_err());
+        let _ = std::fs::remove_file(&dest);
+    }
+
+    #[test]
+    fn read_backup_zip_rejects_archive_missing_expected_entry() {
+        // Build a ZIP that lacks the expected "manifest.json" entry.
+        let dest = tmp_path("missing_entry.libreflow");
+        {
+            let file = std::fs::File::create(&dest).unwrap();
+            let mut zip = zip::ZipWriter::new(file);
+            let opts = SimpleFileOptions::default()
+                .compression_method(zip::CompressionMethod::Deflated);
+            zip.start_file("unexpected.json", opts).unwrap();
+            zip.write_all(b"{}").unwrap();
+            zip.finish().unwrap();
+        }
+        assert!(read_backup_zip(&dest).is_err());
+        let _ = std::fs::remove_file(&dest);
+    }
+
+    #[test]
+    fn read_entry_rejects_declared_size_over_budget() {
+        // Entry whose declared size already exceeds the remaining budget must
+        // be rejected before any decompression happens.
+        let dest = tmp_path("oversized_declared.libreflow");
+        let big = "x".repeat(1000);
+        {
+            let file = std::fs::File::create(&dest).unwrap();
+            let mut zip = zip::ZipWriter::new(file);
+            let opts = SimpleFileOptions::default()
+                .compression_method(zip::CompressionMethod::Deflated);
+            zip.start_file("manifest.json", opts).unwrap();
+            zip.write_all(big.as_bytes()).unwrap();
+            zip.finish().unwrap();
+        }
+        let file = std::fs::File::open(&dest).unwrap();
+        let mut archive = zip::ZipArchive::new(file).unwrap();
+        let mut budget: u64 = 10; // far smaller than the 1000-byte entry
+        let res = read_entry(&mut archive, "manifest.json", &mut budget);
+        assert!(res.is_err());
+        let _ = std::fs::remove_file(&dest);
+    }
+
+    #[test]
+    fn read_entry_decrements_shared_budget_across_calls() {
+        let dest = tmp_path("shared_budget.libreflow");
+        {
+            let file = std::fs::File::create(&dest).unwrap();
+            let mut zip = zip::ZipWriter::new(file);
+            let opts = SimpleFileOptions::default()
+                .compression_method(zip::CompressionMethod::Deflated);
+            zip.start_file("a.json", opts).unwrap();
+            zip.write_all(b"12345").unwrap(); // 5 bytes
+            zip.start_file("b.json", opts).unwrap();
+            zip.write_all(b"12345").unwrap(); // 5 bytes
+            zip.finish().unwrap();
+        }
+        let file = std::fs::File::open(&dest).unwrap();
+        let mut archive = zip::ZipArchive::new(file).unwrap();
+        let mut budget: u64 = 8; // enough for the first entry, not both
+        let a = read_entry(&mut archive, "a.json", &mut budget);
+        assert!(a.is_ok());
+        assert_eq!(budget, 3);
+        let b = read_entry(&mut archive, "b.json", &mut budget);
+        assert!(b.is_err(), "second entry should exceed the depleted budget");
+        let _ = std::fs::remove_file(&dest);
+    }
+}

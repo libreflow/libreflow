@@ -73,3 +73,11 @@ jobs:
       - name: cargo check
         working-directory: src-tauri
         run: cargo check --all-targets
+
+      - name: cargo test
+        working-directory: src-tauri
+        run: cargo test --all-targets
+
+      - name: cargo clippy (deny warnings)
+        working-directory: src-tauri
+        run: cargo clippy --all-targets -- -D warnings
