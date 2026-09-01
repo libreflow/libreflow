@@ -65,9 +65,9 @@
      AAA (7:1) que sur --bg-base ; sur --bg-elevated/--bg-raised il reste
      AA (>=4.5:1) — voir calcul à jour ci-dessous. */
   --bg-base       : #030303;   /* canonique — fenêtre, zone principale (inchangé) */
-  --bg-surface    : #121214;   /* sidebar / navigation — un cran plus clair */
-  --bg-elevated   : #1C1C20;   /* cards, survols, lignes de liste au survol, éléments flottants */
-  --bg-raised     : #1C1C20;   /* popovers empilés au-dessus d'un élevé (cas rare) — même palier que le
+  --bg-surface    : #111318;   /* sidebar / navigation — un cran plus clair, micro-teinte ardoise froide */
+  --bg-elevated   : #1A1B22;   /* cards, survols, lignes de liste au survol, éléments flottants — micro-teinte ardoise froide */
+  --bg-raised     : #1A1B22;   /* popovers empilés au-dessus d'un élevé (cas rare) — même palier que le
                                    précédent : au-delà, le texte accent ne tient plus AA (4.5:1) (§2.9) */
   --bg-sunken     : #000000;   /* champs "creusés" (recherche) — plus sombre que tout conteneur */
 

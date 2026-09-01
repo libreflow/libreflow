@@ -15,9 +15,9 @@ const STYLE_JS_SETTINGS = fs.readFileSync(path.join(__dirname, '../src/settings.
 // Cible : palette dark à 5 paliers, ΔRGB total >= 35 entre --bg et --bg5.
 const DARK_TARGET = {
   '--bg-base'      : '#030303',
-  '--bg-surface'   : '#121214',
-  '--bg-elevated'  : '#1C1C20',
-  '--bg-raised'    : '#1C1C20',
+  '--bg-surface'   : '#111318',
+  '--bg-elevated'  : '#1A1B22',
+  '--bg-raised'    : '#1A1B22',
 };
 
 function extractRoot(css) {
@@ -123,12 +123,12 @@ async function run() {
   });
 
   await t('cyan accent on dark bg-surface passes AA (4.5:1)', () => {
-    const ratio = contrastRatio('#22d3ee', '#121214');
+    const ratio = contrastRatio('#22d3ee', '#111318');
     assert.ok(ratio >= 4.5, `cyan on bg-surface = ${ratio.toFixed(2)}:1`);
   });
 
   await t('green accent on dark bg-surface passes AA (4.5:1)', () => {
-    const ratio = contrastRatio('#34d399', '#121214');
+    const ratio = contrastRatio('#34d399', '#111318');
     assert.ok(ratio >= 4.5, `green on bg-surface = ${ratio.toFixed(2)}:1`);
   });
 
@@ -197,7 +197,7 @@ async function run() {
 
   // --- SC 1.4.11 All [data-theme] accent swatches >= 4.5:1 on --bg-surface (GAP-T01) ---
   // design-system.css declares [data-theme="..."] { --g:#hex }. Each --g must pass AA (4.5:1) on dark bg-surface.
-  const BG_SURFACE_DARK = '#121214';
+  const BG_SURFACE_DARK = '#111318';
   const accentRe = /\[data-theme="[^"]+"\]\s*\{[^}]*--g\s*:\s*(#[0-9a-fA-F]{6})/g;
   let am2;
   while ((am2 = accentRe.exec(DS)) !== null) {

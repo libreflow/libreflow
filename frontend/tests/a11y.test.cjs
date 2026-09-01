@@ -215,7 +215,7 @@ async function run() {
     const m = /--accent\s*:\s*(#[0-9a-fA-F]{6})/.exec(DS);
     assert.ok(m, '--accent hex not found in design-system.css');
     const hex = m[1];
-    for (const [bg, label] of [['#030303', '--bg-base'], ['#121214', '--bg-surface']]) {
+    for (const [bg, label] of [['#030303', '--bg-base'], ['#111318', '--bg-surface']]) {
       const r = contrastRatio(hex, bg);
       assert.ok(r >= 7.0, `accent ${hex} on ${label} = ${r.toFixed(2)}:1 (need 7.0)`);
     }
