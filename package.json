@@ -26,18 +26,16 @@
     "sbom": "npm run sbom:npm && npm run sbom:rust"
   },
   "dependencies": {
-    "@tauri-apps/api": "^2.10.1",
+    "@tauri-apps/api": "^2.11.1",
     "@tauri-apps/plugin-process": "^2.3.1",
-    "@tauri-apps/plugin-updater": "^2.10.1",
+    "@tauri-apps/plugin-updater": "^2.11.0",
     "gsap": "^3.15.0",
     "lit": "^3.3.3"
   },
   "devDependencies": {
     "@playwright/test": "^1.60.0",
-    "@tauri-apps/cli": "^2.10.1",
-    "acorn": "^8.16.0",
-    "js-yaml": "^4.1.1",
+    "@tauri-apps/cli": "^2.11.4",
     "typescript": "^6.0.3",
-    "vite": "^8.0.14"
+    "vite": "^8.2.2"
   }
 }

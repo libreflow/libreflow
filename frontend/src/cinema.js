@@ -14,9 +14,8 @@
 // Exports publics (utilisés par app.js) :
 //   cinemaOpen, cinemaBg
 //   toggleCinema, openCinema, closeCinema, updateCinema
-//   setCinemaBg, cycleCinemaBg, applyCinemaBg, syncCinemaBgSettings, updateCinemaBgBtn
+//   setCinemaBg, cycleCinemaBg, applyCinemaBg, syncCinemaBgSettings
 //   toggleCinemaFullscreen, toggleCinemaRadio
-//   CINEMA_BG_MODES, CINEMA_BG_LABELS
 //   (toggleCinemaMute — Task 7 — vit dans cinema-render.js, cap 650 lignes ici depuis Task 6)
 //   (updateCinemaProgress — Task 7 — n'est plus exportée : app.js ne l'appelait plus depuis
 //    le passage au bus ; reste une fonction interne appelée via on(EVENTS.CINEMA_PROGRESS))
@@ -30,8 +29,8 @@ import { radioActive, stopRadio, startRadio, getRadioQueue } from './radio.js';
 import { toast }                                        from './ui.js';
 import { on, EVENTS }                from './bus.js';
 import { timeline, set as motionSet, kill as motionKill, eases } from './motion.js';
-import { cinemaBg, CINEMA_BG_MODES, CINEMA_BG_LABELS, applyCinemaBg, setCinemaBg, cycleCinemaBg,
-         syncCinemaBgSettings, updateCinemaBgBtn, initCinemaBg, initCinemaBgModule,
+import { cinemaBg, applyCinemaBg, setCinemaBg, cycleCinemaBg,
+         syncCinemaBgSettings, initCinemaBg, initCinemaBgModule,
          updateCinArtColor,
          stopAmbientAnim, resetAmbientColors, updateAmbientGradient,
          updateCachedWinSize, drawBgFrame } from './cinema-bg.js';
@@ -44,8 +43,8 @@ import { initCinemaSeek, isSeekDragging, resetCinemaSeek } from './cinema-seek.j
 import { initCinemaQueue, refreshCinemaQueuePanel, closeCinemaQueuePanel } from './cinema-queue.js';
 import { initCinemaInput, attachCinemaInput, detachCinemaInput, showCinemaControls } from './cinema-input.js';
 
-export { cinemaBg, CINEMA_BG_MODES, CINEMA_BG_LABELS, applyCinemaBg, setCinemaBg, cycleCinemaBg,
-         syncCinemaBgSettings, updateCinemaBgBtn, initCinemaBg, updateCinArtColor,
+export { cinemaBg, applyCinemaBg, setCinemaBg, cycleCinemaBg,
+         syncCinemaBgSettings, initCinemaBg, updateCinArtColor,
          startCinemaViz }; // Task 10 : app.js relance le viz spectre au retour 'full' (cinéma ouvert)
 
 // Radio demande le toggle cinéma (cycle d'import) ; play/pause réveille la boucle maître.

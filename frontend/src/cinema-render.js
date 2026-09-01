@@ -21,7 +21,7 @@
 //   playCinemaQueueTrack(t)          — Task 9 : lecture depuis une rangée du panneau
 
 import { fmt }                                  from './utils.js';
-import { audio, playAt,
+import { audio, playAt, playTrackDirect,
          peekExplicitQueue, removeFromQueue }   from './player.js';
 import { i18n }                                 from './i18n.js';
 import { setMasterGain }                        from './eq.js';
@@ -292,14 +292,19 @@ export function getCinemaQueueUpcoming() {
  * Task 9 — joue une piste choisie dans le panneau file d'attente cinéma. Même
  * sémantique que playQueueItem() (queue.js) : keepQueue:true (ne vide pas le reste de
  * la file explicite, seulement cette piste) + retrait de CETTE seule piste si elle y
- * était. No-op silencieux si la piste a disparu entre le rendu du panneau et le clic
- * (supprimée de la bibliothèque ou sortie de la vue filtrée).
+ * était.
+ * BUG-FBA-2 FIX : une entrée de la file explicite (peekExplicitQueue()) peut être
+ * volontairement HORS de la vue filtrée courante (recherche/filtre actif) — c'est
+ * justement le cas d'usage documenté par playTrackDirect() (player.js, AUDIT CINÉMA
+ * 2026-07-20 P2), mais cette fonction ne l'appelait jamais : le clic sur une telle
+ * rangée du panneau restait un no-op silencieux alors que next() joue bel et bien
+ * cette piste. Fallback sur playTrackDirect() quand filteredIdx() ne trouve rien.
  * @param {object} t
  */
 export function playCinemaQueueTrack(t) {
   if (!t) return;
   const fi = filteredIdx(t);
-  if (fi < 0) return;
   removeFromQueue(t.id);
+  if (fi < 0) { playTrackDirect(t); return; }
   playAt(fi, { keepQueue: true });
 }

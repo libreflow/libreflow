@@ -154,28 +154,6 @@ export function kill(target) {
   gsap.killTweensOf(target);
 }
 
-// ── Modal presets ─────────────────────────────────────────────────────────────
-
-/**
- * @param {Element} el — dialog element inside the backdrop
- * @returns {gsap.core.Tween}
- */
-export function modalOpen(el) {
-  kill(el);
-  if (prefersReducedMotion()) return gsap.set(el, { opacity: 1 });
-  return gsap.from(el, { opacity: 0, duration: 0.22, ease: eases.PREMIUM, clearProps: 'opacity' });
-}
-
-/**
- * @param {Element} el
- * @returns {gsap.core.Tween}
- */
-export function modalClose(el) {
-  kill(el);
-  if (prefersReducedMotion()) return gsap.to(el, { opacity: 0, duration: 0 });
-  return gsap.to(el, { opacity: 0, duration: 0.16, ease: 'power2.in' });
-}
-
 // ── List presets ──────────────────────────────────────────────────────────────
 
 const STAGGER_CAP = CFG.STAGGER_CAP;
