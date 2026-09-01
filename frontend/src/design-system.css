@@ -115,8 +115,8 @@
   /* Espacement / radius / typo : source unique dans leurs sections
      canoniques (§3 typo, §4 spacing, §6 radius). Les doublons §2bis
      (morts — écrasés par la cascade) ont été retirés (S3). Tokens morts
-     purgés à l'audit 2026-07-27 : --space-8, --text-2xl, --blur-1,
-     --card-min-w, --shadow-art-col, --shadow-pl-list (zéro consommateur). */
+     purgés à l'audit 2026-07-27 : --text-2xl, --blur-1, --card-min-w,
+     --shadow-art-col, --shadow-pl-list (zéro consommateur). */
 
   /* Élévations opérationnelles — aplaties style Spotify (profondeur par couleur, pas par ombre) */
   --elev-1 : 0 0 0 0 transparent;
@@ -185,6 +185,7 @@
   --space-5  : 20px;
   --space-6  : 24px;
   --space-7  : 48px;  /* relocalisé depuis §2bis — consommé par --sp-10/12/15 */
+  --space-8  : 64px;   /* respiration en tête de vue (titrage éditorial) */
 }
 
 
@@ -762,10 +763,10 @@ html[data-mode="light"] {
   /* Ombres réelles des surfaces flottantes (audit 2026-07-27 : les alias
      --elev-* transparents neutralisaient toutes les ombres de modales).
      Les surfaces en flux restent plates via --elev-* (doctrine Spotify). */
-  --shadow-sm:  0 1px 3px rgba(0, 0, 0, .25);
-  --shadow-md:  0 4px 12px rgba(0, 0, 0, .30);
-  --shadow-lg:  0 8px 24px rgba(0, 0, 0, .35);
-  --shadow-xl:  0 16px 48px rgba(0, 0, 0, .45);
+  --shadow-sm : 0 1px 3px rgba(0,0,0,.20);
+  --shadow-md : 0 4px 16px rgba(0,0,0,.24);
+  --shadow-lg : 0 8px 28px rgba(0,0,0,.30);
+  --shadow-xl : 0 16px 52px rgba(0,0,0,.40);
 
   /* Ombres composants — drop-shadows recâblées sur --elev-* (audit §2.4 / FND-04).
      Les variantes thème clair (-lt / -pl) restent littérales (re-définies par mode
