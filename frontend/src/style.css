@@ -1,19 +1,13 @@
 /* ── Polices auto-hébergées — zéro dépendance réseau ────────── */
-@font-face { font-family:'Syne'; font-weight:400; font-style:normal; font-display:swap; src:url('/fonts/syne-400.woff2') format('woff2'); }
-@font-face { font-family:'Syne'; font-weight:500; font-style:normal; font-display:swap; src:url('/fonts/syne-500.woff2') format('woff2'); }
-@font-face { font-family:'Syne'; font-weight:600; font-style:normal; font-display:swap; src:url('/fonts/syne-600.woff2') format('woff2'); }
-@font-face { font-family:'Syne'; font-weight:700; font-style:normal; font-display:swap; src:url('/fonts/syne-700.woff2') format('woff2'); }
-@font-face { font-family:'Syne'; font-weight:800; font-style:normal; font-display:swap; src:url('/fonts/syne-800.woff2') format('woff2'); }
-@font-face { font-family:'DM Sans'; font-weight:300; font-style:normal;  font-display:swap; src:url('/fonts/dm-sans-300.woff2')  format('woff2'); }
-@font-face { font-family:'DM Sans'; font-weight:300; font-style:italic;  font-display:swap; src:url('/fonts/dm-sans-300i.woff2') format('woff2'); }
-@font-face { font-family:'DM Sans'; font-weight:400; font-style:normal;  font-display:swap; src:url('/fonts/dm-sans-400.woff2')  format('woff2'); }
-@font-face { font-family:'DM Sans'; font-weight:500; font-style:normal;  font-display:swap; src:url('/fonts/dm-sans-500.woff2')  format('woff2'); }
+@font-face { font-family:'Hanken Grotesk'; font-weight:400; font-style:normal; font-display:swap; src:url('/fonts/hanken-grotesk-400.woff2') format('woff2'); }
+@font-face { font-family:'Hanken Grotesk'; font-weight:500; font-style:normal; font-display:swap; src:url('/fonts/hanken-grotesk-500.woff2') format('woff2'); }
+@font-face { font-family:'Hanken Grotesk'; font-weight:700; font-style:normal; font-display:swap; src:url('/fonts/hanken-grotesk-700.woff2') format('woff2'); }
 
 /* ═══════════════════════════════════════════════════════════
    LibreFlow — CSS premium v3
    Améliorations v3 :
    - Accent couleur #8B6BFF (indigo par défaut)
-   - Typographie : Syne (display) + DM Sans (corps)
+   - Typographie : Hanken Grotesk (famille unique — display + corps)
    - Sidebar : logo-mark identitaire + nav active accent bleu
    - Player bar : glow d'accent + progress gradient
    - Progress bar : thumb avec ring de marque
@@ -1251,7 +1245,7 @@ html[data-mode="light"] .dh-art,
 html[data-mode="light"] .dh-mini-art,
 html[data-mode="light"] #next-preview img { outline-color: var(--tint-2); }
 .tart-ph  { display: flex; align-items: center; justify-content: center; width: 100%; height: 100%; color: var(--t3); }
-/* Règle Syne (audit 2026-07-27) : initiales 10-12px = taille corps → font-body */
+/* Règle police display (audit 2026-07-27) : initiales 10-12px = taille corps → font-body */
 .tart-init { font-size: var(--text-xs); font-weight: 700; letter-spacing: var(--ls-micro); user-select: none; }
 .tr.act .tart::after {
   content: ''; position: absolute; inset: 0;
@@ -2206,7 +2200,7 @@ html[data-motion="reduce"] #vw::before, html[data-motion="reduce"] #vw::after { 
   overflow: hidden;
 }
 .pl-n   {
-  font-family   : var(--font-display, 'Syne', system-ui, sans-serif);
+  font-family   : var(--font-display, 'Hanken Grotesk', system-ui, sans-serif);
   font-size     : var(--text-md);
   font-weight   : var(--fw-bold, 700);
   letter-spacing: -0.01em;
@@ -2850,8 +2844,8 @@ html[data-mode="light"] .sleep-custom-inp:focus { border-color: var(--g); backgr
 #confirm-modal-bg.on #confirm-modal { animation: modalBoxIn var(--motion-base) var(--ease-spring) both; }
 
 .modal-ico  { font-size: var(--text-display); margin-bottom: var(--space-3); }
-/* Règle Syne (audit 2026-07-27) : Syne à taille corps (~15px) perd sa signature
-   display — .modal-h repasse en font-body, graisse 700 conservée. */
+/* Règle police display (audit 2026-07-27) : la police display à taille corps (~15px) perd sa
+   signature — .modal-h repasse en font-body, graisse 700 conservée. */
 .modal-h    { font-size: var(--text-md); font-weight: 700; letter-spacing: var(--ls-tight); border-bottom: 1px solid var(--tint-1, rgba(255,255,255,.06)); padding-bottom: var(--space-3); margin-bottom: var(--space-3); text-wrap: balance; }
 html[data-mode="light"] .modal-h {
   border-bottom-color: var(--border-subtle);
@@ -4164,7 +4158,7 @@ html[data-motion="reduce"] #zoom-hud { transition: opacity var(--motion-fast) ea
   gap: var(--space-2);
   min-height: 44px;
 }
-/* Valeurs finales consolidées (font-weight 600 + Syne + letter-spacing -.02em) */
+/* Valeurs finales consolidées (font-weight 600 + police display + letter-spacing -.02em) */
 .eq-head h3 { font-size: var(--text-base); font-weight: 600; font-family: var(--font-display); color: var(--t); letter-spacing: var(--ls-display); }
 
 /* Bloc titre seul — plus de badges dans le header */
@@ -6269,10 +6263,10 @@ html[data-mode="light"] .tn { color: var(--t); font-weight: 500; }
 /* Player bar : artiste cliquable — hover accentué */
 .pl-a:hover { color: var(--t); }
 
-/* View header : sous-titres breadcrumb avec Syne */
+/* View header : sous-titres breadcrumb avec la police display */
 .bc-cur { font-family: var(--font-display); font-weight: 600; letter-spacing: var(--ls-display); }
 
-/* Scan counter : Syne → fusionné dans .sn principal */
+/* Scan counter : police display → fusionné dans .sn principal */
 
 /* Card sub — cohérence avec .ts */
 .card-sub { letter-spacing: var(--ls-slight); }
@@ -6323,7 +6317,7 @@ html[data-mode="light"] .tn { color: var(--t); font-weight: 500; }
 .pcplay:hover,
 .pcplay:active { animation: none; }  /* désactiver pendant interaction directe */
 
-/* 5. Stat cards — Syne + letter-spacing → fusionnés dans .stat-card-val principal */
+/* 5. Stat cards — police display + letter-spacing → fusionnés dans .stat-card-val principal */
 
 /* 6. EQ panel + Queue panel — opacité initiale à 0 pour éviter le flash visuel à l'ouverture */
 /* NOTE : width inclus ici pour ne pas écraser la transition de largeur Expert définie au-dessus */
@@ -6345,7 +6339,7 @@ html[data-mode="light"] .tn { color: var(--t); font-weight: 500; }
 /* 7. Scrollbar thumb — transition de couleur fluide */
 ::-webkit-scrollbar-thumb { transition: background var(--motion-fast) var(--smooth); }
 
-/* ── Syne sur les éléments manquants ───────────────────────── */
+/* ── Police display sur les éléments manquants ─────────────── */
 
 /* Cartes genres */
 .genre-name { font-family: var(--font-display); letter-spacing: var(--ls-display); }
@@ -6353,7 +6347,7 @@ html[data-mode="light"] .tn { color: var(--t); font-weight: 500; }
 /* Panneaux settings (.queue-head h3 : fusionné dans la définition canonique ~:4107) */
 .set-head-title { font-family: var(--font-display); letter-spacing: var(--ls-display); }
 
-/* Modals — .modal-h Syne → fusionné dans .modal-h principal */
+/* Modals — .modal-h police display → fusionné dans .modal-h principal */
 .pl-modal-h { font-family: var(--font-display); letter-spacing: var(--ls-display); }
 
 /* Drag-drop overlay */
@@ -7197,7 +7191,7 @@ html[data-motion="reduce"] .card { transition: background var(--motion-fast) eas
 }
 
 .vnp-title {
-  /* Règle Syne (audit 2026-07-27) : surface display ≥16px → font-display */
+  /* Règle police display (audit 2026-07-27) : surface display ≥16px → font-display */
   font-family: var(--font-display);
   font-size: var(--text-xl);
   font-weight: 700;
@@ -7354,7 +7348,7 @@ html[data-motion="reduce"] .card { transition: background var(--motion-fast) eas
   gap: var(--space-1);
 }
 .dh-name {
-  /* Règle Syne (audit 2026-07-27) : titre display du drill header → font-display */
+  /* Règle police display (audit 2026-07-27) : titre display du drill header → font-display */
   font-family: var(--font-display);
   font-size: 22px; /* littéral assumé — entre --fs-lg2 (32) et --fs-base (18), palier dédié drill */
   font-weight: 800;

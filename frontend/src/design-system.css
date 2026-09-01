@@ -15,7 +15,7 @@
  *
  * Contrainte projet (CLAUDE.md §15 / §12) :
  *   Pas d'@import url() externe. Les fonts sont chargées localement
- *   par style.css via @font-face (/fonts/syne-*.woff2, /fonts/dm-sans-*.woff2)
+ *   par style.css via @font-face (/fonts/hanken-grotesk-*.woff2)
  *   — fichiers auto-hébergés dans frontend/public/fonts/, aucune connexion réseau.
  *
  * Sommaire :
@@ -150,18 +150,16 @@
 
 /* ============================================================================
  * 3. TYPOGRAPHIE — fonts locales (déjà chargées par style.css), offline
- * Display : Syne     — caractériel, géométrique, signature premium audio.
- *           RÈGLE (audit 2026-07-27) : Syne uniquement pour les rôles display
- *           rendus ≥16px (titres de vue, heroes, stats, noms de panneaux).
- *           Jamais en taille corps — elle y perd sa signature.
- * Body    : DM Sans  — humaniste moderne, ultra-lisible UI.
+ * Display : Hanken Grotesk — grotesque humaniste, une seule famille partout.
+ * Body    : Hanken Grotesk — humaniste moderne, ultra-lisible UI.
  * Mono    : système  — ui-monospace prioritaire, pas de fetch externe.
+ * Poids disponibles : 400, 500, 700.
  * Tailles fluides via clamp(min, vw, max).
  * ============================================================================ */
 :root {
   /* --- Familles ----------------------------------------------------------- */
-  --font-display : 'Syne', system-ui, -apple-system, Segoe UI, sans-serif;
-  --font-body    : 'DM Sans', system-ui, -apple-system, Segoe UI, sans-serif;
+  --font-display : 'Hanken Grotesk', system-ui, -apple-system, Segoe UI, sans-serif;
+  --font-body    : 'Hanken Grotesk', system-ui, -apple-system, Segoe UI, sans-serif;
 
   /* --- Tailles fluides ---------------------------------------------------- */
   --text-xs      : clamp(10px, 1vw,   12px);
@@ -753,7 +751,7 @@ html[data-mode="light"] {
   --decelerate:  var(--ease-standard);
   --accelerate:  var(--ease-standard);
 
-  --font: 'DM Sans', -apple-system, 'Segoe UI', sans-serif;
+  --font: 'Hanken Grotesk', system-ui, -apple-system, 'Segoe UI', sans-serif;
   /* --font-display retiré : doublon de §3 (la valeur §3 fait foi — plus de fallbacks) */
 
   /* Ombres — l'échelle de base est recâblée sur les élévations canoniques

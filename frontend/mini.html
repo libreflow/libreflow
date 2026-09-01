@@ -4,10 +4,9 @@
 <meta charset="UTF-8">
 <title>LibreFlow Mini</title>
 <style>
-@font-face { font-family:'Syne';    font-weight:700;     font-style:normal; font-display:swap; src:url('/fonts/syne-700.woff2')    format('woff2'); }
-@font-face { font-family:'DM Sans'; font-weight:300; font-style:normal;  font-display:swap; src:url('/fonts/dm-sans-300.woff2')  format('woff2'); }
-@font-face { font-family:'DM Sans'; font-weight:400; font-style:normal;  font-display:swap; src:url('/fonts/dm-sans-400.woff2')  format('woff2'); }
-@font-face { font-family:'DM Sans'; font-weight:500; font-style:normal;  font-display:swap; src:url('/fonts/dm-sans-500.woff2')  format('woff2'); }
+@font-face { font-family:'Hanken Grotesk'; font-weight:400; font-style:normal; font-display:swap; src:url('/fonts/hanken-grotesk-400.woff2') format('woff2'); }
+@font-face { font-family:'Hanken Grotesk'; font-weight:500; font-style:normal; font-display:swap; src:url('/fonts/hanken-grotesk-500.woff2') format('woff2'); }
+@font-face { font-family:'Hanken Grotesk'; font-weight:700; font-style:normal; font-display:swap; src:url('/fonts/hanken-grotesk-700.woff2') format('woff2'); }
 
 @property --g {
   syntax: '<color>';
@@ -35,7 +34,7 @@
   --ease:    var(--dur) ease;
   --spring:  cubic-bezier(.34,1.56,.64,1);
   --smooth:  cubic-bezier(.4,0,.2,1);
-  --font:    'DM Sans', -apple-system, 'Segoe UI', sans-serif;
+  --font:    'Hanken Grotesk', -apple-system, 'Segoe UI', sans-serif;
   --g-rgb:   139,107,255;
   --red:     #e84040;
   --red-rgb: 232,64,64;
@@ -158,7 +157,7 @@ body:hover .tb-logo { opacity: .85; }
 .tb-logo-name {
   font-size: 10px;
   font-weight: 700;
-  font-family: 'Syne', var(--font);
+  font-family: var(--font);
   color: #fff;
   letter-spacing: .07em;
   text-transform: uppercase;
@@ -268,7 +267,7 @@ body:hover .sys-btns { opacity: 1; }
 .art-card-ph-init {
   font-size: clamp(22px, 8cqw, 42px);
   font-weight: 800;
-  font-family: 'Syne', var(--font);
+  font-family: var(--font);
   color: color-mix(in srgb, var(--g) 90%, #fff);
   letter-spacing: -.03em;
   text-shadow: 0 2px 12px rgba(0,0,0,.4);
@@ -327,7 +326,7 @@ body:hover .sys-btns { opacity: 1; }
 .track-name {
   font-size: 13px;
   font-weight: 700;
-  font-family: 'Syne', var(--font);
+  font-family: var(--font);
   color: #fff;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   letter-spacing: -.03em;
