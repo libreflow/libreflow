@@ -162,13 +162,13 @@
   --font-body    : 'Hanken Grotesk', system-ui, -apple-system, Segoe UI, sans-serif;
 
   /* --- Tailles fluides ---------------------------------------------------- */
-  --text-xs      : clamp(10px, 1vw,   12px);
+  --text-xs      : clamp(11px, 1vw,   12px);
   --text-sm      : clamp(12px, 1.2vw, 14px);
   --text-base    : clamp(13px, 1.4vw, 15px);
   --text-md      : clamp(15px, 1.6vw, 18px);
-  --text-lg      : clamp(18px, 2vw,   24px);
-  --text-xl      : clamp(22px, 2.8vw, 32px);
-  --text-display : clamp(28px, 4vw,   48px);
+  --text-lg      : clamp(19px, 2.1vw, 26px);
+  --text-xl      : clamp(24px, 3vw,   38px);
+  --text-display : clamp(34px, 5vw,   60px);
 
   /* Weights / line-heights / letter-spacing : définis en §13 (--fw-*, --lh-*, --ls-*). */
 }
