@@ -584,14 +584,42 @@ async function run() {
   // --- Cohésion chromatique : la piste du curseur volume cinéma reflète --cin-rgb-ui,
   // pas seulement le thumb -- miroir de .vslider (piste principale) qui teinte toute
   // la piste avec l'accent, pas seulement son thumb (Task 7 gap) ---
-  await t('.cinema-vol-slider track is tinted by --cin-rgb-ui, with a light-mode neutral override (Task 7)', () => {
+  // AUDIT-CINEMA-2026-09-02 : la piste est en plus remplie proportionnellement au volume
+  // via --cinema-vol-pct (updateCinVolFill, cinema-render.js) -- avant ce fix la piste
+  // était un flat color jamais mis à jour (bug réel, cf. audit), le thumb seul repère
+  // de niveau et le mini-spectre #cinema-vol-vis dessiné derrière devenait le signal
+  // visuel dominant. Même mécanisme que --vol-pct sur .vslider (playerbar.js).
+  await t('.cinema-vol-slider track is tinted by --cin-rgb-ui AND filled proportionally via --cinema-vol-pct, with a light-mode neutral override (Task 7 + AUDIT-CINEMA-2026-09-02)', () => {
     const m = /\.cinema-vol-slider\s*\{[^}]*\}/.exec(SS);
     assert.ok(m, 'règle .cinema-vol-slider introuvable dans style.css');
-    assert.ok(/background\s*:\s*rgba\(\s*var\(--cin-rgb-ui,/.test(m[0]),
+    assert.ok(/background\s*:\s*linear-gradient\([^)]*rgba\(\s*var\(--cin-rgb-ui,/.test(m[0]),
       '.cinema-vol-slider (piste) doit être teintée par --cin-rgb-ui, comme le thumb');
+    assert.ok(/var\(--cinema-vol-pct,/.test(m[0]),
+      '.cinema-vol-slider doit se remplir proportionnellement via --cinema-vol-pct (pas un flat color statique)');
 
-    assert.ok(/html\[data-mode="light"\]\s*\.cinema-vol-slider\s*\{[^}]*background/.test(SS),
+    const mLight = /html\[data-mode="light"\]\s*\.cinema-vol-slider\s*\{[^}]*\}/.exec(SS);
+    assert.ok(mLight, 'override light-mode .cinema-vol-slider introuvable dans style.css');
+    assert.ok(/background/.test(mLight[0]),
       'un override light-mode doit neutraliser la teinte --cin-rgb-ui sur .cinema-vol-slider (illisible sur fond clair, cf. Task 7)');
+    assert.ok(/var\(--cinema-vol-pct,/.test(mLight[0]),
+      'override light-mode doit aussi respecter --cinema-vol-pct (pas de régression du remplissage en light)');
+  });
+
+  await t('updateCinVolFill() sets --cinema-vol-pct and is wired into every volume-change path (AUDIT-CINEMA-2026-09-02)', () => {
+    const cr = readRepoFile('frontend/src/cinema-render.js');
+    assert.ok(/export function updateCinVolFill\(el\)/.test(cr),
+      'cinema-render.js doit exporter updateCinVolFill(el)');
+    assert.ok(/vel\.style\.setProperty\('--cinema-vol-pct', pct \+ '%'\)/.test(cr),
+      'updateCinVolFill() doit poser --cinema-vol-pct comme une custom property (miroir de updateVolSlider/--vol-pct)');
+    // syncCinVolumeUI (chemin commun : ouverture, changement de piste, drag manuel,
+    // raccourcis clavier volume-up/down/set) doit appeler le fill.
+    const syncFn = cr.slice(cr.indexOf('export function syncCinVolumeUI'), cr.indexOf('export function syncCinVolumeUI') + 600);
+    assert.ok(/updateCinVolFill\(volSlider\)/.test(syncFn),
+      'syncCinVolumeUI() doit appeler updateCinVolFill() -- sinon la piste reste figée sur la plupart des chemins');
+    // setCinVolSliders (molette + mute cliquable) doit aussi l'appeler -- ne passe pas par syncCinVolumeUI.
+    const setFn = cr.slice(cr.indexOf('export function setCinVolSliders'), cr.indexOf('export function setCinVolSliders') + 600);
+    assert.ok(/updateCinVolFill\(cvol\)/.test(setFn),
+      'setCinVolSliders() doit appeler updateCinVolFill() -- molette (cinema-input.js) et mute (toggleCinemaMute) passent par ce chemin, pas par syncCinVolumeUI');
   });
 
   // --- Task 7 fix (review) : le chemin volume mini-player rafraîchit l'état mute cinéma ---

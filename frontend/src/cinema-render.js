@@ -16,6 +16,10 @@
 //                                      ici (deps.readVol de initCinemaInput, casse le doublon)
 //   setCinVolSliders(v)              — Task 7 : pose #cinema-vol + #vol (ex-_setVolSliders) ;
 //                                      cinema.js délègue ici (deps.syncVol de initCinemaInput)
+//   updateCinVolFill(el)             — AUDIT-CINEMA-2026-09-02 : remplissage --cinema-vol-pct
+//                                      sur #cinema-vol (miroir de updateVolSlider/--vol-pct,
+//                                      playerbar.js) ; appelée par syncCinVolumeUI() ET par
+//                                      handlers.js (case 'cinema-vol', feedback drag temps réel)
 //   getCinemaQueueUpcoming()         — Task 9 : agrège search.js/player.js(façade queue.js)/
 //                                      radio.js pour buildUpcoming() (cinema-queue.js, fonction pure)
 //   playCinemaQueueTrack(t)          — Task 9 : lecture depuis une rangée du panneau
@@ -89,6 +93,7 @@ export function syncCinVolumeUI(vol) {
   const muted = audio.muted || vol === 0;
   const volSlider = document.getElementById('cinema-vol');
   if (volSlider && !volSlider.matches(':active')) volSlider.value = vol;
+  updateCinVolFill(volSlider);
   const w1 = document.getElementById('cinema-vol-wave1');
   const w2 = document.getElementById('cinema-vol-wave2');
   if (w1) w1.style.display = muted ? 'none' : '';
@@ -103,6 +108,22 @@ export function syncCinVolumeUI(vol) {
     btn.setAttribute('aria-label', i18n(muted ? 'aria_cinema_unmute' : 'aria_cinema_mute'));
     btn.title = i18n(muted ? 't_cinema_unmute' : 't_cinema_mute');
   }
+}
+
+/**
+ * AUDIT-CINEMA-2026-09-02 : pose --cinema-vol-pct (remplissage proportionnel de la
+ * piste #cinema-vol) — miroir de updateVolSlider()/--vol-pct sur le slider principal
+ * (playerbar.js). Avant ce fix, .cinema-vol-slider n'avait AUCUN remplissage (fond
+ * uniforme fixe) : le thumb était le seul repère de niveau, et le mini-spectre
+ * #cinema-vol-vis dessiné juste derrière (seule chose animée sur la piste) devenait
+ * le signal visuel dominant — bruit sans rapport avec le volume réglé.
+ * @param {Element|null} [el] — élément #cinema-vol ; résolu via getElementById si omis.
+ */
+export function updateCinVolFill(el) {
+  const vel = (el instanceof Element) ? el : document.getElementById('cinema-vol');
+  if (!vel) return;
+  const pct = Math.round(+vel.value * 100);
+  vel.style.setProperty('--cinema-vol-pct', pct + '%');
 }
 
 // ── Mute cliquable (Task 7) ──────────────────────────────────
@@ -127,7 +148,14 @@ export function readCinVolDom() {
  *  délègue ici (syncVol des deps initCinemaInput, ex-_syncCinVol) au lieu de dupliquer. */
 export function setCinVolSliders(v) {
   const cvol = document.getElementById('cinema-vol');
-  if (cvol) { cvol.value = v; emit(EVENTS.VOL_SLIDER_UPDATE, { elId: 'cinema-vol' }); }
+  if (cvol) {
+    cvol.value = v;
+    updateCinVolFill(cvol); // AUDIT-CINEMA-2026-09-02 — molette/mute (cinema-input.js,
+                             // toggleCinemaMute) passent par ce chemin, pas par le bus
+                             // VOL_SLIDER_UPDATE ci-dessous (celui-ci ne pose que --vol-pct
+                             // sur #vol via playerbar.js, jamais --cinema-vol-pct).
+    emit(EVENTS.VOL_SLIDER_UPDATE, { elId: 'cinema-vol' });
+  }
   const vel = document.getElementById('vol');
   if (vel) { vel.value = v; emit(EVENTS.VOL_SLIDER_UPDATE, { elId: 'vol' }); }
   saveCfg();

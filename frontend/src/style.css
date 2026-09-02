@@ -5677,10 +5677,17 @@ html[data-motion="reduce"] .cin-txt-swap-out, html[data-motion="reduce"] .cin-tx
   -webkit-appearance: none; appearance: none;
   position: relative; z-index: 1;
   width: 100%; height: var(--track-h);
-  /* Task 7 gap : la piste restait blanche fixe alors que le thumb (plus bas) est
-     déjà teinté par --cin-rgb-ui -- miroir de .vslider (piste principale) qui
-     teinte toute la piste avec l'accent, pas seulement son thumb. */
-  background: rgba(var(--cin-rgb-ui, 255,255,255), .2); border-radius: var(--radius-xs);
+  /* AUDIT-CINEMA-2026-09-02 : remplissage proportionnel au volume, posé par
+     _updateCinVolFill() (cinema-render.js) via --cinema-vol-pct -- même mécanisme
+     que --vol-pct sur .vslider (piste principale). Auparavant un flat rgba(...,.2)
+     jamais mis à jour : le thumb était le SEUL repère visuel de niveau, et le
+     mini-spectre #cinema-vol-vis (dessiné juste derrière, seule chose "vivante"
+     sur la piste) devenait le signal dominant -- bruit visuel sans rapport avec
+     le volume réglé. */
+  background: linear-gradient(to right,
+    rgba(var(--cin-rgb-ui, 255,255,255), .85) var(--cinema-vol-pct, 100%),
+    rgba(var(--cin-rgb-ui, 255,255,255), .2)  var(--cinema-vol-pct, 100%));
+  border-radius: var(--radius-xs);
   outline: none; cursor: pointer;
   transition: height var(--motion-fast) var(--smooth), background var(--motion-base) var(--smooth);
 }
@@ -5766,7 +5773,14 @@ html[data-mode="light"] .cqp-row:focus-visible {
 html[data-mode="light"] .cbtn.on                        { color: var(--g); filter: none; }
 html[data-mode="light"] #cinema-rep.rep-one::after      { color: var(--g); }
 html[data-mode="light"] .cinema-pbar:hover .cinema-fill { background: rgba(255,255,255,.88); }
-html[data-mode="light"] .cinema-vol-slider { background: rgba(255,255,255,.2); }
+/* AUDIT-CINEMA-2026-09-02 : même remplissage proportionnel qu'en dark (--cinema-vol-pct),
+   neutre blanc pour rester lisible sur le fond clair (miroir du override .cinema-vol-slider
+   dark ci-dessus, cf. Task 7 pour la raison du neutre ici). */
+html[data-mode="light"] .cinema-vol-slider {
+  background: linear-gradient(to right,
+    rgba(255,255,255,.9)  var(--cinema-vol-pct, 100%),
+    rgba(255,255,255,.2)  var(--cinema-vol-pct, 100%));
+}
 html[data-mode="light"] .cinema-vol-slider::-webkit-slider-thumb { background: var(--c-white); }
 html[data-mode="light"] .cinema-vol-slider::-moz-range-thumb     { background: var(--c-white); }
 
