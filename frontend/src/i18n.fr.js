@@ -253,6 +253,7 @@ export default {
   aria_now_playing_view:   'En cours de lecture',
   aria_player_bar:         'Contrôles de lecture',
   aria_toggle_now_playing: 'Voir la piste en cours',
+  aria_go_to_artist_bar:   'Voir cet artiste',
   aria_sleep_menu:         'Minuterie sommeil',
   aria_pl_cover_pick:      'Choisir une image de couverture',
   aria_smart_seed_search:  'Rechercher un titre de base',

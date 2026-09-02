@@ -4736,6 +4736,78 @@ section('components/lf-toast-stack.logic.js -- import-smoke');
     _ko++;
   }
 
+  // ─── Playerbar audit fixes (2026-09-01) ──────────────────────────────────────
+  // 3 gaps trouvés : affordance .pl-a trompeuse (cliquable en apparence, non
+  // câblée + propagation vers le parent qui ouvre Now Playing au lieu de driller
+  // vers l'artiste) ; double notification OS quand le mini-player est ouvert ;
+  // pas de fallback si l'image de pochette échoue à charger.
+  try {
+    const fs   = require('fs');
+    const path = require('path');
+    const PBJS   = fs.readFileSync(path.join(__dirname, '../src/playerbar.js'), 'utf8');
+    const HTML   = fs.readFileSync(path.join(__dirname, '../index.html'), 'utf8');
+    const HDLJS  = fs.readFileSync(path.join(__dirname, '../src/handlers.js'), 'utf8');
+    const APPJS  = fs.readFileSync(path.join(__dirname, '../src/app.js'), 'utf8');
+    const I18NJS = fs.readFileSync(path.join(__dirname, '../src/i18n.fr.js'), 'utf8');
+
+    // Fix 1 : .pl-a cliquable vers l'artiste
+    assert(/<div class="pl-a" id="pl-a" data-action="go-to-artist-bar" role="button" tabindex="0"/.test(HTML),
+      'index.html: .pl-a has data-action + role=button + tabindex=0 (was a dead visual affordance)');
+    assert(/export function goToArtistFromBar\(e\)/.test(PBJS),
+      'playerbar.js: goToArtistFromBar() defined');
+    assert(/e\.stopPropagation\(\); \/\/ ne pas laisser \.pl-info parent ouvrir Now Playing/.test(PBJS),
+      'playerbar.js: goToArtistFromBar() stops propagation so the parent .pl-info (role=button) does not also fire');
+    assert(/if \(!t\.artist \|\| t\.artist === unknownArtist \|\| t\.artist === 'Unknown Artist'\) return;/.test(PBJS),
+      'playerbar.js: goToArtistFromBar() guards unknown-artist the same way as ctxGoToArtist()');
+    assert(/'go-to-artist-bar':\s*\(_b, e\) => goToArtistFromBar\(e\)/.test(HDLJS),
+      'handlers.js: go-to-artist-bar wired into the click-delegation _ACTIONS map');
+    assert(/export \{ updateVolSlider, goToArtistFromBar \}; \/\/ re-export pour handlers\.js/.test(APPJS),
+      'app.js: goToArtistFromBar re-exported for handlers.js (same pattern as updateVolSlider)');
+    assert(/aria_go_to_artist_bar:\s*'Voir cet artiste'/.test(I18NJS),
+      'i18n.fr.js: aria_go_to_artist_bar label declared');
+
+    // Fix 2 : pas de double notification OS quand le mini-player est ouvert
+    assert(/import \{ getMiniOpen \}\s*from '\.\/miniplayer\.js'/.test(PBJS),
+      'playerbar.js: imports getMiniOpen from miniplayer.js');
+    const notifyBlock = /\(async \(\) => \{[\s\S]*?if \(getMiniOpen\(\)\) return; \/\/ miniplayer\.js notifie déjà — éviter le doublon\s*\n\s*invoke\('notify_track'/.exec(PBJS);
+    assert(notifyBlock, 'playerbar.js: notify_track (OS notification) is skipped when the mini-player is open (miniplayer.js already notifies via Web Notification API)');
+
+    // Fix 3 : fallback si l'image de pochette échoue à charger
+    assert(/img\.onerror = \(\) => \{ img\.style\.display = 'none'; em\.style\.display = ''; em\.innerHTML = extEmoji\(t\.ext\); \};/.test(PBJS),
+      'playerbar.js: pl-img gets an onerror fallback to the ext emoji (was previously undefined -> broken-image icon on load failure)');
+    // L'assignation onerror doit précéder l'assignation src (sinon une erreur synchrone/cache-hit pourrait ne pas être interceptée)
+    const artBlock = /img\.onerror = .*?\n\s*if \(t\.art\) \{ img\.src = t\.art;/s.exec(PBJS);
+    assert(artBlock, 'playerbar.js: onerror is assigned BEFORE img.src, not after');
+  } catch (e) {
+    console.error('  KO  Playerbar audit fixes (2026-09-01) scan crashed:', e.message);
+    _ko++;
+  }
+
+  // ─── Playerbar UI incoherence — volume slider filled pill bug (2026-09-01) ──
+  // Root cause : updateVolSlider() assignait `.style.background =` (shorthand),
+  // qui réinitialise TOUJOURS `background-clip` à `border-box` même quand le CSS
+  // externe déclare `background-clip: content-box`. Le gradient peignait donc
+  // toute la hauteur de l'élément (padding vertical inclus, ~29px) au lieu
+  // d'être clippé aux 3px centraux de la piste — d'où la capsule pleine/épaisse,
+  // visuellement incohérente avec .pbar (seek bar, fine). Vérifié visuellement
+  // via un harnais HTML isolé avant/après (capture d'écran comparée).
+  try {
+    const fs   = require('fs');
+    const path = require('path');
+    const PBJS = fs.readFileSync(path.join(__dirname, '../src/playerbar.js'), 'utf8');
+    const CSS  = fs.readFileSync(path.join(__dirname, '../src/style.css'), 'utf8');
+
+    assert(!/vel\.style\.background = /.test(PBJS),
+      'playerbar.js: updateVolSlider() no longer assigns the background shorthand (was clobbering background-clip)');
+    assert(/vel\.style\.setProperty\('--vol-pct', pct \+ '%'\);/.test(PBJS),
+      'playerbar.js: updateVolSlider() sets --vol-pct as a custom property instead');
+    assert(/\.vslider \{[^}]*background: linear-gradient\(to right, var\(--g\) var\(--vol-pct, 100%\), var\(--bg5\) var\(--vol-pct, 100%\)\)[^}]*background-clip: content-box/.test(CSS),
+      'style.css: .vslider background is CSS-driven via --vol-pct and background-clip: content-box is preserved (not overwritten by JS anymore)');
+  } catch (e) {
+    console.error('  KO  Playerbar UI incoherence — volume slider filled pill bug (2026-09-01) scan crashed:', e.message);
+    _ko++;
+  }
+
   // -- Résultat -----------------------------------------------------------
   console.log('\n═══════════════════════════════════════════════════════════');
   console.log(`  Total : ${_ok + _ko}   OK: ${_ok}   KO: ${_ko}`);

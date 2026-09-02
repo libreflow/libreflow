@@ -2506,7 +2506,12 @@ html[data-motion="reduce"] #vw::before, html[data-motion="reduce"] #vw::after { 
 }
 /* Piste fine (3px) mais zone interactive ~23px : padding vertical transparent,
    la piste visible est peinte via background-clip content-box (audit 2026-07-27). */
-.vslider { -webkit-appearance: none; width: var(--slider-w); height: calc(var(--track-h) + 2 * var(--space-3)); padding-block: var(--space-3); border-radius: var(--radius-xs); background: rgba(var(--g-rgb), 0.12); background-clip: content-box; outline: none; cursor: pointer; transition: height var(--motion-fast) var(--ease-spring), padding var(--motion-fast) var(--ease-spring); }
+/* UX FIX (2026-09-01) : background piloté en CSS via --vol-pct (custom property posée
+   par updateVolSlider() en JS), plus par un shorthand `.style.background =` en JS qui
+   écrasait systématiquement background-clip: content-box (bug racine de la capsule
+   pleine/épaisse, visuellement incohérente avec .pbar — cf. playerbar.js). --vol-pct
+   a un fallback 100% pour le tout premier paint, avant le premier updateVolSlider(). */
+.vslider { -webkit-appearance: none; width: var(--slider-w); height: calc(var(--track-h) + 2 * var(--space-3)); padding-block: var(--space-3); border-radius: var(--radius-xs); background: linear-gradient(to right, var(--g) var(--vol-pct, 100%), var(--bg5) var(--vol-pct, 100%)); background-clip: content-box; outline: none; cursor: pointer; transition: height var(--motion-fast) var(--ease-spring), padding var(--motion-fast) var(--ease-spring); }
 .vslider:hover { height: calc(var(--track-h-lg) + 2 * var(--space-3)); }
 /* AUDIT-2026-07-27 : thumb accent invisible sur la portion remplie (accent sur
    accent) — passé en blanc avec ombre + liseré, lisible sur piste pleine et vide. */

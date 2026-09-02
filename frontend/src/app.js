@@ -99,8 +99,8 @@ import { initShortcuts } from './shortcuts.js';
 import { setTlistZoom, initTlistZoomWheel } from './tlistZoom.js';
 import { confirmClear, closeModal } from './modal.js';
 export { confirmClear, closeModal }; // re-export pour handlers.js
-import { updateBar, updateVolSlider, setupMarquee, reflowMarquee } from './playerbar.js';
-export { updateVolSlider }; // re-export pour handlers.js
+import { updateBar, updateVolSlider, setupMarquee, reflowMarquee, goToArtistFromBar } from './playerbar.js';
+export { updateVolSlider, goToArtistFromBar }; // re-export pour handlers.js
 // ── cfgsave.js (ARCH-1) ──────────────────────────────────────────────────────
 import { saveCfg, saveCfgNow } from './cfgsave.js';
 export { saveCfg }; // re-export pour cinema.js, ctxmenu.js, player.js, etc.

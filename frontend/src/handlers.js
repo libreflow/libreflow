@@ -70,7 +70,7 @@ import { importM3U, exportM3U, exportXSPF }                    from './m3u.js';
 import { invoke }                                              from './ipc.js';
 import { CFG }                                                from './cfg.js';
 import { setAriaValueText }                                    from './a11y.js';
-import { cycleSpeed, closeModal, clearLibrary, confirmClear, clearAppCache, updateVolSlider, playPlaylistFrom, shufflePlaylist, playPlaylistDirect, playCardByKey, saveCfg } from './app.js';
+import { cycleSpeed, closeModal, clearLibrary, confirmClear, clearAppCache, updateVolSlider, goToArtistFromBar, playPlaylistFrom, shufflePlaylist, playPlaylistDirect, playCardByKey, saveCfg } from './app.js';
 import { _syncVizBtns, closeSettings, toggleSettings, toggleMode, toggleShortcuts, closeShortcuts, setTheme, setMode, switchSetTab, syncMiniSettingsBtn } from './settings.js';
 import { goHome, setView, nextSort, nextAlbumSort, onSearch, clearAllFilters, sortByColumn } from './views.js';
 import { setCinemaBg, toggleCinemaRadio }                      from './cinema.js';
@@ -120,6 +120,7 @@ const _ACTIONS = {
   'toggle-shuffle':        ()    => toggleShuffle(),
   'toggle-repeat':         ()    => toggleRepeat(),
   'toggle-like':           ()    => toggleLike(),
+  'go-to-artist-bar':      (_b, e) => goToArtistFromBar(e),
   'cycle-speed':           ()    => cycleSpeed(),
   'toggle-mute':           ()    => {
     const volEl = document.getElementById('vol');

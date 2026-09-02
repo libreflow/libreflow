@@ -32,6 +32,14 @@ import { animateArtChange, applyArtColor, clearArtColor,
 import { extEmoji }                                  from './utils.js';
 import { extractColor }                              from './tags.js';
 import { on, EVENTS }                               from './bus.js';
+// UX FIX (2026-09-01) : drillDown pour ctxGoToArtist — même hub central que
+// ctxmenu.js/dropin.js/genres.js/handlers.js/library.js/player.js/queue.js/
+// playlists.js/shortcuts.js/views.js, qui importent déjà tous depuis renderer.js.
+import { drillDown }                                from './renderer.js';
+// UX FIX (2026-09-01) : getMiniOpen pour éviter la double notification OS
+// (voir Phase 2 de updateBar() plus bas) — déjà exporté publiquement et
+// consommé par settings.js, pas de cycle (miniplayer.js n'importe pas playerbar.js).
+import { getMiniOpen }                              from './miniplayer.js';
 // Cinéma demande la mise à jour du slider volume — évite le cycle cinema.js ↔ playerbar.js.
 on(EVENTS.VOL_SLIDER_UPDATE, ({ elId }) => updateVolSlider(document.getElementById(elId)));
 on(EVENTS.PLAYERBAR_UPDATE, () => updateBar());
@@ -46,7 +54,15 @@ export function updateVolSlider(el) {
   const vel = (el instanceof Element) ? el : document.getElementById('vol');
   if (!vel) return;
   const pct = Math.round(+vel.value * 100);
-  vel.style.background = `linear-gradient(to right, var(--g) ${pct}%, var(--bg5) ${pct}%)`;
+  // UX FIX (2026-09-01) : remplacer l'assignation `.style.background =` (shorthand)
+  // par une custom property consommée en CSS. Le shorthand `background` réinitialise
+  // TOUJOURS `background-clip` à sa valeur par défaut (`border-box`) même si le CSS
+  // externe déclare `background-clip: content-box` — donc le gradient peignait toute
+  // la hauteur de l'élément (padding vertical inclus, ~29px) au lieu d'être clippé aux
+  // 3px centraux de la piste, comme prévu par le padding-block de .vslider. C'était la
+  // cause racine de la capsule pleine et épaisse (incohérente avec la seek bar fine
+  // .pbar) — pas un choix de design, un bug de spécificité CSS shorthand vs propriété.
+  vel.style.setProperty('--vol-pct', pct + '%');
   const tip = document.getElementById('vol-tip');
   if (tip) {
     tip.textContent = pct + '%';
@@ -129,6 +145,26 @@ export function reflowMarquee() {
   setupMarquee(document.getElementById('pl-a'), t.artistFull || t.artist || i18n('unknown_artist'));
 }
 
+// UX FIX (2026-09-01) : .pl-a (nom d'artiste) affichait déjà cursor:pointer +
+// hover souligné + :focus-visible en CSS (style.css) — une affordance de lien
+// jamais câblée. Pire : imbriqué dans .pl-info (role=button, toggle-now-playing),
+// un clic dessus ouvrait la vue plein écran au lieu d'aller à l'artiste. Même
+// pattern que ctxGoToArtist() (ctxmenu.js) : drillDown vers la vue Artistes,
+// avec la même garde "artiste inconnu" pour ne pas driller sur un placeholder.
+/** @param {MouseEvent} e */
+export function goToArtistFromBar(e) {
+  e.stopPropagation(); // ne pas laisser .pl-info parent ouvrir Now Playing
+  const curIdx = get('curIdx');
+  if (curIdx < 0) return;
+  const t = get('tracks')?.[curIdx];
+  if (!t) return;
+  const unknownArtist = i18n('unknown_artist') || 'Artiste inconnu';
+  if (!t.artist || t.artist === unknownArtist || t.artist === 'Unknown Artist') return;
+  const rawKey      = t.artist.toLowerCase(); // cohérent avec ctxGoToArtist() — search.js fait un match exact
+  const displayName = t.artistFull || t.artist;
+  drillDown('artists', rawKey, displayName);
+}
+
 // ── Now-playing bar update ────────────────────────────────────────────────────
 // Tracking de la dernière notification envoyée (évite les doublons).
 let _lastNotifTrackId = null;
@@ -166,6 +202,12 @@ export function updateBar() {
   setupMarquee(document.getElementById('pl-a'), t.artistFull || t.artist || i18n('unknown_artist'));
 
   const img = document.getElementById('pl-img'), em = document.getElementById('pl-em');
+  // UX FIX (2026-09-01) : fallback si l'image échoue à charger (blob révoqué
+  // prématurément, buffer corrompu, fichier déplacé) — sans onerror, l'utilisateur
+  // voyait l'icône "image cassée" native du navigateur au lieu du fallback emoji
+  // déjà utilisé pour "pas de pochette". onerror réassigné à chaque updateBar()
+  // (pas d'accumulation de listeners : la même réassignation écrase la précédente).
+  img.onerror = () => { img.style.display = 'none'; em.style.display = ''; em.innerHTML = extEmoji(t.ext); };
   if (t.art) { img.src = t.art; img.alt = t.album || t.name || ''; img.style.display = 'block'; em.style.display = 'none'; animateArtChange(); }
   else       { img.alt = ''; img.style.display = 'none'; em.style.display = ''; em.innerHTML = extEmoji(t.ext); }
 
@@ -206,6 +248,12 @@ export function updateBar() {
     if (cinemaOpen) updateCinema();
     if (_shouldNotify) {
       // ART-IDB : base64 généré lazily depuis _artBuf (fire-and-forget, pas bloquant)
+      // UX FIX (2026-09-01) : notify_track (notification OS native Tauri) sautée si le
+      // mini-player est ouvert — miniplayer.js déclenche déjà sa propre notification
+      // (Web Notification API, _notifyTrack) sur le même changement de piste. Sans cette
+      // garde, l'utilisateur voyait 2 notifications OS empilées pour un seul changement.
+      // Le calcul d'artUrl/t._b64 reste inconditionnel : le cache sert aussi à
+      // miniplayer.js et à d'autres relectures futures de la même piste.
       (async () => {
         let artUrl = null;
         if (t._b64) {
@@ -220,6 +268,7 @@ export function updateBar() {
           });
           t._b64 = artUrl; // cache pour le prochain changement de piste
         }
+        if (getMiniOpen()) return; // miniplayer.js notifie déjà — éviter le doublon
         invoke('notify_track', { data: { title: t.name, artist: t.artistFull || t.artist || '', art: artUrl } }).catch(e => console.warn('[playerbar:notify_track]', e));
       })();
       updateMediaSession(t);
