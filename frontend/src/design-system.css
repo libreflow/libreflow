@@ -541,7 +541,7 @@ html[data-mode="light"] {
   --text-desc-max:     320px;   /* max-width descriptions modales sm */
   --text-sf-max:       380px;   /* max-width chemin fichier, overflow ellipsis */
   --welcome-desc-max:  360px;   /* max-width sous-titre écran d'accueil (.wsub) */
-  --welcome-content-max: 440px; /* max-width grille features écran d'accueil (.wfeats) */
+  --welcome-content-max: 440px; /* max-width grille features écran d'accueil (.wf-row) */
   --modal-pl-max:      480px;   /* max-width barre progression playlist */
   --modal-orphan-max:  540px;   /* max-width modale orphelins étendue */
   --cn-next-max:       270px;   /* max-width panneau cinema next */
@@ -770,8 +770,11 @@ html[data-mode="light"] {
 
   /* Ombres composants — drop-shadows recâblées sur --elev-* (audit §2.4 / FND-04).
      Les variantes thème clair (-lt / -pl) restent littérales (re-définies par mode
-     au re-skin couleur), ainsi que les composites et glows spécifiques. */  --shadow-pop:    var(--shadow-md);  --shadow-modal2: var(--shadow-lg);
-  --shadow-modal3: var(--shadow-xl);  --shadow-cin-art:none;
+     au re-skin couleur), ainsi que les composites et glows spécifiques. */
+  --shadow-pop:    var(--shadow-md);
+  --shadow-modal2: var(--shadow-lg);
+  --shadow-modal3: var(--shadow-xl);
+  --shadow-cin-art:none;
   --shadow-thumb:  var(--elev-1);               /* pbar thumb shadow */
 
   /* Ombres accent — glows simples recâblés sur --glow-accent ; les anneaux
@@ -807,7 +810,8 @@ html[data-mode="light"] {
   --dropshadow-art-sm:none;
   --dropshadow-heart: 0 0 16px rgba(255,60,100,.7);     /* like heart glow */
 
-  /* Ombres animation/motion (keyframes) */  --shadow-pcplay-anim:0 2px 12px rgba(var(--g-rgb),.4), 0 0 0 0 rgba(var(--g-rgb),0);
+  /* Ombres animation/motion (keyframes) */
+  --shadow-pcplay-anim:0 2px 12px rgba(var(--g-rgb),.4), 0 0 0 0 rgba(var(--g-rgb),0);
   --shadow-pcplay-glow:0 4px 18px rgba(var(--g-rgb),.6), 0 0 0 5px rgba(var(--g-rgb),.1);
   --shadow-art-col2:   0 0 0 1px color-mix(in srgb, var(--art-color) 40%, rgba(var(--g-rgb), .14));
 

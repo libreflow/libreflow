@@ -208,8 +208,20 @@ export function updateBar() {
   // déjà utilisé pour "pas de pochette". onerror réassigné à chaque updateBar()
   // (pas d'accumulation de listeners : la même réassignation écrase la précédente).
   img.onerror = () => { img.style.display = 'none'; em.style.display = ''; em.innerHTML = extEmoji(t.ext); };
-  if (t.art) { img.src = t.art; img.alt = t.album || t.name || ''; img.style.display = 'block'; em.style.display = 'none'; animateArtChange(); }
-  else       { img.alt = ''; img.style.display = 'none'; em.style.display = ''; em.innerHTML = extEmoji(t.ext); }
+  // UX FIX (2026-09-01, réadapté depuis worktree-flagship-polish-pass b45c876) :
+  // shimmer .pl-art.loading pendant que les tags/pochette de la piste hydratent
+  // (!t.metaDone) — sans ça la pochette sautait directement du vide à l'image
+  // finale, contrairement aux grilles albums/artistes et à la liste de pistes
+  // qui ont déjà ce même pattern .loading (voir renderer-grids.js/renderer.js).
+  const plArt = document.getElementById('pl-art');
+  plArt?.classList.toggle('loading', !t.metaDone);
+  if (!t.metaDone) {
+    img.style.display = 'none'; em.style.display = 'none';
+  } else if (t.art) {
+    img.src = t.art; img.alt = t.album || t.name || ''; img.style.display = 'block'; em.style.display = 'none'; animateArtChange();
+  } else {
+    img.alt = ''; img.style.display = 'none'; em.style.display = ''; em.innerHTML = extEmoji(t.ext);
+  }
 
   const liked = get('liked');
   const _isLikedNow = liked instanceof Set ? liked.has(t.id) : false;

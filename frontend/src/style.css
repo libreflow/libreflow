@@ -1271,7 +1271,8 @@ html[data-mode="light"] #next-preview img { outline-color: var(--tint-2); }
   to   { background-position: -250% center; }
 }
 .tart.loading,
-.card-art.loading {
+.card-art.loading,
+.pl-art.loading {
   background: linear-gradient(
     105deg,
     var(--bg3) 0%,
@@ -1282,6 +1283,31 @@ html[data-mode="light"] #next-preview img { outline-color: var(--tint-2); }
   );
   background-size: 500% 100%;
   animation: shim var(--anim-shim) linear infinite;
+}
+
+/* Masque le glyphe 💿/initiale pendant le shimmer — évite la superposition
+   avec le gradient animé (bruit visuel, réadapté depuis worktree-flagship-polish-pass edf4064). */
+.card-art.loading .card-art-ph { opacity: 0; }
+
+/* Mode clair : les overrides html[data-mode="light"] .tart/.card-art/#pl-art
+   (background:var(--bg4)) ont une spécificité plus élevée que .loading seul
+   et écrasaient le gradient de shimmer ci-dessus, laissant un bloc plat
+   pendant le chargement. Re-déclare le même gradient scoped à .loading pour
+   regagner la spécificité (--bg3/--bg5/--bg6 résolvent déjà en valeurs
+   claires sous ce sélecteur — cf. design-system.css).
+   (réadapté depuis worktree-flagship-polish-pass a4c20a1) */
+html[data-mode="light"] .tart.loading,
+html[data-mode="light"] .card-art.loading,
+html[data-mode="light"] #pl-art.loading {
+  background: linear-gradient(
+    105deg,
+    var(--bg3) 0%,
+    var(--bg3) 35%,
+    var(--bg5) 46%, var(--bg6) 50%, var(--bg5) 54%,
+    var(--bg3) 65%,
+    var(--bg3) 100%
+  );
+  background-size: 500% 100%;
 }
 
 /* ── Skeleton rows (affichés pendant le chargement de la DB) ── */

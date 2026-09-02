@@ -4747,6 +4747,7 @@ section('components/lf-toast-stack.logic.js -- import-smoke');
     const PBJS   = fs.readFileSync(path.join(__dirname, '../src/playerbar.js'), 'utf8');
     const HTML   = fs.readFileSync(path.join(__dirname, '../index.html'), 'utf8');
     const HDLJS  = fs.readFileSync(path.join(__dirname, '../src/handlers.js'), 'utf8');
+    const PBCSS  = fs.readFileSync(path.join(__dirname, '../src/style.css'), 'utf8');
     const APPJS  = fs.readFileSync(path.join(__dirname, '../src/app.js'), 'utf8');
     const I18NJS = fs.readFileSync(path.join(__dirname, '../src/i18n.fr.js'), 'utf8');
 
@@ -4776,8 +4777,20 @@ section('components/lf-toast-stack.logic.js -- import-smoke');
     assert(/img\.onerror = \(\) => \{ img\.style\.display = 'none'; em\.style\.display = ''; em\.innerHTML = extEmoji\(t\.ext\); \};/.test(PBJS),
       'playerbar.js: pl-img gets an onerror fallback to the ext emoji (was previously undefined -> broken-image icon on load failure)');
     // L'assignation onerror doit précéder l'assignation src (sinon une erreur synchrone/cache-hit pourrait ne pas être interceptée)
-    const artBlock = /img\.onerror = .*?\n\s*if \(t\.art\) \{ img\.src = t\.art;/s.exec(PBJS);
-    assert(artBlock, 'playerbar.js: onerror is assigned BEFORE img.src, not after');
+    const onerrorIdx = PBJS.indexOf("img.onerror = () => { img.style.display = 'none'; em.style.display = ''; em.innerHTML = extEmoji(t.ext); };");
+    const imgSrcIdx  = PBJS.indexOf('img.src = t.art;');
+    assert(onerrorIdx !== -1 && imgSrcIdx !== -1 && onerrorIdx < imgSrcIdx,
+      'playerbar.js: onerror is assigned BEFORE img.src, not after');
+
+    // Shimmer pochette playerbar pendant l'hydratation des tags (réadapté depuis
+    // worktree-flagship-polish-pass b45c876) — .pl-art.loading tant que !t.metaDone,
+    // cohérent avec le même pattern déjà câblé sur les grilles et la liste de pistes.
+    assert(/plArt\?\.classList\.toggle\('loading', !t\.metaDone\);/.test(PBJS),
+      'playerbar.js: #pl-art gets the .loading shimmer class while !t.metaDone');
+    assert(/\.tart\.loading,\n\.card-art\.loading,\n\.pl-art\.loading \{/.test(PBCSS),
+      'style.css: .pl-art.loading shares the shimmer gradient with .tart/.card-art');
+    assert(/html\[data-mode="light"\] \.tart\.loading,\nhtml\[data-mode="light"\] \.card-art\.loading,\nhtml\[data-mode="light"\] #pl-art\.loading \{/.test(PBCSS),
+      'style.css: light-mode shimmer override also covers #pl-art.loading (not just .tart/.card-art)');
   } catch (e) {
     console.error('  KO  Playerbar audit fixes (2026-09-01) scan crashed:', e.message);
     _ko++;
@@ -4805,6 +4818,50 @@ section('components/lf-toast-stack.logic.js -- import-smoke');
       'style.css: .vslider background is CSS-driven via --vol-pct and background-clip: content-box is preserved (not overwritten by JS anymore)');
   } catch (e) {
     console.error('  KO  Playerbar UI incoherence — volume slider filled pill bug (2026-09-01) scan crashed:', e.message);
+    _ko++;
+  }
+
+  // ─── Recovered from worktree-flagship-polish-pass (2026-09-01) ──────────────
+  // 9 commits reviewed for relevance/redundancy before reapplying by hand onto
+  // current code (playerbar.js/renderer.js/renderer-grids.js diverged since
+  // July): shimmer skeleton on grid covers + track-row art, catch-path fix so
+  // the shimmer doesn't spin forever on a getArtUrl() rejection, and the
+  // welcome-screen hero redesign. (queue empty-state and .sel-action:active
+  // were already superseded by later work — confirmed via grep, not reapplied.)
+  try {
+    const fs   = require('fs');
+    const path = require('path');
+    const RGJS  = fs.readFileSync(path.join(__dirname, '../src/renderer-grids.js'), 'utf8');
+    const RNJS  = fs.readFileSync(path.join(__dirname, '../src/renderer.js'), 'utf8');
+    const IDXHT = fs.readFileSync(path.join(__dirname, '../index.html'), 'utf8');
+
+    // Grid covers (albums/artists) — shimmer while a cover fetch is in flight
+    assert(/const isPending = !a\.artUrl && !!a\.artTrack;/.test(RGJS) && (RGJS.match(/const isPending = !a\.artUrl && !!a\.artTrack;/g) || []).length === 2,
+      'renderer-grids.js: both renderAlbumsGrid() and renderArtistsGrid() compute isPending for the shimmer class');
+    assert(/<div class="card-art\$\{isPending \? ' loading' : ''\}">/.test(RGJS),
+      'renderer-grids.js: album card-art gets the loading class when pending');
+    assert(/<div class="card-art card-art-round\$\{isPending \? ' loading' : ''\}">/.test(RGJS),
+      'renderer-grids.js: artist card-art gets the loading class when pending');
+    // Catch-path fix: a rejected getArtUrl() must also clear .loading, or the
+    // shimmer spins forever instead of settling into the permanent placeholder.
+    assert(/catch\(e => \{ console\.warn\('\[getArtUrl\]', t\?\.id, e\); ph\.closest\('\.card-art'\)\?\.classList\.remove\('loading'\); \}\);/.test(RGJS),
+      "renderer-grids.js: getArtUrl() rejection also clears .loading (not just the .then success/no-art paths)");
+
+    // Track-row shimmer — .tart.loading while !t.metaDone, monogram placeholder reserved for the final "no art" state
+    assert(/const tartClass = t\.metaDone \? 'tart' : 'tart loading';/.test(RNJS),
+      'renderer.js: thtml() computes tartClass, loading while tags are still hydrating');
+    assert(/\$\{trackNum\}<div class="\$\{tartClass\}">/.test(RNJS),
+      'renderer.js: track row uses the computed tartClass instead of a hardcoded "tart"');
+
+    // Welcome screen — hero halo + compact chip row replaces the 4-card feature grid
+    assert(/<div class="wl-hero" aria-hidden="true">/.test(IDXHT),
+      'index.html: welcome screen has the hero halo wrapper around the logo');
+    assert(!/<div class="wfeats">/.test(IDXHT),
+      'index.html: old 4-card .wfeats grid removed');
+    assert(/<div class="wf-row" role="list" aria-label="Fonctionnalités principales">/.test(IDXHT),
+      'index.html: welcome screen has the compact .wf-row chip list instead');
+  } catch (e) {
+    console.error('  KO  Recovered from worktree-flagship-polish-pass (2026-09-01) scan crashed:', e.message);
     _ko++;
   }
 
