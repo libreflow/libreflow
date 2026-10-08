@@ -1556,7 +1556,9 @@
         </div>
         <div class="modal-btns">
           <button class="mbtn cancel" data-action="close-modal">Annuler</button>
-          <button class="mbtn danger" data-action="clear-library">Vider quand même</button>
+          <button class="mbtn danger" data-action="clear-library" data-i18n="confirm_clear_anyway">
+            Vider quand même
+          </button>
         </div>
       </div>
     </div>
@@ -1568,7 +1570,12 @@
         <div id="confirm-modal-body" class="modal-s"></div>
         <div class="modal-btns">
           <button class="mbtn cancel" data-action="confirm-resolve-no">Annuler</button>
-          <button id="confirm-modal-ok" class="mbtn danger" data-action="confirm-resolve-yes">
+          <button
+            id="confirm-modal-ok"
+            class="mbtn danger"
+            data-action="confirm-resolve-yes"
+            data-i18n="btn_confirm"
+          >
             Confirmer
           </button>
         </div>
@@ -1587,7 +1594,12 @@
         <div id="organize-modal-list" class="organize-preview-list"></div>
         <div class="modal-btns">
           <button class="mbtn cancel" data-action="organize-cancel">Annuler</button>
-          <button class="mbtn" id="organize-confirm-btn" data-action="organize-confirm">
+          <button
+            class="mbtn"
+            id="organize-confirm-btn"
+            data-action="organize-confirm"
+            data-i18n="btn_confirm"
+          >
             Confirmer
           </button>
         </div>
@@ -1603,8 +1615,10 @@
           <!-- Injecté dynamiquement par _renderDrivesList() -->
         </div>
         <div class="modal-btns">
-          <button class="mbtn cancel" data-action="usb-cancel">Fermer</button>
-          <button class="mbtn" data-action="usb-refresh">↻ Actualiser</button>
+          <button class="mbtn cancel" data-action="usb-cancel" data-i18n="btn_close">Fermer</button>
+          <button class="mbtn" data-action="usb-refresh" data-i18n="btn_refresh">
+            ↻ Actualiser
+          </button>
         </div>
       </div>
     </div>
@@ -1627,9 +1641,13 @@
         </div>
 
         <div class="modal-btns" id="cd-actions">
-          <button class="mbtn cancel" data-action="cd-cancel-modal">Ignorer</button>
-          <button class="mbtn" data-action="cd-extract">Extraire vers bibliothèque</button>
-          <button class="mbtn confirm" data-action="cd-play">Lire</button>
+          <button class="mbtn cancel" data-action="cd-cancel-modal" data-i18n="btn_ignore">
+            Ignorer
+          </button>
+          <button class="mbtn" data-action="cd-extract" data-i18n="cd_extract_lib">
+            Extraire vers bibliothèque
+          </button>
+          <button class="mbtn confirm" data-action="cd-play" data-i18n="play">Lire</button>
         </div>
       </div>
     </div>
@@ -1765,7 +1783,9 @@
           <div class="pl-modal-btns">
             <button class="mbtn cancel" data-action="close-pl-modal">Annuler</button>
             <!-- FIX-B4 : .confirm à la place de .danger (sémantique correcte, style dans style.css) -->
-            <button class="mbtn confirm" data-action="confirm-playlist">Créer</button>
+            <button class="mbtn confirm" data-action="confirm-playlist" data-i18n="pl_create">
+              Créer
+            </button>
           </div>
         </div>
 
@@ -2831,7 +2851,13 @@
                     <div class="set-row-label" data-i18n="set_eq_current_device">
                       Appareil actuel
                     </div>
-                    <div class="set-row-sub" id="eq-device-current-label">Détection en cours…</div>
+                    <div
+                      class="set-row-sub"
+                      id="eq-device-current-label"
+                      data-i18n="set_eq_detecting"
+                    >
+                      Détection en cours…
+                    </div>
                   </div>
                   <button
                     id="eq-device-save-btn"
@@ -3169,7 +3195,7 @@
                     <div class="set-row-label" data-i18n="set_organize_library">
                       Organiser la bibliothèque
                     </div>
-                    <div class="set-row-sub">
+                    <div class="set-row-sub" data-i18n="set_org_sub">
                       Déplace les fichiers audio dans des dossiers Artiste/Album. Aperçu avant
                       confirmation.
                     </div>
@@ -3180,6 +3206,7 @@
                     class="mbtn mbtn-sm organize-btn"
                     data-action="organize-trigger"
                     data-scheme="artist-album"
+                    data-i18n="org_scheme_artist_album"
                   >
                     Artiste / Album
                   </button>
@@ -3187,6 +3214,7 @@
                     class="mbtn mbtn-sm organize-btn"
                     data-action="organize-trigger"
                     data-scheme="artist"
+                    data-i18n="org_scheme_artist"
                   >
                     Artiste
                   </button>
@@ -3194,6 +3222,7 @@
                     class="mbtn mbtn-sm organize-btn"
                     data-action="organize-trigger"
                     data-scheme="flat"
+                    data-i18n="org_scheme_flat"
                   >
                     Plat
                   </button>
@@ -3205,24 +3234,38 @@
                 </div>
                 <div class="set-row">
                   <div>
-                    <div class="set-row-label">Exporter la bibliothèque</div>
-                    <div class="set-row-sub">
+                    <div class="set-row-label" data-i18n="set_backup_export_label">
+                      Exporter la bibliothèque
+                    </div>
+                    <div class="set-row-sub" data-i18n="set_backup_export_sub">
                       Sauvegarde les pistes, playlists et historique dans un fichier .libreflow.
                     </div>
                   </div>
-                  <button class="mbtn mbtn-sm" id="backup-export-btn" data-action="backup-export">
+                  <button
+                    class="mbtn mbtn-sm"
+                    id="backup-export-btn"
+                    data-action="backup-export"
+                    data-i18n="set_backup_export_btn"
+                  >
                     Exporter
                   </button>
                 </div>
                 <div class="set-row">
                   <div>
-                    <div class="set-row-label">Restaurer une sauvegarde</div>
-                    <div class="set-row-sub">
+                    <div class="set-row-label" data-i18n="set_backup_import_label">
+                      Restaurer une sauvegarde
+                    </div>
+                    <div class="set-row-sub" data-i18n="set_backup_import_sub">
                       Importe les pistes d'un fichier .libreflow (les données locales sont
                       conservées).
                     </div>
                   </div>
-                  <button class="mbtn mbtn-sm" id="backup-import-btn" data-action="backup-import">
+                  <button
+                    class="mbtn mbtn-sm"
+                    id="backup-import-btn"
+                    data-action="backup-import"
+                    data-i18n="set_backup_import_btn"
+                  >
                     Restaurer
                   </button>
                 </div>
@@ -3231,13 +3274,15 @@
                 <div class="set-section-lbl" data-i18n="set_usb_import">Import USB</div>
                 <div class="set-row">
                   <div>
-                    <div class="set-row-label">Importer depuis un disque externe</div>
-                    <div class="set-row-sub">
+                    <div class="set-row-label" data-i18n="set_usb_label">
+                      Importer depuis un disque externe
+                    </div>
+                    <div class="set-row-sub" data-i18n="set_usb_sub">
                       Détecte les clés USB et disques externes, importe la musique via le pipeline
                       existant.
                     </div>
                   </div>
-                  <button class="mbtn mbtn-sm" data-action="usb-open-modal">
+                  <button class="mbtn mbtn-sm" data-action="usb-open-modal" data-i18n="set_usb_btn">
                     Importer depuis USB
                   </button>
                 </div>
@@ -4401,11 +4446,14 @@
         </div>
         <div class="dupes-list" id="dupes-list"></div>
         <div class="dupes-footer">
-          <button class="mbtn cancel" data-action="close-dupes">Fermer</button>
+          <button class="mbtn cancel" data-action="close-dupes" data-i18n="btn_close">
+            Fermer
+          </button>
           <button
             class="mbtn danger"
             id="dupes-del-all-btn"
             data-action="delete-all-dupes"
+            data-i18n="dupes_delete_all"
             style="display: none"
           >
             Supprimer tous les doublons
@@ -4477,7 +4525,12 @@
         <p class="bte-hint">Laisser vide pour ne pas modifier le champ · Pochette optionnelle</p>
         <div class="modal-btns">
           <button class="mbtn cancel" data-action="close-batch-tag-modal">Annuler</button>
-          <button class="mbtn primary" id="bte-confirm-btn" data-action="confirm-batch-tag-edit">
+          <button
+            class="mbtn primary"
+            id="bte-confirm-btn"
+            data-action="confirm-batch-tag-edit"
+            data-i18n="btn_apply"
+          >
             Appliquer
           </button>
         </div>

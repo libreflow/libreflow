@@ -16,6 +16,7 @@
 
 import { invoke } from './ipc.js';
 import { toast, esc } from './ui.js';
+import { i18n } from './i18n.js';
 import { importPaths } from './watchfolder.js';
 import { detectNewAudioCds } from './cdaudio_pure.js';
 import { openCdModal, cleanupCdCache } from './cdaudio.js';
@@ -122,11 +123,11 @@ function _detectNewRemovable(previous, current) {
 }
 
 function _onUsbConnected(drive) {
-  toast(`Disque USB détecté (${drive.label || drive.path}) — Importer de la musique ?`, 'info');
+  toast(i18n('dv_usb_detected', drive.label || drive.path), 'info');
 }
 
 function _onAudioCdInserted(drive) {
-  toast(`CD Audio détecté (${drive.track_count} pistes) — Lire ou extraire ?`, 'info');
+  toast(i18n('dv_cd_detected', drive.track_count), 'info');
   openCdModal(drive.path);
 }
 
@@ -142,7 +143,7 @@ export async function importFromDrive(drivePath) {
   try {
     result = await invoke('open_folder_at', { startPath: drivePath }, { timeout: 0 });
   } catch (e) {
-    toast(`Erreur d'accès au lecteur : ${e}`, 'error');
+    toast(i18n('dv_drive_error', e), 'error');
     return;
   }
 
@@ -155,15 +156,15 @@ export async function importFromDrive(drivePath) {
 
   const { files } = result;
   if (!files || !files.length) {
-    toast('Aucun fichier audio trouvé dans ce dossier', 'info');
+    toast(i18n('dv_no_audio'), 'info');
     return;
   }
 
   const added = await importPaths(files, 'usb');
   if (added > 0) {
-    toast(`${added} piste(s) importée(s) depuis le lecteur USB`, 'success');
+    toast(i18n('dv_usb_imported', added), 'success');
   } else {
-    toast('Aucune nouvelle piste trouvée (déjà dans la bibliothèque ?)', 'info');
+    toast(i18n('dv_no_new'), 'info');
   }
 }
 

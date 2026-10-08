@@ -16,6 +16,7 @@ import { trackIdx, rebuildTrackIdxMap, invalidateFilterCache } from './search.js
 import { VIRT } from './virt.js';
 import { audio, adjustShuffleQAfterDelete } from './player.js';
 import { toast, toastWithAction, esc } from './ui.js';
+import { i18n } from './i18n.js';
 import { setCurIdx, removeTracksBatch } from './state.js';
 import { saveTrackNow } from './library.js';
 import { CFG } from './cfg.js';
@@ -229,7 +230,7 @@ async function _relocateOrphan(track, rowEl, btnEl) {
     'alac'
   ];
   if (!_AUDIO_EXTS.includes(_pickedExt)) {
-    toast('Type de fichier non reconnu — choisissez un fichier audio', 'warning');
+    toast(i18n('oph_bad_type'), 'warning');
     btnEl.disabled = false;
     btnEl.textContent = prevLabel;
     return;
@@ -253,7 +254,7 @@ async function _relocateOrphan(track, rowEl, btnEl) {
   if (pathEl) pathEl.textContent = newPath;
   btnEl.textContent = '✓ OK';
 
-  toast('"' + track.name + '" relocalisé', 'success');
+  toast(i18n('oph_relocated', track.name), 'success');
 
   invalidateFilterCache();
   emit(EVENTS.RENDER_LIB, {});
@@ -315,8 +316,5 @@ async function _deleteOrphans(orphanTracks) {
   emit(EVENTS.RENDER_LIB, {});
 
   const n = idsToDelete.length;
-  toast(
-    n + ' fichier' + (n > 1 ? 's' : '') + ' supprimé' + (n > 1 ? 's' : '') + ' de la bibliothèque',
-    'success'
-  );
+  toast(i18n('oph_deleted_from_lib', n), 'success');
 }
