@@ -55,6 +55,17 @@ for (const [label, base] of Object.entries(scenarios)) {
   // Guard: baseline=0 → division by zero → Infinity drift.
   // If the baseline rounds to 0 ms the scenario is essentially free (sub-µs fast path).
   // Any positive current measurement is noise, not a regression — treat as OK.
+  // Guard: baseline < 2 ms → relative drift is meaningless on a shared CI runner
+  // (a ±1 ms jitter is ±80% at 1.26 ms). Only flag if the absolute overhead
+  // exceeds the noise floor of 2 ms on top of the baseline.
+  const NOISE_FLOOR_MS = 2;
+  if (base.medianMs > 0 && base.medianMs < NOISE_FLOOR_MS) {
+    const overheadMs = cur.medianMs - base.medianMs;
+    const status0 = overheadMs > NOISE_FLOOR_MS ? 'FAIL' : 'OK (noise floor)';
+    if (status0 === 'FAIL') failed++;
+    rows.push([label, base.medianMs, cur.medianMs, overheadMs, '≤2ms o/h', status0]);
+    continue;
+  }
   const driftPct = base.medianMs === 0
     ? 0
     : ((cur.medianMs - base.medianMs) / base.medianMs) * 100;
