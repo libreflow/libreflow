@@ -371,6 +371,7 @@ html[data-mode='light'] {
   /* Couleurs absolues — pour les rares cas où une couleur exacte est requise */
   --c-white: #ffffff; /* blanc pur — cercle dot, eq-preset, select-input */
   --c-black: #000000; /* noir pur — cinema bg, spl-mode active text */
+  --c-amber-ink: #7a4e00; /* encre ambre (texte sur fond ambré clair, AA 5.5:1) */
   --c-1a: #1a1a1a; /* quasi-noir — cinema art-em fallback */
   --c-genre-fb-1: #1e1e1e; /* fallback gradient carte genre sans --gc (audit 2026-07-27) */
   --c-genre-fb-2: #2a2a2a; /* fallback gradient carte genre — palier haut */
