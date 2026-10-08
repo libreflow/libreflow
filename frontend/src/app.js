@@ -55,7 +55,7 @@ import {
   deletePlaylist, movePlaylistTrack,
   showPlCtxMenu, ctxPlayPlaylist, ctxShufflePlaylist,
   showPlQuickPop, closePlQuickPop, pqpAdd, pqpNew,
-  onTrackDragStart, onPlNavDragStart,
+  onTrackDragStart, onPlNavDragStart, _attachPlaylistReorder,
   togglePinPlaylist, movePlToFolder, removePlFromFolder,
   togglePlFolder, showPlFolderCtxMenu, renamePlFolder, deletePlFolder,
   // S157 FIX-1 : onPlFolderDragOver/Leave/Drop retirés des imports — code mort.
@@ -762,6 +762,14 @@ export function cycleSpeed() {
 
 // FIX DRAG-MODULE → dropin.js : initDrop() résout #drago + attache les listeners après DOMContentLoaded
 document.addEventListener('DOMContentLoaded', () => { initDrop(); });
+// BUG-DND FIX : réactivation du drag-and-drop de réorganisation des pistes d'une
+// playlist — _attachPlaylistReorder() n'était plus appelé nulle part depuis la
+// migration des handlers vers event delegation (handlers.js), seul dragstart
+// survivait : le drop sur #tlist était un no-op.
+document.addEventListener('DOMContentLoaded', () => {
+  const _tlist = document.getElementById('tlist');
+  if (_tlist) _attachPlaylistReorder(_tlist);
+});
 
 // Attendre __TAURI__ avant de démarrer (fix build MSI)
 function waitForTauri(cb, n = 0) {

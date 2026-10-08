@@ -15,10 +15,8 @@
 
 // ── Utilitaire sécurité ───────────────────────────────────────────────────
 
-/** Escape HTML special characters including quotes. Use for any user-provided content in HTML attributes or text nodes. */
-export function esc(str) {
-  return (str || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
-}
+//   esc — délégué à utils.js (dédup AUDIT-2026-08 : deux implémentations vivaient en parallèle)
+export { esc } from './utils.js';
 
 // ── Lit Web Component delegation ─────────────────────────────────────────
 // Phase 0 Lit : les constantes _TOAST_ICONS et _TOAST_DUR vivent désormais

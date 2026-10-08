@@ -17,7 +17,7 @@
 //   initEQ, ensureEQResumed, initBootEQ
 //   toggleEQ, closeEQ, setEQBand, applyEQPreset, getActiveEqPreset, applyEQGains
 //   setEQAutoMode, toggleEQAutoMode, applyGenreEQ
-//   startSmartEQ, stopSmartEQ, updateSmartEQLoudness, updateSmartEQGenre
+//   startSmartEQ, stopSmartEQ, updateSmartEQGenre
 //   loadEQProfiles, getEQProfiles
 //   renderEQBands, filterEQPresets, toggleEQAB
 //   setMasterGain
@@ -123,7 +123,6 @@ let _eqProfiles = {};
 
 // ── Smart EQ ──────────────────────────────────────────────────────────────────
 let _smartGenre    = '';
-let _smartLoudness = 0;
 
 // ── Boot config (sauvegardé AVANT initEQ()) ───────────────────────────────────
 /** Appelé au boot par app.js AVANT que l'AudioContext existe.
@@ -511,18 +510,6 @@ export function updateSmartEQGenre(genre) {
   }
 }
 
-export function updateSmartEQLoudness(lufs) {
-  _smartLoudness = lufs ?? 0;
-  // Compensation loudness légère (±2 dB max), multipliée par le volume courant du slider
-  if (masterGainNode && eqCtx) {
-    const target   = -14; // LUFS cible
-    const delta    = Math.max(-2, Math.min(2, target - _smartLoudness));
-    const compGain = Math.pow(10, delta / 20);
-    const _volEl   = document.getElementById('vol');
-    const volGain  = _volEl ? Math.max(0, Math.min(1, parseFloat(_volEl.value))) : 1;
-    masterGainNode.gain.setTargetAtTime(volGain * compGain, eqCtx.currentTime, 0.3);
-  }
-}
 
 // ── setEQAutoMode / toggleEQAutoMode ─────────────────────────────────────────
 export function setEQAutoMode(val) {

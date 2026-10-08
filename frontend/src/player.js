@@ -1122,19 +1122,6 @@ export function getNextIdx() {
   return -1;
 }
 
-/**
- * AUDIT CINÉMA 2026-07-20 (P2) : lecture directe d'une piste HORS vue filtrée — façade
- * publique sur _playDirect pour le panneau file d'attente du cinéma (cinema-render.js) :
- * une entrée explicite volontairement affichée hors filtre restait sinon un no-op au clic,
- * alors que next() la joue (même fallback _playDirect que la branche explicite de next()).
- * @param {Track} t
- * @returns {void}
- */
-export function playTrackDirect(t) {
-  if (!t) return;
-  const i = trackIdx(t);
-  if (i >= 0) _playDirect(t, i);
-}
 
 /**
  * Task 6 — vrai si la file explicite (queue.js, "lire ensuite") a un item prêt à jouer.
