@@ -10035,6 +10035,12 @@ html[data-motion='reduce'] #cinema-art-img[class*='cin-kb-'] {
   filter: drop-shadow(var(--dropshadow-heart));
   animation: cin-heart-burst var(--dur-reveal) var(--ease-beat) forwards;
 }
+/* AUDIT CINÉMA (SC 2.3.3) : particule décorative — figée (apparaît puis disparaît
+   via le timer JS HEART_BURST_MS) sous mouvement réduit. */
+html[data-motion='reduce'] .cin-heart-burst {
+  animation: none !important;
+  opacity: 0.9;
+}
 
 /* ── Infos titre ──────────────────────────────────────────── */
 .cinema-info {
