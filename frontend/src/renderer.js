@@ -7,7 +7,7 @@ import { getFiltered, filteredIdx, trackIdx,
 import { VIRT, virtBuildRows, virtIdxAtScroll,
          virtTotalH, virtOffsetOf }                          from './virt.js';
 import { esc, fmtd, extEmoji, fmt }                         from './utils.js';
-import { i18n }                                              from './i18n.js';
+import { i18n, getLang }                                     from './i18n.js';
 import { CFG }                                               from './cfg.js';
 import { prefetchArts, getArtUrl }                           from './artLoader.js';
 
@@ -72,6 +72,18 @@ function _djb2(str) {
   return Math.abs(h);
 }
 
+// OPT: labels statiques par ligne — i18n() + esc() identiques pour toutes les
+// lignes, recalculés inutilement à chaque rendu. Cachés par langue (getLang)
+// — aucune invalidation externe requise.
+let _lblLang = null;
+const _LBL = {};
+function _rowLbl(key, fallback) {
+  const lang = getLang();
+  if (_lblLang !== lang) { _lblLang = lang; for (const k of Object.keys(_LBL)) delete _LBL[k]; }
+  if (!_LBL[key]) _LBL[key] = esc(i18n(key) || fallback);
+  return _LBL[key];
+}
+
 export function artPlaceholder(t) {
   const letter = t.name?.[0]?.toUpperCase() || '♪';
   if (t.artColor && ART_COLOR_RE.test(t.artColor)) {
@@ -90,15 +102,13 @@ export function makeLikeBtn(t, liked) {
   liked = liked ?? get('liked');
   const on  = liked?.has(t.id);
   // A11Y-06: label dynamique selon l'état (like_label / unlike_label) — annonce correctement l'état au screen reader
-  const lbl = on
-    ? (i18n('unlike_label') || 'Retirer des favoris')
-    : (i18n('like_label')   || 'Ajouter aux favoris');
-  return `<button class="tlk${on ? ' on' : ''}" data-action="likeat" data-track-id="${esc(t.id)}" aria-pressed="${!!on}" aria-label="${esc(lbl)}" tabindex="-1"><svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg></button>`;
+  const lbl = on ? _rowLbl('unlike_label', 'Retirer des favoris') : _rowLbl('like_label', 'Ajouter aux favoris');
+  return `<button class="tlk${on ? ' on' : ''}" data-action="likeat" data-track-id="${esc(t.id)}" aria-pressed="${!!on}" aria-label="${lbl}" tabindex="-1"><svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg></button>`;
 }
 
 export function makeAddBtn(t) {
-  const lbl = i18n('add_to_playlist') || 'Ajouter à une playlist';
-  return `<button class="tr-add-btn" data-action="show-pl-qpop" data-track-id="${esc(t.id)}" title="${esc(lbl)}" aria-label="${esc(lbl)}" tabindex="-1"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></button>`;
+  const lbl = _rowLbl('add_to_playlist', 'Ajouter à une playlist');
+  return `<button class="tr-add-btn" data-action="show-pl-qpop" data-track-id="${esc(t.id)}" title="${lbl}" aria-label="${lbl}" tabindex="-1"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></button>`;
 }
 
 export function makeEqHTML(_t) {
@@ -107,13 +117,16 @@ export function makeEqHTML(_t) {
 
 // AUDIT-2026-07-27 : ⋯ au hover — ouvre le même menu que le clic droit (tr-more, handlers.js)
 export function makeMoreBtn(t) {
-  const lbl = i18n('tr_more') || "Plus d'actions";
-  return `<button class="tr-more-btn" data-action="tr-more" data-track-id="${esc(t.id)}" title="${esc(lbl)}" aria-label="${esc(lbl)}" aria-haspopup="menu" tabindex="-1"><svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg></button>`;
+  const lbl = _rowLbl('tr_more', "Plus d'actions");
+  return `<button class="tr-more-btn" data-action="tr-more" data-track-id="${esc(t.id)}" title="${lbl}" aria-label="${lbl}" aria-haspopup="menu" tabindex="-1"><svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg></button>`;
 }
 
 // A11Y-3: role="listitem" tabindex="0" aria-label; P6: classes dynamiques
 export function thtml(t, fi, { active = false, liked = false, likedSet, query = '', isAlbumDetail: _isAlbumDetail, albumDetailSort: _albumDetailSort, hlRe, isTabStop = false, setSize = 0 } = {}) {
-  // Artwork — img avec fade-in (.art-img → .art-loaded au onload) OU placeholder
+  // OPT: hoister les échappements utilisés à la fois dans title= et dans le corps de ligne
+  const escName   = esc(t.name || '');
+  const escArtist = esc(t.artistFull || t.artist || '');
+  const escAlbum  = esc(t.album || '');
   const artInner = t.art
     ? `<img class="art-img" src="${esc(t.art)}" alt="" aria-hidden="true">`
     : artPlaceholder(t);
@@ -141,16 +154,16 @@ export function thtml(t, fi, { active = false, liked = false, likedSet, query = 
   draggable="true" data-drag-action="track-drag">
   ${trackNum}<div class="tart">
     ${artInner}
-    <button class="tart-hover-play" data-action="play-track" data-track-id="${esc(t.id)}" tabindex="-1" aria-label="${i18n('play') || 'Lire'}">
+    <button class="tart-hover-play" data-action="play-track" data-track-id="${esc(t.id)}" tabindex="-1" aria-label="${_rowLbl('play', 'Lire')}">
       <svg class="icon-play" viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true"><polygon points="5,3 19,12 5,21"/></svg>
       <svg class="icon-pause" viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true"><rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/></svg>
     </button>
   </div>
   <div class="ti">
-    <div class="tn" title="${esc(t.name || '')}">${hlText(t.name || '', query, hlRe)}</div>
-    <div class="ts" title="${esc(t.artistFull || t.artist || '')}">${hlText(t.artistFull || t.artist || '', query, hlRe)}</div>
+    <div class="tn" title="${escName}">${hlText(t.name || '', query, hlRe)}</div>
+    <div class="ts" title="${escArtist}">${hlText(t.artistFull || t.artist || '', query, hlRe)}</div>
   </div>
-  <div class="ta" title="${esc(t.album || '')}">${esc(t.album || '')}</div>
+  <div class="ta" title="${escAlbum}">${escAlbum}</div>
   <div class="tr-r">
     ${makeEqHTML(t)}
     <span class="tdur">${fmtd(t.duration)}</span>
@@ -244,7 +257,7 @@ export function virtRenderWindow(fl) {
   // le premier tr rendu reçoit tabindex="0"
   let firstTrFiFound = false;
 
-  let html = `<div class="virt-sp" style="height:${topH}px" aria-hidden="true"></div>`;
+  const parts = [`<div class="virt-sp" style="height:${topH}px" aria-hidden="true"></div>`];
 
   for (let i = startIdx; i < endIdx; i++) {
     const row = rows[i];
@@ -252,7 +265,7 @@ export function virtRenderWindow(fl) {
       let hint = '';
       if (row.artistHint) hint = ` <span class="grp-artist">${esc(row.artistHint)}</span>`;
       const cls = row.key.length === 1 ? 'tr-grp tr-grp--alpha' : 'tr-grp';
-      html += `<div class="${cls}" style="height:${VIRT.GRP_H}px" aria-hidden="true">${esc(row.key)}${hint}</div>`;
+      parts.push(`<div class="${cls}" style="height:${VIRT.GRP_H}px" aria-hidden="true">${esc(row.key)}${hint}</div>`);
     } else {
       const t       = row.track;
       const isActive = curTrack?.id === t.id;
@@ -265,11 +278,11 @@ export function virtRenderWindow(fl) {
         isTabStop = true;
         firstTrFiFound = true;
       }
-      html += thtml(t, row.fi, { active: isActive, liked: isLiked, likedSet: liked, query, isAlbumDetail, albumDetailSort, hlRe, isTabStop, setSize: fl.length });
+      parts.push(thtml(t, row.fi, { active: isActive, liked: isLiked, likedSet: liked, query, isAlbumDetail, albumDetailSort, hlRe, isTabStop, setSize: fl.length }));
     }
   }
 
-  html += `<div class="virt-sp" style="height:${botH}px" aria-hidden="true"></div>`;
+  parts.push(`<div class="virt-sp" style="height:${botH}px" aria-hidden="true"></div>`);
 
   // P6 : annuler les spring animations en vol avant de remplacer le DOM
   listEl.querySelectorAll('[data-spring-raf]').forEach(el => {
@@ -281,7 +294,7 @@ export function virtRenderWindow(fl) {
   // innerHTML = reset scrollTop à 0 — l'utilisateur perd sa position à chaque
   // changement de zoom (Ctrl+Wheel). On restaure dans un rAF après la mise en DOM.
   const _savedScrollTop = listEl.scrollTop;
-  listEl.innerHTML = html;
+  listEl.innerHTML = parts.join('');
   // I-1: le DOM a été entièrement reconstruit — invalider la référence de ligne active cachée
   _activeRowEl = null;
   if (_savedScrollTop > 0) {
