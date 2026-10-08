@@ -11557,12 +11557,14 @@ html[data-mode='light'] .rpl {
 
 /* ── View Transitions API — animations personnalisées ────── */
 
-/* Keyframes root */
+/* Keyframes root — AUDIT VT : sortie en opacity seule (pattern Material).
+   L'ancien vtOut combinait scale+translateY+blur : la couche sortante divergeait
+   de la couche entrante (directions opposées) → effet de « saut » à chaque
+   changement de vue. Un fondu sortant ne bouge pas : la nouvelle vue glisse
+   par-dessus sans que les deux couches se séparent. */
 @keyframes vtOut {
   to {
     opacity: 0;
-    transform: scale(0.974) translateY(calc(-1 * var(--sp-2h)));
-    filter: blur(var(--blur-1h));
   }
 }
 @keyframes vtIn {
@@ -11597,7 +11599,6 @@ html[data-mode='light'] .rpl {
 @keyframes vtTitleOut {
   to {
     opacity: 0;
-    transform: translateY(calc(-1 * var(--sp-1d))) scale(0.93);
   }
 }
 @keyframes vtTitleIn {
@@ -11651,10 +11652,12 @@ html[data-nav-dir='back'] ::view-transition-old(main-content) {
 html[data-nav-dir='back'] ::view-transition-new(main-content) {
   animation: navSlideInLeft var(--dur-nav) var(--decelerate) both;
 }
+/* Sorties directionnelles en opacity seule — AUDIT VT (même rationale que vtOut) :
+   la vue sortante reste en place et s'efface, la nouvelle glisse depuis le côté.
+   Les deux couches ne se croisent plus en sens inverse. */
 @keyframes navSlideOutLeft {
   to {
     opacity: 0;
-    transform: translateX(calc(-1 * var(--sp-4h)));
   }
 }
 @keyframes navSlideInRight {
@@ -11666,7 +11669,6 @@ html[data-nav-dir='back'] ::view-transition-new(main-content) {
 @keyframes navSlideOutRight {
   to {
     opacity: 0;
-    transform: translateX(var(--sp-4h));
   }
 }
 @keyframes navSlideInLeft {
