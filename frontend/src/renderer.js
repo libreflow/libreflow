@@ -113,7 +113,10 @@ export function makeMoreBtn(t) {
 
 // A11Y-3: role="listitem" tabindex="0" aria-label; P6: classes dynamiques
 export function thtml(t, fi, { active = false, liked = false, likedSet, query = '', isAlbumDetail: _isAlbumDetail, albumDetailSort: _albumDetailSort, hlRe, isTabStop = false, setSize = 0 } = {}) {
-  // Artwork — img avec fade-in (.art-img → .art-loaded au onload) OU placeholder
+  // OPT: hoister les échappements utilisés à la fois dans title= et dans le corps de ligne
+  const escName   = esc(t.name || '');
+  const escArtist = esc(t.artistFull || t.artist || '');
+  const escAlbum  = esc(t.album || '');
   const artInner = t.art
     ? `<img class="art-img" src="${esc(t.art)}" alt="" aria-hidden="true">`
     : artPlaceholder(t);
@@ -147,10 +150,10 @@ export function thtml(t, fi, { active = false, liked = false, likedSet, query = 
     </button>
   </div>
   <div class="ti">
-    <div class="tn" title="${esc(t.name || '')}">${hlText(t.name || '', query, hlRe)}</div>
-    <div class="ts" title="${esc(t.artistFull || t.artist || '')}">${hlText(t.artistFull || t.artist || '', query, hlRe)}</div>
+    <div class="tn" title="${escName}">${hlText(t.name || '', query, hlRe)}</div>
+    <div class="ts" title="${escArtist}">${hlText(t.artistFull || t.artist || '', query, hlRe)}</div>
   </div>
-  <div class="ta" title="${esc(t.album || '')}">${esc(t.album || '')}</div>
+  <div class="ta" title="${escAlbum}">${escAlbum}</div>
   <div class="tr-r">
     ${makeEqHTML(t)}
     <span class="tdur">${fmtd(t.duration)}</span>
@@ -244,7 +247,7 @@ export function virtRenderWindow(fl) {
   // le premier tr rendu reçoit tabindex="0"
   let firstTrFiFound = false;
 
-  let html = `<div class="virt-sp" style="height:${topH}px" aria-hidden="true"></div>`;
+  const parts = [`<div class="virt-sp" style="height:${topH}px" aria-hidden="true"></div>`];
 
   for (let i = startIdx; i < endIdx; i++) {
     const row = rows[i];
@@ -252,7 +255,7 @@ export function virtRenderWindow(fl) {
       let hint = '';
       if (row.artistHint) hint = ` <span class="grp-artist">${esc(row.artistHint)}</span>`;
       const cls = row.key.length === 1 ? 'tr-grp tr-grp--alpha' : 'tr-grp';
-      html += `<div class="${cls}" style="height:${VIRT.GRP_H}px" aria-hidden="true">${esc(row.key)}${hint}</div>`;
+      parts.push(`<div class="${cls}" style="height:${VIRT.GRP_H}px" aria-hidden="true">${esc(row.key)}${hint}</div>`);
     } else {
       const t       = row.track;
       const isActive = curTrack?.id === t.id;
@@ -265,11 +268,11 @@ export function virtRenderWindow(fl) {
         isTabStop = true;
         firstTrFiFound = true;
       }
-      html += thtml(t, row.fi, { active: isActive, liked: isLiked, likedSet: liked, query, isAlbumDetail, albumDetailSort, hlRe, isTabStop, setSize: fl.length });
+      parts.push(thtml(t, row.fi, { active: isActive, liked: isLiked, likedSet: liked, query, isAlbumDetail, albumDetailSort, hlRe, isTabStop, setSize: fl.length }));
     }
   }
 
-  html += `<div class="virt-sp" style="height:${botH}px" aria-hidden="true"></div>`;
+  parts.push(`<div class="virt-sp" style="height:${botH}px" aria-hidden="true"></div>`);
 
   // P6 : annuler les spring animations en vol avant de remplacer le DOM
   listEl.querySelectorAll('[data-spring-raf]').forEach(el => {
@@ -281,7 +284,7 @@ export function virtRenderWindow(fl) {
   // innerHTML = reset scrollTop à 0 — l'utilisateur perd sa position à chaque
   // changement de zoom (Ctrl+Wheel). On restaure dans un rAF après la mise en DOM.
   const _savedScrollTop = listEl.scrollTop;
-  listEl.innerHTML = html;
+  listEl.innerHTML = parts.join('');
   // I-1: le DOM a été entièrement reconstruit — invalider la référence de ligne active cachée
   _activeRowEl = null;
   if (_savedScrollTop > 0) {
