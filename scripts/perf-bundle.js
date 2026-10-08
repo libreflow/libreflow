@@ -2,7 +2,6 @@
 // LibreFlow — Bundle size gate
 // Lit dist/assets/*.{js,css}, classe en buckets, compare à perf-budgets.json.
 // Exit 0 = OK, exit 1 = au moins une bucket en dépassement, exit 2 = erreur structurelle.
-// Spec: docs/superpowers/specs/2026-05-27-perf-budgets-design.md §5.1
 // Si DIST_DIR ou BUDGETS_FILE changent (futur outDir Vite, etc.), modifier les 2 constantes.
 
 'use strict';

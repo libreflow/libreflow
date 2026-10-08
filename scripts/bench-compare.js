@@ -4,7 +4,6 @@
 // compare à perf-baseline-bench.json.
 // Exit 0 = OK, exit 1 = régression > tolérance OU scénario manquant,
 // exit 2 = erreur structurelle (baseline absent, JSON corrompu, current vide).
-// Spec: docs/superpowers/specs/2026-05-27-perf-budgets-design.md §5.2
 // Test override: env LIBREFLOW_BENCH_BASELINE.
 
 'use strict';
