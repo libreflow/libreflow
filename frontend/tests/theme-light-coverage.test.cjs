@@ -23,42 +23,52 @@ const SS = fs.readFileSync(path.join(__dirname, '../src/style.css'), 'utf8');
 //   - `.cn-next`         → no such CSS selector; real cinema-next panel uses `.cinema-next` (index.html line 1233)
 
 const REQUIRED_LIGHT_SURFACES = [
-  ['#cinema-overlay',    'cinema overlay'],
-  ['#cd-modal-bg',       'CD audio modal bg'],
-  ['#cd-modal',          'CD audio modal'],
+  ['#cinema-overlay', 'cinema overlay'],
+  ['#cd-modal-bg', 'CD audio modal bg'],
+  ['#cd-modal', 'CD audio modal'],
   ['#organize-modal-bg', 'organize modal bg'],
-  ['#organize-modal',    'organize modal'],
-  ['#usb-modal-bg',      'USB import modal bg'],
-  ['#usb-modal',         'USB import modal'],
-  ['#mp-ov',             'miniplayer overlay (#mp-ov)'],
-  ['.vol-tip',           'volume tooltip (.vol-tip)'],
-  ['.cinema-next',       'cinema next panel (.cinema-next)'],
+  ['#organize-modal', 'organize modal'],
+  ['#usb-modal-bg', 'USB import modal bg'],
+  ['#usb-modal', 'USB import modal'],
+  ['#mp-ov', 'miniplayer overlay (#mp-ov)'],
+  ['.vol-tip', 'volume tooltip (.vol-tip)'],
+  ['.cinema-next', 'cinema next panel (.cinema-next)'],
   // B3.7 residual sweep
-  ['#seek-tip',          'seek-time tooltip (#seek-tip)'],
-  ['.ctx-submenu',       'context menu submenu (.ctx-submenu)'],
-  ['.spl-rule-row',      'smart playlist rule row (.spl-rule-row)'],
-  ['.spl-results',       'smart playlist search results (.spl-results)'],
-  ['.prompt-input',      'prompt modal input (.prompt-input)'],
+  ['#seek-tip', 'seek-time tooltip (#seek-tip)'],
+  ['.ctx-submenu', 'context menu submenu (.ctx-submenu)'],
+  ['.spl-rule-row', 'smart playlist rule row (.spl-rule-row)'],
+  ['.spl-results', 'smart playlist search results (.spl-results)'],
+  ['.prompt-input', 'prompt modal input (.prompt-input)']
 ];
 
 async function run() {
-  let pass = 0, fail = 0;
+  let pass = 0,
+    fail = 0;
   const t = async (name, fn) => {
-    try { await fn(); pass++; console.log(`  ✓ ${name}`); }
-    catch (e) { fail++; console.log(`  ✗ ${name}: ${e.message}`); }
+    try {
+      await fn();
+      pass++;
+      console.log(`  ✓ ${name}`);
+    } catch (e) {
+      fail++;
+      console.log(`  ✗ ${name}: ${e.message}`);
+    }
   };
 
   console.log('\n── theme-light-coverage — required overrides ──');
 
   for (const [sel, label] of REQUIRED_LIGHT_SURFACES) {
     await t(`light override covers ${label} (${sel})`, () => {
-      const escSel = sel.replace(/[.#]/g, m => '\\' + m);
-      const re = new RegExp(`html\\[data-mode="light"\\][^{]*${escSel}[^{]*\\{`, 'g');
+      const escSel = sel.replace(/[.#]/g, (m) => '\\' + m);
+      const re = new RegExp(`html\\[data-mode=['\"]light['\"]\\][^{]*${escSel}[^{]*\\{`, 'g');
       assert.ok(re.test(SS), `no html[data-mode="light"] rule found targeting ${sel}`);
     });
   }
 
-  if (fail) { console.log(`\nTHEME-LIGHT-COVERAGE FAIL: ${fail}/${pass + fail}`); process.exit(1); }
+  if (fail) {
+    console.log(`\nTHEME-LIGHT-COVERAGE FAIL: ${fail}/${pass + fail}`);
+    process.exit(1);
+  }
   console.log(`\nTHEME-LIGHT-COVERAGE OK: ${pass}/${pass}`);
 }
 

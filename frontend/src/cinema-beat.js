@@ -23,9 +23,9 @@
 export function createBeatDetector({ history, threshold, cooldownMs }) {
   // Ring buffer pré-alloué — zéro allocation en régime permanent.
   const buf = new Float32Array(history);
-  let idx      = 0;   // nombre de frames vues (index d'écriture)
-  let sum      = 0;   // somme courante O(1) — évite reduce() dans la hot path
-  let lastBeat = 0;   // performance.now() du dernier beat
+  let idx = 0; // nombre de frames vues (index d'écriture)
+  let sum = 0; // somme courante O(1) — évite reduce() dans la hot path
+  let lastBeat = 0; // performance.now() du dernier beat
 
   return {
     /**
@@ -54,6 +54,6 @@ export function createBeatDetector({ history, threshold, cooldownMs }) {
         return true;
       }
       return false;
-    },
+    }
   };
 }

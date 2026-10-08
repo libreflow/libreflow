@@ -17,10 +17,14 @@ export const LANGS = { fr, en };
 let lang = 'fr';
 
 /** Initialise la locale au démarrage, sans side-effects. Appelé depuis boot(). */
-export function initLang(l) { lang = l; }
+export function initLang(l) {
+  lang = l;
+}
 
 /** Retourne la locale active ('fr' | 'en'). */
-export function getLang() { return lang; }
+export function getLang() {
+  return lang;
+}
 
 /** Change la locale en live et rafraîchit l'UI. Persister via saveCfg() côté appelant. */
 export function setLang(l) {
@@ -32,7 +36,7 @@ export function setLang(l) {
 /** Traduit une clé. Retourne la valeur FR en fallback. */
 export function i18n(key, ...args) {
   const dict = LANGS[lang] || LANGS.fr;
-  const val  = dict[key] ?? LANGS.fr[key] ?? key;
+  const val = dict[key] ?? LANGS.fr[key] ?? key;
   return typeof val === 'function' ? val(...args) : val;
 }
 
@@ -59,53 +63,61 @@ export function applyLang() {
     const el = isId ? document.getElementById(sel) : document.querySelector(sel);
     if (!el) return;
     /** @type {Text | null} */ let last = null;
-    el.childNodes.forEach(n => { if (n.nodeType === 3) last = /** @type {Text} */ (n); });
+    el.childNodes.forEach((n) => {
+      if (n.nodeType === 3) last = /** @type {Text} */ (n);
+    });
     if (last) last.textContent = ' ' + i18n(key);
     else el.appendChild(document.createTextNode(' ' + i18n(key)));
   };
 
   // ── data-i18n / data-i18n-title elements ───────────────────
-  document.querySelectorAll('[data-i18n]').forEach(el => {
+  document.querySelectorAll('[data-i18n]').forEach((el) => {
     el.textContent = i18n(el.dataset.i18n);
   });
-  document.querySelectorAll('[data-i18n-html]').forEach(el => {
+  document.querySelectorAll('[data-i18n-html]').forEach((el) => {
     el.innerHTML = i18n(el.dataset.i18nHtml);
   });
-  document.querySelectorAll('[data-i18n-title]').forEach(el => {
+  document.querySelectorAll('[data-i18n-title]').forEach((el) => {
     el.title = i18n(el.dataset.i18nTitle);
   });
   // ── data-i18n-aria : aria-label traduits ───────────────────
-  document.querySelectorAll('[data-i18n-aria]').forEach(el => {
+  document.querySelectorAll('[data-i18n-aria]').forEach((el) => {
     el.setAttribute('aria-label', i18n(el.dataset.i18nAria));
   });
   // ── data-aria-i18n : alias (même effet, deux attributs pour raison historique) ──
-  document.querySelectorAll('[data-aria-i18n]').forEach(el => {
+  document.querySelectorAll('[data-aria-i18n]').forEach((el) => {
     el.setAttribute('aria-label', i18n(el.dataset.ariaI18n));
   });
 
   // Sort label
-  const SLBLS_I18N = { az: 'sort_az', za: 'sort_za', artist: 'sort_artist', album: 'sort_album', recent: 'sort_recent' };
+  const SLBLS_I18N = {
+    az: 'sort_az',
+    za: 'sort_za',
+    artist: 'sort_artist',
+    album: 'sort_album',
+    recent: 'sort_recent'
+  };
   setText('sort-lbl', SLBLS_I18N[get('sort')] || 'sort_az', true);
 
   // Placeholders & titles
-  setAttrEl('srch',     'placeholder', i18n('srch_ph'));
-  setAttrEl('tbt-min',  'title',       i18n('tb_minimize'));
-  setAttrEl('tbt-max',  'title',       i18n('tb_maximize'));
-  setAttrEl('pcplay',   'title',       i18n('pc_play'));
-  setAttrEl('pc-shuf',  'title',       i18n('pc_shuffle'));
-  setAttrEl('pc-rep',   'title',       i18n('pc_repeat'));
+  setAttrEl('srch', 'placeholder', i18n('srch_ph'));
+  setAttrEl('tbt-min', 'title', i18n('tb_minimize'));
+  setAttrEl('tbt-max', 'title', i18n('tb_maximize'));
+  setAttrEl('pcplay', 'title', i18n('pc_play'));
+  setAttrEl('pc-shuf', 'title', i18n('pc_shuffle'));
+  setAttrEl('pc-rep', 'title', i18n('pc_repeat'));
   // Sleep menu inputs
   setAttrEl('sleep-custom-input', 'placeholder', i18n('sleep_ph'));
 
   // Scan view
-  setText('.sh',  'scan_title');
-  setText('.ss',  'scan_sub');
+  setText('.sh', 'scan_title');
+  setText('.ss', 'scan_sub');
 
   // Drag overlay
   setText('.drago-msg', 'drag_hint');
 
   // Welcome screen
-  setText('.wh1',  'wlc_title');
+  setText('.wh1', 'wlc_title');
   setText('.wsub', 'wlc_sub');
   setBtnText('.wbtn-scan', 'wlc_btn');
   setBtnText('.wbtn-m3u', 'wlc_btn_m3u');
@@ -113,8 +125,10 @@ export function applyLang() {
   const feats = document.querySelectorAll('.wf');
   const featKeys = ['wlc_feat1', 'wlc_feat2', 'wlc_feat3', 'wlc_feat4'];
   feats.forEach((f, i) => {
-    const wft = f.querySelector('.wf-t'); if (wft) wft.textContent = i18n(featKeys[i] + '_t');
-    const wfd = f.querySelector('.wf-d'); if (wfd) wfd.textContent = i18n(featKeys[i] + '_d');
+    const wft = f.querySelector('.wf-t');
+    if (wft) wft.textContent = i18n(featKeys[i] + '_t');
+    const wfd = f.querySelector('.wf-d');
+    if (wfd) wfd.textContent = i18n(featKeys[i] + '_d');
   });
 
   // Sidebar buttons
@@ -125,19 +139,21 @@ export function applyLang() {
   setHtml('#modal .modal-s', 'clear_body');
 
   // Modal cancel buttons
-  document.querySelectorAll('.mbtn.cancel').forEach(b => b.textContent = i18n('pl_cancel'));
+  document.querySelectorAll('.mbtn.cancel').forEach((b) => (b.textContent = i18n('pl_cancel')));
 
   // Playlist modal
   setAttrEl('pl-modal-inp', 'placeholder', i18n('pl_name_ph'));
   setText('pl-modal-title', 'pl_modal_h', true);
 
   // Context menu strings
-  setText('ctx-add-lbl',    'pl_add_to', true);
+  setText('ctx-add-lbl', 'pl_add_to', true);
   setText('ctx-remove-lbl', 'pl_remove', true);
   const ctxNewPl = document.getElementById('ctx-new-pl-item');
   if (ctxNewPl) {
     /** @type {Text | null} */ let last = null;
-    ctxNewPl.childNodes.forEach(n => { if (n.nodeType === 3) last = /** @type {Text} */ (n); });
+    ctxNewPl.childNodes.forEach((n) => {
+      if (n.nodeType === 3) last = /** @type {Text} */ (n);
+    });
     if (last) last.textContent = ' ' + i18n('ctx_new_pl');
   }
 
@@ -150,7 +166,7 @@ export function applyLang() {
   // Mode buttons highlight
   const md = document.getElementById('mode-dark-btn');
   const ml = document.getElementById('mode-light-btn');
-  if (md) md.style.background = get('displayMode') === 'dark'  ? 'var(--gd)' : '';
+  if (md) md.style.background = get('displayMode') === 'dark' ? 'var(--gd)' : '';
   if (ml) ml.style.background = get('displayMode') === 'light' ? 'var(--gd)' : '';
 
   // Re-render lib if visible

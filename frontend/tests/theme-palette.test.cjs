@@ -14,10 +14,10 @@ const STYLE_JS_SETTINGS = fs.readFileSync(path.join(__dirname, '../src/settings.
 
 // Cible : palette dark à 5 paliers, ΔRGB total >= 35 entre --bg et --bg5.
 const DARK_TARGET = {
-  '--bg-base'      : '#030303',
-  '--bg-surface'   : '#121214',
-  '--bg-elevated'  : '#1C1C20',
-  '--bg-raised'    : '#1C1C20',
+  '--bg-base': '#030303',
+  '--bg-surface': '#121214',
+  '--bg-elevated': '#1C1C20',
+  '--bg-raised': '#1C1C20'
 };
 
 function extractRoot(css) {
@@ -36,7 +36,7 @@ function extractRoot(css) {
 }
 
 function extractLightOverride(css) {
-  const m = /html\[data-mode="light"\]\s*\{([^}]*)\}/g;
+  const m = /html\[data-mode=['\'"']light['\'"']\]\s*\{([^}]*)\}/g;
   const out = {};
   let block;
   while ((block = m.exec(css))) {
@@ -56,23 +56,31 @@ function extractLightOverride(css) {
  * Si le token n'existe pas dans `primary`, retombe sur `fallback`.
  */
 function resolveVar(primary, fallback, token, depth = 0) {
-  if (depth > 10) return undefined;  // anti-boucle
-  const val = (primary && primary[token] !== undefined) ? primary[token] : (fallback && fallback[token]);
+  if (depth > 10) return undefined; // anti-boucle
+  const val =
+    primary && primary[token] !== undefined ? primary[token] : fallback && fallback[token];
   if (val === undefined || val === null) return undefined;
   const m = /^var\(\s*(--[a-z0-9-]+)\s*(?:,\s*([^)]+))?\s*\)$/i.exec(val.trim());
   if (m) {
     const inner = resolveVar(primary, fallback, m[1], depth + 1);
     if (inner !== undefined) return inner;
-    return m[2] ? m[2].trim() : undefined;   // fallback dans var(..., fallback)
+    return m[2] ? m[2].trim() : undefined; // fallback dans var(..., fallback)
   }
   return val.trim();
 }
 
 async function run() {
-  let pass = 0, fail = 0;
+  let pass = 0,
+    fail = 0;
   const t = async (name, fn) => {
-    try { await fn(); pass++; console.log(`  ✓ ${name}`); }
-    catch (e) { fail++; console.log(`  ✗ ${name}: ${e.message}`); }
+    try {
+      await fn();
+      pass++;
+      console.log(`  ✓ ${name}`);
+    } catch (e) {
+      fail++;
+      console.log(`  ✗ ${name}: ${e.message}`);
+    }
   };
 
   console.log('\n── theme-palette — dark + light + WCAG ──');
@@ -133,15 +141,19 @@ async function run() {
   });
 
   function deltaRGB(a, b) {
-    const ah = parseInt(a.replace('#',''), 16);
-    const bh = parseInt(b.replace('#',''), 16);
-    const ar = (ah>>16)&255, ag = (ah>>8)&255, ab = ah&255;
-    const br = (bh>>16)&255, bg = (bh>>8)&255, bb = bh&255;
-    return Math.abs(ar-br) + Math.abs(ag-bg) + Math.abs(ab-bb);
+    const ah = parseInt(a.replace('#', ''), 16);
+    const bh = parseInt(b.replace('#', ''), 16);
+    const ar = (ah >> 16) & 255,
+      ag = (ah >> 8) & 255,
+      ab = ah & 255;
+    const br = (bh >> 16) & 255,
+      bg = (bh >> 8) & 255,
+      bb = bh & 255;
+    return Math.abs(ar - br) + Math.abs(ag - bg) + Math.abs(ab - bb);
   }
   const pairs = [
     ['--bg-base', '--bg-surface'],
-    ['--bg-surface','--bg-elevated'],
+    ['--bg-surface', '--bg-elevated']
   ];
   for (const [a, b] of pairs) {
     await t(`dark elevation ${a} -> ${b} has ΔRGB >= 8`, () => {
@@ -155,11 +167,18 @@ async function run() {
   // --bg-raised == --bg-elevated by design (2026-07): a real 4th tonal step would
   // push accent-as-text below AA (4.5:1) on Vantablack — see CLAUDE.md §2.9.
   await t('dark --bg-raised equals --bg-elevated (AA budget exhausted, see CLAUDE.md §2.9)', () => {
-    assert.strictEqual((root['--bg-raised'] || '').toUpperCase(), (root['--bg-elevated'] || '').toUpperCase());
+    assert.strictEqual(
+      (root['--bg-raised'] || '').toUpperCase(),
+      (root['--bg-elevated'] || '').toUpperCase()
+    );
   });
 
   // ── AAA SC 1.4.6 Contrast Enhanced — texte normal >=7:1 sur --bg ──────────
-  const AAA_TOKENS = [['--t', 'primary'], ['--t2', 'secondary'], ['--t3', 'muted']];
+  const AAA_TOKENS = [
+    ['--t', 'primary'],
+    ['--t2', 'secondary'],
+    ['--t3', 'muted']
+  ];
   for (const [tok, label] of AAA_TOKENS) {
     await t(`dark ${tok} (${label}) on --bg passes AAA (7:1)`, () => {
       const fg = resolveVar(root, null, tok);
@@ -216,7 +235,10 @@ async function run() {
   await t('.theme-swatch paints background: var(--g)', () => {
     const m = /\.theme-swatch\s+\{([^}]*)\}/.exec(STYLE);
     assert.ok(m, '.theme-swatch base rule not found in style.css');
-    assert.ok(/background\s*:\s*var\(--g\)/.test(m[1]), `.theme-swatch has no background: var(--g) — swatches will render blank/white. Rule: ${m[1]}`);
+    assert.ok(
+      /background\s*:\s*var\(--g\)/.test(m[1]),
+      `.theme-swatch has no background: var(--g) — swatches will render blank/white. Rule: ${m[1]}`
+    );
   });
 
   // --- Each [data-theme] block's --g hex must match its own --g-rgb triplet ---
@@ -244,7 +266,11 @@ async function run() {
       assert.ok(gRgb, `[data-theme="${themeName}"] has no --g-rgb`);
       const expected = hexToRgbTriplet(gHex[1]);
       const actual = gRgb[1].replace(/\s+/g, '');
-      assert.strictEqual(actual, expected, `--g:${gHex[1]} implies --g-rgb:${expected}, but found ${actual}`);
+      assert.strictEqual(
+        actual,
+        expected,
+        `--g:${gHex[1]} implies --g-rgb:${expected}, but found ${actual}`
+      );
     });
   }
 
@@ -259,13 +285,20 @@ async function run() {
   await t('_applyThemeVars() does not inline-override --g-rgb', () => {
     const fn = /function _applyThemeVars\([\s\S]*?\n\}/.exec(STYLE_JS_SETTINGS);
     assert.ok(fn, '_applyThemeVars() body not found in settings.js');
-    assert.ok(!/setProperty\(\s*'--g-rgb'/.test(fn[0]),
-      '_applyThemeVars() sets --g-rgb via inline style — reintroduces the THEME_RGB drift class of bug');
-    assert.ok(!/(?:const|let|var)\s+THEME_RGB\b/.test(STYLE_JS_SETTINGS),
-      'settings.js reintroduces a THEME_RGB-style hardcoded rgb table (drift risk vs design-system.css)');
+    assert.ok(
+      !/setProperty\(\s*'--g-rgb'/.test(fn[0]),
+      '_applyThemeVars() sets --g-rgb via inline style — reintroduces the THEME_RGB drift class of bug'
+    );
+    assert.ok(
+      !/(?:const|let|var)\s+THEME_RGB\b/.test(STYLE_JS_SETTINGS),
+      'settings.js reintroduces a THEME_RGB-style hardcoded rgb table (drift risk vs design-system.css)'
+    );
   });
 
-  if (fail) { console.log(`\nTHEME-PALETTE FAIL: ${fail}/${pass + fail}`); process.exit(1); }
+  if (fail) {
+    console.log(`\nTHEME-PALETTE FAIL: ${fail}/${pass + fail}`);
+    process.exit(1);
+  }
   console.log(`\nTHEME-PALETTE OK: ${pass}/${pass}`);
 }
 

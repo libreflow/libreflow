@@ -20,9 +20,9 @@ export async function logImport(source, paths) {
     date: Date.now(),
     source,
     paths: paths.slice(0, 500),
-    count: paths.length,
+    count: paths.length
   };
-  await dput('imports', entry).catch(e => console.warn('[imports] logImport failed', e));
+  await dput('imports', entry).catch((e) => console.warn('[imports] logImport failed', e));
 }
 
 /**

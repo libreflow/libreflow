@@ -60,46 +60,46 @@
 /** @type {AppState} */
 const _state = {
   // ── Library ─────────────────────────────────────────────────────────
-  tracks:            [],        // Track[] — full, unfiltered
-  liked:             new Set(), // Set<string> — track IDs (migré session 138)
-  recentPlays:       [],        // string[] — track IDs, most recent first (max 50)
+  tracks: [], // Track[] — full, unfiltered
+  liked: new Set(), // Set<string> — track IDs (migré session 138)
+  recentPlays: [], // string[] — track IDs, most recent first (max 50)
 
   // ── Playback ─────────────────────────────────────────────────────────
-  curIdx:            -1,        // number — current track index in tracks[]
-  shuffle:           false,
-  repeat:            'none',    // 'none' | 'all' | 'one'
-  playbackSpeed:     1,
-  crossfadeDur:      0,
-  manualQueue:       [],        // number[] — explicit queue of track indices (played before shuffle/order)
+  curIdx: -1, // number — current track index in tracks[]
+  shuffle: false,
+  repeat: 'none', // 'none' | 'all' | 'one'
+  playbackSpeed: 1,
+  crossfadeDur: 0,
+  manualQueue: [], // number[] — explicit queue of track indices (played before shuffle/order)
 
   // ── UI / View ────────────────────────────────────────────────────────
-  view:              'all',     // 'all' | 'albums' | 'artists' | 'genres' | 'playlists' | 'stats' | 'radio'
-  sort:              'az',      // sort key from SORTS
-  query:             '',
-  drillKey:          '',
-  drillFrom:         '',
-  drillDisplayName:  '',
-  theme:             'blue',
-  dynColor:          true,
-  displayMode:       'dark',    // 'dark' | 'light'
-  currentArtColor:   null,      // string | null — extracted from current artwork
-  albumSort:         'name',    // 'name' | 'count' | 'duration'
-  artistSort:        'name',    // 'name' | 'count'
-  genreSort:         'count',   // 'count' | 'name'
-  albumDetailSort:   'track',   // 'track' | 'az'
+  view: 'all', // 'all' | 'albums' | 'artists' | 'genres' | 'playlists' | 'stats' | 'radio'
+  sort: 'az', // sort key from SORTS
+  query: '',
+  drillKey: '',
+  drillFrom: '',
+  drillDisplayName: '',
+  theme: 'blue',
+  dynColor: true,
+  displayMode: 'dark', // 'dark' | 'light'
+  currentArtColor: null, // string | null — extracted from current artwork
+  albumSort: 'name', // 'name' | 'count' | 'duration'
+  artistSort: 'name', // 'name' | 'count'
+  genreSort: 'count', // 'count' | 'name'
+  albumDetailSort: 'track', // 'track' | 'az'
 
   // ── Playlists ────────────────────────────────────────────────────────
-  playlists:         [],        // Playlist[]
-  curPlId:           null,      // string | null — currently viewed playlist id
-  plFolders:         [],        // { id, name, collapsed, order }[]
-  recentPls:         [],        // string[] — playlist IDs, most recent first (max 5)
-  plGridSort:        'manual',  // 'manual' | 'az' | 'recent' — tri de la grille playlists (REWORK-1)
-  sbWidth:           null,      // number | null — largeur sidebar custom (null = token --sidebar-width)
-  plSort:            'manual',  // 'manual' | 'az' | 'za' | 'artist' | 'album' | 'duration'
+  playlists: [], // Playlist[]
+  curPlId: null, // string | null — currently viewed playlist id
+  plFolders: [], // { id, name, collapsed, order }[]
+  recentPls: [], // string[] — playlist IDs, most recent first (max 5)
+  plGridSort: 'manual', // 'manual' | 'az' | 'recent' — tri de la grille playlists (REWORK-1)
+  sbWidth: null, // number | null — largeur sidebar custom (null = token --sidebar-width)
+  plSort: 'manual', // 'manual' | 'az' | 'za' | 'artist' | 'album' | 'duration'
 
   // ── Misc ─────────────────────────────────────────────────────────────
-  ctxTrackId:        null,      // string | null — track id for context menu
-  formatFilter:      '',        // '' = tous, 'MP3'/'FLAC'/etc. = filtre actif
+  ctxTrackId: null, // string | null — track id for context menu
+  formatFilter: '' // '' = tous, 'MP3'/'FLAC'/etc. = filtre actif
 };
 
 /** @type {Map<string, Set<Function>>} */
@@ -123,7 +123,14 @@ function _notify(key, val) {
   _notifying.add(key);
   try {
     for (const cb of snapshot) {
-      try { cb(val); } catch (e) { console.error('[store] subscriber error', key, e); queueMicrotask(() => { throw e; }); }
+      try {
+        cb(val);
+      } catch (e) {
+        console.error('[store] subscriber error', key, e);
+        queueMicrotask(() => {
+          throw e;
+        });
+      }
     }
   } finally {
     _notifying.delete(key);
@@ -168,4 +175,6 @@ export function subscribe(key, cb) {
  * @param {keyof AppState} key
  * @returns {void}
  */
-export function notify(key) { _notify(key, _state[key]); }
+export function notify(key) {
+  _notify(key, _state[key]);
+}

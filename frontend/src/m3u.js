@@ -12,7 +12,7 @@
 
 import { CFG } from './cfg.js';
 import { i18n } from './i18n.js';
-import { get, set, notify }  from './store.js'; // Phase 4
+import { get, set, notify } from './store.js'; // Phase 4
 import { _trackIdxMap, getFiltered } from './search.js';
 import { toast } from './ui.js';
 import { setView } from './views.js';
@@ -25,33 +25,38 @@ import { isSafePath } from './utils.js';
 //   exportM3U, exportXSPF, importM3U
 
 export function exportM3U() {
-  const view      = get('view');
-  const curPlId   = get('curPlId');
+  const view = get('view');
+  const curPlId = get('curPlId');
   const playlists = get('playlists');
-  const tracks    = get('tracks'); // Phase 4
+  const tracks = get('tracks'); // Phase 4
 
-  const fl = view === 'playlist' && curPlId
-    ? (playlists.find(p => p.id === curPlId)?.trackIds
-        .map(id => (_trackIdxMap.has(id) ? tracks[_trackIdxMap.get(id)] : undefined))
-        .filter(Boolean) || [])
-    : getFiltered();
+  const fl =
+    view === 'playlist' && curPlId
+      ? playlists
+          .find((p) => p.id === curPlId)
+          ?.trackIds.map((id) => (_trackIdxMap.has(id) ? tracks[_trackIdxMap.get(id)] : undefined))
+          .filter(Boolean) || []
+      : getFiltered();
 
-  if (!fl.length) { toast(i18n('t_m3u_no_export'), 'warning'); return; }
+  if (!fl.length) {
+    toast(i18n('t_m3u_no_export'), 'warning');
+    return;
+  }
 
   const lines = ['#EXTM3U'];
   for (const t of fl) {
     if (!t.path) continue;
-    const dur    = Math.round(t.duration) || 0;
+    const dur = Math.round(t.duration) || 0;
     const artist = t.artistFull || t.artist || i18n('unknown_artist');
     lines.push('#EXTINF:' + dur + ',' + artist + ' - ' + t.name);
     lines.push(t.path.replace(/\\/g, '/'));
   }
   const blob = new Blob([lines.join('\n')], { type: 'audio/x-mpegurl' });
-  const url  = URL.createObjectURL(blob);
-  const a    = document.createElement('a');
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
   a.href = url;
-  const pl     = playlists.find(p => p.id === curPlId);
-  const plName = (view === 'playlist' && pl) ? pl.name : 'libreflow';
+  const pl = playlists.find((p) => p.id === curPlId);
+  const plName = view === 'playlist' && pl ? pl.name : 'libreflow';
   a.download = plName + '.m3u';
   a.click();
   setTimeout(() => URL.revokeObjectURL(url), CFG.URL_REVOKE_DELAY_MS);
@@ -64,35 +69,45 @@ export function exportM3U() {
  *  Spéc : https://xspf.org/xspf-v1.html
  *  Compatible VLC, foobar2000, Strawberry, Clementine. */
 export function exportXSPF() {
-  const view      = get('view');
-  const curPlId   = get('curPlId');
+  const view = get('view');
+  const curPlId = get('curPlId');
   const playlists = get('playlists');
-  const tracks    = get('tracks');
+  const tracks = get('tracks');
 
-  const fl = view === 'playlist' && curPlId
-    ? (playlists.find(p => p.id === curPlId)?.trackIds
-        .map(id => (_trackIdxMap.has(id) ? tracks[_trackIdxMap.get(id)] : undefined))
-        .filter(Boolean) || [])
-    : getFiltered();
+  const fl =
+    view === 'playlist' && curPlId
+      ? playlists
+          .find((p) => p.id === curPlId)
+          ?.trackIds.map((id) => (_trackIdxMap.has(id) ? tracks[_trackIdxMap.get(id)] : undefined))
+          .filter(Boolean) || []
+      : getFiltered();
 
-  if (!fl.length) { toast(i18n('t_m3u_no_export'), 'warning'); return; }
+  if (!fl.length) {
+    toast(i18n('t_m3u_no_export'), 'warning');
+    return;
+  }
 
-  const esc = s => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  const esc = (s) =>
+    String(s ?? '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
 
-  const pl     = playlists.find(p => p.id === curPlId);
-  const plName = (view === 'playlist' && pl) ? pl.name : 'LibreFlow';
+  const pl = playlists.find((p) => p.id === curPlId);
+  const plName = view === 'playlist' && pl ? pl.name : 'LibreFlow';
 
   const lines = [
     '<?xml version="1.0" encoding="UTF-8"?>',
     `<playlist version="1" xmlns="http://xspf.org/ns/0/" xmlns:vlc="http://www.videolan.org/vlc/playlist/ns/0/">`,
     `  <title>${esc(plName)}</title>`,
-    `  <trackList>`,
+    `  <trackList>`
   ];
 
   for (const t of fl) {
     if (!t.path) continue;
     const artist = t.artistFull || t.artist || '';
-    const dur    = isFinite(t.duration) && t.duration > 0 ? Math.round(t.duration * 1000) : 0;
+    const dur = isFinite(t.duration) && t.duration > 0 ? Math.round(t.duration * 1000) : 0;
     // Convertir chemin Windows / Unix en URI file://
     const uri = 'file:///' + t.path.replace(/\\/g, '/').replace(/^\//, '');
     lines.push('    <track>');
@@ -107,9 +122,9 @@ export function exportXSPF() {
   lines.push('  </trackList>');
   lines.push('</playlist>');
 
-  const blob  = new Blob([lines.join('\n')], { type: 'application/xspf+xml' });
-  const url   = URL.createObjectURL(blob);
-  const a     = document.createElement('a');
+  const blob = new Blob([lines.join('\n')], { type: 'application/xspf+xml' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
   a.href = url;
   a.download = plName + '.xspf';
   a.click();
@@ -121,13 +136,13 @@ export function exportXSPF() {
 
 export async function importM3U() {
   const input = document.createElement('input');
-  input.type    = 'file';
-  input.accept  = '.m3u,.m3u8';
+  input.type = 'file';
+  input.accept = '.m3u,.m3u8';
   // BUG FIX : attacher au DOM avant .click() (requis par certains navigateurs)
   input.style.display = 'none';
   document.body.appendChild(input);
 
-  input.onchange = async function(e) {
+  input.onchange = async function (e) {
     try {
       const file = e.target.files[0];
       if (!file) return;
@@ -136,7 +151,7 @@ export async function importM3U() {
       const text = (await file.text()).replace(/^﻿/, '');
 
       // Parser M3U : extraire chemins + métadonnées EXTINF
-      const lines   = text.split(/\r?\n/);
+      const lines = text.split(/\r?\n/);
       const entries = [];
       let pendingInfo = null;
       for (const raw of lines) {
@@ -145,12 +160,17 @@ export async function importM3U() {
         if (l.startsWith('#EXTINF:')) {
           const m = l.match(/^#EXTINF:(-?\d+),(.*)$/);
           if (m) {
-            const dur  = parseInt(m[1]);
+            const dur = parseInt(m[1]);
             const info = m[2];
             const dash = info.indexOf(' - ');
-            pendingInfo = dash > 0
-              ? { duration: dur, artist: info.slice(0, dash).trim(), title: info.slice(dash + 3).trim() }
-              : { duration: dur, title: info.trim() };
+            pendingInfo =
+              dash > 0
+                ? {
+                    duration: dur,
+                    artist: info.slice(0, dash).trim(),
+                    title: info.slice(dash + 3).trim()
+                  }
+                : { duration: dur, title: info.trim() };
           }
           continue;
         }
@@ -159,26 +179,34 @@ export async function importM3U() {
         pendingInfo = null;
       }
 
-      if (!entries.length) { toast(i18n('t_m3u_invalid'), 'warning'); return; }
+      if (!entries.length) {
+        toast(i18n('t_m3u_invalid'), 'warning');
+        return;
+      }
 
       // SEC : valider chaque chemin via isSafePath (rejette `..`, `.`, octets null,
       // caractères de contrôle, chemins > 4096). Défense en profondeur côté JS —
       // Rust reste la garde finale, mais on filtre avant l'IPC.
-      const safeEntries = entries.filter(e => isSafePath(e.path));
-      if (!safeEntries.length) { toast(i18n('t_m3u_invalid'), 'warning'); return; }
+      const safeEntries = entries.filter((e) => isSafePath(e.path));
+      if (!safeEntries.length) {
+        toast(i18n('t_m3u_invalid'), 'warning');
+        return;
+      }
 
-      const tracks       = get('tracks'); // Phase 4
+      const tracks = get('tracks'); // Phase 4
       // BUG FIX : filtrer les pistes sans chemin avant le Map — t.path null → TypeError .replace()
-      const tracksWithPath = tracks.filter(t => t.path);
-      const byPath = new Map(tracksWithPath.map(t => [t.path.replace(/\\/g, '/'), t]));
-      const byName = new Map(tracksWithPath.map(t => [t.path.replace(/\\/g, '/').split('/').pop().toLowerCase(), t]));
+      const tracksWithPath = tracks.filter((t) => t.path);
+      const byPath = new Map(tracksWithPath.map((t) => [t.path.replace(/\\/g, '/'), t]));
+      const byName = new Map(
+        tracksWithPath.map((t) => [t.path.replace(/\\/g, '/').split('/').pop().toLowerCase(), t])
+      );
 
       const matchedIds = [];
-      const newPaths   = [];
+      const newPaths = [];
 
       for (const entry of safeEntries) {
         const normalized = entry.path.replace(/\\/g, '/');
-        const basename   = normalized.split('/').pop().toLowerCase();
+        const basename = normalized.split('/').pop().toLowerCase();
         const found = byPath.get(normalized) || byName.get(basename);
         if (found) {
           matchedIds.push(found.id);
@@ -190,8 +218,20 @@ export async function importM3U() {
       // Importer les fichiers manquants si possible
       let importedCount = 0;
       if (newPaths.length) {
-        const AUDIO_EXTS = new Set(['mp3', 'flac', 'aac', 'm4a', 'ogg', 'opus', 'wav', 'wma', 'aiff', 'ape', 'alac']);
-        const validNew = newPaths.filter(p => AUDIO_EXTS.has(p.split('.').pop().toLowerCase()));
+        const AUDIO_EXTS = new Set([
+          'mp3',
+          'flac',
+          'aac',
+          'm4a',
+          'ogg',
+          'opus',
+          'wav',
+          'wma',
+          'aiff',
+          'ape',
+          'alac'
+        ]);
+        const validNew = newPaths.filter((p) => AUDIO_EXTS.has(p.split('.').pop().toLowerCase()));
         if (validNew.length) {
           importedCount = await importPaths(validNew);
           const tracksNow = get('tracks'); // Phase 4 — relire après importPaths
@@ -208,12 +248,23 @@ export async function importM3U() {
         }
       }
 
-      if (!matchedIds.length) { toast(i18n('t_m3u_no_tracks'), 'warning'); return; }
+      if (!matchedIds.length) {
+        toast(i18n('t_m3u_no_tracks'), 'warning');
+        return;
+      }
 
-      const plName = file.name.replace(/\.m3u8?$/i, '').replace(/[-_]+/g, ' ').trim() || 'Playlist importée';
+      const plName =
+        file.name
+          .replace(/\.m3u8?$/i, '')
+          .replace(/[-_]+/g, ' ')
+          .trim() || 'Playlist importée';
       // B17 FIX : suffixe aléatoire — 2 imports M3U dans la même milliseconde
       // produiraient le même id 'pl_<ts>' → le 2e put écraserait le 1er en IDB.
-      const newPl  = { id: 'pl_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7), name: plName, trackIds: matchedIds };
+      const newPl = {
+        id: 'pl_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7),
+        name: plName,
+        trackIds: matchedIds
+      };
       const playlists = get('playlists');
       playlists.push(newPl);
       // AUDIT-2026-05-22 : set('playlists', playlists) est un no-op (meme reference
@@ -229,7 +280,7 @@ export async function importM3U() {
 
       setView('playlist', document.getElementById('ni-pl-' + newPl.id), newPl.id);
     } catch (err) {
-      toast(i18n('t_m3u_import_error') || 'Erreur lors de l\'import M3U', 'error');
+      toast(i18n('t_m3u_import_error') || "Erreur lors de l'import M3U", 'error');
       console.warn('[m3u] importM3U error:', err);
     } finally {
       input.remove();

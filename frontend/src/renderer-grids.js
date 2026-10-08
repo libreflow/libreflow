@@ -10,15 +10,15 @@
 //
 // Aucun import depuis renderer.js — évite la dépendance circulaire.
 
-import { get }                     from './store.js';
-import { i18n }                    from './i18n.js';
-import { esc }                     from './utils.js';
-import { getArtUrl }               from './artLoader.js';
-import { _trackIdxMap, _coll }     from './search.js';
+import { get } from './store.js';
+import { i18n } from './i18n.js';
+import { esc } from './utils.js';
+import { getArtUrl } from './artLoader.js';
+import { _trackIdxMap, _coll } from './search.js';
 
 // ── État interne ──────────────────────────────────────────────────────────────
 
-let _albumMapCache  = null;
+let _albumMapCache = null;
 let _artistMapCache = null;
 
 // trackId → piste représentative (carte grille / drill header)
@@ -37,15 +37,18 @@ function _escapeRegex(s) {
 function hlText(text, query, re) {
   if (!text) return '';
   if (!query) return esc(text);
-  const r = re || new RegExp(
-    `(${query.trim().split(/\s+/).filter(Boolean).map(_escapeRegex).join('|')})`,
-    'gi'
-  );
-  return text.replace(r, '\x00$1\x01').split('\x00').map((seg, i) => {
-    if (i === 0) return esc(seg);
-    const parts = seg.split('\x01');
-    return `<mark class="srch-hl">${esc(parts[0])}</mark>${esc(parts[1] || '')}`;
-  }).join('');
+  const r =
+    re ||
+    new RegExp(`(${query.trim().split(/\s+/).filter(Boolean).map(_escapeRegex).join('|')})`, 'gi');
+  return text
+    .replace(r, '\x00$1\x01')
+    .split('\x00')
+    .map((seg, i) => {
+      if (i === 0) return esc(seg);
+      const parts = seg.split('\x01');
+      return `<mark class="srch-hl">${esc(parts[0])}</mark>${esc(parts[1] || '')}`;
+    })
+    .join('');
 }
 
 /**
@@ -57,27 +60,32 @@ function _hydrateArtPlaceholders(rootEl, { observe = false } = {}) {
   const hydrate = (ph) => {
     const t = _artTrackById.get(ph.getAttribute('data-art-tid'));
     if (!t) return;
-    getArtUrl(t).then(url => {
-      if (!url || !ph.isConnected) return;
-      const img = document.createElement('img');
-      img.alt = '';
-      img.setAttribute('aria-hidden', 'true');
-      if (ph.dataset.artImgClass) img.className = ph.dataset.artImgClass;
-      img.src = url;
-      ph.replaceWith(img);
-    }).catch(e => console.warn('[getArtUrl]', t?.id, e));
+    getArtUrl(t)
+      .then((url) => {
+        if (!url || !ph.isConnected) return;
+        const img = document.createElement('img');
+        img.alt = '';
+        img.setAttribute('aria-hidden', 'true');
+        if (ph.dataset.artImgClass) img.className = ph.dataset.artImgClass;
+        img.src = url;
+        ph.replaceWith(img);
+      })
+      .catch((e) => console.warn('[getArtUrl]', t?.id, e));
   };
   const phs = rootEl.querySelectorAll('[data-art-tid]');
   if (observe && 'IntersectionObserver' in window) {
     const prev = _gridArtObservers.get(rootEl);
     if (prev) prev.disconnect();
-    const obs = new IntersectionObserver((entries, observer) => {
-      for (const e of entries) {
-        if (!e.isIntersecting) continue;
-        observer.unobserve(e.target);
-        hydrate(e.target);
-      }
-    }, { rootMargin: '300px' });
+    const obs = new IntersectionObserver(
+      (entries, observer) => {
+        for (const e of entries) {
+          if (!e.isIntersecting) continue;
+          observer.unobserve(e.target);
+          hydrate(e.target);
+        }
+      },
+      { rootMargin: '300px' }
+    );
     _gridArtObservers.set(rootEl, obs);
     for (const ph of phs) obs.observe(ph);
   } else {
@@ -98,21 +106,24 @@ function _getAlbumMap() {
     if (!map.has(key)) {
       map.set(key, {
         key,
-        displayName:   key,
-        artist:        t.artist || '',
-        art:           null,
-        artTrack:      null,
-        count:         0,
+        displayName: key,
+        artist: t.artist || '',
+        art: null,
+        artTrack: null,
+        count: 0,
         totalDuration: 0,
-        year:          (t.year && t.year !== 1970) ? t.year : null,
-        _artistSet:    new Set(),
+        year: t.year && t.year !== 1970 ? t.year : null,
+        _artistSet: new Set()
       });
     }
     const a = map.get(key);
     a.count++;
     a.totalDuration += t.duration || 0;
     if (t.art && !a.art) a.art = t.art;
-    if (!a.artTrack && t._hasArt && !t.noArt) { a.artTrack = t; _artTrackById.set(t.id, t); }
+    if (!a.artTrack && t._hasArt && !t.noArt) {
+      a.artTrack = t;
+      _artTrackById.set(t.id, t);
+    }
     if (t.year && t.year !== 1970 && !a.year) a.year = t.year;
     if (t.artist) a._artistSet.add(t.artist);
   }
@@ -133,7 +144,10 @@ function _getArtistMap() {
     const a = map.get(key);
     a.count++;
     if (t.art && !a.art) a.art = t.art;
-    if (!a.artTrack && t._hasArt && !t.noArt) { a.artTrack = t; _artTrackById.set(t.id, t); }
+    if (!a.artTrack && t._hasArt && !t.noArt) {
+      a.artTrack = t;
+      _artTrackById.set(t.id, t);
+    }
   }
   _artistMapCache = [...map.values()];
   return _artistMapCache;
@@ -143,7 +157,7 @@ function _getArtistMap() {
 
 /** Invalide les caches album/artiste et la Map artwork. Appelé depuis renderer.js. */
 export function resetGridCaches() {
-  _albumMapCache  = null;
+  _albumMapCache = null;
   _artistMapCache = null;
   _artTrackById.clear();
 }
@@ -169,19 +183,22 @@ function _removeDrillHeader() {
 export function renderDrillHeader(view, key) {
   if (view === 'album-detail') {
     const albums = _getAlbumMap();
-    const entry  = albums.find(a => a.key === key);
-    if (!entry) { _removeDrillHeader(); return; }
+    const entry = albums.find((a) => a.key === key);
+    if (!entry) {
+      _removeDrillHeader();
+      return;
+    }
 
-    const el   = _getOrCreateDrillHeader();
+    const el = _getOrCreateDrillHeader();
     const artH = entry.art
       ? `<img src="${esc(entry.art)}" class="dh-art" alt="">`
       : entry.artTrack
         ? `<div class="dh-art dh-art-ph" data-art-tid="${esc(entry.artTrack.id)}" data-art-img-class="dh-art"></div>`
         : `<div class="dh-art dh-art-ph"></div>`;
-    const mins      = Math.floor((entry.totalDuration || 0) / 60);
+    const mins = Math.floor((entry.totalDuration || 0) / 60);
     const artistKey = entry.artist || '';
-    const playLbl   = esc(i18n('pl_play_all'));
-    const shufLbl   = esc(i18n('pl_shuffle'));
+    const playLbl = esc(i18n('pl_play_all'));
+    const shufLbl = esc(i18n('pl_shuffle'));
 
     el.className = 'drill-header';
     el.innerHTML = `
@@ -189,11 +206,13 @@ export function renderDrillHeader(view, key) {
       <div class="dh-meta">
         <div class="dh-name">${esc(entry.displayName)}</div>
         <div class="dh-sub">
-          ${entry.artist
-            ? `<button class="dh-artist-link" data-action="dh-drill-artist"
+          ${
+            entry.artist
+              ? `<button class="dh-artist-link" data-action="dh-drill-artist"
                  data-artist-key="${esc(artistKey)}"
                  data-artist-name="${esc(entry.artist)}">${esc(entry.artist)}</button>`
-            : ''}
+              : ''
+          }
           ${entry.year ? `<span>${esc(String(entry.year))}</span>` : ''}
           <span>${i18n('track_count', entry.count)}</span>
           ${mins > 0 ? `<span>${i18n('dur_min', mins)}</span>` : ''}
@@ -209,35 +228,40 @@ export function renderDrillHeader(view, key) {
 
   if (view === 'artist-detail') {
     const artists = _getArtistMap();
-    const entry   = artists.find(a => a.key === key);
-    if (!entry) { _removeDrillHeader(); return; }
+    const entry = artists.find((a) => a.key === key);
+    if (!entry) {
+      _removeDrillHeader();
+      return;
+    }
 
     const keyLc = key.toLowerCase();
     const albums = _getAlbumMap()
-      .filter(a => (a.artist || '').toLowerCase() === keyLc)
+      .filter((a) => (a.artist || '').toLowerCase() === keyLc)
       .sort((a, b) => (b.year || 0) - (a.year || 0))
       .slice(0, 20);
 
-    const el   = _getOrCreateDrillHeader();
+    const el = _getOrCreateDrillHeader();
     const artH = entry.art
       ? `<img src="${esc(entry.art)}" class="dh-art dh-art-circle" alt="">`
       : entry.artTrack
         ? `<div class="dh-art dh-art-ph dh-art-circle" data-art-tid="${esc(entry.artTrack.id)}" data-art-img-class="dh-art dh-art-circle"></div>`
         : `<div class="dh-art dh-art-ph dh-art-circle"></div>`;
 
-    const albumCards = albums.map(a => {
-      const cardArt = a.art
-        ? `<img src="${esc(a.art)}" class="dh-mini-art" alt="">`
-        : a.artTrack
-          ? `<div class="dh-mini-art dh-mini-art-ph" data-art-tid="${esc(a.artTrack.id)}" data-art-img-class="dh-mini-art"></div>`
-          : `<div class="dh-mini-art dh-mini-art-ph"></div>`;
-      return `<button class="dh-mini-card" data-action="dh-drill-album"
+    const albumCards = albums
+      .map((a) => {
+        const cardArt = a.art
+          ? `<img src="${esc(a.art)}" class="dh-mini-art" alt="">`
+          : a.artTrack
+            ? `<div class="dh-mini-art dh-mini-art-ph" data-art-tid="${esc(a.artTrack.id)}" data-art-img-class="dh-mini-art"></div>`
+            : `<div class="dh-mini-art dh-mini-art-ph"></div>`;
+        return `<button class="dh-mini-card" data-action="dh-drill-album"
                 data-album-key="${esc(a.key)}" data-album-name="${esc(a.displayName)}">
         ${cardArt}
         <div class="dh-mini-name">${esc(a.displayName)}</div>
         ${a.year ? `<div class="dh-mini-year">${esc(String(a.year))}</div>` : ''}
       </button>`;
-    }).join('');
+      })
+      .join('');
 
     const playLbl = esc(i18n('pl_play_all'));
     const shufLbl = esc(i18n('pl_shuffle'));
@@ -256,11 +280,15 @@ export function renderDrillHeader(view, key) {
           <button class="dh-btn dh-shuf" data-action="dh-shuffle-all" aria-label="${shufLbl}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m18 14 4 4-4 4"/><path d="m18 2 4 4-4 4"/><path d="M2 18h1.973a4 4 0 0 0 3.3-1.7l5.454-8.6A4 4 0 0 1 16.027 6H22"/><path d="M2 6h1.972a4 4 0 0 1 3.6 2.2"/><path d="M22 18h-6.041a4 4 0 0 1-3.3-1.8l-.359-.45"/></svg> ${shufLbl}</button>
         </div>
       </div>
-      ${albums.length > 0 ? `
+      ${
+        albums.length > 0
+          ? `
         <div class="dh-albums-section">
           <div class="dh-albums-title">Albums</div>
           <div class="dh-albums-mini">${albumCards}</div>
-        </div>` : ''}`;
+        </div>`
+          : ''
+      }`;
     _hydrateArtPlaceholders(el);
     return;
   }
@@ -278,9 +306,9 @@ export function renderDrillHeader(view, key) {
  * AC6 : libellés boutons et pluriels via i18n — plus de hardcode FR.
  */
 export function renderAlbumsGrid() {
-  const tracks    = get('tracks') || [];
+  const tracks = get('tracks') || [];
   const albumSort = get('albumSort') || 'name';
-  const query     = get('query') || '';
+  const query = get('query') || '';
 
   let grid = document.getElementById('album-grid');
   if (!grid) {
@@ -300,23 +328,24 @@ export function renderAlbumsGrid() {
   const queryLc = query ? query.toLowerCase() : '';
   let albums = _getAlbumMap();
   if (queryLc) {
-    albums = albums.filter(a =>
-      (a.key || '').toLowerCase().includes(queryLc) ||
-      (a.artist || '').toLowerCase().includes(queryLc)
+    albums = albums.filter(
+      (a) =>
+        (a.key || '').toLowerCase().includes(queryLc) ||
+        (a.artist || '').toLowerCase().includes(queryLc)
     );
   }
-  albums = albums.map(a => ({
-    name:       a.key,
-    artist:     a.artist,
-    artUrl:     a.art,
-    artTrack:   a.artTrack,
-    count:      a.count,
-    totalDur:   a.totalDuration,
-    year:       a.year,
-    _artistSet: a._artistSet,
+  albums = albums.map((a) => ({
+    name: a.key,
+    artist: a.artist,
+    artUrl: a.art,
+    artTrack: a.artTrack,
+    count: a.count,
+    totalDur: a.totalDuration,
+    year: a.year,
+    _artistSet: a._artistSet
   }));
 
-  if (albumSort === 'count')    albums.sort((a, b) => b.count - a.count);
+  if (albumSort === 'count') albums.sort((a, b) => b.count - a.count);
   else if (albumSort === 'duration') albums.sort((a, b) => b.totalDur - a.totalDur);
   else if (albumSort === 'year') albums.sort((a, b) => (b.year || 0) - (a.year || 0));
   else albums.sort((a, b) => _coll.compare(a.name || '', b.name || ''));
@@ -331,23 +360,24 @@ export function renderAlbumsGrid() {
   }
 
   // OPT: labels statiques hoistés hors de la boucle (≈400 cartes par grille)
-  const multiArtistsLbl  = i18n('multi_artists');
+  const multiArtistsLbl = i18n('multi_artists');
   const unknownArtistLbl = i18n('unknown_artist');
-  const sansAlbumLbl     = i18n('sans_album');
-  const nTracksLbl       = i18n('n_tracks');
-  grid.innerHTML = albums.map(a => {
-    // AC4 : isMulti → sous-titre jamais vide
-    const isMulti   = a._artistSet && a._artistSet.size > 1;
-    const artistSub = isMulti ? multiArtistsLbl : (a.artist || unknownArtistLbl);
-    const escName   = esc(a.name);
-    const meta = a.year ? `<span class="card-year">${esc(String(a.year))}</span>` : '';
-    const artHtml = a.artUrl
-      ? `<img src="${esc(a.artUrl)}" alt="" aria-hidden="true">`
-      : a.artTrack
-        ? `<div class="card-art-ph" aria-hidden="true" data-art-tid="${esc(a.artTrack.id)}">💿</div>`
-        : `<div class="card-art-ph" aria-hidden="true">💿</div>`;
-    // AC3 : esc(' — ' + a.artist) pour éviter tout split sur les entités HTML (§13)
-    return `<div class="card" role="button" tabindex="0"
+  const sansAlbumLbl = i18n('sans_album');
+  const nTracksLbl = i18n('n_tracks');
+  grid.innerHTML = albums
+    .map((a) => {
+      // AC4 : isMulti → sous-titre jamais vide
+      const isMulti = a._artistSet && a._artistSet.size > 1;
+      const artistSub = isMulti ? multiArtistsLbl : a.artist || unknownArtistLbl;
+      const escName = esc(a.name);
+      const meta = a.year ? `<span class="card-year">${esc(String(a.year))}</span>` : '';
+      const artHtml = a.artUrl
+        ? `<img src="${esc(a.artUrl)}" alt="" aria-hidden="true">`
+        : a.artTrack
+          ? `<div class="card-art-ph" aria-hidden="true" data-art-tid="${esc(a.artTrack.id)}">💿</div>`
+          : `<div class="card-art-ph" aria-hidden="true">💿</div>`;
+      // AC3 : esc(' — ' + a.artist) pour éviter tout split sur les entités HTML (§13)
+      return `<div class="card" role="button" tabindex="0"
       data-action="drill-album" data-key="${escName}" data-name="${escName}"
       data-from="albums" data-display="${escName}"
       aria-label="${esc(a.name || sansAlbumLbl)}${a.artist ? esc(' — ' + a.artist) : ''}">
@@ -360,7 +390,8 @@ export function renderAlbumsGrid() {
         <span class="card-ct">${a.count} ${nTracksLbl}</span>
       </div>
     </div>`;
-  }).join('');
+    })
+    .join('');
 
   _hydrateArtPlaceholders(grid, { observe: true });
   updateBreadcrumb();
@@ -370,9 +401,9 @@ export function renderAlbumsGrid() {
 
 /** Rendu de la grille Artistes. */
 export function renderArtistsGrid() {
-  const tracks     = get('tracks') || [];
+  const tracks = get('tracks') || [];
   const artistSort = get('artistSort') || 'name';
-  const query      = get('query') || '';
+  const query = get('query') || '';
 
   let grid = document.getElementById('artist-grid');
   if (!grid) {
@@ -393,16 +424,29 @@ export function renderArtistsGrid() {
   const artistMap = new Map();
   for (const t of tracks) {
     const key = t.artist || '';
-    if (queryLc && !key.toLowerCase().includes(queryLc) &&
-        !(t.name || '').toLowerCase().includes(queryLc)) continue;
+    if (
+      queryLc &&
+      !key.toLowerCase().includes(queryLc) &&
+      !(t.name || '').toLowerCase().includes(queryLc)
+    )
+      continue;
     if (!artistMap.has(key)) {
-      artistMap.set(key, { name: key, artUrl: null, artTrack: null, count: 0, albumCount: new Set() });
+      artistMap.set(key, {
+        name: key,
+        artUrl: null,
+        artTrack: null,
+        count: 0,
+        albumCount: new Set()
+      });
     }
     const a = artistMap.get(key);
     a.count++;
     a.albumCount.add(t.album);
     if (!a.artUrl && t.art) a.artUrl = t.art;
-    if (!a.artTrack && t._hasArt && !t.noArt) { a.artTrack = t; _artTrackById.set(t.id, t); }
+    if (!a.artTrack && t._hasArt && !t.noArt) {
+      a.artTrack = t;
+      _artTrackById.set(t.id, t);
+    }
   }
 
   let artists = [...artistMap.values()];
@@ -418,16 +462,17 @@ export function renderArtistsGrid() {
     return;
   }
 
-  grid.innerHTML = artists.map(a => {
-    const escAName = esc(a.name);
-    const nbAlbums = a.albumCount.size;
-    const artHtml  = a.artUrl
-      ? `<img src="${esc(a.artUrl)}" alt="" aria-hidden="true">`
-      : a.artTrack
-        ? `<div class="card-art-ph card-art-circle" aria-hidden="true" data-art-tid="${esc(a.artTrack.id)}">${esc(a.name?.[0]?.toUpperCase() || '?')}</div>`
-        : `<div class="card-art-ph card-art-circle" aria-hidden="true">${esc(a.name?.[0]?.toUpperCase() || '?')}</div>`;
-    const albumSub = nbAlbums > 1 ? ` · ${i18n('n_albums', nbAlbums)}` : '';
-    return `<div class="card card-artist" role="button" tabindex="0"
+  grid.innerHTML = artists
+    .map((a) => {
+      const escAName = esc(a.name);
+      const nbAlbums = a.albumCount.size;
+      const artHtml = a.artUrl
+        ? `<img src="${esc(a.artUrl)}" alt="" aria-hidden="true">`
+        : a.artTrack
+          ? `<div class="card-art-ph card-art-circle" aria-hidden="true" data-art-tid="${esc(a.artTrack.id)}">${esc(a.name?.[0]?.toUpperCase() || '?')}</div>`
+          : `<div class="card-art-ph card-art-circle" aria-hidden="true">${esc(a.name?.[0]?.toUpperCase() || '?')}</div>`;
+      const albumSub = nbAlbums > 1 ? ` · ${i18n('n_albums', nbAlbums)}` : '';
+      return `<div class="card card-artist" role="button" tabindex="0"
       data-action="drill-artist" data-key="${escAName}" data-name="${escAName}"
       data-from="artists" data-display="${escAName}"
       aria-label="${esc(a.name)}">
@@ -439,7 +484,8 @@ export function renderArtistsGrid() {
         <span class="card-sub">${a.count} ${nTracksLbl}${albumSub}</span>
       </div>
     </div>`;
-  }).join('');
+    })
+    .join('');
 
   _hydrateArtPlaceholders(grid, { observe: true });
   updateBreadcrumb();
@@ -450,7 +496,7 @@ export function renderArtistsGrid() {
 /** Rendu de la grille Playlists (vue "playlists"). */
 export function renderPlaylistsGrid() {
   const playlists = get('playlists') || [];
-  const query     = get('query')     || '';
+  const query = get('query') || '';
 
   let grid = document.getElementById('playlist-grid');
   if (!grid) {
@@ -467,57 +513,67 @@ export function renderPlaylistsGrid() {
   if (ag) ag.style.display = 'none';
   if (rg) rg.style.display = 'none';
 
-  const queryLc  = query ? query.toLowerCase() : '';
+  const queryLc = query ? query.toLowerCase() : '';
   let filtered = queryLc
-    ? playlists.filter(p => (p.name || '').toLowerCase().includes(queryLc))
+    ? playlists.filter((p) => (p.name || '').toLowerCase().includes(queryLc))
     : playlists;
 
   // REWORK-1 : tri de la grille (remplace la section « Récentes » de la sidebar).
   // Tri stable : les items hors classement gardent l'ordre manuel du tableau.
   const plGridSort = get('plGridSort') || 'manual';
   if (plGridSort === 'az') {
-    filtered = [...filtered].sort((a, b) => (a.name || '').localeCompare(b.name || '', undefined, { sensitivity: 'base' }));
+    filtered = [...filtered].sort((a, b) =>
+      (a.name || '').localeCompare(b.name || '', undefined, { sensitivity: 'base' })
+    );
   } else if (plGridSort === 'recent') {
     const rank = new Map((get('recentPls') || []).map((id, i) => [id, i]));
-    filtered = [...filtered].sort((a, b) =>
-      (rank.has(a.id) ? rank.get(a.id) : Infinity) - (rank.has(b.id) ? rank.get(b.id) : Infinity));
+    filtered = [...filtered].sort(
+      (a, b) =>
+        (rank.has(a.id) ? rank.get(a.id) : Infinity) - (rank.has(b.id) ? rank.get(b.id) : Infinity)
+    );
   }
 
   if (!filtered.length) {
     const ico = `<svg viewBox="0 0 24 24" fill="none" style="fill:none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="6" x2="14" y2="6"/><line x1="3" y1="12" x2="14" y2="12"/><line x1="3" y1="18" x2="10" y2="18"/><polygon points="17 10 23 14 17 18"/></svg>`;
-    grid.innerHTML = `<div class="pl-grid-empty"><div class="empty-ico">${ico}</div>`
-      + `<div class="empty-h">${esc(i18n('pl_empty'))}</div>`
-      + `<div class="empty-s">${esc(i18n('pl_empty_s'))}</div>`
+    grid.innerHTML =
+      `<div class="pl-grid-empty"><div class="empty-ico">${ico}</div>` +
+      `<div class="empty-h">${esc(i18n('pl_empty'))}</div>` +
+      `<div class="empty-s">${esc(i18n('pl_empty_s'))}</div>` +
       // AUDIT-2026-07-27 : état vide actionnable — l'action existe à un clic
-      + `<button class="empty-cta" data-action="new-playlist">${esc(i18n('pl_new') || 'Nouvelle playlist')}</button></div>`;
+      `<button class="empty-cta" data-action="new-playlist">${esc(i18n('pl_new') || 'Nouvelle playlist')}</button></div>`;
     return;
   }
 
   const tracks = get('tracks') || [];
   // FIX-B6 : data-pl-id uniquement sur le div.card root
-  const plSmartLbl  = esc(i18n('pl_smart_lbl'));
+  const plSmartLbl = esc(i18n('pl_smart_lbl'));
   const plTracksLbl = i18n('n_tracks');
-  grid.innerHTML = filtered.map(pl => {
-    const plTracks = (pl.trackIds || []).slice(0, 4)
-      .map(id => tracks[_trackIdxMap.get(id)])
-      .filter(Boolean);
-    const arts = plTracks.map(t => t.art).filter(Boolean).slice(0, 4);
-    let artHtml;
-    if (pl.coverB64) {
-      artHtml = `<img src="${esc(pl.coverB64)}" alt="" aria-hidden="true">`;
-    } else if (arts.length >= 4) {
-      artHtml = `<div class="card-mosaic" aria-hidden="true">${arts.map(a => `<img src="${esc(a)}" alt="">`).join('')}</div>`;
-    } else if (arts.length > 0) {
-      artHtml = `<img src="${esc(arts[0])}" alt="" aria-hidden="true">`;
-    } else {
-      artHtml = `<div class="card-art-ph" aria-hidden="true">🎵</div>`;
-    }
+  grid.innerHTML = filtered
+    .map((pl) => {
+      const plTracks = (pl.trackIds || [])
+        .slice(0, 4)
+        .map((id) => tracks[_trackIdxMap.get(id)])
+        .filter(Boolean);
+      const arts = plTracks
+        .map((t) => t.art)
+        .filter(Boolean)
+        .slice(0, 4);
+      let artHtml;
+      if (pl.coverB64) {
+        artHtml = `<img src="${esc(pl.coverB64)}" alt="" aria-hidden="true">`;
+      } else if (arts.length >= 4) {
+        artHtml = `<div class="card-mosaic" aria-hidden="true">${arts.map((a) => `<img src="${esc(a)}" alt="">`).join('')}</div>`;
+      } else if (arts.length > 0) {
+        artHtml = `<img src="${esc(arts[0])}" alt="" aria-hidden="true">`;
+      } else {
+        artHtml = `<div class="card-art-ph" aria-hidden="true">🎵</div>`;
+      }
 
-    const smartBadge = pl.smart ? `<span class="smart-badge" title="${plSmartLbl}">✦</span>` : '';
-    const pinBadge   = pl.pinned ? `<span class="pin-badge" aria-hidden="true">📌</span>` : '';
-    const count = (pl.trackIds || []).length;
+      const smartBadge = pl.smart ? `<span class="smart-badge" title="${plSmartLbl}">✦</span>` : '';
+      const pinBadge = pl.pinned ? `<span class="pin-badge" aria-hidden="true">📌</span>` : '';
+      const count = (pl.trackIds || []).length;
 
-    return `<div class="card" role="button" tabindex="0"
+      return `<div class="card" role="button" tabindex="0"
       data-action="set-view" data-view="playlist" data-pl-id="${esc(pl.id)}" data-ni-id="ni-pl-${esc(pl.id)}"
       aria-label="${esc(pl.name || '?')}">
       <div class="card-art">
@@ -530,7 +586,8 @@ export function renderPlaylistsGrid() {
         <span class="card-sub">${count} ${plTracksLbl}</span>
       </div>
     </div>`;
-  }).join('');
+    })
+    .join('');
 
   updateBreadcrumb();
 }
@@ -542,14 +599,16 @@ export function updateBreadcrumb() {
   const bc = document.getElementById('breadcrumb');
   if (!bc) return;
 
-  const view         = get('view')             || 'all';
-  const drillKey     = get('drillKey')         || '';
-  const drillFrom    = get('drillFrom')        || '';
+  const view = get('view') || 'all';
+  const drillKey = get('drillKey') || '';
+  const drillFrom = get('drillFrom') || '';
   const drillDisplay = get('drillDisplayName') || drillKey;
-  const curPlId      = get('curPlId');
-  const playlists    = get('playlists') || [];
+  const curPlId = get('curPlId');
+  const playlists = get('playlists') || [];
 
-  const isDrill = drillKey || (view === 'playlist' && curPlId) ||
+  const isDrill =
+    drillKey ||
+    (view === 'playlist' && curPlId) ||
     ['album-detail', 'artist-detail', 'genre-detail'].includes(view);
 
   if (!isDrill) {
@@ -561,10 +620,10 @@ export function updateBreadcrumb() {
   bc.style.display = '';
 
   const fromLabels = {
-    albums:    i18n('lib_albums')    || 'Albums',
-    artists:   i18n('lib_artists')  || 'Artistes',
-    genres:    'Genres',
-    playlists: i18n('nav_playlists') || 'Playlists',
+    albums: i18n('lib_albums') || 'Albums',
+    artists: i18n('lib_artists') || 'Artistes',
+    genres: 'Genres',
+    playlists: i18n('nav_playlists') || 'Playlists'
   };
 
   let items = [];
@@ -572,16 +631,18 @@ export function updateBreadcrumb() {
     items.push({ label: fromLabels[drillFrom] || drillFrom, action: `setView('${drillFrom}')` });
     items.push({ label: drillDisplay, current: true });
   } else if (view === 'playlist' && curPlId) {
-    const pl = playlists.find(p => p.id === curPlId);
+    const pl = playlists.find((p) => p.id === curPlId);
     items.push({ label: fromLabels.playlists, action: "setView('playlists')" });
     items.push({ label: pl?.name || '?', current: true });
   }
 
-  bc.innerHTML = items.map((item, i) => {
-    if (item.current) {
-      return `<span class="bc-cur" aria-current="page">${esc(item.label)}</span>`;
-    }
-    return `<button class="bc-link" data-action="bc-navigate" data-bc-idx="${i}">${esc(item.label)}</button>
+  bc.innerHTML = items
+    .map((item, i) => {
+      if (item.current) {
+        return `<span class="bc-cur" aria-current="page">${esc(item.label)}</span>`;
+      }
+      return `<button class="bc-link" data-action="bc-navigate" data-bc-idx="${i}">${esc(item.label)}</button>
             <span class="bc-sep" aria-hidden="true">›</span>`;
-  }).join('');
+    })
+    .join('');
 }

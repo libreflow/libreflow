@@ -10,10 +10,13 @@
 //   _allPlayerUI()
 
 import { updateMiniPlayer } from './miniplayer.js';
-import { syncMiniOverlay }  from './minioverlay.js';
+import { syncMiniOverlay } from './minioverlay.js';
 
 /**
  * Met à jour le mini-player Tauri (fenêtre séparée) et l'overlay in-page
  * en un seul appel. À appeler après tout changement d'état du player.
  */
-export function _allPlayerUI() { updateMiniPlayer(); syncMiniOverlay(); }
+export function _allPlayerUI() {
+  updateMiniPlayer();
+  syncMiniOverlay();
+}

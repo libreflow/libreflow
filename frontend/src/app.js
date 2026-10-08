@@ -1,97 +1,297 @@
 // @ts-nocheck
 // LibreFlow — Main application
 import { invoke, invokeRetry, listen, convertFileSrc } from './ipc.js';
-import { audio, playAt, prev, next, togglePlay,
-         toggleShuffle, toggleRepeat, toggleLike, likeat,
-         setIcon, setSpeed, setCrossfade, initCrossfadeAudio,
-         clearCrossfadeTimers, getNextIdx, ensureUrl,
-         initMediaSession,
-         resetShuffleQ,
-         adjustShuffleQAfterDelete, setBootVizState }       from './player.js';
-import { emit, on, EVENTS }                                from './bus.js';
-import { get, set, notify, subscribe }                     from './store.js';
+import {
+  audio,
+  playAt,
+  prev,
+  next,
+  togglePlay,
+  toggleShuffle,
+  toggleRepeat,
+  toggleLike,
+  likeat,
+  setIcon,
+  setSpeed,
+  setCrossfade,
+  initCrossfadeAudio,
+  clearCrossfadeTimers,
+  getNextIdx,
+  ensureUrl,
+  initMediaSession,
+  resetShuffleQ,
+  adjustShuffleQAfterDelete,
+  setBootVizState
+} from './player.js';
+import { emit, on, EVENTS } from './bus.js';
+import { get, set, notify, subscribe } from './store.js';
 // Side-effect import: registers GSAP core + Flip + CustomEase once at boot.
 // Consumers import named primitives from './motion.js' as needed.
 import { setMotionPref, onMotionPrefChange, applyMotionAttr } from './motion.js'; // Task 10
 import { CFG, SPEEDS } from './cfg.js';
 import { openDB, tx, dget, dall, dput, ddel, DB, getStorageEstimate } from './db.js';
 import { i18n, initLang, getLang, applyLang, setLang } from './i18n.js';
-import { cinemaOpen, initCinemaBg, toggleCinema, openCinema, closeCinema, setCinemaBg, cycleCinemaBg, applyCinemaBg, toggleCinemaFullscreen, updateCinArtColor, initCinemaVizSuspend, startCinemaViz } from './cinema.js';
+import {
+  cinemaOpen,
+  initCinemaBg,
+  toggleCinema,
+  openCinema,
+  closeCinema,
+  setCinemaBg,
+  cycleCinemaBg,
+  applyCinemaBg,
+  toggleCinemaFullscreen,
+  updateCinArtColor,
+  initCinemaVizSuspend,
+  startCinemaViz
+} from './cinema.js';
 import { syncCinVolumeUI } from './cinema-render.js'; // Task 7 fix : chemin volume mini-player → état mute cinéma cohérent
-import { toggleQueue, closeQueue, renderQueue, playQueueItem, clearQueueOverride, addToQueueNext, addToQueueEnd, getQueueState, restoreQueueState } from './queue.js';
+import {
+  toggleQueue,
+  closeQueue,
+  renderQueue,
+  playQueueItem,
+  clearQueueOverride,
+  addToQueueNext,
+  addToQueueEnd,
+  getQueueState,
+  restoreQueueState
+} from './queue.js';
 import { exportM3U, importM3U } from './m3u.js';
 import { setPlayLog, flushPlayLog, cancelPlayLogFlush } from './playlog.js';
-import { initEQ, toggleEQ, closeEQ, applyEQPreset, eqAutoMode, setEQAutoMode, toggleEQAutoMode, loadEQProfiles, getEQProfiles, initBootEQ, getActiveEqPreset, masterGainNode, setMasterGain, setEQExpert } from './eq.js';
-import { initDeviceEQ }                                from './eqdevice.js';
-import { initDevices }                                 from './devices.js';
-import { cleanupCdCache }                              from './cdaudio.js';
-import { initViz, setVizMode, getVizMode, setVizEnabled, getVizEnabled, suspendViz, resumeViz } from './viz.js';
-import { setSleepFading, sleepEndOfTrack, toggleSleepMenu, setSleepTimer, setSleepEndOfTrack, setSleepCustom, cancelSleepTimer } from './sleep.js';
+import {
+  initEQ,
+  toggleEQ,
+  closeEQ,
+  applyEQPreset,
+  eqAutoMode,
+  setEQAutoMode,
+  toggleEQAutoMode,
+  loadEQProfiles,
+  getEQProfiles,
+  initBootEQ,
+  getActiveEqPreset,
+  masterGainNode,
+  setMasterGain,
+  setEQExpert
+} from './eq.js';
+import { initDeviceEQ } from './eqdevice.js';
+import { initDevices } from './devices.js';
+import { cleanupCdCache } from './cdaudio.js';
+import {
+  initViz,
+  setVizMode,
+  getVizMode,
+  setVizEnabled,
+  getVizEnabled,
+  suspendViz,
+  resumeViz
+} from './viz.js';
+import {
+  setSleepFading,
+  sleepEndOfTrack,
+  toggleSleepMenu,
+  setSleepTimer,
+  setSleepEndOfTrack,
+  setSleepCustom,
+  cancelSleepTimer
+} from './sleep.js';
 import { esc, fmt, fmtd, extEmoji, normTag, fmtArtists, mainArtist, validYear } from './utils.js';
-import { radioActive, startRadio, stopRadio, resetRadio, radioRefillQueue, ctxStartRadio, radioRegenerateFromCurrent, radioSaveAsPlaylist, renderRadioView, openRadioView, getRadioSeedId, initRadioSeedId, initRadioPlCallbacks } from './radio.js';
-import { initWatchPath, getWatchPath, stopWatchFolder, updateWatchUI, importPaths, startWatchNative } from './watchfolder.js'; // Bug #7 fix : startWatchNative ajouté
+import {
+  radioActive,
+  startRadio,
+  stopRadio,
+  resetRadio,
+  radioRefillQueue,
+  ctxStartRadio,
+  radioRegenerateFromCurrent,
+  radioSaveAsPlaylist,
+  renderRadioView,
+  openRadioView,
+  getRadioSeedId,
+  initRadioSeedId,
+  initRadioPlCallbacks
+} from './radio.js';
+import {
+  initWatchPath,
+  getWatchPath,
+  stopWatchFolder,
+  updateWatchUI,
+  importPaths,
+  startWatchNative
+} from './watchfolder.js'; // Bug #7 fix : startWatchNative ajouté
 import { renderStats, getHeatPeriod, initHeatPeriod } from './stats.js';
-import { switchPlTab, openSmartPlaylistModal, _setSmartSeed, smartSeedSearch, smartPreview, confirmSmartPlaylist, regenerateSmartPlaylist } from './smartplaylist.js';
+import {
+  switchPlTab,
+  openSmartPlaylistModal,
+  _setSmartSeed,
+  smartSeedSearch,
+  smartPreview,
+  confirmSmartPlaylist,
+  regenerateSmartPlaylist
+} from './smartplaylist.js';
 import { detectDupes, removeDupeTrack, deleteAllDupes, closeDupes } from './dupes.js';
 import { checkOrphans } from './orphans.js';
-import { selection, selectionMode, clearSelection, toggleTrackSelection, selAddToPlaylist, selAddBatch, selToggleLike, selRemove, selBatchTagEdit, closeBatchTagModal, confirmBatchTagEdit } from './selection.js';
+import {
+  selection,
+  selectionMode,
+  clearSelection,
+  toggleTrackSelection,
+  selAddToPlaylist,
+  selAddBatch,
+  selToggleLike,
+  selRemove,
+  selBatchTagEdit,
+  closeBatchTagModal,
+  confirmBatchTagEdit
+} from './selection.js';
 import { resetMiniProgressThrottle, setMiniPos, getMiniPos } from './miniplayer.js';
 import { toggleMiniOverlay, initMiniOverlayDrag, reclampMiniOverlay } from './minioverlay.js';
-import { rgEnabled, rgTargetLUFS, initRgState, initRG, setReplayGain, setRGTarget, analyzeAndApplyRG } from './replaygain.js';
+import {
+  rgEnabled,
+  rgTargetLUFS,
+  initRgState,
+  initRG,
+  setReplayGain,
+  setRGTarget,
+  analyzeAndApplyRG
+} from './replaygain.js';
 import { openTagEditor, saveTagEdit, cancelTagEdit } from './tagedit.js';
 import { toast, toastWithAction, confirmAction, resolveConfirm, initRipple } from './ui.js';
 import { checkForUpdate, checkForUpdateManual, initAppVersion } from './updater.js';
-import { getFiltered, rebuildTrackIdxMap, trackIdx, invalidateFilterCache,
-         _trackIdxMap }    from './search.js';
-import { loadTagsAndDurations, loadTagsBg,
-         saveTrack, saveTracks, saveTrackNow, flushTrackBatch,
-         cancelTrackBatch }                                           from './library.js';
+import {
+  getFiltered,
+  rebuildTrackIdxMap,
+  trackIdx,
+  invalidateFilterCache,
+  _trackIdxMap
+} from './search.js';
+import {
+  loadTagsAndDurations,
+  loadTagsBg,
+  saveTrack,
+  saveTracks,
+  saveTrackNow,
+  flushTrackBatch,
+  cancelTrackBatch
+} from './library.js';
 import { revokeArt } from './artLoader.js';
 import { renderGenresGrid, drillGenre, rescanGenres, invalidateGenreGridSig } from './genres.js';
 import {
-  savePlaylists, savePlaylistsNow, renderPlNav, setupPlNavDrop,
-  renderPlHero, setPlSort,
-  openNewPlaylistModal, openRenamePlaylistModal, closePlModal, confirmPlaylistModal,
-  deletePlaylist, movePlaylistTrack,
-  showPlCtxMenu, ctxPlayPlaylist, ctxShufflePlaylist,
-  showPlQuickPop, closePlQuickPop, pqpAdd, pqpNew,
-  onTrackDragStart, onPlNavDragStart,
-  togglePinPlaylist, movePlToFolder, removePlFromFolder,
-  togglePlFolder, showPlFolderCtxMenu, renamePlFolder, deletePlFolder,
+  savePlaylists,
+  savePlaylistsNow,
+  renderPlNav,
+  setupPlNavDrop,
+  renderPlHero,
+  setPlSort,
+  openNewPlaylistModal,
+  openRenamePlaylistModal,
+  closePlModal,
+  confirmPlaylistModal,
+  deletePlaylist,
+  movePlaylistTrack,
+  showPlCtxMenu,
+  ctxPlayPlaylist,
+  ctxShufflePlaylist,
+  showPlQuickPop,
+  closePlQuickPop,
+  pqpAdd,
+  pqpNew,
+  onTrackDragStart,
+  onPlNavDragStart,
+  togglePinPlaylist,
+  movePlToFolder,
+  removePlFromFolder,
+  togglePlFolder,
+  showPlFolderCtxMenu,
+  renamePlFolder,
+  deletePlFolder,
   // S157 FIX-1 : onPlFolderDragOver/Leave/Drop retirés des imports — code mort.
   // Le drag-drop folder est entièrement géré par event delegation dans setupPlNavDrop()
   // (cf. data-folder-drop-id sur .pl-folder-h). Plus aucun handler inline ondragover=…
-  onPlCoverSelected, clearPlCover,
-  _plHeroInlineRename, _plNavInlineRename,
-  playPlaylistFrom, playPlaylistDirect, shufflePlaylist,
+  onPlCoverSelected,
+  clearPlCover,
+  _plHeroInlineRename,
+  _plNavInlineRename,
+  playPlaylistFrom,
+  playPlaylistDirect,
+  shufflePlaylist
 } from './playlists.js';
 export { playPlaylistFrom, playPlaylistDirect, shufflePlaylist }; // re-export (handlers.js backward compat)
 
-import { toggleNowPlaying, closeNowPlaying, updateNowPlaying, initNpBg, onResizeNowPlaying } from './nowplaying.js';
 import {
-  initSettingsVars, getTheme, getDynColor, getDisplayMode,
-  switchSetTab, openSettings, closeSettings,
-  setTheme, setDynColor,
-  applyArtColor, clearArtColor, animateArtChange, _updateArtBlur,
-  closeShortcuts, toggleShortcuts,
-  setMode, toggleMode,
-  _syncVizBtns,
+  toggleNowPlaying,
+  closeNowPlaying,
+  updateNowPlaying,
+  initNpBg,
+  onResizeNowPlaying
+} from './nowplaying.js';
+import {
+  initSettingsVars,
+  getTheme,
+  getDynColor,
+  getDisplayMode,
+  switchSetTab,
+  openSettings,
+  closeSettings,
+  setTheme,
+  setDynColor,
+  applyArtColor,
+  clearArtColor,
+  animateArtChange,
+  _updateArtBlur,
+  closeShortcuts,
+  toggleShortcuts,
+  setMode,
+  toggleMode,
+  _syncVizBtns
 } from './settings.js';
 import {
-  showView, goHome, setView, onSearch, nextSort,
+  showView,
+  goHome,
+  setView,
+  onSearch,
+  nextSort,
   nextAlbumSort,
-  statsGoToGenre, statsGoToArtist, statsGoToAlbum,
-  updateClearFiltersBtn, clearAllFilters,
+  statsGoToGenre,
+  statsGoToArtist,
+  statsGoToAlbum,
+  updateClearFiltersBtn,
+  clearAllFilters
 } from './views.js';
-import { _showSkeletonRows,
-         virtRenderWindow, virtAttachScroll,
-         renderLib, renderAlbumsGrid, renderArtistsGrid, renderPlaylistsGrid,
-         drillDown, updatePlActionBar,
-         playById, patchActiveTrack, patchPlayState,
-         _withVT, scrollToCurrentTrack } from './renderer.js';
+import {
+  _showSkeletonRows,
+  virtRenderWindow,
+  virtAttachScroll,
+  renderLib,
+  renderAlbumsGrid,
+  renderArtistsGrid,
+  renderPlaylistsGrid,
+  drillDown,
+  updatePlActionBar,
+  playById,
+  patchActiveTrack,
+  patchPlayState,
+  _withVT,
+  scrollToCurrentTrack
+} from './renderer.js';
 // ── allplayerui.js (ARCH-1) ──────────────────────────────────────────────────
 import { _allPlayerUI } from './allplayerui.js';
-import { showCtxMenu, closeCtxMenu, ctxToggleLike, ctxDeleteTrack, ctxEditTags, ctxGoToArtist, ctxGoToAlbum, ctxNewPlaylist, ctxRemoveFromPlaylist, ctxSmartPlaylist, ctxPlayNext, ctxAddToQueueEnd, ctxCopyInfo } from './ctxmenu.js';
+import {
+  showCtxMenu,
+  closeCtxMenu,
+  ctxToggleLike,
+  ctxDeleteTrack,
+  ctxEditTags,
+  ctxGoToArtist,
+  ctxGoToAlbum,
+  ctxNewPlaylist,
+  ctxRemoveFromPlaylist,
+  ctxSmartPlaylist,
+  ctxPlayNext,
+  ctxAddToQueueEnd,
+  ctxCopyInfo
+} from './ctxmenu.js';
 import { initDrop } from './dropin.js';
 import { initKeyNav } from './keynav.js';
 import { initSbResize } from './sbresize.js';
@@ -106,7 +306,7 @@ import { saveCfg, saveCfgNow } from './cfgsave.js';
 export { saveCfg }; // re-export pour cinema.js, ctxmenu.js, player.js, etc.
 // ── state.js (ARCH-1) ────────────────────────────────────────────────────────
 import { setCurIdx, setLiked, setCtxTrackId, replaceTracks } from './state.js';
-import { setAriaValueText }                                    from './a11y.js';
+import { setAriaValueText } from './a11y.js';
 
 // CLAUDE.md §6: câbler les fonctions playlists dans radio.js via app.js (pas d'import direct)
 initRadioPlCallbacks({ savePlaylists: savePlaylistsNow, renderPlNav, setupPlNavDrop });
@@ -116,95 +316,151 @@ initCinemaVizSuspend({ suspendViz, resumeViz });
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
-
 // ══ State ══════════════════════════════════════
 // audio + _DOM sont dans player.js (importé ci-dessus)
-let tracks  = [];       // full track array
-let liked   = new Set();
-let curIdx  = -1;
-let shuffle    = false;    // shuffleQ est dans player.js
-let repeat     = 'none';  // none | all | one
+let tracks = []; // full track array
+let liked = new Set();
+let curIdx = -1;
+let shuffle = false; // shuffleQ est dans player.js
+let repeat = 'none'; // none | all | one
 let _autoUpdate = true;
-let sort    = 'az';
-let view    = 'all';
-let drillKey         = '';
-let drillFrom        = '';
+let sort = 'az';
+let view = 'all';
+let drillKey = '';
+let drillFrom = '';
 let drillDisplayName = ''; // nom d'affichage propre (≠ fuzzy key minuscule) pour le breadcrumb
-let playlists   = [];   // [{ id, name, trackIds:[], folderId?, pinned?, coverB64?, smart?, ... }]
-let curPlId     = null; // currently viewed playlist id
-let recentPlays = [];   // [trackId, ...] max 50, most recent first
+let playlists = []; // [{ id, name, trackIds:[], folderId?, pinned?, coverB64?, smart?, ... }]
+let curPlId = null; // currently viewed playlist id
+let recentPlays = []; // [trackId, ...] max 50, most recent first
 // S91 — Vague A : organisation des playlists
-let plFolders   = [];   // [{ id, name, collapsed, order }]
-let recentPls   = [];   // [plId, ...] max 5, most recent first (piste « Récemment écoutées »)
+let plFolders = []; // [{ id, name, collapsed, order }]
+let recentPls = []; // [plId, ...] max 5, most recent first (piste « Récemment écoutées »)
 // S92 — Tri des titres dans une playlist ('manual'|'az'|'za'|'artist'|'album'|'duration')
-let plSort      = 'manual'; // lu depuis pl.sort au chargement, réinitialisé par setPlSort()
+let plSort = 'manual'; // lu depuis pl.sort au chargement, réinitialisé par setPlSort()
 // playLog, logPlay, flushPlayLog → playlog.js
 // selection, selectionMode, _selAnchorId → selection.js
-let ctxTrackId  = null; // track id for context menu
+let ctxTrackId = null; // track id for context menu
 // plModalMode → playlists.js (setPlModalMode export)
-let query   = '';
+let query = '';
 // _recentFilterToastShown et _queueEndedToastShown → player.js
 
-let _retryArtTimer    = null; // FIX #21 — annulable dans clearLibrary()
-let _orphansTimer     = null; // FIX #22 — annulable dans clearLibrary()
+let _retryArtTimer = null; // FIX #21 — annulable dans clearLibrary()
+let _orphansTimer = null; // FIX #22 — annulable dans clearLibrary()
 let crossfadeDur = 0;
-let manualQueue       = [];
-let albumSort         = 'name';   // 'name' | 'count' | 'duration'
-let artistSort        = 'name';   // 'name' | 'count'
-let genreSort         = 'count';  // 'count' | 'name'
-const _unlisteners    = [];       // Tauri listeners — collected for cleanup on pagehide
-let albumDetailSort   = 'track';  // 'track' | 'az' — tri dans la vue détail album
-let playbackSpeed     = 1;
+let manualQueue = [];
+let albumSort = 'name'; // 'name' | 'count' | 'duration'
+let artistSort = 'name'; // 'name' | 'count'
+let genreSort = 'count'; // 'count' | 'name'
+const _unlisteners = []; // Tauri listeners — collected for cleanup on pagehide
+let albumDetailSort = 'track'; // 'track' | 'az' — tri dans la vue détail album
+let playbackSpeed = 1;
 
 // ── Sync des vars locales depuis le store (mises à jour par player.js) ────────
 // Ces abonnements maintiennent les variables locales d'app.js en phase avec
 // l'état canonique écrit par player.js, sans casser les fonctions existantes
 // qui lisent encore ces variables directement.
-subscribe('curIdx',          v => { curIdx          = v; });
-subscribe('shuffle',         v => { shuffle         = v; });
-subscribe('repeat',          v => { repeat          = v; });
-subscribe('manualQueue',     v => { manualQueue     = v; });
-subscribe('recentPlays',     v => { recentPlays     = v; });
-subscribe('playbackSpeed',   v => { playbackSpeed   = v; });
-subscribe('crossfadeDur',    v => { crossfadeDur    = v; });
+subscribe('curIdx', (v) => {
+  curIdx = v;
+});
+subscribe('shuffle', (v) => {
+  shuffle = v;
+});
+subscribe('repeat', (v) => {
+  repeat = v;
+});
+subscribe('manualQueue', (v) => {
+  manualQueue = v;
+});
+subscribe('recentPlays', (v) => {
+  recentPlays = v;
+});
+subscribe('playbackSpeed', (v) => {
+  playbackSpeed = v;
+});
+subscribe('crossfadeDur', (v) => {
+  crossfadeDur = v;
+});
 // ARCH-1 — state.js setters write to store only; subscriptions keep local vars in sync
-subscribe('liked',        v => { liked      = v; });
-subscribe('tracks',       v => { tracks     = v; });
-subscribe('ctxTrackId',   v => { ctxTrackId = v; });
+subscribe('liked', (v) => {
+  liked = v;
+});
+subscribe('tracks', (v) => {
+  tracks = v;
+});
+subscribe('ctxTrackId', (v) => {
+  ctxTrackId = v;
+});
 // Jalon 5 — sync des vars locales depuis le store (genres.js, future extraction)
-subscribe('drillFrom',        v => { drillFrom        = v; });
-subscribe('drillDisplayName', v => { drillDisplayName = v; });
-subscribe('genreSort',        v => { genreSort        = v; });
-subscribe('albumSort',        v => { albumSort        = v; });
-subscribe('artistSort',       v => { artistSort       = v; });
-subscribe('plFolders',        v => { plFolders        = v; });
-subscribe('recentPls',        v => { recentPls        = v; });
+subscribe('drillFrom', (v) => {
+  drillFrom = v;
+});
+subscribe('drillDisplayName', (v) => {
+  drillDisplayName = v;
+});
+subscribe('genreSort', (v) => {
+  genreSort = v;
+});
+subscribe('albumSort', (v) => {
+  albumSort = v;
+});
+subscribe('artistSort', (v) => {
+  artistSort = v;
+});
+subscribe('plFolders', (v) => {
+  plFolders = v;
+});
+subscribe('recentPls', (v) => {
+  recentPls = v;
+});
 // Views.js — synchro vars locales depuis le store
-subscribe('view',             v => { view             = v; });
-subscribe('sort',             v => { sort             = v; });
-subscribe('query',            v => { query            = v; });
-subscribe('curPlId',          v => { curPlId          = v; });
-subscribe('plSort',           v => { plSort           = v; });
-subscribe('drillKey',         v => { drillKey         = v; });
-subscribe('albumDetailSort',  v => { albumDetailSort  = v; });
+subscribe('view', (v) => {
+  view = v;
+});
+subscribe('sort', (v) => {
+  sort = v;
+});
+subscribe('query', (v) => {
+  query = v;
+});
+subscribe('curPlId', (v) => {
+  curPlId = v;
+});
+subscribe('plSort', (v) => {
+  plSort = v;
+});
+subscribe('drillKey', (v) => {
+  drillKey = v;
+});
+subscribe('albumDetailSort', (v) => {
+  albumDetailSort = v;
+});
 
 // ── Bus event handlers ────────────────────────────────────────────────────────
 // TRACK_CHANGE : player.js a démarré une nouvelle piste → mettre à jour l'UI
 on(EVENTS.TRACK_CHANGE, ({ track, idx }) => {
-  updateBar(); patchActiveTrack(); patchPlayState(!audio.paused); _allPlayerUI();
+  updateBar();
+  patchActiveTrack();
+  patchPlayState(!audio.paused);
+  _allPlayerUI();
 });
 // PLAY_STATE : play ou pause → mettre à jour la ligne active + widgets
 on(EVENTS.PLAY_STATE, ({ playing }) => {
-  patchPlayState(playing); _allPlayerUI();
+  patchPlayState(playing);
+  _allPlayerUI();
 });
 // RENDER_LIB : demande de re-rendu émise par player.js (ex: toggle like)
 // Jalon 4 — évite window.renderLib() dans les satellites
 on(EVENTS.RENDER_LIB, () => renderLib());
 // FILTER_CHANGED : invalidateFilter() a été appelé (ex: chip format) → re-rendre la lib
-on(EVENTS.FILTER_CHANGED, () => { renderLib(); updateClearFiltersBtn(); });
+on(EVENTS.FILTER_CHANGED, () => {
+  renderLib();
+  updateClearFiltersBtn();
+});
 // LIBRARY_UPDATED : enable/disable taskbar thumbnail buttons based on track count
 on(EVENTS.LIBRARY_UPDATED, ({ tracks }) => {
-  invoke('taskbar_set_has_tracks', { hasTracks: tracks.length > 0 }).catch(e => { console.warn('[taskbar] taskbar_set_has_tracks failed:', e); });
+  invoke('taskbar_set_has_tracks', { hasTracks: tracks.length > 0 }).catch((e) => {
+    console.warn('[taskbar] taskbar_set_has_tracks failed:', e);
+  });
 });
 // REWORK-5 : les pilules de compteurs en nav ont été supprimées.
 // VIEW_REQUEST : navigation demandée par un satellite (playlists, radio, queue,
@@ -223,7 +479,9 @@ on(EVENTS.STATS_DRILL_GENRE, ({ key, displayName }) => statsGoToGenre(key, displ
 // TRACK_REMOVED : state.js a retiré une/des piste(s) de tracks[] — libérer leur
 // blob: URL d'artwork en cache (artLoader.js), sinon elles ne sont récupérées que
 // de façon incidente par l'éviction LRU sous pression cache.
-on(EVENTS.TRACK_REMOVED, ({ ids }) => { ids.forEach(id => revokeArt(id)); });
+on(EVENTS.TRACK_REMOVED, ({ ids }) => {
+  ids.forEach((id) => revokeArt(id));
+});
 
 // Task 10 — préférence d'animation : recalcule data-motion + relance les boucles
 // canvas cinéma (applyCinemaBg + startCinemaViz, cf. Task 2) si le mode cinéma est
@@ -231,9 +489,15 @@ on(EVENTS.TRACK_REMOVED, ({ ids }) => { ids.forEach(id => revokeArt(id)); });
 // un import cross-module) OU par l'OS en mode 'system' (onMotionPrefChange, motion.js).
 function _refreshMotion() {
   applyMotionAttr();
-  if (cinemaOpen) { applyCinemaBg(); startCinemaViz(); }
+  if (cinemaOpen) {
+    applyCinemaBg();
+    startCinemaViz();
+  }
 }
-on(EVENTS.MOTION_PREF_CHANGED, ({ pref }) => { setMotionPref(pref); _refreshMotion(); });
+on(EVENTS.MOTION_PREF_CHANGED, ({ pref }) => {
+  setMotionPref(pref);
+  _refreshMotion();
+});
 onMotionPrefChange(_refreshMotion);
 
 // ══ Boot ═══════════════════════════════════════
@@ -296,18 +560,19 @@ function _applyBootUI(cfgObj) {
   // UX-Ergo : restaurer le dernier onglet settings ouvert
   set('lastSettingsTab', cfgObj?.lastSettingsTab || 'appearance');
   const watchChk = document.getElementById('watch-folder-chk');
-  if (watchChk) watchChk.addEventListener('change', async () => {
-    if (watchChk.checked) {
-      if (getWatchPath()) {
-        await startWatchNative();
+  if (watchChk)
+    watchChk.addEventListener('change', async () => {
+      if (watchChk.checked) {
+        if (getWatchPath()) {
+          await startWatchNative();
+        } else {
+          watchChk.checked = false; // no folder selected yet — reset visually
+        }
       } else {
-        watchChk.checked = false; // no folder selected yet — reset visually
+        stopWatchFolder(true, true); // silent=true, keepPath=true
       }
-    } else {
-      stopWatchFolder(true, true); // silent=true, keepPath=true
-    }
-    saveCfg();
-  });
+      saveCfg();
+    });
   const checkUpdateBtn = document.getElementById('check-update-btn');
   if (checkUpdateBtn) {
     checkUpdateBtn.addEventListener('click', () => checkForUpdateManual(checkUpdateBtn));
@@ -319,65 +584,104 @@ async function boot() {
   // Sans ce try/catch, l'erreur part en UnhandledPromiseRejection → crash silencieux.
   try {
     await openDB();
-  } catch(e) {
+  } catch (e) {
     console.error('[boot] IDB failed to open:', e);
     // Afficher une bannière d'erreur dans l'UI (toast pas encore disponible à ce stade)
-    document.body.insertAdjacentHTML('afterbegin',
+    document.body.insertAdjacentHTML(
+      'afterbegin',
       `<div style="position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;background:#111;color:#f55;font-size:1.1rem;text-align:center;padding:2rem">
         Base de données corrompue ou inaccessible.<br>
         Essayez de relancer l&rsquo;application.<br>
         Si le problème persiste, effacez les données de l&rsquo;app.
-      </div>`);
+      </div>`
+    );
     return;
   }
   // ARCH-7 : vérifier le quota IDB au boot — avertir si > 80% utilisé
-  getStorageEstimate().then(est => {
-    if (!est || !est.quota) return;
-    const pct = est.usage / est.quota;
-    if (pct > 0.9) {
-      toast(
-        `Stockage utilisé à ${Math.round(pct * 100)}% — libérez de l'espace disque pour éviter la perte de données.`,
-        'error'
-      );
-    } else if (pct > 0.8) {
-      toast(
-        `Stockage utilisé à ${Math.round(pct * 100)}% — pensez à libérer de l'espace disque.`,
-        'warning'
-      );
-    }
-  }).catch(e => console.warn('[app:storageEstimate]', e));
+  getStorageEstimate()
+    .then((est) => {
+      if (!est || !est.quota) return;
+      const pct = est.usage / est.quota;
+      if (pct > 0.9) {
+        toast(
+          `Stockage utilisé à ${Math.round(pct * 100)}% — libérez de l'espace disque pour éviter la perte de données.`,
+          'error'
+        );
+      } else if (pct > 0.8) {
+        toast(
+          `Stockage utilisé à ${Math.round(pct * 100)}% — pensez à libérer de l'espace disque.`,
+          'warning'
+        );
+      }
+    })
+    .catch((e) => console.warn('[app:storageEstimate]', e));
 
   // Load config
-  const cfg = await dget('cfg','state').catch(e => { console.error('[boot] cfg read failed:', e); return null; });
+  const cfg = await dget('cfg', 'state').catch((e) => {
+    console.error('[boot] cfg read failed:', e);
+    return null;
+  });
   if (cfg) {
     // Restaurer liked directement par IDs de pistes (Set<string>)
     // cfg.likedIds = array de track.id (source de vérité depuis session 138+)
     // cfg.liked (ancien format : indices) ignoré — périmé depuis la migration
     liked = new Set(Array.isArray(cfg.likedIds) ? cfg.likedIds : []);
     set('liked', liked);
-    sort        = cfg.sort||'az';   set('sort', sort);
+    sort = cfg.sort || 'az';
+    set('sort', sort);
     // Toutes les vues persistées sont valides, y compris les drill-downs
-    const safeViews = ['all','liked','albums','artists','genres','recent','playlist','stats','album-detail','artist-detail','genre-detail'];
-    view = safeViews.includes(cfg.view) ? cfg.view : 'all'; set('view', view);
+    const safeViews = [
+      'all',
+      'liked',
+      'albums',
+      'artists',
+      'genres',
+      'recent',
+      'playlist',
+      'stats',
+      'album-detail',
+      'artist-detail',
+      'genre-detail'
+    ];
+    view = safeViews.includes(cfg.view) ? cfg.view : 'all';
+    set('view', view);
     set('formatFilter', cfg.formatFilter || '');
-    if (cfg.curPlId)   { curPlId  = cfg.curPlId;  set('curPlId', curPlId); }
-    if (cfg.drillKey)  { drillKey = cfg.drillKey; set('drillKey', drillKey); drillFrom = cfg.drillFrom || ''; drillDisplayName = cfg.drillDisplayName || ''; set('drillFrom', drillFrom); set('drillDisplayName', drillDisplayName); }
-    recentPlays = cfg.recentPlays||[];  set('recentPlays', recentPlays);
+    if (cfg.curPlId) {
+      curPlId = cfg.curPlId;
+      set('curPlId', curPlId);
+    }
+    if (cfg.drillKey) {
+      drillKey = cfg.drillKey;
+      set('drillKey', drillKey);
+      drillFrom = cfg.drillFrom || '';
+      drillDisplayName = cfg.drillDisplayName || '';
+      set('drillFrom', drillFrom);
+      set('drillDisplayName', drillDisplayName);
+    }
+    recentPlays = cfg.recentPlays || [];
+    set('recentPlays', recentPlays);
     // S91 — Vague A : organisation playlists
-    if (Array.isArray(cfg.plFolders)) { plFolders = cfg.plFolders; set('plFolders', plFolders); }
-    if (Array.isArray(cfg.recentPls)) { recentPls = cfg.recentPls.slice(0, 5); set('recentPls', recentPls); }
+    if (Array.isArray(cfg.plFolders)) {
+      plFolders = cfg.plFolders;
+      set('plFolders', plFolders);
+    }
+    if (Array.isArray(cfg.recentPls)) {
+      recentPls = cfg.recentPls.slice(0, 5);
+      set('recentPls', recentPls);
+    }
     // Modules persist — restauration anticipée (avant les tracks)
-    if (cfg.heatPeriod)  initHeatPeriod(cfg.heatPeriod);
+    if (cfg.heatPeriod) initHeatPeriod(cfg.heatPeriod);
     if (cfg.radioSeedId) initRadioSeedId(cfg.radioSeedId);
-    initLang(cfg.lang||'fr');
+    initLang(cfg.lang || 'fr');
     initSettingsVars({
-      theme:       cfg.theme || 'blue',
-      dynColor:    cfg.dynColor !== false,
-      displayMode: cfg.displayMode || 'dark',
+      theme: cfg.theme || 'blue',
+      dynColor: cfg.dynColor !== false,
+      displayMode: cfg.displayMode || 'dark'
     });
     set('displayMode', cfg.displayMode || 'dark');
-    crossfadeDur  = cfg.crossfadeDur||0;  set('crossfadeDur', crossfadeDur);
-    initRgState(cfg.rgEnabled !== false, cfg.rgTargetLUFS||-14);
+    crossfadeDur = cfg.crossfadeDur || 0;
+    set('crossfadeDur', crossfadeDur);
+    initRgState(cfg.rgEnabled !== false, cfg.rgTargetLUFS || -14);
     if (cfg.playbackSpeed && SPEEDS.includes(cfg.playbackSpeed)) {
       playbackSpeed = cfg.playbackSpeed;
       set('playbackSpeed', playbackSpeed);
@@ -394,30 +698,54 @@ async function boot() {
     }
     if (cfg.npBg) initNpBg(cfg.npBg);
     // Restaurer état playback
-    if (cfg.shuffle)   { shuffle = true; set('shuffle', true); }
-    if (cfg.repeat && ['none','all','one'].includes(cfg.repeat)) { repeat = cfg.repeat; set('repeat', repeat); }
-    if (cfg.albumSort       && ['name','duration','count','year'].includes(cfg.albumSort))    { albumSort       = cfg.albumSort;       set('albumSort',       albumSort); }
-    if (cfg.artistSort      && ['name','count'].includes(cfg.artistSort))              { artistSort      = cfg.artistSort;      set('artistSort',      artistSort); }
-    if (cfg.genreSort       && ['count','name'].includes(cfg.genreSort))               { genreSort       = cfg.genreSort;       set('genreSort',       genreSort); }
-    if (cfg.albumDetailSort && ['track','az'].includes(cfg.albumDetailSort))           { albumDetailSort = cfg.albumDetailSort; set('albumDetailSort', albumDetailSort); }
-    if (cfg.plGridSort      && ['manual','az','recent'].includes(cfg.plGridSort))      { set('plGridSort', cfg.plGridSort); }
-    if (Number.isFinite(cfg.sbWidth) && cfg.sbWidth >= 200 && cfg.sbWidth <= 420)      { set('sbWidth', cfg.sbWidth); }
+    if (cfg.shuffle) {
+      shuffle = true;
+      set('shuffle', true);
+    }
+    if (cfg.repeat && ['none', 'all', 'one'].includes(cfg.repeat)) {
+      repeat = cfg.repeat;
+      set('repeat', repeat);
+    }
+    if (cfg.albumSort && ['name', 'duration', 'count', 'year'].includes(cfg.albumSort)) {
+      albumSort = cfg.albumSort;
+      set('albumSort', albumSort);
+    }
+    if (cfg.artistSort && ['name', 'count'].includes(cfg.artistSort)) {
+      artistSort = cfg.artistSort;
+      set('artistSort', artistSort);
+    }
+    if (cfg.genreSort && ['count', 'name'].includes(cfg.genreSort)) {
+      genreSort = cfg.genreSort;
+      set('genreSort', genreSort);
+    }
+    if (cfg.albumDetailSort && ['track', 'az'].includes(cfg.albumDetailSort)) {
+      albumDetailSort = cfg.albumDetailSort;
+      set('albumDetailSort', albumDetailSort);
+    }
+    if (cfg.plGridSort && ['manual', 'az', 'recent'].includes(cfg.plGridSort)) {
+      set('plGridSort', cfg.plGridSort);
+    }
+    if (Number.isFinite(cfg.sbWidth) && cfg.sbWidth >= 200 && cfg.sbWidth <= 420) {
+      set('sbWidth', cfg.sbWidth);
+    }
     // EQ : sera appliqué après initEQ() (les nodes n'existent pas encore)
     initBootEQ(cfg.eqGains, cfg.eqEnabled, cfg.eqPreset);
     setBootVizState(cfg.vizMode, cfg.vizEnabled === false);
-    if (cfg.eqAutoMode)  setEQAutoMode(true);
-    if (cfg.eqExpert)    setEQExpert(true);
-    if (cfg.eqProfiles)  loadEQProfiles(cfg.eqProfiles);
-    initDeviceEQ(cfg.eqDeviceProfiles ?? {}).catch(e => console.warn('[boot] initDeviceEQ failed:', e)); // detects current audio output device
+    if (cfg.eqAutoMode) setEQAutoMode(true);
+    if (cfg.eqExpert) setEQExpert(true);
+    if (cfg.eqProfiles) loadEQProfiles(cfg.eqProfiles);
+    initDeviceEQ(cfg.eqDeviceProfiles ?? {}).catch((e) =>
+      console.warn('[boot] initDeviceEQ failed:', e)
+    ); // detects current audio output device
     initDevices(); // démarrer le polling USB + CD audio
     // Purge tout résidu de cache CD orphelin (rip interrompu, crash, etc.)
-    cleanupCdCache(null).catch(e => console.warn('[boot] CD cache GC failed:', e));
+    cleanupCdCache(null).catch((e) => console.warn('[boot] CD cache GC failed:', e));
     // Watch folder : restaurer le chemin ET relancer la surveillance native.
     // Bug #7 fix : initWatchPath() seul restaure le chemin mais ne relance pas le watcher.
     // La surveillance était inactive jusqu'au prochain clic sur le bouton.
     if (cfg.watchPath) {
       initWatchPath(cfg.watchPath);
-      startWatchNative().catch(e => console.warn('[app:startWatchNative]', e)); // fire-and-forget — timeout géré dans startWatchNative
+      startWatchNative().catch((e) => console.warn('[app:startWatchNative]', e)); // fire-and-forget — timeout géré dans startWatchNative
     }
     // Position mini-player
     setMiniPos(cfg.miniPos ?? null);
@@ -430,17 +758,21 @@ async function boot() {
         // Si EQ déjà prêt, met à jour le gain; sinon audio.volume = cfg.volume comme fallback
         setMasterGain(cfg.volume);
         // A11Y-08 : initialiser aria-valuetext au boot
-        setAriaValueText(_volEl, _v => `${Math.round(_v * 100)} pour cent`, parseFloat(_volEl.value));
+        setAriaValueText(
+          _volEl,
+          (_v) => `${Math.round(_v * 100)} pour cent`,
+          parseFloat(_volEl.value)
+        );
       }
     }
     // Position mini-overlay flottant
     if (cfg.miniOvPos) {
       const _ovEl = document.getElementById('mp-ov');
       if (_ovEl) {
-        _ovEl.style.right  = 'auto';
+        _ovEl.style.right = 'auto';
         _ovEl.style.bottom = 'auto';
-        _ovEl.style.left   = cfg.miniOvPos.x + 'px';
-        _ovEl.style.top    = cfg.miniOvPos.y + 'px';
+        _ovEl.style.left = cfg.miniOvPos.x + 'px';
+        _ovEl.style.top = cfg.miniOvPos.y + 'px';
       }
     }
   }
@@ -456,7 +788,11 @@ async function boot() {
   set('motionPref', motionPref);
   setMotionPref(motionPref);
   applyMotionAttr();
-  try { localStorage.setItem('lf-motion', motionPref); } catch (e) { console.warn('[boot] mirror lf-motion non écrit:', e); }
+  try {
+    localStorage.setItem('lf-motion', motionPref);
+  } catch (e) {
+    console.warn('[boot] mirror lf-motion non écrit:', e);
+  }
   // Ctrl/Cmd + molette → cycle le niveau de zoom sur #tlist (throttle 150ms).
   initTlistZoomWheel();
   // PERF : charger playlists, playlog et tracks EN PARALLÈLE (était séquentiel → 3× plus lent)
@@ -464,16 +800,31 @@ async function boot() {
   // Afficher le skeleton adapté à la vue sauvegardée (albums/artistes/genres/liste)
   if (cfg) _showSkeletonRows(cfg.view);
   const [savedPl, savedLog, saved] = await Promise.all([
-    dall('playlists').catch(e => { console.error('[boot] playlists read failed:', e); return []; }),
-    dall('playlog').catch(e => { console.error('[boot] playlog read failed:', e); return []; }),
-    dall('tracks').catch(e => { console.error('[boot] tracks read failed — library may appear empty:', e); return []; }),
+    dall('playlists').catch((e) => {
+      console.error('[boot] playlists read failed:', e);
+      return [];
+    }),
+    dall('playlog').catch((e) => {
+      console.error('[boot] playlog read failed:', e);
+      return [];
+    }),
+    dall('tracks').catch((e) => {
+      console.error('[boot] tracks read failed — library may appear empty:', e);
+      return [];
+    })
   ]);
   if (savedPl) {
-    playlists = savedPl; set('playlists', playlists); renderPlNav(); setupPlNavDrop();
+    playlists = savedPl;
+    set('playlists', playlists);
+    renderPlNav();
+    setupPlNavDrop();
     // S92 FIX — restaurer le tri de la playlist active (curPlId déjà résolu depuis cfg)
     if (curPlId) {
-      const _sp = playlists.find(p => p.id === curPlId);
-      if (_sp) { plSort = _sp.sort || 'manual'; set('plSort', plSort); } // FIX #29
+      const _sp = playlists.find((p) => p.id === curPlId);
+      if (_sp) {
+        plSort = _sp.sort || 'manual';
+        set('plSort', plSort);
+      } // FIX #29
     }
   }
   setPlayLog(savedLog || []);
@@ -489,37 +840,42 @@ async function boot() {
       for (const r of _slice) {
         // Re-apply fmtArtists + mainArtist on load to fix any old bad data in DB
         const artistFull = fmtArtists(r.artistFull || r.artist) || i18n('unknown_artist');
-        const artist     = mainArtist(artistFull) || artistFull;
+        const artist = mainArtist(artistFull) || artistFull;
         _tracksArr.push({
-          id: r.id, name: r.name,
-          artist,            // canonical main artist
-          artistFull,        // full string incl. featuring
+          id: r.id,
+          name: r.name,
+          artist, // canonical main artist
+          artistFull, // full string incl. featuring
           album: r.album,
-          ext: r.ext, path: r.path, duration: r.duration,
+          ext: r.ext,
+          path: r.path,
+          duration: r.duration,
           dateAdded: r.dateAdded,
           // ARCH-2/PERF-1 : artwork chargé paresseusement via artLoader.js (LRU 60 entrées).
           // On stocke uniquement un flag booléen au boot pour éviter 200-400 MB de RAM.
           // artLoader.prefetchArts() est appelé par virtRenderWindow() après chaque rendu.
-          art:      null,
-          _hasArt:  !!(r.artBuf || r.artB64),
-          _artBuf:  null,
+          art: null,
+          _hasArt: !!(r.artBuf || r.artB64),
+          _artBuf: null,
           _artMime: r.artMime || null,
           artColor: r.artColor || null,
-          url: null, file: null,
+          url: null,
+          file: null,
           genre: r.genre || null,
-          year:  validYear(r.year),
+          year: validYear(r.year),
           track: r.track || null,
-          liked: false, metaDone: true,
-          noArt:      r.noArt     || false,
-          rgGain:     r.rgGain    != null ? r.rgGain    : undefined,
+          liked: false,
+          metaDone: true,
+          noArt: r.noArt || false,
+          rgGain: r.rgGain != null ? r.rgGain : undefined,
           // C-3 : propriétés audio techniques
-          bitrate:    r.bitrate    != null ? r.bitrate    : null,
+          bitrate: r.bitrate != null ? r.bitrate : null,
           sampleRate: r.sampleRate != null ? r.sampleRate : null,
-          channels:   r.channels   != null ? r.channels   : null,
-          bitDepth:   r.bitDepth   != null ? r.bitDepth   : null,
+          channels: r.channels != null ? r.channels : null,
+          bitDepth: r.bitDepth != null ? r.bitDepth : null
         });
       }
-      if (_bi + CFG.BOOT_CHUNK < saved.length) await new Promise(res => setTimeout(res, 0));
+      if (_bi + CFG.BOOT_CHUNK < saved.length) await new Promise((res) => setTimeout(res, 0));
     }
     // RACE-1 FIX : replaceTracks() atomically does set('tracks') + rebuildTrackIdxMap()
     // so subscribers that call trackIdx() during the set notification see a consistent map.
@@ -530,10 +886,16 @@ async function boot() {
     // chargées depuis l'IDB. En production, le scope asset:// est remis à zéro à chaque
     // lancement — sans ce call, audio.src = asset://... échoue avec MEDIA_ERR_SRC_NOT_SUPPORTED.
     // allow_directory(recursive=true) couvre tous les sous-dossiers → O(dossiers distincts) appels.
-    const _assetDirs = [...new Set(
-      tracks.map(t => t.path ? t.path.replace(/[/\\][^/\\]+$/, '') : null).filter(Boolean)
-    )];
-    _assetDirs.forEach(dir => invoke('allow_asset_dir', { path: dir }).catch(e => console.warn('[app:allow_asset_dir]', dir, e)));
+    const _assetDirs = [
+      ...new Set(
+        tracks.map((t) => (t.path ? t.path.replace(/[/\\][^/\\]+$/, '') : null)).filter(Boolean)
+      )
+    ];
+    _assetDirs.forEach((dir) =>
+      invoke('allow_asset_dir', { path: dir }).catch((e) =>
+        console.warn('[app:allow_asset_dir]', dir, e)
+      )
+    );
     // Reconstruire liked par IDs si disponible (robuste aux réordres)
     renderLib();
     // UX-3 : masquer le spinner de boot après le premier rendu de la bibliothèque
@@ -542,12 +904,16 @@ async function boot() {
     showView('lib');
     // Queue persist — restaurer après rebuildTrackIdxMap (IDs validés contre _trackIdxMap)
     if (cfg?.queueState?.ids?.length) restoreQueueState(cfg.queueState);
-    const cb=document.getElementById('btn-clear'); if(cb) cb.disabled=false;
+    const cb = document.getElementById('btn-clear');
+    if (cb) cb.disabled = false;
     toast(i18n('t_loaded', tracks.length), 'success');
     // Restaurer la position de scroll après que renderLib() ait réinitialisé scrollTop à 0
     if (cfg && cfg.scrollTop > 0) {
       const _tlist = document.getElementById('tlist');
-      if (_tlist) requestAnimationFrame(() => { _tlist.scrollTop = cfg.scrollTop; });
+      if (_tlist)
+        requestAnimationFrame(() => {
+          _tlist.scrollTop = cfg.scrollTop;
+        });
     }
     // Rouvrir le mini-overlay si il était visible à la fermeture
     if (cfg && cfg.miniOvOpen) setTimeout(() => toggleMiniOverlay(), 350);
@@ -556,21 +922,24 @@ async function boot() {
     // Cas : scan précédent interrompu (timeout IPC, fichier verrouillé) →
     // metaDone=true mais art=null et noArt=false (lecture avortée, pas confirmée vide).
     // On ne retente PAS les pistes avec noArt=true (lecture OK mais fichier sans art).
-    const _retryList = tracks.filter(t => t.metaDone && !t.art && !t.noArt && t.path);
+    const _retryList = tracks.filter((t) => t.metaDone && !t.art && !t.noArt && t.path);
     if (_retryList.length) {
-      _retryArtTimer = setTimeout(async () => { // FIX #21 — stocker le timer
+      _retryArtTimer = setTimeout(async () => {
+        // FIX #21 — stocker le timer
         // Afficher un toast spinner pendant le chargement des pochettes manquantes
         const dismissSpinner = toast(i18n('t_artwork_retry', _retryList.length), 'loading');
         const BATCH = 4;
         for (let i = 0; i < _retryList.length; i += BATCH) {
-          const batch = _retryList.slice(i, i + BATCH).filter(t => _trackIdxMap.has(t.id));
+          const batch = _retryList.slice(i, i + BATCH).filter((t) => _trackIdxMap.has(t.id));
           if (!batch.length) continue;
-          batch.forEach(t => { t.metaDone = false; }); // autoriser loadTagsBg à tourner
-          await Promise.all(batch.map(t => loadTagsBg(t)));
-          await new Promise(r => setTimeout(r, 50));
+          batch.forEach((t) => {
+            t.metaDone = false;
+          }); // autoriser loadTagsBg à tourner
+          await Promise.all(batch.map((t) => loadTagsBg(t)));
+          await new Promise((r) => setTimeout(r, 50));
         }
         dismissSpinner();
-        const loaded = _retryList.filter(t => t.art).length;
+        const loaded = _retryList.filter((t) => t.art).length;
         if (loaded) toast(i18n('t_artwork_retry_done', loaded), 'success');
       }, 3000); // 3s après boot pour ne pas concurrencer le rendu initial
     }
@@ -586,29 +955,43 @@ async function boot() {
 
     // ── Restaurer la dernière piste et position ──────────────────────────
     if (cfg && cfg.curTrackId) {
-      const resumeTrack = _trackIdxMap.has(cfg.curTrackId) ? tracks[_trackIdxMap.get(cfg.curTrackId)] : undefined;
+      const resumeTrack = _trackIdxMap.has(cfg.curTrackId)
+        ? tracks[_trackIdxMap.get(cfg.curTrackId)]
+        : undefined;
       if (resumeTrack) {
         setCurIdx(trackIdx(resumeTrack)); // FIX #4 — notifier le store
-        const ok  = await ensureUrl(resumeTrack);
+        const ok = await ensureUrl(resumeTrack);
         if (ok) {
           audio.src = resumeTrack.url;
           // Attendre les métadonnées avant de seek.
           // BOOT-1 FIX : si le fichier est manquant (error) ou introuvable (5s timeout),
           // on résout quand même — évite un freeze infini au démarrage.
-          await new Promise(res => {
-            if (audio.readyState >= 1) { res(); return; }
+          await new Promise((res) => {
+            if (audio.readyState >= 1) {
+              res();
+              return;
+            }
             const cleanup = () => {
               audio.removeEventListener('loadedmetadata', onMeta);
-              audio.removeEventListener('error',          onErr);
+              audio.removeEventListener('error', onErr);
               clearTimeout(timer);
             };
-            const onMeta = () => { cleanup(); res(); };
-            const onErr  = () => { cleanup(); res(); }; // fichier manquant — on skip le seek
-            const timer  = setTimeout(() => { cleanup(); res(); }, 5000); // safety net 5s
+            const onMeta = () => {
+              cleanup();
+              res();
+            };
+            const onErr = () => {
+              cleanup();
+              res();
+            }; // fichier manquant — on skip le seek
+            const timer = setTimeout(() => {
+              cleanup();
+              res();
+            }, 5000); // safety net 5s
             audio.addEventListener('loadedmetadata', onMeta, { once: true });
-            audio.addEventListener('error',          onErr,  { once: true });
+            audio.addEventListener('error', onErr, { once: true });
           });
-          if (cfg.curPos && cfg.curPos > 0 && cfg.curPos < (audio.duration - 2)) {
+          if (cfg.curPos && cfg.curPos > 0 && cfg.curPos < audio.duration - 2) {
             audio.currentTime = cfg.curPos;
           }
           // CLAUDE.md §2 invariant 7: radioRefillQueue() BEFORE any UI update tied to the track
@@ -630,22 +1013,45 @@ async function boot() {
     // UX-3 : masquer le spinner de boot même si la bibliothèque est vide
     document.getElementById('boot-spinner')?.remove();
   }
-  initAppVersion().catch(e => console.warn('[app:initAppVersion]', e));
+  initAppVersion().catch((e) => console.warn('[app:initAppVersion]', e));
   // Vérifier les mises à jour 10s après le boot (non bloquant, silencieux si pas configuré)
   if (_autoUpdate) {
-    setTimeout(() => checkForUpdate().catch(e => console.warn('[app:checkForUpdate]', e)), 10_000);
+    setTimeout(
+      () => checkForUpdate().catch((e) => console.warn('[app:checkForUpdate]', e)),
+      10_000
+    );
   }
 
-  listen('win-state', (e) => { const s = e.payload;
-    document.getElementById('tbt-max').title = (s==='maximized'||s==='fullscreen') ? i18n('tb_restore') : i18n('tb_maximize');
-  }, { target: { kind: 'Any' } }).then(u => _unlisteners.push(u));
-  listen('media-key', function(e) { const cmd = e.payload;
-    if      (cmd === 'toggle-play') togglePlay();
-    else if (cmd === 'next')        next(true);
-    else if (cmd === 'prev')        prev();
-    else if (cmd === 'stop')        { audio.pause(); audio.currentTime = 0; setIcon(false); patchPlayState(false); }
-  }).then(u => _unlisteners.push(u));
-  window.addEventListener('pagehide', () => { _unlisteners.forEach(u => { try { u(); } catch(e) { console.warn('[app:unlisten]', e); } }); });
+  listen(
+    'win-state',
+    (e) => {
+      const s = e.payload;
+      document.getElementById('tbt-max').title =
+        s === 'maximized' || s === 'fullscreen' ? i18n('tb_restore') : i18n('tb_maximize');
+    },
+    { target: { kind: 'Any' } }
+  ).then((u) => _unlisteners.push(u));
+  listen('media-key', function (e) {
+    const cmd = e.payload;
+    if (cmd === 'toggle-play') togglePlay();
+    else if (cmd === 'next') next(true);
+    else if (cmd === 'prev') prev();
+    else if (cmd === 'stop') {
+      audio.pause();
+      audio.currentTime = 0;
+      setIcon(false);
+      patchPlayState(false);
+    }
+  }).then((u) => _unlisteners.push(u));
+  window.addEventListener('pagehide', () => {
+    _unlisteners.forEach((u) => {
+      try {
+        u();
+      } catch (e) {
+        console.warn('[app:unlisten]', e);
+      }
+    });
+  });
 
   // ── Sauvegarde complète avant fermeture ──────────────────────────────────
   // beforeunload seul ne suffit pas sous Tauri : les promises async ne sont pas attendues.
@@ -657,11 +1063,7 @@ async function boot() {
     try {
       // 1. cfg (curTrackId, curPos, liked, volume, shuffle, repeat…) — flush via cfgsave.js
       // 2. Toutes les saves en parallèle — allSettled garantit qu'aucune rejection ne coupe les autres
-      await Promise.allSettled([
-        saveCfgNow(),
-        flushTrackBatch(),
-        flushPlayLog(),
-      ]);
+      await Promise.allSettled([saveCfgNow(), flushTrackBatch(), flushPlayLog()]);
       return true;
     } catch (e) {
       console.warn('[flushAllAndClose]', e);
@@ -673,22 +1075,30 @@ async function boot() {
     // Tauri v2 : intercepter CloseRequested pour un flush garanti
     try {
       const appWin = window.__TAURI__.window.getCurrentWindow();
-      appWin.onCloseRequested(async (event) => {
-        event.preventDefault();
-        await _flushAllAndClose();
-        await appWin.destroy();
-      }).catch(() => {
-        // Fallback si onCloseRequested échoue
-        window.addEventListener('beforeunload', () => { _flushAllAndClose(); });
-      });
+      appWin
+        .onCloseRequested(async (event) => {
+          event.preventDefault();
+          await _flushAllAndClose();
+          await appWin.destroy();
+        })
+        .catch(() => {
+          // Fallback si onCloseRequested échoue
+          window.addEventListener('beforeunload', () => {
+            _flushAllAndClose();
+          });
+        });
     } catch {
-      window.addEventListener('beforeunload', () => { _flushAllAndClose(); });
+      window.addEventListener('beforeunload', () => {
+        _flushAllAndClose();
+      });
     }
   } else {
     // Fallback navigateur web (mode dev)
-    window.addEventListener('beforeunload', () => { _flushAllAndClose(); });
+    window.addEventListener('beforeunload', () => {
+      _flushAllAndClose();
+    });
   }
-// ══ Color extraction ═══════════════════════════
+  // ══ Color extraction ═══════════════════════════
 }
 
 // ══ Open folder / Library import → library.js ═════════════════
@@ -696,8 +1106,8 @@ async function boot() {
 // getFiltered, rebuildTrackIdxMap, trackIdx, _trackIdxMap → search.js (imports directs)
 
 function invalidateFilter() {
-  invalidateFilterCache();    // search.js : _GF, _PSC, _albumMapCache, _artistMapCache
-  invalidateGenreGridSig();   // genres.js (Jalon 5)
+  invalidateFilterCache(); // search.js : _GF, _PSC, _albumMapCache, _artistMapCache
+  invalidateGenreGridSig(); // genres.js (Jalon 5)
   emit(EVENTS.FILTER_CHANGED, {}); // Jalon 4 — signal "dirty" : subscribers appellent getFiltered()
 }
 // ══ playPlaylistFrom / playPlaylistDirect / shufflePlaylist → playlists.js (ARCH-1) ═
@@ -734,7 +1144,6 @@ function invalidateFilter() {
 // deletePlaylist, addTrackToPlaylist, removeTrackFromPlaylist.
 // (keyboard listener pl-modal-inp → playlists.js)
 
-
 // ══ CROSSFADE → player.js ═════════════════════════════════════
 
 // setCrossfade, initCrossfadeAudio, clearCrossfadeTimers,
@@ -761,13 +1170,20 @@ export function cycleSpeed() {
 // setSpeed → player.js
 
 // FIX DRAG-MODULE → dropin.js : initDrop() résout #drago + attache les listeners après DOMContentLoaded
-document.addEventListener('DOMContentLoaded', () => { initDrop(); });
+document.addEventListener('DOMContentLoaded', () => {
+  initDrop();
+});
 
 // Attendre __TAURI__ avant de démarrer (fix build MSI)
 function waitForTauri(cb, n = 0) {
-  if (window.__TAURI__?.core?.invoke) { cb(); }
-  else if (n < 200) { setTimeout(() => waitForTauri(cb, n + 1), 25); }
-  else { console.warn('[LibreFlow] __TAURI__ non disponible'); cb(); }
+  if (window.__TAURI__?.core?.invoke) {
+    cb();
+  } else if (n < 200) {
+    setTimeout(() => waitForTauri(cb, n + 1), 25);
+  } else {
+    console.warn('[LibreFlow] __TAURI__ non disponible');
+    cb();
+  }
 }
 
 // ARCH-4 : Global error boundary — attrape les exceptions non gérées et les rejections de promesse
@@ -799,14 +1215,14 @@ let _globalResizeTimer = null;
 window.addEventListener('resize', () => {
   clearTimeout(_globalResizeTimer);
   _globalResizeTimer = setTimeout(() => {
-    onResizeNowPlaying();  // R-H4 — no-op si Now Playing fermé
-    reclampMiniOverlay();  // R-M6 — no-op si mini-overlay fermé
-    reflowMarquee();       // R-L9 — no-op si aucune piste courante
+    onResizeNowPlaying(); // R-H4 — no-op si Now Playing fermé
+    reclampMiniOverlay(); // R-M6 — no-op si mini-overlay fermé
+    reflowMarquee(); // R-L9 — no-op si aucune piste courante
   }, 180);
 });
 
 waitForTauri(() => {
-  boot().catch(e => console.error('[LibreFlow] boot failed:', e)); // FIX #19
+  boot().catch((e) => console.error('[LibreFlow] boot failed:', e)); // FIX #19
   // BUG-AUDIT HIGH : initShortcuts() déplacé ici depuis le niveau module — garantit
   // que __TAURI__ est prêt (F11/F12 → invoke) et le DOM chargé avant d'attacher le handler.
   initShortcuts({ updateVolSlider, closeModal, cycleSpeed });
@@ -818,30 +1234,73 @@ waitForTauri(() => {
 
   // Commandes depuis le mini-player (fenêtre séparée)
   // BUG FIX F6 : stocker l'unlistener mini-cmd avec les autres (voir boot())
-  listen('mini-cmd', (e) => { const msg = e.payload;
+  listen('mini-cmd', (e) => {
+    const msg = e.payload;
     const { cmd, data } = msg;
-    if      (cmd === 'toggle-play')    togglePlay();
-    else if (cmd === 'prev')           prev();
-    else if (cmd === 'next')           next(true);
-    else if (cmd === 'toggle-like')    toggleLike();
+    if (cmd === 'toggle-play') togglePlay();
+    else if (cmd === 'prev') prev();
+    else if (cmd === 'next') next(true);
+    else if (cmd === 'toggle-like') toggleLike();
     else if (cmd === 'toggle-shuffle') toggleShuffle();
-    else if (cmd === 'toggle-repeat')  toggleRepeat();
-    else if (cmd === 'go-home')        goHome();
+    else if (cmd === 'toggle-repeat') toggleRepeat();
+    else if (cmd === 'go-home') goHome();
     // Task 7 fix : `if(cinemaOpen) syncCinVolumeUI(v)` — _allPlayerUI() ne touche que le
     // mini-player/overlay, jamais le cinéma ; sans ce sync, un changement de volume depuis
     // la fenêtre mini-player laisserait le bouton mute cinéma (aria-pressed/icône X) périmé.
     // syncCinVolumeUI dérive l'état muet du volume réel (v==0 ⟺ muet) — cohérent partout.
-    else if (cmd === 'volume-down') { const _c=masterGainNode?masterGainNode.gain.value:parseFloat(document.getElementById('vol')?.value??'1'); const v=Math.max(0,_c-0.05); setMasterGain(v); const vel=document.getElementById('vol'); if(vel){vel.value=v; updateVolSlider(vel); setAriaValueText(vel, _v => `${Math.round(_v * 100)} pour cent`, v);} saveCfg(); _allPlayerUI(); if(cinemaOpen) syncCinVolumeUI(v); }
-    else if (cmd === 'volume-up')   { const _c=masterGainNode?masterGainNode.gain.value:parseFloat(document.getElementById('vol')?.value??'1'); const v=Math.min(1,_c+0.05); setMasterGain(v); const vel=document.getElementById('vol'); if(vel){vel.value=v; updateVolSlider(vel); setAriaValueText(vel, _v => `${Math.round(_v * 100)} pour cent`, v);} saveCfg(); _allPlayerUI(); if(cinemaOpen) syncCinVolumeUI(v); }
-    else if (cmd === 'volume-set' && data != null) { const v=Math.max(0,Math.min(1,data)); setMasterGain(v); const vel=document.getElementById('vol'); if(vel){vel.value=v; updateVolSlider(vel); setAriaValueText(vel, _v => `${Math.round(_v * 100)} pour cent`, v);} saveCfg(); _allPlayerUI(); if(cinemaOpen) syncCinVolumeUI(v); } // QW-10
+    else if (cmd === 'volume-down') {
+      const _c = masterGainNode
+        ? masterGainNode.gain.value
+        : parseFloat(document.getElementById('vol')?.value ?? '1');
+      const v = Math.max(0, _c - 0.05);
+      setMasterGain(v);
+      const vel = document.getElementById('vol');
+      if (vel) {
+        vel.value = v;
+        updateVolSlider(vel);
+        setAriaValueText(vel, (_v) => `${Math.round(_v * 100)} pour cent`, v);
+      }
+      saveCfg();
+      _allPlayerUI();
+      if (cinemaOpen) syncCinVolumeUI(v);
+    } else if (cmd === 'volume-up') {
+      const _c = masterGainNode
+        ? masterGainNode.gain.value
+        : parseFloat(document.getElementById('vol')?.value ?? '1');
+      const v = Math.min(1, _c + 0.05);
+      setMasterGain(v);
+      const vel = document.getElementById('vol');
+      if (vel) {
+        vel.value = v;
+        updateVolSlider(vel);
+        setAriaValueText(vel, (_v) => `${Math.round(_v * 100)} pour cent`, v);
+      }
+      saveCfg();
+      _allPlayerUI();
+      if (cinemaOpen) syncCinVolumeUI(v);
+    } else if (cmd === 'volume-set' && data != null) {
+      const v = Math.max(0, Math.min(1, data));
+      setMasterGain(v);
+      const vel = document.getElementById('vol');
+      if (vel) {
+        vel.value = v;
+        updateVolSlider(vel);
+        setAriaValueText(vel, (_v) => `${Math.round(_v * 100)} pour cent`, v);
+      }
+      saveCfg();
+      _allPlayerUI();
+      if (cinemaOpen) syncCinVolumeUI(v);
+    } // QW-10
     else if (cmd === 'seek' && data != null && audio.duration) {
       audio.currentTime = data * audio.duration;
       resetMiniProgressThrottle(); // le prochain timeupdate passe immédiatement
+    } else if (cmd === 'save-mini-pos' && data) {
+      setMiniPos(data);
+      saveCfg();
     }
-    else if (cmd === 'save-mini-pos' && data) {
-      setMiniPos(data); saveCfg();
-    }
-  }).then(u => { _unlisteners.push(u); });
+  }).then((u) => {
+    _unlisteners.push(u);
+  });
 });
 // Note: mini.html uses invoke('mini_get_state') on load to get initial state,
 // so the mini-request-state event is not needed.
@@ -851,24 +1310,35 @@ waitForTauri(() => {
 // Remplace le transform CSS hover (.card:hover translateY(-4px)) par un tilt 3D.
 const _contentArea = document.getElementById('content-area');
 if (_contentArea) {
-  _contentArea.addEventListener('mousemove', (e) => {
-    const card = e.target.closest('.card');
-    if (!card) return;
-    const rect = card.getBoundingClientRect();
-    const cx = (e.clientX - rect.left) / rect.width  - 0.5;
-    const cy = (e.clientY - rect.top)  / rect.height - 0.5;
-    card.style.transform =
-      `perspective(400px) rotateX(${(cy * -6).toFixed(2)}deg) rotateY(${(cx * 6).toFixed(2)}deg) translateY(-4px) scale(1.02)`;
-  }, { passive: true });
-  _contentArea.addEventListener('mouseleave', (e) => {
-    const card = e.target.closest('.card');
-    if (card) card.style.removeProperty('transform');
-  }, true);
+  _contentArea.addEventListener(
+    'mousemove',
+    (e) => {
+      const card = e.target.closest('.card');
+      if (!card) return;
+      const rect = card.getBoundingClientRect();
+      const cx = (e.clientX - rect.left) / rect.width - 0.5;
+      const cy = (e.clientY - rect.top) / rect.height - 0.5;
+      card.style.transform = `perspective(400px) rotateX(${(cy * -6).toFixed(2)}deg) rotateY(${(cx * 6).toFixed(2)}deg) translateY(-4px) scale(1.02)`;
+    },
+    { passive: true }
+  );
+  _contentArea.addEventListener(
+    'mouseleave',
+    (e) => {
+      const card = e.target.closest('.card');
+      if (card) card.style.removeProperty('transform');
+    },
+    true
+  );
   // Reset au pointerleave de chaque card (cas où mouseleave délégué rate le timing)
-  _contentArea.addEventListener('mouseover', (e) => {
-    const prev = e.relatedTarget?.closest?.('.card');
-    if (prev && prev !== e.target.closest('.card')) prev.style.removeProperty('transform');
-  }, { passive: true });
+  _contentArea.addEventListener(
+    'mouseover',
+    (e) => {
+      const prev = e.relatedTarget?.closest?.('.card');
+      if (prev && prev !== e.target.closest('.card')) prev.style.removeProperty('transform');
+    },
+    { passive: true }
+  );
 }
 
 // ── Toast notification (supprimé lors du refactoring, réintégré ici) ────────
@@ -896,8 +1366,9 @@ export function playCardByKey(from, key, displayName) {
 export async function clearAppCache() {
   const ok = await confirmAction(
     'Vider les caches ?',
-    'Toutes les données seront supprimées : bibliothèque, configuration, playlists et historique d\'écoute.<br><br>L\'application redémarrera automatiquement.',
-    'Vider et redémarrer', 'danger'
+    "Toutes les données seront supprimées : bibliothèque, configuration, playlists et historique d'écoute.<br><br>L'application redémarrera automatiquement.",
+    'Vider et redémarrer',
+    'danger'
   );
   if (!ok) return;
   // 1. Annuler les timers de sauvegarde différée AVANT de fermer la DB.
@@ -905,20 +1376,32 @@ export async function clearAppCache() {
   cancelTrackBatch();
   cancelPlayLogFlush();
   // 2. Fermer la connexion IDB.
-  if (DB) { try { DB.close(); } catch(e) { console.warn('[app:DB.close]', e); } }
+  if (DB) {
+    try {
+      DB.close();
+    } catch (e) {
+      console.warn('[app:DB.close]', e);
+    }
+  }
   // 3. Supprimer la base. On track `deleted` séparément :
   //    onblocked = resolve était un bug silencieux — la DB n'était pas supprimée
   //    mais l'app rechargait quand même, laissant les données intactes.
   let deleted = false;
   await new Promise((resolve, reject) => {
     const req = indexedDB.deleteDatabase('lp4');
-    req.onsuccess = () => { deleted = true; resolve(); };
-    req.onerror   = () => reject(req.error);
+    req.onsuccess = () => {
+      deleted = true;
+      resolve();
+    };
+    req.onerror = () => reject(req.error);
     req.onblocked = () => reject(new Error('IDB blocked: another connection is still open'));
-  }).catch(e => console.warn('[clearAppCache]', e));
+  }).catch((e) => console.warn('[clearAppCache]', e));
   // 4. Ne recharger que si la suppression a réellement eu lieu.
   if (!deleted) {
-    toast('Impossible de vider les caches. Ferme toutes les fenêtres LibreFlow et réessaie.', 'error');
+    toast(
+      'Impossible de vider les caches. Ferme toutes les fenêtres LibreFlow et réessaie.',
+      'error'
+    );
     return;
   }
   window.location.reload();
@@ -933,32 +1416,62 @@ export async function clearLibrary() {
   closeEQ();
   if (cinemaOpen) closeCinema();
   // FIX #21/#22 — annuler les timers de retry artwork et orphelins
-  clearTimeout(_retryArtTimer); _retryArtTimer = null;
-  clearTimeout(_orphansTimer);  _orphansTimer  = null;
+  clearTimeout(_retryArtTimer);
+  _retryArtTimer = null;
+  clearTimeout(_orphansTimer);
+  _orphansTimer = null;
   // Annuler le batch IDB en attente (cancelTrackBatch → library.js)
   cancelTrackBatch();
   cancelPlayLogFlush();
   setPlayLog([]);
   // Révoquer tous les blob URLs pour libérer la mémoire (B4 FIX : guard blob: — data: URIs ne doivent pas être révoquées)
   for (const t of tracks) {
-    if (t.url && t.url.startsWith('blob:'))  try { URL.revokeObjectURL(t.url);  } catch(e) { console.warn('[app:revokeObjectURL url]', e); }
-    if (t.art && t.art.startsWith('blob:'))  try { URL.revokeObjectURL(t.art);  } catch(e) { console.warn('[app:revokeObjectURL art]', e); }
+    if (t.url && t.url.startsWith('blob:'))
+      try {
+        URL.revokeObjectURL(t.url);
+      } catch (e) {
+        console.warn('[app:revokeObjectURL url]', e);
+      }
+    if (t.art && t.art.startsWith('blob:'))
+      try {
+        URL.revokeObjectURL(t.art);
+      } catch (e) {
+        console.warn('[app:revokeObjectURL art]', e);
+      }
   }
-  replaceTracks([]); invalidateFilter();
-  liked   = new Set(); set('liked', liked);
-  playlists = []; set('playlists', playlists); recentPlays = []; set('recentPlays', recentPlays);
-  curPlId = null; set('curPlId', null);
-  plFolders = []; set('plFolders', plFolders); recentPls = []; set('recentPls', recentPls);
+  replaceTracks([]);
+  invalidateFilter();
+  liked = new Set();
+  set('liked', liked);
+  playlists = [];
+  set('playlists', playlists);
+  recentPlays = [];
+  set('recentPlays', recentPlays);
+  curPlId = null;
+  set('curPlId', null);
+  plFolders = [];
+  set('plFolders', plFolders);
+  recentPls = [];
+  set('recentPls', recentPls);
   renderPlNav();
-  curIdx  = -1; set('curIdx', -1);
-  shuffle = false; set('shuffle', false); resetShuffleQ();
-  repeat  = 'none'; set('repeat', 'none');
-  query   = ''; set('query', '');
+  curIdx = -1;
+  set('curIdx', -1);
+  shuffle = false;
+  set('shuffle', false);
+  resetShuffleQ();
+  repeat = 'none';
+  set('repeat', 'none');
+  query = '';
+  set('query', '');
   set('formatFilter', '');
-  albumSort = 'name'; set('albumSort', 'name');
-  artistSort = 'name'; set('artistSort', 'name');
-  genreSort = 'count'; set('genreSort', 'count');
-  albumDetailSort = 'track'; set('albumDetailSort', 'track');
+  albumSort = 'name';
+  set('albumSort', 'name');
+  artistSort = 'name';
+  set('artistSort', 'name');
+  genreSort = 'count';
+  set('genreSort', 'count');
+  albumDetailSort = 'track';
+  set('albumDetailSort', 'track');
   // (_lastNotifTrackId dans playerbar.js se réinitialise naturellement au prochain updateBar)
   // Arrêter l'audio
   audio.pause();
@@ -970,11 +1483,12 @@ export async function clearLibrary() {
   _updateArtBlur(null);
   clearArtColor(); // réinitialise --art-color, --g, --g-rgb, --gd, --gg
   document.getElementById('pl-img').style.display = 'none';
-  document.getElementById('pl-em').style.display  = '';
-  document.getElementById('pl-em').innerHTML      = '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>';
+  document.getElementById('pl-em').style.display = '';
+  document.getElementById('pl-em').innerHTML =
+    '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>';
   document.getElementById('pfill').style.transform = 'scaleX(0)';
-  document.getElementById('tc').textContent       = '0:00';
-  document.getElementById('td').textContent       = '–:––';
+  document.getElementById('tc').textContent = '0:00';
+  document.getElementById('td').textContent = '–:––';
   document.getElementById('pl-lk').classList.remove('on');
   document.getElementById('pl-lk').setAttribute('aria-pressed', 'false');
   document.getElementById('cinema-lk')?.classList.remove('on');
@@ -1000,39 +1514,45 @@ export async function clearLibrary() {
   try {
     await new Promise((ok, fail) => {
       const store = tx('tracks', 'readwrite');
-      store.clear().onerror = e => fail(e.target.error);
+      store.clear().onerror = (e) => fail(e.target.error);
       store.transaction.oncomplete = ok;
-      store.transaction.onerror   = e => fail(e.target.error);
+      store.transaction.onerror = (e) => fail(e.target.error);
     });
     await new Promise((ok, fail) => {
       const store = tx('playlists', 'readwrite');
-      store.clear().onerror = e => fail(e.target.error);
+      store.clear().onerror = (e) => fail(e.target.error);
       store.transaction.oncomplete = ok;
-      store.transaction.onerror   = e => fail(e.target.error);
+      store.transaction.onerror = (e) => fail(e.target.error);
     });
     await new Promise((ok, fail) => {
       const store = tx('playlog', 'readwrite');
-      store.clear().onerror = e => fail(e.target.error);
+      store.clear().onerror = (e) => fail(e.target.error);
       store.transaction.oncomplete = ok;
-      store.transaction.onerror   = e => fail(e.target.error);
+      store.transaction.onerror = (e) => fail(e.target.error);
     });
     await saveCfgNow();
-  } catch(e) { console.warn('[clearLibrary] DB error:', e); }
+  } catch (e) {
+    console.warn('[clearLibrary] DB error:', e);
+  }
   // Réinitialiser radio, crossfade, watchfolder
   resetRadio();
   clearCrossfadeTimers();
   cancelSleepTimer(true); // BUG-D1-13 FIX: cancel sleep timer so it can't fire on an empty library
   stopWatchFolder();
   // Réinitialiser l'état de vue et de drill (évite le flash de contenu périmé au retour)
-  view = 'all'; set('view', 'all');
-  drillKey = ''; set('drillKey', '');
-  drillFrom = ''; set('drillFrom', '');
-  drillDisplayName = ''; set('drillDisplayName', '');
+  view = 'all';
+  set('view', 'all');
+  drillKey = '';
+  set('drillKey', '');
+  drillFrom = '';
+  set('drillFrom', '');
+  drillDisplayName = '';
+  set('drillDisplayName', '');
   document.getElementById('drill-header')?.remove();
   // Vider les grilles et la liste de pistes pour éviter le flash de contenu périmé
   const _tlistClr = document.getElementById('tlist');
   if (_tlistClr) _tlistClr.innerHTML = '';
-  ['album-grid', 'artist-grid', 'playlist-grid'].forEach(id => {
+  ['album-grid', 'artist-grid', 'playlist-grid'].forEach((id) => {
     const g = document.getElementById(id);
     if (g) g.innerHTML = '';
   });

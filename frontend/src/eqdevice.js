@@ -16,14 +16,14 @@
 //   renderDeviceProfiles()         — met à jour la section UI dans #set-page-audio
 
 import { eqNodes, applyEQGains } from './eq.js';
-import { esc }                    from './ui.js';
+import { esc } from './ui.js';
 
 // ── État module ───────────────────────────────────────────────────────────────
 /** @type {{ [deviceId: string]: { bands: number[], label: string } }} */
 let _deviceProfiles = {};
-let _activeId       = '';   // deviceId courant — '' = sortie par défaut OS
-let _activeLabel    = '';   // label lisible du device actuel
-let _knownIds       = [];   // snapshot des audiooutput deviceIds pour détection ajout/retrait
+let _activeId = ''; // deviceId courant — '' = sortie par défaut OS
+let _activeLabel = ''; // label lisible du device actuel
+let _knownIds = []; // snapshot des audiooutput deviceIds pour détection ajout/retrait
 
 // ── Initialisation ────────────────────────────────────────────────────────────
 
@@ -63,12 +63,10 @@ export function getActiveDeviceLabel() {
  * N'appelle PAS saveCfg — le handler doit le faire après.
  */
 export function saveCurrentDeviceProfile() {
-  const bands = eqNodes.length
-    ? eqNodes.map(n => n.gain.value)
-    : new Array(10).fill(0);
+  const bands = eqNodes.length ? eqNodes.map((n) => n.gain.value) : new Array(10).fill(0);
   _deviceProfiles[_activeId || 'default'] = {
     bands,
-    label: _activeLabel || getActiveDeviceLabel(),
+    label: _activeLabel || getActiveDeviceLabel()
   };
   renderDeviceProfiles();
 }
@@ -106,17 +104,20 @@ export function renderDeviceProfiles() {
     return;
   }
 
-  list.innerHTML = ids.map(id => {
-    const p        = _deviceProfiles[id];
-    const label    = esc(p.label || id);
-    const isActive = id === (_activeId || 'default');
-    const gains    = p.bands.map(v => Math.round(v));
-    const preview  = gains.map(v => {
-      const h   = Math.round(Math.abs(v) / 12 * 8);
-      const cls = v > 0 ? 'eq-bar-boost' : v < 0 ? 'eq-bar-cut' : 'eq-bar-flat';
-      return `<span class="${cls}" style="height:${h}px"></span>`;
-    }).join('');
-    return `<div class="eq-device-entry${isActive ? ' active' : ''}">
+  list.innerHTML = ids
+    .map((id) => {
+      const p = _deviceProfiles[id];
+      const label = esc(p.label || id);
+      const isActive = id === (_activeId || 'default');
+      const gains = p.bands.map((v) => Math.round(v));
+      const preview = gains
+        .map((v) => {
+          const h = Math.round((Math.abs(v) / 12) * 8);
+          const cls = v > 0 ? 'eq-bar-boost' : v < 0 ? 'eq-bar-cut' : 'eq-bar-flat';
+          return `<span class="${cls}" style="height:${h}px"></span>`;
+        })
+        .join('');
+      return `<div class="eq-device-entry${isActive ? ' active' : ''}">
       <div class="eq-device-entry-info">
         <span class="eq-device-name">${label}</span>
         <span class="eq-device-bars" aria-hidden="true">${preview}</span>
@@ -127,7 +128,8 @@ export function renderDeviceProfiles() {
         aria-label="Supprimer le profil ${label}"
         style="font-size:10px;padding:3px 8px">✕</button>
     </div>`;
-  }).join('');
+    })
+    .join('');
 }
 
 // ── Détection device ──────────────────────────────────────────────────────────
@@ -136,16 +138,16 @@ async function _refreshActiveDevice() {
   if (!navigator.mediaDevices?.enumerateDevices) return;
   try {
     const devices = await navigator.mediaDevices.enumerateDevices();
-    const outputs = devices.filter(d => d.kind === 'audiooutput');
-    _knownIds = outputs.map(d => d.deviceId);
+    const outputs = devices.filter((d) => d.kind === 'audiooutput');
+    _knownIds = outputs.map((d) => d.deviceId);
 
     // L'élément <audio> expose sinkId ('' = sortie par défaut OS)
     const audioEl = document.getElementById('audio');
-    const sinkId  = audioEl?.sinkId ?? '';
-    _activeId     = sinkId;
+    const sinkId = audioEl?.sinkId ?? '';
+    _activeId = sinkId;
 
     // Trouver le label correspondant
-    const match  = outputs.find(d => d.deviceId === (sinkId || 'default')) || outputs[0];
+    const match = outputs.find((d) => d.deviceId === (sinkId || 'default')) || outputs[0];
     _activeLabel = match?.label || '';
   } catch (e) {
     console.warn('[eqdevice] enumerateDevices failed:', e);

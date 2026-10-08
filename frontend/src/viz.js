@@ -14,49 +14,51 @@
 //   getVizMode()           — retourner le mode courant
 
 import { eqAnalyser, eqCtx } from './eq.js';
-import { audio }               from './player.js';
+import { audio } from './player.js';
 import { saveCfg } from './cfgsave.js';
 import { createPremiumOscilloscope } from './oscPremium.js';
 
 /* ── Mode ─────────────────────────────────────────────────── */
-let vizMode    = 'bars'; // 'bars' | 'oscilloscope' | 'circle'
-let vizEnabled = false;  // false par défaut → économie GPU/CPU au démarrage
+let vizMode = 'bars'; // 'bars' | 'oscilloscope' | 'circle'
+let vizEnabled = false; // false par défaut → économie GPU/CPU au démarrage
 
 /* ── État interne ─────────────────────────────────────────── */
 let canvas, canvasCtx;
-let raf         = null;
-let running     = false;
-let smoothed    = null;   // Float32Array lissé entre frames
+let raf = null;
+let running = false;
+let smoothed = null; // Float32Array lissé entre frames
 // PERF (P1 fix) : suspendu quand le mode cinéma est ouvert — la player bar est masquée
 // sous l'overlay cinéma, la rendre est un gaspillage GPU/CPU. Le rAF reste vivant
 // (pattern cinema-viz.js:166) pour permettre un resumeViz() instantané à la fermeture.
 let _vizSuspended = false;
 // PERF : Uint8Array pré-alloué — évite new Uint8Array(128) à chaque frame (7680 bytes/s de GC)
-let _vizData    = null;
-let _premiumOsc = null;   // instance oscilloscope premium (lazy) — possède son propre rAF + RO
-let _circleAngle   = 0;      // offset de rotation du cercle (rad) — incrémenté chaque frame
-let _circlecx      = null;   // X centre du cercle en px canvas — aligné sur #pcplay (calculé au resize)
-let _circlecy      = null;   // Y centre du cercle en px canvas — aligné sur #pcplay (calculé au resize)
-let vizR = 59, vizG = 130, vizB = 246; // couleur courante (défaut : --g bleu)
+let _vizData = null;
+let _premiumOsc = null; // instance oscilloscope premium (lazy) — possède son propre rAF + RO
+let _circleAngle = 0; // offset de rotation du cercle (rad) — incrémenté chaque frame
+let _circlecx = null; // X centre du cercle en px canvas — aligné sur #pcplay (calculé au resize)
+let _circlecy = null; // Y centre du cercle en px canvas — aligné sur #pcplay (calculé au resize)
+let vizR = 59,
+  vizG = 130,
+  vizB = 246; // couleur courante (défaut : --g bleu)
 // PERF : chaîne RGB mise en cache pour éviter le template literal à chaque barre × frame
-let _vizRGB     = '59,130,246';
+let _vizRGB = '59,130,246';
 // PERF : rgba strings à alpha statique pré-construites quand _vizRGB change.
 // Évite des allocations de template literal par frame en mode circle.
-let _vizRgbaHalo  = `rgba(59,130,246, 0.18)`;
-let _vizRgbaFill  = `rgba(59,130,246, 0.55)`;
+let _vizRgbaHalo = `rgba(59,130,246, 0.18)`;
+let _vizRgbaFill = `rgba(59,130,246, 0.55)`;
 // 8 strings une par bucket d'alpha (utilisé en mode circle)
 const _vizRgbaBuckets = new Array(8);
 function _rebuildVizRgbaCache() {
-  _vizRgbaHalo  = `rgba(${_vizRGB}, 0.18)`;
-  _vizRgbaFill  = `rgba(${_vizRGB}, 0.55)`;
+  _vizRgbaHalo = `rgba(${_vizRGB}, 0.18)`;
+  _vizRgbaFill = `rgba(${_vizRGB}, 0.55)`;
   for (let b = 0; b < 8; b++) {
     _vizRgbaBuckets[b] = `rgba(${_vizRGB}, ${((b + 0.5) / 8).toFixed(2)})`;
   }
 }
 _rebuildVizRgbaCache(); // remplir au boot du module
-let _resizeObs  = null;   // ResizeObserver — stocké pour pouvoir le déconnecter
-let _vizBins    = 0;      // P8 — cache de eqAnalyser.frequencyBinCount (immuable après init)
-let _dpr        = 1;      // devicePixelRatio mis en cache au resize (évite property access par frame)
+let _resizeObs = null; // ResizeObserver — stocké pour pouvoir le déconnecter
+let _vizBins = 0; // P8 — cache de eqAnalyser.frequencyBinCount (immuable après init)
+let _dpr = 1; // devicePixelRatio mis en cache au resize (évite property access par frame)
 
 /* ── P2 FIX : Circle mode — buckets pré-alloués ──────────── */
 // Évite 60 stroke()+strokeStyle par frame → max 8 GPU draw calls (1 par bucket d'alpha).
@@ -65,14 +67,14 @@ const _ALPHA_BUCKETS = 8;
 const _circleBuckets = Array.from({ length: _ALPHA_BUCKETS }, () => []);
 
 /* ── Bars mode ─────────────────────────────────────────────── */
-const BAR_COUNT  = 60;     // bins FFT utilisés (0..~10 kHz)
+const BAR_COUNT = 60; // bins FFT utilisés (0..~10 kHz)
 // Pre-allocated radius arrays for _drawBars — avoids inline [] allocation per frame
 const _radiiTop = [0, 0, 0, 0]; // [tl, tr, br, bl] for main bars (rounded top)
 const _radiiBot = [0, 0, 0, 0]; // for reflection bars (rounded bottom)
 // Gradient mis en cache — invalidé si hauteur canvas ou couleur change
-let _grad        = null;
-let _gradH       = 0;
-let _gradRGB     = '';
+let _grad = null;
+let _gradH = 0;
+let _gradRGB = '';
 
 /* ── Init ─────────────────────────────────────────────────── */
 
@@ -88,25 +90,28 @@ export function initViz() {
 
   // Polyfill roundRect — absent dans certaines versions de WebView2 (< Chromium 99)
   if (!canvasCtx.roundRect) {
-    canvasCtx.roundRect = function(x, y, w, h, radii) {
-      const r = Array.isArray(radii) ? radii : [radii||0, radii||0, radii||0, radii||0];
-      const [tl, tr, br, bl] = r.map(v => v || 0);
+    canvasCtx.roundRect = function (x, y, w, h, radii) {
+      const r = Array.isArray(radii) ? radii : [radii || 0, radii || 0, radii || 0, radii || 0];
+      const [tl, tr, br, bl] = r.map((v) => v || 0);
       this.moveTo(x + tl, y);
       this.lineTo(x + w - tr, y);
-      this.quadraticCurveTo(x + w, y,     x + w, y + tr);
+      this.quadraticCurveTo(x + w, y, x + w, y + tr);
       this.lineTo(x + w, y + h - br);
       this.quadraticCurveTo(x + w, y + h, x + w - br, y + h);
       this.lineTo(x + bl, y + h);
-      this.quadraticCurveTo(x,     y + h, x, y + h - bl);
+      this.quadraticCurveTo(x, y + h, x, y + h - bl);
       this.lineTo(x, y + tl);
-      this.quadraticCurveTo(x,     y,     x + tl, y);
+      this.quadraticCurveTo(x, y, x + tl, y);
       this.closePath();
     };
   }
 
   // Adapter la résolution au devicePixelRatio (évite le rendu flou sur HiDPI)
   // Déconnecter l'éventuel observer précédent avant d'en créer un nouveau
-  if (_resizeObs) { _resizeObs.disconnect(); _resizeObs = null; }
+  if (_resizeObs) {
+    _resizeObs.disconnect();
+    _resizeObs = null;
+  }
   _resizeObs = new ResizeObserver(_resizeCanvas);
   _resizeObs.observe(canvas.parentElement);
   // Différer le premier resize — offsetWidth peut être 0 avant le premier layout
@@ -117,11 +122,11 @@ export function initViz() {
 
 function _resizeCanvas() {
   if (!canvas) return;
-  const pl   = canvas.parentElement;
+  const pl = canvas.parentElement;
   if (!pl) return;
-  const dpr  = window.devicePixelRatio || 1;
+  const dpr = window.devicePixelRatio || 1;
   _dpr = dpr;
-  canvas.width  = pl.offsetWidth  * dpr;
+  canvas.width = pl.offsetWidth * dpr;
   canvas.height = pl.offsetHeight * dpr;
   // Les styles width/height sont gérés par CSS (width:100%; height:100%)
   // Invalider le gradient mis en cache après redimensionnement
@@ -129,14 +134,14 @@ function _resizeCanvas() {
   // Calculer le Y centre du bouton play dans le canvas (1 seul getBCR au resize, jamais pendant le rendu)
   const pcplay = document.getElementById('pcplay');
   if (pcplay) {
-    const plRect  = pl.getBoundingClientRect();
+    const plRect = pl.getBoundingClientRect();
     const btnRect = pcplay.getBoundingClientRect();
-    const cssX    = (btnRect.left + btnRect.width  / 2) - plRect.left;
-    const cssY    = (btnRect.top  + btnRect.height / 2) - plRect.top;
+    const cssX = btnRect.left + btnRect.width / 2 - plRect.left;
+    const cssY = btnRect.top + btnRect.height / 2 - plRect.top;
     _circlecx = cssX * dpr;
     _circlecy = cssY * dpr;
   } else {
-    _circlecx = canvas.width  / 2;
+    _circlecx = canvas.width / 2;
     _circlecy = canvas.height / 2;
   }
 }
@@ -158,7 +163,9 @@ export function setVizMode(mode) {
   if (wasRunning) _startEngine();
 }
 
-export function getVizMode() { return vizMode; }
+export function getVizMode() {
+  return vizMode;
+}
 
 /** Activer ou désactiver complètement le visualiseur.
  *  @param {boolean} enabled */
@@ -178,19 +185,21 @@ export function setVizEnabled(enabled) {
   saveCfg();
 }
 
-export function getVizEnabled() { return vizEnabled; }
+export function getVizEnabled() {
+  return vizEnabled;
+}
 
 /* ── Contrôle ─────────────────────────────────────────────── */
 
 export function startViz() {
-  if (!vizEnabled) return;  // viz désactivé → rien à faire
+  if (!vizEnabled) return; // viz désactivé → rien à faire
   if (!canvas || !eqAnalyser) return;
   if (running) return;
   // Pré-allouer les buffers une seule fois — zéro allocation dans la boucle _draw
   const bins = eqAnalyser.frequencyBinCount;
   _vizBins = bins; // P8 — cache pour _draw() : eqAnalyser.frequencyBinCount est constant après init
-  if (!smoothed  || smoothed.length  !== bins) smoothed  = new Float32Array(bins);
-  if (!_vizData  || _vizData.length  !== bins) _vizData  = new Uint8Array(bins);
+  if (!smoothed || smoothed.length !== bins) smoothed = new Float32Array(bins);
+  if (!_vizData || _vizData.length !== bins) _vizData = new Uint8Array(bins);
   running = true;
   if (eqCtx && eqCtx.state === 'suspended') eqCtx.resume();
   _startEngine();
@@ -223,8 +232,14 @@ export function suspendViz() {
 export function resumeViz() {
   _vizSuspended = false;
   if (!running || !canvas || !eqAnalyser) return;
-  if (vizMode === 'oscilloscope') { _ensurePremiumOsc()?.start(); return; }
-  if (raf) { cancelAnimationFrame(raf); raf = null; }
+  if (vizMode === 'oscilloscope') {
+    _ensurePremiumOsc()?.start();
+    return;
+  }
+  if (raf) {
+    cancelAnimationFrame(raf);
+    raf = null;
+  }
   _draw();
 }
 
@@ -234,7 +249,7 @@ export function updateVizColor(color) {
   if (!color || color === 'transparent') {
     // Fallback : lire la variable d'accent CSS courante (thème ou art color)
     // @property <color> → getComputedStyle peut retourner "rgb(r, g, b)" ou "#hex"
-    const g    = getComputedStyle(document.documentElement).getPropertyValue('--g').trim();
+    const g = getComputedStyle(document.documentElement).getPropertyValue('--g').trim();
     const mHex = g.match(/#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})/i);
     const mRgb = !mHex && g.match(/rgb\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/i);
     if (mHex) {
@@ -242,9 +257,13 @@ export function updateVizColor(color) {
       vizG = parseInt(mHex[2], 16);
       vizB = parseInt(mHex[3], 16);
     } else if (mRgb) {
-      vizR = +mRgb[1]; vizG = +mRgb[2]; vizB = +mRgb[3];
+      vizR = +mRgb[1];
+      vizG = +mRgb[2];
+      vizB = +mRgb[3];
     } else {
-      vizR = 59; vizG = 130; vizB = 246; // dernier recours
+      vizR = 59;
+      vizG = 130;
+      vizB = 246; // dernier recours
     }
     _vizRGB = `${vizR},${vizG},${vizB}`;
     _rebuildVizRgbaCache();
@@ -254,7 +273,9 @@ export function updateVizColor(color) {
   // Format rgb(r,g,b)
   const m = color.match(/rgb\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\)/i);
   if (m) {
-    vizR = +m[1]; vizG = +m[2]; vizB = +m[3];
+    vizR = +m[1];
+    vizG = +m[2];
+    vizB = +m[3];
     _vizRGB = `${vizR},${vizG},${vizB}`;
     _rebuildVizRgbaCache();
     _grad = null;
@@ -301,7 +322,10 @@ function _stopEngine() {
   // Toujours stopper les deux — évite que les deux moteurs tournent en parallèle
   // si l'utilisateur switch de mode plus vite qu'un frame
   if (_premiumOsc) _premiumOsc.stop();
-  if (raf) { cancelAnimationFrame(raf); raf = null; }
+  if (raf) {
+    cancelAnimationFrame(raf);
+    raf = null;
+  }
 }
 
 /* ── Rendu principal (bars / circle) ──────────────────────── */
@@ -312,15 +336,24 @@ function _draw() {
   if (vizMode === 'oscilloscope') return;
   // P1+P2 fix : suspendu (mode cinéma ouvert) ou onglet caché → sauter le rendu mais
   // garder le rAF vivant (pattern cinema-viz.js:166) pour un resume instantané.
-  if (_vizSuspended || document.hidden) { raf = requestAnimationFrame(_draw); return; }
+  if (_vizSuspended || document.hidden) {
+    raf = requestAnimationFrame(_draw);
+    return;
+  }
   // Vérifier eqAnalyser AVANT de planifier le prochain frame — évite une boucle infinie si l'analyser disparaît
-  if (!eqAnalyser) { running = false; return; }
+  if (!eqAnalyser) {
+    running = false;
+    return;
+  }
 
   // FIX : skip si le canvas n'est pas encore rendu (dimensions nulles) — évite le reschedule
   // infini quand le composant est invisible ou pas encore mis en page.
   const w = canvas.width;
   const h = canvas.height;
-  if (w === 0 || h === 0) { raf = requestAnimationFrame(_draw); return; }
+  if (w === 0 || h === 0) {
+    raf = requestAnimationFrame(_draw);
+    return;
+  }
 
   // P8 FIX : bins, _vizData, smoothed sont tous pré-alloués dans startViz()
   // → supprimé les guards de taille qui tournaient à chaque frame (480 checks/sec inutiles)
@@ -356,32 +389,38 @@ function _draw() {
 function _drawBars(bins, w, h) {
   const dpr = _dpr;
 
-  const gap     = 2 * dpr;
-  const barW    = Math.max(2 * dpr, (w - gap * (BAR_COUNT - 1)) / BAR_COUNT);
-  const radius  = Math.min(barW * 0.5, 2 * dpr);
+  const gap = 2 * dpr;
+  const barW = Math.max(2 * dpr, (w - gap * (BAR_COUNT - 1)) / BAR_COUNT);
+  const radius = Math.min(barW * 0.5, 2 * dpr);
 
-  const barBase = h * 0.80;  // y where bars sit (top 80% used for bars)
-  const maxBarH = barBase;   // max bar height
-  const reflH   = h - barBase; // reflection zone = bottom 20%
+  const barBase = h * 0.8; // y where bars sit (top 80% used for bars)
+  const maxBarH = barBase; // max bar height
+  const reflH = h - barBase; // reflection zone = bottom 20%
 
   // Gradient: faded at tip (top) → full color at base, cached
   if (!_grad || h !== _gradH || _vizRGB !== _gradRGB) {
-    _gradH   = h;
+    _gradH = h;
     _gradRGB = _vizRGB;
-    _grad    = canvasCtx.createLinearGradient(0, 0, 0, barBase);
+    _grad = canvasCtx.createLinearGradient(0, 0, 0, barBase);
     _grad.addColorStop(0, `rgba(${_vizRGB}, 0.30)`);
     _grad.addColorStop(1, `rgba(${_vizRGB}, 0.88)`);
   }
 
-  _radiiTop[0] = radius; _radiiTop[1] = radius; _radiiTop[2] = 0; _radiiTop[3] = 0;
-  _radiiBot[0] = 0;      _radiiBot[1] = 0;      _radiiBot[2] = radius; _radiiBot[3] = radius;
+  _radiiTop[0] = radius;
+  _radiiTop[1] = radius;
+  _radiiTop[2] = 0;
+  _radiiTop[3] = 0;
+  _radiiBot[0] = 0;
+  _radiiBot[1] = 0;
+  _radiiBot[2] = radius;
+  _radiiBot[3] = radius;
 
   // Pass 1: main bars (bottom-up, within top 80%)
-  canvasCtx.fillStyle   = _grad;
+  canvasCtx.fillStyle = _grad;
   canvasCtx.globalAlpha = 1;
   for (let i = 0; i < BAR_COUNT; i++) {
     const val = smoothed[i] / 255;
-    const bH  = val * maxBarH;
+    const bH = val * maxBarH;
     if (bH < 1) continue;
     const x = i * (barW + gap);
     canvasCtx.beginPath();
@@ -393,7 +432,7 @@ function _drawBars(bins, w, h) {
   canvasCtx.globalAlpha = 0.18;
   for (let i = 0; i < BAR_COUNT; i++) {
     const val = smoothed[i] / 255;
-    const rH  = Math.min(val * maxBarH * 0.5, reflH);
+    const rH = Math.min(val * maxBarH * 0.5, reflH);
     if (rH < 1) continue;
     const x = i * (barW + gap);
     canvasCtx.beginPath();
@@ -408,21 +447,21 @@ function _drawBars(bins, w, h) {
 /* ── Mode circle ──────────────────────────────────────────── */
 
 function _drawCircle(bins, w, h) {
-  const dpr     = _dpr;
-  const cx      = _circlecx ?? w / 2;  // centré sur #pcplay (calculé au resize)
-  const cy      = _circlecy ?? h / 2;
+  const dpr = _dpr;
+  const cx = _circlecx ?? w / 2; // centré sur #pcplay (calculé au resize)
+  const cy = _circlecy ?? h / 2;
   // inner + maxBar = 0.42 × h → marges 8 % en haut/bas — plus de débordement sur la player bar
-  const minDim  = Math.min(w, h);
-  const inner   = Math.max(10, minDim * 0.22);
-  const maxBar  = minDim * 0.20;
-  const COUNT   = Math.min(BAR_COUNT, bins);
-  const barW    = Math.max(2 * dpr, (2 * Math.PI * inner / COUNT) * 0.55);
+  const minDim = Math.min(w, h);
+  const inner = Math.max(10, minDim * 0.22);
+  const maxBar = minDim * 0.2;
+  const COUNT = Math.min(BAR_COUNT, bins);
+  const barW = Math.max(2 * dpr, ((2 * Math.PI * inner) / COUNT) * 0.55);
 
   // Cercle intérieur de référence (anneau discret)
   canvasCtx.beginPath();
   canvasCtx.arc(cx, cy, inner, 0, Math.PI * 2);
   canvasCtx.strokeStyle = _vizRgbaHalo;
-  canvasCtx.lineWidth   = 1.5 * dpr;
+  canvasCtx.lineWidth = 1.5 * dpr;
   canvasCtx.stroke();
 
   // P2 FIX : alpha buckets — 60 stroke() → max 8 GPU draw calls par frame.
@@ -436,17 +475,17 @@ function _drawCircle(bins, w, h) {
   }
   // Passe 2 : 1 beginPath/stroke par bucket non-vide (max 8 GPU state changes)
   canvasCtx.lineWidth = barW;
-  canvasCtx.lineCap   = 'round';
+  canvasCtx.lineCap = 'round';
   for (let b = 0; b < _ALPHA_BUCKETS; b++) {
     if (!_circleBuckets[b].length) continue;
     canvasCtx.beginPath();
     canvasCtx.strokeStyle = _vizRgbaBuckets[b];
     for (const i of _circleBuckets[b]) {
       const angle = (i / COUNT) * Math.PI * 2 - Math.PI / 2 + _circleAngle;
-      const val   = smoothed[i] / 255;
-      const cosA  = Math.cos(angle);
-      const sinA  = Math.sin(angle);
-      canvasCtx.moveTo(cx + cosA * inner,              cy + sinA * inner);
+      const val = smoothed[i] / 255;
+      const cosA = Math.cos(angle);
+      const sinA = Math.sin(angle);
+      canvasCtx.moveTo(cx + cosA * inner, cy + sinA * inner);
       canvasCtx.lineTo(cx + cosA * (inner + val * maxBar), cy + sinA * (inner + val * maxBar));
     }
     canvasCtx.stroke();

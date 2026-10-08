@@ -7,49 +7,68 @@
 // Exports publics :
 //   toggleMiniPlayer, updateMiniPlayer, updateMiniProgress, resetMiniProgressThrottle
 
-import { invoke }                from './ipc.js';
-import { fmt }                   from './utils.js';
-import { get, subscribe }        from './store.js';
-import { audio }                 from './player.js';
-import { radioActive }           from './radio.js';
-import { dget }                  from './db.js';
-import { ART_MIME_ALLOWLIST }    from './artLoader.js';
+import { invoke } from './ipc.js';
+import { fmt } from './utils.js';
+import { get, subscribe } from './store.js';
+import { audio } from './player.js';
+import { radioActive } from './radio.js';
+import { dget } from './db.js';
+import { ART_MIME_ALLOWLIST } from './artLoader.js';
 
 // Position du mini-player (remplace window._miniPos du BOOT-2)
 let _miniPos = null;
 /** Appelé depuis app.js boot() et le handler de changement de position. */
-export function setMiniPos(pos) { _miniPos = pos; }
+export function setMiniPos(pos) {
+  _miniPos = pos;
+}
 /** Appelé depuis app.js saveCfg() pour persister la position. */
-export function getMiniPos()    { return _miniPos; }
+export function getMiniPos() {
+  return _miniPos;
+}
 /** Appelé depuis settings.js pour synchroniser le bouton du panneau settings. */
-export function getMiniOpen()   { return _miniOpen; }
-
+export function getMiniOpen() {
+  return _miniOpen;
+}
 
 // ── État interne ──────────────────────────────────────────────
 // BUG FIX F3 : throttle à 1 appel/sec max + guard si le mini n'est pas ouvert.
 let _lastMiniProgressTime = 0;
-let _miniOpen  = false; // true = fenêtre mini visible
-let _lastTitle = '';    // dernière piste notifiée (évite doublon sur updateMiniPlayer répétés)
+let _miniOpen = false; // true = fenêtre mini visible
+let _lastTitle = ''; // dernière piste notifiée (évite doublon sur updateMiniPlayer répétés)
 
 // Quand la fenêtre principale reprend le focus, le mini est déjà fermé côté Rust
 window.addEventListener('focus', () => {
   _miniOpen = false;
   // Retirer l'état actif du bouton toolbar
   const btn = document.getElementById('tbt-mini');
-  if (btn) { btn.classList.remove('on'); btn.setAttribute('aria-pressed', 'false'); }
+  if (btn) {
+    btn.classList.remove('on');
+    btn.setAttribute('aria-pressed', 'false');
+  }
 });
 
 // Bug #6 fix : synchroniser le mini-player sur les mutations du store et de l'audio.
 // Sans ça, les changements de volume, like et vitesse dans la fenêtre principale
 // ne se reflétaient pas dans le mini jusqu'au prochain changement de piste.
 // Guard _miniOpen dans updateMiniPlayer() → no-op si le mini est fermé.
-subscribe('currentArtColor',  () => { updateMiniPlayer(); });
-subscribe('liked',            () => { updateMiniPlayer(); }); // liked ♥ changé
-subscribe('playbackSpeed',    () => { updateMiniPlayer(); }); // vitesse modifiée
+subscribe('currentArtColor', () => {
+  updateMiniPlayer();
+});
+subscribe('liked', () => {
+  updateMiniPlayer();
+}); // liked ♥ changé
+subscribe('playbackSpeed', () => {
+  updateMiniPlayer();
+}); // vitesse modifiée
 // Volume : audio.volume n'est pas dans le store → écouter l'événement DOM 'volumechange'.
 // Différer au prochain tick : player.js ↔ miniplayer.js forment une dépendance circulaire,
 // `audio` n'est pas encore initialisé au moment où ce code de module s'exécute.
-setTimeout(() => { if (audio) audio.addEventListener('volumechange', () => { updateMiniPlayer(); }); }, 0);
+setTimeout(() => {
+  if (audio)
+    audio.addEventListener('volumechange', () => {
+      updateMiniPlayer();
+    });
+}, 0);
 
 // ── Contrôle fenêtre ──────────────────────────────────────────
 
@@ -61,7 +80,10 @@ export async function toggleMiniPlayer() {
   _miniOpen = !_miniOpen;
   // Marquer le bouton toolbar comme actif
   const tbtMini = document.getElementById('tbt-mini');
-  if (tbtMini) { tbtMini.classList.add('on'); tbtMini.setAttribute('aria-pressed', 'true'); }
+  if (tbtMini) {
+    tbtMini.classList.add('on');
+    tbtMini.setAttribute('aria-pressed', 'true');
+  }
   await updateMiniPlayer();
   invoke('mini_toggle')
     .then(() => invoke('win_minimize').catch(() => {}))
@@ -75,11 +97,17 @@ export async function toggleMiniPlayer() {
 export async function openMiniAndMinimize() {
   _miniOpen = true;
   const tbtMini = document.getElementById('tbt-mini');
-  if (tbtMini) { tbtMini.classList.add('on'); tbtMini.setAttribute('aria-pressed', 'true'); }
+  if (tbtMini) {
+    tbtMini.classList.add('on');
+    tbtMini.setAttribute('aria-pressed', 'true');
+  }
   await updateMiniPlayer();
   invoke('win_minimize').catch(() => {
     _miniOpen = false;
-    if (tbtMini) { tbtMini.classList.remove('on'); tbtMini.setAttribute('aria-pressed', 'false'); }
+    if (tbtMini) {
+      tbtMini.classList.remove('on');
+      tbtMini.setAttribute('aria-pressed', 'false');
+    }
   });
 }
 
@@ -89,27 +117,35 @@ export async function updateMiniPlayer() {
   if (!_miniOpen) return; // guard cohérent avec updateMiniProgress
   const curIdx = get('curIdx');
   const tracks = get('tracks'); // Phase 4 — store alimenté depuis Jalon 3
-  const liked  = get('liked');
+  const liked = get('liked');
   const base = {
     theme: get('theme'),
     dynColor: get('dynColor') !== false,
     artColor: get('currentArtColor') ?? null,
-    shuffle: get('shuffle'), repeat: get('repeat'),
+    shuffle: get('shuffle'),
+    repeat: get('repeat'),
     radioActive: !!radioActive,
     playing: !audio.paused,
-    progress: audio.duration ? (audio.currentTime / audio.duration * 100) : 0,
+    progress: audio.duration ? (audio.currentTime / audio.duration) * 100 : 0,
     time: fmt(audio.currentTime),
     duration: audio.duration ? fmt(audio.duration) : '',
-    volume:  audio.volume,                  // indicateur volume mini.html
-    miniPos: _miniPos,                       // restauration position (premier applyState)
+    volume: audio.volume, // indicateur volume mini.html
+    miniPos: _miniPos // restauration position (premier applyState)
   };
   if (curIdx < 0) {
-    await invoke('mini_update', { data: { ...base, title:'–', artist:'–', art:null, liked:false } }).catch(e => console.warn('[miniplayer:mini_update idle]', e));
+    await invoke('mini_update', {
+      data: { ...base, title: '–', artist: '–', art: null, liked: false }
+    }).catch((e) => console.warn('[miniplayer:mini_update idle]', e));
     return;
   }
   const t = tracks[curIdx];
   // Guard : curIdx peut être un index persisté devenu invalide (ex. bibliothèque plus petite au redémarrage)
-  if (!t) { await invoke('mini_update', { data: { ...base, title:'–', artist:'–', art:null, liked:false } }).catch(e => console.warn('[miniplayer:mini_update invalid-idx]', e)); return; }
+  if (!t) {
+    await invoke('mini_update', {
+      data: { ...base, title: '–', artist: '–', art: null, liked: false }
+    }).catch((e) => console.warn('[miniplayer:mini_update invalid-idx]', e));
+    return;
+  }
   // BUG 3 FIX : convertir blob: en base64 pour cross-window (les blob: URLs
   // ne sont pas accessibles depuis une autre WebView Tauri)
   let artForMini = null;
@@ -130,15 +166,16 @@ export async function updateMiniPlayer() {
           buf = rec.artBuf;
           const rawMime = rec.artMime || 'image/jpeg';
           mimeHint = ART_MIME_ALLOWLIST.includes(rawMime) ? rawMime : 'image/jpeg';
-          t._artBuf  = buf;
+          t._artBuf = buf;
           t._artMime = mimeHint;
         }
       }
       if (buf) {
         const u8 = new Uint8Array(buf);
         // Détecter le MIME depuis les magic bytes (PNG: 89 50 4E 47, sinon JPEG)
-        const isPNG = u8.length >= 4 && u8[0] === 0x89 && u8[1] === 0x50 && u8[2] === 0x4E && u8[3] === 0x47;
-        const mime  = isPNG ? 'image/png' : 'image/jpeg';
+        const isPNG =
+          u8.length >= 4 && u8[0] === 0x89 && u8[1] === 0x50 && u8[2] === 0x4e && u8[3] === 0x47;
+        const mime = isPNG ? 'image/png' : 'image/jpeg';
         let binary = '';
         const CHUNK = 8192;
         for (let i = 0; i < u8.length; i += CHUNK) {
@@ -147,16 +184,22 @@ export async function updateMiniPlayer() {
         artForMini = `data:${mime};base64,${btoa(binary)}`;
         t._b64 = artForMini;
       }
-    } catch(e) { console.warn('[miniplayer] art base64 conversion failed:', e); artForMini = null; }
+    } catch (e) {
+      console.warn('[miniplayer] art base64 conversion failed:', e);
+      artForMini = null;
+    }
   }
   // await garantit que le mutex Rust est écrit avant que toggleMiniPlayer continue
-  await invoke('mini_update', { data: { ...base,
-    title:  t.name,
-    artist: t.artistFull || t.artist || '–',
-    album:  t.album || '',
-    art:    artForMini,
-    liked:  liked.has(t.id),
-  } }).catch(e => console.warn('[miniplayer:mini_update]', e));
+  await invoke('mini_update', {
+    data: {
+      ...base,
+      title: t.name,
+      artist: t.artistFull || t.artist || '–',
+      album: t.album || '',
+      art: artForMini,
+      liked: liked.has(t.id)
+    }
+  }).catch((e) => console.warn('[miniplayer:mini_update]', e));
 
   // ── Notification système (Windows toast) ──────────────────
   // Déclenche uniquement quand la piste change, pas à chaque updateMiniPlayer
@@ -172,12 +215,14 @@ async function _notifyTrack(title, artist, icon) {
     if (Notification.permission === 'default') await Notification.requestPermission();
     if (Notification.permission !== 'granted') return;
     new Notification(title, {
-      body:   artist,
-      icon:   icon || undefined,
-      silent: true,   // pas de son système (l'audio est déjà dans l'app)
-      tag:    'libreflow-track', // remplace la notif précédente au lieu d'empiler
+      body: artist,
+      icon: icon || undefined,
+      silent: true, // pas de son système (l'audio est déjà dans l'app)
+      tag: 'libreflow-track' // remplace la notif précédente au lieu d'empiler
     });
-  } catch { /* Notification API non dispo ou refusée → silencieux */ }
+  } catch {
+    /* Notification API non dispo ou refusée → silencieux */
+  }
 }
 
 // ── Reset throttle ────────────────────────────────────────────
@@ -196,8 +241,10 @@ export function updateMiniProgress() {
   const now = Date.now();
   if (now - _lastMiniProgressTime < 250) return; // ~4/sec — assez fluide, léger sur IPC
   _lastMiniProgressTime = now;
-  invoke('mini_progress', { data: {
-    progress: audio.currentTime / audio.duration * 100,
-    time: fmt(audio.currentTime),
-  } }).catch(e => console.warn('[miniplayer:mini_progress]', e));
+  invoke('mini_progress', {
+    data: {
+      progress: (audio.currentTime / audio.duration) * 100,
+      time: fmt(audio.currentTime)
+    }
+  }).catch((e) => console.warn('[miniplayer:mini_progress]', e));
 }

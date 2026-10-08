@@ -12,9 +12,9 @@ export default defineConfig({
     command: 'npm run vite',
     url: 'http://localhost:1420',
     reuseExistingServer: true,
-    timeout: 60000,
+    timeout: 60000
   },
   use: { baseURL: 'http://localhost:1420' },
   expect: { toHaveScreenshot: { maxDiffPixelRatio: 0.01 } },
-  projects: [{ name: 'chromium', use: { browserName: 'chromium' } }],
+  projects: [{ name: 'chromium', use: { browserName: 'chromium' } }]
 });

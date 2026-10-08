@@ -25,7 +25,14 @@ export function emit(event, payload) {
   const set = _listeners.get(event);
   if (!set) return;
   for (const fn of set) {
-    try { fn(payload); } catch (e) { console.error('[bus] handler error', event, e); queueMicrotask(() => { throw e; }); }
+    try {
+      fn(payload);
+    } catch (e) {
+      console.error('[bus] handler error', event, e);
+      queueMicrotask(() => {
+        throw e;
+      });
+    }
   }
 }
 
@@ -45,46 +52,46 @@ export function on(event, fn) {
 /** Typed event constants — prevents typos in event names. */
 export const EVENTS = Object.freeze({
   // Player
-  TRACK_CHANGE:     'track:change',       // { track, idx }
-  PLAY_STATE:       'player:state',       // { playing }
+  TRACK_CHANGE: 'track:change', // { track, idx }
+  PLAY_STATE: 'player:state', // { playing }
   // Library
-  LIBRARY_UPDATED:  'library:updated',   // { tracks }
+  LIBRARY_UPDATED: 'library:updated', // { tracks }
   // Search / filter
-  FILTER_CHANGED:   'search:filtered',   // { list }
+  FILTER_CHANGED: 'search:filtered', // { list }
   // UI
-  RENDER_LIB:       'ui:render_lib',     // {} — demande un renderLib() à app.js
+  RENDER_LIB: 'ui:render_lib', // {} — demande un renderLib() à app.js
   // Panel coordination (évite les cycles d'import entre panneaux)
-  PANEL_CLOSE_QUEUE:    'panel:close_queue',    // {}
+  PANEL_CLOSE_QUEUE: 'panel:close_queue', // {}
   PANEL_CLOSE_SETTINGS: 'panel:close_settings', // {}
-  VIEW_REQUEST:         'ui:view_request',       // { view: string, btn: Element|null, plId?: string }
+  VIEW_REQUEST: 'ui:view_request', // { view: string, btn: Element|null, plId?: string }
   // Library
-  TRACK_SAVE_REQUEST:   'library:save_request',  // { track }
-  TRACK_REMOVED:        'library:track_removed', // { ids: string[] }
+  TRACK_SAVE_REQUEST: 'library:save_request', // { track }
+  TRACK_REMOVED: 'library:track_removed', // { ids: string[] }
   // Settings / theme
-  THEME_APPLY_REQUEST:  'theme:apply_request',     // {}
+  THEME_APPLY_REQUEST: 'theme:apply_request', // {}
   // Player bar
-  VOL_SLIDER_UPDATE:    'player:vol_slider_update', // { elId: string }
+  VOL_SLIDER_UPDATE: 'player:vol_slider_update', // { elId: string }
   // Context menu
-  CTX_MENU_CLOSE:       'ui:ctx_menu_close',        // {}
+  CTX_MENU_CLOSE: 'ui:ctx_menu_close', // {}
   // Selection
-  SELECTION_CLEAR:      'selection:clear',           // {}
+  SELECTION_CLEAR: 'selection:clear', // {}
   // Stats navigation
-  STATS_DRILL_GENRE:    'nav:stats_genre',           // { key, displayName }
-  STATS_DRILL_ARTIST:   'nav:stats_artist',          // { displayName }
-  STATS_DRILL_ALBUM:    'nav:stats_album',           // { key, displayName }
+  STATS_DRILL_GENRE: 'nav:stats_genre', // { key, displayName }
+  STATS_DRILL_ARTIST: 'nav:stats_artist', // { displayName }
+  STATS_DRILL_ALBUM: 'nav:stats_album', // { key, displayName }
   // Search
-  SEARCH_DEBOUNCE_CANCEL: 'search:debounce_cancel',  // {}
+  SEARCH_DEBOUNCE_CANCEL: 'search:debounce_cancel', // {}
   // Cinema
-  CINEMA_RADIO_TOGGLE:  'cinema:radio_toggle',       // {}
-  CINEMA_PROGRESS:      'cinema:progress',           // { p, cur, dur }
+  CINEMA_RADIO_TOGGLE: 'cinema:radio_toggle', // {}
+  CINEMA_PROGRESS: 'cinema:progress', // { p, cur, dur }
 
-  PLAYBACK_MODE_CHANGED: 'player:mode_changed',      // {} — shuffle/repeat basculés (cinéma re-rend ses panneaux)
+  PLAYBACK_MODE_CHANGED: 'player:mode_changed', // {} — shuffle/repeat basculés (cinéma re-rend ses panneaux)
   // Smart playlist
   SMART_PLAYLIST_SWITCH_TAB: 'smartplaylist:switch_tab', // { tab: string }
   // Player bar update (from artLoader)
-  PLAYERBAR_UPDATE:           'player:bar_update',         // {}
+  PLAYERBAR_UPDATE: 'player:bar_update', // {}
   // Sleep
-  SLEEP_CROSSFADE_STOP:       'sleep:crossfade_stop',      // {}
+  SLEEP_CROSSFADE_STOP: 'sleep:crossfade_stop', // {}
   // Motion (Task 10) — settings.js → app.js (évite settings.js → cinema.js direct)
-  MOTION_PREF_CHANGED:        'motion:pref_changed',       // { pref: 'system'|'full'|'reduce' }
+  MOTION_PREF_CHANGED: 'motion:pref_changed' // { pref: 'system'|'full'|'reduce' }
 });

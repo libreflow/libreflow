@@ -12,29 +12,60 @@ const SS = fs.readFileSync(path.join(__dirname, '../src/style.css'), 'utf8');
 
 // Tokens canoniques qui DOIVENT vivre uniquement dans design-system.css.
 const CANONICAL = [
-  '--space-1', '--space-2', '--space-3', '--space-4', '--space-5', '--space-6', '--space-7',
-  '--radius-xs', '--radius-sm', '--radius-md', '--radius-lg', '--radius-pill',
+  '--space-1',
+  '--space-2',
+  '--space-3',
+  '--space-4',
+  '--space-5',
+  '--space-6',
+  '--space-7',
+  '--radius-xs',
+  '--radius-sm',
+  '--radius-md',
+  '--radius-lg',
+  '--radius-pill',
   // --text-2xl retiré (audit 2026-07-27) : token mort, zéro consommateur — purgé du design-system.
-  '--text-xs', '--text-sm', '--text-base', '--text-md', '--text-lg', '--text-xl',
-  '--motion-fast', '--motion-base', '--motion-slow',
-  '--ease-standard', '--ease-spring',
-  '--elev-1', '--elev-2', '--elev-3', '--elev-4',
-  '--g', '--g-rgb',
-  '--bg', '--bg1', '--bg2', '--bg3', '--bg4', '--bg5', '--bg6',
-  '--t', '--t2', '--t3', '--t4',
+  '--text-xs',
+  '--text-sm',
+  '--text-base',
+  '--text-md',
+  '--text-lg',
+  '--text-xl',
+  '--motion-fast',
+  '--motion-base',
+  '--motion-slow',
+  '--ease-standard',
+  '--ease-spring',
+  '--elev-1',
+  '--elev-2',
+  '--elev-3',
+  '--elev-4',
+  '--g',
+  '--g-rgb',
+  '--bg',
+  '--bg1',
+  '--bg2',
+  '--bg3',
+  '--bg4',
+  '--bg5',
+  '--bg6',
+  '--t',
+  '--t2',
+  '--t3',
+  '--t4'
 ];
 
 // Aliases legacy qui DOIVENT pointer vers un token canonique (pas de valeur littérale).
 const ALIAS_TARGETS = {
-  '--sp-1':  '--space-1',
-  '--sp-2':  '--space-2',
-  '--sp-3':  '--space-3',
-  '--sp-4':  '--space-4',
-  '--r':     '--radius-sm',
-  '--r2':    '--radius-md',
+  '--sp-1': '--space-1',
+  '--sp-2': '--space-2',
+  '--sp-3': '--space-3',
+  '--sp-4': '--space-4',
+  '--r': '--radius-sm',
+  '--r2': '--radius-md',
   '--dur-fast': '--motion-fast',
-  '--dur-mid':  '--motion-base',
-  '--dur-slow': '--motion-slow',
+  '--dur-mid': '--motion-base',
+  '--dur-slow': '--motion-slow'
 };
 
 function declaredInRoot(css, token) {
@@ -44,10 +75,17 @@ function declaredInRoot(css, token) {
 }
 
 async function run() {
-  let pass = 0, fail = 0;
+  let pass = 0,
+    fail = 0;
   const t = async (name, fn) => {
-    try { await fn(); pass++; console.log(`  ✓ ${name}`); }
-    catch (e) { fail++; console.log(`  ✗ ${name}: ${e.message}`); }
+    try {
+      await fn();
+      pass++;
+      console.log(`  ✓ ${name}`);
+    } catch (e) {
+      fail++;
+      console.log(`  ✗ ${name}: ${e.message}`);
+    }
   };
 
   console.log('\n── theme-tokens — design-system source of truth ──');
@@ -63,7 +101,10 @@ async function run() {
 
   for (const [alias, target] of Object.entries(ALIAS_TARGETS)) {
     await t(`${alias} aliases ${target}`, () => {
-      const re = new RegExp(`${alias.replace(/-/g, '\\-')}\\s*:\\s*var\\(\\s*${target.replace(/-/g, '\\-')}\\s*\\)`, 'g');
+      const re = new RegExp(
+        `${alias.replace(/-/g, '\\-')}\\s*:\\s*var\\(\\s*${target.replace(/-/g, '\\-')}\\s*\\)`,
+        'g'
+      );
       // Token-unification (§17): the operational/alias layer was relocated from
       // style.css into design-system.css. Aliases now live in DS, not SS.
       assert.ok(re.test(DS), `${alias} should be var(${target}) in design-system.css`);
@@ -71,14 +112,21 @@ async function run() {
   }
 
   await t('style.css has <=36 hardcoded hex colors outside :root', async () => {
-    const cleaned = SS
-      .replace(/:root\s*\{[^}]*\}/g, '')
-      .replace(/@keyframes\s+\w+\s*\{[\s\S]*?\n\}/g, '');
+    const cleaned = SS.replace(/:root\s*\{[^}]*\}/g, '').replace(
+      /@keyframes\s+\w+\s*\{[\s\S]*?\n\}/g,
+      ''
+    );
     const hexes = cleaned.match(/#[0-9a-f]{3}([0-9a-f]{3})?\b/gi) || [];
-    assert.ok(hexes.length <= 36, `style.css has ${hexes.length} hardcoded hex colors outside :root — exceed cap of 36`);
+    assert.ok(
+      hexes.length <= 36,
+      `style.css has ${hexes.length} hardcoded hex colors outside :root — exceed cap of 36`
+    );
   });
 
-  if (fail) { console.log(`\nTHEME-TOKENS FAIL: ${fail}/${pass + fail}`); process.exit(1); }
+  if (fail) {
+    console.log(`\nTHEME-TOKENS FAIL: ${fail}/${pass + fail}`);
+    process.exit(1);
+  }
   console.log(`\nTHEME-TOKENS OK: ${pass}/${pass}`);
 }
 

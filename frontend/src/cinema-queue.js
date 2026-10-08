@@ -23,9 +23,9 @@
 // (Échap → fermerait tout le cinéma ; ↑/↓ → changeraient le volume ; Tab → piège overlay
 // entier au lieu du panneau seul).
 
-let _deps  = null; // { getUpcoming, onPlayTrack, panel, trigger }
-let _open  = false;
-let _rows  = [];    // boutons de rangée actuellement rendus (navigation flèches/Tab)
+let _deps = null; // { getUpcoming, onPlayTrack, panel, trigger }
+let _open = false;
+let _rows = []; // boutons de rangée actuellement rendus (navigation flèches/Tab)
 
 /**
  * Construit la liste des ≤ limit prochaines pistes. Même priorité que
@@ -51,14 +51,14 @@ let _rows  = [];    // boutons de rangée actuellement rendus (navigation flèch
  * @returns {object[]}
  */
 export function buildUpcoming({
-  explicitQueue  = [],
-  filtered       = [],
+  explicitQueue = [],
+  filtered = [],
   curFilteredIdx = -1,
-  shuffle        = false,
-  radioActive    = false,
-  radioQueue     = [],
-  repeatAll      = false,
-  limit          = 8,
+  shuffle = false,
+  radioActive = false,
+  radioQueue = [],
+  repeatAll = false,
+  limit = 8
 } = {}) {
   if (limit <= 0) return [];
 
@@ -86,13 +86,19 @@ export function buildUpcoming({
  *  suite de `filtered` depuis curFilteredIdx+1, dédupliquée contre `out`, puis wrap
  *  vers le début si `repeatAll` — piste courante (curFilteredIdx) exclue, un cycle max. */
 function _fillSequential(out, filtered, curFilteredIdx, repeatAll, limit) {
-  const seen = new Set(out.map(t => t.id));
+  const seen = new Set(out.map((t) => t.id));
   for (let i = curFilteredIdx + 1; i < filtered.length && out.length < limit; i++) {
-    if (!seen.has(filtered[i].id)) { out.push(filtered[i]); seen.add(filtered[i].id); }
+    if (!seen.has(filtered[i].id)) {
+      out.push(filtered[i]);
+      seen.add(filtered[i].id);
+    }
   }
   if (!repeatAll) return;
   for (let i = 0; i < curFilteredIdx && out.length < limit; i++) {
-    if (!seen.has(filtered[i].id)) { out.push(filtered[i]); seen.add(filtered[i].id); }
+    if (!seen.has(filtered[i].id)) {
+      out.push(filtered[i]);
+      seen.add(filtered[i].id);
+    }
   }
 }
 
@@ -108,7 +114,7 @@ function _buildRow(t) {
   row.type = 'button';
   row.className = 'cqp-row';
   const artist = t.artistFull || t.artist || '';
-  row.setAttribute('aria-label', artist ? `${t.name || '–'} — ${artist}` : (t.name || '–'));
+  row.setAttribute('aria-label', artist ? `${t.name || '–'} — ${artist}` : t.name || '–');
 
   const body = document.createElement('div');
   body.className = 'cn-body';
@@ -126,7 +132,7 @@ function _buildRow(t) {
     body.appendChild(ph);
   }
 
-  const info  = document.createElement('div');
+  const info = document.createElement('div');
   info.className = 'cn-info';
   const title = document.createElement('div');
   title.className = 'cn-title';
@@ -148,21 +154,24 @@ function _buildRow(t) {
 /** Reconstruit la liste ; préserve la position focalisée (clampée) si le panneau est ouvert. */
 function _render() {
   const { panel, getUpcoming } = _deps;
-  const list  = panel.querySelector('.cqp-list');
+  const list = panel.querySelector('.cqp-list');
   const empty = panel.querySelector('.cqp-empty');
   if (!list) return;
   const prevFocusedIdx = _open ? _rows.indexOf(document.activeElement) : -1;
 
   _clearList(list);
   const upcoming = getUpcoming() || [];
-  _rows = upcoming.map(t => _buildRow(t));
-  _rows.forEach(r => list.appendChild(r));
+  _rows = upcoming.map((t) => _buildRow(t));
+  _rows.forEach((r) => list.appendChild(r));
 
   if (empty) empty.hidden = _rows.length > 0;
   list.hidden = _rows.length === 0;
 
   if (!_open || prevFocusedIdx < 0) return;
-  if (_rows.length) { _rows[Math.min(prevFocusedIdx, _rows.length - 1)].focus(); return; }
+  if (_rows.length) {
+    _rows[Math.min(prevFocusedIdx, _rows.length - 1)].focus();
+    return;
+  }
   // Finding 4 — liste vidée (piste en file lancée) alors qu'une rangée avait le focus :
   // celle-ci vient d'être retirée du DOM → activeElement retomberait sur <body>, ce qui
   // laisse le Tab-trap overlay (cinema.js) fuir hors du modal. Retombe sur le déclencheur
@@ -189,7 +198,7 @@ export function refreshCinemaQueuePanel() {
 
 function _moveFocus(dir) {
   if (!_rows.length) return;
-  const idx  = _rows.indexOf(document.activeElement);
+  const idx = _rows.indexOf(document.activeElement);
   const next = idx < 0 ? 0 : Math.max(0, Math.min(_rows.length - 1, idx + dir));
   _rows[next].focus();
 }
@@ -215,11 +224,20 @@ function _onPanelKey(e) {
     // Piège Tab DANS le panneau — stopPropagation évite que le trap overlay-entier
     // (_onCinemaTrapKey) cycle aussi sur les autres contrôles du cinéma.
     e.stopPropagation();
-    if (!_rows.length) { e.preventDefault(); return; }
-    const first = _rows[0], last = _rows[_rows.length - 1];
+    if (!_rows.length) {
+      e.preventDefault();
+      return;
+    }
+    const first = _rows[0],
+      last = _rows[_rows.length - 1];
     const active = document.activeElement;
-    if (e.shiftKey && active === first) { e.preventDefault(); last.focus(); }
-    else if (!e.shiftKey && active === last) { e.preventDefault(); first.focus(); }
+    if (e.shiftKey && active === first) {
+      e.preventDefault();
+      last.focus();
+    } else if (!e.shiftKey && active === last) {
+      e.preventDefault();
+      first.focus();
+    }
   }
 }
 
@@ -269,7 +287,8 @@ function _closePanel({ restoreFocus = true } = {}) {
 
 function _onTriggerClick(e) {
   e.stopPropagation(); // n'affecte pas _onCinemaMouseMove (mousemove, pas click)
-  if (_open) _closePanel(); else _openPanel();
+  if (_open) _closePanel();
+  else _openPanel();
 }
 
 /**

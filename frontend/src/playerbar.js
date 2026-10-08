@@ -20,18 +20,16 @@
 //   updateVolSlider(el) — met à jour l'UI du slider de volume
 //   setupMarquee(container, text) — texte avec défilement smooth si overflow
 
-import { get }                                      from './store.js';
-import { i18n }                                     from './i18n.js';
-import { invoke }                                   from './ipc.js';
-import { audio, setIcon, updateMediaSession,
-         peekNext }                                 from './player.js';
+import { get } from './store.js';
+import { i18n } from './i18n.js';
+import { invoke } from './ipc.js';
+import { audio, setIcon, updateMediaSession, peekNext } from './player.js';
 import { refreshQueueBadge, queueOpen, renderQueue } from './queue.js';
-import { cinemaOpen, updateCinema }                  from './cinema.js';
-import { animateArtChange, applyArtColor, clearArtColor,
-         _updateArtBlur }                            from './settings.js';
-import { extEmoji }                                  from './utils.js';
-import { extractColor }                              from './tags.js';
-import { on, EVENTS }                               from './bus.js';
+import { cinemaOpen, updateCinema } from './cinema.js';
+import { animateArtChange, applyArtColor, clearArtColor, _updateArtBlur } from './settings.js';
+import { extEmoji } from './utils.js';
+import { extractColor } from './tags.js';
+import { on, EVENTS } from './bus.js';
 // Cinéma demande la mise à jour du slider volume — évite le cycle cinema.js ↔ playerbar.js.
 on(EVENTS.VOL_SLIDER_UPDATE, ({ elId }) => updateVolSlider(document.getElementById(elId)));
 on(EVENTS.PLAYERBAR_UPDATE, () => updateBar());
@@ -43,7 +41,7 @@ let _volHideTimer = 0;
  * @param {Element|null} [el] — élément #vol ; résolu via getElementById si omis.
  */
 export function updateVolSlider(el) {
-  const vel = (el instanceof Element) ? el : document.getElementById('vol');
+  const vel = el instanceof Element ? el : document.getElementById('vol');
   if (!vel) return;
   const pct = Math.round(+vel.value * 100);
   vel.style.background = `linear-gradient(to right, var(--g) ${pct}%, var(--bg5) ${pct}%)`;
@@ -60,14 +58,14 @@ export function updateVolSlider(el) {
 
 function _syncVolIcon(vol) {
   const muted = vol <= 0;
-  const low   = vol > 0 && vol < 0.5;
+  const low = vol > 0 && vol < 0.5;
   const w1 = document.getElementById('vol-wave1');
   const w2 = document.getElementById('vol-wave2');
   const x1 = document.getElementById('vol-x1');
   const x2 = document.getElementById('vol-x2');
   const btn = document.getElementById('btn-vol-mute');
   if (w1) w1.style.display = muted ? 'none' : '';
-  if (w2) w2.style.display = (muted || low) ? 'none' : '';
+  if (w2) w2.style.display = muted || low ? 'none' : '';
   if (x1) x1.style.display = muted ? '' : 'none';
   if (x2) x2.style.display = muted ? '' : 'none';
   if (btn) {
@@ -92,7 +90,10 @@ const _mqRafMap = new Map();
 export function setupMarquee(container, text) {
   if (!container) return;
   const prevRaf = _mqRafMap.get(container);
-  if (prevRaf !== undefined) { cancelAnimationFrame(prevRaf); _mqRafMap.delete(container); }
+  if (prevRaf !== undefined) {
+    cancelAnimationFrame(prevRaf);
+    _mqRafMap.delete(container);
+  }
   container.textContent = '';
   const span = document.createElement('span');
   span.className = 'mq';
@@ -104,9 +105,9 @@ export function setupMarquee(container, text) {
     const overflow = span.scrollWidth - container.offsetWidth;
     if (overflow > 4) {
       const shift = -(overflow + 24);
-      const dur   = Math.max(6, Math.abs(shift) / 38);
+      const dur = Math.max(6, Math.abs(shift) / 38);
       span.style.setProperty('--mq-shift', `${shift}px`);
-      span.style.setProperty('--mq-dur',   `${dur}s`);
+      span.style.setProperty('--mq-dur', `${dur}s`);
       span.classList.add('mq-on');
     }
   });
@@ -149,13 +150,25 @@ export function updateBar() {
   document.title = `${t.name} — ${t.artistFull || t.artist || i18n('unknown_artist')} · LibreFlow`;
   // UX-5 : mettre à jour la région ARIA live pour les lecteurs d'écran
   const _npLive = document.getElementById('np-live');
-  if (_npLive) _npLive.textContent = `${t.name} — ${t.artistFull || t.artist || i18n('unknown_artist')}`;
+  if (_npLive)
+    _npLive.textContent = `${t.name} — ${t.artistFull || t.artist || i18n('unknown_artist')}`;
   setupMarquee(document.getElementById('pl-n'), t.name);
   setupMarquee(document.getElementById('pl-a'), t.artistFull || t.artist || i18n('unknown_artist'));
 
-  const img = document.getElementById('pl-img'), em = document.getElementById('pl-em');
-  if (t.art) { img.src = t.art; img.alt = t.album || t.name || ''; img.style.display = 'block'; em.style.display = 'none'; animateArtChange(); }
-  else       { img.alt = ''; img.style.display = 'none'; em.style.display = ''; em.innerHTML = extEmoji(t.ext); }
+  const img = document.getElementById('pl-img'),
+    em = document.getElementById('pl-em');
+  if (t.art) {
+    img.src = t.art;
+    img.alt = t.album || t.name || '';
+    img.style.display = 'block';
+    em.style.display = 'none';
+    animateArtChange();
+  } else {
+    img.alt = '';
+    img.style.display = 'none';
+    em.style.display = '';
+    em.innerHTML = extEmoji(t.ext);
+  }
 
   const liked = get('liked');
   const _isLikedNow = liked instanceof Set ? liked.has(t.id) : false;
@@ -184,39 +197,51 @@ export function updateBar() {
   // Phase 2 : opérations lourdes — différées après le premier paint.
   // RACE-3 FIX : re-lire curIdx depuis le store — la closure `t` peut être périmée
   // si un changement de piste rapide survient entre Phase 1 et Phase 2.
-  requestAnimationFrame(() => setTimeout(() => {
-    const _p2Idx = get('curIdx');
-    if (_p2Idx < 0) return;
-    const _p2Tracks = get('tracks');
-    const t = _p2Tracks[_p2Idx]; // re-read — may differ from Phase-1 t if track changed
-    if (!t) return;
-    if (t.artColor) applyArtColor(t.artColor);
-    else if (t.art) extractColor(t.art).then(c => { if (c) { t.artColor = c; applyArtColor(c); } }).catch(e => console.warn('[playerbar:extractColor]', e));
-    else clearArtColor();
-    _updateArtBlur(t.art || null);
-    if (cinemaOpen) updateCinema();
-    if (_shouldNotify) {
-      // ART-IDB : base64 généré lazily depuis _artBuf (fire-and-forget, pas bloquant)
-      (async () => {
-        let artUrl = null;
-        if (t._b64) {
-          artUrl = t._b64;
-        } else if (t.art && t.art.startsWith('data:')) {
-          artUrl = t.art;
-        } else if (t._artBuf) {
-          artUrl = await new Promise(res => {
-            const fr = new FileReader();
-            fr.onload = () => res(fr.result);
-            fr.readAsDataURL(new Blob([t._artBuf], { type: t._artMime || 'image/jpeg' }));
-          });
-          t._b64 = artUrl; // cache pour le prochain changement de piste
-        }
-        invoke('notify_track', { data: { title: t.name, artist: t.artistFull || t.artist || '', art: artUrl } }).catch(e => console.warn('[playerbar:notify_track]', e));
-      })();
-      updateMediaSession(t);
-    }
-    if (queueOpen) renderQueue();
-  }, 0));
+  requestAnimationFrame(() =>
+    setTimeout(() => {
+      const _p2Idx = get('curIdx');
+      if (_p2Idx < 0) return;
+      const _p2Tracks = get('tracks');
+      const t = _p2Tracks[_p2Idx]; // re-read — may differ from Phase-1 t if track changed
+      if (!t) return;
+      if (t.artColor) applyArtColor(t.artColor);
+      else if (t.art)
+        extractColor(t.art)
+          .then((c) => {
+            if (c) {
+              t.artColor = c;
+              applyArtColor(c);
+            }
+          })
+          .catch((e) => console.warn('[playerbar:extractColor]', e));
+      else clearArtColor();
+      _updateArtBlur(t.art || null);
+      if (cinemaOpen) updateCinema();
+      if (_shouldNotify) {
+        // ART-IDB : base64 généré lazily depuis _artBuf (fire-and-forget, pas bloquant)
+        (async () => {
+          let artUrl = null;
+          if (t._b64) {
+            artUrl = t._b64;
+          } else if (t.art && t.art.startsWith('data:')) {
+            artUrl = t.art;
+          } else if (t._artBuf) {
+            artUrl = await new Promise((res) => {
+              const fr = new FileReader();
+              fr.onload = () => res(fr.result);
+              fr.readAsDataURL(new Blob([t._artBuf], { type: t._artMime || 'image/jpeg' }));
+            });
+            t._b64 = artUrl; // cache pour le prochain changement de piste
+          }
+          invoke('notify_track', {
+            data: { title: t.name, artist: t.artistFull || t.artist || '', art: artUrl }
+          }).catch((e) => console.warn('[playerbar:notify_track]', e));
+        })();
+        updateMediaSession(t);
+      }
+      if (queueOpen) renderQueue();
+    }, 0)
+  );
 }
 
 // ── Next-preview mini-card ────────────────────────────────────────────────────
@@ -228,10 +253,10 @@ export function updateBar() {
 let _nextPreviewInit = false;
 export function initNextPreview() {
   if (_nextPreviewInit) return; // idempotent : evite duplication sur HMR/re-init
-  const btn      = document.getElementById('btn-next');
-  const artEl    = document.getElementById('np-art');
-  const emEl     = document.getElementById('np-em');
-  const nameEl   = btn?.querySelector('.np-name');
+  const btn = document.getElementById('btn-next');
+  const artEl = document.getElementById('np-art');
+  const emEl = document.getElementById('np-em');
+  const nameEl = btn?.querySelector('.np-name');
   const artistEl = btn?.querySelector('.np-artist');
   if (!btn || !artEl || !emEl || !nameEl || !artistEl) return;
   _nextPreviewInit = true;
@@ -239,18 +264,18 @@ export function initNextPreview() {
   btn.addEventListener('mouseenter', () => {
     const t = peekNext();
     if (!t) return;
-    nameEl.textContent   = t.name || '';
+    nameEl.textContent = t.name || '';
     artistEl.textContent = t.artistFull || t.artist || '';
     if (t.art) {
-      artEl.src           = t.art;
+      artEl.src = t.art;
       artEl.style.display = '';
-      emEl.textContent    = '';
-      emEl.style.display  = 'none';
+      emEl.textContent = '';
+      emEl.style.display = 'none';
     } else {
-      artEl.src           = '';
+      artEl.src = '';
       artEl.style.display = 'none';
-      emEl.textContent    = extEmoji(t.ext);
-      emEl.style.display  = '';
+      emEl.textContent = extEmoji(t.ext);
+      emEl.style.display = '';
     }
   });
 }

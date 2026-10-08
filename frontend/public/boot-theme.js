@@ -13,11 +13,15 @@
     var mode = localStorage.getItem('lf-mode');
     if (mode !== 'light' && mode !== 'dark') mode = 'dark';
     document.documentElement.setAttribute('data-mode', mode);
-  } catch (e) { /* localStorage indisponible — fallback statique (CSS: dark par défaut) */ }
+  } catch (e) {
+    /* localStorage indisponible — fallback statique (CSS: dark par défaut) */
+  }
   try {
     var theme = localStorage.getItem('lf-theme');
     var VALID = ['green', 'blue', 'purple', 'red', 'orange', 'pink', 'cyan'];
     if (VALID.indexOf(theme) === -1) theme = 'blue';
     document.documentElement.setAttribute('data-theme', theme);
-  } catch (e) { /* localStorage indisponible — fallback statique (CSS: blue par défaut) */ }
+  } catch (e) {
+    /* localStorage indisponible — fallback statique (CSS: blue par défaut) */
+  }
 })();

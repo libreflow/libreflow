@@ -34,8 +34,8 @@ export function fmt(s) {
 export function fmtd(s) {
   if ((!s && s !== 0) || !isFinite(s)) return '–:––';
   s = Math.round(s);
-  const h  = Math.floor(s / 3600);
-  const m  = Math.floor((s % 3600) / 60);
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
   const ss = s % 60;
   if (h > 0) return h + ':' + String(m).padStart(2, '0') + ':' + String(ss).padStart(2, '0');
   return m + ':' + String(ss).padStart(2, '0');
@@ -49,7 +49,8 @@ export function extEmoji(e) {
 /** Format a duration in seconds as a human-readable string ("Xh Ym", "Xm", or "Xs"). */
 export function fmtDuration(secs) {
   if (!secs || secs < 60) return `${Math.round(secs || 0)}s`;
-  const h = Math.floor(secs / 3600), m = Math.floor((secs % 3600) / 60);
+  const h = Math.floor(secs / 3600),
+    m = Math.floor((secs % 3600) / 60);
   return h ? `${h}h ${m}m` : `${m}m`;
 }
 
@@ -59,8 +60,8 @@ export function normTag(s) {
   if (!s) return '';
   return s
     .replace(/[\u200B\u200C\u200D\uFEFF\u00AD]/g, '') // zero-width / soft-hyphen / BOM
-    .replace(/\s+/g, ' ')   // collapse whitespace
-    .normalize('NFC')        // Unicode canonical form
+    .replace(/\s+/g, ' ') // collapse whitespace
+    .normalize('NFC') // Unicode canonical form
     .trim();
 }
 
@@ -68,7 +69,7 @@ export function normTag(s) {
  *  Note : les faux-1970 (TDRC="1970-01-01T00:00:00") sont filtrés en amont dans tags.js. */
 export function validYear(y) {
   const n = Number(y);
-  return (Number.isInteger(n) && n >= 1900 && n <= 2100) ? n : null;
+  return Number.isInteger(n) && n >= 1900 && n <= 2100 ? n : null;
 }
 
 /** Retourne true si le chemin est safe (pas de .. ni de segments ., pas d'octets
@@ -78,7 +79,7 @@ export function isSafePath(p) {
   if (p.includes('\0')) return false;
   if (/[\x00-\x1f]/.test(p)) return false;
   const segs = p.replace(/\\/g, '/').split('/');
-  if (segs.some(s => s === '..' || s === '.')) return false;
+  if (segs.some((s) => s === '..' || s === '.')) return false;
   return true;
 }
 
@@ -88,8 +89,8 @@ export function fmtArtists(raw) {
   if (!raw) return '';
   const out = [];
   for (const part of normTag(raw).split(/\s*;\s*/)) {
-    const segs = part.split('/').map(x => x.trim());
-    if (segs.length > 1 && segs.every(x => x.length >= 3)) out.push(...segs);
+    const segs = part.split('/').map((x) => x.trim());
+    if (segs.length > 1 && segs.every((x) => x.length >= 3)) out.push(...segs);
     else out.push(part.trim());
   }
   return out.filter(Boolean).join(', ');

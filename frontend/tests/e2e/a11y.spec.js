@@ -18,7 +18,7 @@ import { seedScript } from '../visual/seed.js';
 async function waitForRealLibrary(page) {
   await page.waitForSelector('#tlist .tr[data-track-id]', {
     state: 'attached',
-    timeout: 20_000,
+    timeout: 20_000
   });
   await page.waitForTimeout(400);
   // Wait for boot toasts to clear so they don't interfere with focus tests.
@@ -27,11 +27,11 @@ async function waitForRealLibrary(page) {
       () => {
         const layer = document.getElementById('toast-shelf');
         const stack = document.querySelector('lf-toast-stack');
-        const stackEmpty = !stack?.shadowRoot ||
-          stack.shadowRoot.querySelectorAll('.t-item').length === 0;
+        const stackEmpty =
+          !stack?.shadowRoot || stack.shadowRoot.querySelectorAll('.t-item').length === 0;
         return (!layer || layer.children.length === 0) && stackEmpty;
       },
-      { timeout: 6000 },
+      { timeout: 6000 }
     )
     .catch(() => {});
   await page.waitForTimeout(200);
@@ -49,7 +49,7 @@ async function openSettingsPanel(page) {
   // Wait for the 50ms setTimeout in openSettings() that moves focus inside the panel.
   await page.waitForFunction(
     () => document.getElementById('settings-box')?.contains(document.activeElement) ?? false,
-    { timeout: 2000 },
+    { timeout: 2000 }
   );
 }
 
@@ -94,22 +94,22 @@ test.describe('settings panel — focus management', () => {
     // _doClose fires after the 160ms GSAP animation. openSettings() stores
     // #tbt-burger as the restore target when opened from the burger panel
     // (WAI-ARIA fallback: menu items live in display:none when the panel closes).
-    await page.waitForFunction(
-      () => document.activeElement?.id === 'tbt-burger',
-      { timeout: 1000 },
-    );
+    await page.waitForFunction(() => document.activeElement?.id === 'tbt-burger', {
+      timeout: 1000
+    });
   });
 
-  test('close button closes the panel and restores focus to the burger button', async ({ page }) => {
+  test('close button closes the panel and restores focus to the burger button', async ({
+    page
+  }) => {
     await openSettingsPanel(page);
 
     await page.locator('.set-close[data-action="close-settings"]').click();
 
     await expect(page.locator('#settings-panel')).not.toBeVisible();
-    await page.waitForFunction(
-      () => document.activeElement?.id === 'tbt-burger',
-      { timeout: 1000 },
-    );
+    await page.waitForFunction(() => document.activeElement?.id === 'tbt-burger', {
+      timeout: 1000
+    });
   });
 });
 
@@ -167,9 +167,7 @@ test.describe('player controls — aria states', () => {
     await expect(playBtn).toHaveAttribute('aria-pressed', 'false');
 
     await playBtn.focus();
-    const isFocused = await page.evaluate(
-      () => document.activeElement?.id === 'pcplay',
-    );
+    const isFocused = await page.evaluate(() => document.activeElement?.id === 'pcplay');
     expect(isFocused).toBe(true);
   });
 });

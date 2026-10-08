@@ -11,18 +11,18 @@
 //   initRG, setReplayGain, setRGTarget, analyzeAndApplyRG, applyRGGain
 
 import { eqCtx, eqSource, eqNodes, audioOutGain, initEQ } from './eq.js';
-import { CFG }                               from './cfg.js';
-import { get }                               from './store.js';
-import { emit, EVENTS }                       from './bus.js';
+import { CFG } from './cfg.js';
+import { get } from './store.js';
+import { emit, EVENTS } from './bus.js';
 import { saveCfg } from './cfgsave.js';
 import { invoke } from './ipc.js';
 
 // ── État (exporté comme live bindings) ────────────────────────
-export let rgEnabled    = true;
+export let rgEnabled = true;
 export let rgTargetLUFS = -14;
 
 // ── État interne ──────────────────────────────────────────────
-let rgGainNode   = null;
+let rgGainNode = null;
 let _rgAnalysisId = 0;
 
 const RG_MAX_BYTES = CFG.RG_MAX_FILE_BYTES; // 30 Mo max pour l'analyse RG
@@ -30,11 +30,13 @@ const RG_MAX_BYTES = CFG.RG_MAX_FILE_BYTES; // 30 Mo max pour l'analyse RG
 // ── Boot / restauration ───────────────────────────────────────
 
 /** Annule toute analyse RG en cours (appelé par clearCrossfadeTimers). */
-export function cancelRgAnalysis() { _rgAnalysisId++; }
+export function cancelRgAnalysis() {
+  _rgAnalysisId++;
+}
 
 /** Restaure l'état RG depuis le cfg persisté — aucun side-effect DOM. */
 export function initRgState(enabled, lufs) {
-  rgEnabled    = !!enabled;
+  rgEnabled = !!enabled;
   rgTargetLUFS = lufs ?? -14;
 }
 
@@ -52,10 +54,16 @@ export function initRG() {
     rgGainNode = eqCtx.createGain();
     rgGainNode.gain.setTargetAtTime(1.0, eqCtx.currentTime, 0.02);
     // Recâbler : déconnecter eqSource → audioOutGain, puis eqSource → rgGainNode → audioOutGain
-    try { eqSource.disconnect(audioOutGain ?? eqNodes[0]); } catch(e) { console.warn('[replaygain:disconnect]', e); }
+    try {
+      eqSource.disconnect(audioOutGain ?? eqNodes[0]);
+    } catch (e) {
+      console.warn('[replaygain:disconnect]', e);
+    }
     eqSource.connect(rgGainNode);
     rgGainNode.connect(audioOutGain ?? eqNodes[0]);
-  } catch(e) { console.warn('[RG init]', e); }
+  } catch (e) {
+    console.warn('[RG init]', e);
+  }
 }
 
 // ── Contrôle utilisateur ──────────────────────────────────────
@@ -67,7 +75,7 @@ export function setReplayGain(enabled) {
     analyzeAndApplyRG();
   } else {
     if (rgGainNode && eqCtx) rgGainNode.gain.setTargetAtTime(1.0, eqCtx.currentTime, 0.1);
-    else if (rgGainNode)     rgGainNode.gain.setValueAtTime(1.0, rgGainNode.context.currentTime);
+    else if (rgGainNode) rgGainNode.gain.setValueAtTime(1.0, rgGainNode.context.currentTime);
   }
   saveCfg();
 }
@@ -87,7 +95,11 @@ export async function analyzeAndApplyRG() {
   if (!rgEnabled || _curIdx < 0) return;
   const t = get('tracks')[_curIdx];
   if (!t) return;
-  if (t.rgGain !== undefined && Number.isFinite(t.rgGain)) { initRG(); applyRGGain(t.rgGain); return; }
+  if (t.rgGain !== undefined && Number.isFinite(t.rgGain)) {
+    initRG();
+    applyRGGain(t.rgGain);
+    return;
+  }
 
   const myId = ++_rgAnalysisId;
 
@@ -108,12 +120,23 @@ export async function analyzeAndApplyRG() {
     if (_rgAnalysisId !== myId) return;
 
     const _dur = isFinite(t.duration) && t.duration > 0 ? t.duration : 30;
-    const _probeCtx = new OfflineAudioContext(2, Math.round(44100 * Math.min(CFG.RG_ANALYSIS_SECS, _dur)), 44100);
-    let srcBuf      = await _probeCtx.decodeAudioData(arrayBuf);
+    const _probeCtx = new OfflineAudioContext(
+      2,
+      Math.round(44100 * Math.min(CFG.RG_ANALYSIS_SECS, _dur)),
+      44100
+    );
+    let srcBuf = await _probeCtx.decodeAudioData(arrayBuf);
     arrayBuf = null;
     const nChannels = srcBuf.numberOfChannels > 1 ? 2 : 1;
-    const offline   = new OfflineAudioContext(nChannels, Math.round(44100 * Math.min(CFG.RG_ANALYSIS_SECS, _dur)), 44100);
-    if (_rgAnalysisId !== myId) { srcBuf = null; return; }
+    const offline = new OfflineAudioContext(
+      nChannels,
+      Math.round(44100 * Math.min(CFG.RG_ANALYSIS_SECS, _dur)),
+      44100
+    );
+    if (_rgAnalysisId !== myId) {
+      srcBuf = null;
+      return;
+    }
 
     const nch = nChannels;
 
@@ -137,7 +160,10 @@ export async function analyzeAndApplyRG() {
     const rendered = await offline.startRendering();
     src.disconnect();
     src.buffer = null;
-    if (_rgAnalysisId !== myId) { srcBuf = null; return; }
+    if (_rgAnalysisId !== myId) {
+      srcBuf = null;
+      return;
+    }
 
     let sumSq = 0;
     for (let ch = 0; ch < nch; ch++) {
@@ -145,15 +171,18 @@ export async function analyzeAndApplyRG() {
       for (let i = 0; i < chData.length; i++) sumSq += chData[i] * chData[i];
     }
     const meanSq = sumSq / (rendered.length * nch);
-    const lufs     = meanSq > 0 ? -0.691 + 10 * Math.log10(meanSq) : -70;
-    const gainDB   = rgTargetLUFS - lufs;
-    t.rgGain       = Math.max(0.1, Math.min(3.162, Math.pow(10, gainDB / 20)));
-    t.rgGainDB     = 20 * Math.log10(t.rgGain);
+    const lufs = meanSq > 0 ? -0.691 + 10 * Math.log10(meanSq) : -70;
+    const gainDB = rgTargetLUFS - lufs;
+    t.rgGain = Math.max(0.1, Math.min(3.162, Math.pow(10, gainDB / 20)));
+    t.rgGainDB = 20 * Math.log10(t.rgGain);
     let _peak = 0;
     try {
       for (let ch = 0; ch < nch; ch++) {
         const _pcm = srcBuf.getChannelData(ch);
-        for (let i = 0; i < _pcm.length; i++) { const a = Math.abs(_pcm[i]); if (a > _peak) _peak = a; }
+        for (let i = 0; i < _pcm.length; i++) {
+          const a = Math.abs(_pcm[i]);
+          if (a > _peak) _peak = a;
+        }
       }
       t.rgPeak = Math.min(1.0, _peak);
     } finally {
@@ -161,7 +190,7 @@ export async function analyzeAndApplyRG() {
     }
     applyRGGain(t.rgGain);
     emit(EVENTS.TRACK_SAVE_REQUEST, { track: t }); // library.js écoute et persiste en IDB
-  } catch(e) {
+  } catch (e) {
     console.warn('[replaygain] analyzeAndApplyRG failed (format non décodable ou interrompu):', e);
     if (_rgAnalysisId === myId) {
       t.rgGain = 1.0;

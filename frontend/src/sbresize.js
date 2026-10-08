@@ -16,17 +16,19 @@
 // Dépendances autorisées (§6) : store.js, cfgsave.js.
 
 import { get, set } from './store.js';
-import { saveCfg }  from './cfgsave.js';
+import { saveCfg } from './cfgsave.js';
 
-const SB_MIN     = 200;
-const SB_MAX     = 420;
+const SB_MIN = 200;
+const SB_MAX = 420;
 const SB_DEFAULT = 260;
 const STEP = 8;
 
 let _handle = null;
 let _mqCompact = null;
 
-function _clamp(px) { return Math.max(SB_MIN, Math.min(SB_MAX, Math.round(px))); }
+function _clamp(px) {
+  return Math.max(SB_MIN, Math.min(SB_MAX, Math.round(px)));
+}
 
 /** Applique la largeur au layout (inline --sb) + reflète aria-valuenow. */
 function _apply(px) {
@@ -57,10 +59,10 @@ function _currentWidth() {
 
 function _onKeyDown(e) {
   let next = null;
-  if      (e.key === 'ArrowLeft')  next = _currentWidth() - STEP;
+  if (e.key === 'ArrowLeft') next = _currentWidth() - STEP;
   else if (e.key === 'ArrowRight') next = _currentWidth() + STEP;
-  else if (e.key === 'Home')       next = SB_MIN;
-  else if (e.key === 'End')        next = SB_MAX;
+  else if (e.key === 'Home') next = SB_MIN;
+  else if (e.key === 'End') next = SB_MAX;
   else return;
   e.preventDefault();
   _setWidth(next);
@@ -74,16 +76,16 @@ function _onPointerDown(e) {
   _handle.setPointerCapture(e.pointerId);
   document.body.classList.add('sb-resizing');
 
-  const onMove = ev => _setWidth(startW + (ev.clientX - startX), false);
+  const onMove = (ev) => _setWidth(startW + (ev.clientX - startX), false);
   const onUp = () => {
     _handle.removeEventListener('pointermove', onMove);
-    _handle.removeEventListener('pointerup',     onUp);
+    _handle.removeEventListener('pointerup', onUp);
     _handle.removeEventListener('pointercancel', onUp);
     document.body.classList.remove('sb-resizing');
     saveCfg(); // persistance une seule fois en fin de geste
   };
   _handle.addEventListener('pointermove', onMove);
-  _handle.addEventListener('pointerup',     onUp);
+  _handle.addEventListener('pointerup', onUp);
   _handle.addEventListener('pointercancel', onUp);
 }
 
@@ -100,8 +102,8 @@ export function initSbResize() {
   _apply(Number.isFinite(get('sbWidth')) ? get('sbWidth') : null);
 
   h.addEventListener('pointerdown', _onPointerDown);
-  h.addEventListener('keydown',     _onKeyDown);
-  h.addEventListener('dblclick',    () => _setWidth(null));
+  h.addEventListener('keydown', _onKeyDown);
+  h.addEventListener('dblclick', () => _setWidth(null));
   // Franchissement du breakpoint compact : retirer/ré-appliquer l'override
   _mqCompact.addEventListener('change', () => _apply(get('sbWidth')));
 }

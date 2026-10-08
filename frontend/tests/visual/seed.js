@@ -24,15 +24,15 @@ export function seedScript() {
   window.__TAURI__ = {
     core: {
       invoke: async () => [],
-      convertFileSrc: (p) => p,
+      convertFileSrc: (p) => p
     },
     event: { listen: async () => () => {} },
     window: {
       getCurrentWindow: () => ({
         listen: async () => () => {},
-        onCloseRequested: async () => () => {},
-      }),
-    },
+        onCloseRequested: async () => () => {}
+      })
+    }
   };
 
   // ── (b) Seed IndexedDB `lp4` v5 ───────────────────────────────────────────
@@ -41,11 +41,15 @@ export function seedScript() {
     const open = indexedDB.open('lp4', 5);
     open.onupgradeneeded = () => {
       const db = open.result;
-      if (!db.objectStoreNames.contains('tracks'))    db.createObjectStore('tracks',    { keyPath: 'id' });
-      if (!db.objectStoreNames.contains('cfg'))       db.createObjectStore('cfg');               // no keyPath
-      if (!db.objectStoreNames.contains('playlists')) db.createObjectStore('playlists', { keyPath: 'id' });
-      if (!db.objectStoreNames.contains('playlog'))   db.createObjectStore('playlog',   { keyPath: 'ts' });
-      if (!db.objectStoreNames.contains('imports'))   db.createObjectStore('imports',   { keyPath: 'id' });
+      if (!db.objectStoreNames.contains('tracks'))
+        db.createObjectStore('tracks', { keyPath: 'id' });
+      if (!db.objectStoreNames.contains('cfg')) db.createObjectStore('cfg'); // no keyPath
+      if (!db.objectStoreNames.contains('playlists'))
+        db.createObjectStore('playlists', { keyPath: 'id' });
+      if (!db.objectStoreNames.contains('playlog'))
+        db.createObjectStore('playlog', { keyPath: 'ts' });
+      if (!db.objectStoreNames.contains('imports'))
+        db.createObjectStore('imports', { keyPath: 'id' });
     };
     open.onsuccess = () => {
       const db = open.result;
@@ -62,39 +66,42 @@ export function seedScript() {
       const now = Date.now();
       for (let i = 0; i < 200; i++) {
         tracksStore.put({
-          id:         't' + i,
-          name:       'Titre ' + i,
-          artist:     'Artiste ' + (i % 25),
+          id: 't' + i,
+          name: 'Titre ' + i,
+          artist: 'Artiste ' + (i % 25),
           artistFull: 'Artiste ' + (i % 25),
-          album:      'Album ' + (i % 40),
-          ext:        'mp3',
-          path:       '/m/song' + i + '.mp3',
-          duration:   180 + i,
-          dateAdded:  now - i * 60000,
-          artColor:   null,
-          noArt:      true,
-          genre:      ['Rock', 'Jazz', 'Pop', 'Electro', 'Classique'][i % 5],
-          year:       2000 + (i % 25),
-          track:      (i % 12) + 1,
+          album: 'Album ' + (i % 40),
+          ext: 'mp3',
+          path: '/m/song' + i + '.mp3',
+          duration: 180 + i,
+          dateAdded: now - i * 60000,
+          artColor: null,
+          noArt: true,
+          genre: ['Rock', 'Jazz', 'Pop', 'Electro', 'Classique'][i % 5],
+          year: 2000 + (i % 25),
+          track: (i % 12) + 1
         });
       }
 
       // Minimal cfg — boot() takes the library branch only when a cfg record
       // exists. view 'all' renders the flat track list (#tlist) in #vlib.
-      txn.objectStore('cfg').put({
-        view:        'all',
-        sort:        'az',
-        lang:        'fr',
-        theme:       'blue',
-        displayMode: 'dark',
-        dynColor:    true,
-        volume:      1,
-      }, 'state');
+      txn.objectStore('cfg').put(
+        {
+          view: 'all',
+          sort: 'az',
+          lang: 'fr',
+          theme: 'blue',
+          displayMode: 'dark',
+          dynColor: true,
+          volume: 1
+        },
+        'state'
+      );
     };
   };
 
   const del = indexedDB.deleteDatabase('lp4');
   del.onsuccess = reseed;
-  del.onerror   = reseed;
+  del.onerror = reseed;
   del.onblocked = reseed;
 }

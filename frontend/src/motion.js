@@ -25,9 +25,9 @@
 //   tl.to('#pl-title', { y: 0, opacity: 1, duration: 0.3 })
 //     .to('#pl-artist', { y: 0, opacity: 1, duration: 0.3 }, '-=0.15');
 
-import { gsap }       from 'gsap';
+import { gsap } from 'gsap';
 import { CustomEase } from 'gsap/CustomEase';
-import { CFG }        from './cfg.js';
+import { CFG } from './cfg.js';
 
 // Register once at module load — registerPlugin is idempotent and tree-shake safe.
 gsap.registerPlugin(CustomEase);
@@ -35,9 +35,10 @@ gsap.registerPlugin(CustomEase);
 // ── Reduced motion ───────────────────────────────────────────────────────────
 // Respect OS pref. Re-read on each tween call so a runtime change (rare but
 // possible via DevTools or accessibility tooling) takes effect immediately.
-const _rmQuery = typeof window !== 'undefined' && typeof window.matchMedia === 'function'
-  ? window.matchMedia('(prefers-reduced-motion: reduce)')
-  : null;
+const _rmQuery =
+  typeof window !== 'undefined' && typeof window.matchMedia === 'function'
+    ? window.matchMedia('(prefers-reduced-motion: reduce)')
+    : null;
 
 // Task 10 : réglage in-app à 3 états (Système/Complètes/Réduites), défaut 'full'.
 // Bug produit : sous Windows avec "Effets d'animation" désactivé, WebView2 rapporte
@@ -65,7 +66,7 @@ export function setMotionPref(pref) {
 /** @returns {boolean} */
 export function prefersReducedMotion() {
   if (_motionPref === 'reduce') return true;
-  if (_motionPref === 'full')   return false;
+  if (_motionPref === 'full') return false;
   return !!(_rmQuery && _rmQuery.matches); // 'system' — consulte l'OS
 }
 
@@ -91,16 +92,16 @@ export function applyMotionAttr() {
 // ── Named eases ──────────────────────────────────────────────────────────────
 // CustomEase paths use SVG cubic bezier syntax: M0,0 C<cp1x>,<cp1y> <cp2x>,<cp2y> 1,1
 // Calibrated for premium player UI: snappy in, smooth out, no overshoot on text.
-CustomEase.create('lf-premium',   'M0,0 C0.22,1 0.36,1 1,1');         // gentle, native-feel
-CustomEase.create('lf-snap',      'M0,0 C0.4,0 0.2,1 1,1');           // quick decision (clicks)
-CustomEase.create('lf-overshoot', 'M0,0 C0.34,1.56 0.64,1 1,1');      // playful overshoot (icons)
+CustomEase.create('lf-premium', 'M0,0 C0.22,1 0.36,1 1,1'); // gentle, native-feel
+CustomEase.create('lf-snap', 'M0,0 C0.4,0 0.2,1 1,1'); // quick decision (clicks)
+CustomEase.create('lf-overshoot', 'M0,0 C0.34,1.56 0.64,1 1,1'); // playful overshoot (icons)
 
 /** Re-exported ease tokens. Use these, never string literals at call sites. */
 export const eases = Object.freeze({
-  PREMIUM:   'lf-premium',
-  SNAP:      'lf-snap',
+  PREMIUM: 'lf-premium',
+  SNAP: 'lf-snap',
   OVERSHOOT: 'lf-overshoot',
-  LINEAR:    'none',
+  LINEAR: 'none'
 });
 
 // ── Core API ─────────────────────────────────────────────────────────────────
@@ -185,12 +186,21 @@ const STAGGER_CAP = CFG.STAGGER_CAP;
  * @param {NodeList|Element[]} items
  */
 export function staggerIn(items) {
-  const els  = Array.from(items).slice(0, STAGGER_CAP);
+  const els = Array.from(items).slice(0, STAGGER_CAP);
   const rest = Array.from(items).slice(STAGGER_CAP);
   kill(els);
   if (rest.length) gsap.set(rest, { opacity: 1 });
-  if (prefersReducedMotion()) { gsap.set(els, { opacity: 1 }); return; }
-  gsap.from(els, { opacity: 0, duration: 0.20, ease: eases.PREMIUM, stagger: 0.018, clearProps: 'opacity' });
+  if (prefersReducedMotion()) {
+    gsap.set(els, { opacity: 1 });
+    return;
+  }
+  gsap.from(els, {
+    opacity: 0,
+    duration: 0.2,
+    ease: eases.PREMIUM,
+    stagger: 0.018,
+    clearProps: 'opacity'
+  });
 }
 
 // ── View transition preset ────────────────────────────────────────────────────
@@ -238,7 +248,7 @@ export function transitionViews(prev, next) {
       gsap.set(prev, { clearProps: 'position,inset,zIndex,pointerEvents,opacity' });
       prev.classList.remove('on');
       prev.style.display = '';
-    },
+    }
   });
 
   // Enter: new view fades in with upward lift (longer)

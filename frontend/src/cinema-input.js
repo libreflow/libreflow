@@ -18,13 +18,15 @@
 //   showCinemaControls()        -- ex-_showControls, consommé par cinema.js (et T24)
 
 const CINEMA_CONTROLS_HIDE_MS = 3000; // délai avant masquage des contrôles
-const HEART_BURST_MS          =  750; // durée de la particule cœur
+const HEART_BURST_MS = 750; // durée de la particule cœur
 
-let _deps           = null;
+let _deps = null;
 let cinemaHideTimer = null;
-let _heartTimer     = null;
+let _heartTimer = null;
 
-export function initCinemaInput(deps) { _deps = deps; }
+export function initCinemaInput(deps) {
+  _deps = deps;
+}
 
 // ── Double-clic pochette → like/unlike + particule cœur ──────
 function _onArtDblClick(e) {
@@ -40,12 +42,15 @@ function _onArtDblClick(e) {
   heart.className = 'cin-heart-burst';
   heart.textContent = '❤';
   heart.style.left = cx + 'px';
-  heart.style.top  = cy + 'px';
+  heart.style.top = cy + 'px';
   overlay.appendChild(heart);
   // FIX (Task 6) : clearTimeout avant réassignation -- un double-double-clic rapide
   // laissait sinon le premier timer orphelin (heart déjà retiré par le second clic).
   if (_heartTimer) clearTimeout(_heartTimer);
-  _heartTimer = setTimeout(() => { heart.remove(); _heartTimer = null; }, HEART_BURST_MS);
+  _heartTimer = setTimeout(() => {
+    heart.remove();
+    _heartTimer = null;
+  }, HEART_BURST_MS);
 }
 
 // ── Raccourcis clavier globaux du mode cinéma ─────────────────
@@ -53,37 +58,56 @@ function _onCinKey(e) {
   if (!_deps.getCinemaOpen()) return;
   // Ignorer si focus sur un input/slider
   const _ct = e.target.tagName;
-  if (_ct === 'INPUT' || _ct === 'TEXTAREA' || _ct === 'SELECT' || e.target.isContentEditable) return;
+  if (_ct === 'INPUT' || _ct === 'TEXTAREA' || _ct === 'SELECT' || e.target.isContentEditable)
+    return;
   showCinemaControls(); // reset idle timer sur toute touche
   const audio = _deps.getAudio();
   switch (e.code) {
     case 'Space':
       e.preventDefault();
-      if (audio) { audio.paused ? audio.play().catch(() => {}) : audio.pause(); _deps.updateCinema(); }
+      if (audio) {
+        audio.paused ? audio.play().catch(() => {}) : audio.pause();
+        _deps.updateCinema();
+      }
       break;
     case 'ArrowLeft':
       e.preventDefault();
       // FIX (Task 6) : garde isFinite(duration) -- pas indispensable pour le clamp à 0,
       // mais symétrique et lisible avec ArrowRight (miroir volontaire).
-      if (audio && isFinite(audio.duration)) { audio.currentTime = Math.max(0, audio.currentTime - 5); }
+      if (audio && isFinite(audio.duration)) {
+        audio.currentTime = Math.max(0, audio.currentTime - 5);
+      }
       break;
     case 'ArrowRight':
       e.preventDefault();
       // FIX (Task 6) : sans cette garde, une durée NaN faisait `audio.duration || 0` -> 0,
       // et Math.min(0, currentTime+5) ramenait la lecture au tout début du morceau.
-      if (audio && isFinite(audio.duration)) { audio.currentTime = Math.min(audio.duration, audio.currentTime + 5); }
+      if (audio && isFinite(audio.duration)) {
+        audio.currentTime = Math.min(audio.duration, audio.currentTime + 5);
+      }
       break;
     case 'ArrowUp':
       e.preventDefault();
-      if (audio) { const v = Math.min(1, _deps.readVol() + 0.05); _deps.setMasterGain(v); _deps.syncVol(v); _deps.updateCinema(); }
+      if (audio) {
+        const v = Math.min(1, _deps.readVol() + 0.05);
+        _deps.setMasterGain(v);
+        _deps.syncVol(v);
+        _deps.updateCinema();
+      }
       break;
     case 'ArrowDown':
       e.preventDefault();
-      if (audio) { const v = Math.max(0, _deps.readVol() - 0.05); _deps.setMasterGain(v); _deps.syncVol(v); _deps.updateCinema(); }
+      if (audio) {
+        const v = Math.max(0, _deps.readVol() - 0.05);
+        _deps.setMasterGain(v);
+        _deps.syncVol(v);
+        _deps.updateCinema();
+      }
       break;
-    case 'KeyN': case 'KeyL':
+    case 'KeyN':
+    case 'KeyL':
       if (e.repeat) return; // même classe de race que KeyR : next() ré-entrant avant la fin
-                             // du changement de piste async désynchroniserait la file/radio.
+      // du changement de piste async désynchroniserait la file/radio.
       e.preventDefault();
       _deps.next();
       break;
@@ -108,7 +132,7 @@ function _onCinKey(e) {
       // radioActive de l'état visible/en file (radio.js).
       if (e.repeat) return;
       e.preventDefault();
-      _deps.toggleCinemaRadio().catch(err => console.warn('[cinema] radio toggle:', err));
+      _deps.toggleCinemaRadio().catch((err) => console.warn('[cinema] radio toggle:', err));
       break;
     case 'KeyC':
       // FIX (Task 6) : la tooltip promet « Fermer [C / Échap] » (i18n t_cinema_close) mais
@@ -137,12 +161,20 @@ function _onCinemaTrapKey(e) {
 
   if (e.key === 'Tab') {
     showCinemaControls(); // A11Y : rendre les contrôles visibles lors de la navigation clavier
-    const focusables = [...overlay.querySelectorAll(
-      'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
-    )].filter(el => { const r = el.getBoundingClientRect(); return r.width > 0 && r.height > 0; });
-    if (!focusables.length) { e.preventDefault(); return; }
-    const first  = focusables[0];
-    const last   = focusables[focusables.length - 1];
+    const focusables = [
+      ...overlay.querySelectorAll(
+        'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+      )
+    ].filter((el) => {
+      const r = el.getBoundingClientRect();
+      return r.width > 0 && r.height > 0;
+    });
+    if (!focusables.length) {
+      e.preventDefault();
+      return;
+    }
+    const first = focusables[0];
+    const last = focusables[focusables.length - 1];
     const active = document.activeElement;
     if (e.shiftKey && active === first) {
       e.preventDefault();
@@ -187,7 +219,11 @@ export function showCinemaControls() {
 function _isKeyboardFocusInOverlay(overlay) {
   const active = document.activeElement;
   if (!active || active === overlay || !overlay.contains(active)) return false;
-  try { return active.matches(':focus-visible'); } catch { return false; }
+  try {
+    return active.matches(':focus-visible');
+  } catch {
+    return false;
+  }
 }
 
 function _hideControls() {
@@ -217,14 +253,14 @@ function _onCinemaFocusIn() {
 export function attachCinemaInput(overlay) {
   overlay.removeEventListener('mousemove', _onCinemaMouseMove);
   overlay.addEventListener('mousemove', _onCinemaMouseMove);
-  overlay.removeEventListener('click',     _onCinemaMouseMove);
-  overlay.addEventListener('click',     _onCinemaMouseMove);
-  overlay.removeEventListener('wheel',     _onCinWheel);
-  overlay.addEventListener('wheel',     _onCinWheel, { passive: false });
-  overlay.removeEventListener('focusin',   _onCinemaFocusIn);
-  overlay.addEventListener('focusin',   _onCinemaFocusIn);
-  document.removeEventListener('keydown',  _onCinKey);
-  document.addEventListener('keydown',  _onCinKey);
+  overlay.removeEventListener('click', _onCinemaMouseMove);
+  overlay.addEventListener('click', _onCinemaMouseMove);
+  overlay.removeEventListener('wheel', _onCinWheel);
+  overlay.addEventListener('wheel', _onCinWheel, { passive: false });
+  overlay.removeEventListener('focusin', _onCinemaFocusIn);
+  overlay.addEventListener('focusin', _onCinemaFocusIn);
+  document.removeEventListener('keydown', _onCinKey);
+  document.addEventListener('keydown', _onCinKey);
   document.removeEventListener('keydown', _onCinemaTrapKey);
   document.addEventListener('keydown', _onCinemaTrapKey);
   // Double-clic pochette → like/unlike (removeEventListener d'abord : évite les listeners zombies)
@@ -235,13 +271,19 @@ export function attachCinemaInput(overlay) {
 
 export function detachCinemaInput(overlay) {
   overlay?.removeEventListener('mousemove', _onCinemaMouseMove);
-  overlay?.removeEventListener('click',     _onCinemaMouseMove);
-  overlay?.removeEventListener('wheel',     _onCinWheel);
-  overlay?.removeEventListener('focusin',   _onCinemaFocusIn);
-  document.removeEventListener('keydown',  _onCinKey);
-  document.removeEventListener('keydown',  _onCinemaTrapKey);
+  overlay?.removeEventListener('click', _onCinemaMouseMove);
+  overlay?.removeEventListener('wheel', _onCinWheel);
+  overlay?.removeEventListener('focusin', _onCinemaFocusIn);
+  document.removeEventListener('keydown', _onCinKey);
+  document.removeEventListener('keydown', _onCinemaTrapKey);
   document.querySelector('.cinema-art-wrap')?.removeEventListener('dblclick', _onArtDblClick);
-  if (cinemaHideTimer) { clearTimeout(cinemaHideTimer); cinemaHideTimer = null; }
-  if (_heartTimer) { clearTimeout(_heartTimer); _heartTimer = null; } // pas de setTimeout orphelin
-  overlay?.querySelectorAll('.cin-heart-burst').forEach(h => h.remove()); // retirer les cœurs restants
+  if (cinemaHideTimer) {
+    clearTimeout(cinemaHideTimer);
+    cinemaHideTimer = null;
+  }
+  if (_heartTimer) {
+    clearTimeout(_heartTimer);
+    _heartTimer = null;
+  } // pas de setTimeout orphelin
+  overlay?.querySelectorAll('.cin-heart-burst').forEach((h) => h.remove()); // retirer les cœurs restants
 }

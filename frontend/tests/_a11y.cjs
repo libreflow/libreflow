@@ -17,12 +17,16 @@ function readRepoFile(rel) {
 function flattenAlpha(fgHex, alpha, bgHex) {
   const fg = parseInt(fgHex.replace('#', ''), 16);
   const bg = parseInt(bgHex.replace('#', ''), 16);
-  const fr = (fg >> 16) & 255, fG = (fg >> 8) & 255, fb = fg & 255;
-  const br = (bg >> 16) & 255, bG = (bg >> 8) & 255, bb = bg & 255;
+  const fr = (fg >> 16) & 255,
+    fG = (fg >> 8) & 255,
+    fb = fg & 255;
+  const br = (bg >> 16) & 255,
+    bG = (bg >> 8) & 255,
+    bb = bg & 255;
   const r = Math.round(br * (1 - alpha) + fr * alpha);
   const g = Math.round(bG * (1 - alpha) + fG * alpha);
   const b = Math.round(bb * (1 - alpha) + fb * alpha);
-  return '#' + [r, g, b].map(x => x.toString(16).padStart(2, '0')).join('');
+  return '#' + [r, g, b].map((x) => x.toString(16).padStart(2, '0')).join('');
 }
 
 /**

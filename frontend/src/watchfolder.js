@@ -17,21 +17,33 @@
 //   importPaths
 
 import { invoke, convertFileSrc, listen } from './ipc.js';
-import { CFG }                            from './cfg.js';
-import { i18n }                           from './i18n.js';
-import { get, notify }                    from './store.js';
-import { on, emit, EVENTS }               from './bus.js';
-import { VIRT }                           from './virt.js';
+import { CFG } from './cfg.js';
+import { i18n } from './i18n.js';
+import { get, notify } from './store.js';
+import { on, emit, EVENTS } from './bus.js';
+import { VIRT } from './virt.js';
 import { invalidateFilterCache } from './search.js';
-import { toast }                          from './ui.js';
-import { setView, showView }              from './views.js';
+import { toast } from './ui.js';
+import { setView, showView } from './views.js';
 import { loadTagsBg, loadTagsAndDurations } from './library.js';
-import { pushTracks }                     from './state.js';
-import { isSafePath }                     from './utils.js';
-import { logImport }                                   from './imports.js';
+import { pushTracks } from './state.js';
+import { isSafePath } from './utils.js';
+import { logImport } from './imports.js';
 
 // SEC-9 : Extensions audio autorisées — synchronisé avec la liste de app.js/_onDrop
-const _AUDIO_EXTS = new Set(['mp3','flac','aac','m4a','ogg','opus','wav','wma','aiff','ape','alac']);
+const _AUDIO_EXTS = new Set([
+  'mp3',
+  'flac',
+  'aac',
+  'm4a',
+  'ogg',
+  'opus',
+  'wav',
+  'wma',
+  'aiff',
+  'ape',
+  'alac'
+]);
 
 /** Retourne true si le chemin a une extension audio reconnue. */
 function _isAudioPath(p) {
@@ -46,63 +58,71 @@ function _isAudioPath(p) {
  * Retourne le nombre de pistes ajoutées.
  */
 async function _doInitialScan(files) {
-  if (_importing) return 0;  // guard: skip if import already in progress
+  if (_importing) return 0; // guard: skip if import already in progress
   _importing = true;
   try {
     showView('scan');
-    const elSn  = document.getElementById('sn');
-    const elSf  = document.getElementById('sf');
+    const elSn = document.getElementById('sn');
+    const elSf = document.getElementById('sf');
     const elBar = document.getElementById('scan-bar');
     const total = files.length;
-    if (elSn)  elSn.textContent = '0';
-    if (elSf)  elSf.textContent = `${total} fichiers détectés…`;
+    if (elSn) elSn.textContent = '0';
+    if (elSf) elSf.textContent = `${total} fichiers détectés…`;
     if (elBar) elBar.style.width = '0%';
 
     const YIELD_EVERY = 200;
-    const newTracks   = [];
-    let   loaded      = 0;
-    const scanStart   = Date.now();
+    const newTracks = [];
+    let loaded = 0;
+    const scanStart = Date.now();
 
     for (const p of files) {
       if (watchSnapshot.has(p)) continue;
       watchSnapshot.add(p);
-      const name    = p.replace(/\\/g, '/').split('/').pop();
-      const ext     = name.split('.').pop().toUpperCase();
-      const bare    = name.replace(/\.[^.]+$/, '');
-      const guess   = bare.includes(' - ') ? bare.split(' - ')[0].trim() : '';
+      const name = p.replace(/\\/g, '/').split('/').pop();
+      const ext = name.split('.').pop().toUpperCase();
+      const bare = name.replace(/\.[^.]+$/, '');
+      const guess = bare.includes(' - ') ? bare.split(' - ')[0].trim() : '';
       const t = {
-        id:          crypto.randomUUID?.() ?? `${Date.now().toString(36)}-${(++_idSeq).toString(36)}`,
-        name:        bare.replace(/[-_]+/g, ' ').trim(),
-        artist:      guess || i18n('unknown_artist'),
-        artistFull:  guess || i18n('unknown_artist'),
-        album: '', ext, path: p,
-        duration:    0,
-        dateAdded:   Date.now(),
-        art: null, artColor: null,
-        url:         convertFileSrc(p),
-        file:        null,
-        metaDone:    false,
+        id: crypto.randomUUID?.() ?? `${Date.now().toString(36)}-${(++_idSeq).toString(36)}`,
+        name: bare.replace(/[-_]+/g, ' ').trim(),
+        artist: guess || i18n('unknown_artist'),
+        artistFull: guess || i18n('unknown_artist'),
+        album: '',
+        ext,
+        path: p,
+        duration: 0,
+        dateAdded: Date.now(),
+        art: null,
+        artColor: null,
+        url: convertFileSrc(p),
+        file: null,
+        metaDone: false,
         _durPending: true,
-        bitrate: null, sampleRate: null, channels: null, bitDepth: null,
+        bitrate: null,
+        sampleRate: null,
+        channels: null,
+        bitDepth: null
       };
       newTracks.push(t);
       loaded++;
       if (elSn) elSn.textContent = String(loaded);
       if (elSn && (loaded % 50 === 0 || loaded <= 10)) {
-        elSn.classList.remove('pop'); void elSn.offsetWidth; elSn.classList.add('pop');
+        elSn.classList.remove('pop');
+        void elSn.offsetWidth;
+        elSn.classList.add('pop');
       }
       if (loaded % YIELD_EVERY === 0 || loaded === total) {
-        const pct = Math.round(loaded / total * 100);
+        const pct = Math.round((loaded / total) * 100);
         if (elBar) elBar.style.width = pct + '%';
         const elapsed = Date.now() - scanStart;
         if (elapsed > 300 && loaded > 0) {
-          const rate   = loaded / elapsed;
-          const etaMs  = (total - loaded) / rate;
-          const etaS   = Math.ceil(etaMs / 1000);
+          const rate = loaded / elapsed;
+          const etaMs = (total - loaded) / rate;
+          const etaS = Math.ceil(etaMs / 1000);
           const etaStr = etaS >= 60 ? `${Math.floor(etaS / 60)}m ${etaS % 60}s` : `${etaS}s`;
           if (elSf) elSf.textContent = `${loaded} / ${total} • ETA ~${etaStr}`;
         }
-        await new Promise(r => setTimeout(r, 0));
+        await new Promise((r) => setTimeout(r, 0));
       }
     }
 
@@ -114,7 +134,11 @@ async function _doInitialScan(files) {
     VIRT._lastListSig = '';
     setView('all', document.getElementById('ni-all'));
     loadTagsAndDurations(newTracks);
-    if (newTracks.length) logImport('folder-scan', newTracks.map(t => t.path));
+    if (newTracks.length)
+      logImport(
+        'folder-scan',
+        newTracks.map((t) => t.path)
+      );
     return newTracks.length;
   } finally {
     // B6 FIX : drainer les events watcher mis en file dans _pendingPaths pendant
@@ -124,8 +148,11 @@ async function _doInitialScan(files) {
     // drain failure cannot leave _importing=true and deadlock all future imports.
     while (_pendingPaths.length) {
       const pending = _pendingPaths.splice(0);
-      try { await _doImportPaths(pending); }
-      catch(e) { console.warn('[watchfolder] pending drain failed:', e); }
+      try {
+        await _doImportPaths(pending);
+      } catch (e) {
+        console.warn('[watchfolder] pending drain failed:', e);
+      }
     }
     _importing = false;
   }
@@ -139,36 +166,44 @@ on(EVENTS.FILTER_CHANGED, () => {
   // Windows : FS insensible à la casse — comparer en lowercase, sinon un chemin
   // dont la casse diffère entre l'événement watcher et t.path serait évincé du
   // snapshot et la piste réimportée en doublon au prochain événement.
-  const currentPaths = new Set(get('tracks').map(t => t.path?.toLowerCase()).filter(Boolean));
+  const currentPaths = new Set(
+    get('tracks')
+      .map((t) => t.path?.toLowerCase())
+      .filter(Boolean)
+  );
   for (const p of watchSnapshot) {
     if (!currentPaths.has(p.toLowerCase())) watchSnapshot.delete(p);
   }
 });
 
 // ── État interne ─────────────────────────────────────────────
-let watchPath     = null;
+let watchPath = null;
 let watchSnapshot = new Set();
 let _watchUnlisten = null; // unlistener Tauri pour 'watch-new-files'
-let _starting     = false; // BUG-11 FIX : lock pour empêcher les appels parallèles à startWatchNative
-let _importing    = false; // RACE-2 FIX : lock pour empêcher les imports parallèles
-let _pendingPaths = [];    // RACE-2 FIX : queue des paths reçus pendant un import en cours
-let _idSeq        = 0;     // compteur pour UUID fallback garanti unique
+let _starting = false; // BUG-11 FIX : lock pour empêcher les appels parallèles à startWatchNative
+let _importing = false; // RACE-2 FIX : lock pour empêcher les imports parallèles
+let _pendingPaths = []; // RACE-2 FIX : queue des paths reçus pendant un import en cours
+let _idSeq = 0; // compteur pour UUID fallback garanti unique
 // SEC-10 : rate-limit sur watch-new-files — debounce pour batcher les bursts d'événements
 let _watchDebTimer = null;
 let _watchRawPaths = [];
-let _modUnlisten  = null; // unlistener pour 'watch-modified-files'
-let _errUnlisten  = null; // unlistener pour 'watch-error' (watcher Rust mort)
-let _modDebTimer  = null; // debounce timer pour les modifications
-let _modRawPaths  = [];   // buffer des paths de fichiers modifiés
-let _watchActive  = false; // true si le watcher natif tourne
+let _modUnlisten = null; // unlistener pour 'watch-modified-files'
+let _errUnlisten = null; // unlistener pour 'watch-error' (watcher Rust mort)
+let _modDebTimer = null; // debounce timer pour les modifications
+let _modRawPaths = []; // buffer des paths de fichiers modifiés
+let _watchActive = false; // true si le watcher natif tourne
 // MODIF-RACE FIX : paths modifiés reçus pendant que loadTagsBg tournait encore
 // pour ce fichier — rejoués dès que ce chargement se termine (_retryPendingReload).
 let _modPendingRetry = new Set();
 
 /** Initialise watchPath depuis la config au démarrage (pas de side-effects). */
-export function initWatchPath(path) { watchPath = path; }
+export function initWatchPath(path) {
+  watchPath = path;
+}
 /** Retourne watchPath courant (pour _doSaveCfg dans app.js). */
-export function getWatchPath() { return watchPath; }
+export function getWatchPath() {
+  return watchPath;
+}
 
 // ── Toggle ───────────────────────────────────────────────────
 
@@ -176,12 +211,15 @@ export async function toggleWatchFolder() {
   let result;
   try {
     result = await invoke('open_folder', undefined, { timeout: 0 });
-  } catch(err) {
+  } catch (err) {
     console.warn('[watchfolder] open_folder failed:', err);
     toast(i18n('t_scan_error', err?.message ?? String(err)), 'error');
     return;
   }
-  if (!result?.folder) { updateWatchUI(); return; }
+  if (!result?.folder) {
+    updateWatchUI();
+    return;
+  }
   if (!isSafePath(result.folder)) {
     console.warn('[watchfolder] Chemin de dossier invalide rejeté :', result.folder);
     return;
@@ -189,9 +227,15 @@ export async function toggleWatchFolder() {
   // Si un dossier était déjà surveillé, full stop silencieux avant de remplacer
   if (watchPath) stopWatchFolder(true, false);
   watchPath = result.folder;
-  invoke('allow_asset_dir', { path: watchPath }).catch(e => console.warn('[watchfolder:allow_asset_dir]', watchPath, e));
-  watchSnapshot = new Set(get('tracks').map(t => t.path).filter(Boolean));
-  const newFiles = (result.files ?? []).filter(p => _isAudioPath(p) && !watchSnapshot.has(p));
+  invoke('allow_asset_dir', { path: watchPath }).catch((e) =>
+    console.warn('[watchfolder:allow_asset_dir]', watchPath, e)
+  );
+  watchSnapshot = new Set(
+    get('tracks')
+      .map((t) => t.path)
+      .filter(Boolean)
+  );
+  const newFiles = (result.files ?? []).filter((p) => _isAudioPath(p) && !watchSnapshot.has(p));
   if (newFiles.length) {
     await _doInitialScan(newFiles);
   }
@@ -208,7 +252,7 @@ export async function toggleWatchFolder() {
  */
 function _reloadTagsForPaths(paths) {
   const tracks = get('tracks');
-  const byPath = new Map(tracks.map(t => [t.path, t]));
+  const byPath = new Map(tracks.map((t) => [t.path, t]));
   for (const p of paths) {
     const t = byPath.get(p);
     if (!t) continue;
@@ -233,7 +277,7 @@ function _reloadOneTrack(t) {
 function _retryPendingReload(path) {
   if (!_modPendingRetry.has(path)) return;
   _modPendingRetry.delete(path);
-  const t = get('tracks').find(tr => tr.path === path);
+  const t = get('tracks').find((tr) => tr.path === path);
   if (t) _reloadOneTrack(t);
 }
 
@@ -243,14 +287,26 @@ function _retryPendingReload(path) {
  */
 export async function startWatchNative() {
   // Nettoyage de l'ancien listener si existant
-  if (_watchUnlisten) { _watchUnlisten(); _watchUnlisten = null; }
-  if (_modUnlisten) { _modUnlisten(); _modUnlisten = null; }
-  if (_errUnlisten) { _errUnlisten(); _errUnlisten = null; }
-  if (_modDebTimer) { clearTimeout(_modDebTimer); _modDebTimer = null; }
+  if (_watchUnlisten) {
+    _watchUnlisten();
+    _watchUnlisten = null;
+  }
+  if (_modUnlisten) {
+    _modUnlisten();
+    _modUnlisten = null;
+  }
+  if (_errUnlisten) {
+    _errUnlisten();
+    _errUnlisten = null;
+  }
+  if (_modDebTimer) {
+    clearTimeout(_modDebTimer);
+    _modDebTimer = null;
+  }
   _modRawPaths = [];
   if (_starting) return; // BUG-11 FIX : éviter les appels parallèles
   if (!watchPath) return;
-  _watchActive = false;   // reset avant toute tentative — évite état stale si la tentative échoue
+  _watchActive = false; // reset avant toute tentative — évite état stale si la tentative échoue
 
   _starting = true;
   try {
@@ -261,9 +317,13 @@ export async function startWatchNative() {
     try {
       await Promise.race([
         invoke('watch_folder_start', { path: watchPath }),
-        new Promise((_, rej) => { _wt = setTimeout(() => rej(new Error('[watchfolder] start timeout')), CFG.IPC_TIMEOUT_MS); }),
+        new Promise((_, rej) => {
+          _wt = setTimeout(() => rej(new Error('[watchfolder] start timeout')), CFG.IPC_TIMEOUT_MS);
+        })
       ]);
-    } finally { clearTimeout(_wt); }
+    } finally {
+      clearTimeout(_wt);
+    }
 
     // Écouter les événements émis par Rust quand de nouveaux fichiers audio apparaissent
     // SEC-10 : debounce WATCH_DEBOUNCE_MS pour batcher les bursts d'événements du watcher
@@ -271,7 +331,7 @@ export async function startWatchNative() {
       const paths = event.payload;
       if (!Array.isArray(paths) || !paths.length) return;
       // SEC-9 : filtrer par extension audio valide avant tout import
-      const newFiles = paths.filter(p => _isAudioPath(p) && !watchSnapshot.has(p));
+      const newFiles = paths.filter((p) => _isAudioPath(p) && !watchSnapshot.has(p));
       if (!newFiles.length) return;
       _watchRawPaths.push(...newFiles);
       if (_watchDebTimer) clearTimeout(_watchDebTimer);
@@ -284,7 +344,7 @@ export async function startWatchNative() {
         try {
           const added = await importPaths(batch);
           if (added) toast(i18n('t_new_files', added), 'success');
-        } catch(e) {
+        } catch (e) {
           console.warn('[watchfolder] importPaths from watcher failed:', e);
           toast(i18n('t_scan_error', e?.message ?? String(e)), 'error');
         }
@@ -295,7 +355,7 @@ export async function startWatchNative() {
     _modUnlisten = await listen('watch-modified-files', (event) => {
       const paths = event.payload;
       if (!Array.isArray(paths) || !paths.length) return;
-      const filtered = paths.filter(p => _isAudioPath(p));
+      const filtered = paths.filter((p) => _isAudioPath(p));
       if (!filtered.length) return;
       _modRawPaths.push(...filtered);
       if (_modDebTimer) clearTimeout(_modDebTimer);
@@ -317,9 +377,18 @@ export async function startWatchNative() {
   } catch (e) {
     // Nettoyer un enregistrement partiel (ex. : 1er listen OK, 2e en échec),
     // sinon le listener Tauri orphelin ne serait jamais désinscrit.
-    if (_watchUnlisten) { _watchUnlisten(); _watchUnlisten = null; }
-    if (_modUnlisten)   { _modUnlisten();   _modUnlisten   = null; }
-    if (_errUnlisten)   { _errUnlisten();   _errUnlisten   = null; }
+    if (_watchUnlisten) {
+      _watchUnlisten();
+      _watchUnlisten = null;
+    }
+    if (_modUnlisten) {
+      _modUnlisten();
+      _modUnlisten = null;
+    }
+    if (_errUnlisten) {
+      _errUnlisten();
+      _errUnlisten = null;
+    }
     // Fallback : pas de surveillance native — log silencieux
     console.warn('[watchfolder] surveillance native indisponible :', e);
   } finally {
@@ -327,28 +396,42 @@ export async function startWatchNative() {
   }
 }
 
-
 /**
  * @param {boolean} [silent=false] - Si true, ne montre pas le toast d'arrêt.
  * @param {boolean} [keepPath=false] - Si true, conserve watchPath/watchSnapshot/_importing
  *   pour permettre un redémarrage du watcher sans perdre le contexte.
  */
 export function stopWatchFolder(silent = false, keepPath = false) {
-  if (_watchUnlisten) { _watchUnlisten(); _watchUnlisten = null; }
-  if (_watchDebTimer) { clearTimeout(_watchDebTimer); _watchDebTimer = null; }
+  if (_watchUnlisten) {
+    _watchUnlisten();
+    _watchUnlisten = null;
+  }
+  if (_watchDebTimer) {
+    clearTimeout(_watchDebTimer);
+    _watchDebTimer = null;
+  }
   _watchRawPaths = [];
-  if (_modUnlisten) { _modUnlisten(); _modUnlisten = null; }
-  if (_errUnlisten) { _errUnlisten(); _errUnlisten = null; }
-  if (_modDebTimer) { clearTimeout(_modDebTimer); _modDebTimer = null; }
+  if (_modUnlisten) {
+    _modUnlisten();
+    _modUnlisten = null;
+  }
+  if (_errUnlisten) {
+    _errUnlisten();
+    _errUnlisten = null;
+  }
+  if (_modDebTimer) {
+    clearTimeout(_modDebTimer);
+    _modDebTimer = null;
+  }
   _modRawPaths = [];
   _modPendingRetry.clear();
-  invoke('watch_folder_stop').catch(e => console.warn('[watchfolder:watch_folder_stop]', e));
+  invoke('watch_folder_stop').catch((e) => console.warn('[watchfolder:watch_folder_stop]', e));
   _watchActive = false;
-  _starting    = false;
+  _starting = false;
   if (!keepPath) {
-    watchPath     = null;
+    watchPath = null;
     watchSnapshot = new Set();
-    _importing    = false;
+    _importing = false;
     // _pendingPaths intentionnellement conservé — voir commentaire BUG-D3B-5 original
   }
   updateWatchUI();
@@ -356,36 +439,54 @@ export function stopWatchFolder(silent = false, keepPath = false) {
 }
 
 export function updateWatchUI() {
-  const indicator  = document.getElementById('watch-indicator');
+  const indicator = document.getElementById('watch-indicator');
   const pathDisplay = document.getElementById('watch-path-display');
-  const chk        = document.getElementById('watch-folder-chk');
-  const changeBtn  = document.getElementById('watch-change-btn');
-  const changeLbl  = document.getElementById('watch-change-btn-lbl');
+  const chk = document.getElementById('watch-folder-chk');
+  const changeBtn = document.getElementById('watch-change-btn');
+  const changeLbl = document.getElementById('watch-change-btn-lbl');
   if (watchPath) {
-    if (indicator)   indicator.style.display = 'flex';
+    if (indicator) indicator.style.display = 'flex';
     const shortName = watchPath.split('\\').pop() || watchPath.split('/').pop() || watchPath;
     const watchLabel = document.getElementById('watch-label');
     // AUDIT-2026-07-01 L1 : contenu dynamique → retirer data-i18n pour que le
     // changement de langue n'écrase pas le nom du dossier (même pattern que pathDisplay).
-    if (watchLabel)  { watchLabel.removeAttribute('data-i18n'); watchLabel.textContent = shortName; }
-    if (pathDisplay) { pathDisplay.removeAttribute('data-i18n'); pathDisplay.textContent = watchPath; }
-    if (chk)         chk.checked = _watchActive;
-    if (changeBtn)   changeBtn.dataset.action = 'change-watch-folder';
-    if (changeLbl) { changeLbl.dataset.i18n = 'set_watch_change_btn'; changeLbl.textContent = i18n('set_watch_change_btn'); }
+    if (watchLabel) {
+      watchLabel.removeAttribute('data-i18n');
+      watchLabel.textContent = shortName;
+    }
+    if (pathDisplay) {
+      pathDisplay.removeAttribute('data-i18n');
+      pathDisplay.textContent = watchPath;
+    }
+    if (chk) chk.checked = _watchActive;
+    if (changeBtn) changeBtn.dataset.action = 'change-watch-folder';
+    if (changeLbl) {
+      changeLbl.dataset.i18n = 'set_watch_change_btn';
+      changeLbl.textContent = i18n('set_watch_change_btn');
+    }
   } else {
-    if (indicator)   indicator.style.display = 'none';
+    if (indicator) indicator.style.display = 'none';
     const watchLabelOff = document.getElementById('watch-label');
-    if (watchLabelOff) { watchLabelOff.dataset.i18n = 'watch_label_default'; watchLabelOff.textContent = i18n('watch_label_default'); }
-    if (pathDisplay) { pathDisplay.dataset.i18n = 'set_no_folder'; pathDisplay.textContent = i18n('set_no_folder'); }
-    if (chk)         chk.checked = false;
-    if (changeBtn)   changeBtn.dataset.action = 'settings-open-folder';
-    if (changeLbl) { changeLbl.dataset.i18n = 'set_add_folder_btn'; changeLbl.textContent = i18n('set_add_folder_btn'); }
+    if (watchLabelOff) {
+      watchLabelOff.dataset.i18n = 'watch_label_default';
+      watchLabelOff.textContent = i18n('watch_label_default');
+    }
+    if (pathDisplay) {
+      pathDisplay.dataset.i18n = 'set_no_folder';
+      pathDisplay.textContent = i18n('set_no_folder');
+    }
+    if (chk) chk.checked = false;
+    if (changeBtn) changeBtn.dataset.action = 'settings-open-folder';
+    if (changeLbl) {
+      changeLbl.dataset.i18n = 'set_add_folder_btn';
+      changeLbl.textContent = i18n('set_add_folder_btn');
+    }
   }
 
   // Les boutons "Organiser la bibliothèque" exigent un dossier surveillé
   // comme racine de l'arborescence cible — sinon désactivés avec tooltip.
   const organizeTip = i18n('set_organize_needs_watch');
-  document.querySelectorAll('.organize-btn').forEach(b => {
+  document.querySelectorAll('.organize-btn').forEach((b) => {
     if (watchPath) {
       b.disabled = false;
       b.removeAttribute('aria-disabled');
@@ -413,7 +514,11 @@ export async function importPaths(paths, source = 'folder-scan') {
   const before = paths.length;
   paths = paths.filter(isSafePath);
   if (paths.length !== before) {
-    console.warn('[watchfolder] importPaths: ' + (before - paths.length) + ' chemin(s) rejeté(s) par isSafePath');
+    console.warn(
+      '[watchfolder] importPaths: ' +
+        (before - paths.length) +
+        ' chemin(s) rejeté(s) par isSafePath'
+    );
   }
   if (!paths.length) return 0;
   if (_importing) {
@@ -437,7 +542,7 @@ export async function importPaths(paths, source = 'folder-scan') {
 
 async function _doImportPaths(paths, source = 'folder-scan') {
   let added = 0;
-  const newPaths  = [];
+  const newPaths = [];
   const newTracks = []; // B10 : différer loadTagsBg jusqu'après rebuildTrackIdxMap
   const tracks = get('tracks'); // Phase 4
   // RACE-4 FIX : déduplication intra-batch — si `paths` contient des doublons
@@ -450,21 +555,31 @@ async function _doImportPaths(paths, source = 'folder-scan') {
     watchSnapshot.add(p);
     newPaths.push(p);
     const name = p.replace(/\\/g, '/').split('/').pop();
-    const ext  = name.split('.').pop().toUpperCase();
+    const ext = name.split('.').pop().toUpperCase();
     const t = {
-      id:         crypto.randomUUID?.() ?? `${Date.now().toString(36)}-${(++_idSeq).toString(36)}`,
-      name:       name.replace(/\.[^.]+$/, '').replace(/[-_]+/g, ' ').trim(),
-      artist:     i18n('unknown_artist'),
+      id: crypto.randomUUID?.() ?? `${Date.now().toString(36)}-${(++_idSeq).toString(36)}`,
+      name: name
+        .replace(/\.[^.]+$/, '')
+        .replace(/[-_]+/g, ' ')
+        .trim(),
+      artist: i18n('unknown_artist'),
       artistFull: i18n('unknown_artist'),
-      album: '', ext, path: p,
-      duration: 0, dateAdded: Date.now(),
-      art: null, artColor: null,
-      url:      convertFileSrc(p),
-      file:     null,
+      album: '',
+      ext,
+      path: p,
+      duration: 0,
+      dateAdded: Date.now(),
+      art: null,
+      artColor: null,
+      url: convertFileSrc(p),
+      file: null,
       metaDone: false,
       // Bug #16 fix : initialiser les champs audio à null comme les imports drag-drop.
       // Sans ça, le badge LOSSLESS et les infos audio restent indéfinis (undefined ≠ null).
-      bitrate: null, sampleRate: null, channels: null, bitDepth: null,
+      bitrate: null,
+      sampleRate: null,
+      channels: null,
+      bitDepth: null
     };
     newTracks.push(t);
     added++;
@@ -489,12 +604,12 @@ async function _doImportPaths(paths, source = 'folder-scan') {
 }
 
 export async function changeWatchFolder() {
-  const prevPath     = watchPath;
+  const prevPath = watchPath;
   const prevSnapshot = new Set(watchSnapshot);
   stopWatchFolder(true, true);
   await toggleWatchFolder();
   if (!watchPath && prevPath) {
-    watchPath     = prevPath;
+    watchPath = prevPath;
     watchSnapshot = prevSnapshot;
     await startWatchNative();
     updateWatchUI();

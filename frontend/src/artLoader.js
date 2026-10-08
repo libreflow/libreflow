@@ -14,15 +14,22 @@
 //   prefetchArts(list)    — batch fire-and-forget (virtual scroll window), appelle loadArt() en interne
 //   revokeArt(trackId)    — libère le blob: URL d'une piste supprimée
 
-import { DB, dget }    from './db.js';
-import { get }         from './store.js';
-import { CFG }         from './cfg.js';
-import { trackIdx }    from './search.js';
+import { DB, dget } from './db.js';
+import { get } from './store.js';
+import { CFG } from './cfg.js';
+import { trackIdx } from './search.js';
 import { emit, EVENTS } from './bus.js';
 
 // ── Constantes ────────────────────────────────────────────────
-const MAX_CACHE = CFG.MAX_ART_CACHE;   // 60 entrées ≈ 6 MB max
-export const ART_MIME_ALLOWLIST = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/bmp', 'image/tiff'];
+const MAX_CACHE = CFG.MAX_ART_CACHE; // 60 entrées ≈ 6 MB max
+export const ART_MIME_ALLOWLIST = [
+  'image/jpeg',
+  'image/png',
+  'image/gif',
+  'image/webp',
+  'image/bmp',
+  'image/tiff'
+];
 
 // ── Cache LRU ─────────────────────────────────────────────────
 // Map insertion-ordered : le premier élément est le plus ancien (LRU).
@@ -46,7 +53,7 @@ function _evict() {
   if (_cache.size < MAX_CACHE) return;
   const curIdx = get('curIdx');
   const tracks = get('tracks');
-  const curId  = curIdx >= 0 ? tracks[curIdx]?.id : null;
+  const curId = curIdx >= 0 ? tracks[curIdx]?.id : null;
   // PERF-CRIT-2 FIX : utiliser la Set maintenue plutôt que querySelectorAll('img').
   const inDom = _domBlobUrls;
   for (const [id, url] of _cache) {
@@ -59,7 +66,10 @@ function _evict() {
     _cache.delete(id);
     // Effacer la référence dans l'objet track pour que thtml() retombe sur le placeholder
     const idx = trackIdx(id);
-    if (idx >= 0 && tracks[idx]) { tracks[idx].art = null; tracks[idx]._artBuf = null; }
+    if (idx >= 0 && tracks[idx]) {
+      tracks[idx].art = null;
+      tracks[idx]._artBuf = null;
+    }
     return;
   }
   // Aucune entrée évictable (toutes visibles / piste courante) : on dépasse
@@ -71,13 +81,13 @@ function _patchArtDOM(t) {
   const row = document.getElementById('tr-' + t.id);
   if (!row) return;
   const ph = row.querySelector('.tart-ph');
-  if (!ph) return;                      // déjà remplacé ou piste absente de la fenêtre
+  if (!ph) return; // déjà remplacé ou piste absente de la fenêtre
   const img = document.createElement('img');
   img.className = 'art-img';
-  img.alt       = '';
+  img.alt = '';
   img.setAttribute('aria-hidden', 'true');
-  img.onload    = () => img.classList.add('art-loaded');
-  img.src       = t.art;
+  img.onload = () => img.classList.add('art-loaded');
+  img.src = t.art;
   // PERF-CRIT-2 FIX : enregistrer l'URL dans la Set pour que _evict() sache
   // qu'elle est référencée dans le DOM sans scanner querySelectorAll('img').
   if (t.art) _domBlobUrls.add(t.art);
@@ -111,7 +121,7 @@ export async function getArtUrl(t) {
   if (_cache.has(t.id)) {
     const cached = _cache.get(t.id);
     _cache.delete(t.id);
-    _cache.set(t.id, cached);           // déplace en fin (= plus récent)
+    _cache.set(t.id, cached); // déplace en fin (= plus récent)
     t.art = cached;
     return cached;
   }
@@ -134,20 +144,23 @@ export async function getArtUrl(t) {
 
     let buf, mime;
     if (rec.artBuf) {
-      buf  = rec.artBuf;
+      buf = rec.artBuf;
       mime = ART_MIME_ALLOWLIST.includes(rec.artMime) ? rec.artMime : 'image/jpeg';
     } else if (rec.artB64) {
       // Compat : anciens enregistrements IDB avec data: URL base64
       const rawMime = rec.artB64.match(/data:([^;]+)/)?.[1] || 'image/jpeg';
       mime = ART_MIME_ALLOWLIST.includes(rawMime) ? rawMime : 'image/jpeg';
       const b64 = rec.artB64.split(',')[1];
-      if (!b64) { t.noArt = true; return null; }
-      const arr = Uint8Array.from(atob(b64), c => c.charCodeAt(0));
+      if (!b64) {
+        t.noArt = true;
+        return null;
+      }
+      const arr = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
       buf = arr.buffer;
     } else {
       // IDB ne contient pas d'artwork — corriger le flag
-      t.noArt    = true;
-      t._hasArt  = false;
+      t.noArt = true;
+      t._hasArt = false;
       return null;
     }
 
@@ -155,11 +168,11 @@ export async function getArtUrl(t) {
     const url = URL.createObjectURL(new Blob([buf], { type: mime }));
     _cache.set(t.id, url);
     // Garder les bytes en mémoire pour que _resolveArtBuf (flushTrackBatch) ne refasse pas l'IDB
-    t._artBuf  = buf;
+    t._artBuf = buf;
     t._artMime = mime;
-    t.art      = url;
+    t.art = url;
     return url;
-  } catch(e) {
+  } catch (e) {
     console.warn('[artLoader] getArtUrl failed:', t.id, e);
     return null;
   }
@@ -190,7 +203,7 @@ async function loadArt(t) {
 export function prefetchArts(trackList) {
   for (const t of trackList) {
     if (t._hasArt && !t.art && !t.noArt) {
-      loadArt(t).catch(e => console.warn('[artLoader:prefetchArts]', t.id, e));
+      loadArt(t).catch((e) => console.warn('[artLoader:prefetchArts]', t.id, e));
     }
   }
 }
@@ -258,22 +271,24 @@ export async function resolveArtBuf(t) {
     try {
       const rec = await dget('tracks', t.id);
       if (rec?.artBuf) {
-        t._artBuf  = rec.artBuf;
+        t._artBuf = rec.artBuf;
         t._artMime = ART_MIME_ALLOWLIST.includes(rec.artMime) ? rec.artMime : 'image/jpeg';
         return { buf: t._artBuf, mime: t._artMime };
       }
-    } catch(e) { console.warn('[resolveArtBuf] IDB fallback failed for', t.id, e); }
+    } catch (e) {
+      console.warn('[resolveArtBuf] IDB fallback failed for', t.id, e);
+    }
     return null;
   }
-  if (!t.art)    return null;
+  if (!t.art) return null;
   // Migration : ancienne IDB avec data: URL base64
   if (t.art.startsWith('data:')) {
     const rawMime = t.art.match(/data:([^;]+)/)?.[1] || 'image/jpeg';
     const mime = ART_MIME_ALLOWLIST.includes(rawMime) ? rawMime : 'image/jpeg';
-    const b64  = t.art.split(',')[1];
+    const b64 = t.art.split(',')[1];
     if (!b64) return null;
-    const arr  = Uint8Array.from(atob(b64), c => c.charCodeAt(0));
-    t._artBuf  = arr.buffer;
+    const arr = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+    t._artBuf = arr.buffer;
     t._artMime = mime;
     return { buf: t._artBuf, mime };
   }
@@ -284,11 +299,13 @@ export async function resolveArtBuf(t) {
       try {
         const rec = await dget('tracks', t.id);
         if (rec?.artBuf) {
-          t._artBuf  = rec.artBuf;
+          t._artBuf = rec.artBuf;
           t._artMime = ART_MIME_ALLOWLIST.includes(rec.artMime) ? rec.artMime : 'image/jpeg';
           return { buf: t._artBuf, mime: t._artMime };
         }
-      } catch(e) { console.warn('[resolveArtBuf] IDB fallback for blob: failed:', t.id, e); }
+      } catch (e) {
+        console.warn('[resolveArtBuf] IDB fallback for blob: failed:', t.id, e);
+      }
     }
     return null;
   }

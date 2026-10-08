@@ -14,11 +14,11 @@
 // En Tauri 2, `withGlobalTauri` n'expose QUE les APIs core (app, core, event,
 // path, window…). Les plugins doivent passer par leurs wrappers npm officiels.
 
-import { check }      from '@tauri-apps/plugin-updater';
-import { relaunch }   from '@tauri-apps/plugin-process';
+import { check } from '@tauri-apps/plugin-updater';
+import { relaunch } from '@tauri-apps/plugin-process';
 import { getVersion } from '@tauri-apps/api/app';
 
-import { i18n }                   from './i18n.js';
+import { i18n } from './i18n.js';
 import { toast, toastWithAction } from './ui.js';
 
 /**
@@ -28,7 +28,7 @@ import { toast, toastWithAction } from './ui.js';
 export async function initAppVersion() {
   try {
     const version = await getVersion();
-    document.querySelectorAll('[data-i18n="set_app_version"]').forEach(el => {
+    document.querySelectorAll('[data-i18n="set_app_version"]').forEach((el) => {
       el.textContent = `v${version}`;
     });
   } catch {
@@ -61,7 +61,10 @@ export async function checkForUpdate() {
 
 export async function checkForUpdateManual(btn) {
   const span = btn?.querySelector('span') ?? btn;
-  if (btn) { btn.disabled = true; if (span) span.textContent = i18n('t_update_checking'); }
+  if (btn) {
+    btn.disabled = true;
+    if (span) span.textContent = i18n('t_update_checking');
+  }
   try {
     const update = await check();
     if (!update) {
@@ -79,15 +82,18 @@ export async function checkForUpdateManual(btn) {
   } catch (e) {
     toast(i18n('t_update_error', String(e)), 'error', 4000);
   } finally {
-    if (btn) { btn.disabled = false; if (span) span.textContent = i18n('t_update_check_btn'); }
+    if (btn) {
+      btn.disabled = false;
+      if (span) span.textContent = i18n('t_update_check_btn');
+    }
   }
 }
 
 // ── Téléchargement + installation avec progress ──────────────────────────────
 
 async function _installUpdate(update) {
-  let downloaded  = 0;
-  let total       = 0;
+  let downloaded = 0;
+  let total = 0;
 
   // Toast vivant — 'loading' (120 000 ms) garantit l'affichage pendant tout
   // le téléchargement, .update() rafraîchit le texte (progress %).

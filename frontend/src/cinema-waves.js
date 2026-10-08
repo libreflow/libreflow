@@ -32,21 +32,24 @@ export const WAVE_BEAT_BOOST_MAX = 1.25;
 export function waveLayerGeom(l, layers) {
   const t = layers > 1 ? l / (layers - 1) : 1; // 0 = arrière, 1 = avant
   return {
-    yBase:      0.58 + t * 0.30,   // 0.58h (horizon) → 0.88h (premier plan)
-    ampBase:    0.012 + t * 0.030, // houle de base — plate au loin, ample devant
-    ampEnergy:  0.022 + t * 0.066, // gain appliqué à l'énergie de bande
+    yBase: 0.58 + t * 0.3, // 0.58h (horizon) → 0.88h (premier plan)
+    ampBase: 0.012 + t * 0.03, // houle de base — plate au loin, ample devant
+    ampEnergy: 0.022 + t * 0.066, // gain appliqué à l'énergie de bande
     // Perspective naturelle : houle LARGE devant (freq basse), frémissement fin
     // au loin (freq haute) — le flip de profondeur T12 avait laissé l'inverse.
-    freq:       3.8 - t * 2.0,     // 3.8 arrière → 1.8 avant
-    fillAlpha:  0.10 + t * 0.24,   // remplissage léger arrière → dense avant
-    crestAlpha: 0.14 + t * 0.60,   // crête discrète arrière → brillante avant
-    lineWidth:  0.7 + t * 1.6,     // 0.7px arrière → 2.3px avant
+    freq: 3.8 - t * 2.0, // 3.8 arrière → 1.8 avant
+    fillAlpha: 0.1 + t * 0.24, // remplissage léger arrière → dense avant
+    crestAlpha: 0.14 + t * 0.6, // crête discrète arrière → brillante avant
+    lineWidth: 0.7 + t * 1.6 // 0.7px arrière → 2.3px avant
   };
 }
 
 // Harmoniques de waveY — poids NORMALISÉS (somme = 1) : `amp` est l'excursion
 // maximale réelle, plus de facteur caché ×1.67 comme dans l'ancien modèle.
-const _W1 = 0.62, _W2 = 0.26, _W3 = 0.08, _W4 = 0.04;
+const _W1 = 0.62,
+  _W2 = 0.26,
+  _W3 = 0.08,
+  _W4 = 0.04;
 
 /**
  * Déplacement vertical d'une vague au point nx ∈ [0,1] — 4 harmoniques
@@ -59,11 +62,12 @@ const _W1 = 0.62, _W2 = 0.26, _W3 = 0.08, _W4 = 0.04;
  * @returns {number} déplacement signé, |retour| ≤ amp
  */
 export function waveY(nx, ph, freq, amp) {
-  return amp * (
-    Math.sin(nx * Math.PI * freq + ph)              * _W1 +
-    Math.sin(nx * Math.PI * freq * 0.62 + ph * 1.3) * _W2 +
-    Math.sin(nx * Math.PI * freq * 2.4 + ph * 0.55) * _W3 +
-    Math.sin(nx * Math.PI * freq * 1.7 + ph * 0.77) * _W4
+  return (
+    amp *
+    (Math.sin(nx * Math.PI * freq + ph) * _W1 +
+      Math.sin(nx * Math.PI * freq * 0.62 + ph * 1.3) * _W2 +
+      Math.sin(nx * Math.PI * freq * 2.4 + ph * 0.55) * _W3 +
+      Math.sin(nx * Math.PI * freq * 1.7 + ph * 0.77) * _W4)
   );
 }
 
@@ -80,10 +84,10 @@ export function waveLayerPalette(r, g, b, layers) {
   const [h, s, l] = rgbToHsl(r, g, b);
   // Saturation : boost contenu pour les arts ternes, mais un gris pur (s≈0) reste
   // gris — on n'invente pas une teinte à partir d'un hue indéfini.
-  const sat = s < 0.05 ? s : Math.min(0.92, Math.max(0.40, s * 1.30));
+  const sat = s < 0.05 ? s : Math.min(0.92, Math.max(0.4, s * 1.3));
   // Rampe de luminance : arrière sombre (fond), avant relevé et borné (pas de
   // blanc éclatant sur les arts très clairs). lFront > lBack garanti par les bornes.
-  const lBack  = Math.max(0.16, l * 0.45);
+  const lBack = Math.max(0.16, l * 0.45);
   const lFront = Math.min(0.62, Math.max(0.44, l));
   const out = new Array(layers);
   for (let i = 0; i < layers; i++) {
@@ -126,13 +130,16 @@ export function agcNormalize(bands, peaks, out, decay = 0.995, floor = 0.04) {
 }
 
 export function computeBandEnergies(fftBuf, out, smooth = 0.35) {
-  const bands  = out.length;
+  const bands = out.length;
   const usable = Math.max(bands + 1, Math.floor(fftBuf.length * 0.72));
   for (let k = 0; k < bands; k++) {
     // Bornes défensives (fix revue) : un buffer plus court que bands+1 ferait
     // déborder end → lecture undefined → NaN. Bande hors buffer → énergie 0.
     const start = Math.min(fftBuf.length, k === 0 ? 0 : Math.floor(Math.pow(usable, k / bands)));
-    const end   = Math.min(fftBuf.length, Math.max(start + 1, Math.floor(Math.pow(usable, (k + 1) / bands))));
+    const end = Math.min(
+      fftBuf.length,
+      Math.max(start + 1, Math.floor(Math.pow(usable, (k + 1) / bands)))
+    );
     let sum = 0;
     for (let i = start; i < end; i++) sum += fftBuf[i];
     const e = end > start ? sum / ((end - start) * 255) : 0;

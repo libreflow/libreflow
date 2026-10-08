@@ -26,24 +26,30 @@
 //   saveCfg()    — debounced config save (CFG.CFG_SAVE_DEBOUNCE ms)
 //   saveCfgNow() — flush immédiat
 
-import { get }                                        from './store.js';
-import { CFG }                                        from './cfg.js';
-import { DB, dput, isQuotaError }                     from './db.js';
-import { getLang, i18n }                              from './i18n.js';
-import { getTheme, getDynColor, getDisplayMode }      from './settings.js';
-import { rgEnabled, rgTargetLUFS }                    from './replaygain.js';
+import { get } from './store.js';
+import { CFG } from './cfg.js';
+import { DB, dput, isQuotaError } from './db.js';
+import { getLang, i18n } from './i18n.js';
+import { getTheme, getDynColor, getDisplayMode } from './settings.js';
+import { rgEnabled, rgTargetLUFS } from './replaygain.js';
 // cinemaBg is read from the store (set by cinema.js via set('cinemaBg',…))
 // to avoid a cinema.js ↔ cfgsave.js circular dependency.
-import { eqEnabled, eqAutoMode, eqExpert,
-         getActiveEqPreset, getEQProfiles, getEQGains } from './eq.js';
-import { getVizMode, getVizEnabled }                  from './viz.js';
-import { getWatchPath }                               from './watchfolder.js';
-import { getMiniPos }                                 from './miniplayer.js';
-import { getHeatPeriod }                              from './stats.js';
-import { getQueueState }                              from './queue.js';
-import { radioActive, getRadioSeedId }               from './radio.js';
-import { getDeviceProfiles }                            from './eqdevice.js';
-import { toast }                                      from './ui.js';
+import {
+  eqEnabled,
+  eqAutoMode,
+  eqExpert,
+  getActiveEqPreset,
+  getEQProfiles,
+  getEQGains
+} from './eq.js';
+import { getVizMode, getVizEnabled } from './viz.js';
+import { getWatchPath } from './watchfolder.js';
+import { getMiniPos } from './miniplayer.js';
+import { getHeatPeriod } from './stats.js';
+import { getQueueState } from './queue.js';
+import { radioActive, getRadioSeedId } from './radio.js';
+import { getDeviceProfiles } from './eqdevice.js';
+import { toast } from './ui.js';
 
 const _audioEl = /** @type {HTMLAudioElement|null} */ (document.getElementById('audio'));
 
@@ -57,7 +63,10 @@ let _saveCfgTimer = null;
  * @returns {Promise<void>}
  */
 export function saveCfgNow() {
-  if (_saveCfgTimer) { clearTimeout(_saveCfgTimer); _saveCfgTimer = null; }
+  if (_saveCfgTimer) {
+    clearTimeout(_saveCfgTimer);
+    _saveCfgTimer = null;
+  }
   return _doSaveCfg(); // FIX #13 — retourner la Promise
 }
 
@@ -77,89 +86,129 @@ async function _doSaveCfg() {
   if (!DB) return; // DB pas encore ouverte (ex: premier démarrage avant boot())
   try {
     // ── State depuis le store ─────────────────────────────────────────────────
-    const liked         = get('liked');          // Set<string>
-    const curIdx        = get('curIdx');          // number
-    const tracks        = get('tracks');          // Track[]
-    const sort          = get('sort');
-    const view          = get('view');
-    const recentPlays   = get('recentPlays') ?? [];
-    const crossfadeDur  = get('crossfadeDur') ?? 0;
+    const liked = get('liked'); // Set<string>
+    const curIdx = get('curIdx'); // number
+    const tracks = get('tracks'); // Track[]
+    const sort = get('sort');
+    const view = get('view');
+    const recentPlays = get('recentPlays') ?? [];
+    const crossfadeDur = get('crossfadeDur') ?? 0;
     const playbackSpeed = get('playbackSpeed') ?? 1;
-    const shuffle       = get('shuffle') ?? false;
-    const repeat        = get('repeat') ?? 'none';
-    const albumSort     = get('albumSort') ?? 'name';
-    const artistSort    = get('artistSort') ?? 'name';
-    const genreSort     = get('genreSort') ?? 'count';
+    const shuffle = get('shuffle') ?? false;
+    const repeat = get('repeat') ?? 'none';
+    const albumSort = get('albumSort') ?? 'name';
+    const artistSort = get('artistSort') ?? 'name';
+    const genreSort = get('genreSort') ?? 'count';
     const albumDetailSort = get('albumDetailSort') ?? 'track';
-    const plGridSort    = get('plGridSort') ?? 'manual';
-    const sbWidth       = get('sbWidth') ?? null;
-    const curPlId       = get('curPlId') ?? null;
-    const drillKey      = get('drillKey') ?? '';
-    const drillFrom     = get('drillFrom') ?? '';
+    const plGridSort = get('plGridSort') ?? 'manual';
+    const sbWidth = get('sbWidth') ?? null;
+    const curPlId = get('curPlId') ?? null;
+    const drillKey = get('drillKey') ?? '';
+    const drillFrom = get('drillFrom') ?? '';
     const drillDisplayName = get('drillDisplayName') ?? '';
-    const plFolders     = get('plFolders') ?? [];
-    const recentPls     = get('recentPls') ?? [];
-    const autoUpdate    = get('autoUpdate') !== false; // true par défaut
-    const formatFilter  = get('formatFilter') || '';
+    const plFolders = get('plFolders') ?? [];
+    const recentPls = get('recentPls') ?? [];
+    const autoUpdate = get('autoUpdate') !== false; // true par défaut
+    const formatFilter = get('formatFilter') || '';
     const cdCopyrightAck = get('cdCopyrightAck') === true; // CONFORMITÉ-CD
     const lastSettingsTab = get('lastSettingsTab') || 'appearance'; // UX-Ergo : mémoire onglet
-    const tlistZoom      = get('tlistZoom') || 'comfortable';       // zoom liste pistes
-    const motionPref     = get('motionPref') || 'system';             // Task 10 : Système/Complètes/Réduites
-    const showRemaining  = get('showRemaining') === true;           // temps restant cliquable (#td)
+    const tlistZoom = get('tlistZoom') || 'comfortable'; // zoom liste pistes
+    const motionPref = get('motionPref') || 'system'; // Task 10 : Système/Complètes/Réduites
+    const showRemaining = get('showRemaining') === true; // temps restant cliquable (#td)
 
-    const likedIds    = liked instanceof Set ? [...liked] : [];
-    const _audioEl    = /** @type {HTMLAudioElement|null} */ (document.getElementById('audio'));
-    const curTrackId  = curIdx >= 0 && tracks[curIdx] ? tracks[curIdx].id : null;
-    const curPos      = curTrackId && (_audioEl?.duration ?? 0) > 0
-      ? Math.floor(_audioEl?.currentTime ?? 0)
-      : 0;
+    const likedIds = liked instanceof Set ? [...liked] : [];
+    const _audioEl = /** @type {HTMLAudioElement|null} */ (document.getElementById('audio'));
+    const curTrackId = curIdx >= 0 && tracks[curIdx] ? tracks[curIdx].id : null;
+    const curPos =
+      curTrackId && (_audioEl?.duration ?? 0) > 0 ? Math.floor(_audioEl?.currentTime ?? 0) : 0;
 
     // ── État DOM supplémentaire ───────────────────────────────────────────────
-    const volEl      = document.getElementById('vol');
-    const volume     = volEl ? Math.round(parseFloat(volEl.value) * 100) / 100 : 1;
-    const tlist      = document.getElementById('tlist');
-    const scrollTop  = tlist ? Math.round(tlist.scrollTop) : 0;
-    const ovEl       = document.getElementById('mp-ov');
+    const volEl = document.getElementById('vol');
+    const volume = volEl ? Math.round(parseFloat(volEl.value) * 100) / 100 : 1;
+    const tlist = document.getElementById('tlist');
+    const scrollTop = tlist ? Math.round(tlist.scrollTop) : 0;
+    const ovEl = document.getElementById('mp-ov');
     const miniOvOpen = ovEl ? ovEl.classList.contains('on') : false;
-    const miniOvPos  = (ovEl && ovEl.style.left && ovEl.style.left !== '')
-      ? { x: parseInt(ovEl.style.left) || 0, y: parseInt(ovEl.style.top) || 0 }
-      : null;
+    const miniOvPos =
+      ovEl && ovEl.style.left && ovEl.style.left !== ''
+        ? { x: parseInt(ovEl.style.left) || 0, y: parseInt(ovEl.style.top) || 0 }
+        : null;
 
-    const _allViews = ['all','liked','albums','artists','genres','recent','playlist','stats','album-detail','artist-detail','genre-detail'];
+    const _allViews = [
+      'all',
+      'liked',
+      'albums',
+      'artists',
+      'genres',
+      'recent',
+      'playlist',
+      'stats',
+      'album-detail',
+      'artist-detail',
+      'genre-detail'
+    ];
 
-    await dput('cfg', {
-      likedIds, sort,
-      view: (_allViews.includes(view) ? view : 'all'),
-      recentPlays: recentPlays.slice(0, 50),
-      lang: getLang(), theme: getTheme(), dynColor: getDynColor(),
-      crossfadeDur, displayMode: getDisplayMode(), rgEnabled, rgTargetLUFS,
-      playbackSpeed, cinemaBg: get('cinemaBg') ?? 'ambient',
-      npBg: get('npBg') ?? 'blur',
-      shuffle, repeat, albumSort, artistSort, genreSort, albumDetailSort, plGridSort, sbWidth,
-      eqEnabled, eqExpert,
-      eqGains: getEQGains(),
-      eqPreset: getActiveEqPreset(),
-      vizMode: getVizMode(), vizEnabled: getVizEnabled(),
-      eqAutoMode, eqProfiles: getEQProfiles(),
-      eqDeviceProfiles: getDeviceProfiles(),
-      watchPath: getWatchPath(),
-      curTrackId, curPos,
-      miniPos: getMiniPos() ?? null,
-      volume, curPlId, scrollTop,
-      miniOvOpen, miniOvPos,
-      drillKey, drillFrom, drillDisplayName,
-      plFolders, recentPls,
-      heatPeriod:  getHeatPeriod(),
-      queueState:  getQueueState(),
-      radioSeedId: radioActive ? getRadioSeedId() : null,
-      autoUpdate,
-      formatFilter,
-      cdCopyrightAck,
-      lastSettingsTab,
-      tlistZoom,
-      motionPref,
-      showRemaining,
-    }, 'state');
+    await dput(
+      'cfg',
+      {
+        likedIds,
+        sort,
+        view: _allViews.includes(view) ? view : 'all',
+        recentPlays: recentPlays.slice(0, 50),
+        lang: getLang(),
+        theme: getTheme(),
+        dynColor: getDynColor(),
+        crossfadeDur,
+        displayMode: getDisplayMode(),
+        rgEnabled,
+        rgTargetLUFS,
+        playbackSpeed,
+        cinemaBg: get('cinemaBg') ?? 'ambient',
+        npBg: get('npBg') ?? 'blur',
+        shuffle,
+        repeat,
+        albumSort,
+        artistSort,
+        genreSort,
+        albumDetailSort,
+        plGridSort,
+        sbWidth,
+        eqEnabled,
+        eqExpert,
+        eqGains: getEQGains(),
+        eqPreset: getActiveEqPreset(),
+        vizMode: getVizMode(),
+        vizEnabled: getVizEnabled(),
+        eqAutoMode,
+        eqProfiles: getEQProfiles(),
+        eqDeviceProfiles: getDeviceProfiles(),
+        watchPath: getWatchPath(),
+        curTrackId,
+        curPos,
+        miniPos: getMiniPos() ?? null,
+        volume,
+        curPlId,
+        scrollTop,
+        miniOvOpen,
+        miniOvPos,
+        drillKey,
+        drillFrom,
+        drillDisplayName,
+        plFolders,
+        recentPls,
+        heatPeriod: getHeatPeriod(),
+        queueState: getQueueState(),
+        radioSeedId: radioActive ? getRadioSeedId() : null,
+        autoUpdate,
+        formatFilter,
+        cdCopyrightAck,
+        lastSettingsTab,
+        tlistZoom,
+        motionPref,
+        showRemaining
+      },
+      'state'
+    );
   } catch (e) {
     if (isQuotaError(e)) {
       // ARCH-7 : quota IDB — cfg est petit, si ça échoue c'est vraiment critique

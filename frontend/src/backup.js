@@ -14,12 +14,12 @@
 //   exportBackup()
 //   importBackup()
 
-import { dall, dget, DB }                            from './db.js';
-import { invoke }                                     from './ipc.js';
-import { toast }                                      from './ui.js';
-import { get, set, notify }                          from './store.js';
+import { dall, dget, DB } from './db.js';
+import { invoke } from './ipc.js';
+import { toast } from './ui.js';
+import { get, set, notify } from './store.js';
 import { rebuildTrackIdxMap, invalidateFilterCache } from './search.js';
-import { VIRT }                                      from './virt.js';
+import { VIRT } from './virt.js';
 
 // Version du format .libreflow (incrémentée si schéma incompatible)
 const BACKUP_FORMAT_VERSION = 1;
@@ -35,7 +35,10 @@ async function _batchPut(storeName, records) {
     const tx = DB.transaction(storeName, 'readwrite');
     const store = tx.objectStore(storeName);
     for (const rec of records) store.put(rec);
-    await new Promise((ok, fail) => { tx.oncomplete = ok; tx.onerror = () => fail(tx.error); });
+    await new Promise((ok, fail) => {
+      tx.oncomplete = ok;
+      tx.onerror = () => fail(tx.error);
+    });
   } catch (e) {
     console.warn(`[backup] batch IDB write (${storeName}) failed:`, e);
   }
@@ -49,7 +52,10 @@ async function _batchPut(storeName, records) {
  */
 export async function exportBackup() {
   const btn = document.getElementById('backup-export-btn');
-  if (btn) { btn.disabled = true; btn.textContent = 'Export en cours…'; }
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = 'Export en cours…';
+  }
 
   try {
     // Lire tous les stores IDB en parallèle
@@ -58,26 +64,26 @@ export async function exportBackup() {
       dall('playlists'),
       dall('playlog'),
       dall('imports').catch(() => []),
-      dget('cfg', 'state').catch(() => ({})),
+      dget('cfg', 'state').catch(() => ({}))
     ]);
 
     const manifest = {
-      version:        BACKUP_FORMAT_VERSION,
-      app_version:    '1.1.0',
-      date:           new Date().toISOString(),
-      track_count:    (tracks ?? []).length,
-      includes_files: false,
+      version: BACKUP_FORMAT_VERSION,
+      app_version: '1.1.0',
+      date: new Date().toISOString(),
+      track_count: (tracks ?? []).length,
+      includes_files: false
     };
 
     const result = await invoke('export_backup', {
       payload: {
-        manifest:  JSON.stringify(manifest),
-        library:   JSON.stringify(tracks  ?? []),
+        manifest: JSON.stringify(manifest),
+        library: JSON.stringify(tracks ?? []),
         playlists: JSON.stringify(playlists ?? []),
-        playlog:   JSON.stringify(playlog ?? []),
-        imports:   JSON.stringify(imports ?? []),
-        config:    JSON.stringify(cfg     ?? {}),
-      },
+        playlog: JSON.stringify(playlog ?? []),
+        imports: JSON.stringify(imports ?? []),
+        config: JSON.stringify(cfg ?? {})
+      }
     });
 
     if (result) {
@@ -89,7 +95,10 @@ export async function exportBackup() {
     console.error('[backup] Export failed:', e);
     toast(`Erreur d'export : ${e}`, 'error');
   } finally {
-    if (btn) { btn.disabled = false; btn.textContent = 'Exporter'; }
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = 'Exporter';
+    }
   }
 }
 
@@ -101,7 +110,10 @@ export async function exportBackup() {
  */
 export async function importBackup() {
   const btn = document.getElementById('backup-import-btn');
-  if (btn) { btn.disabled = true; btn.textContent = 'Restauration…'; }
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = 'Restauration…';
+  }
 
   try {
     const payload = await invoke('import_backup', {});
@@ -112,8 +124,12 @@ export async function importBackup() {
 
     // Vérification de compatibilité du format
     let manifest;
-    try { manifest = JSON.parse(payload.manifest); }
-    catch { toast('Fichier .libreflow invalide (manifest corrompu)', 'error'); return; }
+    try {
+      manifest = JSON.parse(payload.manifest);
+    } catch {
+      toast('Fichier .libreflow invalide (manifest corrompu)', 'error');
+      return;
+    }
 
     if (typeof manifest.version !== 'number' || manifest.version > BACKUP_FORMAT_VERSION) {
       toast(`Format non supporté (version ${manifest.version}). Mettez LibreFlow à jour.`, 'error');
@@ -121,16 +137,16 @@ export async function importBackup() {
     }
 
     // Parsing
-    const backupTracks    = _safeJsonParse(payload.library,   []);
+    const backupTracks = _safeJsonParse(payload.library, []);
     const backupPlaylists = _safeJsonParse(payload.playlists, []);
-    const backupPlaylog   = _safeJsonParse(payload.playlog,   []);
-    const backupImports   = _safeJsonParse(payload.imports,   []);
+    const backupPlaylog = _safeJsonParse(payload.playlog, []);
+    const backupImports = _safeJsonParse(payload.imports, []);
 
     // ── Merge tracks ──────────────────────────────────────────────────────────
     // INVARIANT : toute mutation de tracks[] → rebuildTrackIdxMap() AVANT notify()
     const currentTracks = get('tracks') ?? [];
-    const existingIds   = new Set(currentTracks.map(t => t.id));
-    const addedTracks   = [];
+    const existingIds = new Set(currentTracks.map((t) => t.id));
+    const addedTracks = [];
 
     for (const t of backupTracks) {
       if (!existingIds.has(t.id)) {
@@ -153,9 +169,9 @@ export async function importBackup() {
 
     // ── Playlists : merge par id ──────────────────────────────────────────────
     const currentPlaylists = get('playlists') ?? [];
-    const existingPlIds    = new Set(currentPlaylists.map(p => p.id));
-    const newPlaylists     = [...currentPlaylists];
-    const addedPlaylists   = [];
+    const existingPlIds = new Set(currentPlaylists.map((p) => p.id));
+    const newPlaylists = [...currentPlaylists];
+    const addedPlaylists = [];
     for (const p of backupPlaylists) {
       if (!existingPlIds.has(p.id)) {
         newPlaylists.push(p);
@@ -173,7 +189,10 @@ export async function importBackup() {
     const existingPlaylog = await dall('playlog').catch(() => []);
     const existingTs = new Set();
     for (const l of existingPlaylog) existingTs.add(l.ts);
-    await _batchPut('playlog', backupPlaylog.filter(l => !existingTs.has(l.ts)));
+    await _batchPut(
+      'playlog',
+      backupPlaylog.filter((l) => !existingTs.has(l.ts))
+    );
 
     // ── Imports history : merge par id (put = upsert sur keyPath 'id') ─────────
     await _batchPut('imports', backupImports);
@@ -187,13 +206,19 @@ export async function importBackup() {
     console.error('[backup] Import failed:', e);
     toast(`Erreur d'import : ${e}`, 'error');
   } finally {
-    if (btn) { btn.disabled = false; btn.textContent = 'Restaurer'; }
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = 'Restaurer';
+    }
   }
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function _safeJsonParse(str, fallback) {
-  try { return JSON.parse(str) ?? fallback; }
-  catch { return fallback; }
+  try {
+    return JSON.parse(str) ?? fallback;
+  } catch {
+    return fallback;
+  }
 }

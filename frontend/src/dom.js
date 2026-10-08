@@ -18,4 +18,3 @@ export function $id(id) {
 export function $select(id) {
   return /** @type {HTMLSelectElement} */ (document.getElementById(id));
 }
-

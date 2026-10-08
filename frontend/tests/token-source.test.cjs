@@ -10,8 +10,18 @@ const { readRepoFile } = require('./_a11y.cjs');
 const MAX_TOKENS_PER_ROOT_BLOCK = 3;
 
 async function run() {
-  let pass = 0, fail = 0;
-  const t = async (n, fn) => { try { await fn(); pass++; console.log(`  ✓ ${n}`); } catch (e) { fail++; console.log(`  ✗ ${n}: ${e.message}`); } };
+  let pass = 0,
+    fail = 0;
+  const t = async (n, fn) => {
+    try {
+      await fn();
+      pass++;
+      console.log(`  ✓ ${n}`);
+    } catch (e) {
+      fail++;
+      console.log(`  ✗ ${n}: ${e.message}`);
+    }
+  };
   console.log('\n── token source of truth (§17) ──');
 
   const SS = readRepoFile('frontend/src/style.css');
@@ -21,11 +31,14 @@ async function run() {
     // `:root {` only — `:root[...]` (attribute-scoped) is intentionally excluded.
     const rootBlocks = SS.match(/:root\s*\{[^}]*\}/g) || [];
     const offenders = rootBlocks
-      .map(b => ({ b, n: (b.match(/--[\w-]+\s*:/g) || []).length }))
-      .filter(x => x.n > MAX_TOKENS_PER_ROOT_BLOCK);
-    assert.strictEqual(offenders.length, 0,
-      `style.css has a :root block declaring ${offenders.map(o => o.n).join(',')} tokens ` +
-      `(> ${MAX_TOKENS_PER_ROOT_BLOCK}) — the token layer belongs in design-system.css`);
+      .map((b) => ({ b, n: (b.match(/--[\w-]+\s*:/g) || []).length }))
+      .filter((x) => x.n > MAX_TOKENS_PER_ROOT_BLOCK);
+    assert.strictEqual(
+      offenders.length,
+      0,
+      `style.css has a :root block declaring ${offenders.map((o) => o.n).join(',')} tokens ` +
+        `(> ${MAX_TOKENS_PER_ROOT_BLOCK}) — the token layer belongs in design-system.css`
+    );
   });
 
   await t('design-system.css defines the canonical scales', () => {
@@ -34,7 +47,10 @@ async function run() {
     }
   });
 
-  if (fail) { console.log(`\nTOKEN-SOURCE FAIL: ${fail}/${pass + fail}`); process.exit(1); }
+  if (fail) {
+    console.log(`\nTOKEN-SOURCE FAIL: ${fail}/${pass + fail}`);
+    process.exit(1);
+  }
   console.log(`\nTOKEN-SOURCE OK: ${pass}/${pass}`);
 }
 module.exports = { run };

@@ -2,36 +2,36 @@
 // Now Playing full-page view (#vnp) — Phase 2 Ambient UI Redesign.
 // Vue pleine page intégrée dans #main (remplace l'ancien drawer latéral).
 
-import { updateAmbient }   from './ambient.js';
-import { _showViewRaw }    from './views.js';
-import { invoke }          from './ipc.js';
-import { on, EVENTS }      from './bus.js';
+import { updateAmbient } from './ambient.js';
+import { _showViewRaw } from './views.js';
+import { invoke } from './ipc.js';
+import { on, EVENTS } from './bus.js';
 import { get, set, subscribe } from './store.js';
-import { esc }             from './utils.js';
-import { closeQueue }      from './queue.js';
-import { closeEQ }         from './eq.js';
-import { clearSelection }  from './selection.js';
-import { renderAmbientFrame }                               from './ambientRenderer.js';
-import { sampleArtColors, boostSat, rgbToHsl, hslToRgb }  from './artcolor.js';
-import { saveCfg }                                          from './cfgsave.js';
+import { esc } from './utils.js';
+import { closeQueue } from './queue.js';
+import { closeEQ } from './eq.js';
+import { clearSelection } from './selection.js';
+import { renderAmbientFrame } from './ambientRenderer.js';
+import { sampleArtColors, boostSat, rgbToHsl, hslToRgb } from './artcolor.js';
+import { saveCfg } from './cfgsave.js';
 
 export let nowPlayingOpen = false;
-let _prevView    = 'all';
-let _fullscreen  = false;
+let _prevView = 'all';
+let _fullscreen = false;
 
 // ── NowPlaying background mode state ────────────────────────────────────────
 const NP_BG_MODES = ['blur', 'ambient', 'amoled'];
-let _npBgMode  = 'blur';
-let _npColors  = null;   // { cT, cL, cR } from art sampling
-let _npArtRGB  = '120,80,160'; // "r,g,b" fallback for AMOLED halo
+let _npBgMode = 'blur';
+let _npColors = null; // { cT, cL, cR } from art sampling
+let _npArtRGB = '120,80,160'; // "r,g,b" fallback for AMOLED halo
 let _npAnimRaf = null;
 let _npAnimGen = 0;
-let _npAnimT   = 0;
+let _npAnimT = 0;
 let _npFrameCnt = 0;
 
 const _techInfoCache = new Map(); // path → AudioProps
 
-const _EXPAND_ICON   = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="16" height="16"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>`;
+const _EXPAND_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="16" height="16"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>`;
 const _COMPRESS_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="16" height="16"><polyline points="4 14 10 14 10 20"/><polyline points="20 10 14 10 14 4"/><line x1="10" y1="14" x2="21" y2="3"/><line x1="3" y1="21" x2="10" y2="14"/></svg>`;
 
 // ── Formatters (pure — also tested in core.test.cjs section 10) ──────────────
@@ -40,17 +40,23 @@ export function formatCodec(ext) {
   if (!ext) return '–';
   const upper = ext.toUpperCase();
   const MAP = {
-    MP3: 'MP3', FLAC: 'FLAC', M4A: 'AAC/ALAC',
-    OGG: 'OGG Vorbis', OPUS: 'Opus', WAV: 'WAV',
-    AIFF: 'AIFF', AIF: 'AIFF', APE: 'APE', WMA: 'WMA',
+    MP3: 'MP3',
+    FLAC: 'FLAC',
+    M4A: 'AAC/ALAC',
+    OGG: 'OGG Vorbis',
+    OPUS: 'Opus',
+    WAV: 'WAV',
+    AIFF: 'AIFF',
+    AIF: 'AIFF',
+    APE: 'APE',
+    WMA: 'WMA'
   };
   return MAP[upper] || upper;
 }
 
-
 export function formatBitDepth(bitDepth, sampleRate) {
   const parts = [];
-  if (bitDepth)   parts.push(bitDepth + ' bit');
+  if (bitDepth) parts.push(bitDepth + ' bit');
   if (sampleRate) parts.push((sampleRate / 1000).toFixed(sampleRate % 1000 === 0 ? 0 : 1) + ' kHz');
   return parts.join(' / ') || '–';
 }
@@ -70,8 +76,7 @@ function _buildNpColors() {
       return;
     }
   }
-  const raw = getComputedStyle(document.documentElement)
-    .getPropertyValue('--art-color').trim();
+  const raw = getComputedStyle(document.documentElement).getPropertyValue('--art-color').trim();
   const m = raw.match(/(\d+)[,\s]+(\d+)[,\s]+(\d+)/);
   if (m) {
     const cT = boostSat(+m[1], +m[2], +m[3]);
@@ -79,7 +84,7 @@ function _buildNpColors() {
     _npColors = {
       cT,
       cL: hslToRgb((h + 38) % 360, Math.min(1, s), l),
-      cR: hslToRgb((h - 32 + 360) % 360, Math.min(1, s), l),
+      cR: hslToRgb((h - 32 + 360) % 360, Math.min(1, s), l)
     };
     _npArtRGB = cT.join(',');
   } else {
@@ -89,7 +94,10 @@ function _buildNpColors() {
 
 function _stopNpAnim() {
   _npAnimGen++;
-  if (_npAnimRaf) { cancelAnimationFrame(_npAnimRaf); _npAnimRaf = null; }
+  if (_npAnimRaf) {
+    cancelAnimationFrame(_npAnimRaf);
+    _npAnimRaf = null;
+  }
 }
 
 function _startNpAnim(canvas, ctx, W, H) {
@@ -97,8 +105,7 @@ function _startNpAnim(canvas, ctx, W, H) {
   let last = performance.now();
   function loop(now) {
     if (myGen !== _npAnimGen) return;
-    if (!nowPlayingOpen || document.hidden ||
-        (_npBgMode !== 'ambient' && _npBgMode !== 'amoled')) {
+    if (!nowPlayingOpen || document.hidden || (_npBgMode !== 'ambient' && _npBgMode !== 'amoled')) {
       last = now;
       _npAnimRaf = null;
       return;
@@ -122,7 +129,7 @@ function _applyNpBg() {
 
   _stopNpAnim();
 
-  NP_BG_MODES.forEach(m => vnp.classList.remove('vnp-bg-' + m));
+  NP_BG_MODES.forEach((m) => vnp.classList.remove('vnp-bg-' + m));
   vnp.classList.add('vnp-bg-' + _npBgMode);
 
   if (_npBgMode === 'blur') return;
@@ -132,9 +139,9 @@ function _applyNpBg() {
   const canvas = document.getElementById('vnp-canvas');
   if (!canvas) return;
   const dpr = window.devicePixelRatio || 1;
-  const W = window.innerWidth  || 1280;
+  const W = window.innerWidth || 1280;
   const H = window.innerHeight || 800;
-  canvas.width  = Math.round(W * dpr);
+  canvas.width = Math.round(W * dpr);
   canvas.height = Math.round(H * dpr);
   const ctx = canvas.getContext('2d');
   if (!ctx) return;
@@ -153,7 +160,10 @@ export function cycleNpBg() {
 }
 
 export function initNpBg(mode) {
-  if (NP_BG_MODES.includes(mode)) { _npBgMode = mode; set('npBg', mode); }
+  if (NP_BG_MODES.includes(mode)) {
+    _npBgMode = mode;
+    set('npBg', mode);
+  }
 }
 
 // ── IPC (lazy, cached) ────────────────────────────────────────────────────────
@@ -164,7 +174,10 @@ async function _loadTechInfo(path) {
     const info = await invoke('read_audio_props', { path });
     _techInfoCache.set(path, info);
     return info;
-  } catch(e) { console.warn('[nowplaying] read_audio_props IPC failed for', path, ':', e); return null; }
+  } catch (e) {
+    console.warn('[nowplaying] read_audio_props IPC failed for', path, ':', e);
+    return null;
+  }
 }
 
 // ── Render ────────────────────────────────────────────────────────────────────
@@ -179,9 +192,12 @@ function _renderNowPlaying(t, info) {
 
   const bgStyle = t.art ? ` style="background-image:url('${esc(t.art)}')"` : '';
 
-  const codec    = formatCodec(t.ext);
-  const bitrate  = formatBitrate(info?.bitrate ?? t.bitrate ?? null);
-  const quality  = formatBitDepth(info?.bit_depth ?? t.bitDepth ?? null, info?.sample_rate ?? t.sampleRate ?? null);
+  const codec = formatCodec(t.ext);
+  const bitrate = formatBitrate(info?.bitrate ?? t.bitrate ?? null);
+  const quality = formatBitDepth(
+    info?.bit_depth ?? t.bitDepth ?? null,
+    info?.sample_rate ?? t.sampleRate ?? null
+  );
 
   const isLiked = get('liked')?.has(t.id) ?? false;
 
@@ -200,7 +216,16 @@ function _renderNowPlaying(t, info) {
     <div class="vnp-art-wrap">${artH}</div>
     <div class="vnp-bottom">
       <div class="vnp-info">
-        <div class="vnp-title">${esc(t.name || (t.path ? t.path.split(/[/\\]/).pop().replace(/\.[^.]+$/, '') : '') || '—')}</div>
+        <div class="vnp-title">${esc(
+          t.name ||
+            (t.path
+              ? t.path
+                  .split(/[/\\]/)
+                  .pop()
+                  .replace(/\.[^.]+$/, '')
+              : '') ||
+            '—'
+        )}</div>
         <div class="vnp-artist">${esc(t.artist || '–')}</div>
         ${t.album ? `<div class="vnp-album">${esc(t.album)}</div>` : ''}
         <button class="vnp-lk${isLiked ? ' active' : ''}" data-action="toggle-like"
@@ -217,7 +242,7 @@ function _renderNowPlaying(t, info) {
         ${quality !== '–' ? `<span class="vnp-badge">${esc(quality)}</span>` : ''}
       </div>
       <div class="vnp-links">
-        ${t.album  ? `<button class="vnp-link" data-action="np-drill-album" data-album-key="${esc(t.album)}" data-album-name="${esc(t.album)}">→ Album</button>` : ''}
+        ${t.album ? `<button class="vnp-link" data-action="np-drill-album" data-album-key="${esc(t.album)}" data-album-name="${esc(t.album)}">→ Album</button>` : ''}
         ${t.artist ? `<button class="vnp-link" data-action="np-drill-artist" data-artist-key="${esc(t.artist)}" data-artist-name="${esc(t.artist)}">→ Artiste</button>` : ''}
       </div>
     </div>`;
@@ -238,14 +263,20 @@ export async function openNowPlaying() {
   if (!t) return;
   _renderNowPlaying(t, null);
   const vnp = document.getElementById('vnp');
-  if (vnp) { updateAmbient(vnp); _applyNpBg(); }
+  if (vnp) {
+    updateAmbient(vnp);
+    _applyNpBg();
+  }
   const info = await _loadTechInfo(t.path);
   // La piste courante a pu changer pendant l'await (skip rapide) — ne pas
   // peindre des infos techniques périmées sur la nouvelle pochette.
   if (nowPlayingOpen && (get('tracks') || [])[get('curIdx')]?.id === t.id) {
     _renderNowPlaying(t, info);
     const vnp2 = document.getElementById('vnp');
-    if (vnp2) { updateAmbient(vnp2); _applyNpBg(); }
+    if (vnp2) {
+      updateAmbient(vnp2);
+      _applyNpBg();
+    }
   }
 }
 
@@ -274,7 +305,8 @@ export function toggleNowPlayingFullscreen() {
 }
 
 export function toggleNowPlaying() {
-  if (nowPlayingOpen) closeNowPlaying(); else openNowPlaying();
+  if (nowPlayingOpen) closeNowPlaying();
+  else openNowPlaying();
 }
 
 /**
@@ -292,13 +324,19 @@ export function updateNowPlaying(track) {
   if (!nowPlayingOpen || !track) return;
   _renderNowPlaying(track, _techInfoCache.get(track.path) ?? null);
   const vnp = document.getElementById('vnp');
-  if (vnp) { updateAmbient(vnp); _applyNpBg(); }
-  _loadTechInfo(track.path).then(info => {
+  if (vnp) {
+    updateAmbient(vnp);
+    _applyNpBg();
+  }
+  _loadTechInfo(track.path).then((info) => {
     // Revérifier que `track` est toujours la piste courante après l'await async.
     if (nowPlayingOpen && (get('tracks') || [])[get('curIdx')]?.id === track.id) {
       _renderNowPlaying(track, info);
       const vnp2 = document.getElementById('vnp');
-      if (vnp2) { updateAmbient(vnp2); _applyNpBg(); }
+      if (vnp2) {
+        updateAmbient(vnp2);
+        _applyNpBg();
+      }
     }
   });
 }
@@ -317,11 +355,12 @@ function _patchLikeBtn() {
   if (svg) svg.setAttribute('fill', isLiked ? 'currentColor' : 'none');
 }
 
-subscribe('liked', () => { if (nowPlayingOpen) _patchLikeBtn(); });
+subscribe('liked', () => {
+  if (nowPlayingOpen) _patchLikeBtn();
+});
 
 // Track change — update if open, do NOT auto-open (full-page view, user-initiated only)
 on(EVENTS.TRACK_CHANGE, ({ track }) => {
   if (nowPlayingOpen) updateNowPlaying(track);
   // Do NOT auto-open NP view on track change — it's a full-page view now
 });
-

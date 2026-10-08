@@ -13,13 +13,12 @@
 //   initQueueDrag (Task 4)
 //   peekFirstExplicit, consumeFirstExplicit, peekExplicitQueue (Task 9)
 
-import { esc, extEmoji, fmtd, moveByOne }  from './utils.js';
-import { CFG }                            from './cfg.js';
-import { eqOpen, closeEQ }                from './eq.js';
-import { i18n }                           from './i18n.js';
-import { get, set }                       from './store.js';
-import { getFiltered, filteredIdx, _trackIdxMap,
-         invalidateFilterCache }          from './search.js';
+import { esc, extEmoji, fmtd, moveByOne } from './utils.js';
+import { CFG } from './cfg.js';
+import { eqOpen, closeEQ } from './eq.js';
+import { i18n } from './i18n.js';
+import { get, set } from './store.js';
+import { getFiltered, filteredIdx, _trackIdxMap, invalidateFilterCache } from './search.js';
 // NOTE: seuls playAt + togglePlay sont importés de player.js.
 // `audio` et `isCurrentTrack` ont été retirés pour réduire le couplage circulaire
 // player.js ↔ queue.js (§6 CLAUDE.md). `audio` est accédé via le DOM ;
@@ -32,39 +31,44 @@ import { toast, toastWithAction } from './ui.js';
 // Fermeture via bus — évite les cycles d'import avec views.js et settings.js.
 // Épinglée (queuePinned), la file d'attente ignore ces fermetures forcées : elle
 // reste ouverte (état + DOM) et réapparaît telle quelle une fois l'autre panneau fermé.
-on(EVENTS.PANEL_CLOSE_QUEUE, () => { if (queueOpen && !queuePinned) closeQueue(); });
+on(EVENTS.PANEL_CLOSE_QUEUE, () => {
+  if (queueOpen && !queuePinned) closeQueue();
+});
 
 // ── Focus trap ──────────────────────────────────────────────
 // FOCUS-1 FIX : trap Tab/Shift+Tab dans #queue-panel quand ouvert.
-const _FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
+const _FOCUSABLE =
+  'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
 let _queueFocusTrap = null;
 
 function _setupQueueFocusTrap(panel) {
   if (_queueFocusTrap) panel.removeEventListener('keydown', _queueFocusTrap);
   _queueFocusTrap = (e) => {
     if (e.code !== 'Tab') return;
-    const focusable = [...panel.querySelectorAll(_FOCUSABLE)].filter(el => {
+    const focusable = [...panel.querySelectorAll(_FOCUSABLE)].filter((el) => {
       const r = el.getBoundingClientRect();
       return r.width > 0 && r.height > 0;
     });
     if (!focusable.length) return;
     const first = focusable[0];
-    const last  = focusable[focusable.length - 1];
+    const last = focusable[focusable.length - 1];
     if (e.shiftKey && document.activeElement === first) {
-      e.preventDefault(); last.focus();
+      e.preventDefault();
+      last.focus();
     } else if (!e.shiftKey && document.activeElement === last) {
-      e.preventDefault(); first.focus();
+      e.preventDefault();
+      first.focus();
     }
   };
   panel.addEventListener('keydown', _queueFocusTrap);
 }
 
 // ── State ────────────────────────────────────────────────────
-export let queueOpen  = false;
+export let queueOpen = false;
 export let queuePinned = false;
 // BUG FIX : mémoriser l'ordre de la queue après un drag-drop utilisateur.
 // On stocke les IDs + le curIdx au moment du reorder pour détecter un changement de piste.
-let _queueOverride        = null; // null | Array<string> (IDs dans l'ordre voulu)
+let _queueOverride = null; // null | Array<string> (IDs dans l'ordre voulu)
 let _queueOverrideTrackId = null; // ID de la piste en cours au moment du reorder (pas l'index)
 
 // ── Drag Pointer Events ──────────────────────────────────────────────────────
@@ -80,20 +84,20 @@ function _buildExplicitQueue() {
   if (!_queueOverride || !_queueOverride.length) return [];
   const tracks = get('tracks');
   return _queueOverride
-    .filter(id => _trackIdxMap?.has(id))
-    .map(id => tracks[_trackIdxMap.get(id)]);
+    .filter((id) => _trackIdxMap?.has(id))
+    .map((id) => tracks[_trackIdxMap.get(id)]);
 }
 
 /** Queue naturelle : tracks filtrées après la piste en cours, sans les IDs explicites. */
 function _buildNaturalUpcoming() {
-  const fl      = getFiltered();
-  const curIdx  = get('curIdx');
-  const tracks  = get('tracks');
+  const fl = getFiltered();
+  const curIdx = get('curIdx');
+  const tracks = get('tracks');
   const overSet = new Set(_queueOverride || []);
   const curTrack = curIdx >= 0 ? tracks[curIdx] : null;
   // curTrack = null → startFl = -1 → loop starts at 0 → shows full filtered list
   const startFl = curTrack ? filteredIdx(curTrack) : -1;
-  const result  = [];
+  const result = [];
   for (let i = startFl + 1; i < fl.length && result.length < 50; i++) {
     if (!overSet.has(fl[i].id)) result.push(fl[i]);
   }
@@ -103,10 +107,10 @@ function _buildNaturalUpcoming() {
 /** Source textuelle pour le header "À suivre : [source]". */
 function _getQueueSource() {
   const view = get('view');
-  if (view === 'liked')    return i18n('queue_src_liked') || 'Titres aimés';
-  if (view === 'radio')    return i18n('queue_src_radio') || 'Radio';
+  if (view === 'liked') return i18n('queue_src_liked') || 'Titres aimés';
+  if (view === 'radio') return i18n('queue_src_radio') || 'Radio';
   if (view === 'playlist') {
-    const pl = (get('playlists') || []).find(p => p.id === get('curPlId'));
+    const pl = (get('playlists') || []).find((p) => p.id === get('curPlId'));
     if (pl?.name) return pl.name;
   }
   return i18n('sb_group_lib') || 'Bibliothèque';
@@ -115,8 +119,8 @@ function _getQueueSource() {
 /** Retourne l'état courant de la queue pour la persistance en cfg. */
 export function getQueueState() {
   return {
-    ids:      _queueOverride        ? [..._queueOverride]  : null,
-    anchorId: _queueOverrideTrackId ?? null,
+    ids: _queueOverride ? [..._queueOverride] : null,
+    anchorId: _queueOverrideTrackId ?? null
   };
 }
 
@@ -126,15 +130,19 @@ export function getQueueState() {
  */
 export function restoreQueueState({ ids, anchorId } = {}) {
   if (!Array.isArray(ids) || !ids.length) return;
-  _queueOverride        = ids.filter(id => _trackIdxMap?.has(id));
+  _queueOverride = ids.filter((id) => _trackIdxMap?.has(id));
   _queueOverrideTrackId = anchorId ?? null;
   if (_queueOverride.length) _updateQueueBadge(_queueOverride.length);
-  else { _queueOverride = null; _queueOverrideTrackId = null; }
+  else {
+    _queueOverride = null;
+    _queueOverrideTrackId = null;
+  }
 }
 
 /** Réinitialise l'override (appelé depuis app.js quand la piste en cours change). */
 export function clearQueueOverride() {
-  _queueOverride = null; _queueOverrideTrackId = null;
+  _queueOverride = null;
+  _queueOverrideTrackId = null;
   // Le badge doit refléter la queue naturelle, pas forcément 0
   refreshQueueBadge();
 }
@@ -149,10 +157,10 @@ export function clearQueueOverride() {
  * @returns {boolean}
  */
 export function moveQueueItem(id, dir) {
-  const ex  = _buildExplicitQueue();
-  const idx = ex.findIndex(t => t.id === id);
+  const ex = _buildExplicitQueue();
+  const idx = ex.findIndex((t) => t.id === id);
   if (moveByOne(ex, idx, dir) < 0) return false;
-  _queueOverride        = ex.map(t => t.id);
+  _queueOverride = ex.map((t) => t.id);
   _queueOverrideTrackId = get('tracks')[get('curIdx')]?.id ?? null;
   renderQueue();
   return true;
@@ -160,9 +168,9 @@ export function moveQueueItem(id, dir) {
 
 export function removeFromQueue(id) {
   if (!_queueOverride) return;
-  _queueOverride = _queueOverride.filter(x => x !== id);
+  _queueOverride = _queueOverride.filter((x) => x !== id);
   if (!_queueOverride.length) {
-    _queueOverride        = null;
+    _queueOverride = null;
     _queueOverrideTrackId = null;
   }
   refreshQueueBadge();
@@ -171,20 +179,26 @@ export function removeFromQueue(id) {
 
 /** Vide entièrement la queue explicite. */
 export function clearExplicitQueue() {
-  const _prev       = _queueOverride;
+  const _prev = _queueOverride;
   const _prevAnchor = _queueOverrideTrackId;
-  _queueOverride        = null;
+  _queueOverride = null;
   _queueOverrideTrackId = null;
   refreshQueueBadge();
   if (queueOpen) renderQueue();
   // Annulation : restaurer la file explicite manuelle (restauration en mémoire, non destructive).
   if (_prev) {
-    toastWithAction(i18n('t_queue_cleared') || 'File d\'attente vidée', 'info', i18n('t_undo') || 'Annuler', () => {
-      _queueOverride        = _prev;
-      _queueOverrideTrackId = _prevAnchor;
-      refreshQueueBadge();
-      if (queueOpen) renderQueue();
-    }, 5000);
+    toastWithAction(
+      i18n('t_queue_cleared') || "File d'attente vidée",
+      'info',
+      i18n('t_undo') || 'Annuler',
+      () => {
+        _queueOverride = _prev;
+        _queueOverrideTrackId = _prevAnchor;
+        refreshQueueBadge();
+        if (queueOpen) renderQueue();
+      },
+      5000
+    );
   }
 }
 
@@ -209,7 +223,7 @@ function _updateQueueBadge(count) {
 /** Construit la liste "upcoming" courante (override ou ordre filtré). */
 function _buildUpcoming() {
   const explicit = _buildExplicitQueue();
-  const natural  = _buildNaturalUpcoming();
+  const natural = _buildNaturalUpcoming();
   return [...explicit, ...natural];
 }
 
@@ -226,7 +240,8 @@ export function toggleQueue() {
   if (eqOpen) closeEQ();
   if (queueOpen) emit(EVENTS.PANEL_CLOSE_SETTINGS, {});
   if (queueOpen) {
-    renderQueue(); initQueueDrag();
+    renderQueue();
+    initQueueDrag();
     const panel = document.getElementById('queue-panel');
     if (panel) _setupQueueFocusTrap(panel);
   }
@@ -245,17 +260,17 @@ export function toggleQueuePin() {
 export function closeQueue() {
   if (_springBackTimer) {
     clearTimeout(_springBackTimer);
-    document.querySelectorAll('.queue-ghost').forEach(el => el.remove());
+    document.querySelectorAll('.queue-ghost').forEach((el) => el.remove());
     _springBackTimer = null;
   }
   if (_ptrState) {
     _cleanupDrag(_ptrState.ghost, _ptrState.items || [], _ptrState.itemEl);
     document.getElementById('queue-list')?.classList.remove('queue-promote-active');
-    window.removeEventListener('pointermove',   _onReorderMove);
-    window.removeEventListener('pointerup',     _onReorderUp);
+    window.removeEventListener('pointermove', _onReorderMove);
+    window.removeEventListener('pointerup', _onReorderUp);
     window.removeEventListener('pointercancel', _onReorderUp);
-    window.removeEventListener('pointermove',   _onPromotionMove);
-    window.removeEventListener('pointerup',     _onPromotionUp);
+    window.removeEventListener('pointermove', _onPromotionMove);
+    window.removeEventListener('pointerup', _onPromotionUp);
     window.removeEventListener('pointercancel', _onPromotionUp);
   }
   queueOpen = false;
@@ -271,7 +286,7 @@ export function closeQueue() {
 export function renderQueue() {
   if (!queueOpen) return;
   initQueueDrag(); // idempotent — guard dataset.dragInit prévient les doubles enregistrements
-  const el     = document.getElementById('queue-list');
+  const el = document.getElementById('queue-list');
   const tracks = get('tracks');
   const curIdx = get('curIdx');
   const repeat = get('repeat');
@@ -280,9 +295,7 @@ export function renderQueue() {
   if (repeat === 'one' && curIdx >= 0) {
     const t = tracks[curIdx];
     _updateQueueBadge('∞');
-    const artHTML = t?.art
-      ? `<img src="${esc(t.art)}" alt="">`
-      : extEmoji(t?.ext ?? '');
+    const artHTML = t?.art ? `<img src="${esc(t.art)}" alt="">` : extEmoji(t?.ext ?? '');
     const row = `<div class="queue-item queue-item--loop" role="listitem" tabindex="0" aria-label="${esc((t?.name ?? '') + ' — ' + (t?.artistFull || t?.artist || '') + ' (en boucle)')}" data-action="play-queue-item" data-track-id="${t?.id}">
       <div class="q-art q-art--loop">${artHTML}
         <button class="q-art-hover-play" data-action="toggle-play" tabindex="-1" aria-hidden="true">
@@ -313,14 +326,14 @@ export function renderQueue() {
   // l'affichage suit désormais exactement ce que next() jouera.
 
   const explicit = _buildExplicitQueue();
-  const natural  = _buildNaturalUpcoming();
+  const natural = _buildNaturalUpcoming();
 
   // repeat='all' : compléter la section naturelle si peu de pistes et pas d'override
   if (!_queueOverride && repeat === 'all' && natural.length < 20 && curIdx >= 0) {
-    const fl       = getFiltered();
+    const fl = getFiltered();
     const curTrack = tracks[curIdx];
-    const startFl  = curTrack ? filteredIdx(curTrack) : -1;
-    const naturalSet = new Set(natural.map(t => t.id));
+    const startFl = curTrack ? filteredIdx(curTrack) : -1;
+    const naturalSet = new Set(natural.map((t) => t.id));
     for (let i = 0; i < fl.length && natural.length < 20; i++) {
       if (i !== startFl && !naturalSet.has(fl[i].id)) {
         natural.push(fl[i]);
@@ -334,7 +347,7 @@ export function renderQueue() {
   let html = '';
 
   // ── Section "En cours" ──────────────────────────────────────────────────
-  const curTrack = (curIdx >= 0 && tracks[curIdx]) ? tracks[curIdx] : null;
+  const curTrack = curIdx >= 0 && tracks[curIdx] ? tracks[curIdx] : null;
   if (curTrack) {
     const artNow = curTrack.art
       ? `<img src="${esc(curTrack.art)}" alt="">`
@@ -360,7 +373,9 @@ export function renderQueue() {
   if (!explicit.length && !natural.length) {
     // État vide au standard maison (.empty) — icône + titre + invite,
     // cohérent avec les autres vues (audit 2026-07-27).
-    el.innerHTML = html + `<div class="empty queue-empty">
+    el.innerHTML =
+      html +
+      `<div class="empty queue-empty">
       <div class="empty-ico" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><line x1="9" y1="6" x2="21" y2="6"/><line x1="9" y1="12" x2="21" y2="12"/><line x1="9" y1="18" x2="21" y2="18"/><circle cx="3.5" cy="6" r="1.2" fill="currentColor" stroke="none"/><circle cx="3.5" cy="12" r="1.2" fill="currentColor" stroke="none"/><circle cx="3.5" cy="18" r="1.2" fill="currentColor" stroke="none"/></svg></div>
       <div class="empty-h">${i18n('queue_empty')}</div>
       <div class="empty-s">${i18n('queue_empty_hint')}</div>
@@ -374,14 +389,15 @@ export function renderQueue() {
   if (explicit.length) {
     html += `<div class="queue-section-header" role="presentation">
       <span class="queue-section-label">${esc(i18n('queue_upcoming', explicit.length))}</span>
-      <button class="queue-clear-btn" data-action="clear-queue" aria-label="${esc(i18n('queue_clear_all') || 'Vider la file d\'attente')}" title="${esc(i18n('queue_clear_all'))}">✕ tout</button>
+      <button class="queue-clear-btn" data-action="clear-queue" aria-label="${esc(i18n('queue_clear_all') || "Vider la file d'attente")}" title="${esc(i18n('queue_clear_all'))}">✕ tout</button>
     </div>`;
     // A11Y-03: role=listitem + aria-label pour chaque item (remove button labeled)
-    html += explicit.map((t, i) => {
-      const artHTML  = t.art ? `<img src="${esc(t.art)}" alt="">` : extEmoji(t.ext);
-      const itemLbl  = `${t.name}${t.artistFull || t.artist ? ' — ' + (t.artistFull || t.artist) : ''}`;
-      const rmvLbl   = `Retirer ${t.name} de la file d'attente`;
-      return `<div class="queue-item queue-item--explicit" role="listitem" tabindex="0" aria-label="${esc(itemLbl)}" data-id="${t.id}" data-qi="${i}" data-action="play-queue-item" data-track-id="${t.id}">
+    html += explicit
+      .map((t, i) => {
+        const artHTML = t.art ? `<img src="${esc(t.art)}" alt="">` : extEmoji(t.ext);
+        const itemLbl = `${t.name}${t.artistFull || t.artist ? ' — ' + (t.artistFull || t.artist) : ''}`;
+        const rmvLbl = `Retirer ${t.name} de la file d'attente`;
+        return `<div class="queue-item queue-item--explicit" role="listitem" tabindex="0" aria-label="${esc(itemLbl)}" data-id="${t.id}" data-qi="${i}" data-action="play-queue-item" data-track-id="${t.id}">
         <div class="q-drag-handle" aria-hidden="true"><svg viewBox="0 0 6 14" aria-hidden="true" width="10" height="14"><circle cx="2" cy="2" r="1.2"/><circle cx="5" cy="2" r="1.2"/><circle cx="2" cy="7" r="1.2"/><circle cx="5" cy="7" r="1.2"/><circle cx="2" cy="12" r="1.2"/><circle cx="5" cy="12" r="1.2"/></svg></div>
         <div class="q-art" aria-hidden="true">${artHTML}
           <button class="q-art-hover-play" data-action="play-queue-item" data-track-id="${t.id}" tabindex="-1" aria-hidden="true">
@@ -397,17 +413,20 @@ export function renderQueue() {
         <button class="queue-move-btn" data-action="queue-move-down" data-id="${t.id}" aria-label="${esc(i18n('ctx_move_down') || 'Déplacer vers le bas')}" title="${esc(i18n('ctx_move_down') || 'Déplacer vers le bas')}"><span aria-hidden="true">▼</span></button>
         <button class="queue-remove-btn" data-action="remove-from-queue" data-track-id="${t.id}" aria-label="${esc(rmvLbl)}" title="Retirer"><span aria-hidden="true">✕</span></button>
       </div>`;
-    }).join('');
+      })
+      .join('');
   }
 
   // ── Section "À suivre" (naturelle) ──────────────────────
   if (natural.length) {
     html += `<div class="queue-section-divider" role="presentation">${esc(i18n('queue_next_from', _getQueueSource()))}</div>`;
     // A11Y-03: role=listitem + aria-label pour chaque item naturel
-    html += natural.slice(0, 50).map((t, i) => {
-      const artHTML = t.art ? `<img src="${esc(t.art)}" alt="">` : extEmoji(t.ext);
-      const itemLbl = `${t.name}${t.artistFull || t.artist ? ' — ' + (t.artistFull || t.artist) : ''}`;
-      return `<div class="queue-item queue-item--natural" role="listitem" tabindex="0" aria-label="${esc(itemLbl)}" data-id="${t.id}" data-ni="${i}"
+    html += natural
+      .slice(0, 50)
+      .map((t, i) => {
+        const artHTML = t.art ? `<img src="${esc(t.art)}" alt="">` : extEmoji(t.ext);
+        const itemLbl = `${t.name}${t.artistFull || t.artist ? ' — ' + (t.artistFull || t.artist) : ''}`;
+        return `<div class="queue-item queue-item--natural" role="listitem" tabindex="0" aria-label="${esc(itemLbl)}" data-id="${t.id}" data-ni="${i}"
           data-action="play-queue-item" data-track-id="${t.id}">
         <div class="q-art" aria-hidden="true">${artHTML}
           <button class="q-art-hover-play" data-action="play-queue-item" data-track-id="${t.id}" tabindex="-1" aria-hidden="true">
@@ -420,7 +439,8 @@ export function renderQueue() {
         </div>
         <div class="q-dur" aria-hidden="true">${fmtd(t.duration)}</div>
       </div>`;
-    }).join('');
+      })
+      .join('');
   }
 
   el.innerHTML = html;
@@ -436,8 +456,10 @@ function _createGhost(itemEl, rect) {
   const ghost = itemEl.cloneNode(true);
   ghost.className = 'queue-ghost';
   ghost.style.cssText = [
-    `left:${rect.left}px`, `top:${rect.top}px`,
-    `width:${rect.width}px`, `height:${rect.height}px`,
+    `left:${rect.left}px`,
+    `top:${rect.top}px`,
+    `width:${rect.width}px`,
+    `height:${rect.height}px`
   ].join(';');
   document.body.appendChild(ghost);
   return ghost;
@@ -446,7 +468,10 @@ function _createGhost(itemEl, rect) {
 function _cleanupDrag(ghost, items, itemEl) {
   ghost.remove();
   if (itemEl) itemEl.classList.remove('q-placeholder');
-  items.forEach(el => { el.style.transform = ''; el.style.transition = ''; });
+  items.forEach((el) => {
+    el.style.transform = '';
+    el.style.transition = '';
+  });
   _ptrState = null;
 }
 
@@ -464,12 +489,17 @@ function _onQueuePointerDown(e) {
   const handle = e.target.closest('.q-drag-handle');
   if (handle) {
     const itemEl = handle.closest('.queue-item--explicit');
-    if (itemEl) { _startReorderDrag(e, itemEl); return; }
+    if (itemEl) {
+      _startReorderDrag(e, itemEl);
+      return;
+    }
   }
   // Promotion : drag depuis item naturel (pas depuis un bouton d'action)
   if (!e.target.closest('[data-action]')) {
     const natural = e.target.closest('.queue-item--natural');
-    if (natural) { _startPromotionDrag(e, natural); }
+    if (natural) {
+      _startPromotionDrag(e, natural);
+    }
   }
 }
 
@@ -478,24 +508,32 @@ function _onQueuePointerDown(e) {
 function _startReorderDrag(e, itemEl) {
   e.preventDefault();
   const listEl = document.getElementById('queue-list');
-  const items  = [...listEl.querySelectorAll('.queue-item--explicit')];
+  const items = [...listEl.querySelectorAll('.queue-item--explicit')];
   const srcIdx = items.indexOf(itemEl);
   if (srcIdx < 0) return;
 
-  const rect  = itemEl.getBoundingClientRect();
+  const rect = itemEl.getBoundingClientRect();
   const ghost = _createGhost(itemEl, rect);
 
   itemEl.classList.add('q-placeholder');
-  items.forEach((el, i) => { if (i !== srcIdx) el.style.transition = 'transform .15s ease'; });
+  items.forEach((el, i) => {
+    if (i !== srcIdx) el.style.transition = 'transform .15s ease';
+  });
 
   _ptrState = {
-    mode: 'reorder', listEl, itemEl, ghost, items,
-    srcIdx, targetIdx: srcIdx,
-    startY: e.clientY, startRectTop: rect.top,
+    mode: 'reorder',
+    listEl,
+    itemEl,
+    ghost,
+    items,
+    srcIdx,
+    targetIdx: srcIdx,
+    startY: e.clientY,
+    startRectTop: rect.top
   };
 
-  window.addEventListener('pointermove',   _onReorderMove);
-  window.addEventListener('pointerup',     _onReorderUp);
+  window.addEventListener('pointermove', _onReorderMove);
+  window.addEventListener('pointerup', _onReorderUp);
   window.addEventListener('pointercancel', _onReorderUp);
 }
 
@@ -504,7 +542,7 @@ function _onReorderMove(e) {
   const { ghost, items, itemEl, srcIdx, startY, startRectTop } = _ptrState;
 
   const dy = e.clientY - startY;
-  ghost.style.top = (startRectTop + dy) + 'px';
+  ghost.style.top = startRectTop + dy + 'px';
 
   // Calcul index cible
   const ghostMid = parseFloat(ghost.style.top) + Q_ROW_H / 2;
@@ -522,7 +560,7 @@ function _onReorderMove(e) {
     if (el === itemEl) return;
     let shift = 0;
     if (srcIdx < targetIdx && i > srcIdx && i <= targetIdx) shift = -Q_ROW_H;
-    if (srcIdx > targetIdx && i >= targetIdx && i < srcIdx) shift =  Q_ROW_H;
+    if (srcIdx > targetIdx && i >= targetIdx && i < srcIdx) shift = Q_ROW_H;
     el.style.transform = shift ? `translateY(${shift}px)` : '';
   });
 }
@@ -535,13 +573,13 @@ function _onReorderUp() {
     const ex = _buildExplicitQueue();
     const [moved] = ex.splice(srcIdx, 1);
     ex.splice(targetIdx, 0, moved);
-    _queueOverride        = ex.map(t => t.id);
+    _queueOverride = ex.map((t) => t.id);
     _queueOverrideTrackId = get('tracks')[get('curIdx')]?.id ?? null;
   }
 
   _cleanupDrag(ghost, items, itemEl);
-  window.removeEventListener('pointermove',   _onReorderMove);
-  window.removeEventListener('pointerup',     _onReorderUp);
+  window.removeEventListener('pointermove', _onReorderMove);
+  window.removeEventListener('pointerup', _onReorderUp);
   window.removeEventListener('pointercancel', _onReorderUp);
   renderQueue();
 }
@@ -550,25 +588,30 @@ function _onReorderUp() {
 
 function _startPromotionDrag(e, itemEl) {
   e.preventDefault();
-  const listEl  = document.getElementById('queue-list');
+  const listEl = document.getElementById('queue-list');
   const trackId = itemEl.dataset.id;
   if (!trackId) return;
 
-  const rect  = itemEl.getBoundingClientRect();
+  const rect = itemEl.getBoundingClientRect();
   const ghost = _createGhost(itemEl, rect);
   ghost.classList.add('queue-ghost--promote');
 
   itemEl.classList.add('q-placeholder');
 
   _ptrState = {
-    mode: 'promote', listEl, itemEl, ghost, trackId,
-    items: [],  // pas d'items à animer pour la promotion (contrairement au reorder)
-    startY: e.clientY, startRectTop: rect.top,
-    targetIdx: -1,
+    mode: 'promote',
+    listEl,
+    itemEl,
+    ghost,
+    trackId,
+    items: [], // pas d'items à animer pour la promotion (contrairement au reorder)
+    startY: e.clientY,
+    startRectTop: rect.top,
+    targetIdx: -1
   };
 
-  window.addEventListener('pointermove',   _onPromotionMove);
-  window.addEventListener('pointerup',     _onPromotionUp);
+  window.addEventListener('pointermove', _onPromotionMove);
+  window.addEventListener('pointerup', _onPromotionUp);
   window.addEventListener('pointercancel', _onPromotionUp);
 }
 
@@ -577,13 +620,11 @@ function _onPromotionMove(e) {
   const { ghost, listEl, startY, startRectTop } = _ptrState;
 
   const dy = e.clientY - startY;
-  ghost.style.top = (startRectTop + dy) + 'px';
+  ghost.style.top = startRectTop + dy + 'px';
 
   // Détecter si le ghost est au-dessus du séparateur "À suivre"
   const divider = listEl.querySelector('.queue-section-divider');
-  const inZone  = divider
-    ? e.clientY < divider.getBoundingClientRect().top
-    : true; // pas encore de section explicite → toute la zone est valide
+  const inZone = divider ? e.clientY < divider.getBoundingClientRect().top : true; // pas encore de section explicite → toute la zone est valide
 
   listEl.classList.toggle('queue-promote-active', inZone);
 
@@ -609,17 +650,17 @@ function _onPromotionUp() {
   listEl.classList.remove('queue-promote-active');
 
   const _removePromotionListeners = () => {
-    window.removeEventListener('pointermove',   _onPromotionMove);
-    window.removeEventListener('pointerup',     _onPromotionUp);
+    window.removeEventListener('pointermove', _onPromotionMove);
+    window.removeEventListener('pointerup', _onPromotionUp);
     window.removeEventListener('pointercancel', _onPromotionUp);
   };
 
   if (targetIdx >= 0) {
     // Promouvoir : insérer dans la queue explicite à targetIdx
-    const current  = _queueOverride ? [..._queueOverride] : [];
-    const filtered = current.filter(id => id !== trackId);
+    const current = _queueOverride ? [..._queueOverride] : [];
+    const filtered = current.filter((id) => id !== trackId);
     filtered.splice(targetIdx, 0, trackId);
-    _queueOverride        = filtered;
+    _queueOverride = filtered;
     _queueOverrideTrackId = get('tracks')[get('curIdx')]?.id ?? null;
 
     ghost.remove();
@@ -630,7 +671,10 @@ function _onPromotionUp() {
   } else {
     // Spring-back : annuler avec animation
     ghost.classList.add('queue-ghost--spring');
-    _springBackTimer = setTimeout(() => { ghost.remove(); _springBackTimer = null; }, 300);
+    _springBackTimer = setTimeout(() => {
+      ghost.remove();
+      _springBackTimer = null;
+    }, 300);
     itemEl.classList.remove('q-placeholder');
     _ptrState = null;
     _removePromotionListeners();
@@ -640,14 +684,21 @@ function _onPromotionUp() {
 
 export function playQueueItem(id) {
   if (_ptrState) return;
-  const t = (_trackIdxMap.has(id) ? get('tracks')[_trackIdxMap.get(id)] : undefined);
+  const t = _trackIdxMap.has(id) ? get('tracks')[_trackIdxMap.get(id)] : undefined;
   if (!t) return;
   // repeat=one : toggle au lieu de redémarrer la piste courante.
   // Réimplémentation locale de isCurrentTrack — évite l'import depuis player.js (§6)
   const _ci = get('curIdx');
-  if (_ci >= 0 && get('tracks')[_ci]?.id === id) { togglePlay(); return; }
+  if (_ci >= 0 && get('tracks')[_ci]?.id === id) {
+    togglePlay();
+    return;
+  }
   const fi = filteredIdx(t);
-  if (fi >= 0) { removeFromQueue(id); playAt(fi, { keepQueue: true }); return; }
+  if (fi >= 0) {
+    removeFromQueue(id);
+    playAt(fi, { keepQueue: true });
+    return;
+  }
   // UX-QUEUE-1 FIX : piste hors vue courante → basculer vers 'all' et jouer
   // Couvre : filtre actif, vue "liked" (piste non aimée), vue "playlist" (piste absente)
   const srch = document.getElementById('srch');
@@ -676,11 +727,11 @@ export function playQueueItem(id) {
  * @returns {boolean} true si succès
  */
 export function addToQueueNext(trackId) {
-  const t = (_trackIdxMap.has(trackId) ? get('tracks')[_trackIdxMap.get(trackId)] : null);
+  const t = _trackIdxMap.has(trackId) ? get('tracks')[_trackIdxMap.get(trackId)] : null;
   if (!t) return false;
-  const explicit = _buildExplicitQueue().filter(u => u.id !== trackId);
+  const explicit = _buildExplicitQueue().filter((u) => u.id !== trackId);
   explicit.unshift(t);
-  _queueOverride        = explicit.map(u => u.id);
+  _queueOverride = explicit.map((u) => u.id);
   _queueOverrideTrackId = get('tracks')[get('curIdx')]?.id ?? null;
   _updateQueueBadge(_buildUpcoming().length);
   if (queueOpen) renderQueue();
@@ -697,7 +748,7 @@ export function addToQueueEnd(trackId) {
   if (!t) return false;
   // Construire la file si elle n'existe pas encore
   if (!_queueOverride) {
-    _queueOverride        = [];
+    _queueOverride = [];
     _queueOverrideTrackId = get('tracks')[get('curIdx')]?.id ?? null;
   }
   // Ne pas dupliquer si déjà en queue
@@ -739,16 +790,16 @@ export function consumeFirstExplicit() {
   const track = peekFirstExplicit();
   if (!track) {
     // Tous les IDs restants sont obsolètes — vider
-    _queueOverride        = null;
+    _queueOverride = null;
     _queueOverrideTrackId = null;
     refreshQueueBadge();
     if (queueOpen) renderQueue();
     return null;
   }
-  const fi = _queueOverride.findIndex(id => _trackIdxMap?.has(id));
+  const fi = _queueOverride.findIndex((id) => _trackIdxMap?.has(id));
   _queueOverride = _queueOverride.slice(fi + 1);
   if (!_queueOverride.length) {
-    _queueOverride        = null;
+    _queueOverride = null;
     _queueOverrideTrackId = null;
   } else {
     // AUDIT CINÉMA 2026-07-20 : la piste consommée devient la piste en cours — réancrer

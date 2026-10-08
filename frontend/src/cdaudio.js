@@ -16,35 +16,40 @@
 //   - tracks[] mutations → rebuildTrackIdxMap() OBLIGATOIRE
 //   - audio.volume jamais touché ici (cf. CLAUDE.md §2)
 
-import { invoke, listen, convertFileSrc }     from './ipc.js';
-import { toast, confirmAction }               from './ui.js';
-import { i18n }                               from './i18n.js';
-import { get, set, notify }                   from './store.js';
-import { saveCfg }                            from './cfgsave.js';
-import { rebuildTrackIdxMap, trackIdx, filteredIdx, getFiltered,
-         invalidateFilterCache }              from './search.js';
-import { VIRT }                               from './virt.js';
+import { invoke, listen, convertFileSrc } from './ipc.js';
+import { toast, confirmAction } from './ui.js';
+import { i18n } from './i18n.js';
+import { get, set, notify } from './store.js';
+import { saveCfg } from './cfgsave.js';
+import {
+  rebuildTrackIdxMap,
+  trackIdx,
+  filteredIdx,
+  getFiltered,
+  invalidateFilterCache
+} from './search.js';
+import { VIRT } from './virt.js';
 import { getWatchPath, importPaths, initWatchPath, startWatchNative } from './watchfolder.js';
-import { playAt }                             from './player.js';
+import { playAt } from './player.js';
 import {
   detectNewAudioCds,
   buildEphemeralCdTrack,
   cleanupEphemeralForDrive,
   extractDestPath,
-  calculateRipPercent,
+  calculateRipPercent
 } from './cdaudio_pure.js';
 
 // ── État module ───────────────────────────────────────────────────────────────
 
-let _currentRipId     = null;
-let _currentDrive     = null;
+let _currentRipId = null;
+let _currentDrive = null;
 let _progressUnlisten = null;
-let _prefetchTimer    = null;
+let _prefetchTimer = null;
 let _prefetchAudioListener = null;
 let _cdModalPrevFocus = null;
 // B22 : rips anticipés réutilisables — Map<idx piste CD, tempPath FLAC>, scopée au drive.
-let _prefetchedRips   = new Map();
-let _prefetchDrive    = null;
+let _prefetchedRips = new Map();
+let _prefetchDrive = null;
 
 // ── API publique ──────────────────────────────────────────────────────────────
 
@@ -61,7 +66,7 @@ async function _ensureCdCopyrightAck() {
     i18n('cd_copyright_h'),
     i18n('cd_copyright_body'),
     i18n('cd_copyright_ack'),
-    'primary',
+    'primary'
   );
   if (!ok) return false;
   set('cdCopyrightAck', true);
@@ -72,8 +77,9 @@ async function _ensureCdCopyrightAck() {
 
 export async function openCdModal(drivePath) {
   let toc;
-  try { toc = await invoke('cd_read_toc', { drive: drivePath }); }
-  catch (e) {
+  try {
+    toc = await invoke('cd_read_toc', { drive: drivePath });
+  } catch (e) {
     console.warn('[cdaudio] cd_read_toc failed:', e);
     toast(i18n('cd_err_unreadable'), 'error'); // M-02 : message localisé, erreur IPC en console.warn
     return;
@@ -83,10 +89,10 @@ export async function openCdModal(drivePath) {
 
   const labelEl = document.getElementById('cd-label');
   const countEl = document.getElementById('cd-track-count');
-  const durEl   = document.getElementById('cd-duration');
+  const durEl = document.getElementById('cd-duration');
   if (labelEl) labelEl.textContent = drivePath;
   if (countEl) countEl.textContent = String(toc.tracks.length);
-  if (durEl)   durEl.textContent   = _formatDuration(toc.total_duration_sec);
+  if (durEl) durEl.textContent = _formatDuration(toc.total_duration_sec);
 
   _resetProgressUi();
   const bg = document.getElementById('cd-modal-bg');
@@ -116,11 +122,17 @@ export function closeCdModal() {
 }
 
 export async function playCdTrack(drivePath, idx) {
-  const bg  = document.getElementById('cd-modal-bg');
+  const bg = document.getElementById('cd-modal-bg');
   const toc = bg?._toc;
-  if (!toc) { toast('TOC perdu — réessayer', 'error'); return; }
-  const tocTrack = toc.tracks.find(t => t.idx === idx);
-  if (!tocTrack) { toast(`Piste ${idx} introuvable dans le TOC`, 'error'); return; }
+  if (!toc) {
+    toast('TOC perdu — réessayer', 'error');
+    return;
+  }
+  const tocTrack = toc.tracks.find((t) => t.idx === idx);
+  if (!tocTrack) {
+    toast(`Piste ${idx} introuvable dans le TOC`, 'error');
+    return;
+  }
   // CONFORMITÉ-CD : avertissement copyright one-shot (DMCA / EUCD).
   if (!(await _ensureCdCopyrightAck())) return;
 
@@ -135,12 +147,22 @@ export async function playCdTrack(drivePath, idx) {
 
     try {
       _currentRipId = rip_id;
-      await invoke('cd_rip_track', {
-        drive: drivePath, trackIdx: tocTrack.idx, destPath: tempPath, ripId: rip_id,
-      }, { timeout: 0 });
+      await invoke(
+        'cd_rip_track',
+        {
+          drive: drivePath,
+          trackIdx: tocTrack.idx,
+          destPath: tempPath,
+          ripId: rip_id
+        },
+        { timeout: 0 }
+      );
     } catch (e) {
       _unsubscribeProgress();
-      if (String(e) === 'cancelled') { _resetProgressUi(); return; }
+      if (String(e) === 'cancelled') {
+        _resetProgressUi();
+        return;
+      }
       console.warn('[cdaudio] cd_rip_track failed:', e);
       toast(i18n('cd_err_rip'), 'error');
       _resetProgressUi();
@@ -153,11 +175,7 @@ export async function playCdTrack(drivePath, idx) {
   }
 
   // Inject ephemeral track + play
-  const eph = buildEphemeralCdTrack(
-    { path: drivePath, label: drivePath },
-    tocTrack,
-    tempPath,
-  );
+  const eph = buildEphemeralCdTrack({ path: drivePath, label: drivePath }, tocTrack, tempPath);
   // Tauri custom scheme URL pour <audio src>
   eph.url = convertFileSrc(tempPath);
 
@@ -170,7 +188,7 @@ export async function playCdTrack(drivePath, idx) {
 
   // Lecture immédiate de la piste CD éphémère.
   // playAt attend un index FILTRÉ (getFiltered), pas un index tracks[].
-  getFiltered();              // réchauffe le cache → filteredIdx O(1)
+  getFiltered(); // réchauffe le cache → filteredIdx O(1)
   const fi = filteredIdx(eph);
   if (fi >= 0) playAt(fi);
   else console.warn('[cdaudio] piste CD éphémère hors vue filtrée — lecture ignorée');
@@ -182,9 +200,12 @@ export async function playCdTrack(drivePath, idx) {
 }
 
 export async function extractCd(drivePath) {
-  const bg  = document.getElementById('cd-modal-bg');
+  const bg = document.getElementById('cd-modal-bg');
   const toc = bg?._toc;
-  if (!toc) { toast('TOC perdu — réessayer', 'error'); return; }
+  if (!toc) {
+    toast('TOC perdu — réessayer', 'error');
+    return;
+  }
 
   let watchPath = getWatchPath();
   if (!watchPath) {
@@ -206,7 +227,7 @@ export async function extractCd(drivePath) {
   if (!(await _ensureCdCopyrightAck())) return;
 
   const dateStr = new Date().toISOString().slice(0, 10);
-  const label   = drivePath.replace(/[:\\]/g, '');
+  const label = drivePath.replace(/[:\\]/g, '');
 
   _showProgressUi();
   const written = [];
@@ -215,7 +236,7 @@ export async function extractCd(drivePath) {
   for (let i = 0; i < toc.tracks.length; i++) {
     const tocTrack = toc.tracks[i];
     const rip_id = crypto.randomUUID();
-    const dest   = extractDestPath(watchPath, label, tocTrack.idx, dateStr);
+    const dest = extractDestPath(watchPath, label, tocTrack.idx, dateStr);
     // Texte affiche progression GLOBALE (track i+1/N — XX%) en complément de la barre de remplissage par track.
     // L'audit (UI 2026-05-19) signalait que la barre revenait à zéro entre chaque piste sans repère global.
     const _globalPct = Math.round((i / totalTracks) * 100);
@@ -224,9 +245,16 @@ export async function extractCd(drivePath) {
 
     try {
       _currentRipId = rip_id;
-      await invoke('cd_rip_track', {
-        drive: drivePath, trackIdx: tocTrack.idx, destPath: dest, ripId: rip_id,
-      }, { timeout: 0 });
+      await invoke(
+        'cd_rip_track',
+        {
+          drive: drivePath,
+          trackIdx: tocTrack.idx,
+          destPath: dest,
+          ripId: rip_id
+        },
+        { timeout: 0 }
+      );
       written.push(dest);
     } catch (e) {
       _unsubscribeProgress();
@@ -258,8 +286,11 @@ export async function extractCd(drivePath) {
 
 export async function cancelCurrentRip() {
   if (!_currentRipId) return;
-  try { await invoke('cd_cancel_rip', { ripId: _currentRipId }); }
-  catch (e) { console.warn('[cdaudio] cancel failed:', e); }
+  try {
+    await invoke('cd_cancel_rip', { ripId: _currentRipId });
+  } catch (e) {
+    console.warn('[cdaudio] cancel failed:', e);
+  }
 }
 
 export async function cleanupCdCache(drivePath) {
@@ -275,7 +306,7 @@ export async function cleanupCdCache(drivePath) {
   _prefetchDrive = null;
   // Purge ephemeral tracks bound to this drive
   if (drivePath) {
-    const tracks   = get('tracks');
+    const tracks = get('tracks');
     const filtered = cleanupEphemeralForDrive(tracks, drivePath);
     if (filtered.length !== tracks.length) {
       // B1 FIX : capturer l'id de la piste courante AVANT la mutation de tracks[].
@@ -283,7 +314,7 @@ export async function cleanupCdCache(drivePath) {
       // réajustement curIdx pointe sur une autre piste ou hors tableau
       // (déréférencement de undefined dans updateBar/patchActiveTrack).
       const _curIdx = get('curIdx');
-      const _curId  = (_curIdx >= 0 && _curIdx < tracks.length) ? tracks[_curIdx]?.id : null;
+      const _curId = _curIdx >= 0 && _curIdx < tracks.length ? tracks[_curIdx]?.id : null;
       tracks.length = 0;
       tracks.push(...filtered);
       rebuildTrackIdxMap();
@@ -295,8 +326,11 @@ export async function cleanupCdCache(drivePath) {
     }
   }
   // Best-effort purge du cache disque
-  try { await invoke('cd_purge_cache'); }
-  catch (e) { console.warn('[cdaudio] cd_purge_cache failed:', e); }
+  try {
+    await invoke('cd_purge_cache');
+  } catch (e) {
+    console.warn('[cdaudio] cd_purge_cache failed:', e);
+  }
 }
 
 // ── Helpers internes ──────────────────────────────────────────────────────────
@@ -317,7 +351,10 @@ async function _subscribeProgress(rip_id) {
 }
 
 function _unsubscribeProgress() {
-  if (_progressUnlisten) { _progressUnlisten(); _progressUnlisten = null; }
+  if (_progressUnlisten) {
+    _progressUnlisten();
+    _progressUnlisten = null;
+  }
 }
 
 function _showProgressUi() {
@@ -349,7 +386,8 @@ function _setProgressText(t) {
 
 function _formatDuration(sec) {
   if (!Number.isFinite(sec) || sec < 0) return '?:??';
-  const m = Math.floor(sec / 60), s = Math.floor(sec % 60);
+  const m = Math.floor(sec / 60),
+    s = Math.floor(sec % 60);
   return `${m}:${String(s).padStart(2, '0')}`;
 }
 
@@ -371,7 +409,10 @@ function _schedulePrefetch(drivePath, nextIdx, totalTracks) {
     audio.removeEventListener('timeupdate', fn);
     _prefetchAudioListener = null;
   }
-  if (_prefetchTimer) { clearTimeout(_prefetchTimer); _prefetchTimer = null; }
+  if (_prefetchTimer) {
+    clearTimeout(_prefetchTimer);
+    _prefetchTimer = null;
+  }
   if (nextIdx > totalTracks) return;
 
   const audio = document.getElementById('audio');
@@ -383,11 +424,18 @@ function _schedulePrefetch(drivePath, nextIdx, totalTracks) {
     audio.removeEventListener('timeupdate', onTime);
     _prefetchAudioListener = null;
     try {
-      const rip_id   = crypto.randomUUID();
+      const rip_id = crypto.randomUUID();
       const tempPath = await _tempPathForRip(rip_id);
-      await invoke('cd_rip_track', {
-        drive: drivePath, trackIdx: nextIdx, destPath: tempPath, ripId: rip_id,
-      }, { timeout: 0 });
+      await invoke(
+        'cd_rip_track',
+        {
+          drive: drivePath,
+          trackIdx: nextIdx,
+          destPath: tempPath,
+          ripId: rip_id
+        },
+        { timeout: 0 }
+      );
       // B22 FIX : mémoriser le rip anticipé pour réutilisation par playCdTrack —
       // sans ça le FLAC est rippé puis jamais référencé (re-rip + orphelin).
       _prefetchDrive = drivePath;
