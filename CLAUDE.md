@@ -54,8 +54,6 @@ libreflow/
 │   │   └── visual/              ← Playwright snapshot tests
 │   └── index.html
 ├── src-tauri/                   ← Rust backend (Tauri 2 commands, lofty, notify)
-├── docs/
-│   └── superpowers/specs/ plans/ ← Design specs and implementation plans
 └── .claude/rules/               ← Agent conventions (code-review, testing, security, …)
 ```
 
@@ -254,7 +252,7 @@ Depuis 2026-05-28, libreflow utilise [Lit](https://lit.dev) (3.x, JS pur, sans d
 - Logique pure extraite dans `<nom>.logic.js` (testable depuis `core.test.cjs`).
 - Shadow DOM par défaut ; thématisation via CSS custom properties (`--lf-*`) définies sur `:root`.
 
-**Exclusions permanentes** : `virt.js`, chaîne Web Audio (`player.js`, `eq.js`, `replaygain.js`), `app.js` boot sequence, animations canvas (`cinema.js`, `viz.js`, `motion.js`, `oscPremium.js`), `ipc.js` — restent impératifs (cf. spec `docs/superpowers/specs/2026-05-28-lit-integration-design.md` §4).
+**Exclusions permanentes** : `virt.js`, chaîne Web Audio (`player.js`, `eq.js`, `replaygain.js`), `app.js` boot sequence, animations canvas (`cinema.js`, `viz.js`, `motion.js`, `oscPremium.js`), `ipc.js` — restent impératifs.
 
 Migration phasée — Phase 0 : `<lf-toast-stack>` uniquement. Phases ultérieures (modales, panneaux, sidebar) feront chacune l'objet d'une spec et d'un plan distincts.
 

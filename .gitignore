@@ -48,3 +48,4 @@ blob-report/
 # Session/tooling artifacts (graphify knowledge-graph cache, superpowers session state)
 graphify-out/
 .superpowers/
+frontend/src/cdaudio_pure.cjs
