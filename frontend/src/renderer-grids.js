@@ -330,10 +330,16 @@ export function renderAlbumsGrid() {
     return;
   }
 
+  // OPT: labels statiques hoistés hors de la boucle (≈400 cartes par grille)
+  const multiArtistsLbl  = i18n('multi_artists');
+  const unknownArtistLbl = i18n('unknown_artist');
+  const sansAlbumLbl     = i18n('sans_album');
+  const nTracksLbl       = i18n('n_tracks');
   grid.innerHTML = albums.map(a => {
     // AC4 : isMulti → sous-titre jamais vide
     const isMulti   = a._artistSet && a._artistSet.size > 1;
-    const artistSub = isMulti ? i18n('multi_artists') : (a.artist || i18n('unknown_artist'));
+    const artistSub = isMulti ? multiArtistsLbl : (a.artist || unknownArtistLbl);
+    const escName   = esc(a.name);
     const meta = a.year ? `<span class="card-year">${esc(String(a.year))}</span>` : '';
     const artHtml = a.artUrl
       ? `<img src="${esc(a.artUrl)}" alt="" aria-hidden="true">`
@@ -342,16 +348,16 @@ export function renderAlbumsGrid() {
         : `<div class="card-art-ph" aria-hidden="true">💿</div>`;
     // AC3 : esc(' — ' + a.artist) pour éviter tout split sur les entités HTML (§13)
     return `<div class="card" role="button" tabindex="0"
-      data-action="drill-album" data-key="${esc(a.name)}" data-name="${esc(a.name)}"
-      data-from="albums" data-display="${esc(a.name)}"
-      aria-label="${esc(a.name || i18n('sans_album'))}${a.artist ? esc(' — ' + a.artist) : ''}">
+      data-action="drill-album" data-key="${escName}" data-name="${escName}"
+      data-from="albums" data-display="${escName}"
+      aria-label="${esc(a.name || sansAlbumLbl)}${a.artist ? esc(' — ' + a.artist) : ''}">
       <div class="card-art">${artHtml}
         <button class="card-play-btn" data-action="play-card" tabindex="-1" aria-hidden="true"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><polygon points="5,3 19,12 5,21"/></svg></button>
       </div>
       <div class="card-info">
-        <span class="card-name">${hlText(a.name || i18n('sans_album'), query)}</span>
+        <span class="card-name">${hlText(a.name || sansAlbumLbl, query)}</span>
         <span class="card-sub">${esc(artistSub)}${meta}</span>
-        <span class="card-ct">${a.count} ${i18n('n_tracks')}</span>
+        <span class="card-ct">${a.count} ${nTracksLbl}</span>
       </div>
     </div>`;
   }).join('');
@@ -413,6 +419,7 @@ export function renderArtistsGrid() {
   }
 
   grid.innerHTML = artists.map(a => {
+    const escAName = esc(a.name);
     const nbAlbums = a.albumCount.size;
     const artHtml  = a.artUrl
       ? `<img src="${esc(a.artUrl)}" alt="" aria-hidden="true">`
@@ -421,15 +428,15 @@ export function renderArtistsGrid() {
         : `<div class="card-art-ph card-art-circle" aria-hidden="true">${esc(a.name?.[0]?.toUpperCase() || '?')}</div>`;
     const albumSub = nbAlbums > 1 ? ` · ${i18n('n_albums', nbAlbums)}` : '';
     return `<div class="card card-artist" role="button" tabindex="0"
-      data-action="drill-artist" data-key="${esc(a.name)}" data-name="${esc(a.name)}"
-      data-from="artists" data-display="${esc(a.name)}"
+      data-action="drill-artist" data-key="${escAName}" data-name="${escAName}"
+      data-from="artists" data-display="${escAName}"
       aria-label="${esc(a.name)}">
       <div class="card-art card-art-round">${artHtml}
         <button class="card-play-btn" data-action="play-card" tabindex="-1" aria-hidden="true"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><polygon points="5,3 19,12 5,21"/></svg></button>
       </div>
       <div class="card-info">
         <span class="card-name">${hlText(a.name || '?', query)}</span>
-        <span class="card-sub">${a.count} ${i18n('n_tracks')}${albumSub}</span>
+        <span class="card-sub">${a.count} ${nTracksLbl}${albumSub}</span>
       </div>
     </div>`;
   }).join('');
@@ -488,6 +495,8 @@ export function renderPlaylistsGrid() {
 
   const tracks = get('tracks') || [];
   // FIX-B6 : data-pl-id uniquement sur le div.card root
+  const plSmartLbl  = esc(i18n('pl_smart_lbl'));
+  const plTracksLbl = i18n('n_tracks');
   grid.innerHTML = filtered.map(pl => {
     const plTracks = (pl.trackIds || []).slice(0, 4)
       .map(id => tracks[_trackIdxMap.get(id)])
@@ -504,7 +513,7 @@ export function renderPlaylistsGrid() {
       artHtml = `<div class="card-art-ph" aria-hidden="true">🎵</div>`;
     }
 
-    const smartBadge = pl.smart ? `<span class="smart-badge" title="${esc(i18n('pl_smart_lbl'))}">✦</span>` : '';
+    const smartBadge = pl.smart ? `<span class="smart-badge" title="${plSmartLbl}">✦</span>` : '';
     const pinBadge   = pl.pinned ? `<span class="pin-badge" aria-hidden="true">📌</span>` : '';
     const count = (pl.trackIds || []).length;
 
@@ -518,7 +527,7 @@ export function renderPlaylistsGrid() {
       </div>
       <div class="card-info">
         <span class="card-name">${hlText(pl.name || '?', query)}</span>
-        <span class="card-sub">${count} ${i18n('n_tracks')}</span>
+        <span class="card-sub">${count} ${plTracksLbl}</span>
       </div>
     </div>`;
   }).join('');
