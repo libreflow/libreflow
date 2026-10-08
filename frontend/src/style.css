@@ -89,12 +89,12 @@
   top: 6px;
   left: 6px;
   z-index: 9999;
-  padding: 8px 16px;
+  padding: var(--sp-2) var(--sp-4);
   background: var(--g);
   color: var(--text-on-accent);
   font-weight: 600;
-  font-size: 14px;
-  border-radius: 6px;
+  font-size: var(--fs-md);
+  border-radius: var(--r);
   text-decoration: none;
   transform: translateY(-120%);
   transition: transform 0.15s ease;
@@ -128,7 +128,7 @@
   background: var(--bg);
   color: var(--t2);
   z-index: 99999;
-  font-size: 13px;
+  font-size: var(--fs-caption);
   letter-spacing: 0.04em;
 }
 #boot-spinner svg {
@@ -189,7 +189,7 @@
 }
 .eq-device-bars span {
   width: 3px;
-  border-radius: 1px;
+  border-radius: var(--r-micro);
   min-height: 1px;
 }
 .eq-bar-boost {
@@ -345,7 +345,7 @@
   min-width: 0;
 }
 .usb-drive-label {
-  font-size: 13px;
+  font-size: var(--fs-caption);
   font-weight: 600;
   color: var(--t);
   overflow: hidden;
@@ -419,7 +419,7 @@
   transition: transform var(--motion-base) var(--ease-standard);
 }
 #cd-progress-text {
-  font-size: 12px;
+  font-size: var(--fs-xs);
   color: var(--t2);
   margin: 0 0 8px;
 }
@@ -609,7 +609,7 @@ html[data-mode='light'] .srch-clear:hover {
 html[data-mode='light'] .dupes-badge {
   border-color: rgba(var(--amber-rgb), 0.5);
   box-shadow: 0 0 0 1px rgba(var(--amber-rgb), 0.15);
-  color: #7a4e00;
+  color: var(--c-amber-ink);
   background: rgba(var(--amber-rgb), 0.14);
 }
 
@@ -2489,7 +2489,7 @@ html[data-mode='light'] mark.srch-hl {
   width: 3px;
   height: 4px;
   background: var(--g);
-  border-radius: 1px;
+  border-radius: var(--r-micro);
   animation: eq-dance 0.8s ease-in-out infinite alternate;
   transform-origin: bottom;
 }
@@ -2557,7 +2557,7 @@ html[data-motion='reduce'] .eq-bars span {
   width: 3px;
   height: 4px;
   background: var(--g);
-  border-radius: 1px;
+  border-radius: var(--r-micro);
   transform-origin: bottom;
 }
 #nav-eq-wipe.wiping .wbar {
@@ -4407,7 +4407,7 @@ html[data-motion='reduce'] #vw::after {
   width: var(--icon-xs);
   height: var(--icon-xs);
   border-radius: 50%;
-  background: #fff;
+  background: var(--c-white);
   box-shadow:
     0 1px 4px rgba(0, 0, 0, 0.45),
     0 0 0 1px rgba(0, 0, 0, 0.12);
@@ -6611,7 +6611,7 @@ html[data-mode='light'] .bte-cover-clear {
   left: var(--sp-1h);
   right: var(--sp-1h);
   height: 2px;
-  border-radius: 1px 1px 0 0;
+  border-radius: var(--r-micro) var(--r-micro) 0 0;
   background: var(--g);
   transform: scaleX(0);
   transition: transform var(--dur-fast) var(--ease);
@@ -9001,7 +9001,7 @@ html[data-mode='light'] .eq-ab-btn.active {
   justify-content: space-between;
   width: 26px;
   padding: calc(var(--sp-3h) + 22px) 4px calc(var(--sp-3) + 18px) 0;
-  font-size: 9px;
+  font-size: var(--fs-2xs);
   line-height: 1;
   color: var(--t3); /* A11Y: échelle dB — --t4→--t3 */
   font-variant-numeric: tabular-nums;
@@ -12964,7 +12964,7 @@ html[data-platform='mobile'] .ni > span {
   pointer-events: none;
   background: none;
   color: inherit;
-  font-size: 9px;
+  font-size: var(--fs-2xs);
   font-weight: 500;
   padding: 0;
   border-radius: 0;
@@ -13450,7 +13450,7 @@ html[data-motion='reduce'] .card {
   justify-content: center;
   cursor: pointer;
   backdrop-filter: var(--blur-md);
-  font-size: 18px;
+  font-size: var(--fs-base);
   line-height: 1;
   transition: background var(--dur-fast) ease;
 }
@@ -13580,7 +13580,7 @@ html[data-motion='reduce'] .card {
   padding: 0 20px var(--sp-4);
 }
 .dh-albums-title {
-  font-size: 11px;
+  font-size: var(--fs-xs);
   font-weight: 700;
   letter-spacing: 0.07em;
   text-transform: uppercase;
@@ -13621,7 +13621,7 @@ html[data-motion='reduce'] .card {
   background: var(--bg4);
 }
 .dh-mini-name {
-  font-size: 11px;
+  font-size: var(--fs-xs);
   font-weight: 600;
   color: var(--t); /* R-L1 : --t1 inexistant → --t */
   text-align: center;
@@ -13631,7 +13631,7 @@ html[data-motion='reduce'] .card {
   width: 100%;
 }
 .dh-mini-year {
-  font-size: 10px;
+  font-size: var(--fs-xs);
   color: var(--t3);
 }
 
@@ -13640,7 +13640,7 @@ html[data-motion='reduce'] .card {
   width: 28px;
   flex-shrink: 0;
   text-align: right;
-  font-size: 12px;
+  font-size: var(--fs-xs);
   color: var(--t3);
   font-variant-numeric: tabular-nums;
   padding-right: 4px;
@@ -13957,7 +13957,7 @@ html[data-motion='reduce'] #main.view-fade {
 }
 
 .pcplay svg {
-  fill: var(--text-on-accent, #fff);
+  fill: var(--text-on-accent);
 }
 
 /* #ico-play : margin retiré — double compensation avec le viewBox décalé (audit 2026-07-27) */
