@@ -14,18 +14,18 @@
 //   closeUsbImportModal()
 //   importFromDrive(drivePath)
 
-import { invoke }                       from './ipc.js';
-import { toast, esc }                   from './ui.js';
-import { importPaths }                  from './watchfolder.js';
-import { detectNewAudioCds }            from './cdaudio_pure.js';
-import { openCdModal, cleanupCdCache }  from './cdaudio.js';
+import { invoke } from './ipc.js';
+import { toast, esc } from './ui.js';
+import { importPaths } from './watchfolder.js';
+import { detectNewAudioCds } from './cdaudio_pure.js';
+import { openCdModal, cleanupCdCache } from './cdaudio.js';
 
 // ── État module ───────────────────────────────────────────────────────────────
 
 /** @type {Array<{path:string,label:string,kind:string}>} */
 let _lastDrives = [];
-let _pollTimer  = null;
-let _polling    = false;
+let _pollTimer = null;
+let _polling = false;
 let _usbModalPrevFocus = null;
 const POLL_INTERVAL_MS = 6000; // 6 secondes
 
@@ -37,19 +37,24 @@ const POLL_INTERVAL_MS = 6000; // 6 secondes
  * Idempotent : un second appel remplace l'interval précédent.
  */
 export function initDevices() {
-  if (_pollTimer) { clearInterval(_pollTimer); _pollTimer = null; }
+  if (_pollTimer) {
+    clearInterval(_pollTimer);
+    _pollTimer = null;
+  }
   _poll(); // premier poll immédiat
   _pollTimer = setInterval(_poll, POLL_INTERVAL_MS);
 }
 
-
 /** Affiche le modal d'import USB avec la liste des lecteurs amovibles courants. */
 export async function openUsbImportModal() {
   let drives = [];
-  try { drives = await invoke('list_drives'); }
-  catch (e) { console.warn('[devices] list_drives failed:', e); }
+  try {
+    drives = await invoke('list_drives');
+  } catch (e) {
+    console.warn('[devices] list_drives failed:', e);
+  }
 
-  _renderDrivesList(drives.filter(d => d.kind === 'removable' || d.kind === 'unknown'));
+  _renderDrivesList(drives.filter((d) => d.kind === 'removable' || d.kind === 'unknown'));
 
   const bg = document.getElementById('usb-modal-bg');
   if (!bg) return;
@@ -83,8 +88,11 @@ async function _poll() {
   _polling = true;
   try {
     let drives;
-    try { drives = await invoke('list_drives'); }
-    catch { return; } // IPC indisponible (app en cours de boot, etc.)
+    try {
+      drives = await invoke('list_drives');
+    } catch {
+      return;
+    } // IPC indisponible (app en cours de boot, etc.)
 
     const newRemovable = _detectNewRemovable(_lastDrives, drives);
     for (const d of newRemovable) _onUsbConnected(d);
@@ -94,10 +102,10 @@ async function _poll() {
     for (const cd of newCds) _onAudioCdInserted(cd);
 
     // CD audio : éjection (présent au poll précédent, absent maintenant)
-    const currAudioPaths = new Set(drives.filter(d => d.audio_cd).map(d => d.path));
+    const currAudioPaths = new Set(drives.filter((d) => d.audio_cd).map((d) => d.path));
     for (const prev of _lastDrives) {
       if (prev.audio_cd && !currAudioPaths.has(prev.path)) {
-        cleanupCdCache(prev.path).catch(e => console.warn('[devices] cleanup failed:', e));
+        cleanupCdCache(prev.path).catch((e) => console.warn('[devices] cleanup failed:', e));
       }
     }
 
@@ -109,22 +117,16 @@ async function _poll() {
 
 /** Détecte les lecteurs amovibles apparus depuis le dernier poll. */
 function _detectNewRemovable(previous, current) {
-  const prevPaths = new Set(previous.map(d => d.path));
-  return current.filter(d => d.kind === 'removable' && !prevPaths.has(d.path));
+  const prevPaths = new Set(previous.map((d) => d.path));
+  return current.filter((d) => d.kind === 'removable' && !prevPaths.has(d.path));
 }
 
 function _onUsbConnected(drive) {
-  toast(
-    `Disque USB détecté (${drive.label || drive.path}) — Importer de la musique ?`,
-    'info'
-  );
+  toast(`Disque USB détecté (${drive.label || drive.path}) — Importer de la musique ?`, 'info');
 }
 
 function _onAudioCdInserted(drive) {
-  toast(
-    `CD Audio détecté (${drive.track_count} pistes) — Lire ou extraire ?`,
-    'info'
-  );
+  toast(`CD Audio détecté (${drive.track_count} pistes) — Lire ou extraire ?`, 'info');
   openCdModal(drive.path);
 }
 
@@ -176,7 +178,9 @@ function _renderDrivesList(drives) {
     return;
   }
 
-  list.innerHTML = drives.map(d => `
+  list.innerHTML = drives
+    .map(
+      (d) => `
     <div class="usb-drive-row">
       <div class="usb-drive-info">
         <span class="usb-drive-label">${esc(d.label || d.path)}</span>
@@ -188,5 +192,7 @@ function _renderDrivesList(drives) {
         Choisir un dossier
       </button>
     </div>
-  `).join('');
+  `
+    )
+    .join('');
 }

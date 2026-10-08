@@ -17,11 +17,11 @@
 //                           à la hauteur RÉELLEMENT rendue par .tr, sous peine de désynchroniser
 //                           le rendu de la position de scroll (lignes tronquées, cf. historique).
 
-import { VIRT }            from './virt.js';
-import { set, get }        from './store.js';
-import { emit, EVENTS }    from './bus.js';
-import { saveCfg }         from './cfgsave.js';
-import { i18n }            from './i18n.js';
+import { VIRT } from './virt.js';
+import { set, get } from './store.js';
+import { emit, EVENTS } from './bus.js';
+import { saveCfg } from './cfgsave.js';
+import { i18n } from './i18n.js';
 
 export const TLIST_ZOOM_LEVELS = ['compact', 'comfortable', 'spacious'];
 
@@ -29,9 +29,9 @@ export const TLIST_ZOOM_LEVELS = ['compact', 'comfortable', 'spacious'];
 // voir --tart-size dans design-system.css). compact = 44 (pas moins) : plancher
 // WCAG 2.5.8 partagé avec .tr { min-height: 44px }.
 export const TLIST_ZOOM_ROW_H = {
-  compact:     44,
+  compact: 44,
   comfortable: 56,
-  spacious:    72,
+  spacious: 72
 };
 
 // Anciens noms de niveaux (avant le renommage Spotify) → nouveaux noms.
@@ -59,7 +59,7 @@ const _LEGACY_ZOOM_MAP = { normal: 'comfortable' };
 export function _nextZoomLevel(current, dir) {
   const idx = TLIST_ZOOM_LEVELS.indexOf(current);
   if (idx === -1) return 'comfortable';
-  if (dir === 'in')  return TLIST_ZOOM_LEVELS[Math.min(idx + 1, TLIST_ZOOM_LEVELS.length - 1)];
+  if (dir === 'in') return TLIST_ZOOM_LEVELS[Math.min(idx + 1, TLIST_ZOOM_LEVELS.length - 1)];
   if (dir === 'out') return TLIST_ZOOM_LEVELS[Math.max(idx - 1, 0)];
   return current;
 }
@@ -100,7 +100,7 @@ export function setTlistZoom(level, { silent = false } = {}) {
   VIRT.ROW_H = TLIST_ZOOM_ROW_H[level];
 
   // 3. Invalider les caches de signature du virtual scroll
-  VIRT._lastListSig   = '';
+  VIRT._lastListSig = '';
   VIRT._lastWindowSig = '';
 
   // 4. Persister dans le store et dans IDB (debounced)
@@ -137,7 +137,7 @@ export function tlistZoomReset() {
 // Throttle pour ne déclencher qu'un seul cran de zoom par « geste molette »
 // (les trackpads/molettes envoient de nombreux événements en rafale).
 const _WHEEL_THROTTLE_MS = 150;
-let   _wheelLastAt       = 0;
+let _wheelLastAt = 0;
 
 /**
  * Câble le zoom via Ctrl/Cmd + molette sur le conteneur de la liste de pistes.
@@ -145,17 +145,25 @@ let   _wheelLastAt       = 0;
  */
 export function initTlistZoomWheel() {
   const tlist = document.getElementById('tlist');
-  if (!tlist) { console.warn('[tlistZoom] #tlist introuvable — wheel zoom non câblé'); return; }
-  if (tlist._tlistZoomWheelBound) return;     // idempotence
+  if (!tlist) {
+    console.warn('[tlistZoom] #tlist introuvable — wheel zoom non câblé');
+    return;
+  }
+  if (tlist._tlistZoomWheelBound) return; // idempotence
   tlist._tlistZoomWheelBound = true;
 
-  tlist.addEventListener('wheel', (e) => {
-    if (!(e.ctrlKey || e.metaKey)) return;    // requiert Ctrl (ou Cmd sur macOS)
-    e.preventDefault();                       // bloque le zoom navigateur
-    const now = Date.now();
-    if (now - _wheelLastAt < _WHEEL_THROTTLE_MS) return;
-    _wheelLastAt = now;
-    if (e.deltaY < 0)      tlistZoomIn();     // scroll vers le haut → plus grand
-    else if (e.deltaY > 0) tlistZoomOut();    // scroll vers le bas → plus petit
-  }, { passive: false });
+  tlist.addEventListener(
+    'wheel',
+    (e) => {
+      if (!(e.ctrlKey || e.metaKey)) return; // requiert Ctrl (ou Cmd sur macOS)
+      e.preventDefault(); // bloque le zoom navigateur
+      const now = Date.now();
+      if (now - _wheelLastAt < _WHEEL_THROTTLE_MS) return;
+      _wheelLastAt = now;
+      if (e.deltaY < 0)
+        tlistZoomIn(); // scroll vers le haut → plus grand
+      else if (e.deltaY > 0) tlistZoomOut(); // scroll vers le bas → plus petit
+    },
+    { passive: false }
+  );
 }

@@ -14,14 +14,14 @@ Le seul flux réseau sortant possible est la vérification de mises à jour vers
 
 LibreFlow traite uniquement sur votre disque les données suivantes :
 
-| Donnée | Où | Pourquoi |
-|---|---|---|
-| Chemins absolus de fichiers audio | IndexedDB local (`%APPDATA%/com.libreflow.player`) | Construire la bibliothèque |
-| Tags audio (titre, artiste, album, genre, année, durée) | IndexedDB local | Affichage et tri |
-| Pochettes (extraites des tags) | IndexedDB local (cache LRU 60 entrées) | Affichage |
-| Préférences (thème, EQ, volume, vue active) | IndexedDB local (`cfg`) | Persister la configuration |
-| Historique de lecture | IndexedDB local (`playlog`, plafond 2000 entrées) | Vues « récentes », statistiques locales |
-| Playlists (manuelles + smart) | IndexedDB local | Vos collections |
+| Donnée                                                  | Où                                                 | Pourquoi                                |
+| ------------------------------------------------------- | -------------------------------------------------- | --------------------------------------- |
+| Chemins absolus de fichiers audio                       | IndexedDB local (`%APPDATA%/com.libreflow.player`) | Construire la bibliothèque              |
+| Tags audio (titre, artiste, album, genre, année, durée) | IndexedDB local                                    | Affichage et tri                        |
+| Pochettes (extraites des tags)                          | IndexedDB local (cache LRU 60 entrées)             | Affichage                               |
+| Préférences (thème, EQ, volume, vue active)             | IndexedDB local (`cfg`)                            | Persister la configuration              |
+| Historique de lecture                                   | IndexedDB local (`playlog`, plafond 2000 entrées)  | Vues « récentes », statistiques locales |
+| Playlists (manuelles + smart)                           | IndexedDB local                                    | Vos collections                         |
 
 **Rien ne quitte votre machine.** Aucun compte utilisateur, aucun identifiant, aucun cookie.
 
@@ -37,6 +37,7 @@ LibreFlow effectue **un seul** type de connexion sortante : la vérification de 
 - **Authentification** : la réponse `latest.json` et l'archive téléchargée sont signées (minisign Ed25519) — toute altération est rejetée.
 
 ### Désactivation
+
 Dans **Paramètres → Système → Mises à jour**, désactivez « Vérifier automatiquement les mises à jour » pour supprimer entièrement ce flux. L'option est persistée localement (`cfg.autoUpdateCheck = false`).
 
 ---
@@ -45,13 +46,13 @@ Dans **Paramètres → Système → Mises à jour**, désactivez « Vérifier au
 
 LibreFlow étant 100 % local, la portabilité, l'effacement et la rectification de vos données sont sous votre contrôle direct :
 
-| Droit | Comment l'exercer |
-|---|---|
-| **Accès** | Vos données sont visibles dans l'application. Export complet via Paramètres → Système → Sauvegarde |
-| **Rectification** | Modifier les tags via le clic-droit → « Modifier les tags » |
-| **Effacement** | Paramètres → Système → « Vider la bibliothèque » ou supprimer le dossier `%APPDATA%/com.libreflow.player` |
-| **Portabilité** | Export `.libreflow` (ZIP de JSON) via Paramètres → Sauvegarde |
-| **Opposition au traitement** | Désinstaller LibreFlow + supprimer le dossier de données |
+| Droit                        | Comment l'exercer                                                                                         |
+| ---------------------------- | --------------------------------------------------------------------------------------------------------- |
+| **Accès**                    | Vos données sont visibles dans l'application. Export complet via Paramètres → Système → Sauvegarde        |
+| **Rectification**            | Modifier les tags via le clic-droit → « Modifier les tags »                                               |
+| **Effacement**               | Paramètres → Système → « Vider la bibliothèque » ou supprimer le dossier `%APPDATA%/com.libreflow.player` |
+| **Portabilité**              | Export `.libreflow` (ZIP de JSON) via Paramètres → Sauvegarde                                             |
+| **Opposition au traitement** | Désinstaller LibreFlow + supprimer le dossier de données                                                  |
 
 ---
 

@@ -8,9 +8,9 @@
 //   - Does NOT handle Enter/Space (handled in handlers.js)
 //   - Does NOT steal focus when a modal, context-menu or input is active
 
-import { VIRT }       from './virt.js';
+import { VIRT } from './virt.js';
 import { getFiltered } from './search.js';
-import { CFG }        from './cfg.js';
+import { CFG } from './cfg.js';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -24,10 +24,10 @@ function _isModalOpen() {
   if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return true;
   // Any open modal/dialog overlay
   if (ae.closest('[role="dialog"]')) return true;
-  if (ae.closest('#ctx-menu'))       return true;
-  if (ae.closest('#sleep-menu'))     return true;
-  if (ae.closest('#eq-panel'))       return true;
-  if (ae.closest('#queue-panel'))    return true;
+  if (ae.closest('#ctx-menu')) return true;
+  if (ae.closest('#sleep-menu')) return true;
+  if (ae.closest('#eq-panel')) return true;
+  if (ae.closest('#queue-panel')) return true;
   if (ae.closest('#settings-panel')) return true;
   return false;
 }
@@ -69,13 +69,16 @@ export function initKeyNav(opts = {}) {
     // manuelle (alternative clavier au glisser-déposer). No-op hors playlist.
     if (_reorderTrack && e.altKey && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
       const row = document.activeElement?.closest('.tr:not(.tr-skel)');
-      const id  = row?.dataset.trackId;
+      const id = row?.dataset.trackId;
       if (id) {
         e.preventDefault();
         if (_reorderTrack(id, e.key === 'ArrowUp' ? -1 : 1)) {
           requestAnimationFrame(() => {
             const moved = document.getElementById('tr-' + id);
-            if (moved) { _moveFocus(null, moved); moved.scrollIntoView({ block: 'nearest' }); }
+            if (moved) {
+              _moveFocus(null, moved);
+              moved.scrollIntoView({ block: 'nearest' });
+            }
           });
         }
         return;
@@ -83,9 +86,13 @@ export function initKeyNav(opts = {}) {
     }
 
     const key = e.key;
-    const handled = key === 'ArrowDown' || key === 'ArrowUp'
-                 || key === 'Home'      || key === 'End'
-                 || key === 'PageDown'  || key === 'PageUp';
+    const handled =
+      key === 'ArrowDown' ||
+      key === 'ArrowUp' ||
+      key === 'Home' ||
+      key === 'End' ||
+      key === 'PageDown' ||
+      key === 'PageUp';
     if (!handled) return;
 
     e.preventDefault();
@@ -121,9 +128,10 @@ function _handleArrow(listEl, dir) {
   const focused = document.activeElement?.closest('.tr:not(.tr-skel)');
   const curRowIdx = focused ? rows.indexOf(focused) : -1;
 
-  const isAtEdge = dir === 1
-    ? curRowIdx === rows.length - 1   // last rendered row
-    : curRowIdx === 0;                 // first rendered row
+  const isAtEdge =
+    dir === 1
+      ? curRowIdx === rows.length - 1 // last rendered row
+      : curRowIdx === 0; // first rendered row
 
   if (!isAtEdge && curRowIdx >= 0) {
     // Simple case: sibling row exists in the DOM
@@ -157,7 +165,7 @@ function _handleArrow(listEl, dir) {
   // After one rAF the DOM is rebuilt; focus the row with data-fi === nextFi
   requestAnimationFrame(() => {
     const newRows = _trackRows(listEl);
-    const target = newRows.find(el => parseInt(el.dataset.fi, 10) === nextFi);
+    const target = newRows.find((el) => parseInt(el.dataset.fi, 10) === nextFi);
     if (target) {
       // Remove tabindex="0" from the previously focused row if still in DOM
       const prevFocused = listEl.querySelector('.tr:not(.tr-skel)[tabindex="0"]');
@@ -194,7 +202,7 @@ function _handlePage(listEl, dir) {
 
   requestAnimationFrame(() => {
     const rows = _trackRows(listEl);
-    const target = rows.find(el => parseInt(el.dataset.fi, 10) === targetFi);
+    const target = rows.find((el) => parseInt(el.dataset.fi, 10) === targetFi);
     if (target) {
       const prevFocused = listEl.querySelector('.tr:not(.tr-skel)[tabindex="0"]');
       _moveFocus(prevFocused !== target ? prevFocused : null, target);

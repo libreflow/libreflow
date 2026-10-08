@@ -8,17 +8,17 @@
 //   4. _relocateOrphan   — file picker → update path/url dans tracks[] + IDB
 //   5. _deleteOrphans    — splice tracks[], ddel IDB, rebuildTrackIdxMap, emit events
 
-import { ddel }                                                    from './db.js';
-import { get, notify }                                            from './store.js';
-import { invoke, convertFileSrc }                                 from './ipc.js';
-import { emit, EVENTS }                                           from './bus.js';
-import { trackIdx, rebuildTrackIdxMap, invalidateFilterCache }    from './search.js';
-import { VIRT }                                                   from './virt.js';
-import { audio, adjustShuffleQAfterDelete }                       from './player.js';
-import { toast, toastWithAction, esc }                            from './ui.js';
-import { setCurIdx, removeTracksBatch }                           from './state.js';
-import { saveTrackNow }                                           from './library.js';
-import { CFG }                                                    from './cfg.js';
+import { ddel } from './db.js';
+import { get, notify } from './store.js';
+import { invoke, convertFileSrc } from './ipc.js';
+import { emit, EVENTS } from './bus.js';
+import { trackIdx, rebuildTrackIdxMap, invalidateFilterCache } from './search.js';
+import { VIRT } from './virt.js';
+import { audio, adjustShuffleQAfterDelete } from './player.js';
+import { toast, toastWithAction, esc } from './ui.js';
+import { setCurIdx, removeTracksBatch } from './state.js';
+import { saveTrackNow } from './library.js';
+import { CFG } from './cfg.js';
 
 // ── État interne ──────────────────────────────────────────────────────────────
 let _missingPaths = new Set();
@@ -29,16 +29,18 @@ export async function checkOrphans() {
   const tracks = get('tracks');
   if (!tracks.length) return;
 
-  const paths = tracks.filter(t => t.path).map(t => t.path);
+  const paths = tracks.filter((t) => t.path).map((t) => t.path);
   if (!paths.length) return;
 
   let missing;
   try {
     missing = await Promise.race([
       invoke('check_paths', { paths }),
-      new Promise((_, rej) => setTimeout(() => rej(new Error('check_paths timeout')), CFG.ORPHAN_CHECK_TIMEOUT_MS)),
+      new Promise((_, rej) =>
+        setTimeout(() => rej(new Error('check_paths timeout')), CFG.ORPHAN_CHECK_TIMEOUT_MS)
+      )
     ]);
-  } catch(e) {
+  } catch (e) {
     console.warn('[checkOrphans] check_paths failed:', e);
     return;
   }
@@ -46,15 +48,22 @@ export async function checkOrphans() {
   if (!missing?.length) return;
 
   _missingPaths = new Set(missing);
-  const orphanTracks = tracks.filter(t => t.path && _missingPaths.has(t.path));
+  const orphanTracks = tracks.filter((t) => t.path && _missingPaths.has(t.path));
   if (!orphanTracks.length) return;
 
   const n = orphanTracks.length;
-  const label = n === 1
-    ? '1 fichier manquant dans la bibliothèque'
-    : `${n} fichiers manquants dans la bibliothèque`;
+  const label =
+    n === 1
+      ? '1 fichier manquant dans la bibliothèque'
+      : `${n} fichiers manquants dans la bibliothèque`;
 
-  toastWithAction(label, 'warning', 'Gérer', () => _openOrphanDialog(orphanTracks), CFG.ORPHAN_CHECK_TIMEOUT_MS);
+  toastWithAction(
+    label,
+    'warning',
+    'Gérer',
+    () => _openOrphanDialog(orphanTracks),
+    CFG.ORPHAN_CHECK_TIMEOUT_MS
+  );
 }
 
 // ── Privé ─────────────────────────────────────────────────────────────────────
@@ -63,33 +72,56 @@ export async function checkOrphans() {
 // P2-6 : Dialog interactif avec relocalisation par piste
 async function _openOrphanDialog(orphanTracks) {
   const currentTracks = get('tracks');
-  const fresh = currentTracks.filter(t => t.path && _missingPaths.has(t.path));
-  if (!fresh.length) { _missingPaths.clear(); return; }
+  const fresh = currentTracks.filter((t) => t.path && _missingPaths.has(t.path));
+  if (!fresh.length) {
+    _missingPaths.clear();
+    return;
+  }
 
   const n = fresh.length;
 
   const bg = document.createElement('div');
   bg.className = 'modal-bg orphan-modal-bg';
 
-  const buildRows = () => fresh.map(t =>
-    '<li class="orphan-item" data-track-id="' + esc(t.id) + '">' +
-      '<div class="orphan-item-info">' +
-        '<span class="orphan-title">' + esc(t.name) + '</span>' +
-        '<span class="orphan-path">' + esc(t.path) + '</span>' +
-      '</div>' +
-      '<button class="orphan-relocate-btn" data-track-id="' + esc(t.id) + '">Relocaliser</button>' +
-    '</li>'
-  ).join('');
+  const buildRows = () =>
+    fresh
+      .map(
+        (t) =>
+          '<li class="orphan-item" data-track-id="' +
+          esc(t.id) +
+          '">' +
+          '<div class="orphan-item-info">' +
+          '<span class="orphan-title">' +
+          esc(t.name) +
+          '</span>' +
+          '<span class="orphan-path">' +
+          esc(t.path) +
+          '</span>' +
+          '</div>' +
+          '<button class="orphan-relocate-btn" data-track-id="' +
+          esc(t.id) +
+          '">Relocaliser</button>' +
+          '</li>'
+      )
+      .join('');
 
   bg.innerHTML =
     '<div class="modal orphan-modal" role="dialog" aria-modal="true">' +
-      '<div class="modal-title">' + n + ' fichier' + (n > 1 ? 's' : '') + ' manquant' + (n > 1 ? 's' : '') + '</div>' +
-      '<p class="orphan-desc">Ces fichiers sont référencés dans la bibliothèque mais introuvables sur le disque. Relocalisez-les si vous les avez déplacés, ou supprimez-les de la bibliothèque.</p>' +
-      '<ul class="orphan-list orphan-list-interactive">' + buildRows() + '</ul>' +
-      '<div class="modal-actions">' +
-        '<button class="mbtn secondary orphan-close-btn">Fermer</button>' +
-        '<button class="mbtn danger orphan-delete-btn">Supprimer les manquants</button>' +
-      '</div>' +
+    '<div class="modal-title">' +
+    n +
+    ' fichier' +
+    (n > 1 ? 's' : '') +
+    ' manquant' +
+    (n > 1 ? 's' : '') +
+    '</div>' +
+    '<p class="orphan-desc">Ces fichiers sont référencés dans la bibliothèque mais introuvables sur le disque. Relocalisez-les si vous les avez déplacés, ou supprimez-les de la bibliothèque.</p>' +
+    '<ul class="orphan-list orphan-list-interactive">' +
+    buildRows() +
+    '</ul>' +
+    '<div class="modal-actions">' +
+    '<button class="mbtn secondary orphan-close-btn">Fermer</button>' +
+    '<button class="mbtn danger orphan-delete-btn">Supprimer les manquants</button>' +
+    '</div>' +
     '</div>';
 
   const _prevFocus = document.activeElement;
@@ -108,32 +140,55 @@ async function _openOrphanDialog(orphanTracks) {
   };
 
   bg.querySelector('.orphan-close-btn').addEventListener('click', close);
-  bg.addEventListener('click', e => { if (e.target === bg) close(); });
-  bg.addEventListener('keydown', e => {
-    if (e.key === 'Escape') { close(); return; }
+  bg.addEventListener('click', (e) => {
+    if (e.target === bg) close();
+  });
+  bg.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      close();
+      return;
+    }
     if (e.key === 'Tab') {
-      const focusable = [...bg.querySelectorAll(
-        'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])'
-      )];
-      if (!focusable.length) { e.preventDefault(); return; }
-      const first = focusable[0], last = focusable[focusable.length - 1];
-      if (e.shiftKey) { if (document.activeElement === first) { e.preventDefault(); last.focus(); } }
-      else            { if (document.activeElement === last)  { e.preventDefault(); first.focus(); } }
+      const focusable = [
+        ...bg.querySelectorAll(
+          'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])'
+        )
+      ];
+      if (!focusable.length) {
+        e.preventDefault();
+        return;
+      }
+      const first = focusable[0],
+        last = focusable[focusable.length - 1];
+      if (e.shiftKey) {
+        if (document.activeElement === first) {
+          e.preventDefault();
+          last.focus();
+        }
+      } else {
+        if (document.activeElement === last) {
+          e.preventDefault();
+          first.focus();
+        }
+      }
     }
   });
 
   bg.querySelector('.orphan-delete-btn').addEventListener('click', async () => {
-    const remaining = fresh.filter(t => _missingPaths.has(t.path));
-    if (!remaining.length) { close(); return; }
+    const remaining = fresh.filter((t) => _missingPaths.has(t.path));
+    if (!remaining.length) {
+      close();
+      return;
+    }
     await _deleteOrphans(remaining);
     close();
   });
 
-  bg.querySelector('.orphan-list').addEventListener('click', async e => {
+  bg.querySelector('.orphan-list').addEventListener('click', async (e) => {
     const btn = e.target.closest('.orphan-relocate-btn');
     if (!btn || btn.disabled) return;
-    const id    = btn.dataset.trackId;
-    const track = fresh.find(t => t.id === id);
+    const id = btn.dataset.trackId;
+    const track = fresh.find((t) => t.id === id);
     if (!track) return;
     const row = btn.closest('.orphan-item');
     await _relocateOrphan(track, row, btn);
@@ -149,7 +204,7 @@ async function _relocateOrphan(track, rowEl, btnEl) {
   let newPath;
   try {
     newPath = await invoke('pick_audio_file', undefined, { timeout: 0 });
-  } catch(e) {
+  } catch (e) {
     console.warn('[orphans] pick_audio_file:', e);
   }
 
@@ -160,24 +215,37 @@ async function _relocateOrphan(track, rowEl, btnEl) {
   }
   // SEC-4 : valider l'extension du fichier sélectionné avant toute mutation
   const _pickedExt = newPath.replace(/\\/g, '/').split('/').pop().split('.').pop().toLowerCase();
-  const _AUDIO_EXTS = ['mp3','flac','aac','m4a','ogg','opus','wav','wma','aiff','ape','alac'];
+  const _AUDIO_EXTS = [
+    'mp3',
+    'flac',
+    'aac',
+    'm4a',
+    'ogg',
+    'opus',
+    'wav',
+    'wma',
+    'aiff',
+    'ape',
+    'alac'
+  ];
   if (!_AUDIO_EXTS.includes(_pickedExt)) {
     toast('Type de fichier non reconnu — choisissez un fichier audio', 'warning');
-    btnEl.disabled = false; btnEl.textContent = prevLabel;
+    btnEl.disabled = false;
+    btnEl.textContent = prevLabel;
     return;
   }
 
-  const oldPath = track.path;  // sauvegarder avant mutation
+  const oldPath = track.path; // sauvegarder avant mutation
   const tracks = get('tracks');
-  const idx    = trackIdx(track);
+  const idx = trackIdx(track);
   if (idx >= 0) {
-    tracks[idx].path     = newPath;
-    tracks[idx].url      = convertFileSrc(newPath);
+    tracks[idx].path = newPath;
+    tracks[idx].url = convertFileSrc(newPath);
     tracks[idx].metaDone = false;
     await saveTrackNow(tracks[idx]);
   }
 
-  _missingPaths.delete(oldPath);  // supprime l'ancien chemin manquant
+  _missingPaths.delete(oldPath); // supprime l'ancien chemin manquant
   // track.path et track.url déjà mis à jour via tracks[idx] (même référence)
 
   rowEl.classList.add('orphan-relocated');
@@ -194,34 +262,50 @@ async function _relocateOrphan(track, rowEl, btnEl) {
 async function _deleteOrphans(orphanTracks) {
   const tracks = get('tracks');
 
-  const toRemove = orphanTracks
-    .map(t => trackIdx(t.id))
-    .filter(i => i >= 0);
+  const toRemove = orphanTracks.map((t) => trackIdx(t.id)).filter((i) => i >= 0);
   toRemove.sort((a, b) => b - a);
 
-  const idsToDelete = toRemove.map(i => tracks[i] && tracks[i].id).filter(Boolean);
+  const idsToDelete = toRemove.map((i) => tracks[i] && tracks[i].id).filter(Boolean);
 
   for (const idx of toRemove) {
     const t = tracks[idx];
     if (!t) continue;
-    if (t.art && t.art.startsWith('blob:')) try { URL.revokeObjectURL(t.art); } catch(e) { console.warn('[orphans:revokeObjectURL art]', e); }
-    if (t.url && t.url.startsWith('blob:')) try { URL.revokeObjectURL(t.url); } catch(e) { console.warn('[orphans:revokeObjectURL url]', e); }
+    if (t.art && t.art.startsWith('blob:'))
+      try {
+        URL.revokeObjectURL(t.art);
+      } catch (e) {
+        console.warn('[orphans:revokeObjectURL art]', e);
+      }
+    if (t.url && t.url.startsWith('blob:'))
+      try {
+        URL.revokeObjectURL(t.url);
+      } catch (e) {
+        console.warn('[orphans:revokeObjectURL url]', e);
+      }
   }
 
   // Pré-passe : ajuster shuffle queue + curIdx AVANT splice (idx encore valides).
   for (const idx of toRemove) {
     adjustShuffleQAfterDelete(idx);
-    if (get('curIdx') === idx)    { audio.pause(); setCurIdx(-1); }
-    else if (get('curIdx') > idx) { setCurIdx(get('curIdx') - 1); }
+    if (get('curIdx') === idx) {
+      audio.pause();
+      setCurIdx(-1);
+    } else if (get('curIdx') > idx) {
+      setCurIdx(get('curIdx') - 1);
+    }
   }
 
   // CLAUDE.md §13 : passer par state.js — batch splice + rebuild + notify atomique
   removeTracksBatch(toRemove);
 
-  await Promise.all(idsToDelete.map(id => ddel('tracks', id).catch(e => console.warn('[orphans] IDB delete failed:', e))));
+  await Promise.all(
+    idsToDelete.map((id) =>
+      ddel('tracks', id).catch((e) => console.warn('[orphans] IDB delete failed:', e))
+    )
+  );
 
   const liked = get('liked');
-  idsToDelete.forEach(id => liked.delete(id));
+  idsToDelete.forEach((id) => liked.delete(id));
 
   _missingPaths.clear();
 

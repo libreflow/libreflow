@@ -31,31 +31,44 @@
 // Exports publics :
 //   initShortcuts({ updateVolSlider, closeModal, cycleSpeed })
 
-import { get, set }                                    from './store.js';
-import { emit, EVENTS }                                from './bus.js';
-import { invoke }                                      from './ipc.js';
-import { audio, togglePlay, next, prev,
-         toggleShuffle, toggleRepeat, toggleLike,
-         setSpeed }                                    from './player.js';
-import { masterGainNode, setMasterGain,
-         eqOpen, closeEQ }                             from './eq.js';
-import { queueOpen, closeQueue }                       from './queue.js';
-import { cinemaOpen, closeCinema, toggleCinema }       from './cinema.js';
-import { isShortcutsOpen, closeShortcuts, toggleShortcuts,
-         closeSettings, toggleSettings, _syncVizBtns, syncMiniSettingsBtn } from './settings.js';
-import { closePlModal }                                from './playlists.js';
-import { closeCtxMenu }                                from './ctxmenu.js';
-import { toggleMiniPlayer }                            from './miniplayer.js';
-import { toggleMiniOverlay }                           from './minioverlay.js';
-import { detectDupes }                                 from './dupes.js';
-import { setVizMode, getVizMode }                      from './viz.js';
-import { renderLib }                                   from './renderer.js';
-import { showView }                                    from './views.js';
-import { invalidateFilterCache }                       from './search.js';
-import { invalidateGenreGridSig }                      from './genres.js';
-import { SPEEDS, CFG }                                 from './cfg.js';
-import { tlistZoomIn, tlistZoomOut, tlistZoomReset }  from './tlistZoom.js';
-import { _openSearch, _closeSearch }                   from './handlers.js';
+import { get, set } from './store.js';
+import { emit, EVENTS } from './bus.js';
+import { invoke } from './ipc.js';
+import {
+  audio,
+  togglePlay,
+  next,
+  prev,
+  toggleShuffle,
+  toggleRepeat,
+  toggleLike,
+  setSpeed
+} from './player.js';
+import { masterGainNode, setMasterGain, eqOpen, closeEQ } from './eq.js';
+import { queueOpen, closeQueue } from './queue.js';
+import { cinemaOpen, closeCinema, toggleCinema } from './cinema.js';
+import {
+  isShortcutsOpen,
+  closeShortcuts,
+  toggleShortcuts,
+  closeSettings,
+  toggleSettings,
+  _syncVizBtns,
+  syncMiniSettingsBtn
+} from './settings.js';
+import { closePlModal } from './playlists.js';
+import { closeCtxMenu } from './ctxmenu.js';
+import { toggleMiniPlayer } from './miniplayer.js';
+import { toggleMiniOverlay } from './minioverlay.js';
+import { detectDupes } from './dupes.js';
+import { setVizMode, getVizMode } from './viz.js';
+import { renderLib } from './renderer.js';
+import { showView } from './views.js';
+import { invalidateFilterCache } from './search.js';
+import { invalidateGenreGridSig } from './genres.js';
+import { SPEEDS, CFG } from './cfg.js';
+import { tlistZoomIn, tlistZoomOut, tlistZoomReset } from './tlistZoom.js';
+import { _openSearch, _closeSearch } from './handlers.js';
 
 // ── A11Y-10 : guard typage ────────────────────────────────────────────────
 // Vérifie si l'élément focalisé est un champ de saisie texte.
@@ -65,8 +78,9 @@ function _isTypingTarget(target) {
   const tag = target.tagName;
   if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return true;
   if (target.isContentEditable) return true;
-  const role = target.getAttribute ? (target.getAttribute('role') || '') : '';
-  if (role === 'textbox' || role === 'searchbox' || role === 'spinbutton' || role === 'combobox') return true;
+  const role = target.getAttribute ? target.getAttribute('role') || '' : '';
+  if (role === 'textbox' || role === 'searchbox' || role === 'spinbutton' || role === 'combobox')
+    return true;
   return false;
 }
 
@@ -79,12 +93,12 @@ function _isTypingTarget(target) {
  * @param {Function} cb.cycleSpeed     — cycle la vitesse de lecture
  */
 export function initShortcuts({ updateVolSlider, closeModal, cycleSpeed }) {
-  document.addEventListener('keydown', e => {
+  document.addEventListener('keydown', (e) => {
     // Ctrl+F : ouvre le loupe inline et focus recherche
     if (e.ctrlKey && e.key.toLowerCase() === 'f') {
       const toggle = document.getElementById('srch-toggle');
-      const wrap   = document.getElementById('vh-srch-wrap');
-      const input  = document.getElementById('srch');
+      const wrap = document.getElementById('vh-srch-wrap');
+      const input = document.getElementById('srch');
       if (toggle && getComputedStyle(toggle).display !== 'none') {
         e.preventDefault();
         showView('lib');
@@ -107,13 +121,19 @@ export function initShortcuts({ updateVolSlider, closeModal, cycleSpeed }) {
     if (e.ctrlKey && !e.altKey) {
       const _inField = _isTypingTarget(e.target);
       if ((e.key === '=' || e.key === '+') && !_inField) {
-        e.preventDefault(); tlistZoomIn(); return;
+        e.preventDefault();
+        tlistZoomIn();
+        return;
       }
       if ((e.key === '-' || e.key === '_') && !_inField) {
-        e.preventDefault(); tlistZoomOut(); return;
+        e.preventDefault();
+        tlistZoomOut();
+        return;
       }
       if (e.key === '0' && !_inField) {
-        e.preventDefault(); tlistZoomReset(); return;
+        e.preventDefault();
+        tlistZoomReset();
+        return;
       }
     }
 
@@ -124,7 +144,7 @@ export function initShortcuts({ updateVolSlider, closeModal, cycleSpeed }) {
       if (e.ctrlKey || e.metaKey) return; // laisser les combos modificateurs passer
       if (e.key === 'Escape') {
         if (e.target.id === 'srch') {
-          const wrap   = document.getElementById('vh-srch-wrap');
+          const wrap = document.getElementById('vh-srch-wrap');
           const toggle = document.getElementById('srch-toggle');
           if (wrap && !wrap.hidden && !e.target.value) {
             _closeSearch(wrap, toggle, e.target);
@@ -145,7 +165,10 @@ export function initShortcuts({ updateVolSlider, closeModal, cycleSpeed }) {
     // doit rester fermable au clavier même une fois ajouté à _anyModalOpen ci-dessous —
     // sinon le early-return empêche toute fermeture et devient un piège clavier. Traité
     // AVANT le guard modal générique, en miroir du reste de la cascade Escape plus bas.
-    if (e.code === 'Escape' && isShortcutsOpen()) { closeShortcuts(); return; }
+    if (e.code === 'Escape' && isShortcutsOpen()) {
+      closeShortcuts();
+      return;
+    }
 
     // A11Y : tout backdrop de modale visible (id se terminant par "modal-bg")
     // capture les raccourcis globaux — couvre modal/pl/confirm/organize/usb/cd/
@@ -170,9 +193,18 @@ export function initShortcuts({ updateVolSlider, closeModal, cycleSpeed }) {
     // Laisser cinema.js gérer les raccourcis quand le mode cinéma est ouvert
     if (cinemaOpen) return;
 
-    if (e.code === 'Space')      { e.preventDefault(); togglePlay(); }
-    if (e.code === 'ArrowRight') { e.preventDefault(); next(true); }
-    if (e.code === 'ArrowLeft')  { e.preventDefault(); prev(); }
+    if (e.code === 'Space') {
+      e.preventDefault();
+      togglePlay();
+    }
+    if (e.code === 'ArrowRight') {
+      e.preventDefault();
+      next(true);
+    }
+    if (e.code === 'ArrowLeft') {
+      e.preventDefault();
+      prev();
+    }
 
     // M-13 : ne pas capter ArrowUp/Down pour le volume si le focus est dans la
     // liste de pistes — keynav.js gère alors la navigation au clavier (évite la double action).
@@ -183,7 +215,10 @@ export function initShortcuts({ updateVolSlider, closeModal, cycleSpeed }) {
       const v = Math.min(1, _cur + 0.05);
       setMasterGain(v);
       const vel = document.getElementById('vol');
-      if (vel) { vel.value = v; updateVolSlider(vel); }
+      if (vel) {
+        vel.value = v;
+        updateVolSlider(vel);
+      }
     }
     if (e.code === 'ArrowDown' && !_inTrackList) {
       e.preventDefault();
@@ -191,31 +226,67 @@ export function initShortcuts({ updateVolSlider, closeModal, cycleSpeed }) {
       const v = Math.max(0, _cur - 0.05);
       setMasterGain(v);
       const vel = document.getElementById('vol');
-      if (vel) { vel.value = v; updateVolSlider(vel); }
+      if (vel) {
+        vel.value = v;
+        updateVolSlider(vel);
+      }
     }
 
     if (e.key.toLowerCase() === 's') toggleShuffle();
     if (e.key.toLowerCase() === 'r') toggleRepeat();
-    if (e.key === '/') { document.getElementById('srch')?.focus(); e.preventDefault(); }
+    if (e.key === '/') {
+      document.getElementById('srch')?.focus();
+      e.preventDefault();
+    }
     if (e.key.toLowerCase() === 'f' && !e.ctrlKey && !e.altKey && !cinemaOpen) toggleLike();
-    if (e.key.toLowerCase() === 'm' && !e.ctrlKey && !e.altKey) { toggleMiniPlayer(); syncMiniSettingsBtn(); }
+    if (e.key.toLowerCase() === 'm' && !e.ctrlKey && !e.altKey) {
+      toggleMiniPlayer();
+      syncMiniSettingsBtn();
+    }
     if (e.key.toLowerCase() === 'i' && !e.ctrlKey && !e.altKey) toggleMiniOverlay();
 
     if (e.code === 'Escape') {
       // A11Y-14 : sleep-menu est un role=dialog aria-modal trappé (modal.js) ;
       // Escape doit pouvoir le fermer, sinon le focus trap devient un piège clavier.
       const _sleepMenu = document.getElementById('sleep-menu');
-      if (_sleepMenu?.classList.contains('on')) { _sleepMenu.classList.remove('on'); return; }
-      if (cinemaOpen)                        { closeCinema(); return; }
+      if (_sleepMenu?.classList.contains('on')) {
+        _sleepMenu.classList.remove('on');
+        return;
+      }
+      if (cinemaOpen) {
+        closeCinema();
+        return;
+      }
       // NB : le cas #shortcuts-panel est traité plus haut, avant le guard _anyModalOpen
       // (qui bloquerait sinon Escape lui-même) — inatteignable ici, non dupliqué.
-      if (document.getElementById('pl-modal-bg')?.classList.contains('on'))      { closePlModal(); return; }
-      if (document.getElementById('modal-bg')?.classList.contains('on'))         { closeModal(); return; }
-      if (document.getElementById('confirm-modal-bg')?.classList.contains('on')) { document.querySelector('#confirm-modal .mbtn.cancel')?.click(); return; }
-      if (document.getElementById('ctx-menu')?.classList.contains('on'))         { closeCtxMenu(); return; }
-      if (eqOpen)     { closeEQ(); return; }
-      if (queueOpen)  { closeQueue(); return; }
-      if (document.getElementById('settings-panel')?.classList.contains('on'))   { closeSettings(); return; }
+      if (document.getElementById('pl-modal-bg')?.classList.contains('on')) {
+        closePlModal();
+        return;
+      }
+      if (document.getElementById('modal-bg')?.classList.contains('on')) {
+        closeModal();
+        return;
+      }
+      if (document.getElementById('confirm-modal-bg')?.classList.contains('on')) {
+        document.querySelector('#confirm-modal .mbtn.cancel')?.click();
+        return;
+      }
+      if (document.getElementById('ctx-menu')?.classList.contains('on')) {
+        closeCtxMenu();
+        return;
+      }
+      if (eqOpen) {
+        closeEQ();
+        return;
+      }
+      if (queueOpen) {
+        closeQueue();
+        return;
+      }
+      if (document.getElementById('settings-panel')?.classList.contains('on')) {
+        closeSettings();
+        return;
+      }
 
       const srch = document.getElementById('srch');
       if (srch?.value) {
@@ -235,8 +306,20 @@ export function initShortcuts({ updateVolSlider, closeModal, cycleSpeed }) {
       }
     }
 
-    if (e.code === 'F11') { e.preventDefault(); if (window.__TAURI__) invoke('win_maximize', {}, { timeout: CFG.IPC_TIMEOUT_MS }).catch(e => console.warn('[F11]', e)); }
-    if (e.code === 'F12' && import.meta.env.DEV) { e.preventDefault(); if (window.__TAURI__) invoke('open_devtools', {}, { timeout: CFG.IPC_TIMEOUT_MS }).catch(e => console.warn('[F12]', e)); }
+    if (e.code === 'F11') {
+      e.preventDefault();
+      if (window.__TAURI__)
+        invoke('win_maximize', {}, { timeout: CFG.IPC_TIMEOUT_MS }).catch((e) =>
+          console.warn('[F11]', e)
+        );
+    }
+    if (e.code === 'F12' && import.meta.env.DEV) {
+      e.preventDefault();
+      if (window.__TAURI__)
+        invoke('open_devtools', {}, { timeout: CFG.IPC_TIMEOUT_MS }).catch((e) =>
+          console.warn('[F12]', e)
+        );
+    }
 
     if (e.key.toLowerCase() === 'c' && !e.ctrlKey && !e.altKey) toggleCinema();
     // Note : 'b' (cycleCinemaBg) et 'f' (toggleCinemaFullscreen) en mode cinéma sont gérés

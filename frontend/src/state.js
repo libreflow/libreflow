@@ -22,7 +22,7 @@
 //   replaceTracks(newArray)       — remplace l'array entier et rebuild la map
 
 import { get, set, notify } from './store.js';
-import { rebuildTrackIdxMap }  from './search.js';
+import { rebuildTrackIdxMap } from './search.js';
 import { emit, EVENTS } from './bus.js';
 
 /**
@@ -30,21 +30,27 @@ import { emit, EVENTS } from './bus.js';
  * Utilisé par : dupes.js, ctxmenu.js, library.js, selection.js, orphans.js.
  * @param {number} v
  */
-export function setCurIdx(v)     { set('curIdx',     v); }
+export function setCurIdx(v) {
+  set('curIdx', v);
+}
 
 /**
  * Sync liked dans app.js et dans le store réactif.
  * Utilisé par : selection.js.
  * @param {Set<string>} v
  */
-export function setLiked(v)      { set('liked',      v); }
+export function setLiked(v) {
+  set('liked', v);
+}
 
 /**
  * Sync ctxTrackId (cible du menu contextuel) dans app.js et dans le store.
  * Utilisé par : ctxmenu.js.
  * @param {string|null} v
  */
-export function setCtxTrackId(v) { set('ctxTrackId', v); }
+export function setCtxTrackId(v) {
+  set('ctxTrackId', v);
+}
 
 // ── Mutateurs atomiques de tracks[] (ARCH-3) ──────────────────────────────
 
@@ -122,7 +128,10 @@ export function removeTracksBatch(sortedDescIndices) {
   let indices = sortedDescIndices;
   for (let i = 1; i < indices.length; i++) {
     if (indices[i] >= indices[i - 1]) {
-      console.warn('[state] removeTracksBatch: indices NON triés décroissants — tri défensif appliqué', sortedDescIndices);
+      console.warn(
+        '[state] removeTracksBatch: indices NON triés décroissants — tri défensif appliqué',
+        sortedDescIndices
+      );
       indices = [...sortedDescIndices].sort((a, b) => b - a);
       break;
     }

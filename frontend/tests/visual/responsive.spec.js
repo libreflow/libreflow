@@ -13,7 +13,7 @@
 import { test, expect } from '@playwright/test';
 import { seedScript } from './seed.js';
 
-const WIDTHS  = [600, 720, 900, 1200, 1600];
+const WIDTHS = [600, 720, 900, 1200, 1600];
 const HEIGHTS = [400, 600, 800, 1000];
 
 // Wait for the real library to be on-screen: #vlib active AND #tlist populated
@@ -27,7 +27,7 @@ const HEIGHTS = [400, 600, 800, 1000];
 async function waitForRealLibrary(page) {
   await page.waitForSelector('#tlist .tr[data-track-id]', {
     state: 'attached',
-    timeout: 20000,
+    timeout: 20000
   });
   // Settle async post-render work (artwork loader, marquee, stats).
   await page.waitForTimeout(400);
@@ -38,7 +38,7 @@ async function waitForRealLibrary(page) {
         const layer = document.getElementById('toast-shelf');
         return !layer || layer.children.length === 0;
       },
-      { timeout: 5000 },
+      { timeout: 5000 }
     )
     .catch(() => {});
   await page.waitForTimeout(200);
@@ -54,7 +54,7 @@ test.describe('responsive viewport matrix', () => {
         await waitForRealLibrary(page);
         await expect(page).toHaveScreenshot(`lib-${w}x${h}.png`, {
           fullPage: false,
-          animations: 'disabled',
+          animations: 'disabled'
         });
       });
     }
@@ -72,7 +72,7 @@ test.describe('secondary panels at 720x600', () => {
     await page.waitForTimeout(500); // panel slide-in transition
     await expect(page).toHaveScreenshot('panel-queue-720x600.png', {
       fullPage: false,
-      animations: 'disabled',
+      animations: 'disabled'
     });
   });
 
@@ -89,7 +89,7 @@ test.describe('secondary panels at 720x600', () => {
     await page.waitForTimeout(500); // panel slide-in transition
     await expect(page).toHaveScreenshot('panel-eq-720x600.png', {
       fullPage: false,
-      animations: 'disabled',
+      animations: 'disabled'
     });
   });
 });

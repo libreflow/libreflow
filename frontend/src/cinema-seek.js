@@ -34,8 +34,8 @@
 
 const PAGE_STEP_S = 30; // PageUp/PageDown -- ±30s (Home/End -> 0/durée)
 
-let _deps      = null; // { audio, pbar, fill, thumb, timeEl, tooltip }
-let _dragging  = false;
+let _deps = null; // { audio, pbar, fill, thumb, timeEl, tooltip }
+let _dragging = false;
 let _pointerId = null;
 
 /**
@@ -54,20 +54,22 @@ export function seekPosFromPointer(clientX, rectLeft, rectWidth, duration) {
 export function formatSeekTime(s) {
   if (!s || !isFinite(s) || s < 0) return '–:––'; // !s : 0/null/undefined/NaN — parité exacte avec fmt() (utils.js)
   const total = Math.floor(s);
-  const m  = Math.floor(total / 60);
+  const m = Math.floor(total / 60);
   const ss = total % 60;
   return `${m}:${String(ss).padStart(2, '0')}`;
 }
 
 /** Vrai pendant un drag actif -- geler updateCinemaProgress()/syncCinProgress() côté cinema.js. */
-export function isSeekDragging() { return _dragging; }
+export function isSeekDragging() {
+  return _dragging;
+}
 
 function _applyLive(sec, duration) {
   const { fill, thumb, timeEl, pbar } = _deps;
   const ratio = duration > 0 ? sec / duration : 0;
-  if (fill)   fill.style.transform = 'scaleX(' + ratio + ')';
-  if (thumb)  thumb.style.left     = (ratio * 100) + '%';
-  if (timeEl) timeEl.textContent   = formatSeekTime(sec);
+  if (fill) fill.style.transform = 'scaleX(' + ratio + ')';
+  if (thumb) thumb.style.left = ratio * 100 + '%';
+  if (timeEl) timeEl.textContent = formatSeekTime(sec);
   if (pbar) {
     pbar.setAttribute('aria-valuenow', Math.round(ratio * 100));
     pbar.setAttribute('aria-valuetext', formatSeekTime(sec) + ' / ' + formatSeekTime(duration));
@@ -93,15 +95,15 @@ function _showTooltipAt(clientX, sec) {
   tooltip.textContent = formatSeekTime(sec);
   tooltip.classList.add('show');
   tooltip.removeAttribute('aria-hidden');
-  const r      = pbar.getBoundingClientRect();
-  const ttW    = tooltip.offsetWidth || 40;
-  const halfW  = ttW / 2;
+  const r = pbar.getBoundingClientRect();
+  const ttW = tooltip.offsetWidth || 40;
+  const halfW = ttW / 2;
   const margin = 4;
   const clampedClientX = Math.min(
     Math.max(clientX, halfW + margin),
     window.innerWidth - halfW - margin
   );
-  tooltip.style.left = (clampedClientX - r.left) + 'px';
+  tooltip.style.left = clampedClientX - r.left + 'px';
 }
 
 function _seekFromEvent(e) {
@@ -115,26 +117,30 @@ function _seekFromEvent(e) {
 // le pointerup arrive toujours, isSeekDragging() ne peut pas rester bloqué.
 
 function _bindDragListeners() {
-  window.addEventListener('pointermove',   _onDragMove);
-  window.addEventListener('pointerup',     _onDragUp);
+  window.addEventListener('pointermove', _onDragMove);
+  window.addEventListener('pointerup', _onDragUp);
   window.addEventListener('pointercancel', _onDragCancel);
-  window.addEventListener('blur',          _onWindowBlur);
+  window.addEventListener('blur', _onWindowBlur);
 }
 
 function _unbindDragListeners() {
-  window.removeEventListener('pointermove',   _onDragMove);
-  window.removeEventListener('pointerup',     _onDragUp);
+  window.removeEventListener('pointermove', _onDragMove);
+  window.removeEventListener('pointerup', _onDragUp);
   window.removeEventListener('pointercancel', _onDragCancel);
-  window.removeEventListener('blur',          _onWindowBlur);
+  window.removeEventListener('blur', _onWindowBlur);
 }
 
 function _stopDragging() {
   const pbar = _deps?.pbar;
   if (pbar && _pointerId != null) {
-    try { pbar.releasePointerCapture(_pointerId); } catch { /* capture jamais acquise ou déjà relâchée -- rien à libérer */ }
+    try {
+      pbar.releasePointerCapture(_pointerId);
+    } catch {
+      /* capture jamais acquise ou déjà relâchée -- rien à libérer */
+    }
   }
   _unbindDragListeners();
-  _dragging  = false;
+  _dragging = false;
   _pointerId = null;
   _hideTooltip();
 }
@@ -145,12 +151,15 @@ function _onPointerDown(e) {
   const sec = _seekFromEvent(e);
   if (sec == null) return; // pas de durée valide -- rien à scrubber
   e.preventDefault();
-  _dragging  = true;
+  _dragging = true;
   _pointerId = e.pointerId;
   // Capture = optimisation (routage direct des events) ; la correction du drag repose
   // sur les listeners window ci-dessus, pas sur elle (CLAUDE.md §14 : signal documenté).
-  try { pbar.setPointerCapture(e.pointerId); }
-  catch (err) { console.warn('[cinema-seek] setPointerCapture failed', err); }
+  try {
+    pbar.setPointerCapture(e.pointerId);
+  } catch (err) {
+    console.warn('[cinema-seek] setPointerCapture failed', err);
+  }
   _bindDragListeners();
   _applyLive(sec, audio.duration);
   _showTooltipAt(e.clientX, sec);
@@ -179,30 +188,37 @@ function _onDragCancel(e) {
 }
 
 /** Fenêtre perd le focus pendant un drag (glisser hors WebView) -- même traitement que cancel. */
-function _onWindowBlur() { _stopDragging(); }
+function _onWindowBlur() {
+  _stopDragging();
+}
 
 /** Survol sans drag -- tooltip seule (le drag est géré par les listeners window). */
 function _onHoverMove(e) {
   if (_dragging) return;
   const sec = _seekFromEvent(e);
-  if (sec == null) { _hideTooltip(); return; }
+  if (sec == null) {
+    _hideTooltip();
+    return;
+  }
   _showTooltipAt(e.clientX, sec);
 }
 
-function _onPointerLeave() { if (!_dragging) _hideTooltip(); }
+function _onPointerLeave() {
+  if (!_dragging) _hideTooltip();
+}
 
 function _onKeyDown(e) {
   const { audio } = _deps;
   const duration = audio?.duration;
   if (!duration || !isFinite(duration)) return;
   let sec;
-  if      (e.key === 'Home')     sec = 0;
-  else if (e.key === 'End')      sec = duration;
-  else if (e.key === 'PageUp')   sec = Math.min(duration, audio.currentTime + PAGE_STEP_S);
+  if (e.key === 'Home') sec = 0;
+  else if (e.key === 'End') sec = duration;
+  else if (e.key === 'PageUp') sec = Math.min(duration, audio.currentTime + PAGE_STEP_S);
   else if (e.key === 'PageDown') sec = Math.max(0, audio.currentTime - PAGE_STEP_S);
   else return;
   e.preventDefault(); // pas de stopPropagation : _onCinKey (cinema-input.js) doit voir l'évènement
-                       // bulle pour réarmer showCinemaControls() (idle timer contrôles)
+  // bulle pour réarmer showCinemaControls() (idle timer contrôles)
   _applyLive(sec, duration);
   _commit(sec);
 }
@@ -215,14 +231,14 @@ export function initCinemaSeek(deps) {
   _deps = deps;
   const { pbar } = deps;
   if (!pbar) return;
-  pbar.removeEventListener('pointerdown',  _onPointerDown);
-  pbar.addEventListener('pointerdown',     _onPointerDown);
-  pbar.removeEventListener('pointermove',  _onHoverMove);
-  pbar.addEventListener('pointermove',     _onHoverMove);
+  pbar.removeEventListener('pointerdown', _onPointerDown);
+  pbar.addEventListener('pointerdown', _onPointerDown);
+  pbar.removeEventListener('pointermove', _onHoverMove);
+  pbar.addEventListener('pointermove', _onHoverMove);
   pbar.removeEventListener('pointerleave', _onPointerLeave);
-  pbar.addEventListener('pointerleave',    _onPointerLeave);
-  pbar.removeEventListener('keydown',      _onKeyDown);
-  pbar.addEventListener('keydown',         _onKeyDown);
+  pbar.addEventListener('pointerleave', _onPointerLeave);
+  pbar.removeEventListener('keydown', _onKeyDown);
+  pbar.addEventListener('keydown', _onKeyDown);
 }
 
 /** closeCinema() -- coupe un drag en cours (listeners window compris) + masque la

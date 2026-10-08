@@ -13,11 +13,11 @@
 // inline ont migré vers data-action/data-* + delegated listeners.
 
 import './app.js';
-import { registerHandlers }      from './handlers.js';
-import { initNextPreview }       from './playerbar.js';
-import { installAutoFocusTrap }  from './modal.js';
+import { registerHandlers } from './handlers.js';
+import { initNextPreview } from './playerbar.js';
+import { installAutoFocusTrap } from './modal.js';
 import { initSettingsKeynav, initSettingsListeners } from './settings.js';
-import { initCtxMenu }           from './ctxmenu.js';
+import { initCtxMenu } from './ctxmenu.js';
 registerHandlers();
 initNextPreview();
 // A11Y-SERIOUS : focus trap auto-installé sur tous les [role="dialog"] connus.

@@ -21,34 +21,36 @@ export function detectNewAudioCds(previous, current) {
 
 export function buildEphemeralCdTrack(drive, tocTrack, tempPath) {
   return {
-    id:        `cd:${drive.path}:${tocTrack.idx}`,
-    path:      tempPath,
-    name:      formatTrackLabel(tocTrack.idx),
-    artist:    'CD Audio',
-    album:     drive.label && drive.label.length > 0 ? drive.label : 'CD inconnu',
-    duration:  tocTrack.duration_sec,
-    ext:       'flac',
+    id: `cd:${drive.path}:${tocTrack.idx}`,
+    path: tempPath,
+    name: formatTrackLabel(tocTrack.idx),
+    artist: 'CD Audio',
+    album: drive.label && drive.label.length > 0 ? drive.label : 'CD inconnu',
+    duration: tocTrack.duration_sec,
+    ext: 'flac',
     dateAdded: Date.now(),
-    metaDone:  true,
+    metaDone: true,
     _isEphemeralCd: true,
-    _cdDrive:       drive.path,
+    _cdDrive: drive.path
   };
 }
 
 export function cleanupEphemeralForDrive(tracks, drivePath) {
-  return tracks.filter(t => !(t._isEphemeralCd && t._cdDrive === drivePath));
+  return tracks.filter((t) => !(t._isEphemeralCd && t._cdDrive === drivePath));
 }
 
 function _sanitizeForPath(s) {
-  return String(s || '')
-    .replace(FORBIDDEN_PATH_CHARS, '_')
-    .replace(/\s+/g, '_')
-    .slice(0, 80) || 'unnamed';
+  return (
+    String(s || '')
+      .replace(FORBIDDEN_PATH_CHARS, '_')
+      .replace(/\s+/g, '_')
+      .slice(0, 80) || 'unnamed'
+  );
 }
 
 export function extractDestPath(baseDir, label, trackIdx, dateStr) {
   const safe = _sanitizeForPath(label);
-  const dir  = `${baseDir}\\CD_${safe}_${dateStr}`;
+  const dir = `${baseDir}\\CD_${safe}_${dateStr}`;
   const file = `${formatTrackLabel(trackIdx)}.flac`;
   return `${dir}\\${file}`;
 }

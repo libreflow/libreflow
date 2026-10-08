@@ -16,19 +16,19 @@
 //   ctxStartRadio
 //   radioRegenerateFromCurrent, renderRadioView, openRadioView
 
-import { esc, fmt }                           from './utils.js';
-import { CFG }                                from './cfg.js';
-import { i18n }                               from './i18n.js';
-import { get, notify }                        from './store.js';
+import { esc, fmt } from './utils.js';
+import { CFG } from './cfg.js';
+import { i18n } from './i18n.js';
+import { get, notify } from './store.js';
 import { filteredIdx, _trackIdxMap } from './search.js';
-import { audio, playAt }                      from './player.js';
-import { toast, toastWithAction, confirmAction }                       from './ui.js';
+import { audio, playAt } from './player.js';
+import { toast, toastWithAction, confirmAction } from './ui.js';
 import { setManualQueue } from './player.js';
 import { emit, EVENTS } from './bus.js';
 
 // ── Callbacks injectés par app.js (CLAUDE.md §6 — pas d'import direct playlists.js) ──
-let _savePlaylists  = null;
-let _renderPlNav    = null;
+let _savePlaylists = null;
+let _renderPlNav = null;
 let _setupPlNavDrop = null;
 
 /**
@@ -36,27 +36,31 @@ let _setupPlNavDrop = null;
  * Doit être appelé une fois au démarrage avant tout radioSaveAsPlaylist().
  */
 export function initRadioPlCallbacks({ savePlaylists, renderPlNav, setupPlNavDrop }) {
-  _savePlaylists  = savePlaylists;
-  _renderPlNav    = renderPlNav;
+  _savePlaylists = savePlaylists;
+  _renderPlNav = renderPlNav;
   _setupPlNavDrop = setupPlNavDrop;
 }
 
 // ── Constantes ───────────────────────────────────────────────
-const RADIO_SIZE           = CFG.RADIO_QUEUE_SIZE;
-const RADIO_REFILL         = CFG.RADIO_REFILL_THRESHOLD;
+const RADIO_SIZE = CFG.RADIO_QUEUE_SIZE;
+const RADIO_REFILL = CFG.RADIO_REFILL_THRESHOLD;
 const RADIO_MANUAL_PREVIEW = 8; // titres max exposés dans la file manuelle
 
 // ── État interne ─────────────────────────────────────────────
-export let radioActive    = false;
-let radioSeedId           = null;
+export let radioActive = false;
+let radioSeedId = null;
 
 /** Retourne le seed courant — pour la persistance cfg. */
-export function getRadioSeedId() { return radioSeedId; }
+export function getRadioSeedId() {
+  return radioSeedId;
+}
 /** Restaure silencieusement le seedId au boot (sans démarrer la radio). */
-export function initRadioSeedId(id) { if (id) radioSeedId = id; }
-let radioQueue            = [];
-let _radioPlayedIds       = new Set();
-let _radioStopInProgress  = false; // guard anti-concurrence pour stopRadio (async)
+export function initRadioSeedId(id) {
+  if (id) radioSeedId = id;
+}
+let radioQueue = [];
+let _radioPlayedIds = new Set();
+let _radioStopInProgress = false; // guard anti-concurrence pour stopRadio (async)
 let _radioRefillInProgress = false; // B34 : guard anti-concurrence pour le refill async de radioRefillQueue
 
 // ── Progress bar live (rv-prog-fill) ─────────────────────────
@@ -71,12 +75,20 @@ function radioScore(seed, candidate, recentCountMap, recentSlice, recentWindow, 
   let score = 0;
 
   // 1. GENRE (35 pts)
-  const seedGenres = (seed.genre || '').toLowerCase().split(/[\/,;|]/).map(s => s.trim()).filter(Boolean);
-  const candGenres = (candidate.genre || '').toLowerCase().split(/[\/,;|]/).map(s => s.trim()).filter(Boolean);
+  const seedGenres = (seed.genre || '')
+    .toLowerCase()
+    .split(/[\/,;|]/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+  const candGenres = (candidate.genre || '')
+    .toLowerCase()
+    .split(/[\/,;|]/)
+    .map((s) => s.trim())
+    .filter(Boolean);
   if (seedGenres.length && candGenres.length) {
-    const shared = seedGenres.filter(g => candGenres.some(cg =>
-      cg === g || cg.includes(g) || g.includes(cg)
-    )).length;
+    const shared = seedGenres.filter((g) =>
+      candGenres.some((cg) => cg === g || cg.includes(g) || g.includes(cg))
+    ).length;
     score += (shared / Math.max(seedGenres.length, candGenres.length)) * 35;
   } else if (!seedGenres.length || !candGenres.length) {
     score += 5;
@@ -93,13 +105,14 @@ function radioScore(seed, candidate, recentCountMap, recentSlice, recentWindow, 
 
   // 3. ÉPOQUE (20 pts)
   const msPerYear = 365.25 * 24 * 3600 * 1000;
-  const sYear = seed.year      || Math.floor((seed.dateAdded      || Date.now()) / msPerYear + 1970);
-  const cYear = candidate.year || Math.floor((candidate.dateAdded || Date.now()) / msPerYear + 1970);
+  const sYear = seed.year || Math.floor((seed.dateAdded || Date.now()) / msPerYear + 1970);
+  const cYear =
+    candidate.year || Math.floor((candidate.dateAdded || Date.now()) / msPerYear + 1970);
   const diff = Math.abs(sYear - cYear);
-  if (diff === 0)       score += 20;
-  else if (diff <= 2)   score += 16;
-  else if (diff <= 5)   score += 10;
-  else if (diff <= 10)  score += 5;
+  if (diff === 0) score += 20;
+  else if (diff <= 2) score += 16;
+  else if (diff <= 5) score += 10;
+  else if (diff <= 10) score += 5;
 
   // 4. RÉCENCE / POPULARITÉ — anti-répétition calibré par taille de bibliothèque.
   // Problème : avec une fenêtre fixe de 30, une bibliothèque de 20 titres accumulait
@@ -109,13 +122,13 @@ function radioScore(seed, candidate, recentCountMap, recentSlice, recentWindow, 
   //   → 500 titres : 30 (inchangé) | 50 titres : 20 | 15 titres : 6
   // La pénalité max reste window × 0.7 (≤ 21), cohérente avec l'ancienne valeur sur
   // grandes bibliothèques mais drastiquement réduite sur petites.
-  const recentPos    = recentSlice.indexOf(candidate.id);
+  const recentPos = recentSlice.indexOf(candidate.id);
   if (recentPos >= 0) {
     // Pénalité décroissante proportionnelle : joué très récemment = fortement pénalisé
     score -= Math.round((recentWindow - recentPos) * 0.7);
   } else {
     // Bonus popularité uniquement si hors fenêtre récente
-    const playCount = recentCountMap ? (recentCountMap.get(candidate.id) || 0) : 0;
+    const playCount = recentCountMap ? recentCountMap.get(candidate.id) || 0 : 0;
     score += Math.min(playCount * 2, 10);
   }
 
@@ -139,58 +152,64 @@ async function buildRadioQueue(seedTrack, excludeIds = new Set()) {
   for (const id of get('recentPlays')) recentCountMap.set(id, (recentCountMap.get(id) || 0) + 1);
 
   // PERF2-01/02 : hisser les calculs coûteux hors de la boucle de scoring
-  const _libSize     = tracks.length;
+  const _libSize = tracks.length;
   const recentWindow = Math.min(30, Math.max(5, Math.floor(_libSize * 0.4)));
-  const _rawRecent   = get('recentPlays') || [];
-  const recentSlice  = _rawRecent.filter(id => _trackIdxMap.has(id)).slice(0, recentWindow);
-  const likedSet     = get('liked');
+  const _rawRecent = get('recentPlays') || [];
+  const recentSlice = _rawRecent.filter((id) => _trackIdxMap.has(id)).slice(0, recentWindow);
+  const likedSet = get('liked');
 
   // Tous les candidats scorés (hors seed et exclus)
   const _candidates = tracks
-    .filter(t => t.id !== seedTrack.id && !excludeIds.has(t.id))
-    .map(t => ({ t, s: radioScore(seedTrack, t, recentCountMap, recentSlice, recentWindow, likedSet) }));
+    .filter((t) => t.id !== seedTrack.id && !excludeIds.has(t.id))
+    .map((t) => ({
+      t,
+      s: radioScore(seedTrack, t, recentCountMap, recentSlice, recentWindow, likedSet)
+    }));
   // PERF-7 : yield avant le tri pour libérer le thread principal (~10ms sur 5000 objets)
-  await new Promise(r => setTimeout(r, 0));
+  await new Promise((r) => setTimeout(r, 0));
   const allScored = _candidates.sort((a, b) => b.s - a.s);
 
   // Filtre optimiste : préférer les titres à score >= 0 (pas récemment joués)
   // FALLBACK : si tous les scores sont négatifs (bibliothèque petite / tout récemment joué),
   // inclure quand même tous les candidats triés par score — la radio ne doit jamais retourner [].
-  const scored = allScored.filter(x => x.s >= 0).length > 0
-    ? allScored.filter(x => x.s >= 0)
-    : allScored; // fallback : tous les candidats, au moins les moins mauvais en tête
+  const scored =
+    allScored.filter((x) => x.s >= 0).length > 0 ? allScored.filter((x) => x.s >= 0) : allScored; // fallback : tous les candidats, au moins les moins mauvais en tête
 
   const poolSize = Math.max(RADIO_SIZE * 2, Math.ceil(scored.length * 0.6));
-  const pool     = scored.slice(0, poolSize);
+  const pool = scored.slice(0, poolSize);
 
   // ── Diversité artiste : max 2 titres par artiste dans le résultat ──
   const artistCount = new Map();
-  const selected    = [];
+  const selected = [];
   for (const { t } of pool) {
     if (selected.length >= RADIO_SIZE) break;
-    const a   = (t.artist || '').toLowerCase().trim() || '__unknown__';
+    const a = (t.artist || '').toLowerCase().trim() || '__unknown__';
     const cnt = artistCount.get(a) || 0;
-    if (cnt < 2) { selected.push(t); artistCount.set(a, cnt + 1); }
+    if (cnt < 2) {
+      selected.push(t);
+      artistCount.set(a, cnt + 1);
+    }
   }
   // Fallback : bibliothèque trop petite → compléter sans contrainte d'artiste
   if (selected.length < Math.ceil(RADIO_SIZE / 2)) {
     for (const { t } of pool) {
       if (selected.length >= RADIO_SIZE) break;
-      if (!selected.some(s => s.id === t.id)) selected.push(t);
+      if (!selected.some((s) => s.id === t.id)) selected.push(t);
     }
   }
 
   // ── Injection découverte : ~20% de titres peu/pas écoutés récemment ──
   // Réutiliser recentWindow et recentSlice déjà calculés ci-dessus (PERF2-02).
-  const recentSet  = new Set(recentSlice);
-  const DISCO_SLOTS   = Math.max(1, Math.floor(RADIO_SIZE * 0.2));
+  const recentSet = new Set(recentSlice);
+  const DISCO_SLOTS = Math.max(1, Math.floor(RADIO_SIZE * 0.2));
   const discoveryPool = tracks
-    .filter(t =>
-      !excludeIds.has(t.id) &&
-      t.id !== seedTrack.id &&
-      !recentSet.has(t.id) &&
-      (recentCountMap.get(t.id) || 0) < 2 &&
-      !selected.some(s => s.id === t.id)
+    .filter(
+      (t) =>
+        !excludeIds.has(t.id) &&
+        t.id !== seedTrack.id &&
+        !recentSet.has(t.id) &&
+        (recentCountMap.get(t.id) || 0) < 2 &&
+        !selected.some((s) => s.id === t.id)
     )
     .sort(() => Math.random() - 0.5)
     .slice(0, DISCO_SLOTS);
@@ -225,23 +244,27 @@ export async function startRadio(trackId) {
   }
 
   // Relire APRÈS l'éventuel await (rebuildTrackIdxMap crée un nouveau Map → snapshot stale)
-  const tracks       = get('tracks'); // Phase 4
-  const curIdx       = get('curIdx');
+  const tracks = get('tracks'); // Phase 4
+  const curIdx = get('curIdx');
 
   const seed = trackId
-    ? (_trackIdxMap.has(trackId) ? tracks[_trackIdxMap.get(trackId)] : undefined)
-    : (curIdx >= 0 ? tracks[curIdx] : tracks[Math.floor(Math.random() * tracks.length)]);
+    ? _trackIdxMap.has(trackId)
+      ? tracks[_trackIdxMap.get(trackId)]
+      : undefined
+    : curIdx >= 0
+      ? tracks[curIdx]
+      : tracks[Math.floor(Math.random() * tracks.length)];
 
   if (!seed) {
     toast(i18n('radio_no_track'), 'warning');
     return;
   }
 
-  radioActive     = true;
-  radioSeedId     = seed.id;
+  radioActive = true;
+  radioSeedId = seed.id;
   try {
     radioQueue = await buildRadioQueue(seed);
-  } catch(e) {
+  } catch (e) {
     console.error('[radio] buildRadioQueue failed in startRadio:', e);
     radioActive = false;
     radioSeedId = null;
@@ -256,8 +279,9 @@ export async function startRadio(trackId) {
 
   if (curIdx < 0 || tracks[curIdx]?.id !== seed.id) {
     const fi = filteredIdx(seed);
-    if (fi >= 0) { playAt(fi); }
-    else {
+    if (fi >= 0) {
+      playAt(fi);
+    } else {
       // Le seed n'est pas dans la vue filtrée courante → basculer sur "Tous les titres"
       // et attendre que _withVT + la transition CSS soient terminées (≥ 250ms) avant playAt.
       emit(EVENTS.VIEW_REQUEST, { view: 'all', btn: document.getElementById('ni-all') });
@@ -272,9 +296,9 @@ export async function startRadio(trackId) {
 
 /** Teardown synchrone de l'état radio + UI. Partagé par stopRadio() et stopRadioSilent(). */
 function _radioTeardown() {
-  radioActive     = false;
-  radioSeedId     = null;
-  radioQueue      = [];
+  radioActive = false;
+  radioSeedId = null;
+  radioQueue = [];
   _radioPlayedIds = new Set();
   setManualQueue([]);
   _syncRadioButtons(false);
@@ -288,19 +312,19 @@ export async function stopRadio() {
   if (_radioStopInProgress) return; // guard : empêche deux appels concurrents pendant l'await
   _radioStopInProgress = true;
   try {
-  // Confirmation si la file contient encore des titres
-  if (radioActive && radioQueue.length > 0) {
-    const n  = radioQueue.length;
-    const ok = await confirmAction(
-      i18n('radio_stop_title'),
-      i18n('radio_stop_body', n),
-      i18n('radio_stop_btn'),
-      'danger'
-    );
-    if (!ok) return;
-  }
-  _radioTeardown();
-  toast(i18n('radio_stopped'));
+    // Confirmation si la file contient encore des titres
+    if (radioActive && radioQueue.length > 0) {
+      const n = radioQueue.length;
+      const ok = await confirmAction(
+        i18n('radio_stop_title'),
+        i18n('radio_stop_body', n),
+        i18n('radio_stop_btn'),
+        'danger'
+      );
+      if (!ok) return;
+    }
+    _radioTeardown();
+    toast(i18n('radio_stopped'));
   } finally {
     _radioStopInProgress = false;
   }
@@ -318,9 +342,9 @@ export function stopRadioSilent() {
 
 /** Réinitialise tout l'état radio sans side-effects UI (appelé depuis clearLibrary). */
 export function resetRadio() {
-  radioActive     = false;
-  radioSeedId     = null;
-  radioQueue      = [];
+  radioActive = false;
+  radioSeedId = null;
+  radioQueue = [];
   _radioPlayedIds = new Set();
   setManualQueue([]);
   _syncRadioButtons(false);
@@ -331,7 +355,7 @@ export function ctxStartRadio() {
   // supprimée entre deux appels à get() (race condition lors de suppressions rapides).
   const ctxId = get('ctxTrackId');
   const tracks = get('tracks');
-  const t = (_trackIdxMap.has(ctxId) ? tracks[_trackIdxMap.get(ctxId)] : undefined);
+  const t = _trackIdxMap.has(ctxId) ? tracks[_trackIdxMap.get(ctxId)] : undefined;
   emit(EVENTS.CTX_MENU_CLOSE, {});
   if (t) startRadio(t.id);
 }
@@ -340,9 +364,10 @@ export function ctxStartRadio() {
 
 function _radioSyncManualQueue() {
   setManualQueue(
-    radioQueue.slice(0, RADIO_MANUAL_PREVIEW)
-      .map(t => _trackIdxMap.get(t?.id) ?? -1)
-      .filter(i => i >= 0)
+    radioQueue
+      .slice(0, RADIO_MANUAL_PREVIEW)
+      .map((t) => _trackIdxMap.get(t?.id) ?? -1)
+      .filter((i) => i >= 0)
   );
 }
 
@@ -350,7 +375,10 @@ export async function radioRefillQueue() {
   if (!radioActive) return;
   const tracks = get('tracks'); // Phase 4
   const curIdx = get('curIdx');
-  if (tracks.length < 3) { resetRadio(); return; }
+  if (tracks.length < 3) {
+    resetRadio();
+    return;
+  }
   const cur = tracks[curIdx];
   if (!cur) return;
 
@@ -375,11 +403,11 @@ export async function radioRefillQueue() {
       if (_radioPlayedIds.size >= totalTracks - RADIO_SIZE) {
         // Conserver seulement les titres de la file courante + le seed courant
         // pour garder une diversité minimale.
-        _radioPlayedIds = new Set([cur.id, ...radioQueue.map(t => t.id)]);
+        _radioPlayedIds = new Set([cur.id, ...radioQueue.map((t) => t.id)]);
       }
 
-      const exclude = new Set([..._radioPlayedIds, ...radioQueue.map(t => t.id)]);
-      const extra   = (await buildRadioQueue(cur, exclude)).slice(0, RADIO_SIZE - radioQueue.length);
+      const exclude = new Set([..._radioPlayedIds, ...radioQueue.map((t) => t.id)]);
+      const extra = (await buildRadioQueue(cur, exclude)).slice(0, RADIO_SIZE - radioQueue.length);
       radioQueue.push(...extra);
     } finally {
       _radioRefillInProgress = false;
@@ -396,19 +424,21 @@ export async function radioRefillQueue() {
     try {
       _syncRadioLibBar(true);
       if (get('view') === 'radio') renderRadioView();
-    } catch(e) { console.warn('[radio] rAF update failed:', e); }
+    } catch (e) {
+      console.warn('[radio] rAF update failed:', e);
+    }
   });
 }
 
 // ── Sync boutons radio (cinéma + sidebar nav) ─────────────────
 function _syncRadioButtons(active) {
-  const cinBtn  = document.getElementById('cinema-radio');
+  const cinBtn = document.getElementById('cinema-radio');
   if (cinBtn) {
     cinBtn.classList.toggle('on', active);
     cinBtn.setAttribute('aria-pressed', String(active));
     const cinLbl = active
-      ? (i18n('radio_stop_lbl')  || 'Arrêter la radio [R]')
-      : (i18n('radio_start_lbl') || 'Activer la radio intelligente [R]');
+      ? i18n('radio_stop_lbl') || 'Arrêter la radio [R]'
+      : i18n('radio_start_lbl') || 'Activer la radio intelligente [R]';
     cinBtn.title = cinLbl;
     cinBtn.setAttribute('aria-label', cinLbl);
   }
@@ -433,10 +463,10 @@ function _syncRadioLibBar(active) {
   const seed = _trackIdxMap?.has(radioSeedId)
     ? get('tracks')[_trackIdxMap.get(radioSeedId)] // Phase 4
     : null;
-  const qCount     = radioQueue.length;
-  const seedName   = esc(seed?.name || '–');
+  const qCount = radioQueue.length;
+  const seedName = esc(seed?.name || '–');
   const seedArtist = esc(seed?.artistFull || seed?.artist || '');
-  const seedIdStr  = String(radioSeedId ?? '');
+  const seedIdStr = String(radioSeedId ?? '');
 
   // Mise à jour légère si le seed n'a pas changé — évite de détruire les boutons
   if (bar.classList.contains('on') && bar.dataset.seedId === seedIdStr) {
@@ -447,7 +477,7 @@ function _syncRadioLibBar(active) {
 
   bar.classList.add('on');
   bar.dataset.seedId = seedIdStr;
-  const t_see  = esc(i18n('radio_see_queue'));
+  const t_see = esc(i18n('radio_see_queue'));
   const t_save = esc(i18n('radio_save_lbl'));
   const t_stop = esc(i18n('radio_stop_btn'));
   bar.innerHTML = `
@@ -481,7 +511,9 @@ function _syncRadioLibBar(active) {
 
 /** Synchronise #radio-lib-bar dans #vlib. Appelé depuis setView() à chaque
  *  entrée dans la vue bibliothèque, pour garantir l'affichage immédiat. */
-export function syncRadioLibBar() { _syncRadioLibBar(radioActive); }
+export function syncRadioLibBar() {
+  _syncRadioLibBar(radioActive);
+}
 
 export async function radioSaveAsPlaylist() {
   if (!radioActive) return;
@@ -491,14 +523,26 @@ export async function radioSaveAsPlaylist() {
 
   // seed + file complète (dédoublonnée via Set → O(1))
   const seen = new Set();
-  const ids  = [];
-  const push = id => { if (!seen.has(id)) { seen.add(id); ids.push(id); } };
+  const ids = [];
+  const push = (id) => {
+    if (!seen.has(id)) {
+      seen.add(id);
+      ids.push(id);
+    }
+  };
   if (seed) push(seed.id);
   for (const t of radioQueue) push(t.id);
-  if (!ids.length) { toast(i18n('radio_pl_empty'), 'warning'); return; }
+  if (!ids.length) {
+    toast(i18n('radio_pl_empty'), 'warning');
+    return;
+  }
 
   const name = i18n('radio_pl_name', seed ? seed.name : 'Mix');
-  const pl = { id: 'pl_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8), name, trackIds: ids }; // BUG-m2 FIX : suffixe aléatoire pour éviter collision si sauvegardé 2× dans la même ms
+  const pl = {
+    id: 'pl_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8),
+    name,
+    trackIds: ids
+  }; // BUG-m2 FIX : suffixe aléatoire pour éviter collision si sauvegardé 2× dans la même ms
   get('playlists').push(pl);
   notify('playlists'); // CM-5 FIX: push() in-place → notify() so subscribers see the change
   if (!_savePlaylists) {
@@ -511,7 +555,10 @@ export async function radioSaveAsPlaylist() {
     // Roll back : retirer la playlist ajoutée optimistiquement si la sauvegarde échoue
     const playlists = get('playlists');
     const idx = playlists.indexOf(pl);
-    if (idx >= 0) { playlists.splice(idx, 1); notify('playlists'); }
+    if (idx >= 0) {
+      playlists.splice(idx, 1);
+      notify('playlists');
+    }
     toast(i18n('radio_save_error') || 'Erreur lors de la sauvegarde', 'error');
     return;
   }
@@ -525,7 +572,12 @@ export async function radioSaveAsPlaylist() {
     i18n('radio_pl_see') || 'Voir →',
     // AUDIT-2026-07-01 M5 : cibler la ligne ni-pl-<id> (comme tous les autres
     // émetteurs) — #ni-playlists provoquait un double marquage .on/aria-current.
-    () => emit(EVENTS.VIEW_REQUEST, { view: 'playlist', btn: document.getElementById('ni-pl-' + pl.id), plId: pl.id }),
+    () =>
+      emit(EVENTS.VIEW_REQUEST, {
+        view: 'playlist',
+        btn: document.getElementById('ni-pl-' + pl.id),
+        plId: pl.id
+      }),
     6000
   );
 }
@@ -538,15 +590,15 @@ export async function radioRegenerateFromCurrent() {
   }
   const cur = get('tracks')[get('curIdx')]; // Phase 4
   if (!cur) return;
-  const _prevSeedId     = radioSeedId;
-  const _prevPlayedIds  = new Set(_radioPlayedIds);
-  radioSeedId     = cur.id;
+  const _prevSeedId = radioSeedId;
+  const _prevPlayedIds = new Set(_radioPlayedIds);
+  radioSeedId = cur.id;
   _radioPlayedIds = new Set([cur.id]);
   try {
     radioQueue = await buildRadioQueue(cur);
-  } catch(e) {
+  } catch (e) {
     console.error('[radio] buildRadioQueue failed in radioRegenerateFromCurrent:', e);
-    radioSeedId     = _prevSeedId;
+    radioSeedId = _prevSeedId;
     _radioPlayedIds = _prevPlayedIds;
     toast(i18n('radio_no_track'), 'error');
     return;
@@ -557,7 +609,9 @@ export async function radioRegenerateFromCurrent() {
   toast(i18n('radio_regen_done', cur.name), 'success');
 }
 
-export function getRadioQueue() { return radioQueue; }
+export function getRadioQueue() {
+  return radioQueue;
+}
 
 // ── Vue Radio ────────────────────────────────────────────────
 
@@ -621,25 +675,25 @@ export function renderRadioView() {
     : null;
   const queue = radioQueue;
   // Id du titre en cours de lecture (pour l'indicateur actif dans la file)
-  const _tracks     = get('tracks'); // Phase 4 — snapshot local pour ce rendu
-  const _curTrackId = (get('curIdx') >= 0 && _tracks?.[get('curIdx')])
-    ? _tracks[get('curIdx')].id : null;
+  const _tracks = get('tracks'); // Phase 4 — snapshot local pour ce rendu
+  const _curTrackId =
+    get('curIdx') >= 0 && _tracks?.[get('curIdx')] ? _tracks[get('curIdx')].id : null;
 
   // ── Seed card (bannière centrale enrichie) ───────────────────
   // audio est importé depuis player.js au niveau module — ne pas redéclarer (TDZ)
-  const progPct = (audio && audio.duration > 0)
-    ? ((audio.currentTime / audio.duration * 100) | 0)
-    : 0;
+  const progPct =
+    audio && audio.duration > 0 ? ((audio.currentTime / audio.duration) * 100) | 0 : 0;
 
   const seedArt = seed?.art
     ? `<img src="${esc(seed.art)}" class="rv-seed-art" alt="">`
     : `<div class="rv-seed-art rv-seed-art-em"></div>`;
 
   const t_regen = esc(i18n('radio_regen_btn'));
-  const t_save  = esc(i18n('radio_save_btn'));
-  const t_stop  = esc(i18n('radio_stop_btn'));
+  const t_save = esc(i18n('radio_save_btn'));
+  const t_stop = esc(i18n('radio_stop_btn'));
 
-  const seedHtml = seed ? `
+  const seedHtml = seed
+    ? `
     <div class="rv-header">
       <div class="rv-header-top">
         <div class="rv-header-ico">
@@ -679,25 +733,27 @@ export function renderRadioView() {
       <div class="rv-prog-track">
         <div class="rv-prog-fill" id="rv-prog-fill" style="width:${progPct}%"></div>
       </div>
-    </div>` : '';
+    </div>`
+    : '';
 
   // ── Queue list ───────────────────────────────────────────────
   let queueHtml = '';
   if (queue.length === 0) {
     queueHtml = `<div class="rv-queue-empty">${i18n('radio_queue_fill')}</div>`;
   } else {
-    const t_play   = esc(i18n('radio_play_track'));
+    const t_play = esc(i18n('radio_play_track'));
     const t_remove = esc(i18n('radio_remove_track'));
-    const rows = queue.map((t, i) => {
-      const art = t.art
-        ? `<img src="${esc(t.art)}" class="rv-row-art" alt="">`
-        : `<div class="rv-row-art rv-row-art-em"></div>`;
-      const dur = t.duration ? fmt(t.duration) : '';
-      const isActive = t.id === _curTrackId;
-      const eqIcon = isActive
-        ? `<div class="rv-row-eq"><span></span><span></span><span></span></div>`
-        : `<span class="rv-row-num">${i + 1}</span>`;
-      return `<div class="rv-row${isActive ? ' rv-row-active' : ''}" data-action="play-radio-track" data-idx="${i}" title="${t_play}">
+    const rows = queue
+      .map((t, i) => {
+        const art = t.art
+          ? `<img src="${esc(t.art)}" class="rv-row-art" alt="">`
+          : `<div class="rv-row-art rv-row-art-em"></div>`;
+        const dur = t.duration ? fmt(t.duration) : '';
+        const isActive = t.id === _curTrackId;
+        const eqIcon = isActive
+          ? `<div class="rv-row-eq"><span></span><span></span><span></span></div>`
+          : `<span class="rv-row-num">${i + 1}</span>`;
+        return `<div class="rv-row${isActive ? ' rv-row-active' : ''}" data-action="play-radio-track" data-idx="${i}" title="${t_play}">
         ${eqIcon}
         ${art}
         <div class="rv-row-info">
@@ -708,7 +764,8 @@ export function renderRadioView() {
           <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
         </button>
       </div>`;
-    }).join('');
+      })
+      .join('');
     queueHtml = `
       <div class="rv-queue-header">
         <span>${i18n('radio_next_tracks')}</span>
@@ -725,7 +782,8 @@ export async function openRadioView(btn) {
   // AUDIT CINÉMA 2026-07-20 : l'overlay pose la classe 'active', pas 'on' — l'ancien
   // test 'on' rendait cette route morte (le toggle bus n'était jamais émis).
   if (document.getElementById('cinema-overlay')?.classList.contains('active')) {
-    emit(EVENTS.CINEMA_RADIO_TOGGLE, {}); return;
+    emit(EVENTS.CINEMA_RADIO_TOGGLE, {});
+    return;
   }
 
   // Bug #8 fix : ignorer le `btn` passé (peut être un bouton bannière ou n'importe
@@ -736,8 +794,11 @@ export async function openRadioView(btn) {
   if (!radioActive) {
     const curIdx = get('curIdx');
     const tracks = get('tracks'); // Phase 4
-    const seed = (curIdx >= 0 && tracks?.[curIdx]) ? tracks[curIdx] : null;
-    if (!seed) { toast?.(i18n('radio_start_need'), 'warning'); return; }
+    const seed = curIdx >= 0 && tracks?.[curIdx] ? tracks[curIdx] : null;
+    if (!seed) {
+      toast?.(i18n('radio_start_need'), 'warning');
+      return;
+    }
     await startRadio(seed.id);
     if (!radioActive) return; // startRadio a échoué (ex. bibliothèque trop petite)
   }
@@ -749,5 +810,3 @@ export async function openRadioView(btn) {
 }
 
 // window.* supprimé — playRadioTrackAt/removeRadioTrack sont des exports ES
-
-

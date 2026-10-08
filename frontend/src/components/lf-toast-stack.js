@@ -24,18 +24,72 @@ import { i18n } from '../i18n.js';
 const MAX_TOASTS = 5;
 
 const _TOAST_ICONS = {
-  info:    html`<svg viewBox="0 0 20 20" fill="currentColor" width="20" height="20" aria-hidden="true"><path d="M10 2a8 8 0 1 0 0 16 8 8 0 0 0 0-16zm0 4a1 1 0 1 1 0 2 1 1 0 0 1 0-2zm1.25 8.75h-2.5v-5h2.5v5z"/></svg>`,
-  success: html`<svg viewBox="0 0 20 20" fill="currentColor" width="20" height="20" aria-hidden="true"><path d="M10 2a8 8 0 1 0 0 16 8 8 0 0 0 0-16zm-1.2 11.4L5.4 10l1.2-1.2 2.2 2.2 4.6-4.6 1.2 1.2-5.8 5.8z"/></svg>`,
-  error:   html`<svg viewBox="0 0 20 20" fill="currentColor" width="20" height="20" aria-hidden="true"><path d="M10 2a8 8 0 1 0 0 16 8 8 0 0 0 0-16zm3.5 11.3-1.2 1.2L10 12.2l-2.3 2.3-1.2-1.2L8.8 11 6.5 8.7l1.2-1.2L10 9.8l2.3-2.3 1.2 1.2L11.2 11l2.3 2.3z"/></svg>`,
-  warning: html`<svg viewBox="0 0 20 20" fill="currentColor" width="20" height="20" aria-hidden="true"><path d="M10 2 1 18h18L10 2zm0 5a1 1 0 0 1 1 1v4a1 1 0 1 1-2 0V8a1 1 0 0 1 1-1zm0 8.4a1.1 1.1 0 1 1 0-2.2 1.1 1.1 0 0 1 0 2.2z"/></svg>`,
-  loading: html`<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" width="20" height="20" aria-hidden="true"><path d="M10 2.5A7.5 7.5 0 1 1 3.2 6.8"><animateTransform attributeName="transform" type="rotate" from="0 10 10" to="360 10 10" dur="0.9s" repeatCount="indefinite"/></path></svg>`,
+  info: html`<svg viewBox="0 0 20 20" fill="currentColor" width="20" height="20" aria-hidden="true">
+    <path
+      d="M10 2a8 8 0 1 0 0 16 8 8 0 0 0 0-16zm0 4a1 1 0 1 1 0 2 1 1 0 0 1 0-2zm1.25 8.75h-2.5v-5h2.5v5z"
+    />
+  </svg>`,
+  success: html`<svg
+    viewBox="0 0 20 20"
+    fill="currentColor"
+    width="20"
+    height="20"
+    aria-hidden="true"
+  >
+    <path
+      d="M10 2a8 8 0 1 0 0 16 8 8 0 0 0 0-16zm-1.2 11.4L5.4 10l1.2-1.2 2.2 2.2 4.6-4.6 1.2 1.2-5.8 5.8z"
+    />
+  </svg>`,
+  error: html`<svg
+    viewBox="0 0 20 20"
+    fill="currentColor"
+    width="20"
+    height="20"
+    aria-hidden="true"
+  >
+    <path
+      d="M10 2a8 8 0 1 0 0 16 8 8 0 0 0 0-16zm3.5 11.3-1.2 1.2L10 12.2l-2.3 2.3-1.2-1.2L8.8 11 6.5 8.7l1.2-1.2L10 9.8l2.3-2.3 1.2 1.2L11.2 11l2.3 2.3z"
+    />
+  </svg>`,
+  warning: html`<svg
+    viewBox="0 0 20 20"
+    fill="currentColor"
+    width="20"
+    height="20"
+    aria-hidden="true"
+  >
+    <path
+      d="M10 2 1 18h18L10 2zm0 5a1 1 0 0 1 1 1v4a1 1 0 1 1-2 0V8a1 1 0 0 1 1-1zm0 8.4a1.1 1.1 0 1 1 0-2.2 1.1 1.1 0 0 1 0 2.2z"
+    />
+  </svg>`,
+  loading: html`<svg
+    viewBox="0 0 20 20"
+    fill="none"
+    stroke="currentColor"
+    stroke-width="2.2"
+    stroke-linecap="round"
+    width="20"
+    height="20"
+    aria-hidden="true"
+  >
+    <path d="M10 2.5A7.5 7.5 0 1 1 3.2 6.8">
+      <animateTransform
+        attributeName="transform"
+        type="rotate"
+        from="0 10 10"
+        to="360 10 10"
+        dur="0.9s"
+        repeatCount="indefinite"
+      />
+    </path>
+  </svg>`
 };
 
 export class LfToastStack extends LitElement {
   static _seq = 0;
 
   static properties = {
-    _items: { state: true },
+    _items: { state: true }
   };
 
   static styles = css`
@@ -56,7 +110,7 @@ export class LfToastStack extends LitElement {
     /* Corner fallback — same values as the previous default :host rule,
        restored whenever the sidebar isn't a normal full-height column. */
     :host-context(body.np-full),
-    :host-context(html[data-platform="mobile"]) {
+    :host-context(html[data-platform='mobile']) {
       bottom: auto;
       left: auto;
       width: auto;
@@ -78,7 +132,7 @@ export class LfToastStack extends LitElement {
        :host uses above; the default docked .t-item has no floor (min-width: 0)
        so it stretches to fill whatever width :host computes from --sb. */
     :host-context(body.np-full) .t-item,
-    :host-context(html[data-platform="mobile"]) .t-item {
+    :host-context(html[data-platform='mobile']) .t-item {
       min-width: 260px;
     }
     .t-item {
@@ -90,7 +144,9 @@ export class LfToastStack extends LitElement {
       color: var(--lf-toast-fg, var(--text-primary));
       padding: 14px 16px;
       border-radius: var(--radius-lg);
-      box-shadow: var(--shadow-lg), 0 0 0 1px color-mix(in srgb, var(--lf-toast-accent) 35%, transparent);
+      box-shadow:
+        var(--shadow-lg),
+        0 0 0 1px color-mix(in srgb, var(--lf-toast-accent) 35%, transparent);
       display: flex;
       align-items: center;
       gap: 12px;
@@ -98,11 +154,13 @@ export class LfToastStack extends LitElement {
       max-width: 568px;
       font-size: 14px;
       line-height: 20px;
-      letter-spacing: .01786em;
+      letter-spacing: 0.01786em;
       overflow: hidden;
       animation: t-in var(--motion-base) var(--ease-standard);
       cursor: pointer;
-      transition: transform var(--motion-fast) var(--ease-standard), box-shadow var(--motion-base) var(--ease-standard);
+      transition:
+        transform var(--motion-fast) var(--ease-standard),
+        box-shadow var(--motion-base) var(--ease-standard);
     }
     /* Placed AFTER the base .t-item rule (same tie-break the :host media
        block above relies on) — @media (max-width: 719px) { .t-item { ... } }
@@ -110,18 +168,40 @@ export class LfToastStack extends LitElement {
        it comes later in source order. Moving it earlier would silently
        disable this fallback again. */
     @media (max-width: 719px) {
-      .t-item { min-width: 260px; }
+      .t-item {
+        min-width: 260px;
+      }
     }
-    .t-item.t-out { animation: t-out var(--motion-fast) cubic-bezier(.4, 0, 1, 1) forwards; }
-    .t-item:hover  { transform: translateY(-1px); box-shadow: var(--shadow-xl, var(--shadow-lg)), 0 0 0 1px color-mix(in srgb, var(--lf-toast-accent) 55%, transparent); }
-    .t-item:active { transform: scale(.985); transition-duration: var(--motion-fast); }
+    .t-item.t-out {
+      animation: t-out var(--motion-fast) cubic-bezier(0.4, 0, 1, 1) forwards;
+    }
+    .t-item:hover {
+      transform: translateY(-1px);
+      box-shadow:
+        var(--shadow-xl, var(--shadow-lg)),
+        0 0 0 1px color-mix(in srgb, var(--lf-toast-accent) 55%, transparent);
+    }
+    .t-item:active {
+      transform: scale(0.985);
+      transition-duration: var(--motion-fast);
+    }
 
     /* Per-type accent — applied to the icon glyph and the thin bottom bar only. */
-    .t-info    { --lf-toast-accent: var(--lf-toast-bg-info,    var(--accent)); }
-    .t-success { --lf-toast-accent: var(--lf-toast-bg-success, var(--state-success)); }
-    .t-error   { --lf-toast-accent: var(--lf-toast-bg-error,   var(--state-error)); }
-    .t-warning { --lf-toast-accent: var(--lf-toast-bg-warning, var(--amber)); }
-    .t-loading { --lf-toast-accent: var(--lf-toast-bg-loading, var(--accent)); }
+    .t-info {
+      --lf-toast-accent: var(--lf-toast-bg-info, var(--accent));
+    }
+    .t-success {
+      --lf-toast-accent: var(--lf-toast-bg-success, var(--state-success));
+    }
+    .t-error {
+      --lf-toast-accent: var(--lf-toast-bg-error, var(--state-error));
+    }
+    .t-warning {
+      --lf-toast-accent: var(--lf-toast-bg-warning, var(--amber));
+    }
+    .t-loading {
+      --lf-toast-accent: var(--lf-toast-bg-loading, var(--accent));
+    }
 
     .t-icon {
       flex: 0 0 auto;
@@ -130,7 +210,9 @@ export class LfToastStack extends LitElement {
       justify-content: center;
       color: var(--lf-toast-accent);
     }
-    .t-msg  { flex: 1 1 auto; }
+    .t-msg {
+      flex: 1 1 auto;
+    }
 
     .t-action {
       flex: 0 0 auto;
@@ -144,9 +226,11 @@ export class LfToastStack extends LitElement {
       font: inherit;
       font-weight: 500;
       text-transform: uppercase;
-      letter-spacing: .0892857em;
+      letter-spacing: 0.0892857em;
     }
-    .t-action:hover { background: rgba(255, 255, 255, .08); }
+    .t-action:hover {
+      background: rgba(255, 255, 255, 0.08);
+    }
     .t-action:focus-visible {
       outline: var(--focus-ring);
       outline-offset: 1px;
@@ -156,14 +240,17 @@ export class LfToastStack extends LitElement {
       flex: 0 0 auto;
       background: transparent;
       border: none;
-      color: rgba(255, 255, 255, .6);
+      color: rgba(255, 255, 255, 0.6);
       font-size: 20px;
       line-height: 1;
       cursor: pointer;
       padding: 2px 4px;
       border-radius: 4px;
     }
-    .t-close:hover { color: rgba(255, 255, 255, .92); background: rgba(255, 255, 255, .08); }
+    .t-close:hover {
+      color: rgba(255, 255, 255, 0.92);
+      background: rgba(255, 255, 255, 0.08);
+    }
     .t-close:focus-visible {
       outline: var(--focus-ring);
       outline-offset: 1px;
@@ -171,41 +258,52 @@ export class LfToastStack extends LitElement {
 
     .t-bar {
       position: absolute;
-      left: 0; bottom: 0;
+      left: 0;
+      bottom: 0;
       height: 2px;
       width: 100%;
       transform-origin: left center;
-      background: var(--lf-toast-accent, rgba(255, 255, 255, .4));
-      opacity: .85;
+      background: var(--lf-toast-accent, rgba(255, 255, 255, 0.4));
+      opacity: 0.85;
       transform: scaleX(1);
     }
 
-    @keyframes t-in  { from { transform: translateX(24px); opacity: 0; } }
-    @keyframes t-out { to   { transform: translateX(24px); opacity: 0; } }
+    @keyframes t-in {
+      from {
+        transform: translateX(24px);
+        opacity: 0;
+      }
+    }
+    @keyframes t-out {
+      to {
+        transform: translateX(24px);
+        opacity: 0;
+      }
+    }
 
-    :host-context(html[data-mode="light"]) .t-item {
+    :host-context(html[data-mode='light']) .t-item {
       background: var(--lf-toast-bg, rgba(255, 255, 255, 0.92));
       color: var(--lf-toast-fg, rgba(15, 17, 23, 0.92));
       box-shadow:
-        0 6px 10px rgba(0, 0, 0, .10),
-        0 1px 18px rgba(0, 0, 0, .08),
-        0 3px 5px rgba(0, 0, 0, .14),
+        0 6px 10px rgba(0, 0, 0, 0.1),
+        0 1px 18px rgba(0, 0, 0, 0.08),
+        0 3px 5px rgba(0, 0, 0, 0.14),
         0 0 0 1px color-mix(in srgb, var(--lf-toast-accent) 35%, transparent);
     }
-    :host-context(html[data-mode="light"]) .t-item:hover {
+    :host-context(html[data-mode='light']) .t-item:hover {
       box-shadow:
-        0 6px 10px rgba(0, 0, 0, .10),
-        0 1px 18px rgba(0, 0, 0, .08),
-        0 3px 5px rgba(0, 0, 0, .14),
+        0 6px 10px rgba(0, 0, 0, 0.1),
+        0 1px 18px rgba(0, 0, 0, 0.08),
+        0 3px 5px rgba(0, 0, 0, 0.14),
         0 0 0 1px color-mix(in srgb, var(--lf-toast-accent) 55%, transparent);
     }
-    :host-context(html[data-mode="light"]) .t-action {
+    :host-context(html[data-mode='light']) .t-action {
       color: var(--lf-toast-action, var(--lf-toast-accent, #2563eb));
     }
-    :host-context(html[data-mode="light"]) .t-close {
+    :host-context(html[data-mode='light']) .t-close {
       color: rgba(15, 17, 23, 0.6);
     }
-    :host-context(html[data-mode="light"]) .t-close:hover {
+    :host-context(html[data-mode='light']) .t-close:hover {
       color: rgba(15, 17, 23, 0.92);
       background: rgba(0, 0, 0, 0.06);
     }
@@ -217,7 +315,7 @@ export class LfToastStack extends LitElement {
      *                 action?: { label: string, onClick: Function },
      *                 closable: boolean, dismissing: boolean }>} */
     this._items = [];
-    this._timers = new Map();  // id → setTimeout handle (jamais sérialisé)
+    this._timers = new Map(); // id → setTimeout handle (jamais sérialisé)
   }
 
   /**
@@ -232,7 +330,7 @@ export class LfToastStack extends LitElement {
   push(opts) {
     const type = normalizeType(opts.type);
     const id = ++LfToastStack._seq;
-    const closable = (type === 'error' || type === 'warning');
+    const closable = type === 'error' || type === 'warning';
     const duration = resolveDuration(type, opts.duration, opts.message);
 
     const item = {
@@ -242,7 +340,7 @@ export class LfToastStack extends LitElement {
       duration,
       action: opts.action || null,
       closable,
-      dismissing: false,
+      dismissing: false
     };
 
     this._items = toastReducer(this._items, { type: 'add', item, max: MAX_TOASTS });
@@ -254,7 +352,7 @@ export class LfToastStack extends LitElement {
 
     return {
       remove: () => this._dismiss(id),
-      update: (newMsg) => this._update(id, newMsg),
+      update: (newMsg) => this._update(id, newMsg)
     };
   }
 
@@ -264,18 +362,25 @@ export class LfToastStack extends LitElement {
    */
   _dismiss(id) {
     // Guard: if already dismissing, do nothing.
-    const existing = this._items.find(t => t.id === id);
+    const existing = this._items.find((t) => t.id === id);
     if (!existing || existing.dismissing) return;
 
     const handle = this._timers.get(id);
-    if (handle) { clearTimeout(handle); this._timers.delete(id); }
+    if (handle) {
+      clearTimeout(handle);
+      this._timers.delete(id);
+    }
 
     // Phase 1: mark as dismissing → triggers t-out animation via render().
     this._items = toastReducer(this._items, { type: 'mark-dismissing', id });
 
-    this.dispatchEvent(new CustomEvent('lf-toast-dismiss', {
-      detail: { id }, bubbles: true, composed: true,
-    }));
+    this.dispatchEvent(
+      new CustomEvent('lf-toast-dismiss', {
+        detail: { id },
+        bubbles: true,
+        composed: true
+      })
+    );
   }
 
   /**
@@ -303,11 +408,18 @@ export class LfToastStack extends LitElement {
   // CustomEvent is dispatched last so listeners can tell apart action vs plain dismiss.
   _onActionClick(ev, id, onClick) {
     ev.stopPropagation();
-    try { typeof onClick === 'function' && onClick(); }
-    finally { this._dismiss(id); }
-    this.dispatchEvent(new CustomEvent('lf-toast-action', {
-      detail: { id }, bubbles: true, composed: true,
-    }));
+    try {
+      typeof onClick === 'function' && onClick();
+    } finally {
+      this._dismiss(id);
+    }
+    this.dispatchEvent(
+      new CustomEvent('lf-toast-action', {
+        detail: { id },
+        bubbles: true,
+        composed: true
+      })
+    );
   }
 
   /**
@@ -319,10 +431,12 @@ export class LfToastStack extends LitElement {
     super.updated(changedProps);
     if (!this.shadowRoot) return;
     const bars = this.shadowRoot.querySelectorAll('.t-bar:not([data-bar-started])');
-    bars.forEach(bar => {
+    bars.forEach((bar) => {
       bar.dataset.barStarted = '1';
       requestAnimationFrame(() => {
-        requestAnimationFrame(() => { bar.style.transform = 'scaleX(0)'; });
+        requestAnimationFrame(() => {
+          bar.style.transform = 'scaleX(0)';
+        });
       });
     });
   }
@@ -335,31 +449,53 @@ export class LfToastStack extends LitElement {
 
   render() {
     return html`
-      ${this._items.map(t => html`
-        <div
-          class="t-item t-${t.type}${t.dismissing ? ' t-out' : ''}"
-          role=${t.closable ? 'alert' : 'status'}
-          aria-live=${t.closable ? 'assertive' : 'polite'}
-          @click=${() => this._onItemClick(t.id)}
-          @animationend=${t.dismissing ? () => this._finalize(t.id) : null}
-        >
-          <span class="t-icon" aria-hidden="true">${_TOAST_ICONS[t.type] ?? _TOAST_ICONS.info}</span>
-          <span class="t-msg">${t.message}</span>
-          ${t.action ? html`
-            <button class="t-action"
-                    @click=${(ev) => this._onActionClick(ev, t.id, t.action.onClick)}>
-              ${t.action.label}
-            </button>
-          ` : null}
-          ${t.closable ? html`
-            <button class="t-close" aria-label=${i18n('toast_close')}
-                    @click=${(ev) => this._onCloseClick(ev, t.id)}>×</button>
-          ` : null}
-          <span class="t-bar" aria-hidden="true"
-                style="transition: transform ${t.duration}ms linear;">
-          </span>
-        </div>
-      `)}
+      ${this._items.map(
+        (t) => html`
+          <div
+            class="t-item t-${t.type}${t.dismissing ? ' t-out' : ''}"
+            role=${t.closable ? 'alert' : 'status'}
+            aria-live=${t.closable ? 'assertive' : 'polite'}
+            @click=${() => this._onItemClick(t.id)}
+            @animationend=${t.dismissing ? () => this._finalize(t.id) : null}
+          >
+            <span class="t-icon" aria-hidden="true"
+              >${_TOAST_ICONS[t.type] ?? _TOAST_ICONS.info}</span
+            >
+            <span class="t-msg">${t.message}</span>
+            ${
+              t.action
+                ? html`
+                    <button
+                      class="t-action"
+                      @click=${(ev) => this._onActionClick(ev, t.id, t.action.onClick)}
+                    >
+                      ${t.action.label}
+                    </button>
+                  `
+                : null
+            }
+            ${
+              t.closable
+                ? html`
+                    <button
+                      class="t-close"
+                      aria-label=${i18n('toast_close')}
+                      @click=${(ev) => this._onCloseClick(ev, t.id)}
+                    >
+                      ×
+                    </button>
+                  `
+                : null
+            }
+            <span
+              class="t-bar"
+              aria-hidden="true"
+              style="transition: transform ${t.duration}ms linear;"
+            >
+            </span>
+          </div>
+        `
+      )}
     `;
   }
 }

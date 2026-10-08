@@ -8,8 +8,7 @@ function _luminance(r, g, b) {
 }
 
 function _parseArtColor() {
-  const raw = getComputedStyle(document.documentElement)
-    .getPropertyValue('--art-color').trim();
+  const raw = getComputedStyle(document.documentElement).getPropertyValue('--art-color').trim();
   // Handles: "rgb(R, G, B)", "rgba(R,G,B,A)", bare "R G B", "R, G, B"
   const m = raw.match(/(\d+)[,\s]+(\d+)[,\s]+(\d+)/);
   if (!m) return null;
@@ -26,5 +25,5 @@ export function updateAmbient(el = document.documentElement) {
   const lum = getArtLuminance();
   const isLight = lum >= 0.35;
   el.classList.toggle('art-light', isLight);
-  el.classList.toggle('art-dark',  !isLight);
+  el.classList.toggle('art-dark', !isLight);
 }

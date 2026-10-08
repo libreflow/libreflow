@@ -15,16 +15,15 @@
 //   organizeConfirm()
 //   organizeCancel()
 
-import { get, set, notify }     from './store.js';
-import { saveTracks }            from './library.js';
-import { getWatchPath }          from './watchfolder.js';
-import { invoke }                from './ipc.js';
-import { toast, esc }            from './ui.js';
-import { VIRT }                  from './virt.js';
-import { rebuildTrackIdxMap,
-         invalidateFilterCache } from './search.js';
-import { CFG }                   from './cfg.js';
-import { isSafePath }           from './utils.js';
+import { get, set, notify } from './store.js';
+import { saveTracks } from './library.js';
+import { getWatchPath } from './watchfolder.js';
+import { invoke } from './ipc.js';
+import { toast, esc } from './ui.js';
+import { VIRT } from './virt.js';
+import { rebuildTrackIdxMap, invalidateFilterCache } from './search.js';
+import { CFG } from './cfg.js';
+import { isSafePath } from './utils.js';
 
 // ── État module ───────────────────────────────────────────────────────────────
 /** @type {Array<{from:string,to:string}>} */
@@ -40,13 +39,15 @@ let _prevFocus = null;
  * @returns {string}
  */
 export function sanitizeName(s) {
-  return (String(s || 'Inconnu'))
-    .replace(/[\\/:*?"<>|]/g, '_')
-    .replace(/[\x00-\x1f]/g, '_')
-    .trim()
-    .replace(/\s+$/, '')
-    .replace(/\.+$/, '')
-    .slice(0, 80) || 'Inconnu';
+  return (
+    String(s || 'Inconnu')
+      .replace(/[\\/:*?"<>|]/g, '_')
+      .replace(/[\x00-\x1f]/g, '_')
+      .trim()
+      .replace(/\s+$/, '')
+      .replace(/\.+$/, '')
+      .slice(0, 80) || 'Inconnu'
+  );
 }
 
 function _getBasename(filePath) {
@@ -69,27 +70,27 @@ function _sep(basePath) {
  * @returns {Array<{from:string,to:string}>}
  */
 export function computeMoves(tracks, basePath, scheme) {
-  const sep  = _sep(basePath);
+  const sep = _sep(basePath);
   const base = basePath.replace(/[\\/]+$/, '');
   const moves = [];
-  const seen  = new Set();
+  const seen = new Set();
 
   for (const t of tracks) {
     if (!t.path || !isSafePath(t.path)) continue;
 
-    const file   = _getBasename(t.path);
+    const file = _getBasename(t.path);
     const artist = sanitizeName(t.artist);
-    const album  = sanitizeName(t.album);
+    const album = sanitizeName(t.album);
 
     let targetDir;
-    if      (scheme === 'artist-album') targetDir = [base, artist, album].join(sep);
-    else if (scheme === 'artist')       targetDir = [base, artist].join(sep);
-    else if (scheme === 'flat')         targetDir = base;
+    if (scheme === 'artist-album') targetDir = [base, artist, album].join(sep);
+    else if (scheme === 'artist') targetDir = [base, artist].join(sep);
+    else if (scheme === 'flat') targetDir = base;
     else continue;
 
-    const to    = targetDir + sep + file;
+    const to = targetDir + sep + file;
     const fromN = t.path.replace(/\\/g, '/');
-    const toN   = to.replace(/\\/g, '/');
+    const toN = to.replace(/\\/g, '/');
 
     if (fromN === toN) continue;
     if (seen.has(toN)) continue;
@@ -108,7 +109,7 @@ export function computeMoves(tracks, basePath, scheme) {
  * @param {'artist-album'|'artist'|'flat'} scheme
  */
 export async function organizePreview(scheme) {
-  const tracks   = get('tracks');
+  const tracks = get('tracks');
   const basePath = getWatchPath();
 
   if (!basePath) {
@@ -128,16 +129,20 @@ export async function organizePreview(scheme) {
 
   let dryResult;
   try {
-    dryResult = await invoke('organize_files', { moves, dryRun: true }, { timeout: CFG.ORGANIZE_DRY_RUN_TIMEOUT_MS });
+    dryResult = await invoke(
+      'organize_files',
+      { moves, dryRun: true },
+      { timeout: CFG.ORGANIZE_DRY_RUN_TIMEOUT_MS }
+    );
   } catch (e) {
     toast(`Erreur de validation : ${e}`, 'error');
     return;
   }
 
-  const valid  = dryResult.moves.filter(m => m.ok);
-  const errors = dryResult.moves.filter(m => !m.ok);
+  const valid = dryResult.moves.filter((m) => m.ok);
+  const errors = dryResult.moves.filter((m) => !m.ok);
 
-  _pendingMoves = valid.map(m => ({ from: m.from, to: m.to }));
+  _pendingMoves = valid.map((m) => ({ from: m.from, to: m.to }));
 
   _showOrganizeModal(valid, errors, scheme);
 }
@@ -154,11 +159,18 @@ export async function organizeConfirm() {
   }
 
   const btn = document.getElementById('organize-confirm-btn');
-  if (btn) { btn.disabled = true; btn.textContent = 'En cours…'; }
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = 'En cours…';
+  }
 
   let result;
   try {
-    result = await invoke('organize_files', { moves: _pendingMoves, dryRun: false }, { timeout: CFG.ORGANIZE_TIMEOUT_MS });
+    result = await invoke(
+      'organize_files',
+      { moves: _pendingMoves, dryRun: false },
+      { timeout: CFG.ORGANIZE_TIMEOUT_MS }
+    );
   } catch (e) {
     toast(`Erreur lors de l'organisation : ${e}`, 'error');
     organizeCancel();
@@ -167,7 +179,8 @@ export async function organizeConfirm() {
 
   if (!result || typeof result.error_count !== 'number') {
     toast('Réponse inattendue du serveur', 'error');
-    organizeCancel(); return;
+    organizeCancel();
+    return;
   }
 
   const failCount = result.error_count;
@@ -176,14 +189,17 @@ export async function organizeConfirm() {
     // Rust rolled back all moves on first failure — do not update any paths
     _pendingMoves = [];
     organizeCancel();
-    toast(`Erreur lors de l'organisation : ${failCount} fichier(s) non déplacé(s). Aucune modification appliquée.`, 'error');
+    toast(
+      `Erreur lors de l'organisation : ${failCount} fichier(s) non déplacé(s). Aucune modification appliquée.`,
+      'error'
+    );
     return;
   }
 
   // All moves succeeded — update paths in memory + IDB
-  const succeeded = result.moves.filter(m => m.ok);
-  const tracks    = get('tracks');
-  const pathMap   = new Map(succeeded.map(m => [m.from, m.to]));
+  const succeeded = result.moves.filter((m) => m.ok);
+  const tracks = get('tracks');
+  const pathMap = new Map(succeeded.map((m) => [m.from, m.to]));
 
   // B-2 FIX: accumuler les pistes modifiées, puis appeler saveTracks() une seule
   // fois après la boucle — évite N transactions IDB individuelles non-debounced.
@@ -217,9 +233,13 @@ export function organizeCancel() {
   const bg = document.getElementById('organize-modal-bg');
   if (!bg || bg.classList.contains('modal-closing')) return;
   bg.classList.add('modal-closing');
-  bg.addEventListener('animationend', () => {
-    bg.classList.remove('on', 'modal-closing');
-  }, { once: true });
+  bg.addEventListener(
+    'animationend',
+    () => {
+      bg.classList.remove('on', 'modal-closing');
+    },
+    { once: true }
+  );
   // Fallback si l'animation CSS ne se déclenche pas (ex: prefers-reduced-motion).
   // Stocké pour pouvoir être annulé si le modal est rouvert avant l'échéance.
   bg._closeTimer = setTimeout(() => bg.classList.remove('on', 'modal-closing'), 300);
@@ -232,8 +252,8 @@ export function organizeCancel() {
 
 const _SCHEME_LABELS = {
   'artist-album': 'Artiste / Album / fichier',
-  'artist':       'Artiste / fichier',
-  'flat':         'Plat (tous les fichiers à la racine)',
+  artist: 'Artiste / fichier',
+  flat: 'Plat (tous les fichiers à la racine)'
 };
 
 const _MAX_PREVIEW = 8;
@@ -243,18 +263,21 @@ function _showOrganizeModal(valid, errors, scheme) {
   if (!bg) return;
 
   // Annule un close en cours pour éviter que le timer/anim ne strip 'on' juste après réouverture
-  if (bg._closeTimer) { clearTimeout(bg._closeTimer); bg._closeTimer = null; }
+  if (bg._closeTimer) {
+    clearTimeout(bg._closeTimer);
+    bg._closeTimer = null;
+  }
   bg.classList.remove('modal-closing');
 
-  const title   = document.getElementById('organize-modal-title');
+  const title = document.getElementById('organize-modal-title');
   const summary = document.getElementById('organize-modal-summary');
-  const list    = document.getElementById('organize-modal-list');
-  const btn     = document.getElementById('organize-confirm-btn');
+  const list = document.getElementById('organize-modal-list');
+  const btn = document.getElementById('organize-confirm-btn');
 
   if (title) title.textContent = `Organiser — ${_SCHEME_LABELS[scheme] || scheme}`;
 
   const totalValid = valid.length;
-  const totalErr   = errors.length;
+  const totalErr = errors.length;
 
   let summaryHtml = `<strong>${totalValid}</strong> fichier(s) seront déplacés.`;
   if (totalErr > 0) {
@@ -264,22 +287,24 @@ function _showOrganizeModal(valid, errors, scheme) {
 
   if (list) {
     const preview = valid.slice(0, _MAX_PREVIEW);
-    const extra   = totalValid - preview.length;
-    list.innerHTML = preview.map(m => {
-      const fromShort = esc(m.from.replace(/\\/g, '/').split('/').slice(-2).join('/'));
-      const toShort   = esc(m.to.replace(/\\/g, '/').split('/').slice(-3).join('/'));
-      return `<div class="organize-move-row">
+    const extra = totalValid - preview.length;
+    list.innerHTML =
+      preview
+        .map((m) => {
+          const fromShort = esc(m.from.replace(/\\/g, '/').split('/').slice(-2).join('/'));
+          const toShort = esc(m.to.replace(/\\/g, '/').split('/').slice(-3).join('/'));
+          return `<div class="organize-move-row">
         <span class="organize-move-from" title="${esc(m.from)}">…/${fromShort}</span>
         <span class="organize-move-arrow">→</span>
         <span class="organize-move-to" title="${esc(m.to)}">…/${toShort}</span>
       </div>`;
-    }).join('') + (extra > 0
-      ? `<div class="organize-move-more">…et ${extra} autre(s)</div>`
-      : '');
+        })
+        .join('') +
+      (extra > 0 ? `<div class="organize-move-more">…et ${extra} autre(s)</div>` : '');
   }
 
   if (btn) {
-    btn.disabled    = totalValid === 0;
+    btn.disabled = totalValid === 0;
     btn.textContent = totalValid === 0 ? 'Rien à faire' : 'Confirmer';
   }
 

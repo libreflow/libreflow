@@ -1,5 +1,5 @@
-import { defineConfig }         from 'vite';
-import { resolve }              from 'path';
+import { defineConfig } from 'vite';
+import { resolve } from 'path';
 
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => {
@@ -17,8 +17,8 @@ export default defineConfig(({ mode }) => {
       hmr: { host: 'localhost' },
       watch: {
         // Don't watch Rust files — let Tauri CLI handle those
-        ignored: ['**/src-tauri/**'],
-      },
+        ignored: ['**/src-tauri/**']
+      }
     },
 
     build: {
@@ -41,7 +41,7 @@ export default defineConfig(({ mode }) => {
         // Multi-page: main window + mini player window
         input: {
           main: resolve(__dirname, 'frontend/index.html'),
-          mini: resolve(__dirname, 'frontend/mini.html'),
+          mini: resolve(__dirname, 'frontend/mini.html')
         },
 
         output: {
@@ -69,7 +69,7 @@ export default defineConfig(({ mode }) => {
             const CORE = new Set([
               'frontend/src/ipc.js',
               'frontend/src/cfg.js',
-              'frontend/src/db.js',
+              'frontend/src/db.js'
             ]);
             // Modules lourds chargés à la demande après le premier paint :
             // panneaux secondaires (EQ, cinéma, viz, replaygain, nowplaying)
@@ -90,19 +90,19 @@ export default defineConfig(({ mode }) => {
               'frontend/src/orphans.js',
               'frontend/src/settings.js',
               'frontend/src/tagedit.js',
-              'frontend/src/m3u.js',
+              'frontend/src/m3u.js'
             ]);
             for (const f of CORE) if (p.endsWith('/' + f)) return 'libreflow-core';
             for (const f of EXTRAS) if (p.endsWith('/' + f)) return 'libreflow-extras';
-          },
-        },
-      },
+          }
+        }
+      }
     },
 
     // Oxc transform options (Vite 8 replaced esbuild with Oxc for JS transforms)
     oxc: {
       // Strip console.* and debugger in production builds
-      drop: isProd ? ['console', 'debugger'] : [],
+      drop: isProd ? ['console', 'debugger'] : []
       // Note: esbuild's `legalComments: 'none'` is not portable to Rolldown.
       // Vite 8 / Rolldown handles license comments via its own pipeline.
     },
@@ -111,7 +111,7 @@ export default defineConfig(({ mode }) => {
     optimizeDeps: {
       // Nothing to pre-bundle for now (no npm runtime deps), but the entry
       // forces Vite to pre-scan our modules so the first HMR is instant
-      entries: ['frontend/src/main.js'],
-    },
+      entries: ['frontend/src/main.js']
+    }
   };
 });

@@ -11,84 +11,102 @@
 //   killCanvasTweens()
 
 import { tween, kill as motionKill, eases, prefersReducedMotion } from './motion.js';
-import { waveLayerGeom, waveLayerPalette, computeBandEnergies, agcNormalize, waveY, WAVE_BEAT_BOOST_MAX } from './cinema-waves.js';
+import {
+  waveLayerGeom,
+  waveLayerPalette,
+  computeBandEnergies,
+  agcNormalize,
+  waveY,
+  WAVE_BEAT_BOOST_MAX
+} from './cinema-waves.js';
 
 // ── Vagues — pré-allocation module scope ────────────────────
 // Zéro allocation dans le hot path RAF (CLAUDE.md §10).
-const _WAVE_LAYERS  = 7;
+const _WAVE_LAYERS = 7;
 // Task 17 : 150→96 segments — le tracé quadratique par points milieux lisse mieux
 // que 150 segments droits, pour ~36 % de sin en moins.
-const _WAVE_STEPS   = 96;
+const _WAVE_STEPS = 96;
 // Task 12 : géométrie de profondeur cohérente (l=0 arrière/haut, l=6 avant/bas) —
 // calculée une fois au chargement (cinema-waves.js, pur et testé).
-const _WAVE_GEOM    = Array.from({ length: _WAVE_LAYERS }, (_, l) => waveLayerGeom(l, _WAVE_LAYERS));
-const _waveBands     = new Float32Array(_WAVE_LAYERS); // énergies par bande (0 = basses), EMA in-place
-const _wavePeaks     = new Float32Array(_WAVE_LAYERS); // pics glissants AGC (Task 17)
+const _WAVE_GEOM = Array.from({ length: _WAVE_LAYERS }, (_, l) => waveLayerGeom(l, _WAVE_LAYERS));
+const _waveBands = new Float32Array(_WAVE_LAYERS); // énergies par bande (0 = basses), EMA in-place
+const _wavePeaks = new Float32Array(_WAVE_LAYERS); // pics glissants AGC (Task 17)
 const _waveBandsNorm = new Float32Array(_WAVE_LAYERS); // bandes normalisées 0-1 — pilotent les couches
-const _waveY        = new Float32Array(_WAVE_STEPS + 1); // buffer y partagé remplissage/crête (1 seule passe sin)
+const _waveY = new Float32Array(_WAVE_STEPS + 1); // buffer y partagé remplissage/crête (1 seule passe sin)
 let _waveHorizonGrad = null; // reflet spéculaire sous l'horizon — cache (couleur, h)
 // Task 17 : écume au beat — pool pré-alloué (zéro allocation par frame), les
 // glints surfent la crête (y recalculé via waveY à chaque frame).
-const _FOAM_MAX  = 12;
-const _foamPool  = Array.from({ length: _FOAM_MAX }, () => ({ life: 0, nx: 0, layer: 0, size: 1 }));
-let _foamNext    = 0;
-let _waveSmoothed   = null;          // Float32Array — basses fréquences lissées
-const _wavePhases   = new Float32Array(_WAVE_LAYERS); // phases de chaque couche
-let _waveEnergy     = 0;             // énergie basse freq lissée 0-1
+const _FOAM_MAX = 12;
+const _foamPool = Array.from({ length: _FOAM_MAX }, () => ({ life: 0, nx: 0, layer: 0, size: 1 }));
+let _foamNext = 0;
+let _waveSmoothed = null; // Float32Array — basses fréquences lissées
+const _wavePhases = new Float32Array(_WAVE_LAYERS); // phases de chaque couche
+let _waveEnergy = 0; // énergie basse freq lissée 0-1
 // Beat vagues : le beat arrive en paramètre (snapshot partagé, cinema-loop.js) —
 // plus de détecteur local depuis Task 5 (cycle 2 polish).
-const _waveBeatObj  = { v: 0 };      // GSAP tween target — boost amplitude au beat
-const _waveGrads        = new Array(_WAVE_LAYERS).fill(null); // CanvasGradient de remplissage par couche
-const _waveCrestStrokes = new Array(_WAVE_LAYERS).fill('');   // style stroke crête par couche (cachés)
-let _waveGradRGB    = '';            // clé d'invalidation — couleur LERP
-let _waveGradH      = 0;             // clé d'invalidation — hauteur canvas
+const _waveBeatObj = { v: 0 }; // GSAP tween target — boost amplitude au beat
+const _waveGrads = new Array(_WAVE_LAYERS).fill(null); // CanvasGradient de remplissage par couche
+const _waveCrestStrokes = new Array(_WAVE_LAYERS).fill(''); // style stroke crête par couche (cachés)
+let _waveGradRGB = ''; // clé d'invalidation — couleur LERP
+let _waveGradH = 0; // clé d'invalidation — hauteur canvas
 // Halo atmosphérique en fond — gradient radial teinté par la pochette
-let _waveBgGrad    = null;
+let _waveBgGrad = null;
 let _waveBgGradRGB = '';
-let _waveBgGradW   = 0;
-let _waveBgGradH   = 0;
+let _waveBgGradW = 0;
+let _waveBgGradH = 0;
 // PERF : cache du template literal lerpRGB — reconstruit seulement si les composantes
 // arrondies ont changé depuis la frame précédente (audit perf cinema — cinema-canvas.js:117).
-let _waveLerpRLast = -1, _waveLerpGLast = -1, _waveLerpBLast = -1;
+let _waveLerpRLast = -1,
+  _waveLerpGLast = -1,
+  _waveLerpBLast = -1;
 let _waveLerpRGBCache = '0,0,0';
 
 // ── Étoiles — pré-allocation module scope ───────────────────
-const _STAR_COUNT   = 180;
-const _starX        = new Float32Array(_STAR_COUNT);  // positions X normalisées 0-1
-const _starY        = new Float32Array(_STAR_COUNT);  // positions Y normalisées 0-1
-const _starSize     = new Float32Array(_STAR_COUNT);  // taille base en px
-const _starBri      = new Float32Array(_STAR_COUNT);  // luminosité de base 0-1
-const _starPhase    = new Float32Array(_STAR_COUNT);  // phase scintillement
-const _starSpd      = new Float32Array(_STAR_COUNT);  // vitesse scintillement
-let _starsReady     = false;
-let _starHiFBuf     = null;          // Float32Array — hautes fréquences lissées
-let _starBassSmooth = 0;             // énergie basse lissée — reste pour l'EPS de sommeil (getMaxBandEnergy)
+const _STAR_COUNT = 180;
+const _starX = new Float32Array(_STAR_COUNT); // positions X normalisées 0-1
+const _starY = new Float32Array(_STAR_COUNT); // positions Y normalisées 0-1
+const _starSize = new Float32Array(_STAR_COUNT); // taille base en px
+const _starBri = new Float32Array(_STAR_COUNT); // luminosité de base 0-1
+const _starPhase = new Float32Array(_STAR_COUNT); // phase scintillement
+const _starSpd = new Float32Array(_STAR_COUNT); // vitesse scintillement
+let _starsReady = false;
+let _starHiFBuf = null; // Float32Array — hautes fréquences lissées
+let _starBassSmooth = 0; // énergie basse lissée — reste pour l'EPS de sommeil (getMaxBandEnergy)
 // Beat étoiles : le beat arrive en paramètre (snapshot partagé, cinema-loop.js) —
 // plus de détecteur local depuis Task 5 (cycle 2 polish).
-const _SHOOT_MAX    = 3;
+const _SHOOT_MAX = 3;
 // Étoiles filantes — objets plain tweenés par GSAP, lus dans le RAF
-const _shootPool    = Array.from({ length: _SHOOT_MAX }, () => ({ prog: 0, alpha: 0, x0: 0, y0: 0, x1: 0.3, y1: 0.1 }));
-const _shootTweens  = new Array(_SHOOT_MAX).fill(null);
-let _shootNext      = 0;
+const _shootPool = Array.from({ length: _SHOOT_MAX }, () => ({
+  prog: 0,
+  alpha: 0,
+  x0: 0,
+  y0: 0,
+  x1: 0.3,
+  y1: 0.1
+}));
+const _shootTweens = new Array(_SHOOT_MAX).fill(null);
+let _shootNext = 0;
 // PERF : caches de strings couleur du ciel étoilé — reconstruits seulement si les
 // composantes RGB arrondies changent (audit perf cinema — cinema-canvas.js:260-264).
-let _starLerpRLast = -1, _starLerpGLast = -1, _starLerpBLast = -1;
-let _starFillCache = 'rgb(255,255,255)';      // étoiles (art + boost)
-let _starGlowFillCache = 'rgb(255,255,255)';  // halo des étoiles brillantes
+let _starLerpRLast = -1,
+  _starLerpGLast = -1,
+  _starLerpBLast = -1;
+let _starFillCache = 'rgb(255,255,255)'; // étoiles (art + boost)
+let _starGlowFillCache = 'rgb(255,255,255)'; // halo des étoiles brillantes
 let _starBgTintLast = -1;
-let _starBgFillCache = 'rgba(0,0,0,0.96)';    // fond teinté
+let _starBgFillCache = 'rgba(0,0,0,0.96)'; // fond teinté
 
 // ── Initialisation étoiles ───────────────────────────────────
 
 /** Initialise les étoiles avec des positions pseudo-aléatoires normalisées 0-1. */
 export function initStarfield() {
   for (let i = 0; i < _STAR_COUNT; i++) {
-    _starX[i]     = Math.random();
-    _starY[i]     = Math.random();
-    _starSize[i]  = 0.6 + Math.random() * 2.4;
-    _starBri[i]   = 0.25 + Math.random() * 0.75;
+    _starX[i] = Math.random();
+    _starY[i] = Math.random();
+    _starSize[i] = 0.6 + Math.random() * 2.4;
+    _starBri[i] = 0.25 + Math.random() * 0.75;
     _starPhase[i] = Math.random() * Math.PI * 2;
-    _starSpd[i]   = 0.008 + Math.random() * 0.035;
+    _starSpd[i] = 0.008 + Math.random() * 0.035;
   }
   _starsReady = true;
 }
@@ -104,7 +122,10 @@ function _updateWaveAudio(fft, beat, dtN) {
   if (!fft) {
     const decay = Math.pow(0.95, dtN);
     _waveEnergy *= decay;
-    for (let k = 0; k < _WAVE_LAYERS; k++) { _waveBands[k] *= decay; _waveBandsNorm[k] *= decay; }
+    for (let k = 0; k < _WAVE_LAYERS; k++) {
+      _waveBands[k] *= decay;
+      _waveBandsNorm[k] *= decay;
+    }
     return;
   }
   // Allocation unique — réallocation seulement si le FFT change de taille (rare)
@@ -112,7 +133,7 @@ function _updateWaveAudio(fft, beat, dtN) {
     _waveSmoothed = new Float32Array(Math.max(1, Math.floor(fft.length * 0.12)));
   }
   // Task 12 : énergies par bande log-espacées (0 = basses) — chaque couche a la sienne.
-  computeBandEnergies(fft, _waveBands, 0.30);
+  computeBandEnergies(fft, _waveBands, 0.3);
   // Task 17 : AGC — normalise chaque bande par son pic glissant. Sans ça, le tilt
   // spectral (~−6 dB/octave) laisse les vagues arrière (aigus) quasi immobiles.
   agcNormalize(_waveBands, _wavePeaks, _waveBandsNorm);
@@ -124,7 +145,7 @@ function _updateWaveAudio(fft, beat, dtN) {
   let rawEnergy = 0;
   for (let i = 0; i < bassEnd; i++) rawEnergy += _waveSmoothed[i];
   rawEnergy /= bassEnd * 255;
-  _waveEnergy = _waveEnergy * 0.90 + rawEnergy * 0.10;
+  _waveEnergy = _waveEnergy * 0.9 + rawEnergy * 0.1;
   // Beat partagé → GSAP tween boost amplitude (A11Y SC 2.3.3 : pas de tween sous reduced-motion).
   if (!prefersReducedMotion() && beat) {
     motionKill(_waveBeatObj);
@@ -156,10 +177,10 @@ function _spawnFoam() {
   for (let n = 0; n < 4; n++) {
     const f = _foamPool[_foamNext];
     _foamNext = (_foamNext + 1) % _FOAM_MAX;
-    f.life  = 1;
-    f.nx    = 0.08 + Math.random() * 0.84;
+    f.life = 1;
+    f.nx = 0.08 + Math.random() * 0.84;
     f.layer = _WAVE_LAYERS - 1 - (n & 1); // alterne les 2 couches de premier plan
-    f.size  = 1.2 + Math.random() * 1.6;
+    f.size = 1.2 + Math.random() * 1.6;
   }
 }
 
@@ -171,10 +192,10 @@ function _drawFoam(ctx, w, h, boostMult, dtN) {
   for (let i = 0; i < _FOAM_MAX; i++) {
     const f = _foamPool[i];
     if (f.life <= 0.01) continue;
-    const geo  = _WAVE_GEOM[f.layer];
+    const geo = _WAVE_GEOM[f.layer];
     const band = _waveBandsNorm[_WAVE_LAYERS - 1 - f.layer];
-    const amp  = (geo.ampBase + band * geo.ampEnergy) * h * boostMult;
-    const y    = h * geo.yBase + waveY(f.nx, _wavePhases[f.layer], geo.freq, amp);
+    const amp = (geo.ampBase + band * geo.ampEnergy) * h * boostMult;
+    const y = h * geo.yBase + waveY(f.nx, _wavePhases[f.layer], geo.freq, amp);
     ctx.globalAlpha = f.life * 0.8;
     ctx.beginPath();
     ctx.arc(f.nx * w, y - f.size, f.size * f.life + 0.4, 0, Math.PI * 2);
@@ -189,25 +210,28 @@ function _drawFoam(ctx, w, h, boostMult, dtN) {
 // (hue-shift ±14°, rampe de luminance arrière→avant, plancher pochettes sombres) —
 // fini le monochrome à alpha variable (finding #2/#3).
 function _rebuildWaveStyles(ctx, h, lerpRGB, r, g, b) {
-  _waveGradRGB = lerpRGB; _waveGradH = h;
+  _waveGradRGB = lerpRGB;
+  _waveGradH = h;
   const pal = waveLayerPalette(r, g, b, _WAVE_LAYERS);
   for (let l = 0; l < _WAVE_LAYERS; l++) {
     const geo = _WAVE_GEOM[l];
     const [lr, lg, lb] = pal[l];
     const yBase = h * geo.yBase;
-    const a0    = geo.fillAlpha;
+    const a0 = geo.fillAlpha;
     // Task 16 (fix revue) : le gradient démarre à l'excursion MAX de la couche
     // ((ampBase+ampEnergy)×boost max) — la crête ne peut jamais dépasser le stop-0
     // (l'ancien offset fixe 0.12h laissait un aplat au sommet au pire cas).
     const gradTop = yBase - (geo.ampBase + geo.ampEnergy) * WAVE_BEAT_BOOST_MAX * h;
-    const grad  = ctx.createLinearGradient(0, gradTop, 0, h);
-    grad.addColorStop(0,    `rgba(${lr},${lg},${lb},${a0.toFixed(2)})`);
+    const grad = ctx.createLinearGradient(0, gradTop, 0, h);
+    grad.addColorStop(0, `rgba(${lr},${lg},${lb},${a0.toFixed(2)})`);
     grad.addColorStop(0.38, `rgba(${lr},${lg},${lb},${(a0 * 0.52).toFixed(2)})`);
     grad.addColorStop(0.72, `rgba(${lr},${lg},${lb},${(a0 * 0.15).toFixed(2)})`);
-    grad.addColorStop(1,    'rgba(0,0,0,0)');
+    grad.addColorStop(1, 'rgba(0,0,0,0)');
     _waveGrads[l] = grad;
     // Crête : version éclaircie de la couleur DE LA COUCHE (effet brillant cohérent)
-    const crR = Math.min(255, lr + 70), crG = Math.min(255, lg + 70), crB = Math.min(255, lb + 70);
+    const crR = Math.min(255, lr + 70),
+      crG = Math.min(255, lg + 70),
+      crB = Math.min(255, lb + 70);
     _waveCrestStrokes[l] = `rgba(${crR},${crG},${crB},${geo.crestAlpha.toFixed(2)})`;
   }
   // Task 17 : reflet spéculaire sous l'horizon — vend la lecture « mer » et habille
@@ -215,9 +239,12 @@ function _rebuildWaveStyles(ctx, h, lerpRGB, r, g, b) {
   const [hr, hg, hb] = pal[0];
   const yHor = h * _WAVE_GEOM[0].yBase;
   _waveHorizonGrad = ctx.createLinearGradient(0, yHor, 0, yHor + h * 0.11);
-  _waveHorizonGrad.addColorStop(0,    `rgba(${Math.min(255, hr + 60)},${Math.min(255, hg + 60)},${Math.min(255, hb + 60)},0.14)`);
+  _waveHorizonGrad.addColorStop(
+    0,
+    `rgba(${Math.min(255, hr + 60)},${Math.min(255, hg + 60)},${Math.min(255, hb + 60)},0.14)`
+  );
   _waveHorizonGrad.addColorStop(0.25, `rgba(${hr},${hg},${hb},0.06)`);
-  _waveHorizonGrad.addColorStop(1,    'rgba(0,0,0,0)');
+  _waveHorizonGrad.addColorStop(1, 'rgba(0,0,0,0)');
 }
 
 // Trace le chemin lissé de la couche depuis _waveY — quadratiques par points
@@ -226,7 +253,12 @@ function _traceWavePath(ctx, w) {
   const inv = 1 / _WAVE_STEPS;
   ctx.moveTo(0, _waveY[0]);
   for (let s = 1; s < _WAVE_STEPS; s++) {
-    ctx.quadraticCurveTo(s * inv * w, _waveY[s], (s + 0.5) * inv * w, (_waveY[s] + _waveY[s + 1]) * 0.5);
+    ctx.quadraticCurveTo(
+      s * inv * w,
+      _waveY[s],
+      (s + 0.5) * inv * w,
+      (_waveY[s] + _waveY[s + 1]) * 0.5
+    );
   }
   // Dernier ~1% en segment droit : trade-off assumé de la technique points-milieux
   // (les extrémités doivent ancrer les vrais points) — ne pas « corriger ».
@@ -236,13 +268,13 @@ function _traceWavePath(ctx, w) {
 // Dessine une couche : les y sont calculés UNE fois dans _waveY (4 harmoniques),
 // puis rejoués pour le remplissage ET la crête — sin divisé par 2 (finding #5).
 function _drawWaveLayer(ctx, w, h, l, boostMult) {
-  const geo   = _WAVE_GEOM[l];
+  const geo = _WAVE_GEOM[l];
   const yBase = h * geo.yBase;
   // Mapping bande→couche : AVANT (l=6) ← basses (bande 0), arrière ← aigus.
   // Task 16 : plus de terme _waveEnergy (triple comptage) — l'excursion max est
   // (ampBase + ampEnergy) × WAVE_BEAT_BOOST_MAX, bornée sous l'horizon (testé).
   // Task 17 : bandes NORMALISÉES (AGC) — chaque couche vit quel que soit le mixage.
-  const band      = _waveBandsNorm[_WAVE_LAYERS - 1 - l];
+  const band = _waveBandsNorm[_WAVE_LAYERS - 1 - l];
   const amplitude = (geo.ampBase + band * geo.ampEnergy) * h * boostMult;
   const ph = _wavePhases[l];
   for (let s = 0; s <= _WAVE_STEPS; s++) {
@@ -251,14 +283,16 @@ function _drawWaveLayer(ctx, w, h, l, boostMult) {
   // Remplissage — chemin lissé partagé (Task 17)
   ctx.beginPath();
   _traceWavePath(ctx, w);
-  ctx.lineTo(w, h); ctx.lineTo(0, h); ctx.closePath();
+  ctx.lineTo(w, h);
+  ctx.lineTo(0, h);
+  ctx.closePath();
   ctx.fillStyle = _waveGrads[l];
   ctx.fill();
   // Crête lumineuse — même courbe, rejouée depuis le buffer
   ctx.beginPath();
   _traceWavePath(ctx, w);
   ctx.strokeStyle = _waveCrestStrokes[l];
-  ctx.lineWidth   = geo.lineWidth;
+  ctx.lineWidth = geo.lineWidth;
   ctx.stroke();
 }
 
@@ -282,7 +316,9 @@ export function drawWavesFrame(ctx, w, h, r, g, b, isPlaying, dtN, fft, beat) {
   const boostMult = 1 + _waveBeatObj.v * (WAVE_BEAT_BOOST_MAX - 1);
   // PERF : reconstruit uniquement si r/g/b ont changé — zéro allocation en régime stable.
   if (r !== _waveLerpRLast || g !== _waveLerpGLast || b !== _waveLerpBLast) {
-    _waveLerpRLast = r; _waveLerpGLast = g; _waveLerpBLast = b;
+    _waveLerpRLast = r;
+    _waveLerpGLast = g;
+    _waveLerpBLast = b;
     _waveLerpRGBCache = `${r},${g},${b}`;
   }
   const lerpRGB = _waveLerpRGBCache;
@@ -291,16 +327,20 @@ export function drawWavesFrame(ctx, w, h, r, g, b, isPlaying, dtN, fft, beat) {
   ctx.fillStyle = '#000';
   ctx.fillRect(0, 0, w, h);
   if (lerpRGB !== _waveBgGradRGB || w !== _waveBgGradW || h !== _waveBgGradH) {
-    _waveBgGradRGB = lerpRGB; _waveBgGradW = w; _waveBgGradH = h;
-    const rx = w * 0.5, ry = h * 0.38, rad = Math.max(w, h) * 0.72;
+    _waveBgGradRGB = lerpRGB;
+    _waveBgGradW = w;
+    _waveBgGradH = h;
+    const rx = w * 0.5,
+      ry = h * 0.38,
+      rad = Math.max(w, h) * 0.72;
     _waveBgGrad = ctx.createRadialGradient(rx, ry, 0, rx, ry, rad);
-    _waveBgGrad.addColorStop(0,    `rgba(${lerpRGB},0.16)`);
+    _waveBgGrad.addColorStop(0, `rgba(${lerpRGB},0.16)`);
     _waveBgGrad.addColorStop(0.45, `rgba(${lerpRGB},0.05)`);
-    _waveBgGrad.addColorStop(1,    'rgba(0,0,0,0)');
+    _waveBgGrad.addColorStop(1, 'rgba(0,0,0,0)');
   }
   // Intensité réagit à l'énergie basse + beat — animation sans recréer le gradient
-  ctx.globalAlpha = Math.min(1, 0.50 + _waveEnergy * 1.1 + _waveBeatObj.v * 0.5);
-  ctx.fillStyle   = _waveBgGrad;
+  ctx.globalAlpha = Math.min(1, 0.5 + _waveEnergy * 1.1 + _waveBeatObj.v * 0.5);
+  ctx.fillStyle = _waveBgGrad;
   ctx.fillRect(0, 0, w, h);
   ctx.globalAlpha = 1;
 
@@ -309,7 +349,7 @@ export function drawWavesFrame(ctx, w, h, r, g, b, isPlaying, dtN, fft, beat) {
   if (isPlaying && !prefersReducedMotion()) {
     for (let l = 0; l < _WAVE_LAYERS; l++) {
       const band = _waveBandsNorm[_WAVE_LAYERS - 1 - l];
-      _wavePhases[l] += (0.005 + l * 0.0018 + band * 0.020) * boostMult * dtN;
+      _wavePhases[l] += (0.005 + l * 0.0018 + band * 0.02) * boostMult * dtN;
     }
   }
 
@@ -336,15 +376,18 @@ export function drawWavesFrame(ctx, w, h, r, g, b, isPlaying, dtN, fft, beat) {
 // décroissance de _starBassSmooth est framerate-indépendante (dtN, Task 5).
 // Retourne hiEnergy 0-1.
 function _updateStarAudio(fft, beat, dtN) {
-  if (!fft) { _starBassSmooth *= Math.pow(0.95, dtN); return 0; }
+  if (!fft) {
+    _starBassSmooth *= Math.pow(0.95, dtN);
+    return 0;
+  }
   // Allocation unique — réallocation seulement si le FFT change de taille
   if (!_starHiFBuf || _starHiFBuf.length !== Math.max(1, Math.floor(fft.length * 0.3))) {
     _starHiFBuf = new Float32Array(Math.max(1, Math.floor(fft.length * 0.3)));
   }
   // Hautes fréquences → intensité de scintillement
   const hiStart = Math.floor(fft.length * 0.55);
-  const hiBins  = _starHiFBuf.length;
-  let hiEnergy  = 0;
+  const hiBins = _starHiFBuf.length;
+  let hiEnergy = 0;
   for (let i = 0; i < hiBins; i++) {
     const v = fft[Math.min(hiStart + i, fft.length - 1)];
     _starHiFBuf[i] = _starHiFBuf[i] * 0.78 + v * 0.22;
@@ -353,7 +396,7 @@ function _updateStarAudio(fft, beat, dtN) {
   hiEnergy /= hiBins * 255;
   // Basses fréquences — reste pour l'EPS de sommeil (getMaxBandEnergy, Task 5).
   let bassE = 0;
-  const bassEnd = Math.max(1, Math.floor(fft.length * 0.10));
+  const bassEnd = Math.max(1, Math.floor(fft.length * 0.1));
   for (let i = 0; i < bassEnd; i++) bassE += fft[i];
   bassE /= bassEnd * 255;
   _starBassSmooth = _starBassSmooth * 0.88 + bassE * 0.12;
@@ -382,9 +425,13 @@ export function drawStarfieldFrame(ctx, w, h, r, g, b, ambientT, dtN, fft, beat)
   // Couleur dominante — étoiles légèrement éclairées par l'art
   // PERF : starFill/glowFill reconstruits uniquement si r/g/b ont changé.
   if (r !== _starLerpRLast || g !== _starLerpGLast || b !== _starLerpBLast) {
-    _starLerpRLast = r; _starLerpGLast = g; _starLerpBLast = b;
-    const sr = Math.min(255, r + 90), sg = Math.min(255, g + 90), sb = Math.min(255, b + 90);
-    _starFillCache     = `rgb(${sr},${sg},${sb})`;
+    _starLerpRLast = r;
+    _starLerpGLast = g;
+    _starLerpBLast = b;
+    const sr = Math.min(255, r + 90),
+      sg = Math.min(255, g + 90),
+      sb = Math.min(255, b + 90);
+    _starFillCache = `rgb(${sr},${sg},${sb})`;
     _starGlowFillCache = `rgb(${r},${g},${b})`;
   }
   const starFill = _starFillCache;
@@ -395,7 +442,7 @@ export function drawStarfieldFrame(ctx, w, h, r, g, b, ambientT, dtN, fft, beat)
   // Cache clé sur la somme des composantes arrondies (invalidation fiable et cheap).
   const rTint = Math.round(r * 0.045);
   const gTint = Math.round(g * 0.045);
-  const bTint = Math.round(b * 0.10);
+  const bTint = Math.round(b * 0.1);
   const tintKey = rTint * 66049 + gTint * 257 + bTint; // clé compacte sans collision (<257 par canal)
   if (tintKey !== _starBgTintLast) {
     _starBgTintLast = tintKey;
@@ -410,9 +457,9 @@ export function drawStarfieldFrame(ctx, w, h, r, g, b, ambientT, dtN, fft, beat)
   for (let i = 0; i < _STAR_COUNT; i++) {
     const twk = 0.4 + 0.6 * (0.5 + 0.5 * Math.sin(_starPhase[i] + t * _starSpd[i] * 5.5));
     const bri = _starBri[i] * twk * (1 + hiEnergy * 0.7);
-    const sz  = _starSize[i] * (0.75 + twk * 0.5);
-    const px  = _starX[i] * w;
-    const py  = _starY[i] * h;
+    const sz = _starSize[i] * (0.75 + twk * 0.5);
+    const px = _starX[i] * w;
+    const py = _starY[i] * h;
 
     ctx.globalAlpha = Math.min(1, bri);
 
@@ -444,8 +491,10 @@ export function drawStarfieldFrame(ctx, w, h, r, g, b, ambientT, dtN, fft, beat)
 
     const cx = (st.x0 + st.prog * (st.x1 - st.x0)) * w;
     const cy = (st.y0 + st.prog * (st.y1 - st.y0)) * h;
-    const ox = st.x0 * w, oy = st.y0 * h;
-    const dx = cx - ox, dy = cy - oy;
+    const ox = st.x0 * w,
+      oy = st.y0 * h;
+    const dx = cx - ox,
+      dy = cy - oy;
     const trailLen = Math.hypot(dx, dy);
 
     if (trailLen > 3) {
@@ -474,23 +523,30 @@ export function drawStarfieldFrame(ctx, w, h, r, g, b, ambientT, dtN, fft, beat)
  * Les coordonnées prog et alpha sont tweenées ; le RAF lit les valeurs interpolées.
  */
 function _launchShootingStar() {
-  const idx  = _shootNext % _SHOOT_MAX;
+  const idx = _shootNext % _SHOOT_MAX;
   _shootNext = (_shootNext + 1) % _SHOOT_MAX;
   const star = _shootPool[idx];
   // Direction naturelle : légèrement diagonale haut-gauche → bas-droite
-  star.x0   = 0.05 + Math.random() * 0.55;
-  star.y0   = 0.03 + Math.random() * 0.32;
-  star.x1   = star.x0 + 0.18 + Math.random() * 0.22;
-  star.y1   = star.y0 + 0.04 + Math.random() * 0.14;
+  star.x0 = 0.05 + Math.random() * 0.55;
+  star.y0 = 0.03 + Math.random() * 0.32;
+  star.x1 = star.x0 + 0.18 + Math.random() * 0.22;
+  star.y1 = star.y0 + 0.04 + Math.random() * 0.14;
   star.prog = 0;
   star.alpha = 1;
   // Kill éventuel tween précédent sur ce slot
-  if (_shootTweens[idx]) { motionKill(star); _shootTweens[idx] = null; }
+  if (_shootTweens[idx]) {
+    motionKill(star);
+    _shootTweens[idx] = null;
+  }
   _shootTweens[idx] = tween(star, {
-    prog: 1, alpha: 0,
+    prog: 1,
+    alpha: 0,
     duration: 0.85 + Math.random() * 0.55,
     ease: eases.PREMIUM,
-    onComplete() { _shootTweens[idx] = null; star.alpha = 0; },
+    onComplete() {
+      _shootTweens[idx] = null;
+      star.alpha = 0;
+    }
   });
 }
 

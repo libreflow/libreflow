@@ -10,9 +10,9 @@ on:
 jobs:
   build-windows:
     runs-on: windows-latest
-    environment: libreflow          # lit TAURI_SIGNING_PRIVATE_KEY + PASSWORD
+    environment: libreflow # lit TAURI_SIGNING_PRIVATE_KEY + PASSWORD
     permissions:
-      contents: write               # requis pour créer/modifier des releases GitHub
+      contents: write # requis pour créer/modifier des releases GitHub
 
     steps:
       # ── Checkout ─────────────────────────────────────────────────────────────
@@ -47,7 +47,7 @@ jobs:
       - name: Build Tauri (Windows x64)
         run: npm run tauri build
         env:
-          TAURI_SIGNING_PRIVATE_KEY:          ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
 
       # ── Collecte des artefacts ───────────────────────────────────────────────
@@ -80,8 +80,8 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          name: "LibreFlow ${{ github.ref_name }}"
+          name: 'LibreFlow ${{ github.ref_name }}'
           draft: false
           prerelease: false
-          generate_release_notes: true   # changelog auto depuis les commits
+          generate_release_notes: true # changelog auto depuis les commits
           files: release-artifacts/*

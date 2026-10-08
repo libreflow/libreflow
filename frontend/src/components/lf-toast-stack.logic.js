@@ -13,11 +13,11 @@
 
 // Durées par défaut alignées avec l'ancien _TOAST_DUR de ui.js (préservation contrat)
 export const TOAST_DUR = Object.freeze({
-  info:    3000,
+  info: 3000,
   success: 2600,
-  error:   8000,
+  error: 8000,
   warning: 6000,
-  loading: 120000,
+  loading: 120000
 });
 
 export const TOAST_TYPES = Object.freeze(['info', 'success', 'error', 'warning', 'loading']);
@@ -67,7 +67,7 @@ export function toastReducer(items, action) {
     }
     case 'update': {
       let touched = false;
-      const next = items.map(t => {
+      const next = items.map((t) => {
         if (t.id === action.id) {
           touched = true;
           return { ...t, message: action.message };
@@ -78,7 +78,7 @@ export function toastReducer(items, action) {
     }
     case 'mark-dismissing': {
       let touched = false;
-      const next = items.map(t => {
+      const next = items.map((t) => {
         if (t.id === action.id && !t.dismissing) {
           touched = true;
           return { ...t, dismissing: true };
@@ -88,7 +88,7 @@ export function toastReducer(items, action) {
       return touched ? next : items;
     }
     case 'dismiss': {
-      const next = items.filter(t => t.id !== action.id);
+      const next = items.filter((t) => t.id !== action.id);
       return next.length === items.length ? items : next;
     }
     default:

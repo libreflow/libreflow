@@ -7,32 +7,34 @@
  * ARCH-1 : saveCfg depuis cfgsave.js, _allPlayerUI depuis allplayerui.js (deps circulaires brisées).
  */
 
-import { get, set }                                      from './store.js';
-import { getMiniOpen }                                   from './miniplayer.js';
-import { eqOpen, closeEQ }                               from './eq.js';
-import { getLang, i18n }                                 from './i18n.js';
-import { syncCinemaBgSettings, updateCinArtColor }       from './cinema.js';
-import { updateVizColor, getVizMode, getVizEnabled }     from './viz.js';
-import { saveCfg }       from './cfgsave.js';
+import { get, set } from './store.js';
+import { getMiniOpen } from './miniplayer.js';
+import { eqOpen, closeEQ } from './eq.js';
+import { getLang, i18n } from './i18n.js';
+import { syncCinemaBgSettings, updateCinArtColor } from './cinema.js';
+import { updateVizColor, getVizMode, getVizEnabled } from './viz.js';
+import { saveCfg } from './cfgsave.js';
 import { emit, on, EVENTS } from './bus.js';
 import { _allPlayerUI } from './allplayerui.js';
 import { $id, $select } from './dom.js';
-import { setTlistZoom }         from './tlistZoom.js';
+import { setTlistZoom } from './tlistZoom.js';
 
 // Fermeture via bus — évite le cycle d'import settings.js ↔ queue.js.
-on(EVENTS.PANEL_CLOSE_SETTINGS, () => { if ($id('settings-panel')?.classList.contains('on')) closeSettings(); });
+on(EVENTS.PANEL_CLOSE_SETTINGS, () => {
+  if ($id('settings-panel')?.classList.contains('on')) closeSettings();
+});
 // i18n demande l'application du thème — évite le cycle d'import i18n.js ↔ settings.js.
 on(EVENTS.THEME_APPLY_REQUEST, () => applyTheme());
 
 // ── État local ────────────────────────────────────────────────────────────────
-let _theme          = 'blue';
-let _dynColor       = true;
-let _displayMode    = 'dark';
-let _shortcutsOpen  = false;
+let _theme = 'blue';
+let _dynColor = true;
+let _displayMode = 'dark';
+let _shortcutsOpen = false;
 let _currentArtColor = null;
 
 // A11Y-05: focus management + focus trap pour le panneau settings
-let _settingsTrigger   = null; // élément qui a ouvert le panneau (restauré au close)
+let _settingsTrigger = null; // élément qui a ouvert le panneau (restauré au close)
 let _settingsFocusTrap = null; // handler Tab trap dans #settings-box
 // BUG FIX (audit settings 2026-07-08) : la fermeture programme un fallback
 // (animationend OU 400ms) pour restaurer le focus. Un toggle rapide (ex.
@@ -41,27 +43,30 @@ let _settingsFocusTrap = null; // handler Tab trap dans #settings-box
 // rouvert (classList.remove('on')) et volait le focus vers le trigger PÉRIMÉ.
 // _closeTimer/_closeAnimHandler permettent à openSettings() d'annuler ce cycle
 // de fermeture encore en vol avant qu'il ne s'exécute.
-let _closeTimer       = null;
+let _closeTimer = null;
 let _closeAnimHandler = null;
 
 /** Sélecteur d'éléments focusables pertinents dans le panneau settings. */
-const _FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+const _FOCUSABLE =
+  'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
 function _setupSettingsFocusTrap(box) {
   if (_settingsFocusTrap) box.removeEventListener('keydown', _settingsFocusTrap);
   _settingsFocusTrap = (e) => {
     if (e.code !== 'Tab') return;
-    const focusable = [...box.querySelectorAll(_FOCUSABLE)].filter(el => {
+    const focusable = [...box.querySelectorAll(_FOCUSABLE)].filter((el) => {
       const r = el.getBoundingClientRect();
       return r.width > 0 && r.height > 0;
     });
     if (!focusable.length) return;
     const first = focusable[0];
-    const last  = focusable[focusable.length - 1];
+    const last = focusable[focusable.length - 1];
     if (e.shiftKey && document.activeElement === first) {
-      e.preventDefault(); last.focus();
+      e.preventDefault();
+      last.focus();
     } else if (!e.shiftKey && document.activeElement === last) {
-      e.preventDefault(); first.focus();
+      e.preventDefault();
+      first.focus();
     }
   };
   box.addEventListener('keydown', _settingsFocusTrap);
@@ -69,7 +74,7 @@ function _setupSettingsFocusTrap(box) {
 
 // Art-blur background
 const _artBlurImg = $id('art-blur-img');
-let _artBlurPrev  = null;
+let _artBlurPrev = null;
 let _artBlurTimer = null;
 
 // ── Initialisation depuis boot() ──────────────────────────────────────────────
@@ -78,8 +83,8 @@ let _artBlurTimer = null;
  * Permet à settings.js d'owneriser theme/dynColor/displayMode.
  */
 export function initSettingsVars({ theme, dynColor, displayMode }) {
-  _theme       = theme;
-  _dynColor    = dynColor;
+  _theme = theme;
+  _dynColor = dynColor;
   _displayMode = displayMode;
   // BUG FIX (audit settings 2026-07-08) : sync store → miniplayer.js lit
   // get('theme')/get('dynColor') pour construire le payload IPC mini_update de
@@ -91,30 +96,38 @@ export function initSettingsVars({ theme, dynColor, displayMode }) {
 }
 
 // ── Getters (utilisés par _doSaveCfg dans app.js) ────────────────────────────
-export function getTheme()        { return _theme; }
-export function getDynColor()     { return _dynColor; }
-export function getDisplayMode()  { return _displayMode; }
-export function isShortcutsOpen() { return _shortcutsOpen; }
+export function getTheme() {
+  return _theme;
+}
+export function getDynColor() {
+  return _dynColor;
+}
+export function getDisplayMode() {
+  return _displayMode;
+}
+export function isShortcutsOpen() {
+  return _shortcutsOpen;
+}
 
 // ══ SETTINGS PANEL ═══════════════════════════════════════════════════════════
 
 export function syncMiniSettingsBtn() {
-  const btn  = document.querySelector('#settings-panel [data-action="toggle-mini-player"]');
+  const btn = document.querySelector('#settings-panel [data-action="toggle-mini-player"]');
   const span = btn?.querySelector('span[data-i18n]');
   if (!span) return;
   const open = getMiniOpen();
-  const key  = open ? 'set_mini_btn_close' : 'set_mini_btn';
+  const key = open ? 'set_mini_btn_close' : 'set_mini_btn';
   span.dataset.i18n = key;
-  span.textContent  = i18n(key);
+  span.textContent = i18n(key);
   btn.setAttribute('aria-pressed', String(open));
 }
 
 /** Bascule sur un onglet du panneau settings (tab bar). */
 export function switchSetTab(tab) {
-  document.querySelectorAll('.set-page').forEach(p => p.classList.remove('on'));
+  document.querySelectorAll('.set-page').forEach((p) => p.classList.remove('on'));
   const page = $id('set-page-' + tab);
   if (page) page.classList.add('on');
-  document.querySelectorAll('.set-tab-btn').forEach(b => {
+  document.querySelectorAll('.set-tab-btn').forEach((b) => {
     const isActive = b.dataset.tab === tab;
     b.classList.toggle('on', isActive);
     b.setAttribute('aria-selected', isActive ? 'true' : 'false');
@@ -139,11 +152,16 @@ export function switchSetTab(tab) {
 function _nextTabIndex(key, cur, len) {
   if (len <= 0) return -1;
   switch (key) {
-    case 'ArrowUp':   return (cur - 1 + len) % len;
-    case 'ArrowDown': return (cur + 1) % len;
-    case 'Home':      return 0;
-    case 'End':       return len - 1;
-    default:          return -1;
+    case 'ArrowUp':
+      return (cur - 1 + len) % len;
+    case 'ArrowDown':
+      return (cur + 1) % len;
+    case 'Home':
+      return 0;
+    case 'End':
+      return len - 1;
+    default:
+      return -1;
   }
 }
 
@@ -153,9 +171,11 @@ function _nextTabIndex(key, cur, len) {
  * Idempotent — appelé une seule fois au boot via initSettingsKeynav().
  */
 function _handleTabKeydown(e) {
-  const tabs = /** @type {HTMLElement[]} */ ([...document.querySelectorAll('#set-tabs .set-tab-btn')]);
+  const tabs = /** @type {HTMLElement[]} */ ([
+    ...document.querySelectorAll('#set-tabs .set-tab-btn')
+  ]);
   if (!tabs.length || !tabs.includes(/** @type {HTMLElement} */ (e.target))) return;
-  const cur  = tabs.indexOf(/** @type {HTMLElement} */ (e.target));
+  const cur = tabs.indexOf(/** @type {HTMLElement} */ (e.target));
   const next = _nextTabIndex(e.key, cur, tabs.length);
   if (next < 0) return;
   e.preventDefault();
@@ -171,7 +191,10 @@ let _settingsKeynavInit = false;
 
 /** Initialise la navigation clavier de la tablist. Idempotent — appelée une seule fois au boot. */
 export function initSettingsKeynav() {
-  if (_settingsKeynavInit) { console.warn('[settings] initSettingsKeynav() called more than once'); return; }
+  if (_settingsKeynavInit) {
+    console.warn('[settings] initSettingsKeynav() called more than once');
+    return;
+  }
   const tablist = $id('set-tabs');
   if (!tablist) return;
   _settingsKeynavInit = true;
@@ -188,18 +211,24 @@ const _VALID_TABS = ['appearance', 'audio', 'playback', 'library', 'system'];
 export function toggleSettings() {
   const panel = $id('settings-panel');
   if (panel?.classList.contains('on')) closeSettings();
-  else                                  openSettings();
+  else openSettings();
 }
 
 /** Annule un cycle de fermeture encore en vol (animationend + fallback 400ms). */
 function _cancelPendingClose(panel) {
-  if (_closeTimer)       { clearTimeout(_closeTimer); _closeTimer = null; }
-  if (_closeAnimHandler) { panel.removeEventListener('animationend', _closeAnimHandler); _closeAnimHandler = null; }
+  if (_closeTimer) {
+    clearTimeout(_closeTimer);
+    _closeTimer = null;
+  }
+  if (_closeAnimHandler) {
+    panel.removeEventListener('animationend', _closeAnimHandler);
+    _closeAnimHandler = null;
+  }
 }
 
 export function openSettings() {
-  if (eqOpen)         closeEQ();
-  if (_shortcutsOpen)  closeShortcuts(); // mutual exclusion — évite l'empilement de 2 dialogs trappés
+  if (eqOpen) closeEQ();
+  if (_shortcutsOpen) closeShortcuts(); // mutual exclusion — évite l'empilement de 2 dialogs trappés
   emit(EVENTS.PANEL_CLOSE_QUEUE, {});
   const panel = $id('settings-panel');
   if (!panel) return;
@@ -233,8 +262,9 @@ export function openSettings() {
   // plutôt que sur la croix de fermeture — l'utilisateur peut Arrow-naviguer ou Tab vers le contenu.
   setTimeout(() => {
     /** @type {HTMLElement|null} */
-    const target = document.querySelector('#set-tabs .set-tab-btn.on')
-                || document.querySelector('#settings-box .set-close');
+    const target =
+      document.querySelector('#set-tabs .set-tab-btn.on') ||
+      document.querySelector('#settings-box .set-close');
     target?.focus();
   }, 50);
 }
@@ -272,7 +302,10 @@ export function closeSettings(immediate = false) {
   const _onClose = () => {
     if (_closeHandled) return;
     _closeHandled = true;
-    if (_closeTimer) { clearTimeout(_closeTimer); _closeTimer = null; }
+    if (_closeTimer) {
+      clearTimeout(_closeTimer);
+      _closeTimer = null;
+    }
     _closeAnimHandler = null;
     panel.classList.remove('on', 'closing');
     // A11Y-05: restaurer le focus à l'élément déclencheur après la fermeture de l'animation
@@ -300,28 +333,40 @@ let _settingsListenersInit = false; // garde anti-double-appel
  * @returns {Function} cleanup — retire les listeners (utile pour les tests)
  */
 export function initSettingsListeners() {
-  if (_settingsListenersInit) { console.warn('[settings] initSettingsListeners() called more than once'); return () => {}; }
+  if (_settingsListenersInit) {
+    console.warn('[settings] initSettingsListeners() called more than once');
+    return () => {};
+  }
   _settingsListenersInit = true;
   const ac = new AbortController();
   const { signal } = ac;
-  document.addEventListener('keydown', e => {
-    if (e.code === 'Escape' && $id('settings-panel')?.classList.contains('on')) {
-      e.stopImmediatePropagation();
-      closeSettings();
-    }
-  }, { signal });
+  document.addEventListener(
+    'keydown',
+    (e) => {
+      if (e.code === 'Escape' && $id('settings-panel')?.classList.contains('on')) {
+        e.stopImmediatePropagation();
+        closeSettings();
+      }
+    },
+    { signal }
+  );
   window.addEventListener('focus', () => syncMiniSettingsBtn(), { signal });
   const chk = $id('dyn-color-chk');
-  if (chk) chk.addEventListener('change', e => setDynColor(e.target.checked), { signal });
+  if (chk) chk.addEventListener('change', (e) => setDynColor(e.target.checked), { signal });
   // Zoom liste de pistes
-  document.querySelectorAll('input[name="tlist-zoom"]').forEach(r => {
-    r.addEventListener('change', e => {
-      if (e.target.checked) setTlistZoom(e.target.value);
-    }, { signal });
+  document.querySelectorAll('input[name="tlist-zoom"]').forEach((r) => {
+    r.addEventListener(
+      'change',
+      (e) => {
+        if (e.target.checked) setTlistZoom(e.target.value);
+      },
+      { signal }
+    );
   });
   // Animations (Task 10)
   const motionSel = $select('set-motion-pref');
-  if (motionSel) motionSel.addEventListener('change', e => setMotionPrefSetting(e.target.value), { signal });
+  if (motionSel)
+    motionSel.addEventListener('change', (e) => setMotionPrefSetting(e.target.value), { signal });
   return () => ac.abort();
 }
 
@@ -340,14 +385,18 @@ function _applyThemeVars(t) {
   // paint au prochain boot (la cfg IDB est async, trop tard pour l'attribut initial).
   // Couvre à la fois le changement utilisateur (setTheme) et la correction au boot
   // (applyTheme), qui passent tous deux par cette fonction. Cfg = source de vérité.
-  try { localStorage.setItem('lf-theme', t); } catch (e) { console.warn('[settings] mirror lf-theme non écrit:', e); }
+  try {
+    localStorage.setItem('lf-theme', t);
+  } catch (e) {
+    console.warn('[settings] mirror lf-theme non écrit:', e);
+  }
 }
 
 export function setTheme(t) {
   _theme = t;
   set('theme', t); // sync store → miniplayer.js (cf. initSettingsVars)
   _applyThemeVars(t);
-  document.querySelectorAll('.theme-swatch').forEach(s => {
+  document.querySelectorAll('.theme-swatch').forEach((s) => {
     const on = s.dataset.theme === t;
     s.classList.toggle('on', on);
     s.setAttribute('aria-pressed', String(on));
@@ -373,7 +422,11 @@ export function setMotionPrefSetting(pref) {
   // Mirror localStorage synchrone — lu par public/boot-motion.js AVANT le premier
   // paint au prochain boot (la cfg IDB est async, trop tard pour l'attribut initial).
   // Même pattern que les mirrors lf-mode/lf-theme de boot-theme.js. Cfg = source de vérité.
-  try { localStorage.setItem('lf-motion', pref); } catch (e) { console.warn('[settings] mirror lf-motion non écrit:', e); }
+  try {
+    localStorage.setItem('lf-motion', pref);
+  } catch (e) {
+    console.warn('[settings] mirror lf-motion non écrit:', e);
+  }
   emit(EVENTS.MOTION_PREF_CHANGED, { pref });
 }
 
@@ -384,7 +437,7 @@ function _syncMotionPrefSelect() {
 
 function _syncTlistZoomRadios() {
   const cur = get('tlistZoom') || 'comfortable';
-  document.querySelectorAll('input[name="tlist-zoom"]').forEach(r => {
+  document.querySelectorAll('input[name="tlist-zoom"]').forEach((r) => {
     r.checked = r.value === cur;
   });
 }
@@ -406,7 +459,6 @@ function _applyDynColorUI() {
   }
 }
 
-
 export function setDynColor(v) {
   _dynColor = !!v;
   set('dynColor', _dynColor); // sync store → miniplayer.js (cf. initSettingsVars)
@@ -416,7 +468,7 @@ export function setDynColor(v) {
 
 export function applyTheme() {
   _applyThemeVars(_theme);
-  document.querySelectorAll('.theme-swatch').forEach(s => {
+  document.querySelectorAll('.theme-swatch').forEach((s) => {
     const on = s.dataset.theme === _theme;
     s.classList.toggle('on', on);
     s.setAttribute('aria-pressed', String(on));
@@ -427,7 +479,10 @@ export function applyTheme() {
 // ══ COULEUR DYNAMIQUE ════════════════════════════════════════════════════════
 
 export function applyArtColor(color) {
-  if (!color) { clearArtColor(); return; }
+  if (!color) {
+    clearArtColor();
+    return;
+  }
   _currentArtColor = color;
   set('currentArtColor', color); // sync store → miniplayer.js peut lire la valeur via get()
   document.documentElement.style.setProperty('--art-color', color);
@@ -436,10 +491,10 @@ export function applyArtColor(color) {
     const [, r, g_, b] = _m;
     document.documentElement.style.setProperty('--art-color-rgb', `${r},${g_},${b}`);
     if (_dynColor) {
-      document.documentElement.style.setProperty('--g',   color);
+      document.documentElement.style.setProperty('--g', color);
       document.documentElement.style.setProperty('--g-rgb', `${r},${g_},${b}`);
-      document.documentElement.style.setProperty('--gd',  `rgba(${r},${g_},${b},.14)`);
-      document.documentElement.style.setProperty('--gg',  `rgba(${r},${g_},${b},.28)`);
+      document.documentElement.style.setProperty('--gd', `rgba(${r},${g_},${b},.14)`);
+      document.documentElement.style.setProperty('--gg', `rgba(${r},${g_},${b},.28)`);
     }
   }
   updateVizColor(color);
@@ -489,10 +544,14 @@ export function animateArtChange() {
   const img = $id('pl-img');
   if (!img) return;
   img.classList.remove('art-change');
-  requestAnimationFrame(() => requestAnimationFrame(() => {
-    img.classList.add('art-change');
-    img.addEventListener('animationend', () => img.classList.remove('art-change'), { once: true });
-  }));
+  requestAnimationFrame(() =>
+    requestAnimationFrame(() => {
+      img.classList.add('art-change');
+      img.addEventListener('animationend', () => img.classList.remove('art-change'), {
+        once: true
+      });
+    })
+  );
 }
 
 // ══ PANEL RACCOURCIS ═════════════════════════════════════════════════════════
@@ -521,14 +580,14 @@ export function setMode(mode) {
   _displayMode = mode;
   set('displayMode', mode);
   document.documentElement.setAttribute('data-mode', mode);
-  const icoDark  = $id('ico-mode-dark');
+  const icoDark = $id('ico-mode-dark');
   const icoLight = $id('ico-mode-light');
-  if (icoDark)  icoDark.style.display  = mode === 'dark'  ? '' : 'none';
+  if (icoDark) icoDark.style.display = mode === 'dark' ? '' : 'none';
   if (icoLight) icoLight.style.display = mode === 'light' ? '' : 'none';
-  ['mode-dark-btn', 'mode-light-btn'].forEach(id => {
+  ['mode-dark-btn', 'mode-light-btn'].forEach((id) => {
     const b = $id(id);
     if (!b) return;
-    const isActive = (id === 'mode-dark-btn') ? mode === 'dark' : mode === 'light';
+    const isActive = id === 'mode-dark-btn' ? mode === 'dark' : mode === 'light';
     b.classList.toggle('on', isActive);
     b.setAttribute('aria-pressed', String(isActive));
   });
@@ -538,7 +597,11 @@ export function setMode(mode) {
   // Mirror localStorage synchrone — lu par public/boot-theme.js AVANT le premier
   // paint au prochain boot. Called both on user toggle and at boot (app.js:259
   // setMode(getDisplayMode())), so this single call site covers both mirror-write cases.
-  try { localStorage.setItem('lf-mode', mode); } catch (e) { console.warn('[settings] mirror lf-mode non écrit:', e); }
+  try {
+    localStorage.setItem('lf-mode', mode);
+  } catch (e) {
+    console.warn('[settings] mirror lf-mode non écrit:', e);
+  }
   saveCfg();
 }
 
@@ -549,9 +612,13 @@ export function toggleMode() {
 // ══ SYNC BOUTONS VIZ ════════════════════════════════════════════════════════
 
 export function _syncVizBtns(save = false) {
-  const mode    = getVizMode();
+  const mode = getVizMode();
   const enabled = getVizEnabled();
-  const ids = { bars: 'set-viz-bars', oscilloscope: 'set-viz-oscilloscope', circle: 'set-viz-circle' };
+  const ids = {
+    bars: 'set-viz-bars',
+    oscilloscope: 'set-viz-oscilloscope',
+    circle: 'set-viz-circle'
+  };
   Object.entries(ids).forEach(([m, id]) => {
     const btn = $id(id);
     if (!btn) return;
@@ -563,7 +630,7 @@ export function _syncVizBtns(save = false) {
   if (toggleEl?.type === 'checkbox') toggleEl.checked = enabled;
   const shapeGroup = $id('set-viz-shape-group');
   if (shapeGroup) shapeGroup.style.opacity = enabled ? '' : '0.35';
-  ['set-viz-bars', 'set-viz-oscilloscope', 'set-viz-circle'].forEach(id => {
+  ['set-viz-bars', 'set-viz-oscilloscope', 'set-viz-circle'].forEach((id) => {
     const btn = $id(id);
     if (!btn) return;
     btn.disabled = !enabled;

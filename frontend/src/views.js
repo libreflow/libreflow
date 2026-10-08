@@ -9,26 +9,32 @@
  * ARCH-1 : saveCfg depuis cfgsave.js, invalidateFilter inliné (bus+search+genres).
  */
 
-import { get, set, subscribe }                                        from './store.js';
-import { CFG, SORTS, SLBLS }                                         from './cfg.js';
-import { i18n }                                                       from './i18n.js';
-import { emit, on, EVENTS }                                          from './bus.js';
-import { eqOpen, closeEQ }                                           from './eq.js';
-import { VIRT }                                                       from './virt.js';
-import { getFiltered, _trackIdxMap, invalidateFilterCache }         from './search.js';
-import { buildQ, clearRvProgFill }                                   from './player.js';
-import { _withVT, renderLib, renderAlbumsGrid, renderArtistsGrid,
-         renderPlaylistsGrid, drillDown, updatePlActionBar }         from './renderer.js';
-import { renderGenresGrid, setContentView, invalidateGenreGridSig,
-         drillGenre }                                               from './genres.js';
-import { renderStats }                                               from './stats.js';
-import { renderRadioView, syncRadioLibBar }                          from './radio.js';
-import { openNewPlaylistModal, renderPlHero }                        from './playlists.js';
-import { openSmartPlaylistModal }                                    from './smartplaylist.js';
-import { saveCfg }                                                   from './cfgsave.js';
-import { clearSelection }                                            from './selection.js';
-import { runViewTransition, triggerNavWipe }                         from './view-transition.js';
-import { transitionViews, staggerIn }                                from './motion.js';
+import { get, set, subscribe } from './store.js';
+import { CFG, SORTS, SLBLS } from './cfg.js';
+import { i18n } from './i18n.js';
+import { emit, on, EVENTS } from './bus.js';
+import { eqOpen, closeEQ } from './eq.js';
+import { VIRT } from './virt.js';
+import { getFiltered, _trackIdxMap, invalidateFilterCache } from './search.js';
+import { buildQ, clearRvProgFill } from './player.js';
+import {
+  _withVT,
+  renderLib,
+  renderAlbumsGrid,
+  renderArtistsGrid,
+  renderPlaylistsGrid,
+  drillDown,
+  updatePlActionBar
+} from './renderer.js';
+import { renderGenresGrid, setContentView, invalidateGenreGridSig, drillGenre } from './genres.js';
+import { renderStats } from './stats.js';
+import { renderRadioView, syncRadioLibBar } from './radio.js';
+import { openNewPlaylistModal, renderPlHero } from './playlists.js';
+import { openSmartPlaylistModal } from './smartplaylist.js';
+import { saveCfg } from './cfgsave.js';
+import { clearSelection } from './selection.js';
+import { runViewTransition, triggerNavWipe } from './view-transition.js';
+import { transitionViews, staggerIn } from './motion.js';
 
 // Inline helper — équivalent de app.js:invalidateFilter() (ARCH-1, no circular dep)
 function invalidateFilter() {
@@ -50,14 +56,33 @@ on(EVENTS.SEARCH_DEBOUNCE_CANCEL, () => cancelSearchDebounce());
 // Toutes les lectures passent par get() — les mutations set() maintiennent le store à jour.
 // Les vars locales dans app.js sont synchronisées via subscribe() (déclaré dans app.js).
 
-function _v()  { return get('view') || 'all'; }
-function _s()  { return get('sort') || 'az'; }
-function _q()  { return get('query') || ''; }
+function _v() {
+  return get('view') || 'all';
+}
+function _s() {
+  return get('sort') || 'az';
+}
+function _q() {
+  return get('query') || '';
+}
 
 // ── Visibilité boutons tri — réagit à TOUT changement de vue (setView ET drillDown) ──────
 // drillDown() appelle set('view') directement sans passer par setView() → la logique de
 // visibilité des boutons tri doit être attachée au store, pas à setView() seulement.
-const _NO_MAIN_VIEWS = new Set(['albums','artists','genres','stats','recent','playlist','radio','playlists','album-detail','artist-detail','genre-detail','now-playing']);
+const _NO_MAIN_VIEWS = new Set([
+  'albums',
+  'artists',
+  'genres',
+  'stats',
+  'recent',
+  'playlist',
+  'radio',
+  'playlists',
+  'album-detail',
+  'artist-detail',
+  'genre-detail',
+  'now-playing'
+]);
 
 function _syncSortBtns(v) {
   const mainSortBtn = document.getElementById('main-sort-btn');
@@ -125,7 +150,15 @@ let _lastCoarseView = null;
 
 /** Bascule vers une vue sans View Transition — utilisé en interne pour éviter l'imbrication. */
 export function _showViewRaw(v) {
-  const map = { welcome: 'vw', wlc: 'vw', scan: 'vscan', lib: 'vlib', stats: 'vstats', radio: 'vradio', 'now-playing': 'vnp' };
+  const map = {
+    welcome: 'vw',
+    wlc: 'vw',
+    scan: 'vscan',
+    lib: 'vlib',
+    stats: 'vstats',
+    radio: 'vradio',
+    'now-playing': 'vnp'
+  };
   const next = document.getElementById(map[v] || 'vlib');
   if (!next) return;
 
@@ -135,7 +168,13 @@ export function _showViewRaw(v) {
   // resolve to the SAME coarse container here — so this stays silent for those,
   // and the fine layer stays silent whenever the destination isn't one of its 8
   // sub-view keys — each transition is handled by exactly one of the two layers.
-  const _CONTAINER_TO_COARSE = { vw: 'welcome', vlib: 'lib', vstats: 'stats', vradio: 'radio', vnp: 'now-playing' };
+  const _CONTAINER_TO_COARSE = {
+    vw: 'welcome',
+    vlib: 'lib',
+    vstats: 'stats',
+    vradio: 'radio',
+    vnp: 'now-playing'
+  };
   const _coarseTo = _CONTAINER_TO_COARSE[next.id];
   if (_coarseTo) {
     const _cfi = _COARSE_NAV_ORDER.indexOf(_lastCoarseView);
@@ -149,7 +188,7 @@ export function _showViewRaw(v) {
   }
 
   if (v === 'welcome' || v === 'wlc') {
-    document.querySelectorAll('.sb-nav .ni').forEach(b => {
+    document.querySelectorAll('.sb-nav .ni').forEach((b) => {
       b.classList.remove('on');
       b.removeAttribute('aria-current');
     });
@@ -195,7 +234,7 @@ export function goHome() {
 
 function _setSrchDisabled(disabled) {
   const wrap = document.querySelector('.srch');
-  const inp  = document.getElementById('srch');
+  const inp = document.getElementById('srch');
   if (!wrap || !inp) return;
   wrap.style.display = '';
   inp.disabled = disabled;
@@ -218,7 +257,10 @@ const _NAV_ORDER = ['all', 'liked', 'recent', 'artists', 'albums', 'genres', 'pl
 
 /** Annule le debounce de recherche en cours (ex: drill-down depuis renderer.js). */
 function cancelSearchDebounce() {
-  if (_searchDebounceTimer) { clearTimeout(_searchDebounceTimer); _searchDebounceTimer = null; }
+  if (_searchDebounceTimer) {
+    clearTimeout(_searchDebounceTimer);
+    _searchDebounceTimer = null;
+  }
 }
 // drillDown() (renderer.js) émet SEARCH_DEBOUNCE_CANCEL avant de naviguer, pour éviter
 // qu'un debounce de recherche en vol ne se déclenche après-coup et écrase la vue.
@@ -235,10 +277,10 @@ function _updateSrchBadge(count) {
     document.querySelector('.srch')?.appendChild(badge);
   }
   const hasQuery = !!_q();
-  if (!hasQuery)        badge.textContent = '';
+  if (!hasQuery) badge.textContent = '';
   else if (count === 0) badge.textContent = 'aucun résultat';
   else if (count === 1) badge.textContent = '1 résultat';
-  else                  badge.textContent = `${count} résultats`;
+  else badge.textContent = `${count} résultats`;
   updateClearFiltersBtn();
 }
 
@@ -247,10 +289,10 @@ function _updateSrchBadge(count) {
 export function updateClearFiltersBtn() {
   const btn = document.getElementById('clear-filters');
   if (!btn) return;
-  const hasQuery  = !!_q();
-  const hasFormat = !!(get('formatFilter'));
-  const hasDrill  = !!(get('drillKey'));
-  btn.style.display = (hasQuery || hasFormat || hasDrill) ? 'flex' : 'none';
+  const hasQuery = !!_q();
+  const hasFormat = !!get('formatFilter');
+  const hasDrill = !!get('drillKey');
+  btn.style.display = hasQuery || hasFormat || hasDrill ? 'flex' : 'none';
 }
 
 /**
@@ -308,9 +350,21 @@ export function onSearch(q) {
       const lbl = document.getElementById('sort-lbl');
       if (lbl) lbl.textContent = i18n(SLBLS[_s()] || 'sort_az');
     }
-    if (view === 'albums')  { renderAlbumsGrid();  _updateSrchBadge(getFiltered().length); return; }
-    if (view === 'artists') { renderArtistsGrid(); _updateSrchBadge(getFiltered().length); return; }
-    if (view === 'genres')  { renderGenresGrid();  _updateSrchBadge(getFiltered().length); return; }
+    if (view === 'albums') {
+      renderAlbumsGrid();
+      _updateSrchBadge(getFiltered().length);
+      return;
+    }
+    if (view === 'artists') {
+      renderArtistsGrid();
+      _updateSrchBadge(getFiltered().length);
+      return;
+    }
+    if (view === 'genres') {
+      renderGenresGrid();
+      _updateSrchBadge(getFiltered().length);
+      return;
+    }
     renderLib();
     _updateSrchBadge(getFiltered().length);
   }, CFG.SEARCH_DEBOUNCE);
@@ -330,11 +384,12 @@ function _syncColHdrSort(sort) {
   else if (s === 'za') state.title = 'desc';
   else if (s === 'album') state.album = 'asc';
   else if (s === 'duration') state.duration = 'asc';
-  document.querySelectorAll('#tlist-col-hdr .col-btn').forEach(b => {
+  document.querySelectorAll('#tlist-col-hdr .col-btn').forEach((b) => {
     const col = b.dataset.col;
     const dir = state[col];
     b.classList.toggle('on', !!dir);
-    if (dir) b.dataset.dir = dir; else delete b.dataset.dir;
+    if (dir) b.dataset.dir = dir;
+    else delete b.dataset.dir;
   });
 }
 subscribe('sort', _syncColHdrSort);
@@ -342,16 +397,20 @@ subscribe('sort', _syncColHdrSort);
 export function sortByColumn(col) {
   const cur = _s();
   let next = null;
-  if (col === 'title')    next = cur === 'az' ? 'za' : 'az';
-  if (col === 'album')    next = 'album';
+  if (col === 'title') next = cur === 'az' ? 'za' : 'az';
+  if (col === 'album') next = 'album';
   if (col === 'duration') next = 'duration';
   if (!next || next === cur) return;
   set('sort', next);
   const _lbl = document.getElementById('sort-lbl');
   const _key = SLBLS[next] || 'sort_az';
   if (_lbl) _lbl.textContent = i18n(_key);
-  document.getElementById('main-sort-btn')?.setAttribute('aria-label', `${i18n('pl_sort_label')}: ${i18n(_key)}`);
-  invalidateFilter(); renderLib(); saveCfg();
+  document
+    .getElementById('main-sort-btn')
+    ?.setAttribute('aria-label', `${i18n('pl_sort_label')}: ${i18n(_key)}`);
+  invalidateFilter();
+  renderLib();
+  saveCfg();
 }
 
 export function nextSort() {
@@ -368,7 +427,9 @@ export function nextSort() {
   // A11Y : le bouton parent reçoit un aria-label complet (ex. "Sort: A–Z") — la couleur seule ne porte pas l'info.
   const _btn = document.getElementById('main-sort-btn');
   if (_btn) _btn.setAttribute('aria-label', `${i18n('pl_sort_label')}: ${i18n(_key)}`);
-  invalidateFilter(); renderLib(); saveCfg();
+  invalidateFilter();
+  renderLib();
+  saveCfg();
 }
 
 // ══ TRIS SECONDAIRES (albums / artistes / genres) ════════════════════════════
@@ -378,10 +439,16 @@ export function nextAlbumSort() {
   const cur = get('albumSort') || 'name';
   const next = orders[(orders.indexOf(cur) + 1) % orders.length];
   set('albumSort', next);
-  const labels = { name: i18n('sort_az'), count: i18n('sort_count_lbl'), duration: i18n('pl_sort_duration'), year: i18n('sort_year_lbl') };
+  const labels = {
+    name: i18n('sort_az'),
+    count: i18n('sort_count_lbl'),
+    duration: i18n('pl_sort_duration'),
+    year: i18n('sort_year_lbl')
+  };
   const btn = document.getElementById('album-sort-btn');
   if (btn) btn.textContent = labels[next];
-  renderAlbumsGrid(); saveCfg();
+  renderAlbumsGrid();
+  saveCfg();
 }
 
 export function nextArtistSort() {
@@ -391,7 +458,8 @@ export function nextArtistSort() {
   const labels = { name: i18n('sort_az'), count: i18n('sort_count_lbl') };
   const btn = document.getElementById('artist-sort-btn');
   if (btn) btn.textContent = labels[next];
-  renderArtistsGrid(); saveCfg();
+  renderArtistsGrid();
+  saveCfg();
 }
 
 export function nextGenreSort() {
@@ -401,7 +469,8 @@ export function nextGenreSort() {
   const labels = { count: i18n('sort_count_lbl'), name: i18n('sort_az') };
   const btn = document.getElementById('genre-sort-btn');
   if (btn) btn.textContent = labels[next];
-  renderGenresGrid(); saveCfg();
+  renderGenresGrid();
+  saveCfg();
 }
 
 // ══ CHANGEMENT DE VUE ════════════════════════════════════════════════════════
@@ -412,7 +481,10 @@ export function setView(v, btn, plId) {
   // CSS fade AND startViewTransition() run simultaneously.
   if (typeof document.startViewTransition !== 'function') runViewTransition();
   // Annuler le debounce de recherche en cours
-  if (_searchDebounceTimer) { clearTimeout(_searchDebounceTimer); _searchDebounceTimer = null; }
+  if (_searchDebounceTimer) {
+    clearTimeout(_searchDebounceTimer);
+    _searchDebounceTimer = null;
+  }
   // Nettoyer la sélection active avant tout changement de vue (BUG-1 FIX)
   clearSelection();
 
@@ -443,12 +515,12 @@ export function setView(v, btn, plId) {
       set('curPlId', pid);
       if (pid) {
         const recentPls = get('recentPls') || [];
-        set('recentPls', [pid, ...recentPls.filter(id => id !== pid)].slice(0, 5));
+        set('recentPls', [pid, ...recentPls.filter((id) => id !== pid)].slice(0, 5));
         saveCfg();
       }
       // S92 — restaurer le tri mémorisé de cette playlist
       const playlists = get('playlists') || [];
-      const _plNav = playlists.find(p => p.id === pid);
+      const _plNav = playlists.find((p) => p.id === pid);
       set('plSort', (_plNav && _plNav.sort) || 'manual');
     } else {
       set('curPlId', null);
@@ -476,7 +548,7 @@ export function setView(v, btn, plId) {
     // RACE-3 FIX : reconstruire le shuffleQ quand la vue change pendant le shuffle
     if (get('shuffle')) buildQ();
 
-    VIRT._lastListSig   = '';
+    VIRT._lastListSig = '';
     VIRT._lastWindowSig = '';
     VIRT._lastScrollTop = null;
 
@@ -491,29 +563,44 @@ export function setView(v, btn, plId) {
 
 /** Marque l'item sidebar + l'onglet lib actifs (classe .on + aria-current/selected). */
 function _svMarkNav(v, btn) {
-  document.querySelectorAll('.ni, .sb-nav-btn').forEach(b => {
+  document.querySelectorAll('.ni, .sb-nav-btn').forEach((b) => {
     b.classList.remove('on');
     b.removeAttribute('aria-current');
   });
   // AUDIT-2026-07-27 : les onglets sont des facettes de la bibliothèque
   // (Titres/Artistes/Albums/Genres) ; Radio et Stats ont leur item sidebar dédié.
   const _LIB_VIEWS = ['all', 'artists', 'albums', 'genres'];
-  const _NI_BY_VIEW = { liked: 'ni-liked', recent: 'ni-recent', radio: 'ni-radio', stats: 'ni-stats' };
+  const _NI_BY_VIEW = {
+    liked: 'ni-liked',
+    recent: 'ni-recent',
+    radio: 'ni-radio',
+    stats: 'ni-stats'
+  };
   const _niId = _LIB_VIEWS.includes(v) ? 'ni-all' : _NI_BY_VIEW[v];
   if (_niId) {
     const _ni = document.getElementById(_niId);
-    if (_ni) { _ni.classList.add('on'); _ni.setAttribute('aria-current', 'page'); }
+    if (_ni) {
+      _ni.classList.add('on');
+      _ni.setAttribute('aria-current', 'page');
+    }
   } else if (btn && !btn.classList.contains('lib-tab')) {
-    btn.classList.add('on'); btn.setAttribute('aria-current', 'page');
+    btn.classList.add('on');
+    btn.setAttribute('aria-current', 'page');
   }
   // Sync lib-tab underline indicators + visibilité : la rangée d'onglets ne
   // s'affiche que sur les vues facettes (sinon : onglets tous éteints = confus).
   const _tabsBar = document.querySelector('.lib-tabs');
   if (_tabsBar) _tabsBar.hidden = !_LIB_VIEWS.includes(v);
-  document.querySelectorAll('.lib-tab').forEach(t => { t.classList.remove('on'); t.setAttribute('aria-selected', 'false'); });
+  document.querySelectorAll('.lib-tab').forEach((t) => {
+    t.classList.remove('on');
+    t.setAttribute('aria-selected', 'false');
+  });
   if (_LIB_VIEWS.includes(v)) {
     const _tab = document.querySelector(`.lib-tab[data-view="${v}"]`);
-    if (_tab) { _tab.classList.add('on'); _tab.setAttribute('aria-selected', 'true'); }
+    if (_tab) {
+      _tab.classList.add('on');
+      _tab.setAttribute('aria-selected', 'true');
+    }
   }
 
   _positionNiIndicator(document.querySelector('.ni.on'));
@@ -526,7 +613,10 @@ function _svMarkNav(v, btn) {
 function _positionNiIndicator(el) {
   const ind = document.getElementById('ni-indicator');
   if (!ind) return;
-  if (!el) { ind.style.opacity = '0'; return; }
+  if (!el) {
+    ind.style.opacity = '0';
+    return;
+  }
   ind.style.opacity = '1';
   if (document.documentElement.dataset.platform === 'mobile') return;
   ind.style.transform = `translateY(${el.offsetTop}px)`;
@@ -551,12 +641,17 @@ function _svResetChrome(v, plId) {
 
   // Titre de vue
   const playlists = get('playlists') || [];
-  const pl = playlists.find(p => p.id === plId);
+  const pl = playlists.find((p) => p.id === plId);
   const lbl = {
-    all: i18n('lib_all'), liked: i18n('lib_liked'), artists: i18n('lib_artists'),
-    albums: i18n('lib_albums'), genres: i18n('lib_genres'), recent: i18n('lib_recent'),
-    playlist: pl ? pl.name : i18n('pl_new'), radio: i18n('lib_radio'),
-    playlists: i18n('nav_playlists'),
+    all: i18n('lib_all'),
+    liked: i18n('lib_liked'),
+    artists: i18n('lib_artists'),
+    albums: i18n('lib_albums'),
+    genres: i18n('lib_genres'),
+    recent: i18n('lib_recent'),
+    playlist: pl ? pl.name : i18n('pl_new'),
+    radio: i18n('lib_radio'),
+    playlists: i18n('nav_playlists')
   };
   const vhtitleEl = document.getElementById('vhtitle');
   if (vhtitleEl) vhtitleEl.textContent = lbl[v] || i18n('sb_group_lib');
@@ -580,25 +675,37 @@ function _svLazyBtn(id, init) {
 /** Visibilité + libellés des boutons de tri contextuels de la barre de vue. */
 function _svSyncSortButtons(v) {
   const albumSortBtn = document.getElementById('album-sort-btn');
-  const mainSortBtn  = document.getElementById('main-sort-btn');
-  const NO_MAIN_SORT = ['albums', 'artists', 'genres', 'stats', 'recent', 'playlist', 'radio', 'playlists', 'album-detail', 'artist-detail', 'genre-detail'];
+  const mainSortBtn = document.getElementById('main-sort-btn');
+  const NO_MAIN_SORT = [
+    'albums',
+    'artists',
+    'genres',
+    'stats',
+    'recent',
+    'playlist',
+    'radio',
+    'playlists',
+    'album-detail',
+    'artist-detail',
+    'genre-detail'
+  ];
   if (mainSortBtn) mainSortBtn.style.display = NO_MAIN_SORT.includes(v) ? 'none' : '';
-  if (albumSortBtn) albumSortBtn.style.display = (v === 'albums') ? '' : 'none';
+  if (albumSortBtn) albumSortBtn.style.display = v === 'albums' ? '' : 'none';
 
-  const artistSortBtn = _svLazyBtn('artist-sort-btn', b => {
+  const artistSortBtn = _svLazyBtn('artist-sort-btn', (b) => {
     b.addEventListener('click', nextArtistSort);
     mainSortBtn?.parentNode?.insertBefore(b, mainSortBtn.nextSibling);
   });
   artistSortBtn.title = i18n('sort_btn_artists');
-  artistSortBtn.style.display = (v === 'artists') ? '' : 'none';
+  artistSortBtn.style.display = v === 'artists' ? '' : 'none';
   artistSortBtn.textContent = i18n(get('artistSort') === 'count' ? 'sort_count_lbl' : 'sort_az');
 
-  const genreSortBtn = _svLazyBtn('genre-sort-btn', b => {
+  const genreSortBtn = _svLazyBtn('genre-sort-btn', (b) => {
     b.addEventListener('click', nextGenreSort);
     mainSortBtn?.parentNode?.insertBefore(b, mainSortBtn.nextSibling);
   });
   genreSortBtn.title = i18n('sort_btn_genres');
-  genreSortBtn.style.display = (v === 'genres') ? '' : 'none';
+  genreSortBtn.style.display = v === 'genres' ? '' : 'none';
   genreSortBtn.textContent = i18n(get('genreSort') === 'name' ? 'sort_az' : 'sort_count_lbl');
 
   _svSyncDetailPlBtns(v, mainSortBtn);
@@ -606,48 +713,58 @@ function _svSyncSortButtons(v) {
 
 /** Boutons album-detail + nouvelle playlist / smart playlist. */
 function _svSyncDetailPlBtns(v, mainSortBtn) {
-  const albumDetailSortBtn = _svLazyBtn('album-detail-sort-btn', b => {
+  const albumDetailSortBtn = _svLazyBtn('album-detail-sort-btn', (b) => {
     b.addEventListener('click', () => {
       const cur = get('albumDetailSort') || 'track';
       const next = cur === 'track' ? 'az' : 'track';
       set('albumDetailSort', next);
       b.title = i18n(next === 'track' ? 'sort_btn_track_num' : 'sort_btn_az_ttl');
-      b.querySelector('span').textContent = next === 'track' ? i18n('sort_by_track_lbl') : i18n('sort_az');
-      invalidateFilter(); VIRT._lastListSig = ''; renderLib(); saveCfg();
+      b.querySelector('span').textContent =
+        next === 'track' ? i18n('sort_by_track_lbl') : i18n('sort_az');
+      invalidateFilter();
+      VIRT._lastListSig = '';
+      renderLib();
+      saveCfg();
     });
     b.innerHTML = `<span>${i18n('sort_by_track_lbl')}</span>`;
     b.title = i18n('sort_btn_track_num');
     mainSortBtn?.parentNode?.insertBefore(b, mainSortBtn);
   });
-  albumDetailSortBtn.style.display = (v === 'album-detail') ? '' : 'none';
+  albumDetailSortBtn.style.display = v === 'album-detail' ? '' : 'none';
   if (v === 'album-detail') {
     const ads = get('albumDetailSort') || 'track';
-    albumDetailSortBtn.querySelector('span').textContent = ads === 'track' ? i18n('sort_by_track_lbl') : i18n('sort_az');
+    albumDetailSortBtn.querySelector('span').textContent =
+      ads === 'track' ? i18n('sort_by_track_lbl') : i18n('sort_az');
   }
 
-  const plNewBtn = _svLazyBtn('pl-new-btn', b => {
+  const plNewBtn = _svLazyBtn('pl-new-btn', (b) => {
     b.title = i18n('sb_new_pl') || 'Nouvelle playlist';
     b.addEventListener('click', openNewPlaylistModal);
-    b.innerHTML = '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>';
+    b.innerHTML =
+      '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>';
     mainSortBtn?.parentNode?.insertBefore(b, mainSortBtn.nextSibling);
   });
-  const plSmartBtn = _svLazyBtn('pl-smart-btn', b => {
+  const plSmartBtn = _svLazyBtn('pl-smart-btn', (b) => {
     b.title = i18n('sb_smart_pl') || 'Playlist intelligente';
     b.addEventListener('click', openSmartPlaylistModal);
-    b.innerHTML = '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>';
+    b.innerHTML =
+      '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>';
     mainSortBtn?.parentNode?.insertBefore(b, plNewBtn);
   });
-  plSmartBtn.style.display = (v === 'playlists') ? '' : 'none';
-  plNewBtn.style.display   = (v === 'playlists') ? '' : 'none';
+  plSmartBtn.style.display = v === 'playlists' ? '' : 'none';
+  plNewBtn.style.display = v === 'playlists' ? '' : 'none';
   _svSyncPlGridSortBtn(v, mainSortBtn, plSmartBtn);
 }
 
 /** REWORK-1 : tri de la grille playlists (manuel → A-Z → récentes), persisté. */
 function _svSyncPlGridSortBtn(v, mainSortBtn, anchorBtn) {
-  const LBL = mode => mode === 'az' ? i18n('sort_az')
-    : mode === 'recent' ? i18n('pl_sort_recent')
-    : i18n('pl_sort_manual');
-  const btn = _svLazyBtn('pl-grid-sort-btn', b => {
+  const LBL = (mode) =>
+    mode === 'az'
+      ? i18n('sort_az')
+      : mode === 'recent'
+        ? i18n('pl_sort_recent')
+        : i18n('pl_sort_manual');
+  const btn = _svLazyBtn('pl-grid-sort-btn', (b) => {
     b.title = i18n('sort_btn_playlists');
     b.addEventListener('click', () => {
       const order = ['manual', 'az', 'recent'];
@@ -660,7 +777,7 @@ function _svSyncPlGridSortBtn(v, mainSortBtn, anchorBtn) {
     mainSortBtn?.parentNode?.insertBefore(b, anchorBtn);
   });
   btn.textContent = LBL(get('plGridSort') || 'manual');
-  btn.style.display = (v === 'playlists') ? '' : 'none';
+  btn.style.display = v === 'playlists' ? '' : 'none';
 }
 
 /** Dispatch final vers la vue demandée (grilles différées, stats, radio, liste). */
@@ -668,32 +785,61 @@ function _svDispatchView(v, plId) {
   const tracks = get('tracks') || [];
   // INP FIX : renders de grilles différés → le pointer event se termine < 20ms,
   // le browser peint immédiatement, le contenu arrive dans la task suivante (~0ms après).
-  if (v === 'albums')    { syncRadioLibBar(); _showViewRaw('lib'); saveCfg(); _deferGridRender(renderAlbumsGrid);    return; }
-  if (v === 'artists')   { syncRadioLibBar(); _showViewRaw('lib'); saveCfg(); _deferGridRender(renderArtistsGrid);   return; }
-  if (v === 'genres')    { syncRadioLibBar(); _showViewRaw('lib'); saveCfg(); _deferGridRender(renderGenresGrid);    return; }
-  if (v === 'playlists') { syncRadioLibBar(); _showViewRaw('lib'); saveCfg(); _deferGridRender(renderPlaylistsGrid); return; }
+  if (v === 'albums') {
+    syncRadioLibBar();
+    _showViewRaw('lib');
+    saveCfg();
+    _deferGridRender(renderAlbumsGrid);
+    return;
+  }
+  if (v === 'artists') {
+    syncRadioLibBar();
+    _showViewRaw('lib');
+    saveCfg();
+    _deferGridRender(renderArtistsGrid);
+    return;
+  }
+  if (v === 'genres') {
+    syncRadioLibBar();
+    _showViewRaw('lib');
+    saveCfg();
+    _deferGridRender(renderGenresGrid);
+    return;
+  }
+  if (v === 'playlists') {
+    syncRadioLibBar();
+    _showViewRaw('lib');
+    saveCfg();
+    _deferGridRender(renderPlaylistsGrid);
+    return;
+  }
   if (v === 'stats') {
     _setSrchDisabled(true);
     _showViewRaw('stats');
     renderStats(tracks, _trackIdxMap);
-    saveCfg(); return;
+    saveCfg();
+    return;
   }
   if (v === 'radio') {
     _setSrchDisabled(true);
     // renderRadioView() va rebuilder innerHTML → invalider le cache DOM
     clearRvProgFill();
-    _showViewRaw('radio'); renderRadioView(); saveCfg(); return;
+    _showViewRaw('radio');
+    renderRadioView();
+    saveCfg();
+    return;
   }
   _setSrchDisabled(false);
   syncRadioLibBar();
   const _tl = document.getElementById('tlist');
   if (_tl) _tl.scrollTop = 0;
-  _showViewRaw('lib'); renderLib();
+  _showViewRaw('lib');
+  renderLib();
   // Playlist hero + barre d'action (play / shuffle / ••• → supprimer)
   if (v === 'playlist') {
-    const _fl  = getFiltered();
+    const _fl = getFiltered();
     const _pls = get('playlists') || [];
-    const _pl  = _pls.find(p => p.id === (plId || get('curPlId')));
+    const _pl = _pls.find((p) => p.id === (plId || get('curPlId')));
     renderPlHero(_pl, _fl);
     updatePlActionBar();
   } else {

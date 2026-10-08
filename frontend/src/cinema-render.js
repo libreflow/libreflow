@@ -20,23 +20,22 @@
 //                                      radio.js pour buildUpcoming() (cinema-queue.js, fonction pure)
 //   playCinemaQueueTrack(t)          — Task 9 : lecture depuis une rangée du panneau
 
-import { fmt }                                  from './utils.js';
-import { audio, playAt,
-         peekExplicitQueue, removeFromQueue }   from './player.js';
-import { i18n }                                 from './i18n.js';
-import { setMasterGain }                        from './eq.js';
-import { saveCfg }                              from './cfgsave.js';
-import { get }                                  from './store.js';
-import { CFG }                                  from './cfg.js';
-import { getFiltered, filteredIdx }             from './search.js';
-import { radioActive, getRadioQueue }           from './radio.js';
-import { emit, EVENTS }                         from './bus.js';
+import { fmt } from './utils.js';
+import { audio, playAt, peekExplicitQueue, removeFromQueue } from './player.js';
+import { i18n } from './i18n.js';
+import { setMasterGain } from './eq.js';
+import { saveCfg } from './cfgsave.js';
+import { get } from './store.js';
+import { CFG } from './cfg.js';
+import { getFiltered, filteredIdx } from './search.js';
+import { radioActive, getRadioQueue } from './radio.js';
+import { emit, EVENTS } from './bus.js';
 import { updateCinArtRGBFromTrack, snapArtColor, startAmbientAnim } from './cinema-bg.js';
-import { startCinemaViz }                       from './cinema-viz.js';
-import { prefersReducedMotion }                 from './motion.js';
-import { isSeekDragging }                       from './cinema-seek.js';
-import { ensureContrastOnDark }                 from './artcolor.js';
-import { buildUpcoming }                        from './cinema-queue.js';
+import { startCinemaViz } from './cinema-viz.js';
+import { prefersReducedMotion } from './motion.js';
+import { isSeekDragging } from './cinema-seek.js';
+import { ensureContrastOnDark } from './artcolor.js';
+import { buildUpcoming } from './cinema-queue.js';
 
 // Task 7 — ratio AA (4.5:1) exigé pour --cin-rgb-ui contre le fond quasi-noir du cinéma.
 const CIN_UI_MIN_CONTRAST = 4.5;
@@ -66,7 +65,10 @@ export function renderCinColor(t, trackChanged) {
   // A11Y A4/A5 : sous reduced-motion les boucles rAF ne se replanifient pas ; forcer un
   // redessin statique avec la couleur à jour (ce point est atteint sur les 3 déclencheurs
   // requis : changement de piste, resize, changement de mode — tous invoquent updateCinema()).
-  if (prefersReducedMotion()) { startCinemaViz(); startAmbientAnim(); }
+  if (prefersReducedMotion()) {
+    startCinemaViz();
+    startAmbientAnim();
+  }
   // Propager --cin-rgb (brute, pour fonds/viz) + --cin-rgb-ui (garde-fou contraste
   // WCAG AA 4.5:1 vs noir, Task 7 — SEULE teinte utilisée pour texte/contrôles).
   const overlay = document.getElementById('cinema-overlay');
@@ -92,9 +94,9 @@ export function syncCinVolumeUI(vol) {
   const w1 = document.getElementById('cinema-vol-wave1');
   const w2 = document.getElementById('cinema-vol-wave2');
   if (w1) w1.style.display = muted ? 'none' : '';
-  if (w2) w2.style.display = (muted || vol < 0.5) ? 'none' : '';
-  const x1  = document.getElementById('cinema-vol-x1');
-  const x2  = document.getElementById('cinema-vol-x2');
+  if (w2) w2.style.display = muted || vol < 0.5 ? 'none' : '';
+  const x1 = document.getElementById('cinema-vol-x1');
+  const x2 = document.getElementById('cinema-vol-x2');
   const btn = document.getElementById('cinema-vol-icon');
   if (x1) x1.style.display = muted ? '' : 'none';
   if (x2) x2.style.display = muted ? '' : 'none';
@@ -127,9 +129,15 @@ export function readCinVolDom() {
  *  délègue ici (syncVol des deps initCinemaInput, ex-_syncCinVol) au lieu de dupliquer. */
 export function setCinVolSliders(v) {
   const cvol = document.getElementById('cinema-vol');
-  if (cvol) { cvol.value = v; emit(EVENTS.VOL_SLIDER_UPDATE, { elId: 'cinema-vol' }); }
+  if (cvol) {
+    cvol.value = v;
+    emit(EVENTS.VOL_SLIDER_UPDATE, { elId: 'cinema-vol' });
+  }
   const vel = document.getElementById('vol');
-  if (vel) { vel.value = v; emit(EVENTS.VOL_SLIDER_UPDATE, { elId: 'vol' }); }
+  if (vel) {
+    vel.value = v;
+    emit(EVENTS.VOL_SLIDER_UPDATE, { elId: 'vol' });
+  }
   saveCfg();
 }
 
@@ -153,14 +161,15 @@ export function toggleCinemaMute() {
 /** Barre de progression + temps courant/total (chemin updateCinema, pas le 60fps). */
 export function syncCinProgress() {
   if (isSeekDragging()) return; // Task 5 — ne pas écraser le fill/thumb pendant un drag manuel
-  const fill  = document.getElementById('cinema-fill');
+  const fill = document.getElementById('cinema-fill');
   const thumb = document.getElementById('cinema-pbar-thumb');
-  const tc    = document.getElementById('cinema-tc');
-  const td    = document.getElementById('cinema-td');
-  if (fill  && audio.duration) fill.style.transform = 'scaleX(' + (audio.currentTime / audio.duration) + ')';
-  if (thumb && audio.duration) thumb.style.left = (audio.currentTime / audio.duration * 100) + '%';
-  if (tc)  tc.textContent = fmt(audio.currentTime);
-  if (td)  td.textContent = audio.duration ? fmt(audio.duration) : '–:––';
+  const tc = document.getElementById('cinema-tc');
+  const td = document.getElementById('cinema-td');
+  if (fill && audio.duration)
+    fill.style.transform = 'scaleX(' + audio.currentTime / audio.duration + ')';
+  if (thumb && audio.duration) thumb.style.left = (audio.currentTime / audio.duration) * 100 + '%';
+  if (tc) tc.textContent = fmt(audio.currentTime);
+  if (td) td.textContent = audio.duration ? fmt(audio.duration) : '–:––';
 }
 
 /**
@@ -169,8 +178,8 @@ export function syncCinProgress() {
  * appelée par cinema.js au bon moment de la séquence de swap (Task 6).
  */
 export function applyCinText(t, title, artist) {
-  const elT   = document.getElementById('cinema-title');
-  const elA   = document.getElementById('cinema-artist');
+  const elT = document.getElementById('cinema-title');
+  const elA = document.getElementById('cinema-artist');
   const elAlb = document.getElementById('cinema-album');
   if (elT) elT.textContent = title;
   if (elA) elA.textContent = artist;
@@ -194,13 +203,16 @@ export function decodeArtImage(img, em, art) {
   img.style.opacity = '0'; // masqué pendant le décodage — le skeleton reste visible dessous
   img.src = art;
   img.style.display = 'block';
-  img.decode().then(() => {
-    if (img.src === art) img.style.opacity = ''; // fondu d'entrée via la transition CSS de #cinema-art-img
-  }).catch(() => {
-    if (img.src !== art) return; // dépassé par une piste plus récente entre-temps
-    img.style.display = 'none';
-    if (em) em.style.display = 'flex';
-  });
+  img
+    .decode()
+    .then(() => {
+      if (img.src === art) img.style.opacity = ''; // fondu d'entrée via la transition CSS de #cinema-art-img
+    })
+    .catch(() => {
+      if (img.src !== art) return; // dépassé par une piste plus récente entre-temps
+      img.style.display = 'none';
+      if (em) em.style.display = 'flex';
+    });
 }
 
 /**
@@ -211,19 +223,20 @@ export function decodeArtImage(img, em, art) {
  */
 export function beginCinSwapIn(artWrap, img, em, t, title, artist, art) {
   const txtEls = ['cinema-title', 'cinema-artist', 'cinema-album']
-    .map(id => document.getElementById(id)).filter(Boolean);
+    .map((id) => document.getElementById(id))
+    .filter(Boolean);
   applyCinText(t, title, artist);
   // Retrait des DEUX classes — miroir du traitement artWrap ci-dessous. Sans le retrait de
   // cin-txt-swap-in : un rapid-skip qui interrompt un swap-in en vol laisserait la classe
   // en place, et un classList.add() du même nom au rAF suivant ne redémarre JAMAIS
   // l'animation CSS (il faut une frame sans la classe) → texte qui saute sans animation.
-  txtEls.forEach(el => el.classList.remove('cin-txt-swap-out', 'cin-txt-swap-in'));
+  txtEls.forEach((el) => el.classList.remove('cin-txt-swap-out', 'cin-txt-swap-in'));
   decodeArtImage(img, em, art);
   if (artWrap) {
     artWrap.classList.remove('cin-swap-out', 'cin-swap');
     requestAnimationFrame(() => {
       artWrap.classList.add('cin-swap');
-      txtEls.forEach(el => el.classList.add('cin-txt-swap-in'));
+      txtEls.forEach((el) => el.classList.add('cin-txt-swap-in'));
     });
   }
   return txtEls;
@@ -245,14 +258,16 @@ export function renderCinNextPanel(panel, hint, nt, shuffle) {
   hint?.classList.remove('cin-has-next');
   panel.classList.add('cin-has-next');
   panel.disabled = false; // Task 9
-  const titleEl  = document.getElementById('cinema-next-title');
+  const titleEl = document.getElementById('cinema-next-title');
   const artistEl = document.getElementById('cinema-next-artist');
-  const imgEl    = document.getElementById('cinema-next-img');
-  if (titleEl)  titleEl.textContent  = nt.name || '–';
+  const imgEl = document.getElementById('cinema-next-img');
+  if (titleEl) titleEl.textContent = nt.name || '–';
   if (artistEl) artistEl.textContent = nt.artistFull || nt.artist || '–';
   if (imgEl) {
-    if (nt.art) { imgEl.src = nt.art; imgEl.style.display = 'block'; }
-    else          imgEl.style.display = 'none';
+    if (nt.art) {
+      imgEl.src = nt.art;
+      imgEl.style.display = 'block';
+    } else imgEl.style.display = 'none';
   }
 }
 
@@ -268,23 +283,23 @@ export function renderCinNextPanel(panel, hint, nt, shuffle) {
  * @returns {object[]}
  */
 export function getCinemaQueueUpcoming() {
-  const tracks   = get('tracks');
-  const curIdx   = get('curIdx');
+  const tracks = get('tracks');
+  const curIdx = get('curIdx');
   if (!tracks) return []; // garde défensive (même pattern que _updateNextTrack, cinema.js)
   const curTrack = curIdx >= 0 ? tracks[curIdx] : null;
   const filtered = getFiltered();
   return buildUpcoming({
-    explicitQueue:  peekExplicitQueue(),
+    explicitQueue: peekExplicitQueue(),
     filtered,
     curFilteredIdx: curTrack ? filteredIdx(curTrack) : -1,
-    shuffle:        get('shuffle'),
+    shuffle: get('shuffle'),
     radioActive,
-    radioQueue:     radioActive ? getRadioQueue() : [],
+    radioQueue: radioActive ? getRadioQueue() : [],
     // repeat==='all' → wrap séquentiel (parité getNextIdx()/player.js qui boucle sur
     // filtered[0] — sinon le déclencheur "Suivant" et le panneau ouvert se contredisent
     // en fin de liste). Même source que _syncCinButtons (cinema.js) : get('repeat').
-    repeatAll:      get('repeat') === 'all',
-    limit:          CFG.CINEMA_QUEUE_LIMIT,
+    repeatAll: get('repeat') === 'all',
+    limit: CFG.CINEMA_QUEUE_LIMIT
   });
 }
 

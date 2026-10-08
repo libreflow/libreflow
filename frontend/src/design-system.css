@@ -31,7 +31,6 @@
  *  13. Tokens opérationnels & alias legacy (z-index, ombres, dimensions)
  * ============================================================================ */
 
-
 /* ── @property — propriétés custom animables via CSS transition ──────────── */
 /* Doit précéder tout :root pour que les transitions sur ces variables soient
    actives dès la première frame. Sans ces déclarations, transition: --art-color
@@ -44,9 +43,8 @@
 @property --g {
   syntax: '<color>';
   inherits: true;
-  initial-value: #8B6BFF;
+  initial-value: #8b6bff;
 }
-
 
 /* ============================================================================
  * 2. COULEURS — Thème dark premium audio (B2-revision : Vantablack + Indigo)
@@ -64,24 +62,23 @@
      distinguer les surfaces. Contrepartie assumée : --text-muted ne tient
      AAA (7:1) que sur --bg-base ; sur --bg-elevated/--bg-raised il reste
      AA (>=4.5:1) — voir calcul à jour ci-dessous. */
-  --bg-base       : #030303;   /* canonique — fenêtre, zone principale (inchangé) */
-  --bg-surface    : #121214;   /* sidebar / navigation — un cran plus clair */
-  --bg-elevated   : #1C1C20;   /* cards, survols, lignes de liste au survol, éléments flottants */
-  --bg-raised     : #1C1C20;   /* popovers empilés au-dessus d'un élevé (cas rare) — même palier que le
+  --bg-base: #030303; /* canonique — fenêtre, zone principale (inchangé) */
+  --bg-surface: #121214; /* sidebar / navigation — un cran plus clair */
+  --bg-elevated: #1c1c20; /* cards, survols, lignes de liste au survol, éléments flottants */
+  --bg-raised: #1c1c20; /* popovers empilés au-dessus d'un élevé (cas rare) — même palier que le
                                    précédent : au-delà, le texte accent ne tient plus AA (4.5:1) (§2.9) */
-  --bg-sunken     : #000000;   /* champs "creusés" (recherche) — plus sombre que tout conteneur */
+  --bg-sunken: #000000; /* champs "creusés" (recherche) — plus sombre que tout conteneur */
 
   /* --- Texte — neutres calibrés sur Vantablack --------------------------- */
-  --text-primary   : #F5F6F8;                 /* titres — 19:1 sur #030303 */
-  --text-secondary : #B4B7C2;                 /* artistes — 10.3:1 sur #030303 */
-  --text-muted     : #979CAC;                 /* metadata — 7.5:1 AAA sur #030303 ; 6.2:1 AA sur --bg-elevated/--bg-raised (palier le plus clair) */
+  --text-primary: #f5f6f8; /* titres — 19:1 sur #030303 */
+  --text-secondary: #b4b7c2; /* artistes — 10.3:1 sur #030303 */
+  --text-muted: #979cac; /* metadata — 7.5:1 AAA sur #030303 ; 6.2:1 AA sur --bg-elevated/--bg-raised (palier le plus clair) */
 
   /* --- Accent — Electric Indigo (signature unique) ----------------------- */
-  --accent         : #8B6BFF;                 /* indigo vif — 5.0:1 sur --bg-surface, 4.6:1 sur --bg-elevated/--bg-raised */
-  --accent-glow    : rgba(139, 107, 255, 0.45);
-  --accent-subtle  : rgba(139, 107, 255, 0.12);
+  --accent: #8b6bff; /* indigo vif — 5.0:1 sur --bg-surface, 4.6:1 sur --bg-elevated/--bg-raised */
+  --accent-glow: rgba(139, 107, 255, 0.45);
+  --accent-subtle: rgba(139, 107, 255, 0.12);
 }
-
 
 /* ============================================================================
  * 2bis. PALETTE OPÉRATIONNELLE — alias de travail (B1 consolidation)
@@ -91,26 +88,28 @@
  * ============================================================================ */
 :root {
   /* Accent opérationnel (alias du --accent Electric Indigo défini en §2) */
-  --g       : var(--accent);
-  --g-rgb   : 139, 107, 255;
-  --gd      : var(--accent-subtle);
-  --gg      : var(--accent-glow);
-  --text-on-accent : #050505;             /* noir sur indigo brillant — 5.5:1 AA */
+  --g: var(--accent);
+  --g-rgb: 139, 107, 255;
+  --gd: var(--accent-subtle);
+  --gg: var(--accent-glow);
+  --text-on-accent: #050505; /* noir sur indigo brillant — 5.5:1 AA */
 
   /* --- Alias historiques (B1) reliés à la palette respirée (B2) --------- */
-  --bg  : var(--bg-base);
-  --bg1 : var(--bg-surface);   /* ex #11131A (teinte bleutée à part) — unifié sur l'échelle canonique */
-  --bg2 : var(--bg-surface);
-  --bg3 : var(--bg-elevated);
-  --bg4 : var(--bg-raised);
-  --bg5 : #363A47;
-  --bg6 : #444A5A;
+  --bg: var(--bg-base);
+  --bg1: var(
+    --bg-surface
+  ); /* ex #11131A (teinte bleutée à part) — unifié sur l'échelle canonique */
+  --bg2: var(--bg-surface);
+  --bg3: var(--bg-elevated);
+  --bg4: var(--bg-raised);
+  --bg5: #363a47;
+  --bg6: #444a5a;
 
   /* Texte — alias historiques */
-  --t   : var(--text-primary);
-  --t2  : var(--text-secondary);
-  --t3  : var(--text-muted);
-  --t4  : #2e2e2e;
+  --t: var(--text-primary);
+  --t2: var(--text-secondary);
+  --t3: var(--text-muted);
+  --t4: #2e2e2e;
 
   /* Espacement / radius / typo : source unique dans leurs sections
      canoniques (§3 typo, §4 spacing, §6 radius). Les doublons §2bis
@@ -119,34 +118,37 @@
      --card-min-w, --shadow-art-col, --shadow-pl-list (zéro consommateur). */
 
   /* Élévations opérationnelles — aplaties style Spotify (profondeur par couleur, pas par ombre) */
-  --elev-1 : 0 0 0 0 transparent;
-  --elev-2 : 0 0 0 0 transparent;
-  --elev-3 : 0 0 0 0 transparent;
-  --elev-4 : 0 0 0 0 transparent;
+  --elev-1: 0 0 0 0 transparent;
+  --elev-2: 0 0 0 0 transparent;
+  --elev-3: 0 0 0 0 transparent;
+  --elev-4: 0 0 0 0 transparent;
 
   /* Motion opérationnel */
-  --motion-press: 70ms;   /* press feedback — retour instantané (audit 2026-07-27) */
-  --motion-fast : 120ms;
-  --motion-base : 200ms;
-  --motion-slow : 320ms;
-  --ease-standard : cubic-bezier(.4, 0, .2, 1);
-  --ease-spring   : cubic-bezier(.34, 1.56, .64, 1); /* aligné sur la valeur active (§8) + motion.js lf-overshoot */
+  --motion-press: 70ms; /* press feedback — retour instantané (audit 2026-07-27) */
+  --motion-fast: 120ms;
+  --motion-base: 200ms;
+  --motion-slow: 320ms;
+  --ease-standard: cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-spring: cubic-bezier(
+    0.34,
+    1.56,
+    0.64,
+    1
+  ); /* aligné sur la valeur active (§8) + motion.js lf-overshoot */
 }
-
 
 /* ============================================================================
  * 2ter. (suite §2 couleurs) — Bordures, États
  * ============================================================================ */
 :root {
   /* --- Bordures — AA non-text contrast (>=3:1 sur Vantablack) ---------- */
-  --border-subtle  : rgba(255, 255, 255, 0.45);   /* 3.1:1 vs #030303 */
-  --border-default : rgba(255, 255, 255, 0.55);   /* 4.0:1 */
+  --border-subtle: rgba(255, 255, 255, 0.45); /* 3.1:1 vs #030303 */
+  --border-default: rgba(255, 255, 255, 0.55); /* 4.0:1 */
 
   /* --- États -------------------------------------------------------------- */
-  --state-error    : #FF5A5F;
-  --state-success  : #4ADE80;
+  --state-error: #ff5a5f;
+  --state-success: #4ade80;
 }
-
 
 /* ============================================================================
  * 3. TYPOGRAPHIE — fonts locales (déjà chargées par style.css), offline
@@ -160,35 +162,33 @@
  * ============================================================================ */
 :root {
   /* --- Familles ----------------------------------------------------------- */
-  --font-display : 'Syne', system-ui, -apple-system, Segoe UI, sans-serif;
-  --font-body    : 'DM Sans', system-ui, -apple-system, Segoe UI, sans-serif;
+  --font-display: 'Syne', system-ui, -apple-system, Segoe UI, sans-serif;
+  --font-body: 'DM Sans', system-ui, -apple-system, Segoe UI, sans-serif;
 
   /* --- Tailles fluides ---------------------------------------------------- */
-  --text-xs      : clamp(10px, 1vw,   12px);
-  --text-sm      : clamp(12px, 1.2vw, 14px);
-  --text-base    : clamp(13px, 1.4vw, 15px);
-  --text-md      : clamp(15px, 1.6vw, 18px);
-  --text-lg      : clamp(18px, 2vw,   24px);
-  --text-xl      : clamp(22px, 2.8vw, 32px);
-  --text-display : clamp(28px, 4vw,   48px);
+  --text-xs: clamp(10px, 1vw, 12px);
+  --text-sm: clamp(12px, 1.2vw, 14px);
+  --text-base: clamp(13px, 1.4vw, 15px);
+  --text-md: clamp(15px, 1.6vw, 18px);
+  --text-lg: clamp(18px, 2vw, 24px);
+  --text-xl: clamp(22px, 2.8vw, 32px);
+  --text-display: clamp(28px, 4vw, 48px);
 
   /* Weights / line-heights / letter-spacing : définis en §13 (--fw-*, --lh-*, --ls-*). */
 }
-
 
 /* ============================================================================
  * 4. SPACING — base 4px
  * ============================================================================ */
 :root {
-  --space-1  : 4px;
-  --space-2  : 8px;
-  --space-3  : 12px;
-  --space-4  : 16px;
-  --space-5  : 20px;
-  --space-6  : 24px;
-  --space-7  : 48px;  /* relocalisé depuis §2bis — consommé par --sp-10/12/15 */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-7: 48px; /* relocalisé depuis §2bis — consommé par --sp-10/12/15 */
 }
-
 
 /* ============================================================================
  * 5. TAILLES COMPOSANTS AUDIO — adaptatives PC / Mobile
@@ -198,36 +198,34 @@
 
 /* --- Defaults (PC desktop) — appliqués si data-platform absent ----------- */
 :root {
-  --player-height    : 80px;   /* aligné sur --pb (valeur effective du layout) */
-  --sidebar-width    : 260px;  /* aligné sur --sb (valeur effective de la grille) */
-  --control-size     : 36px;
+  --player-height: 80px; /* aligné sur --pb (valeur effective du layout) */
+  --sidebar-width: 260px; /* aligné sur --sb (valeur effective de la grille) */
+  --control-size: 36px;
 }
 
-:root[data-platform="pc"] {
-  --player-height    : 80px;   /* aligné sur --pb */
-  --sidebar-width    : 260px;  /* aligné sur --sb */
-  --control-size     : 36px;
+:root[data-platform='pc'] {
+  --player-height: 80px; /* aligné sur --pb */
+  --sidebar-width: 260px; /* aligné sur --sb */
+  --control-size: 36px;
 }
 
-:root[data-platform="mobile"] {
-  --player-height    : 64px;
-  --sidebar-width    : 0px;       /* bottom nav remplace la sidebar */
-  --control-size     : 48px;
+:root[data-platform='mobile'] {
+  --player-height: 64px;
+  --sidebar-width: 0px; /* bottom nav remplace la sidebar */
+  --control-size: 48px;
 }
-
 
 /* ============================================================================
  * 6. BORDER RADIUS
  * ============================================================================ */
 :root {
-  --radius-xs   : 4px;    /* relocalisé depuis §2bis — consommé par --r-xs/sm/md */
-  --radius-sm   : 6px;    /* tags, badges */
-  --radius-md   : 10px;   /* boutons, inputs */
-  --radius-row  : 8px;    /* lignes de piste (survol + actif), vignettes/pochettes */
-  --radius-lg   : 16px;   /* grands panneaux et cartes (album/playlist/stats, toasts) */
-  --radius-pill : 999px;  /* relocalisé depuis §2bis — consommé par --r-pill/round/full */
+  --radius-xs: 4px; /* relocalisé depuis §2bis — consommé par --r-xs/sm/md */
+  --radius-sm: 6px; /* tags, badges */
+  --radius-md: 10px; /* boutons, inputs */
+  --radius-row: 8px; /* lignes de piste (survol + actif), vignettes/pochettes */
+  --radius-lg: 16px; /* grands panneaux et cartes (album/playlist/stats, toasts) */
+  --radius-pill: 999px; /* relocalisé depuis §2bis — consommé par --r-pill/round/full */
 }
-
 
 /* ============================================================================
  * 7. OMBRES
@@ -238,7 +236,6 @@
  * portent une vraie ombre --shadow-*.
  * ============================================================================ */
 
-
 /* ============================================================================
  * 8. TRANSITIONS & ANIMATIONS
  * ============================================================================ */
@@ -246,10 +243,8 @@
    --ease-spring). L'ancien bloc --duration-* / --ease-default / --ease-out (sans
    consommateur) a été retiré. */
 
-
 /* 9. Z-index / 10. Layout grid : définis en §13 (--z-*) et §5 (dimensions
    adaptatives PC/Mobile). Sections squelettes supprimées (audit 2026-07-27). */
-
 
 /* ============================================================================
  * 11. DEFAULTS SAINS
@@ -257,8 +252,8 @@
  * ============================================================================ */
 
 ::selection {
-  background : var(--accent-subtle);
-  color      : var(--text-primary);
+  background: var(--accent-subtle);
+  color: var(--text-primary);
 }
 
 /* Scrollbars et :focus-visible définis dans style.css (implémentation
@@ -272,55 +267,54 @@
  * du bouton #mode-toggle-btn (titlebar). Les overrides ne couvrent QUE les
  * tokens chromatiques ; spacing/radius/typo/motion restent communs.
  * ============================================================================ */
-html[data-mode="light"] {
+html[data-mode='light'] {
   /* Surfaces light — 5 paliers espacés, ΔRGB ~12 entre étages */
-  --bg-base       : #F7F8FA;
-  --bg-surface    : #E5E8EE;
-  --bg-elevated   : #D9DDE6;
-  --bg-raised     : #CAD0DC;
+  --bg-base: #f7f8fa;
+  --bg-surface: #e5e8ee;
+  --bg-elevated: #d9dde6;
+  --bg-raised: #cad0dc;
 
-  --bg  : var(--bg-base);
-  --bg1 : #EEF0F4;
-  --bg2 : var(--bg-surface);
-  --bg3 : var(--bg-elevated);
-  --bg4 : var(--bg-raised);
-  --bg5 : #B0B6C2;
-  --bg6 : #98A0AE;
+  --bg: var(--bg-base);
+  --bg1: #eef0f4;
+  --bg2: var(--bg-surface);
+  --bg3: var(--bg-elevated);
+  --bg4: var(--bg-raised);
+  --bg5: #b0b6c2;
+  --bg6: #98a0ae;
 
   /* Texte light — hiérarchie inverse, chroma neutre (pas l'ochre dark) */
-  --text-primary   : #0F1117;
-  --text-secondary : #232939;                 /* AAA SC 1.4.6 — 13.6:1 base, 9.4:1 sur --bg-raised */
-  --text-muted     : #373C4C;                 /* AAA SC 1.4.6 — 10.3:1 base, 7.1:1 sur --bg-raised */
-  --t   : var(--text-primary);
-  --t2  : var(--text-secondary);
-  --t3  : var(--text-muted);
-  --t4  : #95A0B4;
+  --text-primary: #0f1117;
+  --text-secondary: #232939; /* AAA SC 1.4.6 — 13.6:1 base, 9.4:1 sur --bg-raised */
+  --text-muted: #373c4c; /* AAA SC 1.4.6 — 10.3:1 base, 7.1:1 sur --bg-raised */
+  --t: var(--text-primary);
+  --t2: var(--text-secondary);
+  --t3: var(--text-muted);
+  --t4: #95a0b4;
 
   /* Accent Electric Indigo : --accent reste constant sur dark et light.
      Seul --accent-subtle est ajusté pour la lisibilité sur fond clair. */
-  --accent-subtle : rgba(139, 107, 255, 0.14);
+  --accent-subtle: rgba(139, 107, 255, 0.14);
 
   /* Bordures light — alpha noir au lieu d'alpha blanc */
-  --border-subtle  : rgba(0, 0, 0, 0.06);
-  --border-default : rgba(0, 0, 0, 0.12);
+  --border-subtle: rgba(0, 0, 0, 0.06);
+  --border-default: rgba(0, 0, 0, 0.12);
 
   /* Voiles & teintes light */
-  --scrim-2 : rgba(0, 0, 0, 0.22);
-  --scrim-3 : rgba(0, 0, 0, 0.35);
-  --tint-1  : rgba(0, 0, 0, 0.04);
-  --tint-2  : rgba(0, 0, 0, 0.08);
+  --scrim-2: rgba(0, 0, 0, 0.22);
+  --scrim-3: rgba(0, 0, 0, 0.35);
+  --tint-1: rgba(0, 0, 0, 0.04);
+  --tint-2: rgba(0, 0, 0, 0.08);
 
   /* Focus light — même logique subtile, micro-lueur accent */
-  --focus-ring-contrast : rgba(var(--g-rgb), 0.10);
+  --focus-ring-contrast: rgba(var(--g-rgb), 0.1);
 
   /* Hover surfaces — inversées pour le mode clair (alpha noir) */
-  --row-hover  : rgba(0, 0, 0, 0.06);
-  --row-active : rgba(0, 0, 0, 0.10);
+  --row-hover: rgba(0, 0, 0, 0.06);
+  --row-active: rgba(0, 0, 0, 0.1);
 
   /* Séparateur light — alpha noir, visible sur fond clair (vs rgba(blanc,.04) dark) */
-  --sep: rgba(0, 0, 0, 0.10);
+  --sep: rgba(0, 0, 0, 0.1);
 }
-
 
 /* ============================================================================
  * 13. OPERATIONAL & LEGACY-ALIAS TOKENS (relocated from style.css — single source)
@@ -347,8 +341,8 @@ html[data-mode="light"] {
   /* Typographie — taille hero (display est défini en §3 : clamp(28px,4vw,48px)) */
 
   /* Graisses */
-  --fw-medium:   500;
-  --fw-bold:     700;
+  --fw-medium: 500;
+  --fw-bold: 700;
 
   /* Élévations — migrées vers design-system.css (B1) */
   --glow-accent: 0 0 0 3px var(--accent-subtle);
@@ -362,42 +356,42 @@ html[data-mode="light"] {
   --blur-xl: 48px;
 
   /* Voiles & teintes (cible des rgba(0/255…) littéraux) */
-  --scrim-2: rgba(0,0,0,.30);
-  --scrim-3: rgba(0,0,0,.45);
-  --tint-1:  rgba(255,255,255,.06);
-  --tint-2:  rgba(255,255,255,.10);
+  --scrim-2: rgba(0, 0, 0, 0.3);
+  --scrim-3: rgba(0, 0, 0, 0.45);
+  --tint-1: rgba(255, 255, 255, 0.06);
+  --tint-2: rgba(255, 255, 255, 0.1);
 
   /* États — sémantique partagée (toasts, trends, stop/delete) */
-  --red:     #e84040;
-  --red-rgb: 232,64,64;
-  --green:   #1db954;    /* success / up trend */
-  --amber:     #f59e0b;
+  --red: #e84040;
+  --red-rgb: 232, 64, 64;
+  --green: #1db954; /* success / up trend */
+  --amber: #f59e0b;
   --amber-rgb: 245, 158, 11;
 
   /* Couleurs absolues — pour les rares cas où une couleur exacte est requise */
-  --c-white: #ffffff;    /* blanc pur — cercle dot, eq-preset, select-input */
-  --c-black: #000000;    /* noir pur — cinema bg, spl-mode active text */
-  --c-1a:    #1a1a1a;    /* quasi-noir — cinema art-em fallback */
-  --c-genre-fb-1: #1e1e1e;  /* fallback gradient carte genre sans --gc (audit 2026-07-27) */
-  --c-genre-fb-2: #2a2a2a;  /* fallback gradient carte genre — palier haut */
+  --c-white: #ffffff; /* blanc pur — cercle dot, eq-preset, select-input */
+  --c-black: #000000; /* noir pur — cinema bg, spl-mode active text */
+  --c-1a: #1a1a1a; /* quasi-noir — cinema art-em fallback */
+  --c-genre-fb-1: #1e1e1e; /* fallback gradient carte genre sans --gc (audit 2026-07-27) */
+  --c-genre-fb-2: #2a2a2a; /* fallback gradient carte genre — palier haut */
   --c-spectrum-bg: #0a0a12; /* fond cinéma « Spectre » — noir teinté bleu volontaire */
-  --c-f0:    #f0f0f0;    /* gris clair light-mode — pl-sort-sel bg */
-  --c-e4:    #e4e4e4;    /* gris clair light-mode hover — pl-sort-sel:hover */
-  --c-cc:    #cccccc;    /* gris moyen light-mode border — pl-sort-sel border */
+  --c-f0: #f0f0f0; /* gris clair light-mode — pl-sort-sel bg */
+  --c-e4: #e4e4e4; /* gris clair light-mode hover — pl-sort-sel:hover */
+  --c-cc: #cccccc; /* gris moyen light-mode border — pl-sort-sel border */
 
   /* EQ — couleurs spectrales par bande (fixes, hors palette thème) */
-  --eq-warm:       #f48a3d;   /* bande grave chaude (band 2) */
-  --eq-cool:       #5baeff;   /* bande aiguë froide (band 10) */
-  --eq-cut:        #ff7a45;   /* valeur en coupe active */
+  --eq-warm: #f48a3d; /* bande grave chaude (band 2) */
+  --eq-cool: #5baeff; /* bande aiguë froide (band 10) */
+  --eq-cut: #ff7a45; /* valeur en coupe active */
 
   /* États sémantiques contextuels */
-  --like-active:   #e0304a;   /* cœur like actif dans le mini-player */
+  --like-active: #e0304a; /* cœur like actif dans le mini-player */
 
   /* Layout — --sb et --pb aliasent les tokens canoniques §5 */
   --tb: 38px;
-  --sb: var(--sidebar-width);  /* 260px — alias de §5 --sidebar-width */
-  --sb-sm: 54px;               /* sidebar compacte icônes-only (< 720px) */
-  --pb: var(--player-height);  /* 96px — alias de §5 --player-height */
+  --sb: var(--sidebar-width); /* 260px — alias de §5 --sidebar-width */
+  --sb-sm: 54px; /* sidebar compacte icônes-only (< 720px) */
+  --pb: var(--player-height); /* 96px — alias de §5 --player-height */
 
   /* ════════════════════════════════════════════════════════════════════════
      ALIAS LEGACY — à supprimer en v2
@@ -418,229 +412,233 @@ html[data-mode="light"] {
   /* Spacing — recâblé sur l'échelle canonique --space-* (harmonisation, audit §2.1).
      25 paliers → 8. nano/micro/1q restent littéraux : hairlines/bordures
      sous-grille intentionnelles (les snapper à 4px casserait les séparateurs 1px). */
-  --sp-nano:  1px;            /* hairline — gardé littéral */
-  --sp-micro: 2px;            /* hairline — gardé littéral */
-  --sp-1q: 3px;               /* sous-grille — gardé littéral */
-  --sp-1:  var(--space-1);    /* 4 */
-  --sp-1p: var(--space-1);    /* 5  → 4 */
-  --sp-1h: var(--space-2);    /* 6  → 8 */
-  --sp-1d: var(--space-2);    /* 7  → 8 */
-  --sp-2:  var(--space-2);    /* 8 */
-  --sp-2q: var(--space-2);    /* 9  → 8 */
-  --sp-2h: var(--space-3);    /* 10 → 12 */
-  --sp-3:  var(--space-3);    /* 12 */
-  --sp-3h: var(--space-4);    /* 14 → 16 */
-  --sp-4:  var(--space-4);    /* 16 */
-  --sp-5:  var(--space-5);    /* 20 */
-  --sp-6:  var(--space-5);    /* 24 → 20 */
-  --sp-7:  var(--space-6);    /* 28 → 24 */
-  --sp-4h: var(--space-4);    /* 18 → 16 */
-  --sp-5h: var(--space-5);    /* 22 → 20 */
-  --sp-7h: var(--space-6);    /* 30 → 24 */
-  --sp-8:  var(--space-6);    /* 32 → 24 */
-  --sp-10: var(--space-7);    /* 40 → 48 */
-  --sp-12: var(--space-7);    /* 48 */
-  --sp-15: var(--space-7);    /* 60 → 48 */
+  --sp-nano: 1px; /* hairline — gardé littéral */
+  --sp-micro: 2px; /* hairline — gardé littéral */
+  --sp-1q: 3px; /* sous-grille — gardé littéral */
+  --sp-1: var(--space-1); /* 4 */
+  --sp-1p: var(--space-1); /* 5  → 4 */
+  --sp-1h: var(--space-2); /* 6  → 8 */
+  --sp-1d: var(--space-2); /* 7  → 8 */
+  --sp-2: var(--space-2); /* 8 */
+  --sp-2q: var(--space-2); /* 9  → 8 */
+  --sp-2h: var(--space-3); /* 10 → 12 */
+  --sp-3: var(--space-3); /* 12 */
+  --sp-3h: var(--space-4); /* 14 → 16 */
+  --sp-4: var(--space-4); /* 16 */
+  --sp-5: var(--space-5); /* 20 */
+  --sp-6: var(--space-5); /* 24 → 20 */
+  --sp-7: var(--space-6); /* 28 → 24 */
+  --sp-4h: var(--space-4); /* 18 → 16 */
+  --sp-5h: var(--space-5); /* 22 → 20 */
+  --sp-7h: var(--space-6); /* 30 → 24 */
+  --sp-8: var(--space-6); /* 32 → 24 */
+  --sp-10: var(--space-7); /* 40 → 48 */
+  --sp-12: var(--space-7); /* 48 */
+  --sp-15: var(--space-7); /* 60 → 48 */
 
   /* Échelle de breakpoints canonique — 3 seuils intentionnels (voir le plan). */
 
   /* Icônes — sous-échelle SVG resserrée (harmonisation, audit §2.7 / FND-09).
      Ancres icône : xs 12 / xl 16 / 3xl 20 / 4xl 24 / 32. Les tokens servant de
      dimension de conteneur (dot, 22/26/28/30/36/40/44, icon-4) restent littéraux. */
-  --icon-2xs:  var(--icon-xs);   /* 10 → 12 */
-  --icon-xs:   12px;             /* ancre */
-  --icon-sm:   var(--icon-xs);   /* 13 → 12 */
-  --icon-md:   var(--icon-xl);   /* 14 → 16 */
-  --icon-lg:   var(--icon-xl);   /* 15 → 16 */
-  --icon-xl:   16px;             /* ancre */
-  --icon-2xl:  var(--icon-xl);   /* 18 → 16 */
-  --icon-3xl:  20px;             /* ancre */
-  --icon-4xl:  24px;             /* ancre */
-  --icon-11:   var(--icon-xs);   /* 11 → 12 */
-  --icon-22:   22px;   /* conteneur — gardé littéral */
-  --icon-26:   26px;   /* conteneur — gardé littéral */
-  --icon-32:   32px;   /* ancre display */
-  --icon-28:   28px;   /* conteneur bouton — gardé littéral */
-  --icon-36:   36px;   /* conteneur — gardé littéral */
-  --icon-40:   40px;   /* conteneur — gardé littéral */
-  --icon-44:   44px;   /* conteneur — gardé littéral */
-  --icon-4:     4px;   /* dot xs — gardé littéral */
-  --ctrl-30:   30px;   /* conteneur — gardé littéral */
+  --icon-2xs: var(--icon-xs); /* 10 → 12 */
+  --icon-xs: 12px; /* ancre */
+  --icon-sm: var(--icon-xs); /* 13 → 12 */
+  --icon-md: var(--icon-xl); /* 14 → 16 */
+  --icon-lg: var(--icon-xl); /* 15 → 16 */
+  --icon-xl: 16px; /* ancre */
+  --icon-2xl: var(--icon-xl); /* 18 → 16 */
+  --icon-3xl: 20px; /* ancre */
+  --icon-4xl: 24px; /* ancre */
+  --icon-11: var(--icon-xs); /* 11 → 12 */
+  --icon-22: 22px; /* conteneur — gardé littéral */
+  --icon-26: 26px; /* conteneur — gardé littéral */
+  --icon-32: 32px; /* ancre display */
+  --icon-28: 28px; /* conteneur bouton — gardé littéral */
+  --icon-36: 36px; /* conteneur — gardé littéral */
+  --icon-40: 40px; /* conteneur — gardé littéral */
+  --icon-44: 44px; /* conteneur — gardé littéral */
+  --icon-4: 4px; /* dot xs — gardé littéral */
+  --ctrl-30: 30px; /* conteneur — gardé littéral */
 
   /* Artwork display sizes */
-  --art-cinema:    42px;   /* miniature cinéma inline */
-  --art-empty:     48px;   /* icône état vide */
-  --art-settings:  54px;   /* artwork panneau settings */
-  --art-player:    60px;   /* pochette player bar */
-  --art-avatar:    58px;   /* avatar profil circulaire */
-  --art-ring:      60px;   /* anneau spinner chargement */
-  --art-card:      64px;   /* artwork playlist / album card */
-  --art-hero-sm:   88px;   /* hero cover — responsive sm */
-  --art-cover:    100px;   /* cover placeholder modal */
-  --art-hero:     148px;   /* hero cover — taille pleine */
-  --art-drill:    120px;   /* artwork drill header album/artiste (audit 2026-07-27) */
-  --art-np:       320px;   /* artwork vue Now Playing (audit 2026-07-27) */
-  --art-list:      56px;   /* colonne artwork dans rangée track (grid) */
-  --tr-h:          56px;   /* hauteur d'une ligne piste (défaut = Comfortable) — pilotée par data-tlist-zoom */
-  --tart-size:     40px;   /* taille pochette .tart (défaut = Comfortable) — pilotée par data-tlist-zoom */
+  --art-cinema: 42px; /* miniature cinéma inline */
+  --art-empty: 48px; /* icône état vide */
+  --art-settings: 54px; /* artwork panneau settings */
+  --art-player: 60px; /* pochette player bar */
+  --art-avatar: 58px; /* avatar profil circulaire */
+  --art-ring: 60px; /* anneau spinner chargement */
+  --art-card: 64px; /* artwork playlist / album card */
+  --art-hero-sm: 88px; /* hero cover — responsive sm */
+  --art-cover: 100px; /* cover placeholder modal */
+  --art-hero: 148px; /* hero cover — taille pleine */
+  --art-drill: 120px; /* artwork drill header album/artiste (audit 2026-07-27) */
+  --art-np: 320px; /* artwork vue Now Playing (audit 2026-07-27) */
+  --art-list: 56px; /* colonne artwork dans rangée track (grid) */
+  --tr-h: 56px; /* hauteur d'une ligne piste (défaut = Comfortable) — pilotée par data-tlist-zoom */
+  --tart-size: 40px; /* taille pochette .tart (défaut = Comfortable) — pilotée par data-tlist-zoom */
   /* rem (pas em) : .tr et #tlist-col-hdr n'ont pas la même taille de police —
      un em résoudrait à une largeur différente dans chacun et désalignerait
      la colonne album entre l'en-tête et les lignes. */
-  --tr-album-col:  12rem;   /* largeur de la colonne album dans la grille .tr */
+  --tr-album-col: 12rem; /* largeur de la colonne album dans la grille .tr */
 
   /* Éléments structurels — tracks & sliders */
-  --track-h-xs: 2px;   /* indicateurs fins, tab active line */
-  --track-h:    3px;   /* piste standard slider / progress */
-  --track-h-md: 4px;   /* piste large — cf-slider, scan-bar, rg-bar */
-  --track-h-lg: 6px;   /* piste expansée — pbar:hover, genre-bar */
-  --slider-w:  72px;   /* largeur volume slider */
-  --lang-w:    24px;   /* largeur indicateur langue (non-carré) */
+  --track-h-xs: 2px; /* indicateurs fins, tab active line */
+  --track-h: 3px; /* piste standard slider / progress */
+  --track-h-md: 4px; /* piste large — cf-slider, scan-bar, rg-bar */
+  --track-h-lg: 6px; /* piste expansée — pbar:hover, genre-bar */
+  --slider-w: 72px; /* largeur volume slider */
+  --lang-w: 24px; /* largeur indicateur langue (non-carré) */
 
   /* Skeleton loaders */
-  --skel-title-h: 13px;   /* hauteur titre skeleton */
-  --skel-sub-h:   11px;   /* hauteur sous-titre skeleton */
+  --skel-title-h: 13px; /* hauteur titre skeleton */
+  --skel-sub-h: 11px; /* hauteur sous-titre skeleton */
 
   /* Dimensions structurels — composants */
-  --sep-h:              1px;    /* séparateurs horizontaux fins (.ns, .ctx-sep) */
-  --vh-min-h:          52px;    /* min-height en-têtes de vue (.vh) */
-  --folder-row-h:      34px;    /* hauteur rangée dossier playlist (.pl-folder-h) */
-  --eq-slider-min-h:   92px;    /* min-height zone slider EQ — aligné grille 4px (UIH-eq-01) */
-  --viz-canvas-h:     160px;    /* hauteur canvas visualiseur cinéma */
-  --cinema-pbar-hover-h: 7px;   /* pbar élargie au hover — cinéma */
-  --cinema-vol-hover-h:  5px;   /* vol slider élargi au hover — cinéma */
-  --orphan-list-max-h: 260px;   /* cap liste orphelins modale (scroll) */
-  --spl-results-max-h: 120px;   /* cap liste résultats smart playlist (scroll) — R-L5 */
-  --spl-preview-max-h: 100px;   /* cap liste preview smart playlist (scroll) — R-L5 */
-  --eq-spacer-min:      12px;   /* respiration min espace-courbe EQ — aligné grille 4px (UIH-eq-01) */
-  --eq-spacer-max:      52px;   /* plafond espace-courbe EQ */
-  --eq-bands-max-h:    280px;   /* cap panneau bandes EQ */
-  --scrollbar-w:         5px;   /* épaisseur scrollbar Webkit */
+  --sep-h: 1px; /* séparateurs horizontaux fins (.ns, .ctx-sep) */
+  --vh-min-h: 52px; /* min-height en-têtes de vue (.vh) */
+  --folder-row-h: 34px; /* hauteur rangée dossier playlist (.pl-folder-h) */
+  --eq-slider-min-h: 92px; /* min-height zone slider EQ — aligné grille 4px (UIH-eq-01) */
+  --viz-canvas-h: 160px; /* hauteur canvas visualiseur cinéma */
+  --cinema-pbar-hover-h: 7px; /* pbar élargie au hover — cinéma */
+  --cinema-vol-hover-h: 5px; /* vol slider élargi au hover — cinéma */
+  --orphan-list-max-h: 260px; /* cap liste orphelins modale (scroll) */
+  --spl-results-max-h: 120px; /* cap liste résultats smart playlist (scroll) — R-L5 */
+  --spl-preview-max-h: 100px; /* cap liste preview smart playlist (scroll) — R-L5 */
+  --eq-spacer-min: 12px; /* respiration min espace-courbe EQ — aligné grille 4px (UIH-eq-01) */
+  --eq-spacer-max: 52px; /* plafond espace-courbe EQ */
+  --eq-bands-max-h: 280px; /* cap panneau bandes EQ */
+  --scrollbar-w: 5px; /* épaisseur scrollbar Webkit */
 
   /* Largeurs composants — tiroirs & modales. Dimensions structurelles,
      hors échelle d'espacement — exceptions assumées (UIH-settings-07). */
-  --set-sidebar-w:     200px;   /* barre latérale du panneau settings */
-  --set-content-w:     720px;   /* largeur max de la colonne contenu settings */
-  --shelf-w:           280px;   /* étagère mini-player / shelf flottant */
-  --modal-w:           340px;   /* modal standard (confirm, shortcuts) */
-  --modal-pl-w:        380px;   /* modal playlist */
-  --modal-bte-w:       360px;   /* modal batch tag editor */
-  --modal-dupe-w:      520px;   /* modal doublons */
-  --search-input-min:  120px;   /* min-width input recherche (responsive) */
-  --tb-btn-min:         34px;   /* min-width boutons toolbar / track-r */
-  --target-min:         24px;   /* WCAG 2.2 SC 2.5.8 — cible tactile minimale (boutons icône inline) */
-  --time-min-w:         32px;   /* min-width affichage temps (dur, pos) */
-  --tag-lbl-w:          46px;   /* largeur label tag-edit-lbl */
-  --dropdown-min-w:    150px;   /* min-width menus contextuels */
-  --ctx-pane-min:      190px;   /* min-width panneau ctx / tag dropdown */
-  --app-min-w:         520px;   /* min-width application */
-  --stats-bar-min:      60px;   /* min-width barre progression stats */
-  --vol-slider-sm:      60px;   /* width volume slider (responsive sm) */
+  --set-sidebar-w: 200px; /* barre latérale du panneau settings */
+  --set-content-w: 720px; /* largeur max de la colonne contenu settings */
+  --shelf-w: 280px; /* étagère mini-player / shelf flottant */
+  --modal-w: 340px; /* modal standard (confirm, shortcuts) */
+  --modal-pl-w: 380px; /* modal playlist */
+  --modal-bte-w: 360px; /* modal batch tag editor */
+  --modal-dupe-w: 520px; /* modal doublons */
+  --search-input-min: 120px; /* min-width input recherche (responsive) */
+  --tb-btn-min: 34px; /* min-width boutons toolbar / track-r */
+  --target-min: 24px; /* WCAG 2.2 SC 2.5.8 — cible tactile minimale (boutons icône inline) */
+  --time-min-w: 32px; /* min-width affichage temps (dur, pos) */
+  --tag-lbl-w: 46px; /* largeur label tag-edit-lbl */
+  --dropdown-min-w: 150px; /* min-width menus contextuels */
+  --ctx-pane-min: 190px; /* min-width panneau ctx / tag dropdown */
+  --app-min-w: 520px; /* min-width application */
+  --stats-bar-min: 60px; /* min-width barre progression stats */
+  --vol-slider-sm: 60px; /* width volume slider (responsive sm) */
 
   /* Contraintes de largeur — max-width layout */
-  --text-empty-max:    260px;   /* max-width texte état vide */
-  --text-desc-max:     320px;   /* max-width descriptions modales sm */
-  --text-sf-max:       380px;   /* max-width chemin fichier, overflow ellipsis */
-  --welcome-desc-max:  360px;   /* max-width sous-titre écran d'accueil (.wsub) */
+  --text-empty-max: 260px; /* max-width texte état vide */
+  --text-desc-max: 320px; /* max-width descriptions modales sm */
+  --text-sf-max: 380px; /* max-width chemin fichier, overflow ellipsis */
+  --welcome-desc-max: 360px; /* max-width sous-titre écran d'accueil (.wsub) */
   --welcome-content-max: 440px; /* max-width grille features écran d'accueil (.wfeats) */
-  --modal-pl-max:      480px;   /* max-width barre progression playlist */
-  --modal-orphan-max:  540px;   /* max-width modale orphelins étendue */
-  --cn-next-max:       270px;   /* max-width panneau cinema next */
-  --cn-next-min:       180px;   /* min-width panneau cinema next */
-  --cqp-max-h:         320px;   /* max-height panneau file d'attente cinéma (Task 9) */
-  --cqp-trigger-gap:    88px;   /* écart panneau file d'attente ↔ #cinema-next (Task 9) */
+  --modal-pl-max: 480px; /* max-width barre progression playlist */
+  --modal-orphan-max: 540px; /* max-width modale orphelins étendue */
+  --cn-next-max: 270px; /* max-width panneau cinema next */
+  --cn-next-min: 180px; /* min-width panneau cinema next */
+  --cqp-max-h: 320px; /* max-height panneau file d'attente cinéma (Task 9) */
+  --cqp-trigger-gap: 88px; /* écart panneau file d'attente ↔ #cinema-next (Task 9) */
 
   /* Dimensions d'alignement UI — labels & valeurs */
-  --cfg-val-min:        30px;   /* min-width valeur config slider */
-  --eq-note-min:        28px;   /* min-width label note EQ */
-  --kbd-min:            26px;   /* min-width touche clavier */
-  --stats-rank-min:     20px;   /* min-width numéro rang stats */
-  --stats-count-min:    40px;   /* min-width compteur lecture stats */
-  --genre-name-min:    110px;   /* min-width nom genre dans barre */
+  --cfg-val-min: 30px; /* min-width valeur config slider */
+  --eq-note-min: 28px; /* min-width label note EQ */
+  --kbd-min: 26px; /* min-width touche clavier */
+  --stats-rank-min: 20px; /* min-width numéro rang stats */
+  --stats-count-min: 40px; /* min-width compteur lecture stats */
+  --genre-name-min: 110px; /* min-width nom genre dans barre */
 
   /* Grilles layout — grid-template-columns */
-  --card-min-w-lg:     200px;   /* min-width carte large (playlist cards) */
-  --pl-art-col:         72px;   /* colonne artwork dans grille playlist modale */
-  --tr-r-w:            152px;   /* section droite rangée track (dur + like + ajout + ⋯) — élargie pour le bouton ⋯ (audit 2026-07-27) */
-  --cinema-vol-w:       80px;   /* curseur volume cinéma */
+  --card-min-w-lg: 200px; /* min-width carte large (playlist cards) */
+  --pl-art-col: 72px; /* colonne artwork dans grille playlist modale */
+  --tr-r-w: 152px; /* section droite rangée track (dur + like + ajout + ⋯) — élargie pour le bouton ⋯ (audit 2026-07-27) */
+  --cinema-vol-w: 80px; /* curseur volume cinéma */
   /* Task 8 : insets responsives (clamp) — s'adaptent au viewport au lieu de px fixes. */
-  --cinema-corner-top:  clamp(16px, 2vh, 32px);   /* inset top boutons coin cinéma */
-  --cinema-corner-x:    clamp(20px, 2.5vw, 48px); /* inset horizontal principal coin cinéma */
-  --cinema-clock-inset: clamp(40px, 5vh, 80px);   /* insets bas de #cinema-overlay -- horloge (side-l) ET piste suivante/file d'attente (side-r), harmonisés (Task 2 layout grid) */
+  --cinema-corner-top: clamp(16px, 2vh, 32px); /* inset top boutons coin cinéma */
+  --cinema-corner-x: clamp(20px, 2.5vw, 48px); /* inset horizontal principal coin cinéma */
+  --cinema-clock-inset: clamp(
+    40px,
+    5vh,
+    80px
+  ); /* insets bas de #cinema-overlay -- horloge (side-l) ET piste suivante/file d'attente (side-r), harmonisés (Task 2 layout grid) */
 
   /* Focus — accessibilité clavier */
-  --focus-ring:    2px solid var(--g);
-  --focus-offset:  2px;
+  --focus-ring: 2px solid var(--g);
+  --focus-offset: 2px;
   /* Micro-lueur subtile (style Spotify) — halo très transparent en couleur accent,
      visible seulement au clavier. Pas de double anneau opaque. */
   --focus-ring-contrast: rgba(var(--g-rgb), 0.12);
-  --border-w-sm:   1px;    /* épaisseur border fine — bordures standard (1px hairline) */
-  --border-w-md:   1.5px;  /* épaisseur border medium — inputs actifs, modal highlight */
-  --border-w-lg:   2px;    /* épaisseur border forte — tabs, drag-over, queue-act */
-  --border-w-xl:   3px;    /* épaisseur border xl — spinner, track-active left */
-  --border-w-2xl:  4px;    /* épaisseur border 2xl — tooltips flèche */
+  --border-w-sm: 1px; /* épaisseur border fine — bordures standard (1px hairline) */
+  --border-w-md: 1.5px; /* épaisseur border medium — inputs actifs, modal highlight */
+  --border-w-lg: 2px; /* épaisseur border forte — tabs, drag-over, queue-act */
+  --border-w-xl: 3px; /* épaisseur border xl — spinner, track-active left */
+  --border-w-2xl: 4px; /* épaisseur border 2xl — tooltips flèche */
 
   /* Flou — recâblé sur --blur-sm/md/lg/xl (harmonisation, audit §2.7). 19 → 4. */
-  --blur-1h:  var(--blur-sm);   /* 1.5 → 4 */
-  --blur-2:   var(--blur-sm);   /* 2   → 4 */
-  --blur-3:   var(--blur-sm);   /* 3   → 4 */
-  --blur-4:   var(--blur-sm);   /* 4 */
-  --blur-6:   var(--blur-md);   /* 6   → 8 */
-  --blur-8:   var(--blur-md);   /* 8 */
-  --blur-10:  var(--blur-md);   /* 10  → 8 */
-  --blur-12:  var(--blur-lg);   /* 12  → 16 */
-  --blur-14:  var(--blur-lg);   /* 14  → 16 */
-  --blur-16:  var(--blur-lg);   /* 16 */
-  --blur-18:  var(--blur-lg);   /* 18  → 16 */
-  --blur-20:  var(--blur-lg);   /* 20  → 16 */
-  --blur-24:  var(--blur-lg);   /* 24  → 16 */
-  --blur-26:  var(--blur-lg);   /* 26  → 16 */
-  --blur-28:  var(--blur-xl);   /* 28  → 48 */
-  --blur-48:  var(--blur-xl);   /* 48 */
-  --blur-60:  var(--blur-xl);   /* 60  → 48 */
-  --blur-64:  var(--blur-xl);   /* 64  → 48 */
+  --blur-1h: var(--blur-sm); /* 1.5 → 4 */
+  --blur-2: var(--blur-sm); /* 2   → 4 */
+  --blur-3: var(--blur-sm); /* 3   → 4 */
+  --blur-4: var(--blur-sm); /* 4 */
+  --blur-6: var(--blur-md); /* 6   → 8 */
+  --blur-8: var(--blur-md); /* 8 */
+  --blur-10: var(--blur-md); /* 10  → 8 */
+  --blur-12: var(--blur-lg); /* 12  → 16 */
+  --blur-14: var(--blur-lg); /* 14  → 16 */
+  --blur-16: var(--blur-lg); /* 16 */
+  --blur-18: var(--blur-lg); /* 18  → 16 */
+  --blur-20: var(--blur-lg); /* 20  → 16 */
+  --blur-24: var(--blur-lg); /* 24  → 16 */
+  --blur-26: var(--blur-lg); /* 26  → 16 */
+  --blur-28: var(--blur-xl); /* 28  → 48 */
+  --blur-48: var(--blur-xl); /* 48 */
+  --blur-60: var(--blur-xl); /* 60  → 48 */
+  --blur-64: var(--blur-xl); /* 64  → 48 */
 
   /* Line-height — recâblé (harmonisation, audit §2.3). 12 → 4 ancres.
      tight/snug/base/loose = ancres ; lh-1 et lh-px-14 restent littéraux. */
-  --lh-tight:   1.2;                /* ancre */
-  --lh-snug:    1.3;                /* ancre */
-  --lh-base:    1.5;                /* ancre */
-  --lh-loose:   1.75;               /* ancre */
-  --lh-1:       1;                  /* leading ras — gardé littéral */
-  --lh-compact: var(--lh-tight);    /* 1.1  → 1.2 */
-  --lh-relaxed: var(--lh-tight);    /* 1.15 → 1.2 */
-  --lh-comfort: var(--lh-base);     /* 1.4  → 1.5 */
-  --lh-airy:    var(--lh-base);     /* 1.6  → 1.5 */
-  --lh-spacious:var(--lh-loose);    /* 1.65 → 1.75 */
-  --lh-px-14:   14px;               /* hauteur fixe badges — gardé littéral */
+  --lh-tight: 1.2; /* ancre */
+  --lh-snug: 1.3; /* ancre */
+  --lh-base: 1.5; /* ancre */
+  --lh-loose: 1.75; /* ancre */
+  --lh-1: 1; /* leading ras — gardé littéral */
+  --lh-compact: var(--lh-tight); /* 1.1  → 1.2 */
+  --lh-relaxed: var(--lh-tight); /* 1.15 → 1.2 */
+  --lh-comfort: var(--lh-base); /* 1.4  → 1.5 */
+  --lh-airy: var(--lh-base); /* 1.6  → 1.5 */
+  --lh-spacious: var(--lh-loose); /* 1.65 → 1.75 */
+  --lh-px-14: 14px; /* hauteur fixe badges — gardé littéral */
   /* Letter-spacing — recâblé (harmonisation, audit §2.3). 22 → 4 ancres. */
-  --ls-display: -0.02em;            /* ancre — display serré */
-  --ls-tight:   -0.01em;            /* ancre — tracking serré */
-  --ls-reset:    0;                 /* ancre — normal */
-  --ls-label:    .06em;             /* ancre — caps / labels */
-  --ls-heading:      var(--ls-display);  /* -.03  → -.02 */
-  --ls-hero:         var(--ls-display);  /* -.025 → -.02 */
-  --ls-stat-val:     var(--ls-display);  /* -.04  → -.02 */
-  --ls-display-fine: var(--ls-tight);    /* -.005 → -.01 */
-  --ls-numeric:      var(--ls-tight);    /* -.008 → -.01 */
-  --ls-slight:  var(--ls-reset);    /* .01  → 0 */
-  --ls-micro:   var(--ls-reset);    /* .02  → 0 */
-  --ls-subtle:  var(--ls-reset);    /* .03  → 0 */
-  --ls-filter:  var(--ls-reset);    /* .4px → 0 */
-  --ls-wide:    var(--ls-label);    /* .04  → .06 */
-  --ls-xwide:   var(--ls-label);    /* .08  → .06 */
-  --ls-cinema:  var(--ls-label);    /* .10  → .06 */
-  --ls-caps:    var(--ls-label);    /* 1.2px → .06em */
-  --ls-caps-sm: var(--ls-label);    /* 1px   → .06em */
-  --ls-stat:    var(--ls-label);    /* 1.3px → .06em */
+  --ls-display: -0.02em; /* ancre — display serré */
+  --ls-tight: -0.01em; /* ancre — tracking serré */
+  --ls-reset: 0; /* ancre — normal */
+  --ls-label: 0.06em; /* ancre — caps / labels */
+  --ls-heading: var(--ls-display); /* -.03  → -.02 */
+  --ls-hero: var(--ls-display); /* -.025 → -.02 */
+  --ls-stat-val: var(--ls-display); /* -.04  → -.02 */
+  --ls-display-fine: var(--ls-tight); /* -.005 → -.01 */
+  --ls-numeric: var(--ls-tight); /* -.008 → -.01 */
+  --ls-slight: var(--ls-reset); /* .01  → 0 */
+  --ls-micro: var(--ls-reset); /* .02  → 0 */
+  --ls-subtle: var(--ls-reset); /* .03  → 0 */
+  --ls-filter: var(--ls-reset); /* .4px → 0 */
+  --ls-wide: var(--ls-label); /* .04  → .06 */
+  --ls-xwide: var(--ls-label); /* .08  → .06 */
+  --ls-cinema: var(--ls-label); /* .10  → .06 */
+  --ls-caps: var(--ls-label); /* 1.2px → .06em */
+  --ls-caps-sm: var(--ls-label); /* 1px   → .06em */
+  --ls-stat: var(--ls-label); /* 1.3px → .06em */
 
   /* Alias sémantiques accent — --gd/--gg restent les sources (mis à jour par settings.js) */
-  --accent-subtle:  var(--gd);   /* remplace var(--gd) dans les rules CSS */
-  --accent-mid:     var(--gg);   /* remplace var(--gg) dans les rules CSS */
-  --accent:         var(--g);                 /* couleur accent pleine — .fmt-chip.active, etc. */
-  --on-accent:      var(--text-on-accent);    /* texte/icônes sur fond accent */
+  --accent-subtle: var(--gd); /* remplace var(--gd) dans les rules CSS */
+  --accent-mid: var(--gg); /* remplace var(--gg) dans les rules CSS */
+  --accent: var(--g); /* couleur accent pleine — .fmt-chip.active, etc. */
+  --on-accent: var(--text-on-accent); /* texte/icônes sur fond accent */
 
   /* Boutons — base tokens partagés */
-  --btn-h:    30px;
+  --btn-h: 30px;
   --btn-h-lg: 40px;
 
   /* Bordures — --border-subtle/default/strong NE sont volontairement PAS
@@ -653,25 +651,25 @@ html[data-mode="light"] {
   /* Typography — recâblé sur --text-* (harmonisation, audit §2.3). 20 tailles fixes → 7.
      3xs/2xs restent littéraux (micro-badges, sous-échelle volontaire).
      disp-md/lg/xl/hero restent littéraux (grandes tailles display rares). */
-  --fs-3xs:      8px;                 /* micro-badge — gardé littéral */
-  --fs-2xs:      9px;                 /* micro-badge — gardé littéral */
-  --fs-xs:      var(--text-xs);       /* clamp 10-12 */
-  --fs-sm:      var(--text-xs);       /* clamp 10-12 */
-  --fs-caption: var(--text-sm);       /* clamp 12-14 */
-  --fs-md:      var(--text-base);     /* clamp 13-15 */
-  --fs-base:    var(--text-md);       /* clamp 15-18 */
-  --fs-subhead: var(--text-lg);       /* clamp 18-24 */
-  --fs-body:    var(--text-lg);       /* clamp 18-24 */
-  --fs-inter:   var(--text-lg);       /* clamp 18-24 */
-  --fs-lg:      var(--text-lg);       /* clamp 18-24 */
-  --fs-xl:      var(--text-xl);       /* clamp 22-32 */
-  --fs-lg2:     var(--text-xl);       /* clamp 22-32 */
-  --fs-disp:    var(--text-display);  /* clamp 28-48 */
-  --fs-disp-sm: var(--text-display);  /* clamp 28-48 */
-  --fs-disp-md: 48px;                 /* display rare — gardé littéral */
-  --fs-disp-lg: 52px;                 /* display rare — gardé littéral */
-  --fs-disp-xl: 72px;                 /* display rare — gardé littéral */
-  --fs-hero:    80px;                 /* display rare — gardé littéral */
+  --fs-3xs: 8px; /* micro-badge — gardé littéral */
+  --fs-2xs: 9px; /* micro-badge — gardé littéral */
+  --fs-xs: var(--text-xs); /* clamp 10-12 */
+  --fs-sm: var(--text-xs); /* clamp 10-12 */
+  --fs-caption: var(--text-sm); /* clamp 12-14 */
+  --fs-md: var(--text-base); /* clamp 13-15 */
+  --fs-base: var(--text-md); /* clamp 15-18 */
+  --fs-subhead: var(--text-lg); /* clamp 18-24 */
+  --fs-body: var(--text-lg); /* clamp 18-24 */
+  --fs-inter: var(--text-lg); /* clamp 18-24 */
+  --fs-lg: var(--text-lg); /* clamp 18-24 */
+  --fs-xl: var(--text-xl); /* clamp 22-32 */
+  --fs-lg2: var(--text-xl); /* clamp 22-32 */
+  --fs-disp: var(--text-display); /* clamp 28-48 */
+  --fs-disp-sm: var(--text-display); /* clamp 28-48 */
+  --fs-disp-md: 48px; /* display rare — gardé littéral */
+  --fs-disp-lg: 52px; /* display rare — gardé littéral */
+  --fs-disp-xl: 72px; /* display rare — gardé littéral */
+  --fs-hero: 80px; /* display rare — gardé littéral */
 
   /* ── Échelle typographique fluide (responsive niveau Spotify) ──────────
      clamp(min, préférence-fluide, max). L'unité cqi = 1% de la largeur du
@@ -679,75 +677,75 @@ html[data-mode="light"] {
      pas avec la fenêtre. Adoptée progressivement, remplace les --fs-* fixes.
      ATTENTION : cqi résout à 0 si l'élément n'est pas enfant d'un named container — toujours consommer dans un container context. */
   --fs-f-caption: clamp(0.69rem, 0.66rem + 0.15cqi, 0.78rem);
-  --fs-f-body:    clamp(0.81rem, 0.77rem + 0.25cqi, 0.94rem);
-  --fs-f-subhead: clamp(0.94rem, 0.88rem + 0.4cqi,  1.13rem);
+  --fs-f-body: clamp(0.81rem, 0.77rem + 0.25cqi, 0.94rem);
+  --fs-f-subhead: clamp(0.94rem, 0.88rem + 0.4cqi, 1.13rem);
 
   /* Typographie responsive — clamp() fluid (px min, vw fluid, px max) */
-  --fs-vw-view:      clamp(26px, 3.5vw, 40px);  /* titre de vue/section responsive */
-  --fs-vw-hero:      clamp(18px, 2.6vw, 32px);  /* playlist hero responsive */
+  --fs-vw-view: clamp(26px, 3.5vw, 40px); /* titre de vue/section responsive */
+  --fs-vw-hero: clamp(18px, 2.6vw, 32px); /* playlist hero responsive */
   /* --fs-vw-hero-sm retiré (R-H1) — son seul consommateur, le @media 520px mort, a été supprimé */
-  --fs-vw-clock:     clamp(44px, 7.5vw, 90px);  /* cinéma horloge idle responsive */
-  --fs-vw-date:      clamp(11px, 1.4vw, 15px);  /* cinéma date idle responsive */
-  --fs-vw-cin-title: clamp(16px, 3.2vw, 34px);  /* cinéma titre piste responsive */
-  --fs-vw-cin-art:   clamp(11px, 1.8vw, 17px);  /* cinéma artiste responsive */
-  --fs-vw-cin-alb:   clamp(9px, 1.3vw, 13px);   /* cinéma album responsive */
+  --fs-vw-clock: clamp(44px, 7.5vw, 90px); /* cinéma horloge idle responsive */
+  --fs-vw-date: clamp(11px, 1.4vw, 15px); /* cinéma date idle responsive */
+  --fs-vw-cin-title: clamp(16px, 3.2vw, 34px); /* cinéma titre piste responsive */
+  --fs-vw-cin-art: clamp(11px, 1.8vw, 17px); /* cinéma artiste responsive */
+  --fs-vw-cin-alb: clamp(9px, 1.3vw, 13px); /* cinéma album responsive */
 
   /* @deprecated Utiliser --radius-xs / --radius-sm / --radius-md / --radius-lg / --radius-pill directement (§6) */
   /* Rayons — recâblés sur l'échelle canonique --radius-* (harmonisation, audit §2.2).
      17 rayons → 5. --r-micro reste littéral (hairline 1px). */
-  --r-micro:  1px;                 /* hairline — gardé littéral */
-  --r-xs:     var(--radius-xs);    /* 2  → 4 */
-  --r-sm:     var(--radius-xs);    /* 3  → 4 */
-  --r-md:     var(--radius-xs);    /* 4 */
-  --r-lg:     var(--radius-sm);    /* 5  → 8 */
-  --r:        var(--radius-sm);    /* 6  → 8  (rayon standard) */
-  --r-badge:  var(--radius-sm);    /* 7  → 8 */
-  --r-art:    var(--radius-sm);    /* 8 */
-  --r-9:      var(--radius-sm);    /* 9  → 8 */
-  --r2:       var(--radius-md);    /* 10 → 12 */
-  --r-card:   var(--radius-lg);    /* 12 → 16 — grands panneaux/cartes (album, stats, toasts) */
-  --r3:       var(--radius-md);    /* 14 → 12 */
-  --r-4xl:    var(--radius-lg);    /* 16 */
-  --r-pill:   var(--radius-pill);  /* 20 → pilule pleine */
-  --r-32:     var(--radius-lg);    /* 32 → 16 */
-  --r-full:   var(--radius-pill);  /* 60 → pilule pleine */
+  --r-micro: 1px; /* hairline — gardé littéral */
+  --r-xs: var(--radius-xs); /* 2  → 4 */
+  --r-sm: var(--radius-xs); /* 3  → 4 */
+  --r-md: var(--radius-xs); /* 4 */
+  --r-lg: var(--radius-sm); /* 5  → 8 */
+  --r: var(--radius-sm); /* 6  → 8  (rayon standard) */
+  --r-badge: var(--radius-sm); /* 7  → 8 */
+  --r-art: var(--radius-sm); /* 8 */
+  --r-9: var(--radius-sm); /* 9  → 8 */
+  --r2: var(--radius-md); /* 10 → 12 */
+  --r-card: var(--radius-lg); /* 12 → 16 — grands panneaux/cartes (album, stats, toasts) */
+  --r3: var(--radius-md); /* 14 → 12 */
+  --r-4xl: var(--radius-lg); /* 16 */
+  --r-pill: var(--radius-pill); /* 20 → pilule pleine */
+  --r-32: var(--radius-lg); /* 32 → 16 */
+  --r-full: var(--radius-pill); /* 60 → pilule pleine */
 
   /* @deprecated Utiliser --motion-fast (120ms) / --motion-base (200ms) / --motion-slow (320ms) directement (§2bis) */
   /* Transitions — recâblées sur --motion-* (harmonisation, audit §2.5). 19 durées → 3.
      Les durées de boucle infinie (--anim-*) et les durées fonctionnelles
      (reveal, art-color, flash) restent littérales. */
-  --dur:           var(--motion-fast);   /* 140 → 120 */
-  --dur-fast:      var(--motion-fast);   /* 80  → 120 */
-  --dur-interact:  var(--motion-fast);   /* 160 → 120 */
-  --dur-mid:       var(--motion-base);   /* 220 → 200 */
-  --dur-slow:      var(--motion-slow);   /* 400 → 320 */
-  --dur-micro:     var(--motion-fast);   /* 120 */
-  --dur-menu:      var(--motion-fast);   /* 130 → 120 */
-  --dur-tooltip:   var(--motion-fast);   /* 150 → 120 */
-  --dur-card:      var(--motion-base);   /* 200 */
-  --dur-cinema:    var(--motion-slow);   /* 420 → 320 */
-  --dur-overlay:   var(--motion-slow);   /* 350 → 320 */
-  --dur-reveal:    700ms;                /* reveal long délibéré — gardé littéral */
-  --dur-nav:       var(--motion-base);   /* 240 → 200 */
-  --dur-exit:      var(--motion-base);   /* 180 → 200 */
-  --dur-art-color: 900ms;                /* fondu couleur pochette — gardé littéral */
-  --dur-flash:      60ms;                /* anti-flash fonctionnel — gardé littéral */
-  --dur-modal:     var(--motion-slow);   /* 260 → 320 */
-  --dur-card-in:   var(--motion-slow);   /* 280 → 320 */
-  --dur-enter:     var(--motion-slow);   /* 300 → 320 */
-  --anim-glow:     2.6s;    /* playGlow infinite glow */
+  --dur: var(--motion-fast); /* 140 → 120 */
+  --dur-fast: var(--motion-fast); /* 80  → 120 */
+  --dur-interact: var(--motion-fast); /* 160 → 120 */
+  --dur-mid: var(--motion-base); /* 220 → 200 */
+  --dur-slow: var(--motion-slow); /* 400 → 320 */
+  --dur-micro: var(--motion-fast); /* 120 */
+  --dur-menu: var(--motion-fast); /* 130 → 120 */
+  --dur-tooltip: var(--motion-fast); /* 150 → 120 */
+  --dur-card: var(--motion-base); /* 200 */
+  --dur-cinema: var(--motion-slow); /* 420 → 320 */
+  --dur-overlay: var(--motion-slow); /* 350 → 320 */
+  --dur-reveal: 700ms; /* reveal long délibéré — gardé littéral */
+  --dur-nav: var(--motion-base); /* 240 → 200 */
+  --dur-exit: var(--motion-base); /* 180 → 200 */
+  --dur-art-color: 900ms; /* fondu couleur pochette — gardé littéral */
+  --dur-flash: 60ms; /* anti-flash fonctionnel — gardé littéral */
+  --dur-modal: var(--motion-slow); /* 260 → 320 */
+  --dur-card-in: var(--motion-slow); /* 280 → 320 */
+  --dur-enter: var(--motion-slow); /* 300 → 320 */
+  --anim-glow: 2.6s; /* playGlow infinite glow */
 
   /* Durées animations longues (infini) — gardées littérales */
-  --anim-shim:     1.8s;    /* skeleton shimmer / drago border / radio-cbtn — boucles lentes */
-  --anim-art:      0.8s;    /* art-color background transition */
-  --ease:       var(--dur) ease;
+  --anim-shim: 1.8s; /* skeleton shimmer / drago border / radio-cbtn — boucles lentes */
+  --anim-art: 0.8s; /* art-color background transition */
+  --ease: var(--dur) ease;
   /* Easings — recâblés sur --ease-standard / --ease-spring (6 → 2) */
-  --spring:      var(--ease-spring);
+  --spring: var(--ease-spring);
   --spring-soft: var(--ease-spring);
-  --snappy:      var(--ease-standard);
-  --smooth:      var(--ease-standard);
-  --decelerate:  var(--ease-standard);
-  --accelerate:  var(--ease-standard);
+  --snappy: var(--ease-standard);
+  --smooth: var(--ease-standard);
+  --decelerate: var(--ease-standard);
+  --accelerate: var(--ease-standard);
 
   --font: 'DM Sans', -apple-system, 'Segoe UI', sans-serif;
   /* --font-display retiré : doublon de §3 (la valeur §3 fait foi — plus de fallbacks) */
@@ -760,114 +758,125 @@ html[data-mode="light"] {
   /* Ombres réelles des surfaces flottantes (audit 2026-07-27 : les alias
      --elev-* transparents neutralisaient toutes les ombres de modales).
      Les surfaces en flux restent plates via --elev-* (doctrine Spotify). */
-  --shadow-sm:  0 1px 3px rgba(0, 0, 0, .25);
-  --shadow-md:  0 4px 12px rgba(0, 0, 0, .30);
-  --shadow-lg:  0 8px 24px rgba(0, 0, 0, .35);
-  --shadow-xl:  0 16px 48px rgba(0, 0, 0, .45);
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.25);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.3);
+  --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.35);
+  --shadow-xl: 0 16px 48px rgba(0, 0, 0, 0.45);
 
   /* Ombres composants — drop-shadows recâblées sur --elev-* (audit §2.4 / FND-04).
      Les variantes thème clair (-lt / -pl) restent littérales (re-définies par mode
-     au re-skin couleur), ainsi que les composites et glows spécifiques. */  --shadow-pop:    var(--shadow-md);  --shadow-modal2: var(--shadow-lg);
-  --shadow-modal3: var(--shadow-xl);  --shadow-cin-art:none;
-  --shadow-thumb:  var(--elev-1);               /* pbar thumb shadow */
+     au re-skin couleur), ainsi que les composites et glows spécifiques. */
+  --shadow-pop: var(--shadow-md);
+  --shadow-modal2: var(--shadow-lg);
+  --shadow-modal3: var(--shadow-xl);
+  --shadow-cin-art: none;
+  --shadow-thumb: var(--elev-1); /* pbar thumb shadow */
 
   /* Ombres accent — glows simples recâblés sur --glow-accent ; les anneaux
      multi-état (hover/light) et composites restent littéraux. */
-  --shadow-pcplay:    var(--glow-accent);       /* pcplay ring */
-  --shadow-pcplay-hv: 0 0 0 5px rgba(var(--g-rgb),.16);
-  --shadow-pcplay-lt: 0 0 0 5px rgba(var(--g-rgb),.18);
-  --shadow-acc-glow:  var(--glow-accent);       /* accent glow doux */
-  --shadow-wbtn-hv:   var(--glow-accent);       /* wbtn hover */
-  --shadow-pbar-thumb: 0 0 0 3px rgba(var(--g-rgb),.35);
-  --shadow-pl-icon:   var(--glow-accent);       /* pl-icon playing */
-  --shadow-dot-glow:  var(--glow-accent);       /* dot glow */
-  --shadow-pbar-glow: var(--glow-accent);       /* pbar fill glow */
+  --shadow-pcplay: var(--glow-accent); /* pcplay ring */
+  --shadow-pcplay-hv: 0 0 0 5px rgba(var(--g-rgb), 0.16);
+  --shadow-pcplay-lt: 0 0 0 5px rgba(var(--g-rgb), 0.18);
+  --shadow-acc-glow: var(--glow-accent); /* accent glow doux */
+  --shadow-wbtn-hv: var(--glow-accent); /* wbtn hover */
+  --shadow-pbar-thumb: 0 0 0 3px rgba(var(--g-rgb), 0.35);
+  --shadow-pl-icon: var(--glow-accent); /* pl-icon playing */
+  --shadow-dot-glow: var(--glow-accent); /* dot glow */
+  --shadow-pbar-glow: var(--glow-accent); /* pbar fill glow */
 
   /* Ombres inset & indicateurs */
-  --shadow-tab-top:   inset 0 2px 0 0 var(--g); /* onglet actif haut */
-  --shadow-tab-bot:   inset 0 -2px 0 0 var(--g); /* onglet actif bas */
-  --shadow-tr-focus:  inset 0 0 0 2px var(--g), inset 0 0 0 4px rgba(255,255,255,0.18); /* A11Y-22: colored ring + white inner layer */
-  --shadow-tr-above:  0 -2px 0 var(--g); /* drag drop above */
-  --shadow-tr-below:  0 2px 0 var(--g); /* drag drop below */
+  --shadow-tab-top: inset 0 2px 0 0 var(--g); /* onglet actif haut */
+  --shadow-tab-bot: inset 0 -2px 0 0 var(--g); /* onglet actif bas */
+  --shadow-tr-focus:
+    inset 0 0 0 2px var(--g), inset 0 0 0 4px rgba(255, 255, 255, 0.18); /* A11Y-22: colored ring + white inner layer */
+  --shadow-tr-above: 0 -2px 0 var(--g); /* drag drop above */
+  --shadow-tr-below: 0 2px 0 var(--g); /* drag drop below */
 
   /* Ombres neutres — légères & thème clair */
   /* Ombres latérales (side panels) */
-  --shadow-queue:     -1px 0 0 var(--sep);
+  --shadow-queue: -1px 0 0 var(--sep);
 
   /* Ombres playlist */
-  --shadow-pl-list2:  0 0 0 1px rgba(var(--g-rgb),.16);
+  --shadow-pl-list2: 0 0 0 1px rgba(var(--g-rgb), 0.16);
 
   /* Ombres texte & drop-shadow */
-  --tshadow-genre:    0 1px 3px rgba(255,255,255,.5);   /* genre name light */
-  --tshadow-title:    0 1px 4px rgba(0,0,0,.45);          /* track title dark */
-  --dropshadow-art:   none;
-  --dropshadow-art-sm:none;
-  --dropshadow-heart: 0 0 16px rgba(255,60,100,.7);     /* like heart glow */
+  --tshadow-genre: 0 1px 3px rgba(255, 255, 255, 0.5); /* genre name light */
+  --tshadow-title: 0 1px 4px rgba(0, 0, 0, 0.45); /* track title dark */
+  --dropshadow-art: none;
+  --dropshadow-art-sm: none;
+  --dropshadow-heart: 0 0 16px rgba(255, 60, 100, 0.7); /* like heart glow */
 
-  /* Ombres animation/motion (keyframes) */  --shadow-pcplay-anim:0 2px 12px rgba(var(--g-rgb),.4), 0 0 0 0 rgba(var(--g-rgb),0);
-  --shadow-pcplay-glow:0 4px 18px rgba(var(--g-rgb),.6), 0 0 0 5px rgba(var(--g-rgb),.1);
-  --shadow-art-col2:   0 0 0 1px color-mix(in srgb, var(--art-color) 40%, rgba(var(--g-rgb), .14));
+  /* Ombres animation/motion (keyframes) */
+  --shadow-pcplay-anim: 0 2px 12px rgba(var(--g-rgb), 0.4), 0 0 0 0 rgba(var(--g-rgb), 0);
+  --shadow-pcplay-glow: 0 4px 18px rgba(var(--g-rgb), 0.6), 0 0 0 5px rgba(var(--g-rgb), 0.1);
+  --shadow-art-col2: 0 0 0 1px color-mix(in srgb, var(--art-color) 40%, rgba(var(--g-rgb), 0.14));
 
   /* Ombres keyframe pulsation — radio-pulse */
 
   /* Ombres keyframe rename feedback */
 
   /* Ombres keyframe cinema — glow art-color (valeurs dynamiques color-mix) */
-  --shadow-cin-glow-lo:  0 0 40px 10px color-mix(in srgb, var(--art-color) 22%, transparent);
-  --shadow-cin-glow-hi:  0 0 72px 22px color-mix(in srgb, var(--art-color) 42%, transparent);
-  --shadow-cin-glow-28:  0 0 40px 10px color-mix(in srgb, var(--art-color) 28%, transparent);
-  --shadow-cin-glow-12:  0 0 80px 24px color-mix(in srgb, var(--art-color) 12%, transparent);
+  --shadow-cin-glow-lo: 0 0 40px 10px color-mix(in srgb, var(--art-color) 22%, transparent);
+  --shadow-cin-glow-hi: 0 0 72px 22px color-mix(in srgb, var(--art-color) 42%, transparent);
+  --shadow-cin-glow-28: 0 0 40px 10px color-mix(in srgb, var(--art-color) 28%, transparent);
+  --shadow-cin-glow-12: 0 0 80px 24px color-mix(in srgb, var(--art-color) 12%, transparent);
 
   /* Ombres keyframe cinema — beat-pulse (--beat-color injecté par JS) */
-  --shadow-cin-beat-0:   0 0 70px 24px var(--beat-color, rgba(255,255,255,.22));
-  --shadow-cin-beat-ext: 0 0 120px 48px color-mix(in srgb, var(--beat-color, rgba(255,255,255,.22)) 40%, transparent);
-  --shadow-cin-pbar:     0 0 10px rgba(255,255,255,.55);                         /* cinema pbar fill hover glow */
+  --shadow-cin-beat-0: 0 0 70px 24px var(--beat-color, rgba(255, 255, 255, 0.22));
+  --shadow-cin-beat-ext: 0 0 120px 48px
+    color-mix(in srgb, var(--beat-color, rgba(255, 255, 255, 0.22)) 40%, transparent);
+  --shadow-cin-pbar: 0 0 10px rgba(255, 255, 255, 0.55); /* cinema pbar fill hover glow */
 
   /* ── Cinema mode — durées, easings, focus ring, opacités blanches (Task 4) ──
      Unifie JS<->CSS : --dur-cin-swap-out/-in reflètent CIN_SWAP_OUT_MS/CIN_SWAP_IN_MS
      (cinema.js) ; --dur-cin-beat reflète BEAT_PULSE_MS (cinema-viz.js). Testé par
      core.test.cjs (cohérence) et a11y.test.cjs (focus ring token, cooldown flash). */
-  --dur-cin-swap-out:   120ms;  /* pochette sortante — == CIN_SWAP_OUT_MS */
-  --dur-cin-swap-in:    440ms;  /* pochette entrante — == CIN_SWAP_IN_MS (fix désync 320↔440) */
-  --dur-cin-beat:       620ms;  /* pulse beat — == BEAT_PULSE_MS (fix désync 600↔620) */
-  --dur-cin-breathe:    6s;     /* respiration pochette idle */
-  --dur-cin-bg-breathe: 8s;     /* respiration fond ambient */
-  --dur-cin-float:      9s;     /* flottement pochette idle */
-  --dur-cin-glow:       5s;     /* respiration glow coloré pochette */
+  --dur-cin-swap-out: 120ms; /* pochette sortante — == CIN_SWAP_OUT_MS */
+  --dur-cin-swap-in: 440ms; /* pochette entrante — == CIN_SWAP_IN_MS (fix désync 320↔440) */
+  --dur-cin-beat: 620ms; /* pulse beat — == BEAT_PULSE_MS (fix désync 600↔620) */
+  --dur-cin-breathe: 6s; /* respiration pochette idle */
+  --dur-cin-bg-breathe: 8s; /* respiration fond ambient */
+  --dur-cin-float: 9s; /* flottement pochette idle */
+  --dur-cin-glow: 5s; /* respiration glow coloré pochette */
 
-  --ease-spring-soft:   cubic-bezier(.34,1.2,.64,1);  /* swap pochette / cinema-art-wrap */
-  --ease-spring-softer: cubic-bezier(.34,1.3,.64,1);  /* cinema-info / cinema-prog / cinema-controls */
-  --ease-kenburns:      cubic-bezier(.4,0,.6,1);      /* Ken Burns pochette (4 variantes) */
-  --ease-beat:          cubic-bezier(.22,1,.36,1);    /* beat-pulse / heart-burst */
+  --ease-spring-soft: cubic-bezier(0.34, 1.2, 0.64, 1); /* swap pochette / cinema-art-wrap */
+  --ease-spring-softer: cubic-bezier(
+    0.34,
+    1.3,
+    0.64,
+    1
+  ); /* cinema-info / cinema-prog / cinema-controls */
+  --ease-kenburns: cubic-bezier(0.4, 0, 0.6, 1); /* Ken Burns pochette (4 variantes) */
+  --ease-beat: cubic-bezier(0.22, 1, 0.36, 1); /* beat-pulse / heart-burst */
 
-  --cin-focus-ring: 0 0 0 2px rgba(255,255,255,.8), 0 0 0 4px rgba(0,0,0,.25); /* anneau focus cinéma (dark) */
+  --cin-focus-ring:
+    0 0 0 2px rgba(255, 255, 255, 0.8), 0 0 0 4px rgba(0, 0, 0, 0.25); /* anneau focus cinéma (dark) */
 
   /* Échelle d'opacités blanches cinéma — usages répétés uniquement */
-  --cin-text-hi:       rgba(255,255,255,.95);  /* cinema-title */
-  --cin-text-mid:      rgba(255,255,255,.72);  /* cinema-artist */
-  --cin-surface:       rgba(255,255,255,.06);  /* cinema-next background */
-  --cin-surface-hover: rgba(255,255,255,.10);  /* cinema-corner-btn background */
-  --cin-hairline:      rgba(255,255,255,.08);  /* cinema-corner-btn border / art-img outline */
+  --cin-text-hi: rgba(255, 255, 255, 0.95); /* cinema-title */
+  --cin-text-mid: rgba(255, 255, 255, 0.72); /* cinema-artist */
+  --cin-surface: rgba(255, 255, 255, 0.06); /* cinema-next background */
+  --cin-surface-hover: rgba(255, 255, 255, 0.1); /* cinema-corner-btn background */
+  --cin-hairline: rgba(255, 255, 255, 0.08); /* cinema-corner-btn border / art-img outline */
 
-  --shadow-player-ring:  0 -1px 0 rgba(var(--g-rgb),.15);                       /* player bar top accent line */
+  --shadow-player-ring: 0 -1px 0 rgba(var(--g-rgb), 0.15); /* player bar top accent line */
   /* Dimensions supplémentaires — layout & modales */
-  --wf-max:             560px;  /* max-width modale waveform / batch-tag */
-  --ctx-pane-max:       280px;  /* max-width menu contextuel */
-  --modal-max-offset:    80px;  /* offset hauteur max viewport (100vh - N) */
-  --panel-queue-w:      300px;  /* largeur panneau queue latéral */
-  --panel-eq-w:         320px;  /* largeur panneau EQ latéral (mode simple) */
-  --panel-eq-expert-w:  400px;  /* largeur panneau EQ latéral (mode expert) */
+  --wf-max: 560px; /* max-width modale waveform / batch-tag */
+  --ctx-pane-max: 280px; /* max-width menu contextuel */
+  --modal-max-offset: 80px; /* offset hauteur max viewport (100vh - N) */
+  --panel-queue-w: 300px; /* largeur panneau queue latéral */
+  --panel-eq-w: 320px; /* largeur panneau EQ latéral (mode simple) */
+  --panel-eq-expert-w: 400px; /* largeur panneau EQ latéral (mode expert) */
 
   /* Dimensions cinéma & artwork */
-  --art-cinema-max:     420px;  /* taille max pochette cinéma (min(46vh,46vw,N)) — 520px ≥1600px, cf. @media plus bas */
+  --art-cinema-max: 420px; /* taille max pochette cinéma (min(46vh,46vw,N)) — 520px ≥1600px, cf. @media plus bas */
 
   /* Grilles stats & heatmap */
   --artist-month-col-min: 90px; /* min colonne nom artiste (stats month) */
-  --heatmap-cell-min:     10px; /* min cellule heatmap (grid auto-fill) */
-
+  --heatmap-cell-min: 10px; /* min cellule heatmap (grid auto-fill) */
 
   /* Ombres composées — sel-bar ring */
-  --shadow-sep-ring:    0 0 0 1px var(--sep);  /* ring séparateur fin autour d'éléments flottants */
+  --shadow-sep-ring: 0 0 0 1px var(--sep); /* ring séparateur fin autour d'éléments flottants */
 
   /* Z-index — hiérarchie des couches UI (7 niveaux)
    *  base     in-flow content (au-dessus des pseudo-éléments)
@@ -877,50 +886,50 @@ html[data-mode="light"] {
    *  modal    modals (empilables avec calc(var(--z-modal) + offset))
    *  toast    notifications (au-dessus de toute modale)
    *  tooltip  ctxmenu, tooltips (top absolu) */
-  --z-base:     1;
-  --z-sticky:   100;
+  --z-base: 1;
+  --z-sticky: 100;
   --z-dropdown: 200;
-  --z-overlay:  500;
-  --z-modal:    800;
-  --z-toast:    9000;
-  --z-tooltip:  9999;
+  --z-overlay: 500;
+  --z-modal: 800;
+  --z-toast: 9000;
+  --z-tooltip: 9999;
 
   /* Séparateur — dividers structurels inter-rangées (.grp-lbl, .tr, .ns) ;
      distinct de --border-1 (.06) qui cerne les composants/conteneurs. */
-  --sep: rgba(255,255,255,.04);
+  --sep: rgba(255, 255, 255, 0.04);
 
   /* ── Hover surfaces — niveaux de lift pour les rangées interactives ──
      Sur Vantablack (#030303), --bg3 (#0A0A0A) ne donne que Δ7 (~invisible).
      Ces tokens expriment le lift en alpha blanc, comme Spotify/Deezer. */
-  --row-hover  : rgba(255,255,255,.09);  /* rangées pistes, queue, listes — Δ~20 */
-  --row-active : rgba(255,255,255,.13);  /* pressed / :active */
+  --row-hover: rgba(255, 255, 255, 0.09); /* rangées pistes, queue, listes — Δ~20 */
+  --row-active: rgba(255, 255, 255, 0.13); /* pressed / :active */
 
   /* ── Bordures inline — 3 niveaux (remplacent les rgba(255,255,255,X) hardcodés) ──
      Thème sombre : blanc semi-transparent. Thème clair : noir semi-transparent.
      Utiliser selon l'intensité visuelle souhaitée, pas selon la valeur hex. */
-  --border-1:      rgba(255,255,255,.06);   /* panels, contours subtils, reflets inset */
-  --border-2:      rgba(255,255,255,.08);   /* modals, inputs, listes */
-  --border-3:      rgba(255,255,255,.10);   /* popups actifs, menus */
+  --border-1: rgba(255, 255, 255, 0.06); /* panels, contours subtils, reflets inset */
+  --border-2: rgba(255, 255, 255, 0.08); /* modals, inputs, listes */
+  --border-3: rgba(255, 255, 255, 0.1); /* popups actifs, menus */
 
   /* ── Surfaces glassmorphism (remplacent les rgba(XX,XX,XX,0.8X) hardcodés) ──
      light mode : --glass-surface / --glass-panel → var(--bg2) solide (= opaque, lisible).
      --glass-toast reste sombre même en light (toasts always-dark = convention UX). */
-  --glass-surface: rgba(20,20,20,.82);      /* fond modales (playlist, settings, confirm) */
-  --glass-panel:   rgba(22,22,22,.88);      /* fond ctx-menu, drawers */
-  --glass-toast:   rgba(22,22,22,.92);      /* fond toasts — NE PAS surcharger en light */
+  --glass-surface: rgba(20, 20, 20, 0.82); /* fond modales (playlist, settings, confirm) */
+  --glass-panel: rgba(22, 22, 22, 0.88); /* fond ctx-menu, drawers */
+  --glass-toast: rgba(22, 22, 22, 0.92); /* fond toasts — NE PAS surcharger en light */
 
   /* ── Scrims (overlay de fond sous les modales) ── */
-  --scrim:         rgba(0,0,0,.5);          /* modal std, batch-tag, orphans */
-  --scrim-heavy:   rgba(0,0,0,.65);         /* confirm modal (plus opaque = danger visible) */
+  --scrim: rgba(0, 0, 0, 0.5); /* modal std, batch-tag, orphans */
+  --scrim-heavy: rgba(0, 0, 0, 0.65); /* confirm modal (plus opaque = danger visible) */
 
   /* ── Visualiseur ── */
-  --blend-viz:     screen;                  /* mix-blend-mode du canvas viz player */
+  --blend-viz: screen; /* mix-blend-mode du canvas viz player */
 
   /* Player bar elevation — séparateur hairline Spotify-style, pas de drop lourd */
-  --player-shadow: 0 -1px 0 rgba(255,255,255,.07);
+  --player-shadow: 0 -1px 0 rgba(255, 255, 255, 0.07);
 
   /* Mini-player brand glow — dynamique via --g-rgb */
-  --mini-glow: 0 0 0 1px rgba(var(--g-rgb),.20);
+  --mini-glow: 0 0 0 1px rgba(var(--g-rgb), 0.2);
 
   /* Ambient art color — géré par @property ci-dessus */
   --art-color: transparent;
@@ -941,29 +950,79 @@ html[data-mode="light"] {
    (cf. .tr { min-height: 44px }, CLAUDE.md §2.9) — descendre en dessous
    recréerait le même désaccord via min-height qui regonflerait la ligne
    au-delà de ce que --tr-h annonce. */
-:root[data-tlist-zoom="compact"]  { --tr-h: 44px; --tart-size: 32px; }
-:root[data-tlist-zoom="spacious"] { --tr-h: 72px; --tart-size: 56px; }
+:root[data-tlist-zoom='compact'] {
+  --tr-h: 44px;
+  --tart-size: 32px;
+}
+:root[data-tlist-zoom='spacious'] {
+  --tr-h: 72px;
+  --tart-size: 56px;
+}
 
 /* ── Thèmes couleur (accent par défaut = Electric Indigo via --accent) ─── */
-[data-theme="indigo"] { --g:#8B6BFF; --g-rgb:139,107,255; --gd:rgba(139,107,255,.14); --gg:rgba(139,107,255,.28); }
-[data-theme="green"]  { --g:#34d399; --g-rgb:52,211,153;  --gd:rgba(52,211,153,.14);  --gg:rgba(52,211,153,.28); }
-[data-theme="blue"]   { --g:#1D9BF0; --g-rgb:29,155,240;  --gd:rgba(29,155,240,.14);  --gg:rgba(29,155,240,.28); }
-[data-theme="purple"] { --g:#a855f7; --g-rgb:168,85,247;  --gd:rgba(168,85,247,.14);  --gg:rgba(168,85,247,.28); }
-[data-theme="red"]    { --g:#ef4444; --g-rgb:239,68,68;   --gd:rgba(239,68,68,.14);   --gg:rgba(239,68,68,.28); }
-[data-theme="orange"] { --g:#f97316; --g-rgb:249,115,22;  --gd:rgba(249,115,22,.14);  --gg:rgba(249,115,22,.28); }
-[data-theme="pink"]   { --g:#ec4899; --g-rgb:236,72,153;  --gd:rgba(236,72,153,.14);  --gg:rgba(236,72,153,.28); }
-[data-theme="cyan"]   { --g:#22d3ee; --g-rgb:34,211,238;  --gd:rgba(34,211,238,.14);  --gg:rgba(34,211,238,.28); }
+[data-theme='indigo'] {
+  --g: #8b6bff;
+  --g-rgb: 139, 107, 255;
+  --gd: rgba(139, 107, 255, 0.14);
+  --gg: rgba(139, 107, 255, 0.28);
+}
+[data-theme='green'] {
+  --g: #34d399;
+  --g-rgb: 52, 211, 153;
+  --gd: rgba(52, 211, 153, 0.14);
+  --gg: rgba(52, 211, 153, 0.28);
+}
+[data-theme='blue'] {
+  --g: #1d9bf0;
+  --g-rgb: 29, 155, 240;
+  --gd: rgba(29, 155, 240, 0.14);
+  --gg: rgba(29, 155, 240, 0.28);
+}
+[data-theme='purple'] {
+  --g: #a855f7;
+  --g-rgb: 168, 85, 247;
+  --gd: rgba(168, 85, 247, 0.14);
+  --gg: rgba(168, 85, 247, 0.28);
+}
+[data-theme='red'] {
+  --g: #ef4444;
+  --g-rgb: 239, 68, 68;
+  --gd: rgba(239, 68, 68, 0.14);
+  --gg: rgba(239, 68, 68, 0.28);
+}
+[data-theme='orange'] {
+  --g: #f97316;
+  --g-rgb: 249, 115, 22;
+  --gd: rgba(249, 115, 22, 0.14);
+  --gg: rgba(249, 115, 22, 0.28);
+}
+[data-theme='pink'] {
+  --g: #ec4899;
+  --g-rgb: 236, 72, 153;
+  --gd: rgba(236, 72, 153, 0.14);
+  --gg: rgba(236, 72, 153, 0.28);
+}
+[data-theme='cyan'] {
+  --g: #22d3ee;
+  --g-rgb: 34, 211, 238;
+  --gd: rgba(34, 211, 238, 0.14);
+  --gg: rgba(34, 211, 238, 0.28);
+}
 
 /* Task 8 — responsive : grands écrans ≥1600px, pochette cinéma agrandie.
    Override sanctionné (token-source.test.cjs) : petit bloc :root{} dans un @media. */
 @media (min-width: 1600px) {
-  :root { --art-cinema-max: 520px; }
+  :root {
+    --art-cinema-max: 520px;
+  }
 }
 
 /* Respect des préférences utilisateur — anti-motion.
    Task 10 : scoping html[data-motion="reduce"] (réglage in-app, défaut 'full')
    remplace l'ancienne media query OS prefers-reduced-motion — voir motion.js. */
-html[data-motion="reduce"] *, html[data-motion="reduce"] *::before, html[data-motion="reduce"] *::after {
-  animation-duration  : 0ms !important;
-  transition-duration : 0ms !important;
+html[data-motion='reduce'] *,
+html[data-motion='reduce'] *::before,
+html[data-motion='reduce'] *::after {
+  animation-duration: 0ms !important;
+  transition-duration: 0ms !important;
 }

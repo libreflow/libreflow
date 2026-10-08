@@ -18,7 +18,10 @@ function _waitTauriReady() {
   if (_tauriReady) return _tauriReady;
   return (_tauriReady = new Promise((res, rej) => {
     // @ts-ignore — __TAURI__ injected at runtime by Tauri, not in Window type
-    if (window.__TAURI__) { res(); return; }
+    if (window.__TAURI__) {
+      res();
+      return;
+    }
     // F9 : annuler le fallback timer dès que tauri://init arrive (évite timer orphelin)
     let _fallbackTimer;
     const handler = () => {
@@ -90,14 +93,11 @@ async function invoke(cmd, args, opts) {
   return Promise.race([
     _invokeP,
     new Promise((_, fail) => {
-      _timerId = setTimeout(
-        () => {
-          console.warn('[ipc] timeout:', cmd);
-          fail(new Error(`[ipc] ${cmd} timed out after ${timeout}ms`));
-        },
-        timeout
-      );
-    }),
+      _timerId = setTimeout(() => {
+        console.warn('[ipc] timeout:', cmd);
+        fail(new Error(`[ipc] ${cmd} timed out after ${timeout}ms`));
+      }, timeout);
+    })
   ]);
 }
 
@@ -111,10 +111,10 @@ async function listen(event, handler, options) {
   await _waitTauriReady();
   // @ts-ignore — __TAURI__ injected at runtime by Tauri, not in Window type
   return options
-    // @ts-ignore — __TAURI__ injected at runtime by Tauri, not in Window type
-    ? window.__TAURI__.event.listen(event, handler, options)
-    // @ts-ignore — __TAURI__ injected at runtime by Tauri, not in Window type
-    : window.__TAURI__.event.listen(event, handler);
+    ? // @ts-ignore — __TAURI__ injected at runtime by Tauri, not in Window type
+      window.__TAURI__.event.listen(event, handler, options)
+    : // @ts-ignore — __TAURI__ injected at runtime by Tauri, not in Window type
+      window.__TAURI__.event.listen(event, handler);
 }
 
 /**
@@ -130,9 +130,7 @@ function convertFileSrc(filePath) {
     // @ts-ignore — __TAURI__ injected at runtime by Tauri, not in Window type
     return window.__TAURI__.core.convertFileSrc(normalized);
   }
-  const encoded = encodeURIComponent(normalized)
-    .replace(/%3A/gi, ':')
-    .replace(/%2F/g, '/');
+  const encoded = encodeURIComponent(normalized).replace(/%3A/gi, ':').replace(/%2F/g, '/');
   return `asset://localhost/${encoded}`;
 }
 
@@ -156,7 +154,7 @@ async function invokeRetry(cmd, args, maxRetries = 3) {
         throw Object.assign(new Error(detail), { cause: err });
       }
       const jitter = delay * (0.8 + Math.random() * 0.4);
-      await new Promise(r => setTimeout(r, jitter));
+      await new Promise((r) => setTimeout(r, jitter));
       delay *= 2;
     }
   }

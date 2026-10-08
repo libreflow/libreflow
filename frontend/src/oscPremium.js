@@ -21,20 +21,20 @@
 //   • rAF no-ops when document.hidden or canvas is offscreen
 //   • zero allocations inside the render loop
 
-const SAMPLE_CAP   = 128;
-const SAT          = 65;
-const LUM          = 65;
-const HUE_CALM     = 220;
-const HUE_MID      = 280;
-const HUE_PEAK     = 320;
-const LINE_MIN     = 1;
-const LINE_MAX     = 3.5;
-const GHOST_ALPHA  = 0.18;
-const ENERGY_GAIN  = 3;
-const CR_K         = 1 / 6;
+const SAMPLE_CAP = 128;
+const SAT = 65;
+const LUM = 65;
+const HUE_CALM = 220;
+const HUE_MID = 280;
+const HUE_PEAK = 320;
+const LINE_MIN = 1;
+const LINE_MAX = 3.5;
+const GHOST_ALPHA = 0.18;
+const ENERGY_GAIN = 3;
+const CR_K = 1 / 6;
 
 export function createPremiumOscilloscope(canvas, analyser, opts = {}) {
-  if (!canvas)   throw new Error('createPremiumOscilloscope: canvas required');
+  if (!canvas) throw new Error('createPremiumOscilloscope: canvas required');
   if (!analyser) throw new Error('createPremiumOscilloscope: analyser required');
 
   analyser.smoothingTimeConstant = 0.85;
@@ -47,9 +47,11 @@ export function createPremiumOscilloscope(canvas, analyser, opts = {}) {
   if (!ctx) throw new Error('createPremiumOscilloscope: 2D context unavailable');
 
   const sampleCount = Math.min(SAMPLE_CAP, analyser.fftSize);
-  const data     = new Uint8Array(sampleCount);
-  const prev     = new Uint8Array(sampleCount);   prev.fill(128);
-  const smoothed = new Float32Array(sampleCount); smoothed.fill(128);
+  const data = new Uint8Array(sampleCount);
+  const prev = new Uint8Array(sampleCount);
+  prev.fill(128);
+  const smoothed = new Float32Array(sampleCount);
+  smoothed.fill(128);
 
   let dpr = 1;
   let raf = null;
@@ -60,9 +62,9 @@ export function createPremiumOscilloscope(canvas, analyser, opts = {}) {
     const rect = canvas.getBoundingClientRect();
     if (rect.width === 0 || rect.height === 0) return;
     dpr = window.devicePixelRatio || 1;
-    const w = Math.max(1, Math.round(rect.width  * dpr));
+    const w = Math.max(1, Math.round(rect.width * dpr));
     const h = Math.max(1, Math.round(rect.height * dpr));
-    if (canvas.width  !== w) canvas.width  = w;
+    if (canvas.width !== w) canvas.width = w;
     if (canvas.height !== h) canvas.height = h;
   }
   const ro = new ResizeObserver(resize);
@@ -88,7 +90,7 @@ export function createPremiumOscilloscope(canvas, analyser, opts = {}) {
       sumAbs += dev < 0 ? -dev : dev;
       prev[i] = s;
     }
-    const avg    = sumAbs / sampleCount / 128;
+    const avg = sumAbs / sampleCount / 128;
     const energy = avg * ENERGY_GAIN > 1 ? 1 : avg * ENERGY_GAIN;
 
     // destination-out fade keeps the canvas transparent (no host-UI darkening).
@@ -99,22 +101,26 @@ export function createPremiumOscilloscope(canvas, analyser, opts = {}) {
 
     let hue, sat, lum;
     if (staticColor) {
-      hue = staticColor.h; sat = staticColor.s; lum = staticColor.l;
+      hue = staticColor.h;
+      sat = staticColor.s;
+      lum = staticColor.l;
     } else {
-      hue = energy < 0.5
-        ? HUE_CALM + (HUE_MID  - HUE_CALM) * (energy * 2)
-        : HUE_MID  + (HUE_PEAK - HUE_MID ) * ((energy - 0.5) * 2);
-      sat = SAT; lum = LUM;
+      hue =
+        energy < 0.5
+          ? HUE_CALM + (HUE_MID - HUE_CALM) * (energy * 2)
+          : HUE_MID + (HUE_PEAK - HUE_MID) * ((energy - 0.5) * 2);
+      sat = SAT;
+      lum = LUM;
     }
 
     ctx.strokeStyle = `hsl(${hue.toFixed(1)}, ${sat}%, ${lum}%)`;
-    ctx.lineWidth   = (LINE_MIN + (LINE_MAX - LINE_MIN) * energy) * dpr;
-    ctx.lineJoin    = 'round';
-    ctx.lineCap     = 'round';
+    ctx.lineWidth = (LINE_MIN + (LINE_MAX - LINE_MIN) * energy) * dpr;
+    ctx.lineJoin = 'round';
+    ctx.lineCap = 'round';
 
     const sliceW = w / (sampleCount - 1);
-    const mid    = h / 2;
-    const amp    = h * 0.42;
+    const mid = h / 2;
+    const amp = h * 0.42;
 
     ctx.beginPath();
     const y0 = mid + (smoothed[0] / 128 - 1) * amp;
@@ -122,20 +128,20 @@ export function createPremiumOscilloscope(canvas, analyser, opts = {}) {
 
     // Catmull-Rom → cubic Bezier (k = 1/6). Control points derived from adjacent samples.
     for (let i = 0; i < sampleCount - 1; i++) {
-      const xi   = i * sliceW;
-      const xi1  = (i + 1) * sliceW;
-      const yi   = mid + (smoothed[i] / 128 - 1) * amp;
-      const yi1  = mid + (smoothed[i + 1] / 128 - 1) * amp;
-      const im1  = i - 1 < 0 ? 0 : i - 1;
-      const ip2  = i + 2 > sampleCount - 1 ? sampleCount - 1 : i + 2;
+      const xi = i * sliceW;
+      const xi1 = (i + 1) * sliceW;
+      const yi = mid + (smoothed[i] / 128 - 1) * amp;
+      const yi1 = mid + (smoothed[i + 1] / 128 - 1) * amp;
+      const im1 = i - 1 < 0 ? 0 : i - 1;
+      const ip2 = i + 2 > sampleCount - 1 ? sampleCount - 1 : i + 2;
       const xim1 = im1 * sliceW;
       const xip2 = ip2 * sliceW;
       const yim1 = mid + (smoothed[im1] / 128 - 1) * amp;
       const yip2 = mid + (smoothed[ip2] / 128 - 1) * amp;
-      const cp1x = xi  + (xi1 - xim1) * CR_K;
-      const cp1y = yi  + (yi1 - yim1) * CR_K;
-      const cp2x = xi1 - (xip2 - xi)  * CR_K;
-      const cp2y = yi1 - (yip2 - yi)  * CR_K;
+      const cp1x = xi + (xi1 - xim1) * CR_K;
+      const cp1y = yi + (yi1 - yim1) * CR_K;
+      const cp2x = xi1 - (xip2 - xi) * CR_K;
+      const cp2y = yi1 - (yip2 - yi) * CR_K;
       ctx.bezierCurveTo(cp1x, cp1y, cp2x, cp2y, xi1, yi1);
     }
     ctx.stroke();
@@ -160,6 +166,6 @@ export function createPremiumOscilloscope(canvas, analyser, opts = {}) {
      */
     setStaticColor(color) {
       staticColor = color ?? null;
-    },
+    }
   };
 }

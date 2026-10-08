@@ -24,7 +24,7 @@ import { seedScript } from './seed.js';
 async function waitForRealLibrary(page) {
   await page.waitForSelector('#tlist .tr[data-track-id]', {
     state: 'attached',
-    timeout: 20000,
+    timeout: 20000
   });
   await page.waitForTimeout(400);
   await page
@@ -33,7 +33,7 @@ async function waitForRealLibrary(page) {
         const layer = document.getElementById('toast-shelf');
         return !layer || layer.children.length === 0;
       },
-      { timeout: 5000 },
+      { timeout: 5000 }
     )
     .catch(() => {});
   // Also wait for lf-toast-stack to be empty (Lit toast layer)
@@ -47,7 +47,7 @@ async function waitForRealLibrary(page) {
         const sr = stack.shadowRoot;
         return !sr || sr.querySelectorAll('.t-item').length === 0;
       },
-      { timeout: 5000 },
+      { timeout: 5000 }
     )
     .catch(() => {});
   await page.waitForTimeout(200);
@@ -81,13 +81,13 @@ test.describe('lf-toast-stack', () => {
         const sr = document.querySelector('lf-toast-stack')?.shadowRoot;
         return sr && sr.querySelectorAll('.t-item').length > 0;
       },
-      { timeout: 5000 },
+      { timeout: 5000 }
     );
     await page.waitForTimeout(250);
 
     const stack = page.locator('lf-toast-stack');
     await expect(stack).toHaveScreenshot('lf-toast-info.png', {
-      animations: 'disabled',
+      animations: 'disabled'
     });
   });
 
@@ -110,13 +110,13 @@ test.describe('lf-toast-stack', () => {
         const sr = document.querySelector('lf-toast-stack')?.shadowRoot;
         return sr && sr.querySelectorAll('.t-item').length > 0;
       },
-      { timeout: 5000 },
+      { timeout: 5000 }
     );
     await page.waitForTimeout(250);
 
     const stack = page.locator('lf-toast-stack');
     await expect(stack).toHaveScreenshot('lf-toast-error.png', {
-      animations: 'disabled',
+      animations: 'disabled'
     });
   });
 });

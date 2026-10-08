@@ -17,7 +17,12 @@
 
 /** Escape HTML special characters including quotes. Use for any user-provided content in HTML attributes or text nodes. */
 export function esc(str) {
-  return (str || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  return (str || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
 }
 
 // ── Lit Web Component delegation ─────────────────────────────────────────
@@ -71,7 +76,7 @@ export function toastWithAction(m, type = 'info', label, onAction, dur) {
     message: m,
     type,
     duration: dur,
-    action: { label, onClick: onAction },
+    action: { label, onClick: onAction }
   });
   const remove = () => handle.remove();
   remove.update = (newMsg) => handle.update(newMsg);
@@ -89,13 +94,22 @@ function _trapFocus(containerEl) {
   const focusable = 'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])';
   const handler = (e) => {
     if (e.key !== 'Tab') return;
-    const els = [...containerEl.querySelectorAll(focusable)].filter(el => !el.disabled && el.offsetParent !== null);
+    const els = [...containerEl.querySelectorAll(focusable)].filter(
+      (el) => !el.disabled && el.offsetParent !== null
+    );
     if (!els.length) return;
-    const first = els[0], last = els[els.length - 1];
+    const first = els[0],
+      last = els[els.length - 1];
     if (e.shiftKey) {
-      if (document.activeElement === first) { e.preventDefault(); last.focus(); }
+      if (document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      }
     } else {
-      if (document.activeElement === last) { e.preventDefault(); first.focus(); }
+      if (document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      }
     }
   };
   containerEl.addEventListener('keydown', handler);
@@ -118,18 +132,21 @@ let _confirmTrapCleanup = () => {};
  * @returns {Promise<boolean>}
  */
 export function confirmAction(title, body, okLabel = 'Confirmer', okStyle = 'danger') {
-  return new Promise(resolve => {
-    const bg    = document.getElementById('confirm-modal-bg');
-    const elT   = document.getElementById('confirm-modal-title');
-    const elB   = document.getElementById('confirm-modal-body');
+  return new Promise((resolve) => {
+    const bg = document.getElementById('confirm-modal-bg');
+    const elT = document.getElementById('confirm-modal-title');
+    const elB = document.getElementById('confirm-modal-body');
     const okBtn = document.getElementById('confirm-modal-ok');
-    if (!bg || !elT || !elB || !okBtn) { resolve(false); return; }
-    elT.textContent   = title;
+    if (!bg || !elT || !elB || !okBtn) {
+      resolve(false);
+      return;
+    }
+    elT.textContent = title;
     // body is trusted HTML — callers must use esc() for user-provided content
-    elB.innerHTML     = body;
+    elB.innerHTML = body;
     okBtn.textContent = okLabel;
-    okBtn.className   = `mbtn ${okStyle}`;
-    const _prevFocus  = document.activeElement;
+    okBtn.className = `mbtn ${okStyle}`;
+    const _prevFocus = document.activeElement;
     _confirmResolve = (result) => {
       bg.classList.remove('on');
       _confirmResolve = () => {};
@@ -152,7 +169,6 @@ export function resolveConfirm(result) {
   _confirmResolve(result);
 }
 
-
 /**
  * Modal de saisie texte (remplace window.prompt — incompatible Tauri v2).
  * @param {string} title        — Titre de la modal
@@ -162,7 +178,7 @@ export function resolveConfirm(result) {
  * @returns {Promise<string|null>} — Valeur saisie, ou null si annulé
  */
 export function promptAction(title, defaultVal = '', okLabel = 'OK', cancelLabel = 'Annuler') {
-  return new Promise(resolve => {
+  return new Promise((resolve) => {
     const _prevFocus = document.activeElement;
     const bg = document.createElement('div');
     bg.className = 'prompt-bg prompt-modal-bg';
@@ -179,11 +195,11 @@ export function promptAction(title, defaultVal = '', okLabel = 'OK', cancelLabel
       </div>`;
     document.body.appendChild(bg);
 
-    const input     = bg.querySelector('.prompt-input');
-    const okBtn     = bg.querySelector('.prompt-ok');
+    const input = bg.querySelector('.prompt-input');
+    const okBtn = bg.querySelector('.prompt-ok');
     const cancelBtn = bg.querySelector('.prompt-cancel');
     bg.querySelector('.modal-title').textContent = title;
-    okBtn.textContent     = okLabel;
+    okBtn.textContent = okLabel;
     cancelBtn.textContent = cancelLabel;
     input.value = defaultVal;
 
@@ -197,10 +213,18 @@ export function promptAction(title, defaultVal = '', okLabel = 'OK', cancelLabel
 
     okBtn.addEventListener('click', () => finish(input.value.trim() || null));
     cancelBtn.addEventListener('click', () => finish(null));
-    bg.addEventListener('click', e => { if (e.target === bg) finish(null); });
-    input.addEventListener('keydown', e => {
-      if (e.code === 'Enter')  { e.preventDefault(); finish(input.value.trim() || null); }
-      if (e.code === 'Escape') { e.preventDefault(); finish(null); }
+    bg.addEventListener('click', (e) => {
+      if (e.target === bg) finish(null);
+    });
+    input.addEventListener('keydown', (e) => {
+      if (e.code === 'Enter') {
+        e.preventDefault();
+        finish(input.value.trim() || null);
+      }
+      if (e.code === 'Escape') {
+        e.preventDefault();
+        finish(null);
+      }
     });
 
     // Afficher + focus
@@ -213,8 +237,11 @@ export function promptAction(title, defaultVal = '', okLabel = 'OK', cancelLabel
 }
 
 // Fermer avec Échap
-document.addEventListener('keydown', e => {
-  if (e.code === 'Escape' && document.getElementById('confirm-modal-bg')?.classList.contains('on')) {
+document.addEventListener('keydown', (e) => {
+  if (
+    e.code === 'Escape' &&
+    document.getElementById('confirm-modal-bg')?.classList.contains('on')
+  ) {
     e.stopImmediatePropagation();
     _confirmResolve(false);
   }
@@ -225,15 +252,19 @@ document.addEventListener('keydown', e => {
 const _RIPPLE_SEL = '.tr, .tbt, .mbtn, .pc, .tb-icon-btn';
 
 export function initRipple() {
-  document.addEventListener('pointerdown', (e) => {
-    const el = e.target.closest(_RIPPLE_SEL);
-    if (!el || el.classList.contains('tr-skel')) return;
-    const rect = el.getBoundingClientRect();
-    const size = Math.max(rect.width, rect.height) * 2;
-    const r = document.createElement('span');
-    r.className = 'rpl';
-    r.style.cssText = `width:${size}px;height:${size}px;left:${e.clientX - rect.left - size / 2}px;top:${e.clientY - rect.top - size / 2}px;`;
-    el.appendChild(r);
-    r.addEventListener('animationend', () => r.remove(), { once: true });
-  }, { passive: true });
+  document.addEventListener(
+    'pointerdown',
+    (e) => {
+      const el = e.target.closest(_RIPPLE_SEL);
+      if (!el || el.classList.contains('tr-skel')) return;
+      const rect = el.getBoundingClientRect();
+      const size = Math.max(rect.width, rect.height) * 2;
+      const r = document.createElement('span');
+      r.className = 'rpl';
+      r.style.cssText = `width:${size}px;height:${size}px;left:${e.clientX - rect.left - size / 2}px;top:${e.clientY - rect.top - size / 2}px;`;
+      el.appendChild(r);
+      r.addEventListener('animationend', () => r.remove(), { once: true });
+    },
+    { passive: true }
+  );
 }

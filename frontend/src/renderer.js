@@ -1,30 +1,40 @@
 // renderer.js — Rendu de la bibliothèque, grilles et helpers HTML
 
-import { get, set }                                          from './store.js';
-import { emit, on, EVENTS }                                  from './bus.js';
-import { getFiltered, filteredIdx, trackIdx,
-         _trackIdxMap, invalidateFilterCache, _coll }        from './search.js';
-import { VIRT, virtBuildRows, virtIdxAtScroll,
-         virtTotalH, virtOffsetOf }                          from './virt.js';
-import { esc, fmtd, extEmoji, fmt }                         from './utils.js';
-import { i18n, getLang }                                     from './i18n.js';
-import { CFG }                                               from './cfg.js';
-import { prefetchArts, getArtUrl }                           from './artLoader.js';
+import { get, set } from './store.js';
+import { emit, on, EVENTS } from './bus.js';
+import {
+  getFiltered,
+  filteredIdx,
+  trackIdx,
+  _trackIdxMap,
+  invalidateFilterCache,
+  _coll
+} from './search.js';
+import { VIRT, virtBuildRows, virtIdxAtScroll, virtTotalH, virtOffsetOf } from './virt.js';
+import { esc, fmtd, extEmoji, fmt } from './utils.js';
+import { i18n, getLang } from './i18n.js';
+import { CFG } from './cfg.js';
+import { prefetchArts, getArtUrl } from './artLoader.js';
 
 // Imports circulaires — OK en ES modules (appelés à l'exécution, pas à l'init)
-import { playAt, audio }                                     from './player.js';
-import { playLog }                                           from './playlog.js';
-import { getImports }                                        from './imports.js';
+import { playAt, audio } from './player.js';
+import { playLog } from './playlog.js';
+import { getImports } from './imports.js';
 
 // Grilles et drill header — split §16 (renderer.js dépassait 800 lignes)
-import { renderAlbumsGrid, renderArtistsGrid, renderPlaylistsGrid,
-         renderDrillHeader, resetGridCaches,
-         updateBreadcrumb }                                  from './renderer-grids.js';
+import {
+  renderAlbumsGrid,
+  renderArtistsGrid,
+  renderPlaylistsGrid,
+  renderDrillHeader,
+  resetGridCaches,
+  updateBreadcrumb
+} from './renderer-grids.js';
 
 export { renderAlbumsGrid, renderArtistsGrid, renderPlaylistsGrid, updateBreadcrumb };
 
-let _plHero       = null;    // référence au #pl-hero courant (FIX-B1)
-let _activeRowEl  = null;    // I-1: cache du dernier élément .tr.act
+let _plHero = null; // référence au #pl-hero courant (FIX-B1)
+let _activeRowEl = null; // I-1: cache du dernier élément .tr.act
 // R-H9 : true tant que #tlist affiche des lignes squelette — le ResizeObserver
 // de virtAttachScroll recalcule alors le nombre de lignes au lieu de re-rendre la liste.
 let _skeletonActive = false;
@@ -33,9 +43,13 @@ const ART_COLOR_RE = /^rgb\(\s*\d{1,3}\s*,\s*\d{1,3}\s*,\s*\d{1,3}\s*\)$/;
 let _tracksSig = ''; // content hash for grid cache invalidation (see renderer-grids.js)
 
 // Restore art-loaded fade-in without inline onload (load events don't bubble → capture phase)
-document.addEventListener('load', (e) => {
-  if (e.target?.classList?.contains('art-img')) e.target.classList.add('art-loaded');
-}, true);
+document.addEventListener(
+  'load',
+  (e) => {
+    if (e.target?.classList?.contains('art-img')) e.target.classList.add('art-loaded');
+  },
+  true
+);
 
 function escapeRegex(s) {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -54,16 +68,19 @@ export function hlText(text, query, re) {
   // Build per-word alternation regex when no pre-compiled re provided.
   // Matches "dark side" as /dark|side/ so both words are highlighted even when
   // they appear in different fields (consistent with multi-term filter logic).
-  const r = re || new RegExp(
-    `(${query.trim().split(/\s+/).filter(Boolean).map(escapeRegex).join('|')})`,
-    'gi'
-  );
+  const r =
+    re ||
+    new RegExp(`(${query.trim().split(/\s+/).filter(Boolean).map(escapeRegex).join('|')})`, 'gi');
   // Split the raw text around matches using sentinel bytes, then escape each part.
-  return text.replace(r, '\x00$1\x01').split('\x00').map((seg, i) => {
-    if (i === 0) return esc(seg);
-    const parts = seg.split('\x01');
-    return `<mark class="srch-hl">${esc(parts[0])}</mark>${esc(parts[1] || '')}`;
-  }).join('');
+  return text
+    .replace(r, '\x00$1\x01')
+    .split('\x00')
+    .map((seg, i) => {
+      if (i === 0) return esc(seg);
+      const parts = seg.split('\x01');
+      return `<mark class="srch-hl">${esc(parts[0])}</mark>${esc(parts[1] || '')}`;
+    })
+    .join('');
 }
 
 function _djb2(str) {
@@ -79,7 +96,10 @@ let _lblLang = null;
 const _LBL = {};
 function _rowLbl(key, fallback) {
   const lang = getLang();
-  if (_lblLang !== lang) { _lblLang = lang; for (const k of Object.keys(_LBL)) delete _LBL[k]; }
+  if (_lblLang !== lang) {
+    _lblLang = lang;
+    for (const k of Object.keys(_LBL)) delete _LBL[k];
+  }
   if (!_LBL[key]) _LBL[key] = esc(i18n(key) || fallback);
   return _LBL[key];
 }
@@ -92,17 +112,19 @@ export function artPlaceholder(t) {
   // Album d'abord : les pistes d'un même album partagent la même couleur
   // (les crédits "feat." varient par piste et fragmenteraient la teinte).
   const seed = t.album || t.artist || t.name || '';
-  const hue  = _djb2(seed) % 360;
-  const bg   = `hsl(${hue},32%,26%)`;
-  const fg   = `hsl(${hue},55%,72%)`;
+  const hue = _djb2(seed) % 360;
+  const bg = `hsl(${hue},32%,26%)`;
+  const fg = `hsl(${hue},55%,72%)`;
   return `<div class="tart-ph" aria-hidden="true" style="background:${bg};color:${fg}"><span class="tart-init">${extEmoji(t.ext) || letter}</span></div>`;
 }
 
 export function makeLikeBtn(t, liked) {
   liked = liked ?? get('liked');
-  const on  = liked?.has(t.id);
+  const on = liked?.has(t.id);
   // A11Y-06: label dynamique selon l'état (like_label / unlike_label) — annonce correctement l'état au screen reader
-  const lbl = on ? _rowLbl('unlike_label', 'Retirer des favoris') : _rowLbl('like_label', 'Ajouter aux favoris');
+  const lbl = on
+    ? _rowLbl('unlike_label', 'Retirer des favoris')
+    : _rowLbl('like_label', 'Ajouter aux favoris');
   return `<button class="tlk${on ? ' on' : ''}" data-action="likeat" data-track-id="${esc(t.id)}" aria-pressed="${!!on}" aria-label="${lbl}" tabindex="-1"><svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg></button>`;
 }
 
@@ -122,29 +144,46 @@ export function makeMoreBtn(t) {
 }
 
 // A11Y-3: role="listitem" tabindex="0" aria-label; P6: classes dynamiques
-export function thtml(t, fi, { active = false, liked = false, likedSet, query = '', isAlbumDetail: _isAlbumDetail, albumDetailSort: _albumDetailSort, hlRe, isTabStop = false, setSize = 0 } = {}) {
+export function thtml(
+  t,
+  fi,
+  {
+    active = false,
+    liked = false,
+    likedSet,
+    query = '',
+    isAlbumDetail: _isAlbumDetail,
+    albumDetailSort: _albumDetailSort,
+    hlRe,
+    isTabStop = false,
+    setSize = 0
+  } = {}
+) {
   // OPT: hoister les échappements utilisés à la fois dans title= et dans le corps de ligne
-  const escName   = esc(t.name || '');
+  const escName = esc(t.name || '');
   const escArtist = esc(t.artistFull || t.artist || '');
-  const escAlbum  = esc(t.album || '');
+  const escAlbum = esc(t.album || '');
   const artInner = t.art
     ? `<img class="art-img" src="${esc(t.art)}" alt="" aria-hidden="true">`
     : artPlaceholder(t);
 
   // M-1: utiliser la valeur pré-calculée si fournie, sinon fallback sur get() (compatibilité standalone)
-  const isAlbumDetail   = _isAlbumDetail   ?? (get('view') === 'album-detail');
-  const albumDetailSort = _albumDetailSort  ?? (isAlbumDetail ? (get('albumDetailSort') || 'track') : null);
+  const isAlbumDetail = _isAlbumDetail ?? get('view') === 'album-detail';
+  const albumDetailSort =
+    _albumDetailSort ?? (isAlbumDetail ? get('albumDetailSort') || 'track' : null);
   const trackNum = isAlbumDetail
-    // tri A-Z → numéro séquentiel (position 1-N) ; tri 'track' → numéro de tag (ou position si absent)
-    ? `<div class="tr-num">${albumDetailSort === 'az' ? (fi + 1) : (t.track ?? fi + 1)}</div>`
+    ? // tri A-Z → numéro séquentiel (position 1-N) ; tri 'track' → numéro de tag (ou position si absent)
+      `<div class="tr-num">${albumDetailSort === 'az' ? fi + 1 : (t.track ?? fi + 1)}</div>`
     : '';
 
-  const classes  = ['tr', active ? 'act' : '', isAlbumDetail ? 'tr--album-detail' : ''].filter(Boolean).join(' ');
-  const ariaLbl  = [t.name, t.artistFull || t.artist].filter(Boolean).join(' — ');
+  const classes = ['tr', active ? 'act' : '', isAlbumDetail ? 'tr--album-detail' : '']
+    .filter(Boolean)
+    .join(' ');
+  const ariaLbl = [t.name, t.artistFull || t.artist].filter(Boolean).join(' — ');
   // A11Y-ROVING: roving tabindex — seul le tab stop courant reçoit tabindex="0"
-  const tabIdx   = isTabStop ? '0' : '-1';
+  const tabIdx = isTabStop ? '0' : '-1';
   // A11Y : aria-current="true" sur la piste courante (info non couleur-only) + title sur titres/artistes longs (tooltip troncation)
-  const ariaCur  = active ? ' aria-current="true"' : '';
+  const ariaCur = active ? ' aria-current="true"' : '';
 
   // A11Y-16 : aria-setsize/aria-posinset annoncent la position réelle ("X sur Y")
   // dans la liste virtualisée — équivalent role=list correct (les lignes restent
@@ -181,15 +220,15 @@ export function virtRenderWindow(fl) {
   // R-H9 : un rendu réel de la liste sort de l'état skeleton.
   _skeletonActive = false;
 
-  const sort  = get('sort')  || 'az';
+  const sort = get('sort') || 'az';
   const query = get('query') || '';
-  const view  = get('view')  || 'all';
+  const view = get('view') || 'all';
 
   // Construire les descripteurs de lignes si la signature a changé
   const midId = fl[fl.length >> 1]?.id || '';
-  const sig = `${fl.length}|${sort}|${query}|${view}|${fl[0]?.id||''}|${midId}|${fl[fl.length-1]?.id||''}`;
+  const sig = `${fl.length}|${sort}|${query}|${view}|${fl[0]?.id || ''}|${midId}|${fl[fl.length - 1]?.id || ''}`;
   if (VIRT._lastListSig !== sig) {
-    VIRT._rows        = virtBuildRows(fl, { sort, query, view });
+    VIRT._rows = virtBuildRows(fl, { sort, query, view });
     VIRT._lastListSig = sig;
     // I-2: construire la Map fi→rowIdx pour O(1) lookup dans scrollToCurrentTrack
     const fiMap = new Map();
@@ -200,37 +239,40 @@ export function virtRenderWindow(fl) {
     VIRT._fiToRowIdx = fiMap;
   }
 
-  const rows     = VIRT._rows;
-  if (!rows.length) { listEl.innerHTML = ''; return; }
+  const rows = VIRT._rows;
+  if (!rows.length) {
+    listEl.innerHTML = '';
+    return;
+  }
 
   const scrollTop = listEl.scrollTop;
-  const viewH     = listEl.clientHeight || window.innerHeight;
+  const viewH = listEl.clientHeight || window.innerHeight;
 
   const firstVisible = virtIdxAtScroll(rows, scrollTop);
-  const startIdx     = Math.max(0, firstVisible - VIRT.BUFFER);
+  const startIdx = Math.max(0, firstVisible - VIRT.BUFFER);
   // Utiliser la plus petite hauteur de ligne (GRP_H) pour ne jamais sous-estimer le nombre de lignes visibles
   const visibleCount = Math.ceil(viewH / Math.min(VIRT.ROW_H, VIRT.GRP_H)) + 1;
-  const endIdx       = Math.min(rows.length, firstVisible + visibleCount + VIRT.BUFFER);
+  const endIdx = Math.min(rows.length, firstVisible + visibleCount + VIRT.BUFFER);
 
   // Delta check — ne pas reconstruire le DOM si la fenêtre et la piste active n'ont pas changé
-  const curIdx  = get('curIdx');
+  const curIdx = get('curIdx');
   const _windowSig = `${startIdx}|${endIdx}|${curIdx}`;
   if (VIRT._lastWindowSig === _windowSig) return;
   VIRT._lastWindowSig = _windowSig;
 
   VIRT._startIdx = startIdx;
-  VIRT._endIdx   = endIdx;
-  const tracks  = get('tracks');
-  const liked   = get('liked');
+  VIRT._endIdx = endIdx;
+  const tracks = get('tracks');
+  const liked = get('liked');
   const curTrack = curIdx >= 0 ? tracks[curIdx] : null;
 
-  const topH    = virtOffsetOf(rows, startIdx);
-  const totalH  = virtTotalH(rows);
-  const botH    = Math.max(0, totalH - virtOffsetOf(rows, endIdx));
+  const topH = virtOffsetOf(rows, startIdx);
+  const totalH = virtTotalH(rows);
+  const botH = Math.max(0, totalH - virtOffsetOf(rows, endIdx));
 
   // M-1: hoist isAlbumDetail + albumDetailSort — évite un get() par ligne dans la boucle
-  const isAlbumDetail   = view === 'album-detail';
-  const albumDetailSort = isAlbumDetail ? (get('albumDetailSort') || 'track') : null;
+  const isAlbumDetail = view === 'album-detail';
+  const albumDetailSort = isAlbumDetail ? get('albumDetailSort') || 'track' : null;
   // M-2: pré-compiler la regex de recherche une seule fois avant la boucle (per-word alternation)
   const hlRe = query
     ? new RegExp(`(${query.trim().split(/\s+/).filter(Boolean).map(escapeRegex).join('|')})`, 'gi')
@@ -265,27 +307,41 @@ export function virtRenderWindow(fl) {
       let hint = '';
       if (row.artistHint) hint = ` <span class="grp-artist">${esc(row.artistHint)}</span>`;
       const cls = row.key.length === 1 ? 'tr-grp tr-grp--alpha' : 'tr-grp';
-      parts.push(`<div class="${cls}" style="height:${VIRT.GRP_H}px" aria-hidden="true">${esc(row.key)}${hint}</div>`);
+      parts.push(
+        `<div class="${cls}" style="height:${VIRT.GRP_H}px" aria-hidden="true">${esc(row.key)}${hint}</div>`
+      );
     } else {
-      const t       = row.track;
+      const t = row.track;
       const isActive = curTrack?.id === t.id;
-      const isLiked  = liked?.has(t.id) ?? false;
+      const isLiked = liked?.has(t.id) ?? false;
       // A11Y-ROVING: tabindex="0" pour la piste courante, ou pour le premier tr si aucune courante
       let isTabStop = false;
       if (tabStopFi >= 0) {
-        isTabStop = (row.fi === tabStopFi);
+        isTabStop = row.fi === tabStopFi;
       } else if (!firstTrFiFound) {
         isTabStop = true;
         firstTrFiFound = true;
       }
-      parts.push(thtml(t, row.fi, { active: isActive, liked: isLiked, likedSet: liked, query, isAlbumDetail, albumDetailSort, hlRe, isTabStop, setSize: fl.length }));
+      parts.push(
+        thtml(t, row.fi, {
+          active: isActive,
+          liked: isLiked,
+          likedSet: liked,
+          query,
+          isAlbumDetail,
+          albumDetailSort,
+          hlRe,
+          isTabStop,
+          setSize: fl.length
+        })
+      );
     }
   }
 
   parts.push(`<div class="virt-sp" style="height:${botH}px" aria-hidden="true"></div>`);
 
   // P6 : annuler les spring animations en vol avant de remplacer le DOM
-  listEl.querySelectorAll('[data-spring-raf]').forEach(el => {
+  listEl.querySelectorAll('[data-spring-raf]').forEach((el) => {
     const id = parseInt(el.dataset.springRaf);
     if (id) cancelAnimationFrame(id);
   });
@@ -298,7 +354,9 @@ export function virtRenderWindow(fl) {
   // I-1: le DOM a été entièrement reconstruit — invalider la référence de ligne active cachée
   _activeRowEl = null;
   if (_savedScrollTop > 0) {
-    requestAnimationFrame(() => { listEl.scrollTop = _savedScrollTop; });
+    requestAnimationFrame(() => {
+      listEl.scrollTop = _savedScrollTop;
+    });
   }
 
   // ARCH-2/PERF-1 : précharger l'artwork des pistes visibles (lazy loading)
@@ -344,7 +402,10 @@ export function virtAttachScroll(listEl) {
         _roRaf = null;
         // R-H9 : tant que la liste est en état skeleton, recalculer le nombre
         // de lignes squelette plutôt que de rendre la fenêtre virtuelle.
-        if (_skeletonActive) { _showSkeletonRows(); return; }
+        if (_skeletonActive) {
+          _showSkeletonRows();
+          return;
+        }
         // Forcer un re-rendu même à signature de fenêtre identique.
         VIRT._lastWindowSig = '';
         virtRenderWindow(getFiltered());
@@ -354,7 +415,6 @@ export function virtAttachScroll(listEl) {
     listEl._virtResizeObserver = ro;
   }
 }
-
 
 export function renderLib() {
   const fl = getFiltered();
@@ -367,8 +427,8 @@ export function renderLib() {
   // forçait un rebuild complet même sur simple changement de tri.
   // C-1: invalider les caches memoïsés album/artist uniquement si tracks[] a changé
   // Évite un rebuild coûteux à chaque navigation (tri, filtre, drill) sur la même lib.
-  const _tracks   = get('tracks') || [];
-  const _newSig   = _computeTracksSig(_tracks);
+  const _tracks = get('tracks') || [];
+  const _newSig = _computeTracksSig(_tracks);
   if (_newSig !== _tracksSig) {
     _tracksSig = _newSig;
     resetGridCaches(); // invalide _albumMapCache, _artistMapCache, _artTrackById (renderer-grids.js)
@@ -382,61 +442,77 @@ export function renderLib() {
 
   // État vide : afficher un message contextuel quand la liste est vide
   if (!fl.length && listEl) {
-    const _view   = get('view')     || 'all';
-    const _query  = get('query')    || '';
-    const _drill  = get('drillKey') || '';
-    const _tracks = get('tracks')   || [];
-    let _ico = '', _h = '', _s = '';
-    const _svg = (d) => `<svg viewBox="0 0 24 24" fill="none" style="fill:none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">${d}</svg>`;
+    const _view = get('view') || 'all';
+    const _query = get('query') || '';
+    const _drill = get('drillKey') || '';
+    const _tracks = get('tracks') || [];
+    let _ico = '',
+      _h = '',
+      _s = '';
+    const _svg = (d) =>
+      `<svg viewBox="0 0 24 24" fill="none" style="fill:none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">${d}</svg>`;
     const _libEmpty = !_tracks.length;
     if (_query) {
       // Recherche sans résultat
       _ico = _svg(`<circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>`);
-      _h = i18n('empty_search_h'); _s = i18n('empty_search_s');
+      _h = i18n('empty_search_h');
+      _s = i18n('empty_search_s');
     } else if (_view === 'liked') {
-      _ico = _svg(`<path d="M20.42 4.58a5.4 5.4 0 0 0-7.65 0L12 5.35l-.77-.77a5.4 5.4 0 0 0-7.65 7.65l.77.77L12 20.77l7.65-7.77.77-.77a5.4 5.4 0 0 0 0-7.65z"/>`);
+      _ico = _svg(
+        `<path d="M20.42 4.58a5.4 5.4 0 0 0-7.65 0L12 5.35l-.77-.77a5.4 5.4 0 0 0-7.65 7.65l.77.77L12 20.77l7.65-7.77.77-.77a5.4 5.4 0 0 0 0-7.65z"/>`
+      );
       _h = i18n(_libEmpty ? 'empty_lib_h' : 'empty_liked_h');
       _s = i18n(_libEmpty ? 'empty_lib_s' : 'empty_liked_s');
     } else if (_view === 'recent') {
-      _ico = _svg(`<path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="16.5" y1="13.5" x2="12" y2="13"/>`);
+      _ico = _svg(
+        `<path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="16.5" y1="13.5" x2="12" y2="13"/>`
+      );
       _h = i18n(_libEmpty ? 'empty_lib_h' : 'empty_recent_h');
       _s = i18n(_libEmpty ? 'empty_lib_s' : 'empty_recent_s');
     } else if (_view === 'playlist') {
-      _ico = _svg(`<line x1="3" y1="6" x2="14" y2="6"/><line x1="3" y1="12" x2="14" y2="12"/><line x1="3" y1="18" x2="10" y2="18"/><polygon points="17 10 23 14 17 18"/>`);
+      _ico = _svg(
+        `<line x1="3" y1="6" x2="14" y2="6"/><line x1="3" y1="12" x2="14" y2="12"/><line x1="3" y1="18" x2="10" y2="18"/><polygon points="17 10 23 14 17 18"/>`
+      );
       _h = i18n(_libEmpty ? 'empty_lib_h' : 'empty_pl_h');
       _s = i18n(_libEmpty ? 'empty_lib_s' : 'empty_pl_s');
     } else if (_drill || _view === 'album-detail' || _view === 'artist-detail') {
-      _ico = _svg(`<rect x="2.5" y="2.5" width="19" height="19" rx="3"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.5"/>`);
-      _h = i18n('empty_drill_h'); _s = i18n('empty_drill_s');
+      _ico = _svg(
+        `<rect x="2.5" y="2.5" width="19" height="19" rx="3"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.5"/>`
+      );
+      _h = i18n('empty_drill_h');
+      _s = i18n('empty_drill_s');
     } else {
       // Vue générique (all, albums, artists, genres…)
-      _ico = _svg(`<path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/>`);
-      _h = i18n('empty_lib_h'); _s = i18n('empty_lib_s');
+      _ico = _svg(
+        `<path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/>`
+      );
+      _h = i18n('empty_lib_h');
+      _s = i18n('empty_lib_s');
     }
     if (_h) {
-      const _curPl = _view === 'playlist'
-        ? (get('playlists') || []).find(p => p.id === get('curPlId'))
-        : null;
+      const _curPl =
+        _view === 'playlist' ? (get('playlists') || []).find((p) => p.id === get('curPlId')) : null;
       // AUDIT-2026-07-27 : chaque état vide se termine par un bouton (règle
       // flagship) — recherche → effacer, favoris/récents → explorer la biblio.
       const _cta = _libEmpty
         ? `<button class="empty-cta" data-action="open-folder">${esc(i18n('empty_cta_scan') || 'Scanner un dossier')}</button>`
         : _query
           ? `<button class="empty-cta" data-action="clear-search">${esc(i18n('aria_srch_clear') || 'Effacer la recherche')}</button>`
-          : (_view === 'playlist' && _curPl?.smart)
+          : _view === 'playlist' && _curPl?.smart
             ? `<button class="empty-cta" data-action="regen-cur-pl">${esc(i18n('pl_regen_btn') || 'Régénérer')}</button>`
-            : (_view === 'playlist')
+            : _view === 'playlist'
               ? `<button class="empty-cta" data-action="set-view" data-view="all" data-ni-id="ni-all">${esc(i18n('empty_cta_add') || 'Ajouter des titres')}</button>`
-              : (_view === 'liked' || _view === 'recent')
+              : _view === 'liked' || _view === 'recent'
                 ? `<button class="empty-cta" data-action="set-view" data-view="all" data-ni-id="ni-all">${esc(i18n('empty_cta_explore') || 'Explorer la bibliothèque')}</button>`
                 : '';
-      listEl.innerHTML = `<div class="empty"><div class="empty-ico">${_ico}</div>`
-        + `<div class="empty-h">${esc(_h)}</div><div class="empty-s">${esc(_s)}</div>${_cta}</div>`;
+      listEl.innerHTML =
+        `<div class="empty"><div class="empty-ico">${_ico}</div>` +
+        `<div class="empty-h">${esc(_h)}</div><div class="empty-s">${esc(_s)}</div>${_cta}</div>`;
     }
   }
 
   // Drill header pour album-detail / artist-detail
-  const view     = get('view')     || 'all';
+  const view = get('view') || 'all';
   const drillKey = get('drillKey') || '';
   renderDrillHeader(view, drillKey);
 
@@ -452,27 +528,29 @@ export function _showSkeletonRows(savedView) {
   // R-H9 : marquer l'état skeleton — le ResizeObserver de virtAttachScroll
   // recalcule le nombre de lignes tant que ce flag est actif.
   _skeletonActive = true;
-  const count = Math.max(8, Math.ceil((listEl.clientHeight || window.innerHeight) / CFG.VIRT_ROW_H));
+  const count = Math.max(
+    8,
+    Math.ceil((listEl.clientHeight || window.innerHeight) / CFG.VIRT_ROW_H)
+  );
   let html = '';
   for (let i = 0; i < count; i++) {
-    html += '<div class="tr tr-skel" aria-hidden="true">'
-          + '<div class="tart loading"></div>'
-          + '<div class="ti"><div class="skel-line skel-title"></div><div class="skel-line skel-sub"></div></div>'
-          + '<div class="tr-r"><div class="skel-line skel-dur"></div></div>'
-          + '</div>';
+    html +=
+      '<div class="tr tr-skel" aria-hidden="true">' +
+      '<div class="tart loading"></div>' +
+      '<div class="ti"><div class="skel-line skel-title"></div><div class="skel-line skel-sub"></div></div>' +
+      '<div class="tr-r"><div class="skel-line skel-dur"></div></div>' +
+      '</div>';
   }
   listEl.innerHTML = html;
 }
 
-
 export function drillDown(from, key, displayName) {
   emit(EVENTS.SEARCH_DEBOUNCE_CANCEL, {}); // annule tout debounce de recherche en cours avant de drill
-  set('drillKey',         key);
-  set('drillFrom',        from);
+  set('drillKey', key);
+  set('drillFrom', from);
   set('drillDisplayName', displayName || key);
-  const viewName = from === 'albums' ? 'album-detail'
-                 : from === 'genres' ? 'genre-detail'
-                 : 'artist-detail';
+  const viewName =
+    from === 'albums' ? 'album-detail' : from === 'genres' ? 'genre-detail' : 'artist-detail';
   set('view', viewName);
   invalidateFilterCache();
   // AUDIT-2026-05-22 (M-06) : les maps album/artist derivent de tracks[], pas du
@@ -512,40 +590,42 @@ export function drillDown(from, key, displayName) {
 }
 
 export function updatePlActionBar() {
-  const curPlId   = get('curPlId');
+  const curPlId = get('curPlId');
   const playlists = get('playlists') || [];
-  const tracks    = get('tracks')    || [];
+  const tracks = get('tracks') || [];
 
-  const pl = curPlId ? playlists.find(p => p.id === curPlId) : null;
+  const pl = curPlId ? playlists.find((p) => p.id === curPlId) : null;
   if (!pl) {
     const existing = document.getElementById('pl-action-bar');
     if (existing) existing.remove();
     return;
   }
 
-  const count   = (pl.trackIds || []).length;
-  const plTracks = pl.trackIds.map(id => {
-    const idx = _trackIdxMap.get(id);
-    return idx !== undefined ? tracks[idx] : null;
-  }).filter(Boolean);
+  const count = (pl.trackIds || []).length;
+  const plTracks = pl.trackIds
+    .map((id) => {
+      const idx = _trackIdxMap.get(id);
+      return idx !== undefined ? tracks[idx] : null;
+    })
+    .filter(Boolean);
   const totalDur = plTracks.reduce((s, t) => s + (t.duration || 0), 0);
 
   const plSort = get('plSort') || 'manual';
   const sorts = [
-    { v: 'manual',   l: i18n('pl_sort_manual')   || 'Manuel' },
-    { v: 'az',       l: i18n('sort_az')           || 'A–Z' },
-    { v: 'za',       l: i18n('sort_za')           || 'Z–A' },
-    { v: 'artist',   l: i18n('sort_artist')       || 'Artiste' },
-    { v: 'album',    l: i18n('sort_album')         || 'Album' },
-    { v: 'duration', l: i18n('pl_sort_duration')  || 'Durée' },
+    { v: 'manual', l: i18n('pl_sort_manual') || 'Manuel' },
+    { v: 'az', l: i18n('sort_az') || 'A–Z' },
+    { v: 'za', l: i18n('sort_za') || 'Z–A' },
+    { v: 'artist', l: i18n('sort_artist') || 'Artiste' },
+    { v: 'album', l: i18n('sort_album') || 'Album' },
+    { v: 'duration', l: i18n('pl_sort_duration') || 'Durée' }
   ];
-  const sortOptions = sorts.map(s =>
-    `<option value="${s.v}"${plSort === s.v ? ' selected' : ''}>${esc(s.l)}</option>`
-  ).join('');
+  const sortOptions = sorts
+    .map((s) => `<option value="${s.v}"${plSort === s.v ? ' selected' : ''}>${esc(s.l)}</option>`)
+    .join('');
 
   const playLbl = i18n('pl_play_all') || 'Tout lire';
-  const shufLbl = i18n('pl_shuffle')  || 'Aléatoire';
-  const moreLbl = i18n('pl_more')     || 'Plus';
+  const shufLbl = i18n('pl_shuffle') || 'Aléatoire';
+  const moreLbl = i18n('pl_more') || 'Plus';
   // FAB Play accentué + SVG (audit 2026-07-27 : les glyphes Unicode ▶ ⇀ •••
   // cassaient le langage d'icônes SVG de l'app, et l'action primaire n'était
   // pas saillante). Ordre Spotify : Play, Shuffle, méta, puis outils à droite.
@@ -590,8 +670,8 @@ export function playById(id) {
 }
 
 export function patchActiveTrack() {
-  const curIdx   = get('curIdx');
-  const tracks   = get('tracks') || [];
+  const curIdx = get('curIdx');
+  const tracks = get('tracks') || [];
   const curTrack = curIdx >= 0 ? tracks[curIdx] : null;
 
   // I-1: retirer .act de la ligne précédente via la référence cachée si elle est encore dans le DOM
@@ -602,7 +682,7 @@ export function patchActiveTrack() {
     _activeRowEl.removeAttribute('aria-current');
   } else {
     // Fallback : le DOM a changé depuis la dernière fois — balayage complet
-    document.querySelectorAll('.tr.act, .tr[aria-current="true"]').forEach(el => {
+    document.querySelectorAll('.tr.act, .tr[aria-current="true"]').forEach((el) => {
       el.classList.remove('act', 'playing-row');
       el.removeAttribute('aria-current');
     });
@@ -623,8 +703,12 @@ export function patchActiveTrack() {
 export function patchPlayState(playing) {
   const tlist = document.getElementById('tlist');
   const qlist = document.getElementById('queue-list');
-  if (tlist) tlist.querySelectorAll('.tr.act').forEach(el => el.classList.toggle('playing-row', playing));
-  if (qlist) qlist.querySelectorAll('.queue-item--loop').forEach(el => el.classList.toggle('playing-row', playing));
+  if (tlist)
+    tlist.querySelectorAll('.tr.act').forEach((el) => el.classList.toggle('playing-row', playing));
+  if (qlist)
+    qlist
+      .querySelectorAll('.queue-item--loop')
+      .forEach((el) => el.classList.toggle('playing-row', playing));
 }
 
 export function patchTrackEl(id) {
@@ -643,10 +727,10 @@ export function patchTrackEl(id) {
   if (idx < 0) return;
 
   const tracks = get('tracks');
-  const t      = tracks[idx];
+  const t = tracks[idx];
   if (!t) return;
 
-  const fi    = filteredIdx(t); // recalcul frais — évite un dataset stale
+  const fi = filteredIdx(t); // recalcul frais — évite un dataset stale
   const liked = get('liked');
   const query = get('query') || '';
   const curIdx = get('curIdx');
@@ -656,8 +740,16 @@ export function patchTrackEl(id) {
   // tabstop du nœud remplacé — sinon la ligne re-rendue annonce aria-setsize="0"
   // et perd son tabindex="0".
   const isTabStop = el.getAttribute('tabindex') === '0';
-  el.insertAdjacentHTML('beforebegin',
-    thtml(t, fi, { active: isActive, liked: liked?.has(t.id) ?? false, query, setSize: getFiltered().length, isTabStop }));
+  el.insertAdjacentHTML(
+    'beforebegin',
+    thtml(t, fi, {
+      active: isActive,
+      liked: liked?.has(t.id) ?? false,
+      query,
+      setSize: getFiltered().length,
+      isTabStop
+    })
+  );
   el.remove();
 }
 
@@ -672,7 +764,9 @@ export function _withVT(fn) {
     // Sans catch, ces rejections propagent comme unhandledrejection → logs parasites
     // et, dans certains WebViews, spamme la console et perturbe les événements suivants.
     const vt = document.startViewTransition(fn);
-    const ignoreAbort = e => { if (e?.name !== 'AbortError') throw e; };
+    const ignoreAbort = (e) => {
+      if (e?.name !== 'AbortError') throw e;
+    };
     vt.ready.catch(ignoreAbort);
     vt.finished.catch(ignoreAbort);
   } else {
@@ -702,19 +796,19 @@ export function scrollToCurrentTrack() {
   const listEl = document.getElementById('tlist');
   if (!listEl) return;
 
-  const offset  = virtOffsetOf(rows, rowIdx);
-  const rowH    = VIRT.ROW_H;
-  const viewH   = listEl.clientHeight;
+  const offset = virtOffsetOf(rows, rowIdx);
+  const rowH = VIRT.ROW_H;
+  const viewH = listEl.clientHeight;
   const scrollT = listEl.scrollTop;
 
   // Si déjà visible, ne pas scroller
   if (offset >= scrollT && offset + rowH <= scrollT + viewH) return;
 
-  const targetTop = Math.max(0, offset - (viewH / 2) + (rowH / 2));
+  const targetTop = Math.max(0, offset - viewH / 2 + rowH / 2);
   // Smooth si saut < 3 viewports, sinon instantané (évite 3s d'animation pour un skip de 500 titres)
   listEl.scrollTo({
-    top:      targetTop,
-    behavior: Math.abs(scrollT - targetTop) < window.innerHeight * 3 ? 'smooth' : 'instant',
+    top: targetTop,
+    behavior: Math.abs(scrollT - targetTop) < window.innerHeight * 3 ? 'smooth' : 'instant'
   });
 }
 
@@ -722,22 +816,26 @@ export function renderFormatChips() {
   const bar = document.getElementById('format-bar');
   if (!bar) return;
   const tracks = get('tracks');
-  const formats = [...new Set(tracks.map(t => t.ext).filter(Boolean))].sort();
-  if (formats.length < 2) { bar.innerHTML = ''; return; }
+  const formats = [...new Set(tracks.map((t) => t.ext).filter(Boolean))].sort();
+  if (formats.length < 2) {
+    bar.innerHTML = '';
+    return;
+  }
   const active = get('formatFilter') || '';
   bar.innerHTML = [
     `<button class="fmt-chip${!active ? ' active' : ''}" data-action="filter-format" data-fmt="" aria-pressed="${String(!active)}">Tous</button>`,
-    ...formats.map(f =>
-      `<button class="fmt-chip${active === f ? ' active' : ''}" data-action="filter-format" data-fmt="${esc(f)}" aria-pressed="${String(active === f)}">${esc(f)}</button>`
-    ),
+    ...formats.map(
+      (f) =>
+        `<button class="fmt-chip${active === f ? ' active' : ''}" data-action="filter-format" data-fmt="${esc(f)}" aria-pressed="${String(active === f)}">${esc(f)}</button>`
+    )
   ].join('');
 }
 
 const _SRC_LABELS = {
-  'drag-drop':    'Glisser-déposer',
-  'folder-scan':  'Scan dossier',
-  'usb':          'USB',
-  'manual':       'Manuel',
+  'drag-drop': 'Glisser-déposer',
+  'folder-scan': 'Scan dossier',
+  usb: 'USB',
+  manual: 'Manuel'
 };
 
 export async function renderImportHistory() {
@@ -749,15 +847,20 @@ export async function renderImportHistory() {
     el.innerHTML = '<span class="import-history-empty">Aucun import enregistré.</span>';
     return;
   }
-  el.innerHTML = entries.slice(0, 50).map(e => {
-    const d = new Date(e.date);
-    const dateStr = d.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' })
-      + ' ' + d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
-    const src = _SRC_LABELS[e.source] ?? e.source;
-    return `<div class="import-entry">
+  el.innerHTML = entries
+    .slice(0, 50)
+    .map((e) => {
+      const d = new Date(e.date);
+      const dateStr =
+        d.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' }) +
+        ' ' +
+        d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+      const src = _SRC_LABELS[e.source] ?? e.source;
+      return `<div class="import-entry">
       <span class="import-date">${esc(dateStr)}</span>
       <span class="import-src">${esc(src)}</span>
       <span class="import-count">${e.count} titre${e.count > 1 ? 's' : ''}</span>
     </div>`;
-  }).join('');
+    })
+    .join('');
 }

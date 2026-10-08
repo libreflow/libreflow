@@ -17,23 +17,35 @@
 // Exports publics :
 //   initDrop
 
-import { get }                                         from './store.js';
-import { emit, EVENTS }                                from './bus.js';
-import { i18n }                                        from './i18n.js';
-import { toast }                                       from './ui.js';
-import { invalidateFilterCache }                        from './search.js';
-import { pushTracks }                                   from './state.js';
-import { invalidateGenreGridSig }                      from './genres.js';
-import { loadTagsBg }                                  from './library.js';
-import { logImport }                                   from './imports.js';
-import { renderLib }                                   from './renderer.js';
-import { showView }                                    from './views.js';
+import { get } from './store.js';
+import { emit, EVENTS } from './bus.js';
+import { i18n } from './i18n.js';
+import { toast } from './ui.js';
+import { invalidateFilterCache } from './search.js';
+import { pushTracks } from './state.js';
+import { invalidateGenreGridSig } from './genres.js';
+import { loadTagsBg } from './library.js';
+import { logImport } from './imports.js';
+import { renderLib } from './renderer.js';
+import { showView } from './views.js';
 
 // Extensions audio acceptées — synchronisé avec watchfolder.js et le watcher Rust
-const _EXTS = new Set(['mp3','flac','aac','m4a','ogg','opus','wav','wma','aiff','ape','alac']);
+const _EXTS = new Set([
+  'mp3',
+  'flac',
+  'aac',
+  'm4a',
+  'ogg',
+  'opus',
+  'wav',
+  'wma',
+  'aiff',
+  'ape',
+  'alac'
+]);
 
 // ── État interne ─────────────────────────────────────────────────────────────
-let _drago    = null;  // #drago overlay — résolu après DOMContentLoaded
+let _drago = null; // #drago overlay — résolu après DOMContentLoaded
 // Compteur dragenter/dragleave — évite le flickering sur WebView2
 // (e.relatedTarget est parfois null même en intra-fenêtre sur Windows)
 let _dragDepth = 0;
@@ -60,7 +72,7 @@ async function _onDrop(e) {
   _dragDepth = 0;
   if (_drago) _drago.classList.remove('on');
 
-  const items    = [...e.dataTransfer.items];
+  const items = [...e.dataTransfer.items];
   const allFiles = [];
 
   // Support dossiers via DataTransferItem API (webkitGetAsEntry)
@@ -69,23 +81,37 @@ async function _onDrop(e) {
   // mémoire pour les dossiers profonds avec de nombreux sous-dossiers.
   async function traverseEntry(entry) {
     if (entry.isFile) {
-      await new Promise(res => entry.file(
-        f => { allFiles.push(f); res(); },
-        err => { console.warn('[dropin] entry.file error', entry.name, err); res(); },
-      ));
+      await new Promise((res) =>
+        entry.file(
+          (f) => {
+            allFiles.push(f);
+            res();
+          },
+          (err) => {
+            console.warn('[dropin] entry.file error', entry.name, err);
+            res();
+          }
+        )
+      );
     } else if (entry.isDirectory) {
       const reader = entry.createReader();
       // Lire et traiter chaque batch de 100 entrées dès sa réception (streaming),
       // sans attendre la totalité de l'arborescence (évite l'accumulation RAM).
       let done = false;
       while (!done) {
-        const batch = await new Promise(res => {
+        const batch = await new Promise((res) => {
           reader.readEntries(
-            entries => res(entries),
-            err => { console.warn('[dropin] readEntries error', err); res([]); },
+            (entries) => res(entries),
+            (err) => {
+              console.warn('[dropin] readEntries error', err);
+              res([]);
+            }
           );
         });
-        if (!batch.length) { done = true; break; }
+        if (!batch.length) {
+          done = true;
+          break;
+        }
         for (const sub of batch) await traverseEntry(sub);
       }
     }
@@ -112,59 +138,73 @@ async function _onDrop(e) {
     if (/(^|[/\\])\.\.([/\\]|$)/.test(p)) return false;
     return true;
   };
-  const audioFiles = allFiles.filter(f =>
-    _isSafeDropPath(f) && _EXTS.has(f.name.split('.').pop().toLowerCase()),
+  const audioFiles = allFiles.filter(
+    (f) => _isSafeDropPath(f) && _EXTS.has(f.name.split('.').pop().toLowerCase())
   );
-  if (!audioFiles.length) { toast(i18n('t_drag_hint'), 'warning'); return; }
+  if (!audioFiles.length) {
+    toast(i18n('t_drag_hint'), 'warning');
+    return;
+  }
 
   showView('scan');
-  const tracks    = get('tracks');
+  const tracks = get('tracks');
   const newTracks = [];
-  const _total    = audioFiles.length;
-  const _sf       = document.getElementById('sf');
-  const _bar      = document.getElementById('scan-bar');
+  const _total = audioFiles.length;
+  const _sf = document.getElementById('sf');
+  const _bar = document.getElementById('scan-bar');
   if (_bar) _bar.style.width = '0%';
-  let _scanned    = 0;
+  let _scanned = 0;
 
   for (const file of audioFiles) {
     _scanned++;
-    if (_bar) _bar.style.width = Math.round(_scanned / _total * 100) + '%';
-    if (_sf)  _sf.textContent  = `${_scanned} / ${_total}`;
+    if (_bar) _bar.style.width = Math.round((_scanned / _total) * 100) + '%';
+    if (_sf) _sf.textContent = `${_scanned} / ${_total}`;
     // Dédup : comparer les basenames (file.webkitRelativePath est toujours vide en drag-drop Tauri).
     // Fonctionne pour t.path = nom seul (drag-drop) ou chemin complet (scan dossier).
     const _dnL = file.name.toLowerCase();
     // B13 FIX : t.path peut être undefined (piste restaurée d'un backup .libreflow) —
     // t.path.split() throw alors hors de la boucle for synchrone → pushTracks jamais
     // appelé → tous les fichiers déposés perdus. Garde défensive comme watchfolder/m3u.
-    if (tracks.some(t => t.path && t.path.split(/[/\\]/).pop().toLowerCase() === _dnL)) continue;
+    if (tracks.some((t) => t.path && t.path.split(/[/\\]/).pop().toLowerCase() === _dnL)) continue;
 
     const ext = file.name.split('.').pop().toUpperCase();
     const url = URL.createObjectURL(file);
 
-    const dur = await new Promise(res => {
-      const a = new Audio(); a.preload = 'metadata'; a.src = url;
+    const dur = await new Promise((res) => {
+      const a = new Audio();
+      a.preload = 'metadata';
+      a.src = url;
       // BUG FIX F5 : libérer l'Audio temporaire après lecture des métadonnées
-      const done = (v) => { a.src = ''; a.load(); res(v); };
+      const done = (v) => {
+        a.src = '';
+        a.load();
+        res(v);
+      };
       a.addEventListener('loadedmetadata', () => done(a.duration || 0), { once: true });
-      a.addEventListener('error',          () => done(0),               { once: true });
+      a.addEventListener('error', () => done(0), { once: true });
       setTimeout(() => done(a.duration || 0), 3000);
     });
 
     const t = {
-      id:         crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2) + Date.now(),
-      name:       file.name.replace(/\.[^.]+$/, '').replace(/[-_]+/g, ' ').trim(),
-      artist:     i18n('unknown_artist'),
+      id: crypto.randomUUID
+        ? crypto.randomUUID()
+        : Math.random().toString(36).slice(2) + Date.now(),
+      name: file.name
+        .replace(/\.[^.]+$/, '')
+        .replace(/[-_]+/g, ' ')
+        .trim(),
+      artist: i18n('unknown_artist'),
       artistFull: i18n('unknown_artist'),
-      album:      '',
+      album: '',
       ext,
-      path:       file.webkitRelativePath || file.name,
-      duration:   dur,
-      dateAdded:  Date.now(),
-      art:        null,
-      artColor:   null,
+      path: file.webkitRelativePath || file.name,
+      duration: dur,
+      dateAdded: Date.now(),
+      art: null,
+      artColor: null,
       url,
       file,
-      metaDone:   false,
+      metaDone: false
     };
 
     newTracks.push(t);
@@ -181,8 +221,12 @@ async function _onDrop(e) {
   renderLib();
   showView('lib');
   toast(i18n('t_files_added', newTracks.length), 'success');
-  newTracks.forEach(t => loadTagsBg(t));
-  if (newTracks.length) logImport('drag-drop', newTracks.map(t => t.path));
+  newTracks.forEach((t) => loadTagsBg(t));
+  if (newTracks.length)
+    logImport(
+      'drag-drop',
+      newTracks.map((t) => t.path)
+    );
 }
 
 // ── Init ─────────────────────────────────────────────────────────────────────
@@ -194,7 +238,7 @@ async function _onDrop(e) {
 export function initDrop() {
   _drago = document.getElementById('drago');
   document.addEventListener('dragenter', _onDragEnter);
-  document.addEventListener('dragover',  _onDragOver);
+  document.addEventListener('dragover', _onDragOver);
   document.addEventListener('dragleave', _onDragLeave);
-  document.addEventListener('drop',      _onDrop);
+  document.addEventListener('drop', _onDrop);
 }

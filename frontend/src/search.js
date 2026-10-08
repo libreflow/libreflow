@@ -110,61 +110,96 @@ subscribe('tracks', () => {
 
 export const GENRE_ALIASES = Object.freeze({
   // Rock
-  'rock & roll':         'rock',             'rock and roll':     'rock',
-  'rockandroll':         'rock',             'alt rock':          'alternative rock',
-  'alternativerock':     'alternative rock', 'alternative':       'alternative rock',
-  'indie rock':          'indie',            'punk rock':         'punk',
-  'hard rock':           'rock',             'soft rock':         'rock',
+  'rock & roll': 'rock',
+  'rock and roll': 'rock',
+  rockandroll: 'rock',
+  'alt rock': 'alternative rock',
+  alternativerock: 'alternative rock',
+  alternative: 'alternative rock',
+  'indie rock': 'indie',
+  'punk rock': 'punk',
+  'hard rock': 'rock',
+  'soft rock': 'rock',
   // Electronic
-  'edm':                 'electronic',       'electro':           'electronic',
-  'electronica':         'electronic',       'electronic music':  'electronic',
-  'dance':               'electronic',       'dance music':       'electronic',
-  'dance pop':           'pop',              'techno':            'electronic',
-  'house':               'electronic',       'trance':            'electronic',
-  'ambient':             'electronic',       'drum and bass':     'electronic',
-  'dnb':                 'electronic',       'dubstep':           'electronic',
-  'drum & bass':         'electronic',
+  edm: 'electronic',
+  electro: 'electronic',
+  electronica: 'electronic',
+  'electronic music': 'electronic',
+  dance: 'electronic',
+  'dance music': 'electronic',
+  'dance pop': 'pop',
+  techno: 'electronic',
+  house: 'electronic',
+  trance: 'electronic',
+  ambient: 'electronic',
+  'drum and bass': 'electronic',
+  dnb: 'electronic',
+  dubstep: 'electronic',
+  'drum & bass': 'electronic',
   // Hip-hop
-  'hip hop':             'hip-hop',          'hiphop':            'hip-hop',
-  'rap':                 'hip-hop',          'trap':              'hip-hop',
-  'drill':               'hip-hop',          'phonk':             'hip-hop',
-  'gangsta rap':         'hip-hop',          'old school':        'hip-hop',
+  'hip hop': 'hip-hop',
+  hiphop: 'hip-hop',
+  rap: 'hip-hop',
+  trap: 'hip-hop',
+  drill: 'hip-hop',
+  phonk: 'hip-hop',
+  'gangsta rap': 'hip-hop',
+  'old school': 'hip-hop',
   // R&B / Soul
-  'r&b':                 'r&b/soul',         'soul':              'r&b/soul',
-  'rnb':                 'r&b/soul',         'rhythm and blues':  'r&b/soul',
-  'neo soul':            'r&b/soul',         'rhythm & blues':    'r&b/soul',
+  'r&b': 'r&b/soul',
+  soul: 'r&b/soul',
+  rnb: 'r&b/soul',
+  'rhythm and blues': 'r&b/soul',
+  'neo soul': 'r&b/soul',
+  'rhythm & blues': 'r&b/soul',
   // Jazz
-  'smooth jazz':         'jazz',             'bebop':             'jazz',
-  'fusion':              'jazz',             'jazz fusion':       'jazz',
-  'nu jazz':             'jazz',
+  'smooth jazz': 'jazz',
+  bebop: 'jazz',
+  fusion: 'jazz',
+  'jazz fusion': 'jazz',
+  'nu jazz': 'jazz',
   // Classical
-  'classical music':     'classical',        'orchestra':         'classical',
-  'orchestral':          'classical',        'baroque':           'classical',
-  'opera':               'classical',        'symphonic':         'classical',
+  'classical music': 'classical',
+  orchestra: 'classical',
+  orchestral: 'classical',
+  baroque: 'classical',
+  opera: 'classical',
+  symphonic: 'classical',
   // Pop
-  'synth-pop':           'pop',              'synthpop':          'pop',
-  'indie pop':           'pop',              'art pop':           'pop',
-  'bubblegum pop':       'pop',
+  'synth-pop': 'pop',
+  synthpop: 'pop',
+  'indie pop': 'pop',
+  'art pop': 'pop',
+  'bubblegum pop': 'pop',
   // Metal
-  'heavy metal':         'metal',            'death metal':       'metal',
-  'black metal':         'metal',            'metalcore':         'metal',
-  'thrash metal':        'metal',            'doom metal':        'metal',
-  'nu metal':            'metal',
+  'heavy metal': 'metal',
+  'death metal': 'metal',
+  'black metal': 'metal',
+  metalcore: 'metal',
+  'thrash metal': 'metal',
+  'doom metal': 'metal',
+  'nu metal': 'metal',
   // Country / Folk
-  'country music':       'country',          'bluegrass':         'country',
+  'country music': 'country',
+  bluegrass: 'country',
   // Latin
-  'latin pop':           'latin',            'salsa':             'latin',
-  'reggaeton':           'latin',            'bossa nova':        'latin',
+  'latin pop': 'latin',
+  salsa: 'latin',
+  reggaeton: 'latin',
+  'bossa nova': 'latin',
   // Reggae
-  'dub':                 'reggae',           'ska':               'reggae',
+  dub: 'reggae',
+  ska: 'reggae',
   // Blues
-  'blues rock':          'blues',            'delta blues':       'blues',
-  'chicago blues':       'blues',
+  'blues rock': 'blues',
+  'delta blues': 'blues',
+  'chicago blues': 'blues',
   // Funk
-  'funk rock':           'funk',
+  'funk rock': 'funk',
   // Gospel / Chanson
-  'chanson française':   'chanson',          'variété française': 'variete',
-  'variété':             'variete',
+  'chanson française': 'chanson',
+  'variété française': 'variete',
+  variété: 'variete'
 });
 
 /**
@@ -193,7 +228,9 @@ function _ensureNlc(t) {
   // peut `delete t._nlc` sans réinitialiser `_nlcGen` ; sans ce garde le rebuild
   // est sauté et `hay` reste undefined → TypeError dans _filterByQuery.
   if (t._nlcGen !== _filterGen || t._nlc == null) {
-    t._nlc = [t.name || '', t.artist || '', t.artistFull || '', t.album || '', t.genre || ''].join(' ').toLowerCase();
+    t._nlc = [t.name || '', t.artist || '', t.artistFull || '', t.album || '', t.genre || '']
+      .join(' ')
+      .toLowerCase();
     t._nlcGen = _filterGen;
   }
 }
@@ -208,7 +245,7 @@ function _ensureTrigrams(t) {
   // laisserait `_trigrams` undefined au prochain accès fuzzy.
   if (t._trigGen !== _filterGen || t._trigrams == null) {
     t._trigrams = _trigrams(t._nlc || '');
-    t._trigGen  = _filterGen;
+    t._trigGen = _filterGen;
   }
 }
 
@@ -223,10 +260,10 @@ function _filterByQuery(tracks, query) {
   const q = query.trim().toLowerCase();
   if (!q) return tracks;
   const parts = q.split(/\s+/).filter(Boolean);
-  return tracks.filter(t => {
+  return tracks.filter((t) => {
     _ensureNlc(t);
     const hay = t._nlc;
-    return parts.every(p => hay.includes(p));
+    return parts.every((p) => hay.includes(p));
   });
 }
 
@@ -255,23 +292,20 @@ function _sortTracks(src, sort, recentPlays) {
     case 'za':
       return copy.sort((a, b) => _compare(b.name, a.name));
     case 'artist':
-      return copy.sort((a, b) =>
-        _compare(a.artist, b.artist) ||
-        _compare(a.album, b.album)   ||
-        (a.track || 0) - (b.track || 0) ||
-        _compare(a.name, b.name)
+      return copy.sort(
+        (a, b) =>
+          _compare(a.artist, b.artist) ||
+          _compare(a.album, b.album) ||
+          (a.track || 0) - (b.track || 0) ||
+          _compare(a.name, b.name)
       );
     case 'album':
-      return copy.sort((a, b) =>
-        _compare(a.album, b.album) ||
-        (a.track || 0) - (b.track || 0) ||
-        _compare(a.name, b.name)
+      return copy.sort(
+        (a, b) =>
+          _compare(a.album, b.album) || (a.track || 0) - (b.track || 0) || _compare(a.name, b.name)
       );
     case 'duration': // colonne « Durée » cliquable (audit 2026-07-27)
-      return copy.sort((a, b) =>
-        (a.duration || 0) - (b.duration || 0) ||
-        _compare(a.name, b.name)
-      );
+      return copy.sort((a, b) => (a.duration || 0) - (b.duration || 0) || _compare(a.name, b.name));
     default: // 'az'
       return copy.sort((a, b) => _compare(a.name, b.name));
   }
@@ -288,18 +322,18 @@ let _lastWasFuzzy = false;
  * @returns {Track[]}
  */
 export function getFiltered() {
-  const tracks      = get('tracks')      || [];
-  const sort        = get('sort')        || 'az';
-  const query       = get('query')       || '';
-  const view        = get('view')        || 'all';
-  const drillKey    = get('drillKey')    || '';
-  const drillFrom   = get('drillFrom')   || '';
-  const curPlId     = get('curPlId')     || null;
+  const tracks = get('tracks') || [];
+  const sort = get('sort') || 'az';
+  const query = get('query') || '';
+  const view = get('view') || 'all';
+  const drillKey = get('drillKey') || '';
+  const drillFrom = get('drillFrom') || '';
+  const curPlId = get('curPlId') || null;
   const recentPlays = get('recentPlays') || [];
-  const plSort          = get('plSort')          || 'manual';
-  const albumDetailSort = (view === 'album-detail') ? (get('albumDetailSort') || 'track') : '';
-  const liked           = get('liked');
-  const formatFilter    = get('formatFilter') || '';
+  const plSort = get('plSort') || 'manual';
+  const albumDetailSort = view === 'album-detail' ? get('albumDetailSort') || 'track' : '';
+  const liked = get('liked');
+  const formatFilter = get('formatFilter') || '';
 
   // Signature de cache — inclure toutes les dimensions qui peuvent changer le résultat.
   // AUDIT-2026-05-22 (M-07) : tracksSig = length + dernier id est volontairement
@@ -308,9 +342,10 @@ export function getFiltered() {
   // PRIMAIRE d'invalidation. Tout site qui mute/reordonne tracks[] (tagedit,
   // organize, backup, library, selection...) DOIT appeler invalidateFilterCache()
   // — la signature n'est qu'un garde-fou rapide pour les changements de longueur.
-  const tracksSig   = tracks.length + '|' + (tracks[0]?.id || '') + '|' + (tracks[tracks.length - 1]?.id || '');
-  const likedSig    = (view === 'liked') ? (liked?.size ?? 0) : '';
-  const recentSig   = (sort === 'recent') ? recentPlays.slice(0, 20).join(',') : '';
+  const tracksSig =
+    tracks.length + '|' + (tracks[0]?.id || '') + '|' + (tracks[tracks.length - 1]?.id || '');
+  const likedSig = view === 'liked' ? (liked?.size ?? 0) : '';
+  const recentSig = sort === 'recent' ? recentPlays.slice(0, 20).join(',') : '';
   const sig = `${sort}\0${albumDetailSort}\0${query}\0${view}\0${drillKey}\0${drillFrom}\0${curPlId}\0${plSort}\0${tracksSig}\0${likedSig}\0${recentSig}\0${formatFilter}`;
 
   // @ts-ignore — result is always Track[] when sig matches (null only on first call)
@@ -318,31 +353,30 @@ export function getFiltered() {
 
   // ── Filtrage par vue ──────────────────────────────────────────────────────
   let src = tracks;
-  if (formatFilter) src = src.filter(t => (t.ext || '') === formatFilter);
+  if (formatFilter) src = src.filter((t) => (t.ext || '') === formatFilter);
 
   if (drillKey && drillFrom) {
     // Drill-down album / artiste / genre
     if (drillFrom === 'albums') {
       const key = drillKey.toLowerCase();
-      src = src.filter(t => (t.album || '').toLowerCase() === key);
+      src = src.filter((t) => (t.album || '').toLowerCase() === key);
     } else if (drillFrom === 'artists') {
       const key = drillKey.toLowerCase();
-      src = src.filter(t =>
-        (t.artist || '').toLowerCase() === key ||
-        (t.artistFull || '').toLowerCase() === key
+      src = src.filter(
+        (t) => (t.artist || '').toLowerCase() === key || (t.artistFull || '').toLowerCase() === key
       );
     } else if (drillFrom === 'genres') {
-      src = src.filter(t => _normalizeGenre(t.genre) === drillKey);
+      src = src.filter((t) => _normalizeGenre(t.genre) === drillKey);
     }
   } else if (view === 'liked') {
-    src = src.filter(t => liked?.has(t.id));
+    src = src.filter((t) => liked?.has(t.id));
   } else if (view === 'playlist' && curPlId) {
     const playlists = get('playlists') || [];
-    const pl = playlists.find(p => p.id === curPlId);
+    const pl = playlists.find((p) => p.id === curPlId);
     if (pl) {
-      src = /** @type {Track[]} */ (pl.trackIds
-        .filter(id => _trackIdxMap.has(id))
-        .map(id => tracks[_trackIdxMap.get(id)]));
+      src = /** @type {Track[]} */ (
+        pl.trackIds.filter((id) => _trackIdxMap.has(id)).map((id) => tracks[_trackIdxMap.get(id)])
+      );
     } else {
       src = [];
     }
@@ -350,7 +384,7 @@ export function getFiltered() {
     // Vue "récentes" : uniquement les pistes jouées récemment
     const recentSet = new Map(recentPlays.map((id, i) => [id, i]));
     src = src
-      .filter(t => recentSet.has(t.id))
+      .filter((t) => recentSet.has(t.id))
       .sort((a, b) => (recentSet.get(a.id) || 0) - (recentSet.get(b.id) || 0));
   }
 
@@ -377,13 +411,13 @@ export function getFiltered() {
         _scores.set(t.id, _trigramScore(qTrigrams, t._trigrams));
       }
       const fuzzy = src
-        .filter(t => (_scores.get(t.id) ?? 0) >= CFG.FUZZY_THRESHOLD)
+        .filter((t) => (_scores.get(t.id) ?? 0) >= CFG.FUZZY_THRESHOLD)
         .sort((a, b) => (_scores.get(b.id) ?? 0) - (_scores.get(a.id) ?? 0));
       _lastWasFuzzy = fuzzy.length > 0;
       // Cache result directly and return — skip normal sort since results are ordered by score
       if (_lastWasFuzzy) {
         const posMap = new Map(fuzzy.map((t, i) => [t.id, i]));
-        _GF.sig    = sig;
+        _GF.sig = sig;
         _GF.result = fuzzy;
         _GF.posMap = posMap;
         return fuzzy;
@@ -400,7 +434,7 @@ export function getFiltered() {
   // Vue 'recent' sans query : ordre de lecture récente déjà appliqué dans le filtre,
   //   ne pas ré-appliquer _sortTracks qui écraserait cet ordre.
   const isManualPlaylist = view === 'playlist' && plSort === 'manual' && !query;
-  const isRecentView     = view === 'recent' && !query;
+  const isRecentView = view === 'recent' && !query;
   let result;
   if (isManualPlaylist || isRecentView) {
     result = filtered; // ordre préservé (playlist manuelle ou récentes)
@@ -424,7 +458,7 @@ export function getFiltered() {
   // Utilise t.id (string) comme clé — les références d'objets changent après setTracks()
   const posMap = new Map(result.map((t, i) => [t.id, i]));
 
-  _GF.sig    = sig;
+  _GF.sig = sig;
   _GF.result = result;
   _GF.posMap = posMap;
 
@@ -441,7 +475,7 @@ export function getFiltered() {
 export function filteredIdx(track) {
   if (!track || !_GF.posMap) return -1;
   // Compatibilité : appelé avec un objet piste ou un id string direct
-  const id = (typeof track === 'string') ? track : (track.id ?? null);
+  const id = typeof track === 'string' ? track : (track.id ?? null);
   if (!id) return -1;
   const pos = _GF.posMap.get(id);
   return pos !== undefined ? pos : -1;

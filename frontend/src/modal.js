@@ -25,19 +25,24 @@ let _modalFocusTrap = null;
 /** @type {WeakMap<HTMLElement, { handler: (e: KeyboardEvent) => void, prevFocus: HTMLElement|null }>} */
 const _trapRegistry = new WeakMap();
 
-const _MODAL_FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+const _MODAL_FOCUSABLE =
+  'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
 function _buildModalFocusTrap(dialogEl) {
   return function (e) {
     if (e.key !== 'Tab') return;
-    const els = [...dialogEl.querySelectorAll(_MODAL_FOCUSABLE)]
-      .filter(el => el.offsetWidth > 0 || el.offsetHeight > 0);
+    const els = [...dialogEl.querySelectorAll(_MODAL_FOCUSABLE)].filter(
+      (el) => el.offsetWidth > 0 || el.offsetHeight > 0
+    );
     if (!els.length) return;
-    const first = els[0], last = els[els.length - 1];
+    const first = els[0],
+      last = els[els.length - 1];
     if (e.shiftKey && document.activeElement === first) {
-      e.preventDefault(); last.focus();
+      e.preventDefault();
+      last.focus();
     } else if (!e.shiftKey && document.activeElement === last) {
-      e.preventDefault(); first.focus();
+      e.preventDefault();
+      first.focus();
     }
   };
 }
@@ -54,7 +59,7 @@ function _buildModalFocusTrap(dialogEl) {
 export function trapFocus(dialogEl, opts = {}) {
   if (!dialogEl || _trapRegistry.has(dialogEl)) return;
   const prevFocus = /** @type {HTMLElement|null} */ (document.activeElement);
-  const handler   = _buildModalFocusTrap(dialogEl);
+  const handler = _buildModalFocusTrap(dialogEl);
   dialogEl.addEventListener('keydown', handler);
   _trapRegistry.set(dialogEl, { handler, prevFocus });
   // Focus initial — un microtask delay évite que l'ouverture par clic vole le focus immédiatement.
@@ -98,14 +103,18 @@ export function installAutoFocusTrap() {
   // Cibles auto-wirées (TOUS sauf #modal-bg qui garde son ancien path explicite).
   // `shortcuts-panel` est inclus : le panel lui-même porte `role="dialog"` (pas de wrapper).
   const autoIds = [
-    'confirm-modal-bg', 'organize-modal-bg', 'usb-modal-bg', 'cd-modal-bg',
-    'pl-modal-bg',      'batch-tag-modal-bg',
+    'confirm-modal-bg',
+    'organize-modal-bg',
+    'usb-modal-bg',
+    'cd-modal-bg',
+    'pl-modal-bg',
+    'batch-tag-modal-bg',
     'dupes-panel',
     'shortcuts-panel',
     // A11Y-14 : sleep-menu se déclare role=dialog aria-modal — il porte le rôle
     // lui-même (comme shortcuts-panel) et bascule `.on`. La fermeture clavier
     // (Escape) est gérée dans shortcuts.js pour éviter un piège au clavier.
-    'sleep-menu',
+    'sleep-menu'
   ];
   for (const id of autoIds) {
     const bg = document.getElementById(id);
