@@ -603,15 +603,9 @@ async function boot() {
       if (!est || !est.quota) return;
       const pct = est.usage / est.quota;
       if (pct > 0.9) {
-        toast(
-          `Stockage utilisé à ${Math.round(pct * 100)}% — libérez de l'espace disque pour éviter la perte de données.`,
-          'error'
-        );
+        toast(i18n('app_storage_critical', Math.round(pct * 100)), 'error');
       } else if (pct > 0.8) {
-        toast(
-          `Stockage utilisé à ${Math.round(pct * 100)}% — pensez à libérer de l'espace disque.`,
-          'warning'
-        );
+        toast(i18n('app_storage_warn', Math.round(pct * 100)), 'warning');
       }
     })
     .catch((e) => console.warn('[app:storageEstimate]', e));
@@ -1192,7 +1186,7 @@ window.addEventListener('error', (e) => {
   if (e.filename && !e.filename.includes('LibreFlow') && !e.filename.includes('localhost')) return; // ignorer les erreurs d'extensions tierces
   console.error('[LibreFlow] Uncaught error:', e.error || e.message);
   const msg = e.error?.message || e.message || 'Erreur inconnue';
-  toast(`Erreur inattendue : ${msg}`, 'error');
+  toast(i18n('app_unexpected_error', msg), 'error');
 });
 window.addEventListener('unhandledrejection', (e) => {
   const reason = e.reason;
@@ -1200,7 +1194,7 @@ window.addEventListener('unhandledrejection', (e) => {
   if (reason && reason._alreadyToasted) return;
   console.error('[LibreFlow] Unhandled rejection:', reason);
   const msg = reason?.message || String(reason) || 'Erreur asynchrone';
-  toast(`Erreur asynchrone : ${msg}`, 'error');
+  toast(i18n('app_async_error', msg), 'error');
 });
 
 // ── Listener `resize` global centralisé (audit responsive 2026-05-22) ─────────
@@ -1398,10 +1392,7 @@ export async function clearAppCache() {
   }).catch((e) => console.warn('[clearAppCache]', e));
   // 4. Ne recharger que si la suppression a réellement eu lieu.
   if (!deleted) {
-    toast(
-      'Impossible de vider les caches. Ferme toutes les fenêtres LibreFlow et réessaie.',
-      'error'
-    );
+    toast(i18n('app_cache_clear_fail'), 'error');
     return;
   }
   window.location.reload();

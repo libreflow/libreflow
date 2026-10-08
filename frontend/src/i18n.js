@@ -138,8 +138,10 @@ export function applyLang() {
   setText('#modal .modal-h', 'clear_h');
   setHtml('#modal .modal-s', 'clear_body');
 
-  // Modal cancel buttons
-  document.querySelectorAll('.mbtn.cancel').forEach((b) => (b.textContent = i18n('pl_cancel')));
+  // Modal cancel buttons — respecte un data-i18n explicite quand présent
+  document.querySelectorAll('.mbtn.cancel').forEach((b) => {
+    if (!b.dataset.i18n) b.textContent = i18n('pl_cancel');
+  });
 
   // Playlist modal
   setAttrEl('pl-modal-inp', 'placeholder', i18n('pl_name_ph'));

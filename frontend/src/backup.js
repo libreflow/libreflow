@@ -17,6 +17,7 @@
 import { dall, dget, DB } from './db.js';
 import { invoke } from './ipc.js';
 import { toast } from './ui.js';
+import { i18n } from './i18n.js';
 import { get, set, notify } from './store.js';
 import { rebuildTrackIdxMap, invalidateFilterCache } from './search.js';
 import { VIRT } from './virt.js';
@@ -54,7 +55,7 @@ export async function exportBackup() {
   const btn = document.getElementById('backup-export-btn');
   if (btn) {
     btn.disabled = true;
-    btn.textContent = 'Export en cours…';
+    btn.textContent = i18n('bk_exporting');
   }
 
   try {
@@ -87,17 +88,17 @@ export async function exportBackup() {
     });
 
     if (result) {
-      toast(`Bibliothèque exportée — ${(tracks ?? []).length} piste(s)`, 'success');
+      toast(i18n('bk_exported', (tracks ?? []).length), 'success');
     } else {
-      toast('Export annulé', 'info');
+      toast(i18n('bk_export_cancelled'), 'info');
     }
   } catch (e) {
     console.error('[backup] Export failed:', e);
-    toast(`Erreur d'export : ${e}`, 'error');
+    toast(i18n('bk_export_error', e), 'error');
   } finally {
     if (btn) {
       btn.disabled = false;
-      btn.textContent = 'Exporter';
+      btn.textContent = i18n('set_backup_export_btn');
     }
   }
 }
@@ -112,13 +113,13 @@ export async function importBackup() {
   const btn = document.getElementById('backup-import-btn');
   if (btn) {
     btn.disabled = true;
-    btn.textContent = 'Restauration…';
+    btn.textContent = i18n('bk_importing');
   }
 
   try {
     const payload = await invoke('import_backup', {});
     if (!payload) {
-      toast('Import annulé', 'info');
+      toast(i18n('bk_import_cancelled'), 'info');
       return;
     }
 
@@ -127,12 +128,12 @@ export async function importBackup() {
     try {
       manifest = JSON.parse(payload.manifest);
     } catch {
-      toast('Fichier .libreflow invalide (manifest corrompu)', 'error');
+      toast(i18n('bk_invalid_file'), 'error');
       return;
     }
 
     if (typeof manifest.version !== 'number' || manifest.version > BACKUP_FORMAT_VERSION) {
-      toast(`Format non supporté (version ${manifest.version}). Mettez LibreFlow à jour.`, 'error');
+      toast(i18n('bk_unsupported_format', manifest.version), 'error');
       return;
     }
 
@@ -198,17 +199,14 @@ export async function importBackup() {
     await _batchPut('imports', backupImports);
 
     const added = addedTracks.length;
-    toast(
-      `Restauration terminée — ${added} nouvelle(s) piste(s) ajoutée(s) / ${manifest.track_count ?? backupTracks.length} dans la sauvegarde`,
-      'success'
-    );
+    toast(i18n('bk_restored', added, manifest.track_count ?? backupTracks.length), 'success');
   } catch (e) {
     console.error('[backup] Import failed:', e);
-    toast(`Erreur d'import : ${e}`, 'error');
+    toast(i18n('bk_import_error', e), 'error');
   } finally {
     if (btn) {
       btn.disabled = false;
-      btn.textContent = 'Restaurer';
+      btn.textContent = i18n('set_backup_import_btn');
     }
   }
 }

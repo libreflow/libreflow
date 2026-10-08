@@ -20,6 +20,7 @@ import { saveTracks } from './library.js';
 import { getWatchPath } from './watchfolder.js';
 import { invoke } from './ipc.js';
 import { toast, esc } from './ui.js';
+import { i18n } from './i18n.js';
 import { VIRT } from './virt.js';
 import { rebuildTrackIdxMap, invalidateFilterCache } from './search.js';
 import { CFG } from './cfg.js';
@@ -113,17 +114,17 @@ export async function organizePreview(scheme) {
   const basePath = getWatchPath();
 
   if (!basePath) {
-    toast('Aucun dossier de surveillance configuré', 'error');
+    toast(i18n('org_no_watch'), 'error');
     return;
   }
   if (!tracks.length) {
-    toast('Aucune piste dans la bibliothèque', 'error');
+    toast(i18n('org_no_tracks'), 'error');
     return;
   }
 
   const moves = computeMoves(tracks, basePath, scheme);
   if (!moves.length) {
-    toast('Toutes les pistes sont déjà correctement organisées', 'info');
+    toast(i18n('org_already'), 'info');
     return;
   }
 
@@ -135,7 +136,7 @@ export async function organizePreview(scheme) {
       { timeout: CFG.ORGANIZE_DRY_RUN_TIMEOUT_MS }
     );
   } catch (e) {
-    toast(`Erreur de validation : ${e}`, 'error');
+    toast(i18n('org_valid_error', e), 'error');
     return;
   }
 
@@ -161,7 +162,7 @@ export async function organizeConfirm() {
   const btn = document.getElementById('organize-confirm-btn');
   if (btn) {
     btn.disabled = true;
-    btn.textContent = 'En cours…';
+    btn.textContent = i18n('org_working');
   }
 
   let result;
@@ -172,13 +173,13 @@ export async function organizeConfirm() {
       { timeout: CFG.ORGANIZE_TIMEOUT_MS }
     );
   } catch (e) {
-    toast(`Erreur lors de l'organisation : ${e}`, 'error');
+    toast(i18n('org_error', e), 'error');
     organizeCancel();
     return;
   }
 
   if (!result || typeof result.error_count !== 'number') {
-    toast('Réponse inattendue du serveur', 'error');
+    toast(i18n('org_unexpected'), 'error');
     organizeCancel();
     return;
   }
@@ -189,10 +190,7 @@ export async function organizeConfirm() {
     // Rust rolled back all moves on first failure — do not update any paths
     _pendingMoves = [];
     organizeCancel();
-    toast(
-      `Erreur lors de l'organisation : ${failCount} fichier(s) non déplacé(s). Aucune modification appliquée.`,
-      'error'
-    );
+    toast(i18n('org_rollback', failCount), 'error');
     return;
   }
 
@@ -222,7 +220,7 @@ export async function organizeConfirm() {
 
   _pendingMoves = [];
   organizeCancel();
-  toast(`${succeeded.length} fichier(s) organisé(s) avec succès`, 'success');
+  toast(i18n('org_done', succeeded.length), 'success');
 }
 
 // ── organizeCancel ────────────────────────────────────────────────────────────
@@ -305,7 +303,7 @@ function _showOrganizeModal(valid, errors, scheme) {
 
   if (btn) {
     btn.disabled = totalValid === 0;
-    btn.textContent = totalValid === 0 ? 'Rien à faire' : 'Confirmer';
+    btn.textContent = totalValid === 0 ? i18n('org_nothing_todo') : i18n('btn_confirm');
   }
 
   // A11Y : sauvegarder l'élément focusé avant ouverture (restauré dans organizeCancel)

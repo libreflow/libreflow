@@ -645,5 +645,83 @@ export default {
   // ── Nouveaux — grilles Albums/Artistes ──────────────────────
   multi_artists: 'Artistes multiples',
   n_albums: (n) => `${n} album${n !== 1 ? 's' : ''}`,
-  dur_min: (m) => `${m} min`
+  dur_min: (m) => `${m} min`,
+
+  // ── AUDIT UI i18n — chaînes boutons/labels précédemment codées en dur ──
+  btn_confirm: 'Confirmer',
+  btn_close: 'Fermer',
+  btn_apply: 'Appliquer',
+  btn_ignore: 'Ignorer',
+  btn_refresh: '↻ Actualiser',
+  btn_browse: 'Parcourir…',
+  confirm_clear_anyway: 'Vider quand même',
+  cd_extract_lib: 'Extraire vers bibliothèque',
+  set_eq_detecting: 'Détection en cours…',
+  set_rg_target_full: (v) => `Cible : ${v} LUFS`,
+  org_scheme_artist_album: 'Artiste / Album',
+  org_scheme_artist: 'Artiste',
+  org_scheme_flat: 'Plat',
+  set_org_sub: 'Déplace les fichiers audio dans des dossiers Artiste/Album.',
+  set_backup_export_label: 'Exporter la bibliothèque',
+  set_backup_export_sub:
+    'Sauvegarde les pistes, playlists et historique dans un fichier .libreflow.',
+  set_backup_export_btn: 'Exporter',
+  set_backup_import_label: 'Restaurer une sauvegarde',
+  set_backup_import_sub:
+    'Importe les pistes d\u2019un fichier .libreflow (les données locales sont conservées).',
+  set_backup_import_btn: 'Restaurer',
+  set_usb_label: 'Importer depuis un disque externe',
+  set_usb_sub:
+    'Détecte les clés USB et disques externes, importe la musique qu\u2019ils contiennent.',
+  set_usb_btn: 'Importer depuis USB',
+  dupes_delete_all: 'Supprimer tous les doublons',
+  // ── AUDIT UI i18n — toasts modules non localisés (backup/devices/organize/orphans/cdaudio/app) ──
+  bk_exporting: 'Export en cours…',
+  bk_exported: (n) => `Bibliothèque exportée — ${n} piste${n !== 1 ? 's' : ''}`,
+  bk_export_cancelled: 'Export annulé',
+  bk_export_error: (e) => `Erreur d\u2019export : ${e}`,
+  bk_importing: 'Restauration…',
+  bk_import_cancelled: 'Import annulé',
+  bk_invalid_file: 'Fichier .libreflow invalide (manifest corrompu)',
+  bk_unsupported_format: (v) => `Format non supporté (version ${v}). Mettez LibreFlow à jour.`,
+  bk_restored: (n, total) =>
+    `Restauration terminée — ${n} nouvelle${n !== 1 ? 's' : ''} piste${n !== 1 ? 's' : ''} ajoutée${n !== 1 ? 's' : ''} / ${total} dans la sauvegarde`,
+  bk_import_error: (e) => `Erreur d\u2019import : ${e}`,
+  dv_usb_detected: (label) => `Disque USB détecté (${label}) — Importer de la musique ?`,
+  dv_cd_detected: (n) => `CD Audio détecté (${n} piste${n !== 1 ? 's' : ''}) — Lire ou extraire ?`,
+  dv_drive_error: (e) => `Erreur d\u2019accès au lecteur : ${e}`,
+  dv_no_audio: 'Aucun fichier audio trouvé dans ce dossier',
+  dv_usb_imported: (n) =>
+    `${n} piste${n !== 1 ? 's' : ''} importée${n !== 1 ? 's' : ''} depuis le lecteur USB`,
+  dv_no_new: 'Aucune nouvelle piste trouvée (déjà dans la bibliothèque ?)',
+  org_no_watch: 'Aucun dossier de surveillance configuré',
+  org_no_tracks: 'Aucune piste dans la bibliothèque',
+  org_already: 'Toutes les pistes sont déjà correctement organisées',
+  org_valid_error: (e) => `Erreur de validation : ${e}`,
+  org_working: 'En cours…',
+  org_error: (e) => `Erreur lors de l\u2019organisation : ${e}`,
+  org_rollback: (n) =>
+    `Erreur lors de l\u2019organisation : ${n} fichier${n !== 1 ? 's' : ''} non déplacé${n !== 1 ? 's' : ''}. Aucune modification appliquée.`,
+  org_unexpected: 'Réponse inattendue du serveur',
+  org_done: (n) => `${n} fichier${n !== 1 ? 's' : ''} organisé${n !== 1 ? 's' : ''} avec succès`,
+  org_nothing_todo: 'Rien à faire',
+  oph_bad_type: 'Type de fichier non reconnu — choisissez un fichier audio',
+  oph_relocated: (name) => `« ${name} » relocalisé`,
+  oph_deleted_from_lib: (n) =>
+    `${n} fichier${n !== 1 ? 's' : ''} supprimé${n !== 1 ? 's' : ''} de la bibliothèque`,
+  cd_toc_lost: 'TOC perdu — réessayer',
+  cd_track_missing: (idx) => `Piste ${idx} introuvable dans le TOC`,
+  cd_rip_cancelled: 'Extraction annulée',
+  cd_rip_error: (idx, e) => `Erreur sur piste ${idx} : ${e}`,
+  cd_ripped: (n) =>
+    `${n} piste${n !== 1 ? 's' : ''} extraite${n !== 1 ? 's' : ''} et ajoutée${n !== 1 ? 's' : ''}`,
+  cd_ripped_import_fail: 'Extraction terminée mais import échoué',
+  app_unexpected_error: (msg) => `Erreur inattendue : ${msg}`,
+  app_async_error: (msg) => `Erreur asynchrone : ${msg}`,
+  app_storage_warn: (pct) =>
+    `Stockage utilisé à ${pct}% — pensez à libérer de l\u2019espace disque.`,
+  app_storage_critical: (pct) =>
+    `Stockage utilisé à ${pct}% — libérez de l\u2019espace disque pour éviter la perte de données.`,
+  app_cache_clear_fail:
+    'Impossible de vider les caches. Ferme toutes les fenêtres LibreFlow et réessaie.'
 };

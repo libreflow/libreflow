@@ -125,12 +125,12 @@ export async function playCdTrack(drivePath, idx) {
   const bg = document.getElementById('cd-modal-bg');
   const toc = bg?._toc;
   if (!toc) {
-    toast('TOC perdu — réessayer', 'error');
+    toast(i18n('cd_toc_lost'), 'error');
     return;
   }
   const tocTrack = toc.tracks.find((t) => t.idx === idx);
   if (!tocTrack) {
-    toast(`Piste ${idx} introuvable dans le TOC`, 'error');
+    toast(i18n('cd_track_missing', idx), 'error');
     return;
   }
   // CONFORMITÉ-CD : avertissement copyright one-shot (DMCA / EUCD).
@@ -203,7 +203,7 @@ export async function extractCd(drivePath) {
   const bg = document.getElementById('cd-modal-bg');
   const toc = bg?._toc;
   if (!toc) {
-    toast('TOC perdu — réessayer', 'error');
+    toast(i18n('cd_toc_lost'), 'error');
     return;
   }
 
@@ -259,11 +259,11 @@ export async function extractCd(drivePath) {
     } catch (e) {
       _unsubscribeProgress();
       if (String(e) === 'cancelled') {
-        toast('Extraction annulée', 'info');
+        toast(i18n('cd_rip_cancelled'), 'info');
         _resetProgressUi();
         return;
       }
-      toast(`Erreur sur track ${tocTrack.idx} : ${e}`, 'error');
+      toast(i18n('cd_rip_error', tocTrack.idx, e), 'error');
     } finally {
       _currentRipId = null;
       _unsubscribeProgress();
@@ -273,10 +273,10 @@ export async function extractCd(drivePath) {
   if (written.length) {
     try {
       await importPaths(written);
-      toast(`${written.length} piste(s) extraite(s) et ajoutée(s)`, 'success');
+      toast(i18n('cd_ripped', written.length), 'success');
     } catch (e) {
       console.warn('[cdaudio] importPaths failed:', e);
-      toast('Extraction terminée mais import échoué', 'error');
+      toast(i18n('cd_ripped_import_fail'), 'error');
     }
   }
 
