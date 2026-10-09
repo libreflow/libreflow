@@ -1169,8 +1169,16 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 // Attendre __TAURI__ avant de démarrer (fix build MSI)
+// PERF-LH : dans un navigateur pur (Lighthouse, dev vite, tests), __TAURI__ n'arrive
+// jamais — l'ancien polling 200×25 ms imposait 5 s de délai fixe avant boot() et
+// le premier rendu (LCP 14,8 s). __TAURI_INTERNALS__ est injecté par le script
+// d'init Tauri AVANT tout script de page : son absence au moment de l'évaluation
+// du module signifie de façon fiable « contexte non-Tauri » → boot immédiat.
 function waitForTauri(cb, n = 0) {
   if (window.__TAURI__?.core?.invoke) {
+    cb();
+  } else if (!window.__TAURI_INTERNALS__ && n === 0) {
+    console.warn('[LibreFlow] __TAURI__ non disponible — démarrage navigateur');
     cb();
   } else if (n < 200) {
     setTimeout(() => waitForTauri(cb, n + 1), 25);
