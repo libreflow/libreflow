@@ -451,7 +451,7 @@ export function nextAlbumSort() {
   saveCfg();
 }
 
-export function nextArtistSort() {
+function nextArtistSort() {
   const cur = get('artistSort') || 'name';
   const next = cur === 'name' ? 'count' : 'name';
   set('artistSort', next);
@@ -462,7 +462,7 @@ export function nextArtistSort() {
   saveCfg();
 }
 
-export function nextGenreSort() {
+function nextGenreSort() {
   const cur = get('genreSort') || 'count';
   const next = cur === 'count' ? 'name' : 'count';
   set('genreSort', next);

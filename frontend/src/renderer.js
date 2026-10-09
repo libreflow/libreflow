@@ -104,7 +104,7 @@ function _rowLbl(key, fallback) {
   return _LBL[key];
 }
 
-export function artPlaceholder(t) {
+function artPlaceholder(t) {
   const letter = t.name?.[0]?.toUpperCase() || '♪';
   if (t.artColor && ART_COLOR_RE.test(t.artColor)) {
     return `<div class="tart-ph" aria-hidden="true" style="background:${esc(t.artColor)}"><span class="tart-init">${extEmoji(t.ext) || letter}</span></div>`;
@@ -118,7 +118,7 @@ export function artPlaceholder(t) {
   return `<div class="tart-ph" aria-hidden="true" style="background:${bg};color:${fg}"><span class="tart-init">${extEmoji(t.ext) || letter}</span></div>`;
 }
 
-export function makeLikeBtn(t, liked) {
+function makeLikeBtn(t, liked) {
   liked = liked ?? get('liked');
   const on = liked?.has(t.id);
   // A11Y-06: label dynamique selon l'état (like_label / unlike_label) — annonce correctement l'état au screen reader
@@ -128,17 +128,17 @@ export function makeLikeBtn(t, liked) {
   return `<button class="tlk${on ? ' on' : ''}" data-action="likeat" data-track-id="${esc(t.id)}" aria-pressed="${!!on}" aria-label="${lbl}" tabindex="-1"><svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg></button>`;
 }
 
-export function makeAddBtn(t) {
+function makeAddBtn(t) {
   const lbl = _rowLbl('add_to_playlist', 'Ajouter à une playlist');
   return `<button class="tr-add-btn" data-action="show-pl-qpop" data-track-id="${esc(t.id)}" title="${lbl}" aria-label="${lbl}" tabindex="-1"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></button>`;
 }
 
-export function makeEqHTML(_t) {
+function makeEqHTML(_t) {
   return '<span class="eq-bars" aria-hidden="true"><span></span><span></span><span></span></span>';
 }
 
 // AUDIT-2026-07-27 : ⋯ au hover — ouvre le même menu que le clic droit (tr-more, handlers.js)
-export function makeMoreBtn(t) {
+function makeMoreBtn(t) {
   const lbl = _rowLbl('tr_more', "Plus d'actions");
   return `<button class="tr-more-btn" data-action="tr-more" data-track-id="${esc(t.id)}" title="${lbl}" aria-label="${lbl}" aria-haspopup="menu" tabindex="-1"><svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg></button>`;
 }
@@ -812,7 +812,7 @@ export function scrollToCurrentTrack() {
   });
 }
 
-export function renderFormatChips() {
+function renderFormatChips() {
   const bar = document.getElementById('format-bar');
   if (!bar) return;
   const tracks = get('tracks');

@@ -15,16 +15,6 @@
 
 // ── Utilitaire sécurité ───────────────────────────────────────────────────
 
-/** Escape HTML special characters including quotes. Use for any user-provided content in HTML attributes or text nodes. */
-export function esc(str) {
-  return (str || '')
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
-}
-
 // ── Lit Web Component delegation ─────────────────────────────────────────
 // Phase 0 Lit : les constantes _TOAST_ICONS et _TOAST_DUR vivent désormais
 // dans frontend/src/components/lf-toast-stack.{js,logic.js}. ui.js délègue.

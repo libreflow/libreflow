@@ -36,7 +36,7 @@ const _COMPRESS_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColo
 
 // ── Formatters (pure — also tested in core.test.cjs section 10) ──────────────
 
-export function formatCodec(ext) {
+function formatCodec(ext) {
   if (!ext) return '–';
   const upper = ext.toUpperCase();
   const MAP = {
@@ -54,14 +54,14 @@ export function formatCodec(ext) {
   return MAP[upper] || upper;
 }
 
-export function formatBitDepth(bitDepth, sampleRate) {
+function formatBitDepth(bitDepth, sampleRate) {
   const parts = [];
   if (bitDepth) parts.push(bitDepth + ' bit');
   if (sampleRate) parts.push((sampleRate / 1000).toFixed(sampleRate % 1000 === 0 ? 0 : 1) + ' kHz');
   return parts.join(' / ') || '–';
 }
 
-export function formatBitrate(bitrate) {
+function formatBitrate(bitrate) {
   if (!bitrate) return '–';
   return bitrate + ' kbps';
 }
@@ -250,7 +250,7 @@ function _renderNowPlaying(t, info) {
 
 // ── Public API ────────────────────────────────────────────────────────────────
 
-export async function openNowPlaying() {
+async function openNowPlaying() {
   _prevView = get('view') || 'all';
   closeQueue();
   closeEQ();

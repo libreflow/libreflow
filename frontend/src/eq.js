@@ -335,7 +335,7 @@ export function closeEQ() {
 
 // ── setEQBand ─────────────────────────────────────────────────────────────────
 /** Modifie le gain de la bande `idx` (0-9) à la valeur `db` (en dB). */
-export function setEQBand(idx, db) {
+function setEQBand(idx, db) {
   if (isNaN(db) || !isFinite(db)) return;
   if (!eqCtx) initEQ();
   if (!eqNodes[idx]) return;
@@ -505,7 +505,7 @@ function _updatePowerBtn() {
 
 // ── applyGenreEQ ─────────────────────────────────────────────────────────────
 /** Applique le preset correspondant au genre donné (clé normalisée). */
-export function applyGenreEQ(genre) {
+function applyGenreEQ(genre) {
   if (!genre) return;
   const preset = GENRE_TO_PRESET[genre.toLowerCase()] ?? null;
   if (preset) applyEQPreset(preset);
@@ -518,7 +518,7 @@ export function startSmartEQ() {
   _smartRunning = true;
 }
 
-export function stopSmartEQ() {
+function stopSmartEQ() {
   _smartRunning = false;
 }
 
@@ -529,7 +529,7 @@ export function updateSmartEQGenre(genre) {
   }
 }
 
-export function updateSmartEQLoudness(lufs) {
+function updateSmartEQLoudness(lufs) {
   _smartLoudness = lufs ?? 0;
   // Compensation loudness légère (±2 dB max), multipliée par le volume courant du slider
   if (masterGainNode && eqCtx) {
@@ -630,7 +630,7 @@ export function filterEQPresets(cat) {
 
 // ── renderEQBands ─────────────────────────────────────────────────────────────
 /** Génère les 10 sliders EQ dans #eq-bands. */
-export function renderEQBands() {
+function renderEQBands() {
   const container = document.getElementById('eq-bands');
   if (!container) return;
 
@@ -909,7 +909,7 @@ function _syncEQUI() {
 
 // ── Handler input slider (wired via data-input-action="eq-band-input") ────────
 // Exposé sur window pour que handlers.js puisse le brancher si nécessaire
-export function handleEQBandInput(e) {
+function handleEQBandInput(e) {
   const idx = parseInt(e.target.dataset.band, 10);
   if (isNaN(idx)) return;
   setEQBand(idx, parseFloat(e.target.value));

@@ -199,7 +199,7 @@ export async function analyzeAndApplyRG() {
   }
 }
 
-export function applyRGGain(gain) {
+function applyRGGain(gain) {
   if (!rgGainNode) initRG();
   if (rgGainNode && eqCtx) {
     rgGainNode.gain.setTargetAtTime(gain, eqCtx.currentTime, 0.1);

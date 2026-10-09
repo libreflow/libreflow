@@ -19,7 +19,8 @@ import { get, set, notify } from './store.js';
 import { saveTracks } from './library.js';
 import { getWatchPath } from './watchfolder.js';
 import { invoke } from './ipc.js';
-import { toast, esc } from './ui.js';
+import { toast } from './ui.js';
+import { esc } from './utils.js';
 import { i18n } from './i18n.js';
 import { VIRT } from './virt.js';
 import { rebuildTrackIdxMap, invalidateFilterCache } from './search.js';
@@ -39,7 +40,7 @@ let _prevFocus = null;
  * @param {string|undefined} s
  * @returns {string}
  */
-export function sanitizeName(s) {
+function sanitizeName(s) {
   return (
     String(s || 'Inconnu')
       .replace(/[\\/:*?"<>|]/g, '_')
@@ -70,7 +71,7 @@ function _sep(basePath) {
  * @param {'artist-album'|'artist'|'flat'} scheme
  * @returns {Array<{from:string,to:string}>}
  */
-export function computeMoves(tracks, basePath, scheme) {
+function computeMoves(tracks, basePath, scheme) {
   const sep = _sep(basePath);
   const base = basePath.replace(/[\\/]+$/, '');
   const moves = [];

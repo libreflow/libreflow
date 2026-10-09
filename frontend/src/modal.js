@@ -56,7 +56,7 @@ function _buildModalFocusTrap(dialogEl) {
  * @param {HTMLElement} dialogEl
  * @param {{ initialFocus?: string }} [opts]
  */
-export function trapFocus(dialogEl, opts = {}) {
+function trapFocus(dialogEl, opts = {}) {
   if (!dialogEl || _trapRegistry.has(dialogEl)) return;
   const prevFocus = /** @type {HTMLElement|null} */ (document.activeElement);
   const handler = _buildModalFocusTrap(dialogEl);
@@ -77,7 +77,7 @@ export function trapFocus(dialogEl, opts = {}) {
  *
  * @param {HTMLElement} dialogEl
  */
-export function releaseFocus(dialogEl) {
+function releaseFocus(dialogEl) {
   if (!dialogEl) return;
   const entry = _trapRegistry.get(dialogEl);
   if (!entry) return;

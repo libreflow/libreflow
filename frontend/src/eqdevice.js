@@ -16,7 +16,7 @@
 //   renderDeviceProfiles()         — met à jour la section UI dans #set-page-audio
 
 import { eqNodes, applyEQGains } from './eq.js';
-import { esc } from './ui.js';
+import { esc } from './utils.js';
 
 // ── État module ───────────────────────────────────────────────────────────────
 /** @type {{ [deviceId: string]: { bands: number[], label: string } }} */
@@ -50,7 +50,7 @@ export function getDeviceProfiles() {
 }
 
 /** @returns {string} Label lisible ou fallback */
-export function getActiveDeviceLabel() {
+function getActiveDeviceLabel() {
   if (_activeLabel) return _activeLabel;
   if (_activeId && _activeId !== 'default') return `ID:${_activeId.slice(0, 8)}`;
   return 'Sortie par défaut';

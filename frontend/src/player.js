@@ -1320,11 +1320,6 @@ export function getNextIdx() {
  * @param {Track} t
  * @returns {void}
  */
-export function playTrackDirect(t) {
-  if (!t) return;
-  const i = trackIdx(t);
-  if (i >= 0) _playDirect(t, i);
-}
 
 /**
  * Task 6 — vrai si la file explicite (queue.js, "lire ensuite") a un item prêt à jouer.
@@ -1436,7 +1431,7 @@ export function initMediaSession() {
 }
 
 /** @returns {void} */
-export function updateMediaSessionState() {
+function updateMediaSessionState() {
   if (!('mediaSession' in navigator)) return;
   navigator.mediaSession.playbackState = audio.paused ? 'paused' : 'playing';
   if (!isNaN(audio.duration) && audio.duration > 0) {
