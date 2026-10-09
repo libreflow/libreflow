@@ -12,7 +12,8 @@
   try {
     var p = localStorage.getItem('lf-motion');
     if (p !== 'system' && p !== 'full' && p !== 'reduce')
-      p = 'system'; /* AUDIT-2026-07-27 : défaut = respecter l'OS */
+      p =
+        'full'; /* FIX (cinéma figé) : défaut 'full' — 'system' gelait le mode cinéma sous OS "animations réduites" (cf. motion.js) */
     var reduce =
       p === 'reduce' ||
       (p === 'system' && window.matchMedia('(prefers-reduced-motion: reduce)').matches);

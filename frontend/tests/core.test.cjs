@@ -3885,7 +3885,6 @@ section('components/lf-toast-stack.logic.js -- import-smoke');
       DEFAULT_MOTION_PREF === 'full',
       "défaut app : motionPref = 'full' (profil vierge, sans clé cfg)"
     );
-
     const fs = require('fs');
     const path = require('path');
     const root = path.join(__dirname, '../..');
@@ -3893,6 +3892,24 @@ section('components/lf-toast-stack.logic.js -- import-smoke');
 
     const MOTION = read('frontend/src/motion.js');
     const APP = read('frontend/src/app.js');
+    const BOOT_MOTION = read('frontend/public/boot-motion.js');
+    // FIX (cinéma figé) : le défaut 'full' doit être celui des SOURCES aussi — l'audit
+    // 2026-07-27 l'avait repassé à 'system' aux 3 endroits, réintroduisant le gel du
+    // fond animé du mode cinéma sous OS « Effets d'animation » désactivés (WebView2
+    // rapporte prefers-reduced-motion:reduce en permanence → cinema-loop s'endort).
+    assert(
+      /let _motionPref = 'full';/.test(MOTION),
+      "motion.js : défaut _motionPref = 'full' (ignore l'OS — corrige le cinéma figé)"
+    );
+    assert(
+      /\(cfg && cfg\.motionPref\) \|\| 'full';/.test(APP),
+      "app.js : défaut boot motionPref = 'full' (profil vierge)"
+    );
+    assert(
+      /p =\s*'full';/.test(BOOT_MOTION),
+      "boot-motion.js : fallback mirror localStorage = 'full'"
+    );
+
     // PERF-LH : le CSS cinéma vit dans cinema.css (chunk différé) — concat pour
     // que les assertions cinéma continuent de s'appliquer.
     const CSS = read('frontend/src/style.css') + read('frontend/src/cinema.css');

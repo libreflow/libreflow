@@ -48,7 +48,11 @@ const _rmQuery =
 // conformité WCAG même si l'OS ne la demande pas. Poussé depuis app.js — AUCUN
 // nouvel import ici (motion.js est importé par la quasi-totalité des modules —
 // risque de cycle si on importait cfg.js/store.js en retour).
-let _motionPref = 'system'; // AUDIT-2026-07-27 : défaut = suivre l'OS (était 'full')
+let _motionPref = 'full'; // FIX (cinéma figé) : défaut 'full' — l'audit 2026-07-27 l'avait repassé à
+// 'system', réintroduisant le bug produit corrigé par ddb3497 : WebView2 rapporte
+// prefers-reduced-motion:reduce en permanence sous Windows avec « Effets d'animation »
+// désactivés → la boucle cinéma s'endort après 1 frame, fond animé figé. 'system'
+// reste disponible via le réglage in-app.
 
 /**
  * Pousse la préférence d'animation applicative. Appelé depuis app.js (boot +
