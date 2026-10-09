@@ -541,6 +541,22 @@ section('search.js -- _normalizeGenre');
     const key = g.toLowerCase().trim().replace(/\s+/g, ' ');
     return GENRE_ALIASES[key] || key;
   }
+  // ANCRAGE SOURCE : le miroir ci-dessus doit rester fidèle à search.js. Sans import
+  // ESM possible, on vérifie les invariants clés de la source — sinon le miroir teste
+  // une logique qui n'existe plus côté app (leçon motionPref, cf. section Task 10).
+  (function () {
+    const fs = require('fs');
+    const path = require('path');
+    const SEARCH = fs.readFileSync(path.join(__dirname, '../src/search.js'), 'utf8');
+    assert(
+      /export function _normalizeGenre\(g\)\s*\{[\s\S]*?GENRE_ALIASES\[key\] \|\| key/.test(SEARCH),
+      'search.js: _normalizeGenre() utilise GENRE_ALIASES[key] || key (le miroir suit la source)'
+    );
+    assert(
+      /export const GENRE_ALIASES = Object\.freeze\(/.test(SEARCH),
+      'search.js: GENRE_ALIASES existe et est gelé (Object.freeze)'
+    );
+  })();
 
   assert(_normalizeGenre(null) === '', '_normalizeGenre: null → ""');
   assert(_normalizeGenre('') === '', '_normalizeGenre: vide → ""');
@@ -655,6 +671,17 @@ section('library.js -- _validYear (range 1900–2100)');
     const n = Number(y);
     return Number.isInteger(n) && n >= 1900 && n <= 2100 ? n : null;
   }
+  // ANCRAGE SOURCE : validYear vit dans utils.js (importé par library.js:308) — vérifier
+  // que la source garde les mêmes bornes/logique que le miroir.
+  (function () {
+    const fs = require('fs');
+    const path = require('path');
+    const UTILS = fs.readFileSync(path.join(__dirname, '../src/utils.js'), 'utf8');
+    assert(
+      /export function validYear\(y\)\s*\{[\s\S]*?n >= 1900[\s\S]*?n <= 2100/.test(UTILS),
+      'utils.js: validYear() garde les bornes 1900–2100 (le miroir suit la source)'
+    );
+  })();
 
   assert(_validYear(2023) === 2023, '_validYear: 2023 → 2023');
   assert(_validYear('2023') === 2023, '_validYear: "2023" → 2023');
@@ -682,6 +709,19 @@ section('library.js -- _sanitizeTagStr (SEC-5)');
     const trimmed = val.trim().slice(0, maxLen);
     return trimmed || null;
   }
+  // ANCRAGE SOURCE : _sanitizeTagStr vit dans library.js:43 — vérifier que la source
+  // garde type-check + maxLen (le miroir a déjà glissé syntaxiquement une fois).
+  (function () {
+    const fs = require('fs');
+    const path = require('path');
+    const LIB = fs.readFileSync(path.join(__dirname, '../src/library.js'), 'utf8');
+    assert(
+      /function _sanitizeTagStr\(val, maxLen = 500\)\s*\{[\s\S]*?typeof val !== 'string'[\s\S]*?return null/.test(
+        LIB
+      ),
+      'library.js: _sanitizeTagStr() garde le type-check string + maxLen 500 (le miroir suit la source)'
+    );
+  })();
 
   assert(_sanitizeTagStr('hello') === 'hello', '_sanitizeTagStr: string normale');
   assert(_sanitizeTagStr('  hi  ') === 'hi', '_sanitizeTagStr: trim');
@@ -3880,11 +3920,9 @@ section('components/lf-toast-stack.logic.js -- import-smoke');
     assert(_effectiveReducedMotion('reduce', false) === true, "pref='reduce' force true, OS=false");
     assert(_effectiveReducedMotion('system', true) === true, "pref='system' suit l'OS (true)");
     assert(_effectiveReducedMotion('system', false) === false, "pref='system' suit l'OS (false)");
-    const DEFAULT_MOTION_PREF = 'full';
-    assert(
-      DEFAULT_MOTION_PREF === 'full',
-      "défaut app : motionPref = 'full' (profil vierge, sans clé cfg)"
-    );
+    // NOTE : l'ancienne assertion `DEFAULT_MOTION_PREF === 'full'` testait une constante
+    // locale du test (tautologie) — la régression motionPref='system' est passée au
+    // travers. Le défaut est désormais vérifié sur les SOURCES ci-dessous.
     const fs = require('fs');
     const path = require('path');
     const root = path.join(__dirname, '../..');
