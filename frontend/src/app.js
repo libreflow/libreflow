@@ -779,7 +779,7 @@ async function boot() {
   // public/boot-motion.js (mirror localStorage lf-motion, fallback statique "full") ;
   // la cfg IDB reste la source de vérité — on corrige ici attribut ET mirror si divergents
   // (couvre aussi les profils existants d'avant l'introduction du mirror).
-  const motionPref = (cfg && cfg.motionPref) || 'system'; // AUDIT-2026-07-27 : défaut = prefers-reduced-motion OS
+  const motionPref = (cfg && cfg.motionPref) || 'full'; // FIX (cinéma figé) : 'system' gelait le fond animé sous OS "animations réduites" (cf. motion.js)
   set('motionPref', motionPref);
   setMotionPref(motionPref);
   applyMotionAttr();
