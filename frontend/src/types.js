@@ -246,7 +246,7 @@
 /** @typedef {'play-track'|'track-click'|'open-tag-editor'|'save-tag-edit'|'cancel-tag-edit'|'likeat'|'play-queue-item'} TrackAction */
 
 /** Actions navigation / divers */
-/** @typedef {'drill-genre'|'drill-album'|'drill-artist'|'rescan-genres'|'bc-navigate'|'heat-period'|'scroll-to-current'|'clear-search'|'clear-filters'|'open-settings'|'close-settings'|'toggle-mode'|'go-home'|'toggle-shortcuts'|'close-shortcuts'|'set-view'|'next-sort'|'next-album-sort'|'filter-format'|'close-modal'|'clear-library'|'confirm-resolve-yes'|'confirm-resolve-no'|'play-card'} NavAction */
+/** @typedef {'drill-genre'|'drill-album'|'drill-artist'|'rescan-genres'|'bc-navigate'|'heat-period'|'scroll-to-current'|'clear-search'|'clear-filters'|'open-settings'|'close-settings'|'toggle-mode'|'go-home'|'toggle-shortcuts'|'close-shortcuts'|'set-view'|'next-sort'|'next-album-sort'|'filter-format'|'close-modal'|'clear-library'|'play-card'} NavAction */
 
 /** Actions organize / backup / USB / CD */
 /** @typedef {'organize-trigger'|'organize-confirm'|'organize-cancel'|'backup-export'|'backup-import'|'usb-open-modal'|'usb-scan'|'usb-cancel'|'usb-refresh'|'cd-play'|'cd-extract'|'cd-cancel-modal'|'cd-cancel-rip'|'bte-cover-file-click'} PeriphAction */

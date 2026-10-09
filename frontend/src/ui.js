@@ -1,25 +1,25 @@
 // LibreFlow — ui.js
-// Utilitaires UI purs : toasts, modal de confirmation.
-// Extrait de app.js (Phase 6).
+// Utilitaires UI purs : toasts, modal de confirmation, modal de saisie, ripple.
+//
+// Les modales confirm/prompt sont déléguées au Web Component Lit <lf-modal>
+// (frontend/src/components/lf-modal.js), sur le même modèle que <lf-toast-stack>.
 //
 // AUCUNE dépendance vers d'autres modules LibreFlow — i18n.js importe toast depuis
 // ui.js, donc tout import de i18n.js ici créerait un cycle bidirectionnel.
-// Pour les libellés localisés, les appelants passent des chaînes déjà traduites.
+// Les libellés localisés sont résolus paresseusement par lf-modal via les
+// attributs data-i18n (comme le reste du markup statique), et les appelants
+// peuvent toujours surcharger okLabel/cancelLabel.
 //
 // Exports publics :
 //   toast(msg, type)                                    — notification temporaire
 //   toastWithAction(msg, type, label, onAction, dur)    — toast avec bouton undo
 //   confirmAction(title, body, okLabel, okStyle)        — modal confirm → Promise<boolean>
-//   resolveConfirm(result)                              — résout la modal depuis handlers.js
 //   promptAction(title, defaultVal, okLabel, cancelLabel) — saisie texte → Promise<string|null>
-
-// ── Utilitaire sécurité ───────────────────────────────────────────────────
-
-// ── Lit Web Component delegation ─────────────────────────────────────────
-// Phase 0 Lit : les constantes _TOAST_ICONS et _TOAST_DUR vivent désormais
-// dans frontend/src/components/lf-toast-stack.{js,logic.js}. ui.js délègue.
-
+//   initRipple()                                         — effet ripple global boutons
+// ─────────────────────────────────────────────────────────────────────────────
+// ── Lit Web Component delegation ──────────────────────────────────────────────
 import './components/lf-toast-stack.js';
+import './components/lf-modal.js';
 
 let _stack = null;
 
@@ -34,7 +34,26 @@ function _getStack() {
   return _stack;
 }
 
-// ── Toast ─────────────────────────────────────────────────────────────────
+let _modal = null;
+
+/** Trouve ou crée le singleton <lf-modal> attaché à document.body. */
+function _getModal() {
+  if (_modal && _modal.isConnected) return _modal;
+  _modal = document.querySelector('lf-modal');
+  if (!_modal) {
+    _modal = document.createElement('lf-modal');
+    document.body.appendChild(_modal);
+  }
+  return _modal;
+}
+
+/** Résout un libellé i18n par clé via le dictionnaire DOM standard. */
+function _lbl(key, fallback) {
+  const el = document.querySelector(`[data-i18n="${key}"]`);
+  return (el && el.textContent.trim()) || fallback;
+}
+
+// ── Toast ────────────────────────────────────────────────────────────────────
 
 /**
  * Affiche une notification temporaire.
@@ -73,171 +92,43 @@ export function toastWithAction(m, type = 'info', label, onAction, dur) {
   return remove;
 }
 
-// ── Focus trap ────────────────────────────────────────────────────────────
-
-/**
- * Confine le focus Tab à l'intérieur d'un conteneur modal.
- * @param {HTMLElement} containerEl
- * @returns {Function} Fonction de cleanup pour retirer le listener
- */
-function _trapFocus(containerEl) {
-  const focusable = 'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])';
-  const handler = (e) => {
-    if (e.key !== 'Tab') return;
-    const els = [...containerEl.querySelectorAll(focusable)].filter(
-      (el) => !el.disabled && el.offsetParent !== null
-    );
-    if (!els.length) return;
-    const first = els[0],
-      last = els[els.length - 1];
-    if (e.shiftKey) {
-      if (document.activeElement === first) {
-        e.preventDefault();
-        last.focus();
-      }
-    } else {
-      if (document.activeElement === last) {
-        e.preventDefault();
-        first.focus();
-      }
-    }
-  };
-  containerEl.addEventListener('keydown', handler);
-  return () => containerEl.removeEventListener('keydown', handler);
-}
-
-// ── Confirm modal ─────────────────────────────────────────────────────────
-
-/** Callback interne résolvant la Promise en cours. */
-let _confirmResolve = () => {};
-/** Cleanup du focus trap de la modal confirm. */
-let _confirmTrapCleanup = () => {};
+// ── Modales (déléguées à <lf-modal>) ──────────────────────────────────────────
 
 /**
  * Affiche la modal de confirmation et retourne une Promise<boolean>.
  * @param {string} title    Titre de la modal
- * @param {string} body     Corps HTML
- * @param {string} okLabel  Label du bouton de confirmation
- * @param {string} okStyle  Classe CSS du bouton ('danger' | 'primary' | ...)
+ * @param {string} body     Corps HTML (trusted — utiliser esc() pour du contenu utilisateur)
+ * @param {string} [okLabel]  Label du bouton de confirmation (défaut = i18n btn_confirm)
+ * @param {string} [okStyle]  Style du bouton ('danger' | 'primary' | ...)
  * @returns {Promise<boolean>}
  */
-export function confirmAction(title, body, okLabel = 'Confirmer', okStyle = 'danger') {
-  return new Promise((resolve) => {
-    const bg = document.getElementById('confirm-modal-bg');
-    const elT = document.getElementById('confirm-modal-title');
-    const elB = document.getElementById('confirm-modal-body');
-    const okBtn = document.getElementById('confirm-modal-ok');
-    if (!bg || !elT || !elB || !okBtn) {
-      resolve(false);
-      return;
-    }
-    elT.textContent = title;
-    // body is trusted HTML — callers must use esc() for user-provided content
-    elB.innerHTML = body;
-    okBtn.textContent = okLabel;
-    okBtn.className = `mbtn ${okStyle}`;
-    const _prevFocus = document.activeElement;
-    _confirmResolve = (result) => {
-      bg.classList.remove('on');
-      _confirmResolve = () => {};
-      _confirmTrapCleanup();
-      _confirmTrapCleanup = () => {};
-      _prevFocus?.focus();
-      resolve(result);
-    };
-    bg.classList.add('on');
-    _confirmTrapCleanup = _trapFocus(document.getElementById('confirm-modal'));
-    setTimeout(() => okBtn.focus(), 50);
+export function confirmAction(title, body, okLabel, okStyle = 'danger') {
+  return _getModal().confirm({
+    title,
+    bodyHTML: body,
+    okLabel: okLabel || _lbl('btn_confirm', 'Confirmer'),
+    okStyle
   });
-}
-
-/**
- * Résout la modal de confirmation depuis l'extérieur (handlers.js).
- * @param {boolean} result
- */
-export function resolveConfirm(result) {
-  _confirmResolve(result);
 }
 
 /**
  * Modal de saisie texte (remplace window.prompt — incompatible Tauri v2).
  * @param {string} title        — Titre de la modal
- * @param {string} defaultVal   — Valeur pré-remplie
- * @param {string} okLabel      — Libellé bouton confirmer
- * @param {string} cancelLabel  — Libellé bouton annuler (le caller passe i18n('btn_cancel'))
+ * @param {string} [defaultVal] — Valeur pré-remplie
+ * @param {string} [okLabel]    — Libellé bouton confirmer (défaut = i18n btn_confirm)
+ * @param {string} [cancelLabel] — Libellé bouton annuler (défaut = i18n btn_cancel)
  * @returns {Promise<string|null>} — Valeur saisie, ou null si annulé
  */
-export function promptAction(title, defaultVal = '', okLabel = 'OK', cancelLabel = 'Annuler') {
-  return new Promise((resolve) => {
-    const _prevFocus = document.activeElement;
-    const bg = document.createElement('div');
-    bg.className = 'prompt-bg prompt-modal-bg';
-    bg.setAttribute('role', 'dialog');
-    bg.setAttribute('aria-modal', 'true');
-    bg.innerHTML = `
-      <div class="modal prompt-modal">
-        <div class="modal-title"></div>
-        <input class="prompt-input" type="text" />
-        <div class="modal-actions">
-          <button class="mbtn secondary prompt-cancel"></button>
-          <button class="mbtn primary prompt-ok"></button>
-        </div>
-      </div>`;
-    document.body.appendChild(bg);
-
-    const input = bg.querySelector('.prompt-input');
-    const okBtn = bg.querySelector('.prompt-ok');
-    const cancelBtn = bg.querySelector('.prompt-cancel');
-    bg.querySelector('.modal-title').textContent = title;
-    okBtn.textContent = okLabel;
-    cancelBtn.textContent = cancelLabel;
-    input.value = defaultVal;
-
-    const removeTrap = _trapFocus(bg);
-    const finish = (val) => {
-      removeTrap();
-      bg.remove();
-      _prevFocus?.focus();
-      resolve(val);
-    };
-
-    okBtn.addEventListener('click', () => finish(input.value.trim() || null));
-    cancelBtn.addEventListener('click', () => finish(null));
-    bg.addEventListener('click', (e) => {
-      if (e.target === bg) finish(null);
-    });
-    input.addEventListener('keydown', (e) => {
-      if (e.code === 'Enter') {
-        e.preventDefault();
-        finish(input.value.trim() || null);
-      }
-      if (e.code === 'Escape') {
-        e.preventDefault();
-        finish(null);
-      }
-    });
-
-    // Afficher + focus
-    requestAnimationFrame(() => {
-      bg.classList.add('on');
-      input.select();
-      input.focus();
-    });
+export function promptAction(title, defaultVal = '', okLabel, cancelLabel) {
+  return _getModal().prompt({
+    title,
+    defaultValue: defaultVal,
+    okLabel: okLabel || _lbl('btn_confirm', 'OK'),
+    cancelLabel: cancelLabel || _lbl('btn_cancel', 'Annuler')
   });
 }
 
-// Fermer avec Échap
-document.addEventListener('keydown', (e) => {
-  if (
-    e.code === 'Escape' &&
-    document.getElementById('confirm-modal-bg')?.classList.contains('on')
-  ) {
-    e.stopImmediatePropagation();
-    _confirmResolve(false);
-  }
-});
-
-// ── Ripple ────────────────────────────────────────────────────────────────
+// ── Ripple ────────────────────────────────────────────────────────────────────
 
 const _RIPPLE_SEL = '.tr, .tbt, .mbtn, .pc, .tb-icon-btn';
 

@@ -37,8 +37,8 @@ const REQUIRED_LIGHT_SURFACES = [
   ['#seek-tip', 'seek-time tooltip (#seek-tip)'],
   ['.ctx-submenu', 'context menu submenu (.ctx-submenu)'],
   ['.spl-rule-row', 'smart playlist rule row (.spl-rule-row)'],
-  ['.spl-results', 'smart playlist search results (.spl-results)'],
-  ['.prompt-input', 'prompt modal input (.prompt-input)']
+  ['.spl-results', 'smart playlist search results (.spl-results)']
+  // .prompt-input retiré — prompt modal est désormais <lf-modal> (styles scoped Lit, tokens thème)
 ];
 
 async function run() {

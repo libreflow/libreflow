@@ -135,8 +135,8 @@ async function run() {
         'mobile #ni-indicator rule must declare transform: translateX(...)'
       );
       assert.ok(
-        /height\s*:\s*var\(--sp-micro\)/.test(m[1]),
-        'mobile #ni-indicator rule must declare height: var(--sp-micro)'
+        /height\s*:\s*2px/.test(m[1]),
+        'mobile #ni-indicator rule must declare height: 2px (hairline littérale — ancien --sp-micro retiré)'
       );
     }
   );

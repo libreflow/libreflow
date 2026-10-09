@@ -128,7 +128,7 @@ export function selAddToPlaylist() {
     picker = document.createElement('div');
     picker.id = 'sel-pl-picker';
     picker.style.cssText = `position:fixed;z-index:91;background:var(--bg2);border:1px solid rgba(255,255,255,.1);
-      border-radius:var(--r2);padding:6px;display:flex;flex-direction:column;gap:2px;
+      border-radius:var(--radius-md);padding:6px;display:flex;flex-direction:column;gap:2px;
       min-width:160px;box-shadow:var(--shadow-md);`;
     document.body.appendChild(picker);
   }
