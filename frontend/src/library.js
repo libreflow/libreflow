@@ -277,6 +277,9 @@ export async function loadTagsBg(t, rustTags = null) {
       const guessed = guessGenre(t);
       if (guessed) {
         t.genre = guessed;
+        delete t._nlc;
+        delete t._glc;
+        delete t._genreParts;
         changed = true;
       }
     }

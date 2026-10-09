@@ -110,14 +110,15 @@ function buildLibrary(n) {
   return tracks;
 }
 
-// ── Reproduction inline de search.js (trigram + nlc + filter) ─────────────────
+// ── Reproduction inline de search.js (nlc + trigram lazy, cf. PM-2) ──────────
+// Le chemin exact ne construit JAMAIS les trigrammes (réservés au fallback fuzzy).
 
 let _filterGen = 1;
 
 function _trigrams(str) {
-  const s = ' ' + str + ' ';
+  const s = str.replace(/\s+/g, ' ').trim();
   const set = new Set();
-  for (let i = 0; i < s.length - 2; i++) set.add(s.slice(i, i + 3));
+  for (let i = 0; i <= s.length - 3; i++) set.add(s.slice(i, i + 3));
   return set;
 }
 
@@ -129,18 +130,28 @@ function _trigramScore(qSet, tSet) {
   return inter / (qSet.size + tSet.size - inter);
 }
 
+function _ensureNlc(t) {
+  if (t._nlcGen !== _filterGen || t._nlc == null) {
+    t._nlc = [t.name || '', t.artist || '', t.artistFull || '', t.album || '', t.genre || '']
+      .join(' ')
+      .toLowerCase();
+    t._nlcGen = _filterGen;
+  }
+}
+
+function _ensureTrigrams(t) {
+  if (t._trigGen !== _filterGen || t._trigrams == null) {
+    t._trigrams = _trigrams(t._nlc || '');
+    t._trigGen = _filterGen;
+  }
+}
+
 function filterExact(tracks, query) {
   const q = query.trim().toLowerCase();
   if (!q) return tracks;
   const parts = q.split(/\s+/).filter(Boolean);
   return tracks.filter((t) => {
-    if (t._nlcGen !== _filterGen) {
-      t._nlc = [t.name || '', t.artist || '', t.artistFull || '', t.album || '', t.genre || '']
-        .join(' ')
-        .toLowerCase();
-      t._trigrams = _trigrams(t._nlc);
-      t._nlcGen = _filterGen;
-    }
+    _ensureNlc(t);
     const hay = t._nlc;
     return parts.every((p) => hay.includes(p));
   });
@@ -150,13 +161,8 @@ function filterFuzzy(tracks, query) {
   const qTrigrams = _trigrams(query.toLowerCase().replace(/\s+/g, ' ').trim());
   const scores = new Map();
   for (const t of tracks) {
-    if (t._nlcGen !== _filterGen) {
-      t._nlc = [t.name || '', t.artist || '', t.artistFull || '', t.album || '', t.genre || '']
-        .join(' ')
-        .toLowerCase();
-      t._trigrams = _trigrams(t._nlc);
-      t._nlcGen = _filterGen;
-    }
+    _ensureNlc(t);
+    _ensureTrigrams(t);
     scores.set(t.id, _trigramScore(qTrigrams, t._trigrams));
   }
   const TH = 0.4;

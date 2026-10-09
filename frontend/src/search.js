@@ -83,19 +83,23 @@ export function trackIdx(idOrTrack) {
 /** @type {{ sig: string | null, result: Track[] | null, posMap: Map<string, number> | null }} */
 const _GF = { sig: null, result: null, posMap: null };
 
-// Generation counter for per-track NLC/trigram cache. Incrémenté à chaque
-// invalidate ; les lecteurs vérifient `t._nlcGen === _filterGen` avant d'utiliser
-// les caches. Évite un sweep O(n) sur 50k tracks à chaque mutation.
+// Generation counter for per-track NLC/trigram cache. Les lecteurs vérifient
+// `t._nlcGen === _filterGen` avant d'utiliser les caches.
+// PERF : il n'est PLUS bumpé par invalidateFilterCache() — un like / queue /
+// playlist mute l'ordre ou la composition de la liste, jamais le texte des
+// pistes ; forcer le re-scan O(n) des 50k _nlc coûtait ~70 ms à chaque hit.
+// L'invariant est garanti par les sites de mutation de tags (tagedit,
+// selection, loadTagsBg, genres) qui font `delete t._nlc` — le garde
+// `t._nlc == null` (B2 FIX) force le rebuild de la seule piste mutée.
 let _filterGen = 0;
 
 /**
  * Invalide le cache de getFiltered(). Appeler après toute mutation UI.
- * O(1) — bump le generation counter au lieu de balayer toutes les tracks.
+ * O(1).
  * @returns {void}
  */
 export function invalidateFilterCache() {
   _GF.sig = '';
-  _filterGen++;
 }
 
 // ── Store subscriber : auto-invalidation du cache NLC lors d'un changement de tracks ──
