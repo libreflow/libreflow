@@ -345,6 +345,41 @@ html[data-mode='light'] {
   /* Icônes — sous-échelle SVG resserrée (harmonisation, audit §2.7 / FND-09).
      Ancres icône : xs 12 / xl 16 / 3xl 20 / 4xl 24 / 32. Les tokens servant de
      dimension de conteneur (dot, 22/26/28/30/36/40/44, icon-4) restent littéraux. */
+  --red-rgb: 232, 64, 64;
+  --eq-cool: #5baeff; /* bande aiguë froide (band 10) */
+  --pb: var(--player-height); /* 96px — alias de §5 --player-height */
+  --tb: 38px;
+  --glow-accent: 0 0 0 3px var(--accent-subtle);
+  --blur-sm: 4px;
+  --blur-md: 8px;
+  --blur-lg: 16px;
+  --blur-xl: 48px;
+  /* Voiles & teintes (cible des rgba(0/255…) littéraux) */
+  --scrim-2: rgba(0, 0, 0, 0.3);
+  --scrim-3: rgba(0, 0, 0, 0.45);
+  --tint-1: rgba(255, 255, 255, 0.06);
+  --tint-2: rgba(255, 255, 255, 0.1);
+  --fw-medium: 500;
+  --fw-bold: 700;
+  --red: #e84040;
+  --c-spectrum-bg: #0a0a12; /* fond cinéma « Spectre » — noir teinté bleu volontaire */
+  --c-black: #000000; /* noir pur — cinema bg, spl-mode active text */
+  --like-active: #e0304a; /* cœur like actif dans le mini-player */
+  --c-genre-fb-1: #1e1e1e; /* fallback gradient carte genre sans --gc (audit 2026-07-27) */
+  --c-white: #ffffff; /* blanc pur — cercle dot, eq-preset, select-input */
+  --green: #1db954; /* success / up trend */
+  --sb: var(--sidebar-width); /* 260px — alias de §5 --sidebar-width */
+  --eq-warm: #f48a3d; /* bande grave chaude (band 2) */
+  --amber: #f59e0b;
+  --c-genre-fb-2: #2a2a2a; /* fallback gradient carte genre — palier haut */
+  --amber-rgb: 245, 158, 11;
+  --c-1a: #1a1a1a; /* quasi-noir — cinema art-em fallback */
+  --c-e4: #e4e4e4; /* gris clair light-mode hover — pl-sort-sel:hover */
+  --eq-cut: #ff7a45; /* valeur en coupe active */
+  --sb-sm: 54px; /* sidebar compacte icônes-only (< 720px) */
+  --c-f0: #f0f0f0; /* gris clair light-mode — pl-sort-sel bg */
+  --c-amber-ink: #7a4e00; /* encre ambre (texte sur fond ambré clair, AA 5.5:1) */
+  --c-cc: #cccccc; /* gris moyen light-mode border — pl-sort-sel border */
   --icon-2xs: var(--icon-xs); /* 10 → 12 */
   --icon-xs: 12px; /* ancre */
   --icon-sm: var(--icon-xs); /* 13 → 12 */
@@ -584,7 +619,7 @@ html[data-mode='light'] {
   /* Durées animations longues (infini) — gardées littérales */
   --anim-shim: 1.8s; /* skeleton shimmer / drago border / radio-cbtn — boucles lentes */
   --anim-art: 0.8s; /* art-color background transition */
-  --ease: var(--dur) ease;
+  --ease: var(--motion-fast) ease;
   /* Easings — recâblés sur --ease-standard / --ease-spring (6 → 2) */
   --spring: var(--ease-spring);
   --spring-soft: var(--ease-spring);
