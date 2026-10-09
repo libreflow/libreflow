@@ -3466,7 +3466,9 @@ section('components/lf-toast-stack.logic.js -- import-smoke');
 
     const bgSrc = read('frontend/src/cinema-bg.js');
     const dsSrc = read('frontend/src/design-system.css');
-    const ssSrc = read('frontend/src/style.css');
+    // PERF-LH : le CSS cinéma vit dans cinema.css (chunk différé) — concat pour
+    // que les assertions cinéma continuent de s'appliquer.
+    const ssSrc = read('frontend/src/style.css') + read('frontend/src/cinema.css');
 
     // (a) constante MODE_CROSSFADE_MS (house pattern comme AMBIENT_CROSSFADE_MS) +
     // applyCinemaBg() déclenche le mécanisme de cross-fade à la bascule de mode.
@@ -3632,7 +3634,9 @@ section('components/lf-toast-stack.logic.js -- import-smoke');
     section('cards Albums -- uniformité (AC1-AC8)');
 
     const rgSrc = read('frontend/src/renderer-grids.js');
-    const ssSrc = read('frontend/src/style.css');
+    // PERF-LH : le CSS cinéma vit dans cinema.css (chunk différé) — concat pour
+    // que les assertions cinéma continuent de s'appliquer.
+    const ssSrc = read('frontend/src/style.css') + read('frontend/src/cinema.css');
     const frSrc = read('frontend/src/i18n.fr.js');
     const enSrc = read('frontend/src/i18n.en.js');
 
@@ -3790,7 +3794,9 @@ section('components/lf-toast-stack.logic.js -- import-smoke');
     const root = path.join(__dirname, '../..');
     const read = (f) => fs.readFileSync(path.join(root, f), 'utf8');
 
-    const CSS = read('frontend/src/style.css');
+    // PERF-LH : le CSS cinéma vit dans cinema.css (chunk différé) — concat pour
+    // que les assertions cinéma continuent de s'appliquer.
+    const CSS = read('frontend/src/style.css') + read('frontend/src/cinema.css');
     const CIN = read('frontend/src/cinema.js');
     const CIN_RENDER = read('frontend/src/cinema-render.js');
     const FR = read('frontend/src/i18n.fr.js');
@@ -3883,7 +3889,9 @@ section('components/lf-toast-stack.logic.js -- import-smoke');
 
     const MOTION = read('frontend/src/motion.js');
     const APP = read('frontend/src/app.js');
-    const CSS = read('frontend/src/style.css');
+    // PERF-LH : le CSS cinéma vit dans cinema.css (chunk différé) — concat pour
+    // que les assertions cinéma continuent de s'appliquer.
+    const CSS = read('frontend/src/style.css') + read('frontend/src/cinema.css');
     const DS = read('frontend/src/design-system.css');
     const FR = read('frontend/src/i18n.fr.js');
     const EN = read('frontend/src/i18n.en.js');
@@ -4000,7 +4008,9 @@ section('components/lf-toast-stack.logic.js -- import-smoke');
     const root = path.join(__dirname, '../..');
     const read = (f) => fs.readFileSync(path.join(root, f), 'utf8');
     const BG = read('frontend/src/cinema-bg.js');
-    const CSS = read('frontend/src/style.css');
+    // PERF-LH : le CSS cinéma vit dans cinema.css (chunk différé) — concat pour
+    // que les assertions cinéma continuent de s'appliquer.
+    const CSS = read('frontend/src/style.css') + read('frontend/src/cinema.css');
 
     // (a) le frame-skip 30fps dépend du focus fenêtre — fenêtre focalisée → 60fps
     // pour tous les modes (le viz player-bar est suspendu sous l'overlay depuis T1).
@@ -4324,7 +4334,8 @@ section('components/lf-toast-stack.logic.js -- import-smoke');
       /viz-fade-in/.test(BG4) && /cinemaBg\s*===\s*'spectrum'/.test(BG4),
       'cinema-bg.js: bascule vers spectrum → classe viz-fade-in sur #cinema-viz'
     );
-    const CSS2 = read('frontend/src/style.css');
+    // PERF-LH : CSS cinéma dans cinema.css — concat pour les assertions cinéma.
+    const CSS2 = read('frontend/src/style.css') + read('frontend/src/cinema.css');
     assert(
       /\.cinema-viz\.viz-fade-in\s*\{[^}]*animation[^}]*var\(--motion-/.test(CSS2),
       'style.css: animation viz-fade-in tokenisée (--motion-*)'
@@ -5121,7 +5132,8 @@ section('components/lf-toast-stack.logic.js -- import-smoke');
 
     section('cinema layout grid Task 2 -- #cinema-overlay grid + zones nommees');
 
-    const CSS2 = read('frontend/src/style.css');
+    // PERF-LH : CSS cinéma dans cinema.css — concat pour les assertions cinéma.
+    const CSS2 = read('frontend/src/style.css') + read('frontend/src/cinema.css');
     const DS2 = read('frontend/src/design-system.css');
 
     assert(
@@ -5240,7 +5252,8 @@ section('components/lf-toast-stack.logic.js -- import-smoke');
 
     section('cinema layout grid Task 3 -- next/queue-access compact icon-only');
 
-    const CSS3 = read('frontend/src/style.css');
+    // PERF-LH : CSS cinéma dans cinema.css — concat pour les assertions cinéma.
+    const CSS3 = read('frontend/src/style.css') + read('frontend/src/cinema.css');
     const HTML3 = read('frontend/index.html');
 
     const nextBtnIdx = HTML3.indexOf('id="cinema-next"');
@@ -5393,7 +5406,8 @@ section('components/lf-toast-stack.logic.js -- import-smoke');
       'cinema legacy display:none override -- fix: compact-icon collapse must not be overridden'
     );
 
-    const CSS4 = read('frontend/src/style.css');
+    // PERF-LH : CSS cinéma dans cinema.css — concat pour les assertions cinéma.
+    const CSS4 = read('frontend/src/style.css') + read('frontend/src/cinema.css');
 
     // Bloc @media (max-width: 600px) -- borné par le prochain @media (breakpoint
     // tablette, quelques lignes plus bas) pour éviter les faux positifs ailleurs

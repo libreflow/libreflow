@@ -185,6 +185,9 @@ export function toggleCinema() {
 export function openCinema() {
   if (cinemaOpen) return;
   cinemaOpen = true;
+  // PERF-LH : le CSS du mode cinéma (~40 KB) est différé — chargé seulement
+  // à la première ouverture. Règle de masquage critique dans style.css.
+  import('./cinema.css');
   const overlay = document.getElementById('cinema-overlay');
   if (!overlay) return;
   // A11Y A.8 — capture previous focus; move focus into overlay on next paint

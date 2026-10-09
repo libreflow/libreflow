@@ -7,31 +7,31 @@
       "tolerancePct": 10
     },
     "filterExact()           query \"shadow\"": {
-      "medianMs": 12.63,
+      "medianMs": 12.47,
       "tolerancePct": 20
     },
     "filterExact()           query \"queen pulse\"": {
-      "medianMs": 10.65,
+      "medianMs": 10.36,
       "tolerancePct": 20
     },
     "filterExact()           cache hit  \"shadow\"": {
-      "medianMs": 2.58,
+      "medianMs": 2.62,
       "tolerancePct": 30
     },
     "filterFuzzy()           query \"shdaow\"": {
-      "medianMs": 290.81,
+      "medianMs": 306.86,
       "tolerancePct": 15
     },
     "virtBuildRows()         sort=az (grouped)": {
-      "medianMs": 9.55,
+      "medianMs": 15.99,
       "tolerancePct": 60
     },
     "virtBuildRows()         sort=artist (grouped)": {
-      "medianMs": 2.65,
+      "medianMs": 2.48,
       "tolerancePct": 30
     },
     "virtBuildRows()         sort=date (flat)": {
-      "medianMs": 1.04,
+      "medianMs": 1.51,
       "tolerancePct": 60
     }
   }

@@ -4,28 +4,28 @@
   "_note": "Edited by `npm run perf:baseline`. Manual overrides preserved.",
   "buckets": {
     "backup": {
-      "rawBytes": 2589
+      "rawBytes": 2971
+    },
+    "_css": {
+      "rawBytes": 237034
     },
     "dupes": {
-      "rawBytes": 3579
+      "rawBytes": 3661
     },
     "gsap": {
       "rawBytes": 76103
     },
     "libreflow-core": {
-      "rawBytes": 4565
+      "rawBytes": 5186
     },
     "libreflow-extras": {
-      "rawBytes": 404988
+      "rawBytes": 405229
     },
     "m3u": {
       "rawBytes": 4343
     },
     "main": {
-      "rawBytes": 61309
-    },
-    "_css": {
-      "rawBytes": 236969
+      "rawBytes": 61595
     },
     "mini": {
       "rawBytes": 9583
@@ -34,7 +34,7 @@
       "rawBytes": 670
     },
     "orphans": {
-      "rawBytes": 4779
+      "rawBytes": 4774
     },
     "smartplaylist": {
       "rawBytes": 15139

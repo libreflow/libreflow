@@ -1,13 +1,16 @@
 // frontend/tests/theme-light-coverage.test.cjs
 // Pour chaque surface critique listée, vérifie qu'au moins une règle
-// `html[data-mode="light"] <selector>` existe dans style.css.
+// `html[data-mode="light"] <selector>` existe dans style.css (+ cinema.css).
 'use strict';
 
 const fs = require('fs');
 const path = require('path');
 const assert = require('assert');
 
-const SS = fs.readFileSync(path.join(__dirname, '../src/style.css'), 'utf8');
+const SS =
+  fs.readFileSync(path.join(__dirname, '../src/style.css'), 'utf8') +
+  // PERF-LH : le CSS du mode cinéma vit dans un fichier différé chargé à l'ouverture.
+  fs.readFileSync(path.join(__dirname, '../src/cinema.css'), 'utf8');
 
 // DOM verification notes (B3.1):
 //   - `#cinema`          → no id="cinema" in index.html; replaced with `#cinema-overlay` (line 1218)
