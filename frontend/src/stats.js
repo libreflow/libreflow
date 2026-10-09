@@ -265,7 +265,7 @@ export function renderStats(tracks, trackIdxMap) {
     }
 
     <div>
-      <div class="stats-heading">${i18n('stats_genres')} <span style="font-size:9px;opacity:.5;font-weight:400;letter-spacing:0">${i18n('stats_genres_hint')}</span></div>
+      <div class="stats-heading">${i18n('stats_genres')} <span style="font-size:var(--text-2xs);opacity:.5;font-weight:400;letter-spacing:0">${i18n('stats_genres_hint')}</span></div>
       <div class="stats-genres">
         ${topGenres
           .map(
@@ -289,7 +289,7 @@ export function renderStats(tracks, trackIdxMap) {
         <button class="heat-filter-btn${_heatPeriod === 30 ? ' on' : ''}" data-action="heat-period" data-days="30">30j</button>
         <button class="heat-filter-btn${_heatPeriod === 90 ? ' on' : ''}" data-action="heat-period" data-days="90">90j</button>
       </div>
-      <span style="font-size:9px;opacity:.5;font-weight:400;letter-spacing:0;margin-left:auto">${i18n('stats_click_day')}</span>
+      <span style="font-size:var(--text-2xs);opacity:.5;font-weight:400;letter-spacing:0;margin-left:auto">${i18n('stats_click_day')}</span>
     </div>
     <div class="stats-heatmap">
       <div class="heatmap-grid" style="grid-template-columns:repeat(${_heatPeriod},1fr);gap:${_heatPeriod > 30 ? 2 : 3}px">
