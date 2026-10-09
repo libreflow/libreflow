@@ -2906,9 +2906,11 @@ section('components/lf-toast-stack.logic.js -- import-smoke');
     // (e) les deux callbacks rAF d'ouverture (cinema.js/openCinema) doivent vérifier
     // cinemaOpen avant d'agir — un close() survenu entre l'appel et l'exécution de la
     // frame ne doit pas focaliser/animer un overlay déjà refermé (race rAF).
+    // Corps d'ouverture : _applyOpenCinema() — openCinema() attend cinema.css avant
+    // d'activer l'overlay (fix freeze animations, chunk CSS différé).
     const openCinemaBody =
-      /export function openCinema\(\)\s*\{[\s\S]*?\n\}\n/.exec(cinSrc)?.[0] || '';
-    assert(openCinemaBody.length > 0, 'cinema.js : openCinema() trouvée');
+      /function _applyOpenCinema\(overlay\) \{[\s\S]*?\n\}\n/.exec(cinSrc)?.[0] || '';
+    assert(openCinemaBody.length > 0, 'cinema.js : _applyOpenCinema() trouvée');
     const rafGuardCount = (
       openCinemaBody.match(/requestAnimationFrame\(\(\)\s*=>\s*\{\s*if \(!cinemaOpen\) return;/g) ||
       []
@@ -3313,9 +3315,11 @@ section('components/lf-toast-stack.logic.js -- import-smoke');
     assert(/export function resumeViz/.test(vizSrc), 'viz.js exporte resumeViz()');
 
     // (c) cinema.js câble la suspension à l'ouverture/fermeture (openCinema/closeCinema)
-    const openBody = /export function openCinema\(\)[\s\S]*?\n\}\n/.exec(cinSrc)?.[0] || '';
+    // Corps d'activation : _applyOpenCinema() (openCinema() attend cinema.css — fix freeze)
+    const openBody =
+      /function _applyOpenCinema\(overlay\) \{[\s\S]*?\n\}\n/.exec(cinSrc)?.[0] || '';
     const closeBody = /export function closeCinema\(\)[\s\S]*?\n\}\n/.exec(cinSrc)?.[0] || '';
-    assert(openBody.length > 0, 'cinema.js : openCinema() trouvée');
+    assert(openBody.length > 0, 'cinema.js : _applyOpenCinema() trouvée');
     assert(closeBody.length > 0, 'cinema.js : closeCinema() trouvée');
     assert(/_suspendViz\(\)/.test(openBody), 'openCinema() suspend le viz player-bar (P1 fix)');
     assert(/_resumeViz\(\)/.test(closeBody), 'closeCinema() reprend le viz player-bar');
@@ -4695,9 +4699,10 @@ section('components/lf-toast-stack.logic.js -- import-smoke');
       'cinema.js câble drawBg/drawViz sur drawBgFrame/drawVizFrame dans initCinemaLoop'
     );
 
-    const openBody = /export function openCinema\(\)[\s\S]*?\n\}\n/.exec(cinSrc)?.[0] || '';
+    const openBody =
+      /function _applyOpenCinema\(overlay\) \{[\s\S]*?\n\}\n/.exec(cinSrc)?.[0] || '';
     const closeBody = /export function closeCinema\(\)[\s\S]*?\n\}\n/.exec(cinSrc)?.[0] || '';
-    assert(openBody.length > 0, 'cinema.js: openCinema() trouvée');
+    assert(openBody.length > 0, 'cinema.js: _applyOpenCinema() trouvée');
     assert(closeBody.length > 0, 'cinema.js: closeCinema() trouvée');
     assert(
       /startCinemaViz\(\);\s*\n\s*startCinemaLoop\(\);/.test(openBody),
