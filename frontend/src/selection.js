@@ -49,7 +49,7 @@ subscribe('tracks', () => {
 
 // ── Mode sélection ────────────────────────────────────────────
 
-export function enterSelectionMode() {
+function enterSelectionMode() {
   selectionMode = true;
   document.getElementById('sel-bar').classList.add('on');
   updateSelBar();
@@ -66,7 +66,7 @@ export function clearSelection() {
   VIRT._lastListSig = '';
 }
 
-export function updateSelBar() {
+function updateSelBar() {
   const n = selection.size;
   document.getElementById('sel-count').textContent =
     `${n} titre${n !== 1 ? 's' : ''} sélectionné${n !== 1 ? 's' : ''}`;

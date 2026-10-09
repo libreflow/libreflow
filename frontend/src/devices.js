@@ -15,7 +15,8 @@
 //   importFromDrive(drivePath)
 
 import { invoke } from './ipc.js';
-import { toast, esc } from './ui.js';
+import { toast } from './ui.js';
+import { esc } from './utils.js';
 import { i18n } from './i18n.js';
 import { importPaths } from './watchfolder.js';
 import { detectNewAudioCds } from './cdaudio_pure.js';

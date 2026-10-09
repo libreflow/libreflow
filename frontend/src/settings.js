@@ -412,7 +412,7 @@ export function setTheme(t) {
 // nouvel import cross-module settings.js → cinema.js).
 const _MOTION_PREFS = ['system', 'full', 'reduce'];
 
-export function setMotionPrefSetting(pref) {
+function setMotionPrefSetting(pref) {
   if (!_MOTION_PREFS.includes(pref)) {
     console.warn('[settings] motionPref inconnu ignoré:', pref);
     return;
@@ -466,7 +466,7 @@ export function setDynColor(v) {
   saveCfg();
 }
 
-export function applyTheme() {
+function applyTheme() {
   _applyThemeVars(_theme);
   document.querySelectorAll('.theme-swatch').forEach((s) => {
     const on = s.dataset.theme === _theme;
