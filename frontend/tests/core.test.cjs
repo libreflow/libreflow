@@ -4326,8 +4326,8 @@ section('components/lf-toast-stack.logic.js -- import-smoke');
     );
     const CSS2 = read('frontend/src/style.css');
     assert(
-      /\.cinema-viz\.viz-fade-in\s*\{[^}]*animation[^}]*var\(--dur-/.test(CSS2),
-      'style.css: animation viz-fade-in tokenisée (--dur-*)'
+      /\.cinema-viz\.viz-fade-in\s*\{[^}]*animation[^}]*var\(--motion-/.test(CSS2),
+      'style.css: animation viz-fade-in tokenisée (--motion-*)'
     );
     // filter:opacity() et non opacity — .bg-spectrum .cinema-viz force opacity:1
     // !important, qui écraserait des keyframes opacity (les animations perdent

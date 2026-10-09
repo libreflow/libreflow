@@ -832,19 +832,19 @@ function renderFormatChips() {
 }
 
 const _SRC_LABELS = {
-  'drag-drop': 'Glisser-déposer',
-  'folder-scan': 'Scan dossier',
+  'drag-drop': () => i18n('ih_src_drag'),
+  'folder-scan': () => i18n('ih_src_folder'),
   usb: 'USB',
-  manual: 'Manuel'
+  manual: () => i18n('ih_src_manual')
 };
 
 export async function renderImportHistory() {
   const el = document.getElementById('import-history-list');
   if (!el) return;
-  el.innerHTML = '<span class="import-history-empty">Chargement…</span>';
+  el.innerHTML = `<span class="import-history-empty">${esc(i18n('ih_loading'))}</span>`;
   const entries = await getImports();
   if (!entries.length) {
-    el.innerHTML = '<span class="import-history-empty">Aucun import enregistré.</span>';
+    el.innerHTML = `<span class="import-history-empty">${esc(i18n('ih_empty'))}</span>`;
     return;
   }
   el.innerHTML = entries
@@ -852,10 +852,18 @@ export async function renderImportHistory() {
     .map((e) => {
       const d = new Date(e.date);
       const dateStr =
-        d.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' }) +
+        d.toLocaleDateString(getLang() === 'fr' ? 'fr-FR' : 'en-US', {
+          day: '2-digit',
+          month: '2-digit',
+          year: 'numeric'
+        }) +
         ' ' +
-        d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
-      const src = _SRC_LABELS[e.source] ?? e.source;
+        d.toLocaleTimeString(getLang() === 'fr' ? 'fr-FR' : 'en-US', {
+          hour: '2-digit',
+          minute: '2-digit'
+        });
+      const srcLab = _SRC_LABELS[e.source];
+      const src = typeof srcLab === 'function' ? srcLab() : (srcLab ?? e.source);
       return `<div class="import-entry">
       <span class="import-date">${esc(dateStr)}</span>
       <span class="import-src">${esc(src)}</span>

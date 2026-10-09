@@ -546,6 +546,10 @@ export default {
   set_cache_label: 'Clear caches',
   set_cache_sub: 'Deletes all app data (library, config, playlists, history) then restarts',
   set_cache_btn: 'Clear caches',
+  set_cache_confirm_h: 'Clear caches?',
+  set_cache_confirm_body:
+    'All data will be deleted: library, configuration, playlists and listening history.<br><br>The app will restart automatically.',
+  set_cache_confirm_btn: 'Clear and restart',
   // Radio
   radio_need_more: 'Add at least 3 tracks to use radio',
   radio_restart_title: 'Radio already running',
@@ -706,5 +710,10 @@ export default {
   app_async_error: (msg) => `Async error: ${msg}`,
   app_storage_warn: (pct) => `Storage at ${pct}% used — consider freeing disk space.`,
   app_storage_critical: (pct) => `Storage at ${pct}% used — free up disk space to avoid data loss.`,
-  app_cache_clear_fail: 'Cannot clear caches. Close all LibreFlow windows and try again.'
+  app_cache_clear_fail: 'Cannot clear caches. Close all LibreFlow windows and try again.',
+  ih_loading: 'Loading…',
+  ih_empty: 'No imports recorded.',
+  ih_src_drag: 'Drag & drop',
+  ih_src_folder: 'Folder scan',
+  ih_src_manual: 'Manual'
 };

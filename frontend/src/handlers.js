@@ -117,7 +117,6 @@ import {
 } from './radio.js';
 import { changeWatchFolder, toggleWatchFolder } from './watchfolder.js';
 import { setVizMode, setVizEnabled } from './viz.js';
-import { resolveConfirm } from './ui.js';
 import { setCrossfade } from './player.js';
 import { importM3U, exportM3U, exportXSPF } from './m3u.js';
 import { invoke } from './ipc.js';
@@ -628,8 +627,6 @@ const _ACTIONS = {
   'confirm-smart-pl': () => confirmSmartPlaylist(),
   'spl-add-rule': () => addSmartRule(), // Bug #13 fix : bouton "+ règle"
   'spl-mode': (btn) => switchSmartMode(btn.dataset.mode), // Bug #13 fix : switch mode
-  'confirm-resolve-yes': () => resolveConfirm(true),
-  'confirm-resolve-no': () => resolveConfirm(false),
 
   // ── Grid cards — hover play button ───────────────────────
   'play-card': (btn, e) => {

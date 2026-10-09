@@ -96,9 +96,9 @@ export class LfToastStack extends LitElement {
     /* Google Material Snackbar look — single dark slab, accent via icon + thin progress bar. */
     :host {
       position: fixed;
-      bottom: calc(var(--pb) + var(--sp-2));
-      left: var(--sp-2);
-      width: calc(var(--sb) - var(--sp-4));
+      bottom: calc(var(--pb) + var(--space-2));
+      left: var(--space-2);
+      width: calc(var(--sb) - var(--space-4));
       display: flex;
       flex-direction: column-reverse;
       align-items: stretch;
@@ -115,7 +115,7 @@ export class LfToastStack extends LitElement {
       left: auto;
       width: auto;
       top: calc(var(--tb, 32px) + 12px);
-      right: var(--sp-4, 16px);
+      right: var(--space-4, 16px);
       align-items: flex-end;
     }
     @media (max-width: 719px) {
@@ -124,7 +124,7 @@ export class LfToastStack extends LitElement {
         left: auto;
         width: auto;
         top: calc(var(--tb, 32px) + 12px);
-        right: var(--sp-4, 16px);
+        right: var(--space-4, 16px);
         align-items: flex-end;
       }
     }

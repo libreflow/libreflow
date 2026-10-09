@@ -553,6 +553,10 @@ export default {
   set_cache_sub:
     "Supprime toutes les données de l'application (bibliothèque, config, playlists, historique) puis redémarre",
   set_cache_btn: 'Vider les caches',
+  set_cache_confirm_h: 'Vider les caches ?',
+  set_cache_confirm_body:
+    "Toutes les données seront supprimées : bibliothèque, configuration, playlists et historique d'écoute.<br><br>L'application redémarrera automatiquement.",
+  set_cache_confirm_btn: 'Vider et redémarrer',
   // Radio
   radio_need_more: 'Ajoute au moins 3 titres pour utiliser la radio',
   radio_restart_title: 'Radio déjà en cours',
@@ -723,5 +727,10 @@ export default {
   app_storage_critical: (pct) =>
     `Stockage utilisé à ${pct}% — libérez de l\u2019espace disque pour éviter la perte de données.`,
   app_cache_clear_fail:
-    'Impossible de vider les caches. Ferme toutes les fenêtres LibreFlow et réessaie.'
+    'Impossible de vider les caches. Ferme toutes les fenêtres LibreFlow et réessaie.',
+  ih_loading: 'Chargement…',
+  ih_empty: 'Aucun import enregistré.',
+  ih_src_drag: 'Glisser-déposer',
+  ih_src_folder: 'Scan dossier',
+  ih_src_manual: 'Manuel'
 };

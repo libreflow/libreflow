@@ -157,7 +157,7 @@ import {
   analyzeAndApplyRG
 } from './replaygain.js';
 import { openTagEditor, saveTagEdit, cancelTagEdit } from './tagedit.js';
-import { toast, toastWithAction, confirmAction, resolveConfirm, initRipple } from './ui.js';
+import { toast, toastWithAction, confirmAction, initRipple } from './ui.js';
 import { checkForUpdate, checkForUpdateManual, initAppVersion } from './updater.js';
 import {
   getFiltered,
@@ -1359,9 +1359,9 @@ export function playCardByKey(from, key, displayName) {
 
 export async function clearAppCache() {
   const ok = await confirmAction(
-    'Vider les caches ?',
-    "Toutes les données seront supprimées : bibliothèque, configuration, playlists et historique d'écoute.<br><br>L'application redémarrera automatiquement.",
-    'Vider et redémarrer',
+    i18n('set_cache_confirm_h'),
+    i18n('set_cache_confirm_body'),
+    i18n('set_cache_confirm_btn'),
     'danger'
   );
   if (!ok) return;

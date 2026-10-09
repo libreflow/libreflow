@@ -187,7 +187,7 @@
   --space-4: 16px;
   --space-5: 20px;
   --space-6: 24px;
-  --space-7: 48px; /* relocalisé depuis §2bis — consommé par --sp-10/12/15 */
+  --space-7: 48px;
 }
 
 /* ============================================================================
@@ -329,113 +329,16 @@ html[data-mode='light'] {
   /* R1 tokens canoniques + palette dark migrés vers design-system.css (B1). */
   transition: --g var(--anim-art) ease;
 
-  /* ════════════════════════════════════════════════════════════════
-     R1 — ÉCHELLES CANONIQUES D'HARMONISATION (audit 2026-05-21)
-     Réf : docs/superpowers/audits/ui-harmonization-audit.md §2.
-     Couche CIBLE. Additive : aucun consommateur n'y est encore recâblé,
-     donc rendu strictement inchangé. La migration des consommateurs
-     (--sp-* / --r-* / --fs-* / --dur-* / --shadow-* → ces tokens) se
-     fait écran par écran dans les lots R2–R5, avec vérification visuelle.
-     ════════════════════════════════════════════════════════════════ */
-
-  /* Typographie — taille hero (display est défini en §3 : clamp(28px,4vw,48px)) */
-
-  /* Graisses */
-  --fw-medium: 500;
-  --fw-bold: 700;
-
-  /* Élévations — migrées vers design-system.css (B1) */
-  --glow-accent: 0 0 0 3px var(--accent-subtle);
-
-  /* Motion — migrées vers design-system.css (B1) */
-
-  /* Flou (cible de --blur-*, 19 → 4) */
-  --blur-sm: 4px;
-  --blur-md: 8px;
-  --blur-lg: 16px;
-  --blur-xl: 48px;
-
-  /* Voiles & teintes (cible des rgba(0/255…) littéraux) */
-  --scrim-2: rgba(0, 0, 0, 0.3);
-  --scrim-3: rgba(0, 0, 0, 0.45);
-  --tint-1: rgba(255, 255, 255, 0.06);
-  --tint-2: rgba(255, 255, 255, 0.1);
-
-  /* États — sémantique partagée (toasts, trends, stop/delete) */
-  --red: #e84040;
-  --red-rgb: 232, 64, 64;
-  --green: #1db954; /* success / up trend */
-  --amber: #f59e0b;
-  --amber-rgb: 245, 158, 11;
-
-  /* Couleurs absolues — pour les rares cas où une couleur exacte est requise */
-  --c-white: #ffffff; /* blanc pur — cercle dot, eq-preset, select-input */
-  --c-black: #000000; /* noir pur — cinema bg, spl-mode active text */
-  --c-amber-ink: #7a4e00; /* encre ambre (texte sur fond ambré clair, AA 5.5:1) */
-  --c-1a: #1a1a1a; /* quasi-noir — cinema art-em fallback */
-  --c-genre-fb-1: #1e1e1e; /* fallback gradient carte genre sans --gc (audit 2026-07-27) */
-  --c-genre-fb-2: #2a2a2a; /* fallback gradient carte genre — palier haut */
-  --c-spectrum-bg: #0a0a12; /* fond cinéma « Spectre » — noir teinté bleu volontaire */
-  --c-f0: #f0f0f0; /* gris clair light-mode — pl-sort-sel bg */
-  --c-e4: #e4e4e4; /* gris clair light-mode hover — pl-sort-sel:hover */
-  --c-cc: #cccccc; /* gris moyen light-mode border — pl-sort-sel border */
-
-  /* EQ — couleurs spectrales par bande (fixes, hors palette thème) */
-  --eq-warm: #f48a3d; /* bande grave chaude (band 2) */
-  --eq-cool: #5baeff; /* bande aiguë froide (band 10) */
-  --eq-cut: #ff7a45; /* valeur en coupe active */
-
-  /* États sémantiques contextuels */
-  --like-active: #e0304a; /* cœur like actif dans le mini-player */
-
-  /* Layout — --sb et --pb aliasent les tokens canoniques §5 */
-  --tb: 38px;
-  --sb: var(--sidebar-width); /* 260px — alias de §5 --sidebar-width */
-  --sb-sm: 54px; /* sidebar compacte icônes-only (< 720px) */
-  --pb: var(--player-height); /* 96px — alias de §5 --player-height */
-
-  /* ════════════════════════════════════════════════════════════════════════
-     ALIAS LEGACY — à supprimer en v2
-     Ces alias ont été introduits lors de la migration R1→R5 pour ne pas
-     casser les ~200 consommateurs existants dans style.css. Ils ne doivent
-     plus être utilisés dans le nouveau code.
-
-     Tokens canoniques cibles :
+  /* ALIAS LEGACY — RETIRÉS (audit UI 2026) : les alias --sp-*, --fs-*, --r-*,
+     --dur-* ont été migrés vers les tokens canoniques dans style.css et les
+     composants, puis supprimés. Utiliser directement :
        espacement  → --space-0 … --space-16   (§4)
        radius      → --radius-xs … --radius-pill (§6)
        typographie → --text-xs … --text-display  (§3), --fs-f-* fluides
        durées      → --motion-fast / --motion-base / --motion-slow (§2bis)
-
-     Retrait prévu : v2.0 — après migration complète de style.css.
-     ════════════════════════════════════════════════════════════════════════ */
-
-  /* @deprecated Utiliser --space-N directement (§4) */
-  /* Spacing — recâblé sur l'échelle canonique --space-* (harmonisation, audit §2.1).
-     25 paliers → 8. nano/micro/1q restent littéraux : hairlines/bordures
-     sous-grille intentionnelles (les snapper à 4px casserait les séparateurs 1px). */
-  --sp-nano: 1px; /* hairline — gardé littéral */
-  --sp-micro: 2px; /* hairline — gardé littéral */
-  --sp-1q: 3px; /* sous-grille — gardé littéral */
-  --sp-1: var(--space-1); /* 4 */
-  --sp-1p: var(--space-1); /* 5  → 4 */
-  --sp-1h: var(--space-2); /* 6  → 8 */
-  --sp-1d: var(--space-2); /* 7  → 8 */
-  --sp-2: var(--space-2); /* 8 */
-  --sp-2q: var(--space-2); /* 9  → 8 */
-  --sp-2h: var(--space-3); /* 10 → 12 */
-  --sp-3: var(--space-3); /* 12 */
-  --sp-3h: var(--space-4); /* 14 → 16 */
-  --sp-4: var(--space-4); /* 16 */
-  --sp-5: var(--space-5); /* 20 */
-  --sp-6: var(--space-5); /* 24 → 20 */
-  --sp-7: var(--space-6); /* 28 → 24 */
-  --sp-4h: var(--space-4); /* 18 → 16 */
-  --sp-5h: var(--space-5); /* 22 → 20 */
-  --sp-7h: var(--space-6); /* 30 → 24 */
-  --sp-8: var(--space-6); /* 32 → 24 */
-  --sp-10: var(--space-7); /* 40 → 48 */
-  --sp-12: var(--space-7); /* 48 */
-  --sp-15: var(--space-7); /* 60 → 48 */
+     */
+  /* Hairlines sous-grille : les anciens --sp-nano/micro/1q (1/2/3px) sont
+     désormais inlinés littéralement aux consommateurs. */
 
   /* Échelle de breakpoints canonique — 3 seuils intentionnels (voir le plan). */
 
@@ -647,30 +550,8 @@ html[data-mode='light'] {
      Ce ré-alias vers var(--border-1/2/3) (.06/.08/.10) neutralisait
      silencieusement le correctif A11Y-03 au runtime — retiré. */
 
-  /* @deprecated Utiliser --text-xs / --text-sm / --text-base / --text-md / --text-lg / --text-xl / --text-display directement (§3).
-     Pour le nouveau code fluide : préférer --fs-f-caption / --fs-f-body / --fs-f-subhead / --fs-f-title / --fs-f-disp. */
-  /* Typography — recâblé sur --text-* (harmonisation, audit §2.3). 20 tailles fixes → 7.
-     3xs/2xs restent littéraux (micro-badges, sous-échelle volontaire).
-     disp-md/lg/xl/hero restent littéraux (grandes tailles display rares). */
-  --fs-3xs: 8px; /* micro-badge — gardé littéral */
-  --fs-2xs: 9px; /* micro-badge — gardé littéral */
-  --fs-xs: var(--text-xs); /* clamp 10-12 */
-  --fs-sm: var(--text-xs); /* clamp 10-12 */
-  --fs-caption: var(--text-sm); /* clamp 12-14 */
-  --fs-md: var(--text-base); /* clamp 13-15 */
-  --fs-base: var(--text-md); /* clamp 15-18 */
-  --fs-subhead: var(--text-lg); /* clamp 18-24 */
-  --fs-body: var(--text-lg); /* clamp 18-24 */
-  --fs-inter: var(--text-lg); /* clamp 18-24 */
-  --fs-lg: var(--text-lg); /* clamp 18-24 */
-  --fs-xl: var(--text-xl); /* clamp 22-32 */
-  --fs-lg2: var(--text-xl); /* clamp 22-32 */
-  --fs-disp: var(--text-display); /* clamp 28-48 */
-  --fs-disp-sm: var(--text-display); /* clamp 28-48 */
-  --fs-disp-md: 48px; /* display rare — gardé littéral */
-  --fs-disp-lg: 52px; /* display rare — gardé littéral */
-  --fs-disp-xl: 72px; /* display rare — gardé littéral */
-  --fs-hero: 80px; /* display rare — gardé littéral */
+  /* Les anciens alias --fs-* sont retirés : tailles micro-badges (8/9px)
+     et display rares (48/52/72/80px) sont inlinés littéraux aux consommateurs. */
 
   /* ── Échelle typographique fluide (responsive niveau Spotify) ──────────
      clamp(min, préférence-fluide, max). L'unité cqi = 1% de la largeur du
@@ -691,49 +572,13 @@ html[data-mode='light'] {
   --fs-vw-cin-art: clamp(11px, 1.8vw, 17px); /* cinéma artiste responsive */
   --fs-vw-cin-alb: clamp(9px, 1.3vw, 13px); /* cinéma album responsive */
 
-  /* @deprecated Utiliser --radius-xs / --radius-sm / --radius-md / --radius-lg / --radius-pill directement (§6) */
-  /* Rayons — recâblés sur l'échelle canonique --radius-* (harmonisation, audit §2.2).
-     17 rayons → 5. --r-micro reste littéral (hairline 1px). */
-  --r-micro: 1px; /* hairline — gardé littéral */
-  --r-xs: var(--radius-xs); /* 2  → 4 */
-  --r-sm: var(--radius-xs); /* 3  → 4 */
-  --r-md: var(--radius-xs); /* 4 */
-  --r-lg: var(--radius-sm); /* 5  → 8 */
-  --r: var(--radius-sm); /* 6  → 8  (rayon standard) */
-  --r-badge: var(--radius-sm); /* 7  → 8 */
-  --r-art: var(--radius-sm); /* 8 */
-  --r-9: var(--radius-sm); /* 9  → 8 */
-  --r2: var(--radius-md); /* 10 → 12 */
-  --r-card: var(--radius-lg); /* 12 → 16 — grands panneaux/cartes (album, stats, toasts) */
-  --r3: var(--radius-md); /* 14 → 12 */
-  --r-4xl: var(--radius-lg); /* 16 */
-  --r-pill: var(--radius-pill); /* 20 → pilule pleine */
-  --r-32: var(--radius-lg); /* 32 → 16 */
-  --r-full: var(--radius-pill); /* 60 → pilule pleine */
+  /* Anciens alias --r-* retirés. Hairline 1px inliné littéral aux consommateurs. */
 
-  /* @deprecated Utiliser --motion-fast (120ms) / --motion-base (200ms) / --motion-slow (320ms) directement (§2bis) */
-  /* Transitions — recâblées sur --motion-* (harmonisation, audit §2.5). 19 durées → 3.
-     Les durées de boucle infinie (--anim-*) et les durées fonctionnelles
-     (reveal, art-color, flash) restent littérales. */
-  --dur: var(--motion-fast); /* 140 → 120 */
-  --dur-fast: var(--motion-fast); /* 80  → 120 */
-  --dur-interact: var(--motion-fast); /* 160 → 120 */
-  --dur-mid: var(--motion-base); /* 220 → 200 */
-  --dur-slow: var(--motion-slow); /* 400 → 320 */
-  --dur-micro: var(--motion-fast); /* 120 */
-  --dur-menu: var(--motion-fast); /* 130 → 120 */
-  --dur-tooltip: var(--motion-fast); /* 150 → 120 */
-  --dur-card: var(--motion-base); /* 200 */
-  --dur-cinema: var(--motion-slow); /* 420 → 320 */
-  --dur-overlay: var(--motion-slow); /* 350 → 320 */
+  /* Durées fonctionnelles littérales : reveal (700ms), art-color (900ms),
+     flash (60ms) et boucles infinies (--anim-*). */
   --dur-reveal: 700ms; /* reveal long délibéré — gardé littéral */
-  --dur-nav: var(--motion-base); /* 240 → 200 */
-  --dur-exit: var(--motion-base); /* 180 → 200 */
   --dur-art-color: 900ms; /* fondu couleur pochette — gardé littéral */
   --dur-flash: 60ms; /* anti-flash fonctionnel — gardé littéral */
-  --dur-modal: var(--motion-slow); /* 260 → 320 */
-  --dur-card-in: var(--motion-slow); /* 280 → 320 */
-  --dur-enter: var(--motion-slow); /* 300 → 320 */
   --anim-glow: 2.6s; /* playGlow infinite glow */
 
   /* Durées animations longues (infini) — gardées littérales */

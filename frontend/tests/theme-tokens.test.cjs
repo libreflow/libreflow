@@ -55,18 +55,20 @@ const CANONICAL = [
   '--t4'
 ];
 
-// Aliases legacy qui DOIVENT pointer vers un token canonique (pas de valeur littérale).
-const ALIAS_TARGETS = {
-  '--sp-1': '--space-1',
-  '--sp-2': '--space-2',
-  '--sp-3': '--space-3',
-  '--sp-4': '--space-4',
-  '--r': '--radius-sm',
-  '--r2': '--radius-md',
-  '--dur-fast': '--motion-fast',
-  '--dur-mid': '--motion-base',
-  '--dur-slow': '--motion-slow'
-};
+// Aliases legacy --sp-*/--r*/--dur-* : retirés (audit UI 2026). Aucune
+// déclaration dans design-system.css ni consommation dans style.css ne doit
+// subsister — le code consomme directement les tokens canoniques.
+const RETIRED_ALIASES = [
+  '--sp-1',
+  '--sp-2',
+  '--sp-3',
+  '--sp-4',
+  '--r:',
+  '--r2',
+  '--dur-fast',
+  '--dur-mid',
+  '--dur-slow'
+];
 
 function declaredInRoot(css, token) {
   // Cherche `--token:` à l'intérieur d'un bloc :root { ... }.
@@ -99,15 +101,11 @@ async function run() {
     });
   }
 
-  for (const [alias, target] of Object.entries(ALIAS_TARGETS)) {
-    await t(`${alias} aliases ${target}`, () => {
-      const re = new RegExp(
-        `${alias.replace(/-/g, '\\-')}\\s*:\\s*var\\(\\s*${target.replace(/-/g, '\\-')}\\s*\\)`,
-        'g'
-      );
-      // Token-unification (§17): the operational/alias layer was relocated from
-      // style.css into design-system.css. Aliases now live in DS, not SS.
-      assert.ok(re.test(DS), `${alias} should be var(${target}) in design-system.css`);
+  for (const alias of RETIRED_ALIASES) {
+    await t(`${alias} retired everywhere`, () => {
+      const re = new RegExp(`${alias.replace(/-/g, '\\-')}\\s*[:)]`, 'g');
+      assert.ok(!re.test(DS), `${alias} still declared in design-system.css`);
+      assert.ok(!re.test(SS), `${alias} still consumed in style.css`);
     });
   }
 
