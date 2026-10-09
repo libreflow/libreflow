@@ -71,6 +71,9 @@ export default defineConfig(({ mode }) => {
               'frontend/src/cfg.js',
               'frontend/src/db.js'
             ]);
+            // NOTE PERF-LH : stats, smartplaylist, dupes, orphans, tagedit, m3u et
+            // backup sont importés dynamiquement à l'usage — retirés de la liste
+            // EXTRAS pour que Rolldown les split en chunks async distincts.
             // Modules lourds chargés à la demande après le premier paint :
             // panneaux secondaires (EQ, cinéma, viz, replaygain, nowplaying)
             // + outils (stats, smart-pl, backup, CD, dupes/orphans, tag editor, m3u).
@@ -81,16 +84,9 @@ export default defineConfig(({ mode }) => {
               'frontend/src/viz.js',
               'frontend/src/replaygain.js',
               'frontend/src/nowplaying.js',
-              'frontend/src/stats.js',
-              'frontend/src/smartplaylist.js',
-              'frontend/src/backup.js',
               'frontend/src/cdaudio.js',
               'frontend/src/cdaudio_pure.js',
-              'frontend/src/dupes.js',
-              'frontend/src/orphans.js',
-              'frontend/src/settings.js',
-              'frontend/src/tagedit.js',
-              'frontend/src/m3u.js'
+              'frontend/src/settings.js'
             ]);
             for (const f of CORE) if (p.endsWith('/' + f)) return 'libreflow-core';
             for (const f of EXTRAS) if (p.endsWith('/' + f)) return 'libreflow-extras';

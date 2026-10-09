@@ -131,6 +131,8 @@ export async function removeDupeTrack(id, gi, ti) {
   }
   // Persister la suppression en IDB — sinon la piste réapparaît au redémarrage
   await ddel('tracks', t.id).catch((e) => console.warn('[dupes] IDB delete failed:', e));
+  // PERF-LH v6 : supprimer la pochette associée dans le store dédié
+  await ddel('artwork', t.id).catch(() => {});
   // Mettre à jour le groupe
   if (dupesGroups[gi]) {
     dupesGroups[gi].splice(ti, 1);
@@ -199,7 +201,10 @@ export async function deleteAllDupes() {
     // Persister toutes les suppressions en IDB en parallèle
     await Promise.all(
       idsToDelete.map((id) =>
-        ddel('tracks', id).catch((e) => console.warn('[dupes] IDB delete failed:', e))
+        Promise.all([
+          ddel('tracks', id).catch((e) => console.warn('[dupes] IDB delete failed:', e)),
+          ddel('artwork', id).catch(() => {}) // PERF-LH v6
+        ])
       )
     );
 

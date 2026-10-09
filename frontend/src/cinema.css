@@ -1,0 +1,1579 @@
+/* ═══ MODE CINÉMA ════════════════════════════════════════════ */
+#cinema-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-overlay);
+  background: var(--c-black);
+  /* Task 2 (layout grid) : chaque élément a une zone nommée explicite -- les
+     collisions deviennent structurellement impossibles au lieu d'être patchées
+     par breakpoint. Colonnes extérieures égales (1fr/1fr) : le héros reste centré
+     même si l'horloge (gauche) et la carte piste-suivante (droite) ont des
+     largeurs différentes. */
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  grid-template-rows: auto 1fr;
+  grid-template-areas:
+    'corner-l .    corner-r'
+    'side-l   hero side-r';
+  /* Insets harmonisés : mêmes tokens que les boutons de coin pour corner-l/r,
+     même token que l'horloge pour le bas (side-l/side-r) -- avant ce commit,
+     .cinema-next/.cinema-queue-panel utilisaient --sp-8 (32px fixe) au lieu de
+     --cinema-clock-inset (clamp 40-80px), écart non intentionnel. */
+  padding: var(--cinema-corner-top) var(--cinema-corner-x) var(--cinema-clock-inset);
+  overflow: hidden; /* empêche tout scroll interne */
+  /* ── Animation d'entrée / sortie ── */
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition:
+    opacity var(--motion-slow) ease,
+    visibility 0ms var(--motion-slow); /* visibility cachée après la fin du fade-out */
+  cursor: none;
+}
+#cinema-overlay.active {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: all;
+  transition: opacity var(--motion-slow) ease; /* no delay à l'ouverture */
+}
+
+/* ── Cursor — géré par classe .ctrl-on sur l'overlay ── */
+#cinema-overlay.ctrl-on {
+  cursor: default;
+}
+
+/* ── Vignette bords — dégradé sombre périphérique ── */
+#cinema-overlay::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 1;
+  background: radial-gradient(
+    ellipse 90% 90% at 50% 50%,
+    transparent 45%,
+    rgba(0, 0, 0, 0.55) 100%
+  );
+}
+/* ── Scrim bas — lisibilité info + contrôles sur tous les fonds ── */
+#cinema-overlay::after {
+  content: '';
+  position: absolute;
+  inset: auto 0 0 0;
+  height: 60%;
+  background: linear-gradient(
+    to top,
+    rgba(0, 0, 0, 0.52) 0%,
+    rgba(0, 0, 0, 0.22) 40%,
+    transparent 100%
+  );
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* ── Arrière-plan flou pochette ───────────────────────────── */
+.cinema-bg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 0;
+  transition:
+    opacity var(--dur-reveal) ease,
+    filter var(--motion-slow) ease;
+  opacity: 0;
+}
+/* ── Modes de fond ─────────────────────────────────────────────────────────
+   blur     : canvas double-pass blur via JS (WebView2-safe, pas de filter CSS)
+   ambient  : gradient radial depuis artColor (Apple Music style)
+   spectrum : visualiseur audio plein écran
+   amoled   : noir pur
+   ─────────────────────────────────────────────────────────────────────── */
+
+/* ambient — fond rendu sur canvas (no banding, noise dithering) */
+#cinema-overlay.bg-ambient {
+  background: var(--c-black);
+}
+#cinema-overlay.bg-ambient .cinema-bg {
+  opacity: 1;
+  /* Respiration douce — animation sur le canvas rendu */
+  animation: cinema-ambient-breathe var(--dur-cin-bg-breathe) ease-in-out infinite;
+}
+/* PERF FIX : suppression du filter sur canvas — force le GPU à créer un
+   stacking context isolé (compositing layer) à chaque frame → coûteux.
+   L'effet de respiration est conservé via opacity seule (pas de couche GPU extra). */
+@keyframes cinema-ambient-breathe {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  40% {
+    opacity: 0.94;
+  }
+  70% {
+    opacity: 0.97;
+  }
+}
+
+/* spectrum — viz plein écran, fond sombre dégradé */
+#cinema-overlay.bg-spectrum {
+  background: radial-gradient(
+    ellipse 120% 100% at 50% 50%,
+    var(--c-spectrum-bg) 0%,
+    var(--c-black) 70%
+  );
+}
+#cinema-overlay.bg-spectrum .cinema-bg {
+  opacity: 0;
+}
+#cinema-overlay.bg-spectrum .cinema-viz {
+  height: 100% !important;
+  bottom: 0 !important;
+  top: 0 !important;
+  opacity: 1 !important;
+}
+/* Vignette centrale renforcée pour lisibilité */
+#cinema-overlay.bg-spectrum::before {
+  background:
+    radial-gradient(
+      ellipse 50% 45% at 50% 50%,
+      rgba(0, 0, 0, 0.75) 0%,
+      rgba(0, 0, 0, 0.35) 55%,
+      transparent 80%
+    ),
+    linear-gradient(
+      to bottom,
+      rgba(0, 0, 0, 0.4) 0%,
+      transparent 25%,
+      transparent 75%,
+      rgba(0, 0, 0, 0.5) 100%
+    );
+}
+
+/* amoled — noir pur + halo coloré très subtil depuis artColor */
+#cinema-overlay.bg-amoled {
+  background: var(--c-black);
+}
+/* AMOLED : canvas visible — halo animé minimaliste rendu par JS (_renderAmbientFrame) */
+#cinema-overlay.bg-amoled .cinema-bg {
+  opacity: 1;
+}
+#cinema-overlay.bg-amoled::before {
+  background:
+    radial-gradient(
+      ellipse 55% 45% at 50% 12%,
+      rgba(var(--art-color-rgb, 80, 80, 120), 0.08) 0%,
+      transparent 70%
+    ),
+    radial-gradient(ellipse 90% 60% at 50% 100%, rgba(0, 0, 0, 0.6) 0%, transparent 70%);
+}
+
+/* waves — vagues audio-réactives rendues sur canvas */
+#cinema-overlay.bg-waves {
+  background: var(--c-black);
+}
+#cinema-overlay.bg-waves .cinema-bg {
+  opacity: 1;
+}
+
+/* starfield — ciel étoilé audio-réactif rendu sur canvas */
+#cinema-overlay.bg-starfield {
+  background: var(--c-black);
+}
+#cinema-overlay.bg-starfield .cinema-bg {
+  opacity: 1;
+}
+
+/* Superposition fix — masque le canvas viz dans les modes à visualiseur intégré.
+   Ces modes dessinent sur cinema-bg uniquement ; cinema-viz ne doit pas superposer ses barres. */
+#cinema-overlay.bg-waves .cinema-viz,
+#cinema-overlay.bg-starfield .cinema-viz,
+#cinema-overlay.bg-amoled .cinema-viz {
+  opacity: 0 !important;
+  pointer-events: none;
+}
+
+/* ── Visualiseur audio (canvas full-width, bottom) ──────── */
+.cinema-viz {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  height: var(--viz-canvas-h);
+  z-index: 1;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 800ms ease;
+  /* Masque le reflet canvas qui déborde légèrement en bas */
+  -webkit-mask-image: linear-gradient(
+    to bottom,
+    rgba(0, 0, 0, 1) 0%,
+    rgba(0, 0, 0, 0.6) 85%,
+    rgba(0, 0, 0, 0) 100%
+  );
+  mask-image: linear-gradient(
+    to bottom,
+    rgba(0, 0, 0, 1) 0%,
+    rgba(0, 0, 0, 0.6) 85%,
+    rgba(0, 0, 0, 0) 100%
+  );
+}
+/* Task 15 : fade d'entrée du viz à la bascule VERS spectrum — remplace le cut sec
+   (aucun snapshot de cross-fade pour ce mode, cf. cinema-bg.js Task 11). Animé via
+   filter:opacity() et NON opacity : .bg-spectrum .cinema-viz force opacity:1
+   !important (pour battre l'inline JS), ce qui écraserait des keyframes opacity. */
+@keyframes cin-viz-fade-in {
+  from {
+    filter: opacity(0);
+  }
+  to {
+    filter: opacity(1);
+  }
+}
+.cinema-viz.viz-fade-in {
+  animation: cin-viz-fade-in var(--motion-slow) ease;
+}
+html[data-motion='reduce'] .cinema-viz.viz-fade-in {
+  animation: none !important;
+}
+
+/* ── Horloge idle (bottom-left, inversement de ctrl-on) ─── */
+#cinema-clock {
+  grid-area: side-l;
+  justify-self: start;
+  align-self: end;
+  z-index: 5;
+  opacity: 0;
+  transform: translateY(var(--space-2));
+  transition:
+    opacity var(--dur-reveal) ease,
+    transform var(--dur-reveal) ease;
+  pointer-events: none;
+}
+#cinema-overlay.active:not(.ctrl-on) #cinema-clock {
+  opacity: 1;
+  transform: none;
+}
+.ck-time {
+  font-size: var(--fs-vw-clock);
+  font-weight: 200;
+  color: rgba(255, 255, 255, 0.82);
+  letter-spacing: var(--ls-display);
+  line-height: var(--lh-1);
+  font-variant-numeric: tabular-nums;
+  text-shadow:
+    0 2px 20px rgba(0, 0, 0, 0.55),
+    0 1px 4px rgba(0, 0, 0, 0.35);
+}
+.ck-date {
+  font-size: var(--fs-vw-date);
+  color: rgba(255, 255, 255, 0.32);
+  margin-top: var(--space-2);
+  text-transform: capitalize;
+  letter-spacing: var(--ls-label);
+  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.4);
+}
+
+/* ── Animation idle — pochette flottante avec micro-rotation ── */
+@keyframes cinema-float {
+  0% {
+    transform: translateY(0) rotate(-0.6deg) scale(1);
+  }
+  30% {
+    transform: translateY(calc(-1 * var(--space-2))) rotate(0deg) scale(1.008);
+  }
+  60% {
+    transform: translateY(calc(-1 * var(--space-3))) rotate(0.5deg) scale(1.012);
+  }
+  100% {
+    transform: translateY(0) rotate(-0.6deg) scale(1);
+  }
+}
+/* Glow coloré basé sur la couleur de la pochette — respiration lente */
+@keyframes cinema-art-glow {
+  0%,
+  100% {
+    box-shadow: var(--shadow-cin-glow-lo), var(--shadow-cin-art);
+  }
+  50% {
+    box-shadow: var(--shadow-cin-glow-hi), var(--shadow-cin-art);
+  }
+}
+/* Float + glow simultanés (mode idle, pas de beat) */
+#cinema-overlay.active:not(.ctrl-on) .cinema-art-wrap:not(.beat) {
+  animation:
+    cinema-float var(--dur-cin-float) cubic-bezier(0.45, 0.05, 0.55, 0.95) infinite,
+    cinema-art-glow var(--dur-cin-glow) ease-in-out infinite;
+}
+/* Glow seul quand les contrôles sont visibles (float stoppé) */
+#cinema-overlay.ctrl-on .cinema-art-wrap.cin-enter:not(.beat) {
+  animation: cinema-art-glow var(--dur-cin-glow) ease-in-out infinite;
+}
+
+/* ── Piste suivante (bottom-right, avec les contrôles) ──── */
+.cinema-next {
+  z-index: 5;
+  background: var(--cin-surface);
+  backdrop-filter: blur(var(--blur-lg)) saturate(1.3);
+  -webkit-backdrop-filter: blur(var(--blur-lg)) saturate(1.3);
+  border: var(--border-w-sm) solid var(--cin-hairline);
+  border-radius: var(--radius-md);
+  padding: var(--space-3) var(--space-4);
+  opacity: 0;
+  transform: translateY(var(--space-2));
+  transition:
+    opacity var(--motion-slow) ease,
+    transform var(--motion-slow) var(--ease-spring);
+  pointer-events: none;
+  max-width: var(--cn-next-max);
+  min-width: var(--cn-next-min);
+}
+/* .cin-has-next est ajouté par JS quand une piste suivante existe.
+   Sans cette classe, le panneau reste à opacity:0 même si ctrl-on (pas de next track).
+   L'approche class évite display:none qui casse les transitions opacity. */
+#cinema-overlay.ctrl-on .cinema-next.cin-has-next {
+  opacity: 1;
+  transform: none;
+  pointer-events: all;
+  transition-delay: var(--motion-fast);
+}
+/* Task 9 — un panneau file d'attente OUVERT épingle son déclencheur visible : l'auto-hide
+   (.ctrl-on retiré après 3s d'inactivité, Task 2) ne doit pas faire disparaître #cinema-next
+   tant que #cinema-queue-panel reste ouvert au-dessus. Court-circuite la garde .ctrl-on. */
+.cinema-next.cqp-trigger-pinned {
+  opacity: 1;
+  transform: none;
+  pointer-events: all;
+}
+.cn-label {
+  font-size: var(--text-xs);
+  color: rgba(255, 255, 255, 0.52);
+  text-transform: uppercase;
+  letter-spacing: var(--ls-label);
+  margin-bottom: var(--space-2);
+  font-weight: 600;
+}
+.cn-body {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+.cn-img {
+  width: var(--art-cinema);
+  height: var(--art-cinema);
+  object-fit: cover;
+  border-radius: var(--radius-sm);
+  flex-shrink: 0;
+}
+.cn-info {
+  min-width: 0;
+}
+.cn-title {
+  font-size: var(--text-base);
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.88);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.cn-artist {
+  font-size: var(--text-xs);
+  color: rgba(255, 255, 255, 0.65);
+  margin-top: 3px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.cn-icon {
+  display: none;
+  width: var(--icon-lg);
+  height: var(--icon-lg);
+  flex-shrink: 0;
+}
+
+/* ── Compact : piste suivante / hint shuffle → bouton icône seule (Task 3) ──
+   En dessous de ces seuils, la carte riche (vignette+titre/artiste, ou texte du
+   hint shuffle) ne tient plus sans chevaucher la pill de contrôles ou le texte
+   titre/artiste. Plutôt que masquer l'accès à la file d'attente (perte
+   fonctionnelle), on le réduit à un bouton rond icône seule, même gabarit que
+   .cinema-corner-btn. Seuil largeur (700px) distinct du seuil de compaction de
+   la pill de contrôles (600px, inchangé) -- c'est le point réel où la carte
+   piste-suivante ne tient plus, pas où la pill se resserre. */
+@media (max-width: 700px), (max-height: 640px) {
+  .cinema-next,
+  .cinema-shuffle-hint {
+    width: var(--btn-h-lg);
+    height: var(--btn-h-lg);
+    min-width: 0;
+    max-width: none;
+    padding: 0;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--cin-surface-hover);
+    backdrop-filter: blur(var(--blur-md));
+    -webkit-backdrop-filter: blur(var(--blur-md));
+    color: rgba(255, 255, 255, 0.55);
+  }
+  .cinema-next .cn-label,
+  .cinema-next .cn-body,
+  .cinema-shuffle-hint .cn-body--hint span {
+    display: none;
+  }
+  .cinema-next .cn-icon {
+    display: block;
+  }
+}
+
+/* ── Hint shuffle (Task 6) — même panneau/style que .cinema-next, contenu différent ── */
+.cn-body--hint {
+  color: rgba(255, 255, 255, 0.75);
+  font-size: var(--text-xs);
+  font-weight: 600;
+}
+.cn-body--hint svg {
+  flex-shrink: 0;
+  opacity: 0.75;
+}
+
+/* ── #cinema-next est un <button> (Task 9) — reset chrome UA, garde le style .cinema-next ── */
+#cinema-next {
+  cursor: pointer;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  -webkit-appearance: none;
+  appearance: none;
+}
+#cinema-next:focus-visible {
+  box-shadow: var(--cin-focus-ring);
+  outline: none;
+}
+
+/* ── Panneau file d'attente dépliable (Task 9) — ancré au-dessus de #cinema-next,
+     même glass que .cinema-next ; translateY+fade tokenisés (--motion-base). ──── */
+.cinema-queue-panel {
+  /* Task 2 (layout grid) : ancré relativement à .cinema-side-r (position:relative)
+     au lieu du bord du viewport -- découplé de tout inset dupliqué. */
+  position: absolute;
+  bottom: calc(100% + var(--cqp-trigger-gap));
+  right: 0;
+  z-index: 6;
+  width: var(--cn-next-max);
+  max-height: var(--cqp-max-h);
+  overflow-y: auto;
+  background: var(--cin-surface);
+  backdrop-filter: blur(var(--blur-lg)) saturate(1.3);
+  -webkit-backdrop-filter: blur(var(--blur-lg)) saturate(1.3);
+  border: var(--border-w-sm) solid var(--cin-hairline);
+  border-radius: var(--radius-md);
+  padding: var(--space-2);
+  opacity: 0;
+  transform: translateY(var(--space-2));
+  pointer-events: none;
+  transition:
+    opacity var(--motion-base) ease,
+    transform var(--motion-base) var(--ease-spring-soft);
+}
+.cinema-queue-panel.cqp-open {
+  opacity: 1;
+  transform: none;
+  pointer-events: all;
+}
+html[data-motion='reduce'] .cinema-queue-panel {
+  transition: none;
+}
+.cqp-header {
+  font-size: var(--text-xs);
+  color: rgba(255, 255, 255, 0.52);
+  text-transform: uppercase;
+  letter-spacing: var(--ls-label);
+  margin-bottom: var(--space-2);
+  font-weight: 600;
+  padding: 0 var(--space-2);
+}
+.cqp-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+.cqp-list[hidden] {
+  display: none;
+} /* [hidden] seul serait battu par le display:flex ci-dessus (CSS auteur > UA) */
+.cqp-row {
+  display: block;
+  width: 100%;
+  min-width: var(--target-min);
+  min-height: var(--target-min);
+  background: none;
+  border: none;
+  border-radius: var(--radius-xs);
+  padding: var(--space-2);
+  cursor: pointer;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  -webkit-appearance: none;
+  appearance: none;
+  transition: background var(--motion-fast) ease;
+}
+.cqp-row:hover {
+  background: var(--cin-surface-hover);
+}
+.cqp-row:focus-visible {
+  box-shadow: var(--cin-focus-ring);
+  outline: none;
+}
+.cqp-img--empty {
+  background: var(--cin-surface-hover);
+}
+.cqp-empty {
+  font-size: var(--text-xs);
+  color: rgba(255, 255, 255, 0.65);
+  padding: var(--space-3) var(--space-2);
+  text-align: center;
+}
+
+/* ── Boutons de coin (close + bg + fs) ────────────────────── */
+.cinema-corner-btn {
+  z-index: 10;
+  background: var(--cin-surface-hover);
+  border: none;
+  width: var(--btn-h-lg);
+  height: var(--btn-h-lg);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: rgba(255, 255, 255, 0.55);
+  cursor: pointer;
+  backdrop-filter: blur(var(--blur-md));
+  -webkit-backdrop-filter: blur(var(--blur-md));
+  /* État initial (masqué) */
+  opacity: 0;
+  transform: translateY(calc(-1 * var(--space-3)));
+  pointer-events: none;
+  /* Transition unifiée : hover bg/color rapide + animation entrée/sortie + hover/press scale */
+  transition:
+    background var(--motion-fast) var(--ease-standard),
+    transform var(--motion-fast) var(--ease-standard),
+    color var(--motion-fast) ease,
+    opacity var(--motion-slow) ease;
+}
+.cinema-corner-btn:hover {
+  background: rgba(255, 255, 255, 0.2);
+  color: var(--text-on-accent);
+  transform: scale(1.08);
+}
+.cinema-corner-btn:active {
+  transform: scale(0.95);
+}
+.cinema-corner-btn:focus-visible {
+  outline: none;
+  box-shadow: var(--cin-focus-ring);
+}
+.cinema-corner-btn svg {
+  width: var(--icon-lg);
+  height: var(--icon-lg);
+}
+.cinema-close svg {
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 2;
+  stroke-linecap: round;
+  width: var(--icon-md);
+  height: var(--icon-md);
+}
+
+/* ── Zones de grille (Task 2 -- repositionnement cinéma) ──────────────────
+   Chaque zone nommée est assignée exactement une fois -- les collisions sont
+   structurellement impossibles (cf. grid-template-areas de #cinema-overlay). */
+#cinema-bg-btn {
+  grid-area: corner-l;
+  justify-self: start;
+  align-self: start;
+}
+.cinema-corner-r {
+  grid-area: corner-r;
+  justify-self: end;
+  align-self: start;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+.cinema-hero {
+  grid-area: hero;
+  justify-self: center;
+  align-self: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.cinema-side-r {
+  grid-area: side-r;
+  justify-self: end;
+  align-self: end;
+  position: relative; /* ancre #cinema-queue-panel (bottom:100% relatif à cette boîte) */
+}
+/* .cinema-shuffle-hint partage la classe .cinema-next (même carte visuelle) mais doit
+   se superposer EXACTEMENT à #cinema-next plutôt que s'empiler dessous en flux normal
+   -- seul l'un des deux est visible à la fois (opacity togglée en JS, cinema.js). */
+.cinema-shuffle-hint {
+  position: absolute;
+  inset: 0;
+}
+
+/* ── UI visibility — état initial (masqué) pour cinema-info uniquement ── */
+/* cinema-prog et cinema-controls ont leur état initial dans leurs blocs layout ci-dessous */
+.cinema-info {
+  opacity: 0;
+  transform: translateY(var(--space-4));
+  transition:
+    opacity var(--motion-slow) ease,
+    transform var(--motion-slow) var(--ease-spring-softer);
+  pointer-events: none;
+}
+
+#cinema-overlay.ctrl-on .cinema-corner-btn,
+#cinema-overlay.ctrl-on .cinema-controls,
+#cinema-overlay.ctrl-on .cinema-info,
+#cinema-overlay.ctrl-on .cinema-prog {
+  opacity: 1;
+  transform: none;
+  pointer-events: all;
+}
+/* Cascade : boutons coin → info → prog → controls */
+#cinema-overlay.ctrl-on .cinema-corner-btn {
+  transition-delay: 0ms;
+}
+#cinema-overlay.ctrl-on .cinema-info {
+  transition-delay: 30ms;
+}
+#cinema-overlay.ctrl-on .cinema-prog {
+  transition-delay: var(--motion-fast);
+}
+#cinema-overlay.ctrl-on .cinema-controls {
+  transition-delay: var(--motion-fast);
+}
+
+/* ── Pochette ─────────────────────────────────────────────── */
+.cinema-art-wrap {
+  position: relative;
+  width: min(46vh, 46vw, var(--art-cinema-max));
+  height: min(46vh, 46vw, var(--art-cinema-max));
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  /* Skeleton/fallback (Task 6) : gradient dérivé de --cin-rgb au lieu d'un aplat noir —
+     visible pendant le décodage de la pochette (img masqué) et quand il n'y a aucune
+     pochette (#cinema-art-em). --cin-rgb propagé par renderCinColor() (cinema-render.js). */
+  background: radial-gradient(
+    circle at 35% 32%,
+    rgba(var(--cin-rgb, 60, 60, 72), 0.32),
+    var(--c-black) 74%
+  );
+  box-shadow: none;
+  transition:
+    transform 500ms var(--ease-spring-soft),
+    opacity 480ms ease;
+  z-index: 2;
+  flex-shrink: 0;
+  /* état initial hors cinéma — sera animé à l'ouverture */
+  opacity: 0;
+  transform: scale(0.88);
+}
+/* Ouverture : la classe .cin-enter active l'animation d'entrée */
+.cinema-art-wrap.cin-enter {
+  opacity: 1;
+  transform: scale(1);
+}
+/* Changement de piste : scale 0.96→1 + fade */
+@keyframes cinema-art-swap {
+  0% {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+.cinema-art-wrap.cin-swap {
+  /* B4-DESYNC : durée alignée sur CIN_SWAP_IN_MS (cinema.js) via --dur-cin-swap-in —
+     auparavant var(--motion-slow) (320ms) contre 440ms côté JS (retrait de la classe). */
+  animation: cinema-art-swap var(--dur-cin-swap-in) var(--ease-spring-soft) forwards;
+}
+/* Animation sortante avant le swap — l'ancienne pochette s'efface légèrement vers le haut */
+@keyframes cinema-art-swap-out {
+  0% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.03);
+  }
+}
+.cinema-art-wrap.cin-swap-out {
+  animation: cinema-art-swap-out var(--dur-cin-swap-out) ease-in forwards;
+}
+/* ── Cinema art breathing (B4-M10) ──────────────────────────────────────── */
+@keyframes cinema-art-breathe {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.012);
+  }
+}
+.cinema-art-wrap:not(.cin-swap):not(.cin-swap-out):not(.beat) {
+  animation: cinema-art-breathe var(--dur-cin-breathe) ease-in-out infinite;
+}
+/* Task 11 (défrizz) : la pochette anime transform en continu (float + breathe, Ken
+   Burns sur l'img enfant) — promotion GPU explicite pour éviter les re-rasterisations
+   par frame. Scopé à l'overlay actif : aucun layer résident hors cinéma (même pattern
+   que .cinema-fill plus bas). */
+#cinema-overlay.active .cinema-art-wrap {
+  will-change: transform;
+}
+html[data-motion='reduce'] .cinema-art-wrap {
+  animation: none !important;
+}
+html[data-motion='reduce'] .cinema-bg {
+  animation: none !important;
+}
+/* Task 11 (fix revue) : animations coupées → libérer le layer GPU de la pochette.
+   L'ID est requis pour battre la promotion `#cinema-overlay.active .cinema-art-wrap`
+   (1,2,0) au cascade — sans lui la règle reduce (0,2,1) perdait et le layer restait
+   résident. */
+html[data-motion='reduce'] #cinema-overlay .cinema-art-wrap {
+  will-change: auto;
+}
+.cinema-art-wrap:hover {
+  filter: brightness(1.06);
+}
+
+/* Fond flou pour pochettes non carrées — évite les barres noires (letterbox).
+   background-image hérité de l'inline style posé par JS en même temps que img.src.
+   scale(1.12) déborde légèrement hors du conteneur (overflow:hidden le clippe)
+   pour masquer le halo blanc aux bords causé par le blur. */
+.cinema-art-wrap::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  /* --cin-bg-url posée par JS via setProperty — plus fiable que background-image:inherit
+     (propriété non-héritée → comportement instable dans WebView2) */
+  background-image: var(--cin-bg-url, none);
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  filter: blur(var(--blur-lg)) brightness(0.32) saturate(1.4);
+  transform: scale(1.12);
+  pointer-events: none;
+}
+
+/* Beat : flash coloré via --beat-color injecté par JS depuis _cinArtRGB */
+@keyframes cinema-beat-pulse {
+  0% {
+    transform: scale(1.022);
+    box-shadow: var(--shadow-cin-beat-0), var(--shadow-cin-beat-ext), var(--shadow-cin-art);
+  }
+  100% {
+    transform: scale(1);
+    box-shadow: var(--shadow-cin-glow-28), var(--shadow-cin-glow-12), var(--shadow-cin-art);
+  }
+}
+.cinema-art-wrap.beat {
+  /* B4-DESYNC : durée alignée sur BEAT_PULSE_MS (cinema-viz.js) via --dur-cin-beat —
+     auparavant 600ms littéral contre 620ms côté JS. */
+  animation: cinema-beat-pulse var(--dur-cin-beat) var(--ease-beat) forwards !important;
+}
+/* ── Ken Burns — 4 variantes directionnelles SANS translate ──────────────────
+   Principe : transform-origin variable par variante = zoom ancré dans un coin
+   différent → illusion de panoramique sans jamais déplacer l'élément img.
+   Aucun translate = aucun risque de clipper les pochettes non carrées
+   (object-fit:contain expose toujours l'image entière, quel que soit le ratio). */
+@keyframes cin-kb-0 {
+  from {
+    transform: scale(1);
+  }
+  to {
+    transform: scale(1.1);
+  }
+}
+@keyframes cin-kb-1 {
+  from {
+    transform: scale(1);
+  }
+  to {
+    transform: scale(1.1);
+  }
+}
+@keyframes cin-kb-2 {
+  from {
+    transform: scale(1.1);
+  }
+  to {
+    transform: scale(1);
+  }
+}
+@keyframes cin-kb-3 {
+  from {
+    transform: scale(1);
+  }
+  to {
+    transform: scale(1.1);
+  }
+}
+
+/* transform-origin = point d'ancrage du zoom → direction du panoramique perçu */
+#cinema-art-img.cin-kb-0 {
+  animation: cin-kb-0 30s var(--ease-kenburns) forwards;
+  transform-origin: 62% 62%;
+}
+#cinema-art-img.cin-kb-1 {
+  animation: cin-kb-1 28s var(--ease-kenburns) forwards;
+  transform-origin: 38% 38%;
+}
+#cinema-art-img.cin-kb-2 {
+  animation: cin-kb-2 32s var(--ease-kenburns) forwards;
+  transform-origin: 60% 40%;
+}
+#cinema-art-img.cin-kb-3 {
+  animation: cin-kb-3 26s var(--ease-kenburns) forwards;
+  transform-origin: 40% 60%;
+}
+
+/* A11Y SC 2.3.1 / 2.2.2 — reduced-motion : neutraliser le flash beat et le Ken
+   Burns. Placé APRÈS leurs définitions car .cinema-art-wrap.beat (0,2,0 !important)
+   et le shorthand `animation … forwards` battaient le kill-switch global
+   (* { animation-duration:0 !important }) par spécificité — laissant le flash
+   jouer et l'image figée à scale(1.10). */
+html[data-motion='reduce'] .cinema-art-wrap.beat {
+  animation: none !important;
+}
+html[data-motion='reduce'] #cinema-art-img[class*='cin-kb-'] {
+  animation: none !important;
+  transform: none !important;
+}
+
+/* ── État pause (Task 6) — geler les animations idle pochette/fond ──────────
+   Basculée sur #cinema-overlay là où l'icône play/pause est déjà synchronisée
+   (_syncCinButtons, cinema.js). !important : mêmes specificités que les règles
+   d'animation idle ci-dessus (déjà en !important pour .beat) — pattern existant.
+   Les fonds canvas gèlent en pause côté JS (Task 14 : _ambientT conditionné à
+   _getIsPlaying() dans cinema-bg.js, les 4 modes) — ici, seulement le CSS. */
+#cinema-overlay.is-paused .cinema-art-wrap,
+#cinema-overlay.is-paused #cinema-art-img,
+#cinema-overlay.is-paused .cinema-bg {
+  animation-play-state: paused !important;
+}
+#cinema-overlay.is-paused .cinema-bg {
+  filter: saturate(0.7);
+}
+
+#cinema-art-img {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+  border-radius: inherit;
+  outline: 1px solid var(--cin-hairline);
+  outline-offset: -1px;
+  transition: opacity var(--motion-slow) ease;
+}
+#cinema-art-em {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 80px;
+  background: var(--c-1a);
+}
+
+/* ── Heart burst (double-click like) ─────────────────────── */
+@keyframes cin-heart-burst {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.2);
+  }
+  30% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1.4);
+  }
+  60% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1.1);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(1.6);
+  }
+}
+.cin-heart-burst {
+  position: fixed;
+  font-size: 72px;
+  line-height: var(--lh-1);
+  pointer-events: none;
+  z-index: 10;
+  filter: drop-shadow(var(--dropshadow-heart));
+  animation: cin-heart-burst var(--dur-reveal) var(--ease-beat) forwards;
+}
+
+/* ── Infos titre ──────────────────────────────────────────── */
+.cinema-info {
+  margin-top: var(--space-5);
+  text-align: center;
+  width: min(var(--art-cinema-max), 90vw);
+  z-index: 2;
+}
+.cinema-title {
+  font-size: var(--fs-vw-cin-title);
+  font-weight: 700;
+  color: var(--cin-text-hi);
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  text-wrap: balance;
+  letter-spacing: var(--ls-display);
+  line-height: var(--lh-tight);
+  text-shadow:
+    0 2px 16px rgba(0, 0, 0, 0.55),
+    0 1px 3px rgba(0, 0, 0, 0.4);
+}
+.cinema-artist {
+  font-size: var(--fs-vw-cin-art);
+  /* Blanc fixe — évite que --cin-rgb (= --g dynColor) rende le texte illisible sur fond sombre */
+  color: var(--cin-text-mid);
+  margin-top: var(--space-2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-weight: 400;
+  letter-spacing: var(--ls-tight);
+  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.4);
+}
+.cinema-album {
+  font-size: var(--fs-vw-cin-alb);
+  /* Task 7 — teinté par la pochette : --cin-rgb-ui est déjà garanti >=4.5:1 vs noir
+     (ensureContrastOnDark, artcolor.js), donc sûr ici (contrairement à --cin-rgb brute). */
+  color: rgb(var(--cin-rgb-ui, 255, 255, 255));
+  margin-top: var(--space-1);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-weight: 500;
+  letter-spacing: var(--ls-label);
+  text-transform: uppercase;
+  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.55);
+}
+
+/* ── Swap texte synchronisé avec la pochette (Task 6) ────────────────────
+   Mêmes durées/timers que la pochette (--dur-cin-swap-out/-in, pilotés par
+   _cinSwapOutTimer/_cinSwapInTimer dans cinema.js) — pas d'horloge séparée,
+   zéro dérive possible entre texte et pochette. */
+@keyframes cin-txt-swap-out {
+  0% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+}
+@keyframes cin-txt-swap-in {
+  0% {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.cin-txt-swap-out {
+  animation: cin-txt-swap-out var(--dur-cin-swap-out) ease-in forwards;
+}
+.cin-txt-swap-in {
+  animation: cin-txt-swap-in var(--dur-cin-swap-in) var(--ease-spring-soft) forwards;
+}
+html[data-motion='reduce'] .cin-txt-swap-out,
+html[data-motion='reduce'] .cin-txt-swap-in {
+  animation: none !important;
+}
+
+/* ── Barre de progression cinéma ──────────────────────────── */
+.cinema-prog {
+  margin-top: var(--space-3);
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  width: min(var(--art-cinema-max), 90vw);
+  z-index: 2;
+  /* État initial animation (monte du bas) */
+  opacity: 0;
+  transform: translateY(var(--space-4));
+  pointer-events: none;
+  transition:
+    opacity var(--motion-slow) ease,
+    transform var(--motion-slow) var(--ease-spring-softer);
+}
+.cinema-pbar {
+  flex: 1;
+  height: var(--track-h-md);
+  background: rgba(255, 255, 255, 0.18);
+  border-radius: var(--radius-xs);
+  cursor: pointer;
+  position: relative;
+  overflow: visible;
+  transition: height var(--motion-fast) var(--ease-spring);
+}
+.cinema-pbar::after {
+  /* SC 2.5.8 : -8px donnait 20-23px de cible réelle (piste 4-7px + 16px) --
+     sous le plancher 24px. -10px porte la cible à 24-27px selon l'état hover. */
+  content: '';
+  position: absolute;
+  inset: -10px 0;
+}
+.cinema-pbar:hover {
+  height: var(--cinema-pbar-hover-h);
+}
+/* Task 7 — le fill se teinte au hover (repos = blanc neutre, cf. .cinema-fill ci-dessous) */
+.cinema-pbar:hover .cinema-fill {
+  background: rgb(var(--cin-rgb-ui, 255, 255, 255));
+  box-shadow: var(--shadow-cin-pbar);
+}
+.cinema-pbar:focus-visible {
+  outline: none;
+  box-shadow: var(--cin-focus-ring);
+  border-radius: var(--radius-xs);
+}
+.cinema-fill {
+  height: 100%;
+  border-radius: var(--radius-xs);
+  background: rgba(255, 255, 255, 0.88);
+  width: 100%;
+  transform: scaleX(0);
+  transform-origin: left center;
+  pointer-events: none;
+  transition:
+    box-shadow var(--motion-base) var(--ease-standard),
+    background var(--motion-base) var(--ease-standard);
+}
+#cinema-overlay.active .cinema-fill {
+  will-change: transform;
+}
+.cinema-time {
+  font-size: var(--text-xs);
+  color: rgba(255, 255, 255, 0.38);
+  min-width: 3.5ch;
+  font-variant-numeric: tabular-nums;
+  font-weight: 500;
+}
+
+/* ── Thumb + tooltip de scrub (Task 5) ───────────────────────
+   Le thumb est un sibling de .cinema-fill (pas un enfant) : positionné par
+   `left: %` en JS -- évite la distorsion en ellipse qu'un enfant hériterait
+   du transform: scaleX() du fill. Masqué par défaut, révélé au hover/focus/
+   .ctrl-on (même logique de visibilité que les autres contrôles cinéma). */
+.cinema-pbar-thumb {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  width: var(--icon-xs);
+  height: var(--icon-xs);
+  border-radius: 50%;
+  /* Task 7 — teinté par la pochette (light mode : override plus bas, garde var(--text-primary)) */
+  background: rgb(var(--cin-rgb-ui, 255, 255, 255));
+  box-shadow: var(--shadow-thumb);
+  transform: translate(-50%, -50%) scale(0);
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    transform var(--motion-fast) var(--ease-spring-soft),
+    opacity var(--motion-fast) ease;
+}
+.cinema-pbar:hover .cinema-pbar-thumb,
+.cinema-pbar:focus-visible .cinema-pbar-thumb,
+#cinema-overlay.ctrl-on .cinema-pbar-thumb {
+  transform: translate(-50%, -50%) scale(1);
+  opacity: 1;
+}
+.cinema-seek-tip {
+  position: absolute;
+  bottom: calc(100% + var(--space-3));
+  left: 0; /* valeur initiale -- écrasée par cinema-seek.js (clampée aux bords viewport) */
+  transform: translateX(-50%);
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(var(--blur-md));
+  -webkit-backdrop-filter: blur(var(--blur-md));
+  border: var(--border-w-sm) solid rgba(255, 255, 255, 0.14);
+  color: var(--cin-text-hi);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  padding: 3px var(--space-2);
+  border-radius: var(--radius-sm);
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity var(--motion-fast) ease;
+  z-index: var(--z-tooltip);
+}
+.cinema-seek-tip.show {
+  opacity: 1;
+}
+
+/* ── Contrôles cinéma ─────────────────────────────────────── */
+.cinema-controls {
+  margin-top: var(--space-3);
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  z-index: 2;
+  /* Glassmorphism : fond verre sombre sous les boutons */
+  background: rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(var(--blur-lg)) saturate(1.3);
+  -webkit-backdrop-filter: blur(var(--blur-lg)) saturate(1.3);
+  border: var(--border-w-sm) solid rgba(255, 255, 255, 0.07);
+  border-radius: var(--radius-pill);
+  padding: var(--space-2) var(--space-4);
+  /* État initial animation (monte du bas avec ressort prononcé) */
+  opacity: 0;
+  transform: translateY(var(--space-5));
+  pointer-events: none;
+  transition:
+    opacity 380ms ease,
+    transform 440ms var(--ease-spring-softer);
+}
+.cbtn {
+  background: transparent;
+  border: none;
+  width: var(--icon-40);
+  height: var(--icon-40);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: rgba(255, 255, 255, 0.65);
+  transition:
+    background var(--motion-fast) ease,
+    color var(--motion-fast) ease,
+    transform var(--motion-fast) var(--ease-spring);
+  cursor: pointer;
+  position: relative;
+}
+.cbtn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--text-on-accent);
+  transform: scale(1.12);
+}
+.cbtn:active {
+  transform: scale(0.93);
+}
+.cbtn:focus-visible {
+  outline: none;
+  box-shadow: var(--cin-focus-ring);
+}
+/* Task 7 — cohésion chromatique : les états actifs suivent la couleur de la pochette
+   (--cin-rgb-ui, garde-fou contraste AA 4.5:1 vs noir — cf. artcolor.js) au lieu de
+   l'accent de thème figé --g. #cinema-rep (badge) et .cbtn-radio gardent leur propre
+   override plus bas (radio reste sur --g, cf. keyframe radio-pulse-cbtn inchangée). */
+.cbtn.on {
+  color: rgb(var(--cin-rgb-ui, 255, 255, 255));
+  filter: drop-shadow(0 0 4px rgba(var(--cin-rgb-ui, 255, 255, 255), 0.45));
+}
+.cbtn svg {
+  width: var(--icon-xl);
+  height: var(--icon-xl);
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  pointer-events: none;
+}
+.cbtn.on svg {
+  stroke: currentColor;
+}
+.cbtn-like svg {
+  fill: none;
+}
+.cbtn-like.on svg {
+  fill: currentColor;
+}
+.cbtn-radio svg {
+  fill: none;
+  stroke: currentColor;
+}
+.cbtn-radio.on {
+  color: var(--g);
+  animation: radio-pulse-cbtn var(--anim-shim) ease-out infinite;
+}
+/* Badge repeat-one : override cinéma seul (#pc-rep du player principal garde --g, cf. plus haut) */
+#cinema-rep.rep-one::after {
+  color: rgb(var(--cin-rgb-ui, 255, 255, 255));
+}
+@keyframes radio-pulse-cbtn {
+  0%,
+  100% {
+    filter: none;
+  }
+  50% {
+    filter: drop-shadow(0 0 8px rgba(var(--g-rgb), 0.7));
+  }
+}
+.cbtn-play {
+  width: var(--art-avatar);
+  height: var(--art-avatar);
+  border-radius: 50%;
+  background: var(--c-white);
+  color: var(--c-black);
+  /* grid 1/1 : empilement play/pause pour le cross-fade (cf. .pcplay) */
+  display: grid;
+  place-items: center;
+  transition:
+    transform var(--motion-fast) var(--ease-spring),
+    filter var(--motion-fast) ease;
+}
+.cbtn-play:hover {
+  filter: brightness(0.9);
+  transform: scale(1.06);
+}
+.cbtn-play:active {
+  transform: scale(0.94);
+}
+.cbtn-play svg {
+  width: var(--icon-22);
+  height: var(--icon-22);
+  fill: currentColor;
+  stroke: none;
+}
+
+/* ── Volume cinéma ────────────────────────────────────────── */
+.cinema-vol-sep {
+  width: 1px;
+  height: var(--icon-28);
+  margin: 0 var(--space-1);
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 1px;
+  flex-shrink: 0;
+}
+.cinema-vol-wrap {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 0 var(--space-2);
+}
+/* Task 7 — #cinema-vol-icon est un vrai <button> (mute cliquable) : la cible tactile
+   respecte le plancher 24px (SC 2.5.8) même si l'icône visuelle reste plus petite. */
+.cinema-vol-icon-btn {
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: var(--target-min);
+  min-height: var(--target-min);
+  border-radius: var(--radius-xs);
+  flex-shrink: 0;
+  cursor: pointer;
+  color: rgba(255, 255, 255, 0.55);
+  transition: color var(--motion-fast) ease;
+}
+.cinema-vol-icon-btn:hover {
+  color: var(--text-on-accent);
+}
+.cinema-vol-icon-btn:focus-visible {
+  outline: none;
+  box-shadow: var(--cin-focus-ring);
+}
+.cinema-vol-icon {
+  width: var(--icon-lg);
+  height: var(--icon-lg);
+  flex-shrink: 0;
+  pointer-events: none; /* le clic résout toujours sur le <button> parent */
+}
+/* ── Ambient visualiseur intégré à la barre de volume ─────── */
+.cinema-vol-bar {
+  position: relative;
+  width: var(--cinema-vol-w);
+  display: flex;
+  align-items: center;
+}
+.cinema-vol-vis {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  margin-top: auto;
+  margin-bottom: auto;
+  width: 100%;
+  height: 28px;
+  pointer-events: none;
+  z-index: 0;
+  border-radius: var(--radius-xs);
+}
+.cinema-vol-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  height: var(--track-h);
+  /* Task 7 gap : la piste restait blanche fixe alors que le thumb (plus bas) est
+     déjà teinté par --cin-rgb-ui -- miroir de .vslider (piste principale) qui
+     teinte toute la piste avec l'accent, pas seulement son thumb. */
+  background: rgba(var(--cin-rgb-ui, 255, 255, 255), 0.2);
+  border-radius: var(--radius-xs);
+  outline: none;
+  cursor: pointer;
+  transition:
+    height var(--motion-fast) var(--ease-standard),
+    background var(--motion-base) var(--ease-standard);
+}
+.cinema-vol-slider:hover {
+  height: var(--cinema-vol-hover-h);
+}
+/* A11Y-SLIDER-3 — focus clavier cinéma (fond semi-opaque blanc, pas de --g qui serait trop contrasté) */
+.cinema-vol-slider:focus-visible {
+  box-shadow: var(--cin-focus-ring);
+}
+/* Task 7 — accent du slider volume teinté par la pochette (--cin-rgb-ui, contraste
+   garanti >=4.5:1 vs noir — cf. artcolor.js) au lieu du blanc/accent figé. */
+.cinema-vol-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: var(--icon-sm);
+  height: var(--icon-sm);
+  border-radius: 50%;
+  background: rgb(var(--cin-rgb-ui, 255, 255, 255));
+  cursor: pointer;
+  transition: transform var(--motion-fast) var(--ease-spring);
+}
+.cinema-vol-slider:hover::-webkit-slider-thumb {
+  transform: scale(1.2);
+}
+.cinema-vol-slider::-moz-range-thumb {
+  width: var(--icon-sm);
+  height: var(--icon-sm);
+  border-radius: 50%;
+  border: none;
+  background: rgb(var(--cin-rgb-ui, 255, 255, 255));
+  cursor: pointer;
+  transition: transform var(--motion-fast) var(--ease-spring);
+}
+.cinema-vol-slider:hover::-moz-range-thumb {
+  transform: scale(1.2);
+}
+
+/* ── Cinema mode — light overrides (B3) ──────────────────────────────────────────── */
+html[data-mode='light'] #cinema-overlay {
+  background: linear-gradient(180deg, var(--bg-elevated) 0%, var(--bg-surface) 100%);
+  color: var(--text-primary);
+}
+
+/* Light cinema — dark text on light gradient (white text was ~1.1:1 contrast on #E5E8EE) */
+html[data-mode='light'] .cinema-title,
+html[data-mode='light'] .cinema-artist,
+html[data-mode='light'] .cinema-album {
+  text-shadow: none;
+}
+html[data-mode='light'] .cinema-title {
+  color: var(--text-primary);
+}
+html[data-mode='light'] .cinema-artist {
+  color: var(--text-secondary);
+}
+html[data-mode='light'] .cinema-album {
+  color: var(--text-muted);
+}
+html[data-mode='light'] .cinema-time {
+  color: var(--text-muted);
+}
+
+/* Light cinema — thumb/tooltip de scrub (Task 5) : mêmes tokens texte/surface
+   que .cinema-corner-btn pour rester cohérent avec le reste du chrome cinéma. */
+html[data-mode='light'] .cinema-pbar-thumb {
+  background: var(--text-primary);
+  box-shadow: var(--shadow-sm);
+}
+html[data-mode='light'] .cinema-seek-tip {
+  background: rgba(255, 255, 255, 0.85);
+  border-color: rgba(0, 0, 0, 0.1);
+  color: var(--text-primary);
+}
+
+html[data-mode='light'] .cinema-art-wrap {
+  background: radial-gradient(
+    circle at 35% 32%,
+    rgba(var(--cin-rgb, 60, 60, 72), 0.32),
+    var(--bg-elevated) 74%
+  );
+}
+html[data-mode='light'] #cinema-art-em {
+  background: var(--bg-elevated);
+}
+
+html[data-mode='light'] .cinema-corner-btn {
+  background: rgba(255, 255, 255, 0.55);
+  backdrop-filter: blur(var(--blur-md));
+  -webkit-backdrop-filter: blur(var(--blur-md));
+  color: var(--text-primary);
+}
+html[data-mode='light'] .cinema-corner-btn:hover {
+  background: rgba(255, 255, 255, 0.75);
+  transform: scale(1.08);
+}
+html[data-mode='light'] .cinema-corner-btn:active {
+  transform: scale(0.95);
+}
+/* Light mode — focus rings inverted: dark inner ring on light cinema background */
+html[data-mode='light'] .cinema-corner-btn:focus-visible,
+html[data-mode='light'] .cbtn:focus-visible,
+html[data-mode='light'] .cinema-pbar:focus-visible,
+html[data-mode='light'] .cinema-vol-icon-btn:focus-visible,
+html[data-mode='light'] .cinema-vol-slider:focus-visible,
+html[data-mode='light'] #cinema-next:focus-visible,
+html[data-mode='light'] .cqp-row:focus-visible {
+  box-shadow:
+    0 0 0 2px rgba(0, 0, 0, 0.75),
+    0 0 0 4px rgba(255, 255, 255, 0.45);
+}
+
+/* Task 7 — la teinte --cin-rgb-ui est garantie >=4.5:1 contre NOIR uniquement ;
+   sur le fond clair du cinéma light elle serait illisible. Retour aux valeurs
+   light-safe pré-Task-7 (l'accent de thème --g est déjà validé AA en light). */
+html[data-mode='light'] .cbtn.on {
+  color: var(--g);
+  filter: none;
+}
+html[data-mode='light'] #cinema-rep.rep-one::after {
+  color: var(--g);
+}
+html[data-mode='light'] .cinema-pbar:hover .cinema-fill {
+  background: rgba(255, 255, 255, 0.88);
+}
+html[data-mode='light'] .cinema-vol-slider {
+  background: rgba(255, 255, 255, 0.2);
+}
+html[data-mode='light'] .cinema-vol-slider::-webkit-slider-thumb {
+  background: var(--c-white);
+}
+html[data-mode='light'] .cinema-vol-slider::-moz-range-thumb {
+  background: var(--c-white);
+}
+
+html[data-mode='light'] #art-blur-bg {
+  background: rgba(255, 255, 255, 0.45); /* voile clair au lieu du noir 72% */
+}
+
+html[data-mode='light'] .cinema-next {
+  background: rgba(0, 0, 0, 0.08);
+  backdrop-filter: blur(var(--blur-md));
+  -webkit-backdrop-filter: blur(var(--blur-md));
+  border: var(--border-w-sm) solid rgba(0, 0, 0, 0.12);
+}
+
+html[data-mode='light'] .cn-label {
+  color: var(--text-secondary);
+}
+
+html[data-mode='light'] .cn-title {
+  color: var(--text-primary);
+}
+
+html[data-mode='light'] .cn-artist {
+  color: var(--text-secondary);
+}
+
+/* Finding 2 (post-review) — .cn-body--hint est blanc-fixe (rgba(255,255,255,.75)) sans
+   override light → illisible sur le fond clair de .cinema-next ci-dessus. currentColor
+   fait aussi passer l'icône (stroke="currentColor", index.html) au même ton. */
+html[data-mode='light'] .cn-body--hint {
+  color: var(--text-secondary);
+}
+
+/* Task 9 — panneau file d'attente : mêmes overrides light que .cinema-next
+   (.cn-title/.cn-artist ci-dessus s'appliquent déjà aux rangées, réutilisées telles quelles). */
+html[data-mode='light'] .cinema-queue-panel {
+  background: rgba(0, 0, 0, 0.08);
+  backdrop-filter: blur(var(--blur-md));
+  -webkit-backdrop-filter: blur(var(--blur-md));
+  border: var(--border-w-sm) solid rgba(0, 0, 0, 0.12);
+}
+html[data-mode='light'] .cqp-header,
+html[data-mode='light'] .cqp-empty {
+  color: var(--text-secondary);
+}
+html[data-mode='light'] .cqp-row:hover,
+html[data-mode='light'] .cqp-img--empty {
+  background: rgba(0, 0, 0, 0.06);
+}
+
+/* Light mode : vignette et scrim inversés (clairs, pas sombres) */
+html[data-mode='light'] #cinema-overlay::before {
+  background: radial-gradient(
+    ellipse 90% 90% at 50% 50%,
+    transparent 45%,
+    rgba(255, 255, 255, 0.4) 100%
+  );
+}
+html[data-mode='light'] #cinema-overlay::after {
+  background: linear-gradient(
+    to top,
+    rgba(255, 255, 255, 0.5) 0%,
+    rgba(255, 255, 255, 0.2) 38%,
+    transparent 100%
+  );
+}
+
+/* ── Cinema responsive — pill serrée + volume masqué sur écrans étroits ── */
+@media (max-width: 600px) {
+  .cinema-controls {
+    gap: var(--space-1);
+    padding: var(--space-2) var(--space-3);
+  }
+  .cbtn {
+    width: var(--icon-32);
+    height: var(--icon-32);
+  }
+  .cinema-vol-sep,
+  .cinema-vol-wrap {
+    display: none;
+  }
+}
+
+/* ── Cinema responsive — breakpoint intermédiaire (tablette/petit desktop) ──
+   Pill un cran plus compacte qu'en plein format, mais le volume reste utilisable
+   (contrairement à <600px) : seul le visualiseur ambient intégré à la piste de
+   volume (#cinema-vol-vis) est masqué pour désencombrer la pill. */
+@media (min-width: 601px) and (max-width: 1023px) {
+  .cinema-controls {
+    gap: var(--space-2);
+    padding: var(--space-2) var(--space-3);
+  }
+  #cinema-vol-vis {
+    display: none;
+  }
+}
+
+/* ── Cinema responsive — anti-chevauchement sur petites hauteurs ──
+   Sous 640px de hauteur, l'horloge idle (bottom-left) et le panneau "suivant"
+   (bottom-right) peuvent chevaucher la pill de contrôles (bottom-center) ou le
+   texte titre/artiste. Les deux sont purement informatifs → masqués sans perte
+   fonctionnelle (la pill de contrôles reste toujours visible/accessible). */
+@media (max-height: 640px) {
+  #cinema-clock {
+    display: none;
+  } /* purement décoratif, aucune perte fonctionnelle */
+}
+

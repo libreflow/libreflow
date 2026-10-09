@@ -29,7 +29,7 @@ import { get, set, notify, subscribe } from './store.js';
 // Consumers import named primitives from './motion.js' as needed.
 import { setMotionPref, onMotionPrefChange, applyMotionAttr } from './motion.js'; // Task 10
 import { CFG, SPEEDS } from './cfg.js';
-import { openDB, tx, dget, dall, dput, ddel, DB, getStorageEstimate } from './db.js';
+import { openDB, tx, dget, dall, dput, ddel, dkeys, DB, getStorageEstimate } from './db.js';
 import { i18n, initLang, getLang, applyLang, setLang } from './i18n.js';
 import {
   cinemaOpen,
@@ -57,7 +57,6 @@ import {
   getQueueState,
   restoreQueueState
 } from './queue.js';
-import { exportM3U, importM3U } from './m3u.js';
 import { setPlayLog, flushPlayLog, cancelPlayLogFlush } from './playlog.js';
 import {
   initEQ,
@@ -120,18 +119,6 @@ import {
   importPaths,
   startWatchNative
 } from './watchfolder.js'; // Bug #7 fix : startWatchNative ajouté
-import { renderStats, getHeatPeriod, initHeatPeriod } from './stats.js';
-import {
-  switchPlTab,
-  openSmartPlaylistModal,
-  _setSmartSeed,
-  smartSeedSearch,
-  smartPreview,
-  confirmSmartPlaylist,
-  regenerateSmartPlaylist
-} from './smartplaylist.js';
-import { detectDupes, removeDupeTrack, deleteAllDupes, closeDupes } from './dupes.js';
-import { checkOrphans } from './orphans.js';
 import {
   selection,
   selectionMode,
@@ -156,8 +143,6 @@ import {
   setRGTarget,
   analyzeAndApplyRG
 } from './replaygain.js';
-import { openTagEditor, saveTagEdit, cancelTagEdit } from './tagedit.js';
-import { toast, toastWithAction, confirmAction, initRipple } from './ui.js';
 import { checkForUpdate, checkForUpdateManual, initAppVersion } from './updater.js';
 import {
   getFiltered,
@@ -579,6 +564,13 @@ function _applyBootUI(cfgObj) {
   }
 }
 
+// PERF-BOOT-3 : exécuter un travail non critique une fois le main thread libre.
+// requestIdleCallback si dispo, sinon setTimeout — jamais sur le chemin critique du boot.
+const _deferIdle = (fn) => {
+  if (typeof requestIdleCallback === 'function') requestIdleCallback(fn);
+  else setTimeout(fn, 200);
+};
+
 async function boot() {
   // R-2 : health check IDB — si la DB est corrompue ou bloquée, openDB() rejette.
   // Sans ce try/catch, l'erreur part en UnhandledPromiseRejection → crash silencieux.
@@ -598,17 +590,20 @@ async function boot() {
     return;
   }
   // ARCH-7 : vérifier le quota IDB au boot — avertir si > 80% utilisé
-  getStorageEstimate()
-    .then((est) => {
-      if (!est || !est.quota) return;
-      const pct = est.usage / est.quota;
-      if (pct > 0.9) {
-        toast(i18n('app_storage_critical', Math.round(pct * 100)), 'error');
-      } else if (pct > 0.8) {
-        toast(i18n('app_storage_warn', Math.round(pct * 100)), 'warning');
-      }
-    })
-    .catch((e) => console.warn('[app:storageEstimate]', e));
+  // PERF-BOOT-3 : différé en idle — indépendant du premier rendu (toasts après LCP)
+  _deferIdle(() =>
+    getStorageEstimate()
+      .then((est) => {
+        if (!est || !est.quota) return;
+        const pct = est.usage / est.quota;
+        if (pct > 0.9) {
+          toast(i18n('app_storage_critical', Math.round(pct * 100)), 'error');
+        } else if (pct > 0.8) {
+          toast(i18n('app_storage_warn', Math.round(pct * 100)), 'warning');
+        }
+      })
+      .catch((e) => console.warn('[app:storageEstimate]', e))
+  );
 
   // Load config
   const cfg = await dget('cfg', 'state').catch((e) => {
@@ -664,7 +659,8 @@ async function boot() {
       set('recentPls', recentPls);
     }
     // Modules persist — restauration anticipée (avant les tracks)
-    if (cfg.heatPeriod) initHeatPeriod(cfg.heatPeriod);
+    if (cfg.heatPeriod)
+      import('./stats.js').then(({ initHeatPeriod }) => initHeatPeriod(cfg.heatPeriod));
     if (cfg.radioSeedId) initRadioSeedId(cfg.radioSeedId);
     initLang(cfg.lang || 'fr');
     initSettingsVars({
@@ -728,12 +724,16 @@ async function boot() {
     if (cfg.eqAutoMode) setEQAutoMode(true);
     if (cfg.eqExpert) setEQExpert(true);
     if (cfg.eqProfiles) loadEQProfiles(cfg.eqProfiles);
-    initDeviceEQ(cfg.eqDeviceProfiles ?? {}).catch((e) =>
-      console.warn('[boot] initDeviceEQ failed:', e)
-    ); // detects current audio output device
-    initDevices(); // démarrer le polling USB + CD audio
-    // Purge tout résidu de cache CD orphelin (rip interrompu, crash, etc.)
-    cleanupCdCache(null).catch((e) => console.warn('[boot] CD cache GC failed:', e));
+    // PERF-BOOT-3 : détection périphérique audio, polling USB/CD et purge du
+    // cache CD différés en idle — aucun n'est requis pour le premier rendu.
+    _deferIdle(() => {
+      initDeviceEQ(cfg.eqDeviceProfiles ?? {}).catch((e) =>
+        console.warn('[boot] initDeviceEQ failed:', e)
+      ); // detects current audio output device
+      initDevices(); // démarrer le polling USB + CD audio
+      // Purge tout résidu de cache CD orphelin (rip interrompu, crash, etc.)
+      cleanupCdCache(null).catch((e) => console.warn('[boot] CD cache GC failed:', e));
+    });
     // Watch folder : restaurer le chemin ET relancer la surveillance native.
     // Bug #7 fix : initWatchPath() seul restaure le chemin mais ne relance pas le watcher.
     // La surveillance était inactive jusqu'au prochain clic sur le bouton.
@@ -793,7 +793,7 @@ async function boot() {
   // Les trois stores sont indépendants — aucun n'a besoin que l'autre soit chargé en premier.
   // Afficher le skeleton adapté à la vue sauvegardée (albums/artistes/genres/liste)
   if (cfg) _showSkeletonRows(cfg.view);
-  const [savedPl, savedLog, saved] = await Promise.all([
+  const [savedPl, savedLog, saved, savedArtKeys] = await Promise.all([
     dall('playlists').catch((e) => {
       console.error('[boot] playlists read failed:', e);
       return [];
@@ -804,6 +804,12 @@ async function boot() {
     }),
     dall('tracks').catch((e) => {
       console.error('[boot] tracks read failed — library may appear empty:', e);
+      return [];
+    }),
+    // PERF-LH v6 : clés du store artwork (léger — pas de désérialisation des
+    // pochettes) pour reconstruire le flag _hasArt de chaque piste au boot.
+    dkeys('artwork').catch((e) => {
+      console.warn('[boot] artwork keys read failed:', e);
       return [];
     })
   ]);
@@ -829,6 +835,8 @@ async function boot() {
     // PERF-BOOT : traitement par tranches — évite le blocage main-thread sur grandes bibliothèques.
     // BOOT-2 FIX : cadence réduite à 10-20 yields pour 50k pistes (était 100 yields × setTimeout(0) ≈ +400ms).
     const _tracksArr = [];
+    /** @type {Set<string>} PERF-LH v6 — ids possédant une pochette dans le store artwork */
+    const _bootArtKeys = new Set(/** @type {string[]} */ (savedArtKeys || []));
     for (let _bi = 0; _bi < saved.length; _bi += CFG.BOOT_CHUNK) {
       const _slice = saved.slice(_bi, _bi + CFG.BOOT_CHUNK);
       for (const r of _slice) {
@@ -849,7 +857,7 @@ async function boot() {
           // On stocke uniquement un flag booléen au boot pour éviter 200-400 MB de RAM.
           // artLoader.prefetchArts() est appelé par virtRenderWindow() après chaque rendu.
           art: null,
-          _hasArt: !!(r.artBuf || r.artB64),
+          _hasArt: _bootArtKeys.has(r.id) || !!(r.artBuf || r.artB64), // PERF-LH v6 : artwork store
           _artBuf: null,
           _artMime: r.artMime || null,
           artColor: r.artColor || null,
@@ -940,7 +948,7 @@ async function boot() {
 
     // C-2 : vérification des fichiers orphelins — 6s après boot, non-bloquant
     // (après l'artwork retry pour ne pas cumuler les I/O au démarrage)
-    _orphansTimer = setTimeout(() => checkOrphans(), CFG.ORPHAN_START_DELAY_MS); // FIX #22 — stocker le timer
+    _orphansTimer = setTimeout(() => import('./orphans.js').then(({ checkOrphans }) => checkOrphans()), CFG.ORPHAN_START_DELAY_MS); // FIX #22 — stocker le timer
 
     // MINOR-1 FIX : applyLang() / setMode() / sync UI AVANT le await BOOT-1.
     // Avant ce fix, ces appels venaient après le bloc if/else → bloqués jusqu'à 5s
@@ -1525,6 +1533,13 @@ export async function clearLibrary() {
     });
     await new Promise((ok, fail) => {
       const store = tx('playlog', 'readwrite');
+      store.clear().onerror = (e) => fail(e.target.error);
+      store.transaction.oncomplete = ok;
+      store.transaction.onerror = (e) => fail(e.target.error);
+    });
+    // PERF-LH v6 : vider aussi le store artwork dédié
+    await new Promise((ok, fail) => {
+      const store = tx('artwork', 'readwrite');
       store.clear().onerror = (e) => fail(e.target.error);
       store.transaction.oncomplete = ok;
       store.transaction.onerror = (e) => fail(e.target.error);

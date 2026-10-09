@@ -60,13 +60,25 @@ export async function exportBackup() {
 
   try {
     // Lire tous les stores IDB en parallèle
-    const [tracks, playlists, playlog, imports, cfg] = await Promise.all([
+    const [tracks, playlists, playlog, imports, cfg, artwork] = await Promise.all([
       dall('tracks'),
       dall('playlists'),
       dall('playlog'),
       dall('imports').catch(() => []),
-      dget('cfg', 'state').catch(() => ({}))
+      dget('cfg', 'state').catch(() => ({})),
+      // PERF-LH v6 : pochettes dans le store dédié — réintégrées au format
+      // d'export historique (artBuf inline) pour garder le format compatible.
+      dall('artwork').catch(() => [])
     ]);
+    const artById = new Map((artwork ?? []).map((a) => [a.id, a]));
+    for (const t of tracks ?? []) {
+      const a = artById.get(t.id);
+      if (a) {
+        t.artBuf = a.buf || null;
+        t.artB64 = a.b64 || null;
+        t.artMime = a.mime || null;
+      }
+    }
 
     const manifest = {
       version: BACKUP_FORMAT_VERSION,
@@ -156,9 +168,21 @@ export async function importBackup() {
       }
     }
 
+    // PERF-LH v6 : les backups anciens (v1) et récents portent l'artwork inline
+    // (artBuf/artB64) — l'extraire vers le store artwork dédié, stripper le record.
+    const addedArtwork = [];
+    for (const t of addedTracks) {
+      if (t.artBuf || t.artB64) {
+        addedArtwork.push({ id: t.id, buf: t.artBuf || null, b64: t.artB64 || null, mime: t.artMime || null });
+        delete t.artBuf;
+        delete t.artB64;
+        delete t.artMime;
+      }
+    }
     if (addedTracks.length) {
       // Une seule transaction IDB pour tout le lot (vs un dput par piste).
       await _batchPut('tracks', addedTracks);
+      if (addedArtwork.length) await _batchPut('artwork', addedArtwork);
       // Mutation in-place du tableau du store : pas de set() (qui notifierait
       // AVANT rebuildTrackIdxMap, exposant un _trackIdxMap stale aux subscribers).
       get('tracks').push(...addedTracks);

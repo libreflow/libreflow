@@ -139,18 +139,19 @@ export async function getArtUrl(t) {
   // Miss — charger depuis IDB
   try {
     if (!DB) return null;
-    const rec = await dget('tracks', t.id);
+    // PERF-LH v6 : la pochette vit dans le store artwork dédié
+    const rec = await dget('artwork', t.id);
     if (!rec) return null;
 
     let buf, mime;
-    if (rec.artBuf) {
-      buf = rec.artBuf;
-      mime = ART_MIME_ALLOWLIST.includes(rec.artMime) ? rec.artMime : 'image/jpeg';
-    } else if (rec.artB64) {
+    if (rec.buf) {
+      buf = rec.buf;
+      mime = ART_MIME_ALLOWLIST.includes(rec.mime) ? rec.mime : 'image/jpeg';
+    } else if (rec.b64) {
       // Compat : anciens enregistrements IDB avec data: URL base64
-      const rawMime = rec.artB64.match(/data:([^;]+)/)?.[1] || 'image/jpeg';
+      const rawMime = rec.b64.match(/data:([^;]+)/)?.[1] || 'image/jpeg';
       mime = ART_MIME_ALLOWLIST.includes(rawMime) ? rawMime : 'image/jpeg';
-      const b64 = rec.artB64.split(',')[1];
+      const b64 = rec.b64.split(',')[1];
       if (!b64) {
         t.noArt = true;
         return null;
@@ -269,10 +270,10 @@ export async function resolveArtBuf(t) {
   // ARCH-2/PERF-1 : artwork paresseux — art existe en IDB mais pas encore chargé en RAM.
   if (t._hasArt && !t.noArt && !t.art) {
     try {
-      const rec = await dget('tracks', t.id);
-      if (rec?.artBuf) {
-        t._artBuf = rec.artBuf;
-        t._artMime = ART_MIME_ALLOWLIST.includes(rec.artMime) ? rec.artMime : 'image/jpeg';
+      const rec = await dget('artwork', t.id);
+      if (rec?.buf) {
+        t._artBuf = rec.buf;
+        t._artMime = ART_MIME_ALLOWLIST.includes(rec.mime) ? rec.mime : 'image/jpeg';
         return { buf: t._artBuf, mime: t._artMime };
       }
     } catch (e) {
@@ -297,10 +298,10 @@ export async function resolveArtBuf(t) {
     t.art = null; // invalider l'URL révoquée pour éviter de retomber ici
     if (t._hasArt && !t.noArt) {
       try {
-        const rec = await dget('tracks', t.id);
-        if (rec?.artBuf) {
-          t._artBuf = rec.artBuf;
-          t._artMime = ART_MIME_ALLOWLIST.includes(rec.artMime) ? rec.artMime : 'image/jpeg';
+        const rec = await dget('artwork', t.id);
+        if (rec?.buf) {
+          t._artBuf = rec.buf;
+          t._artMime = ART_MIME_ALLOWLIST.includes(rec.mime) ? rec.mime : 'image/jpeg';
           return { buf: t._artBuf, mime: t._artMime };
         }
       } catch (e) {

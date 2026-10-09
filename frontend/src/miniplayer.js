@@ -161,10 +161,11 @@ export async function updateMiniPlayer() {
       let buf = t._artBuf || null;
       let mimeHint = t._artMime || 'image/jpeg';
       if (!buf) {
-        const rec = await dget('tracks', t.id).catch(() => null);
-        if (rec?.artBuf) {
-          buf = rec.artBuf;
-          const rawMime = rec.artMime || 'image/jpeg';
+        // PERF-LH v6 : pochette dans le store artwork dédié
+        const rec = await dget('artwork', t.id).catch(() => null);
+        if (rec?.buf) {
+          buf = rec.buf;
+          const rawMime = rec.mime || 'image/jpeg';
           mimeHint = ART_MIME_ALLOWLIST.includes(rawMime) ? rawMime : 'image/jpeg';
           t._artBuf = buf;
           t._artMime = mimeHint;

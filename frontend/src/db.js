@@ -1,7 +1,8 @@
 // LibreFlow — IndexedDB layer
 //
 // Database schema (version 5):
-//   tracks    { id, name, artist, album, path, ext, duration, dateAdded, artB64, artColor, genre, rgGain }
+//   tracks    { id, name, artist, album, path, ext, duration, dateAdded, artColor, genre, rgGain } // PERF-LH v6 : artwork déplacé dans le store dédié
+//   artwork   { id, buf, b64, mime } // pochettes — lus paresseusement par artLoader.js
 //   cfg       { state: <app config object> }
 //   playlists { id, name, trackIds[] }
 //   playlog   { ts, id, dur }
@@ -32,7 +33,8 @@ async function openDB() {
     return;
   }
   _openingPromise = new Promise((ok, fail) => {
-    const r = indexedDB.open('lp4', 5); // v5 : ajout du store imports
+    const r = indexedDB.open('lp4', 6); // v6 : store artwork dédié (PERF-LH)
+    let _postUpgrade = null;
     r.onupgradeneeded = (e) => {
       const d = e.target.result;
       if (!d.objectStoreNames.contains('tracks')) d.createObjectStore('tracks', { keyPath: 'id' });
@@ -43,6 +45,32 @@ async function openDB() {
         d.createObjectStore('playlog', { keyPath: 'ts' });
       if (!d.objectStoreNames.contains('imports'))
         d.createObjectStore('imports', { keyPath: 'id' });
+      // PERF-LH v6 : les pochettes (artBuf/artB64, jusqu'à ~3 Mo/piste) quittent le
+      // store tracks → dall('tracks') au boot ne désérialise plus les images.
+      if (!d.objectStoreNames.contains('artwork')) {
+        d.createObjectStore('artwork', { keyPath: 'id' });
+        // Migration : déplacer les pochettes des records tracks existants et
+        // stripper les champs du store tracks dans LA MÊME transaction d'upgrade
+        // (atomique, pas de fenêtre de corruption). e.oldVersion < 6 → migration.
+        if (e.oldVersion > 0 && e.oldVersion < 6) {
+          const tracksStore = e.target.transaction.objectStore('tracks');
+          const artStore = e.target.transaction.objectStore('artwork');
+          tracksStore.openCursor().onsuccess = (ev) => {
+            const cursor = ev.target.result;
+            if (!cursor) return;
+            const rec = cursor.value;
+            if (rec.artBuf || rec.artB64) {
+              artStore.put({ id: rec.id, buf: rec.artBuf || null, b64: rec.artB64 || null, mime: rec.artMime || null });
+              const stripped = { ...rec };
+              delete stripped.artBuf;
+              delete stripped.artB64;
+              delete stripped.artMime;
+              cursor.update(stripped);
+            }
+            cursor.continue();
+          };
+        }
+      }
     };
     r.onsuccess = (e) => ok(e.target.result);
     r.onerror = () => fail(r.error);
@@ -59,7 +87,7 @@ async function openDB() {
  * Open a transaction on a single store and return the IObjectStore.
  * Throws synchronously if DB has not been initialised yet.
  *
- * @param {string} s             - Store name ('tracks' | 'cfg' | 'playlists' | 'playlog' | 'imports')
+ * @param {string} s             - Store name ('tracks' | 'cfg' | 'playlists' | 'playlog' | 'imports' | 'artwork')
  * @param {'readonly'|'readwrite'} [m='readonly'] - Transaction mode
  * @returns {IDBObjectStore}
  */
@@ -164,6 +192,24 @@ const ddel = (s, k) =>
     CFG.IDB_TIMEOUT_DEFAULT
   );
 
+/**
+ * Get all keys (not values) from a store. Lightweight — IndexedDB returns
+ * key arrays without deserialising record payloads (PERF-LH v6 : used at
+ * boot to build the _hasArt flag set from the artwork store cheaply).
+ *
+ * @param {string} s
+ * @returns {Promise<IDBValidKey[]>}
+ */
+const dkeys = (s) =>
+  _raceWithTimeout(
+    new Promise((ok, fail) => {
+      const r = tx(s).getAllKeys();
+      r.onsuccess = () => ok(r.result);
+      r.onerror = () => fail(r.error);
+    }),
+    CFG.IDB_TIMEOUT_DEFAULT
+  );
+
 // ── Storage quota ─────────────────────────────────────────────
 
 /**
@@ -200,4 +246,4 @@ export function isQuotaError(e) {
   );
 }
 
-export { openDB, tx, dget, dall, dput, ddel };
+export { openDB, tx, dget, dall, dput, ddel, dkeys };

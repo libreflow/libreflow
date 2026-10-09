@@ -23,7 +23,10 @@ async function run() {
   console.log('\n── a11y — WCAG 2.1 AA static checks ──');
 
   const DS = readRepoFile('frontend/src/design-system.css');
-  const SS = readRepoFile('frontend/src/style.css');
+  const SS =
+    readRepoFile('frontend/src/style.css') +
+    // PERF-LH : le CSS du mode cinéma vit dans un fichier différé (cinema.css).
+    readRepoFile('frontend/src/cinema.css');
   const HTML = readRepoFile('frontend/index.html');
   const VJ = readRepoFile('frontend/src/views.js');
 
@@ -341,13 +344,10 @@ async function run() {
   // (Task 4 design-system): the dark-cinema focus ring box-shadow was duplicated
   // literally 4x (.cinema-corner-btn, .cbtn, .cinema-pbar, .cinema-vol-slider).
   // It must now resolve through a single --cin-focus-ring token.
-  function extractCinemaSection(css) {
-    const start = css.indexOf('#cinema-overlay {');
-    const end = css.indexOf('/* ═══ PANNEAUX OVERLAY', start);
-    if (start === -1 || end === -1)
-      throw new Error('cinema CSS section boundaries not found in style.css');
-    return css.slice(start, end);
-  }
+  // PERF-LH : le CSS cinéma vit désormais dans cinema.css (chunk différé) —
+  // la « section cinéma » est tout simplement ce fichier.
+  const CIN = readRepoFile('frontend/src/cinema.css');
+  const extractCinemaSection = () => CIN;
   await t(
     'cinema focus ring uses a single --cin-focus-ring token, not a repeated literal (SC 2.4.13)',
     () => {
