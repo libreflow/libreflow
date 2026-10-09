@@ -579,6 +579,13 @@ function _applyBootUI(cfgObj) {
   }
 }
 
+// PERF-BOOT-3 : exécuter un travail non critique une fois le main thread libre.
+// requestIdleCallback si dispo, sinon setTimeout — jamais sur le chemin critique du boot.
+const _deferIdle = (fn) => {
+  if (typeof requestIdleCallback === 'function') requestIdleCallback(fn);
+  else setTimeout(fn, 200);
+};
+
 async function boot() {
   // R-2 : health check IDB — si la DB est corrompue ou bloquée, openDB() rejette.
   // Sans ce try/catch, l'erreur part en UnhandledPromiseRejection → crash silencieux.
@@ -598,17 +605,20 @@ async function boot() {
     return;
   }
   // ARCH-7 : vérifier le quota IDB au boot — avertir si > 80% utilisé
-  getStorageEstimate()
-    .then((est) => {
-      if (!est || !est.quota) return;
-      const pct = est.usage / est.quota;
-      if (pct > 0.9) {
-        toast(i18n('app_storage_critical', Math.round(pct * 100)), 'error');
-      } else if (pct > 0.8) {
-        toast(i18n('app_storage_warn', Math.round(pct * 100)), 'warning');
-      }
-    })
-    .catch((e) => console.warn('[app:storageEstimate]', e));
+  // PERF-BOOT-3 : différé en idle — indépendant du premier rendu (toasts après LCP)
+  _deferIdle(() =>
+    getStorageEstimate()
+      .then((est) => {
+        if (!est || !est.quota) return;
+        const pct = est.usage / est.quota;
+        if (pct > 0.9) {
+          toast(i18n('app_storage_critical', Math.round(pct * 100)), 'error');
+        } else if (pct > 0.8) {
+          toast(i18n('app_storage_warn', Math.round(pct * 100)), 'warning');
+        }
+      })
+      .catch((e) => console.warn('[app:storageEstimate]', e))
+  );
 
   // Load config
   const cfg = await dget('cfg', 'state').catch((e) => {
@@ -728,12 +738,16 @@ async function boot() {
     if (cfg.eqAutoMode) setEQAutoMode(true);
     if (cfg.eqExpert) setEQExpert(true);
     if (cfg.eqProfiles) loadEQProfiles(cfg.eqProfiles);
-    initDeviceEQ(cfg.eqDeviceProfiles ?? {}).catch((e) =>
-      console.warn('[boot] initDeviceEQ failed:', e)
-    ); // detects current audio output device
-    initDevices(); // démarrer le polling USB + CD audio
-    // Purge tout résidu de cache CD orphelin (rip interrompu, crash, etc.)
-    cleanupCdCache(null).catch((e) => console.warn('[boot] CD cache GC failed:', e));
+    // PERF-BOOT-3 : détection périphérique audio, polling USB/CD et purge du
+    // cache CD différés en idle — aucun n'est requis pour le premier rendu.
+    _deferIdle(() => {
+      initDeviceEQ(cfg.eqDeviceProfiles ?? {}).catch((e) =>
+        console.warn('[boot] initDeviceEQ failed:', e)
+      ); // detects current audio output device
+      initDevices(); // démarrer le polling USB + CD audio
+      // Purge tout résidu de cache CD orphelin (rip interrompu, crash, etc.)
+      cleanupCdCache(null).catch((e) => console.warn('[boot] CD cache GC failed:', e));
+    });
     // Watch folder : restaurer le chemin ET relancer la surveillance native.
     // Bug #7 fix : initWatchPath() seul restaure le chemin mais ne relance pas le watcher.
     // La surveillance était inactive jusqu'au prochain clic sur le bouton.
