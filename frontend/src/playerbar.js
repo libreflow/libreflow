@@ -133,6 +133,12 @@ export function reflowMarquee() {
 // ── Now-playing bar update ────────────────────────────────────────────────────
 // Tracking de la dernière notification envoyée (évite les doublons).
 let _lastNotifTrackId = null;
+// AUDIT-PLAYERBAR : tracking dédié au heart-beat — découplé du dédoublonnage
+// des notifications. Avant, un même flag servait aux deux : relancer la même
+// piste aimée ne re-déclenchait jamais le pulse car _lastNotifTrackId n'avait
+// pas changé, et inversement un like pendant la lecture interférait avec les
+// notifications OS.
+let _lastHeartBeatTrackId = null;
 
 /**
  * Met à jour le panneau inférieur "Now Playing" (titre, artiste, pochette, like,
@@ -178,7 +184,8 @@ export function updateBar() {
   document.getElementById('cinema-lk')?.setAttribute('aria-pressed', String(_isLikedNow));
 
   // Heart-beat : piste déjà aimée qui devient active → pulse unique
-  if (_isLikedNow && t.id !== _lastNotifTrackId) {
+  if (_isLikedNow && t.id !== _lastHeartBeatTrackId) {
+    _lastHeartBeatTrackId = t.id;
     const _hb = document.getElementById('pl-lk');
     if (_hb) {
       void _hb.offsetWidth;

@@ -4442,8 +4442,11 @@ html[data-motion='reduce'] #vw::after {
   white-space: nowrap;
 }
 /* pointer-events:auto : capture le curseur pour maintenir :hover actif quand
-   le curseur glisse du bouton vers la card (qui flotte au-dessus). */
-#btn-next:hover #next-preview {
+   le curseur glisse du bouton vers la card (qui flotte au-dessus).
+   A11Y AUDIT : + :focus-visible — parité clavier, la next-preview s'affiche
+   aussi quand le bouton ⏭ reçoit le focus (pas seulement au survol souris). */
+#btn-next:hover #next-preview,
+#btn-next:focus-visible #next-preview {
   opacity: 1;
   transform: translateX(-50%) translateY(0);
   pointer-events: auto;
@@ -11129,10 +11132,15 @@ html[data-mode='light'] .rv-start-btn {
   }
 }
 
-/* Extras cèdent au transport (jamais touché) */
+/* Extras cèdent au transport (jamais touché).
+   A11Y AUDIT : seul le slider de volume disparaît — le bouton mute reste
+   visible pour ne pas perdre le contrôle du son en mode compact (le
+   raccourci clavier M reste, mais l'utilisateur tactile n'a plus rien).
+   La target tactile est déjà à 48px via --control-size sur mobile. */
 @container playerbar (max-width: 720px) {
   #btn-speed,
-  .vol {
+  .vol .vslider,
+  .vol .vol-tip {
     display: none;
   }
 }
