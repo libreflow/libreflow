@@ -48,6 +48,8 @@ function _sanitizeTagStr(val, maxLen = 500) {
 
 // ── État interne ──────────────────────────────────────────────────────────────
 let _saveTrackBatch = new Map(); // Map<id, Track> — pistes à flush
+let _artQueue = new Map(); // PERF-LH v6 : Map<id, {id, buf, b64, mime}> — pochettes à écrire dans le store artwork au prochain flush
+let _artDelQueue = new Set(); // PERF-LH v6 : ids dont la pochette doit être supprimée (noArt) au prochain flush
 let _saveTrackTimer = null; // debounce timer
 let _saveTrackMaxTimer = null; // garantit un flush toutes les 2s sous charge continue
 let _flushGeneration = 0; // FIX FREEZE : incrémenté par cancelTrackBatch() pour annuler un flush en vol
@@ -406,6 +408,10 @@ export async function flushTrackBatch() {
     batch.map(async (t) => {
       if (!_trackIdxMap.has(t.id)) return null;
       const artRes = t.noArt ? null : await resolveArtBuf(t);
+      // PERF-LH v6 : la pochette va dans le store artwork dédié — le record
+      // tracks ne contient plus les bytes d'image (dall('tracks') au boot).
+      if (artRes?.buf) _artQueue.set(t.id, { id: t.id, buf: artRes.buf, b64: null, mime: artRes.mime || null });
+      else if (t.noArt) _artDelQueue.add(t.id); // pochette retirée (tags ré-édités) — purge de l'entrée orpheline
       return {
         id: t.id,
         name: t.name,
@@ -416,8 +422,6 @@ export async function flushTrackBatch() {
         path: t.path,
         duration: t.duration,
         dateAdded: t.dateAdded,
-        artBuf: artRes?.buf || null,
-        artMime: artRes?.mime || null,
         artColor: t.artColor || null,
         genre: t.genre || null,
         year: t.year != null && t.year !== false ? t.year : null,
@@ -441,10 +445,15 @@ export async function flushTrackBatch() {
 
   /** Exécute une transaction IDB de type readwrite pour écrire les records donnés. */
   async function _writeTx(recs) {
-    const transaction = DB.transaction('tracks', 'readwrite');
+    const transaction = DB.transaction(['tracks', 'artwork'], 'readwrite');
     _currentWriteTx = transaction; // FIX FREEZE : exposé pour abort si clearLibrary() intervient
     const store = transaction.objectStore('tracks');
     for (const rec of recs) store.put(rec);
+    const artStore = transaction.objectStore('artwork');
+    for (const art of _artQueue.values()) artStore.put(art);
+    for (const id of _artDelQueue) artStore.delete(id);
+    _artQueue.clear();
+    _artDelQueue.clear();
     await new Promise((ok, fail) => {
       transaction.oncomplete = () => {
         _currentWriteTx = null;
@@ -469,11 +478,11 @@ export async function flushTrackBatch() {
     if (isQuotaError(e)) {
       // ARCH-7 : quota IDB dépassé — réessayer sans artBuf (artwork sacrifié, métadonnées préservées)
       console.warn('[flushTrackBatch] Quota IDB dépassé — retry sans artwork', e);
-      const stripped = validRecords.map((r) => ({ ...r, artBuf: null, artMime: null }));
+      _artQueue.clear(); // PERF-LH v6 : sacrifier les pochettes, garder les métadonnées
       try {
-        await _writeTx(stripped);
+        await _writeTx(validRecords);
         // Invalider le flag _hasArt sur les tracks concernées pour éviter des retentatives IDB
-        for (const rec of stripped) {
+        for (const rec of validRecords) {
           const idx = _trackIdxMap.get(rec.id);
           if (idx != null) {
             const t = get('tracks')[idx];
@@ -580,8 +589,6 @@ export async function saveTrackNow(t) {
       path: t.path,
       duration: t.duration,
       dateAdded: t.dateAdded,
-      artBuf: artRes?.buf || null,
-      artMime: artRes?.mime || null,
       artColor: t.artColor || null,
       genre: t.genre || null,
       year: t.year != null && t.year !== false ? t.year : null,
@@ -593,8 +600,10 @@ export async function saveTrackNow(t) {
       channels: t.channels != null ? t.channels : null,
       bitDepth: t.bitDepth != null ? t.bitDepth : null
     };
-    const transaction = DB.transaction('tracks', 'readwrite');
+    const transaction = DB.transaction(['tracks', 'artwork'], 'readwrite');
     transaction.objectStore('tracks').put(rec);
+    if (artRes?.buf)
+      transaction.objectStore('artwork').put({ id: t.id, buf: artRes.buf, b64: null, mime: artRes.mime || null });
     await new Promise((ok, fail) => {
       transaction.oncomplete = ok;
       transaction.onerror = () => fail(transaction.error);

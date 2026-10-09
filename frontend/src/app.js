@@ -29,7 +29,7 @@ import { get, set, notify, subscribe } from './store.js';
 // Consumers import named primitives from './motion.js' as needed.
 import { setMotionPref, onMotionPrefChange, applyMotionAttr } from './motion.js'; // Task 10
 import { CFG, SPEEDS } from './cfg.js';
-import { openDB, tx, dget, dall, dput, ddel, DB, getStorageEstimate } from './db.js';
+import { openDB, tx, dget, dall, dput, ddel, dkeys, DB, getStorageEstimate } from './db.js';
 import { i18n, initLang, getLang, applyLang, setLang } from './i18n.js';
 import {
   cinemaOpen,
@@ -793,7 +793,7 @@ async function boot() {
   // Les trois stores sont indépendants — aucun n'a besoin que l'autre soit chargé en premier.
   // Afficher le skeleton adapté à la vue sauvegardée (albums/artistes/genres/liste)
   if (cfg) _showSkeletonRows(cfg.view);
-  const [savedPl, savedLog, saved] = await Promise.all([
+  const [savedPl, savedLog, saved, savedArtKeys] = await Promise.all([
     dall('playlists').catch((e) => {
       console.error('[boot] playlists read failed:', e);
       return [];
@@ -804,6 +804,12 @@ async function boot() {
     }),
     dall('tracks').catch((e) => {
       console.error('[boot] tracks read failed — library may appear empty:', e);
+      return [];
+    }),
+    // PERF-LH v6 : clés du store artwork (léger — pas de désérialisation des
+    // pochettes) pour reconstruire le flag _hasArt de chaque piste au boot.
+    dkeys('artwork').catch((e) => {
+      console.warn('[boot] artwork keys read failed:', e);
       return [];
     })
   ]);
@@ -829,6 +835,8 @@ async function boot() {
     // PERF-BOOT : traitement par tranches — évite le blocage main-thread sur grandes bibliothèques.
     // BOOT-2 FIX : cadence réduite à 10-20 yields pour 50k pistes (était 100 yields × setTimeout(0) ≈ +400ms).
     const _tracksArr = [];
+    /** @type {Set<string>} PERF-LH v6 — ids possédant une pochette dans le store artwork */
+    const _bootArtKeys = new Set(/** @type {string[]} */ (savedArtKeys || []));
     for (let _bi = 0; _bi < saved.length; _bi += CFG.BOOT_CHUNK) {
       const _slice = saved.slice(_bi, _bi + CFG.BOOT_CHUNK);
       for (const r of _slice) {
@@ -849,7 +857,7 @@ async function boot() {
           // On stocke uniquement un flag booléen au boot pour éviter 200-400 MB de RAM.
           // artLoader.prefetchArts() est appelé par virtRenderWindow() après chaque rendu.
           art: null,
-          _hasArt: !!(r.artBuf || r.artB64),
+          _hasArt: _bootArtKeys.has(r.id) || !!(r.artBuf || r.artB64), // PERF-LH v6 : artwork store
           _artBuf: null,
           _artMime: r.artMime || null,
           artColor: r.artColor || null,
@@ -1525,6 +1533,13 @@ export async function clearLibrary() {
     });
     await new Promise((ok, fail) => {
       const store = tx('playlog', 'readwrite');
+      store.clear().onerror = (e) => fail(e.target.error);
+      store.transaction.oncomplete = ok;
+      store.transaction.onerror = (e) => fail(e.target.error);
+    });
+    // PERF-LH v6 : vider aussi le store artwork dédié
+    await new Promise((ok, fail) => {
+      const store = tx('artwork', 'readwrite');
       store.clear().onerror = (e) => fail(e.target.error);
       store.transaction.oncomplete = ok;
       store.transaction.onerror = (e) => fail(e.target.error);
