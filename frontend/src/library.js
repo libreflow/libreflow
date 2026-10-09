@@ -245,16 +245,25 @@ export async function loadTagsBg(t, rustTags = null) {
       t.name = ntitle;
       changed = true;
       delete t._nlc;
+      delete t._sk;
+      delete t._ak;
+      delete t._bk;
     }
     if (nartistFull && nartistFull !== t.artistFull) {
       t.artistFull = nartistFull;
       changed = true;
       delete t._nlc;
+      delete t._sk;
+      delete t._ak;
+      delete t._bk;
     }
     if (nartist && nartist !== t.artist) {
       t.artist = nartist;
       changed = true;
       delete t._nlc;
+      delete t._sk;
+      delete t._ak;
+      delete t._bk;
       delete t._artistKey;
       delete t._alc;
     }
@@ -262,6 +271,9 @@ export async function loadTagsBg(t, rustTags = null) {
       t.album = nalbum;
       changed = true;
       delete t._nlc;
+      delete t._sk;
+      delete t._ak;
+      delete t._bk;
       delete t._albumKey;
       delete t._ablc;
     }
@@ -270,6 +282,9 @@ export async function loadTagsBg(t, rustTags = null) {
       t.genre = ngenre;
       changed = true;
       delete t._nlc;
+      delete t._sk;
+      delete t._ak;
+      delete t._bk;
       delete t._glc;
       delete t._genreParts;
     }
@@ -278,6 +293,9 @@ export async function loadTagsBg(t, rustTags = null) {
       if (guessed) {
         t.genre = guessed;
         delete t._nlc;
+        delete t._sk;
+        delete t._ak;
+        delete t._bk;
         delete t._glc;
         delete t._genreParts;
         changed = true;

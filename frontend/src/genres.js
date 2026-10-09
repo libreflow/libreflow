@@ -414,6 +414,9 @@ export async function rescanGenres(force = false, silent = false) {
       if (guessed) {
         t.genre = guessed;
         delete t._nlc;
+        delete t._sk;
+        delete t._ak;
+        delete t._bk;
         delete t._glc;
         delete t._genreParts;
         genreModified.push(t);
