@@ -167,6 +167,8 @@
 
   /* --- Tailles fluides ---------------------------------------------------- */
   --text-xs: clamp(10px, 1vw, 12px);
+  --text-2xs: 9px; /* micro-badges — sous-échelle volontaire, non clamped */
+  --text-3xs: 8px; /* micro-badges — sous-échelle volontaire, non clamped */
   --text-sm: clamp(12px, 1.2vw, 14px);
   --text-base: clamp(13px, 1.4vw, 15px);
   --text-md: clamp(15px, 1.6vw, 18px);
@@ -516,26 +518,6 @@ html[data-mode='light'] {
   --border-w-xl: 3px; /* épaisseur border xl — spinner, track-active left */
   --border-w-2xl: 4px; /* épaisseur border 2xl — tooltips flèche */
 
-  /* Flou — recâblé sur --blur-sm/md/lg/xl (harmonisation, audit §2.7). 19 → 4. */
-  --blur-1h: var(--blur-sm); /* 1.5 → 4 */
-  --blur-2: var(--blur-sm); /* 2   → 4 */
-  --blur-3: var(--blur-sm); /* 3   → 4 */
-  --blur-4: var(--blur-sm); /* 4 */
-  --blur-6: var(--blur-md); /* 6   → 8 */
-  --blur-8: var(--blur-md); /* 8 */
-  --blur-10: var(--blur-md); /* 10  → 8 */
-  --blur-12: var(--blur-lg); /* 12  → 16 */
-  --blur-14: var(--blur-lg); /* 14  → 16 */
-  --blur-16: var(--blur-lg); /* 16 */
-  --blur-18: var(--blur-lg); /* 18  → 16 */
-  --blur-20: var(--blur-lg); /* 20  → 16 */
-  --blur-24: var(--blur-lg); /* 24  → 16 */
-  --blur-26: var(--blur-lg); /* 26  → 16 */
-  --blur-28: var(--blur-xl); /* 28  → 48 */
-  --blur-48: var(--blur-xl); /* 48 */
-  --blur-60: var(--blur-xl); /* 60  → 48 */
-  --blur-64: var(--blur-xl); /* 64  → 48 */
-
   /* Line-height — recâblé (harmonisation, audit §2.3). 12 → 4 ancres.
      tight/snug/base/loose = ancres ; lh-1 et lh-px-14 restent littéraux. */
   --lh-tight: 1.2; /* ancre */
@@ -543,32 +525,12 @@ html[data-mode='light'] {
   --lh-base: 1.5; /* ancre */
   --lh-loose: 1.75; /* ancre */
   --lh-1: 1; /* leading ras — gardé littéral */
-  --lh-compact: var(--lh-tight); /* 1.1  → 1.2 */
-  --lh-relaxed: var(--lh-tight); /* 1.15 → 1.2 */
-  --lh-comfort: var(--lh-base); /* 1.4  → 1.5 */
-  --lh-airy: var(--lh-base); /* 1.6  → 1.5 */
-  --lh-spacious: var(--lh-loose); /* 1.65 → 1.75 */
   --lh-px-14: 14px; /* hauteur fixe badges — gardé littéral */
   /* Letter-spacing — recâblé (harmonisation, audit §2.3). 22 → 4 ancres. */
   --ls-display: -0.02em; /* ancre — display serré */
   --ls-tight: -0.01em; /* ancre — tracking serré */
   --ls-reset: 0; /* ancre — normal */
   --ls-label: 0.06em; /* ancre — caps / labels */
-  --ls-heading: var(--ls-display); /* -.03  → -.02 */
-  --ls-hero: var(--ls-display); /* -.025 → -.02 */
-  --ls-stat-val: var(--ls-display); /* -.04  → -.02 */
-  --ls-display-fine: var(--ls-tight); /* -.005 → -.01 */
-  --ls-numeric: var(--ls-tight); /* -.008 → -.01 */
-  --ls-slight: var(--ls-reset); /* .01  → 0 */
-  --ls-micro: var(--ls-reset); /* .02  → 0 */
-  --ls-subtle: var(--ls-reset); /* .03  → 0 */
-  --ls-filter: var(--ls-reset); /* .4px → 0 */
-  --ls-wide: var(--ls-label); /* .04  → .06 */
-  --ls-xwide: var(--ls-label); /* .08  → .06 */
-  --ls-cinema: var(--ls-label); /* .10  → .06 */
-  --ls-caps: var(--ls-label); /* 1.2px → .06em */
-  --ls-caps-sm: var(--ls-label); /* 1px   → .06em */
-  --ls-stat: var(--ls-label); /* 1.3px → .06em */
 
   /* Alias sémantiques accent — --gd/--gg restent les sources (mis à jour par settings.js) */
   --accent-subtle: var(--gd); /* remplace var(--gd) dans les rules CSS */
@@ -620,13 +582,6 @@ html[data-mode='light'] {
   --anim-shim: 1.8s; /* skeleton shimmer / drago border / radio-cbtn — boucles lentes */
   --anim-art: 0.8s; /* art-color background transition */
   --ease: var(--motion-fast) ease;
-  /* Easings — recâblés sur --ease-standard / --ease-spring (6 → 2) */
-  --spring: var(--ease-spring);
-  --spring-soft: var(--ease-spring);
-  --snappy: var(--ease-standard);
-  --smooth: var(--ease-standard);
-  --decelerate: var(--ease-standard);
-  --accelerate: var(--ease-standard);
 
   --font: 'DM Sans', -apple-system, 'Segoe UI', sans-serif;
   /* --font-display retiré : doublon de §3 (la valeur §3 fait foi — plus de fallbacks) */
@@ -774,6 +729,7 @@ html[data-mode='light'] {
   --z-modal: 800;
   --z-toast: 9000;
   --z-tooltip: 9999;
+  --z-boot: 99999; /* boot spinner — couche la plus haute, masque tout au chargement */
 
   /* Séparateur — dividers structurels inter-rangées (.grp-lbl, .tr, .ns) ;
      distinct de --border-1 (.06) qui cerne les composants/conteneurs. */
