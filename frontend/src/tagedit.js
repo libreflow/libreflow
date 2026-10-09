@@ -271,6 +271,9 @@ export async function saveTagEdit(trackId) {
   delete t._albumKey;
   delete t._artistKey;
   delete t._nlc;
+  delete t._sk;
+  delete t._ak;
+  delete t._bk;
   delete t._trigrams;
   delete t._alc;
   delete t._ablc;
