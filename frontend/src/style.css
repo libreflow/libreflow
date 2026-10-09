@@ -3784,18 +3784,30 @@ html[data-motion='reduce'] #vw::after {
   flex-shrink: 0;
   background: var(--bg4);
   overflow: hidden;
+  /* RAFFINEMENT-1 : halo subtil teinté par la couleur dominante de la pochette.
+     --art-color-rgb est posé par applyArtColor() (settings.js) ; fallback transparent
+     quand aucune piste avec artwork n'est active. Le glow monte au hover. */
+  box-shadow:
+    0 2px 10px rgba(var(--art-color-rgb, 0 0 0), 0.18),
+    0 0 0 1px rgba(var(--art-color-rgb, 255 255 255), 0.08);
+  transition:
+    transform var(--motion-fast) var(--ease-standard),
+    box-shadow var(--motion-base) var(--ease-standard);
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: var(--text-lg);
   position: relative;
   z-index: 1;
-  /* Tilt 3D — transition rapide au move, retour spring au leave */
-  transition:
-    transform var(--motion-fast) var(--ease-standard),
-    box-shadow var(--motion-base) var(--ease-standard);
   will-change: transform;
   cursor: pointer;
+}
+/* RAFFINEMENT-1 : le halo s'intensifie au survol de .pl-info */
+.pl-info:hover .pl-art,
+.pl-info:focus-visible .pl-art {
+  box-shadow:
+    0 4px 18px rgba(var(--art-color-rgb, 0 0 0), 0.32),
+    0 0 0 1px rgba(var(--art-color-rgb, 255 255 255), 0.14);
 }
 /* hover CSS supprimé — géré par le tilt JS pour éviter le conflit de transform */
 .pl-art img {
@@ -3997,6 +4009,39 @@ html[data-motion='reduce'] #vw::after {
   align-items: center;
   gap: var(--space-2);
   min-width: 0; /* R-C5 */
+  position: relative; /* ancre les séparateurs RAFFINEMENT-4 */
+}
+/* RAFFINEMENT-4 : séparateurs verticaux discrets entre les 3 zones de la barre.
+   Dégradés transparent→sep→transparent : ils s'estompent aux extrémités,
+   structurant sans durcir. Disparaissent en compact (<900px) où l'espace est compté. */
+.pl-c::before,
+.pl-c::after {
+  content: '';
+  position: absolute;
+  top: 25%;
+  bottom: 25%;
+  width: 1px;
+  background: linear-gradient(
+    180deg,
+    transparent,
+    var(--sep) 30%,
+    var(--sep) 70%,
+    transparent
+  );
+  opacity: 0.6;
+  pointer-events: none;
+}
+.pl-c::before {
+  left: calc(-0.5 * var(--space-2));
+}
+.pl-c::after {
+  right: calc(-0.5 * var(--space-2));
+}
+@container playerbar (max-width: 900px) {
+  .pl-c::before,
+  .pl-c::after {
+    display: none;
+  }
 }
 .pl-btns {
   display: flex;
@@ -4083,16 +4128,20 @@ html[data-motion='reduce'] #vw::after {
    n'existe pas dans le DOM (la radio se pilote via l'onglet lib + cinéma). */
 
 .pcplay {
-  width: var(--icon-40);
+  /* RAFFINEMENT-3 : pill accent — plus large que haut, halo lumineux permanent
+     (subtil) qui s'intensifie en lecture. Remplace le cercle plat. */
+  width: calc(var(--icon-40) + var(--space-4));
   height: var(--icon-40);
-  border-radius: 50%;
-  background: var(--g);
+  border-radius: 999px;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--g) 92%, var(--c-white)), var(--g));
   border: none;
   /* grid 1/1 : les SVG play/pause s'empilent pour le cross-fade (audit 2026-07-27) */
   display: grid;
   place-items: center;
   flex-shrink: 0;
-  box-shadow: var(--shadow-pcplay-anim);
+  box-shadow:
+    0 2px 14px rgba(var(--g-rgb), 0.35),
+    0 0 0 1px rgba(var(--g-rgb), 0.25);
   transition:
     transform var(--motion-fast) var(--ease-spring),
     box-shadow var(--motion-base) ease,
@@ -4100,6 +4149,12 @@ html[data-motion='reduce'] #vw::after {
     background var(--motion-base) ease;
   margin: 0 var(--space-3);
   position: relative;
+}
+/* RAFFINEMENT-3 : halo lumineux --accent-glow au hover, cohérent avec playGlow */
+.pcplay:hover {
+  box-shadow:
+    var(--shadow-pcplay-hv),
+    0 4px 22px var(--accent-glow);
 }
 .pcplay::after {
   content: '';
@@ -4219,17 +4274,21 @@ html[data-motion='reduce'] #vw::after {
   box-shadow: 0 0 0 2px rgba(var(--g-rgb), 0.35);
   border-radius: var(--radius-xs);
 }
-.pbar:hover .pfill::after {
+.pbar:hover .pfill::after,
+.pbar:focus-visible .pfill::after {
   content: '';
   position: absolute;
   right: calc(-1 * var(--space-2));
   top: 50%;
-  transform: translateY(-50%) scale(1);
-  width: var(--icon-sm);
-  height: var(--icon-sm);
+  /* RAFFINEMENT-2 : thumb magnétique — apparition par scale depuis le centre
+     du fill (plus de translation verticale qui accrochait au premier hover). */
+  width: var(--icon-md);
+  height: var(--icon-md);
   border-radius: 50%;
   background: var(--c-white);
-  box-shadow: var(--shadow-pbar-thumb);
+  box-shadow:
+    var(--shadow-pbar-thumb),
+    0 0 12px rgba(var(--g-rgb), 0.45);
   animation: thumbIn 0.15s var(--ease-spring) forwards;
   z-index: 10;
 }
@@ -4242,6 +4301,26 @@ html[data-motion='reduce'] #vw::after {
     transform: translateY(-50%) scale(1);
     opacity: 1;
   }
+}
+/* RAFFINEMENT-2 : point lumineux en tête de fill — "front lumineux" du remplissage,
+   visible même sans hover (le sens de progression reste lisible au repos). */
+.pfill::before {
+  content: '';
+  position: absolute;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--g) 40%, var(--c-white));
+  box-shadow: 0 0 8px 1px rgba(var(--g-rgb), 0.55);
+  opacity: 0.9;
+  transition: opacity var(--motion-fast) ease;
+}
+.pbar:hover .pfill::before,
+.pbar:focus-visible .pfill::before {
+  opacity: 0; /* le thumb magnétique prend le relais au hover */
 }
 .pfill {
   height: 100%;
