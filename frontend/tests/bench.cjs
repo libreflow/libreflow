@@ -115,6 +115,9 @@ function buildLibrary(n) {
 
 let _filterGen = 1;
 
+// Interning global : les trigrammes des pistes partagent les strings (PERF heap)
+const _trigramIntern = new Map();
+
 function _trigrams(str) {
   const s = str.replace(/\s+/g, ' ').trim();
   const set = new Set();
@@ -122,12 +125,31 @@ function _trigrams(str) {
   return set;
 }
 
-function _trigramScore(qSet, tSet) {
-  if (qSet.size === 0 || tSet.size === 0) return 0;
+function _trigramsArr(str) {
+  const s = str.replace(/\s+/g, ' ').trim();
+  const out = [];
+  const seen = new Set();
+  for (let i = 0; i <= s.length - 3; i++) {
+    const g = s.slice(i, i + 3);
+    let v = _trigramIntern.get(g);
+    if (v === undefined) {
+      v = g;
+      _trigramIntern.set(g, v);
+    }
+    if (!seen.has(v)) {
+      seen.add(v);
+      out.push(v);
+    }
+  }
+  return out;
+}
+
+function _trigramScore(qSet, tArr) {
+  if (qSet.size === 0 || tArr.length === 0) return 0;
   let inter = 0;
-  for (const tg of qSet) if (tSet.has(tg)) inter++;
+  for (const tg of tArr) if (qSet.has(tg)) inter++;
   // Jaccard
-  return inter / (qSet.size + tSet.size - inter);
+  return inter / (qSet.size + tArr.length - inter);
 }
 
 function _ensureNlc(t) {
@@ -141,7 +163,7 @@ function _ensureNlc(t) {
 
 function _ensureTrigrams(t) {
   if (t._trigGen !== _filterGen || t._trigrams == null) {
-    t._trigrams = _trigrams(t._nlc || '');
+    t._trigrams = _trigramsArr(t._nlc || '');
     t._trigGen = _filterGen;
   }
 }

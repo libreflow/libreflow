@@ -26,6 +26,13 @@ import { CFG } from './cfg.js';
 // ── Trigram helpers ───────────────────────────────────────────────────────────
 
 /** Returns Set of all 3-char trigrams from a string. */
+// PERF : les trigrammes des pistes sont stockés comme tableaux de strings
+// INTERNÉES (Map globale) — sur 50k pistes, un Set<string> par piste duplique
+// chaque trigramme dans le heap (~60 MB) ; l'interning les partage (~20 MB).
+/** @type {Map<string, string>} */
+const _trigramIntern = new Map();
+
+/** Returns Set of all 3-char trigrams from a string (pour la query). */
 function _trigrams(str) {
   const s = str.replace(/\s+/g, ' ').trim();
   const t = new Set();
@@ -33,12 +40,36 @@ function _trigrams(str) {
   return t;
 }
 
-/** Jaccard similarity between two trigram Sets. 0–1. */
+/**
+ * Returns array of interned 3-char trigrams from a string (pour les pistes).
+ * @param {string} str
+ * @returns {string[]}
+ */
+function _trigramsArr(str) {
+  const s = str.replace(/\s+/g, ' ').trim();
+  const out = [];
+  const seen = new Set();
+  for (let i = 0; i <= s.length - 3; i++) {
+    const g = s.slice(i, i + 3);
+    let v = _trigramIntern.get(g);
+    if (v === undefined) {
+      v = g;
+      _trigramIntern.set(g, v);
+    }
+    if (!seen.has(v)) {
+      seen.add(v);
+      out.push(v);
+    }
+  }
+  return out;
+}
+
+/** Jaccard similarity between a query Set and a track trigram array. 0–1. */
 function _trigramScore(a, b) {
-  if (!a.size || !b.size) return 0;
+  if (!a.size || !b.length) return 0;
   let inter = 0;
-  for (const g of a) if (b.has(g)) inter++;
-  return inter / (a.size + b.size - inter);
+  for (const g of b) if (a.has(g)) inter++;
+  return inter / (a.size + b.length - inter);
 }
 
 // ── Collator partagé (P3) ────────────────────────────────────────────────────
@@ -248,7 +279,7 @@ function _ensureTrigrams(t) {
   // B2 FIX : idem _ensureNlc — un `delete t._trigrams` sans reset de `_trigGen`
   // laisserait `_trigrams` undefined au prochain accès fuzzy.
   if (t._trigGen !== _filterGen || t._trigrams == null) {
-    t._trigrams = _trigrams(t._nlc || '');
+    t._trigrams = _trigramsArr(t._nlc || '');
     t._trigGen = _filterGen;
   }
 }
