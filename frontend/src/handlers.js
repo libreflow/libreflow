@@ -58,7 +58,6 @@ import {
 } from './eq.js';
 import { saveCurrentDeviceProfile, deleteDeviceProfile, renderDeviceProfiles } from './eqdevice.js';
 import { organizePreview, organizeConfirm, organizeCancel } from './organize.js';
-import { exportBackup, importBackup } from './backup.js';
 import { openUsbImportModal, closeUsbImportModal, importFromDrive } from './devices.js';
 import { closeCdModal, playCdTrack, extractCd, cancelCurrentRip } from './cdaudio.js';
 import {
@@ -85,7 +84,6 @@ import {
   bteCoverClear,
   bteCoverSelected
 } from './selection.js';
-import { closeDupes, detectDupes, removeDupeTrack, deleteAllDupes } from './dupes.js';
 import {
   showCtxMenu,
   closeCtxMenu,
@@ -118,7 +116,6 @@ import {
 import { changeWatchFolder, toggleWatchFolder } from './watchfolder.js';
 import { setVizMode, setVizEnabled } from './viz.js';
 import { setCrossfade } from './player.js';
-import { importM3U, exportM3U, exportXSPF } from './m3u.js';
 import { invoke } from './ipc.js';
 import { CFG } from './cfg.js';
 import { setAriaValueText } from './a11y.js';
@@ -193,20 +190,7 @@ import {
   showPlFolderCtxMenu,
   setPlSort
 } from './playlists.js';
-import {
-  switchPlTab,
-  smartPreview,
-  confirmSmartPlaylist,
-  smartSeedSearch,
-  openSmartPlaylistModal,
-  _setSmartSeed,
-  regenerateSmartPlaylist,
-  addSmartRule,
-  switchSmartMode
-} from './smartplaylist.js'; // Bug #13 fix
 import { setReplayGain, setRGTarget } from './replaygain.js';
-import { openTagEditor, saveTagEdit, cancelTagEdit } from './tagedit.js';
-import { setHeatPeriod } from './stats.js';
 import { get, set } from './store.js';
 import {
   toggleNowPlaying,
@@ -407,35 +391,59 @@ const _ACTIONS = {
   },
 
   // ── Dupes ─────────────────────────────────────────────────
-  'close-dupes': () => closeDupes(),
-  'detect-dupes': () => detectDupes(),
-  'delete-all-dupes': () => deleteAllDupes(),
-  'remove-dupe-track': (btn) => removeDupeTrack(btn.dataset.id, +btn.dataset.gi, +btn.dataset.ti),
+  'close-dupes': async () => {
+    const { closeDupes } = await import('./dupes.js');
+    await closeDupes();
+  },
+  'detect-dupes': async () => {
+    const { detectDupes } = await import('./dupes.js');
+    await detectDupes();
+  },
+  'delete-all-dupes': async () => {
+    const { deleteAllDupes } = await import('./dupes.js');
+    await deleteAllDupes();
+  },
+  'remove-dupe-track': async (btn) => {
+    const { removeDupeTrack } = await import('./dupes.js');
+    await removeDupeTrack(btn.dataset.id, +btn.dataset.gi, +btn.dataset.ti);
+  },
 
   // ── Library ───────────────────────────────────────────────
   'open-folder': async () => {
     await toggleWatchFolder();
   },
-  'import-m3u': () => importM3U(),
-  'export-m3u': () => exportM3U(),
-  'export-xspf': () => exportXSPF(),
+  'import-m3u': async () => {
+    const { importM3U } = await import('./m3u.js');
+    await importM3U();
+  },
+  'export-m3u': async () => {
+    const { exportM3U } = await import('./m3u.js');
+    await exportM3U();
+  },
+  'export-xspf': async () => {
+    const { exportXSPF } = await import('./m3u.js');
+    await exportXSPF();
+  },
 
   // ── Settings + action combinée ────────────────────────────
   'settings-open-folder': async () => {
     closeSettings();
     await toggleWatchFolder();
   },
-  'settings-import-m3u': () => {
+  'settings-import-m3u': async () => {
     closeSettings();
-    importM3U();
+    const { importM3U } = await import('./m3u.js');
+    await importM3U();
   },
-  'settings-export-m3u': () => {
+  'settings-export-m3u': async () => {
     closeSettings();
-    exportM3U();
+    const { exportM3U } = await import('./m3u.js');
+    await exportM3U();
   },
-  'settings-export-xspf': () => {
+  'settings-export-xspf': async () => {
     closeSettings();
-    exportXSPF();
+    const { exportXSPF } = await import('./m3u.js');
+    await exportXSPF();
   },
   'settings-rescan-genres': () => {
     closeSettings();
@@ -443,7 +451,7 @@ const _ACTIONS = {
   },
   'settings-detect-dupes': () => {
     closeSettings();
-    detectDupes();
+    import('./dupes.js').then(({ detectDupes }) => detectDupes());
   },
   'settings-confirm-clear': () => {
     closeSettings();
@@ -520,10 +528,13 @@ const _ACTIONS = {
   },
 
   'backup-export': async () => {
+    // PERF-LH : chargé à la demande — hors chemin critique du boot.
+    const { exportBackup } = await import('./backup.js');
     await exportBackup();
   },
 
   'backup-import': async () => {
+    const { importBackup } = await import('./backup.js');
     await importBackup();
   },
 
@@ -615,7 +626,10 @@ const _ACTIONS = {
     if (tab === 'library') renderImportHistory();
     if (tab === 'audio') renderDeviceProfiles();
   },
-  'pl-tab': (btn) => switchPlTab(btn.dataset.tab),
+  'pl-tab': async (btn) => {
+    const { switchPlTab } = await import('./smartplaylist.js');
+    await switchPlTab(btn.dataset.tab);
+  },
   'close-modal': () => closeModal(),
   'clear-library': () => clearLibrary(),
   'close-pl-modal': () => closePlModal(),
@@ -623,10 +637,22 @@ const _ACTIONS = {
   'pl-cover-click': () => document.getElementById('pl-cover-file')?.click(),
   'bte-cover-file-click': () => document.getElementById('bte-cover-file')?.click(),
   'confirm-playlist': () => confirmPlaylistModal(),
-  'smart-preview': () => smartPreview(),
-  'confirm-smart-pl': () => confirmSmartPlaylist(),
-  'spl-add-rule': () => addSmartRule(), // Bug #13 fix : bouton "+ règle"
-  'spl-mode': (btn) => switchSmartMode(btn.dataset.mode), // Bug #13 fix : switch mode
+  'smart-preview': async () => {
+    const { smartPreview } = await import('./smartplaylist.js');
+    await smartPreview();
+  },
+  'confirm-smart-pl': async () => {
+    const { confirmSmartPlaylist } = await import('./smartplaylist.js');
+    await confirmSmartPlaylist();
+  },
+  'spl-add-rule': async () => {
+    const { addSmartRule } = await import('./smartplaylist.js');
+    await addSmartRule();
+  },
+  'spl-mode': async (btn) => {
+    const { switchSmartMode } = await import('./smartplaylist.js');
+    await switchSmartMode(btn.dataset.mode);
+  },
 
   // ── Grid cards — hover play button ───────────────────────
   'play-card': (btn, e) => {
@@ -652,10 +678,16 @@ const _ACTIONS = {
   },
   'open-tag-editor': (btn, e) => {
     e.stopPropagation();
-    openTagEditor(btn.dataset.trackId);
+    import('./tagedit.js').then(({ openTagEditor }) => openTagEditor(btn.dataset.trackId));
   },
-  'save-tag-edit': (btn) => saveTagEdit(btn.dataset.trackId),
-  'cancel-tag-edit': () => cancelTagEdit(),
+  'save-tag-edit': async (btn) => {
+    const { saveTagEdit } = await import('./tagedit.js');
+    await saveTagEdit(btn.dataset.trackId);
+  },
+  'cancel-tag-edit': async () => {
+    const { cancelTagEdit } = await import('./tagedit.js');
+    await cancelTagEdit();
+  },
   likeat: (btn, e) => likeat(e, btn.dataset.trackId, btn),
   'play-queue-item': (btn) => playQueueItem(btn.dataset.trackId),
 
@@ -675,13 +707,19 @@ const _ACTIONS = {
   },
 
   // Stats
-  'heat-period': (btn) => setHeatPeriod(+btn.dataset.days),
+  'heat-period': async (btn) => {
+    const { setHeatPeriod } = await import('./stats.js');
+    await setHeatPeriod(+btn.dataset.days);
+  },
 
   // Playlists — lecture
   'play-pl-from': () => playPlaylistFrom(0),
   'shuffle-cur-pl': () => shufflePlaylist(),
   'play-pl-direct': (btn, e) => playPlaylistDirect(btn.dataset.plId, e),
-  'regen-cur-pl': () => regenerateSmartPlaylist(get('curPlId')),
+  'regen-cur-pl': async () => {
+    const { regenerateSmartPlaylist } = await import('./smartplaylist.js');
+    await regenerateSmartPlaylist(get('curPlId'));
+  },
   'rename-cur-pl': () => openRenamePlaylistModal(get('curPlId')),
   'delete-cur-pl': (btn, e) => deletePlaylist(e, get('curPlId')),
 
@@ -738,7 +776,7 @@ const _ACTIONS = {
   'pqp-new': () => pqpNew(),
   'pqp-smart': () => {
     closePlQuickPop();
-    openSmartPlaylistModal(getPqpTrackId());
+    import('./smartplaylist.js').then(({ openSmartPlaylistModal }) => openSmartPlaylistModal(getPqpTrackId()));
   },
   'ctx-play-pl': (btn) => ctxPlayPlaylist(btn.dataset.plId),
   'ctx-shuffle-pl': (btn) => ctxShufflePlaylist(btn.dataset.plId),
@@ -761,7 +799,10 @@ const _ACTIONS = {
   },
 
   // Smart playlist
-  'set-smart-seed': (btn) => _setSmartSeed(btn.dataset.trackId),
+  'set-smart-seed': async (btn) => {
+    const { _setSmartSeed } = await import('./smartplaylist.js');
+    await _setSmartSeed(btn.dataset.trackId);
+  },
 
   // ── Inline search toggle ──────────────────────────────────
   'toggle-search': () => {
@@ -872,13 +913,13 @@ function _handleInput(e) {
       break;
 
     case 'smart-seed-search':
-      smartSeedSearch(el.value);
+      import('./smartplaylist.js').then(({ smartSeedSearch }) => smartSeedSearch(el.value));
       break;
 
     case 'spl-rules-preview': // combinator AND/OR change → re-preview
     case 'smart-preview-if-visible':
       if (document.getElementById('smart-preview')?.style.display !== 'none') {
-        smartPreview();
+        import('./smartplaylist.js').then(({ smartPreview }) => smartPreview());
       }
       break;
 

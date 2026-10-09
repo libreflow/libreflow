@@ -57,7 +57,6 @@ import {
   getQueueState,
   restoreQueueState
 } from './queue.js';
-import { exportM3U, importM3U } from './m3u.js';
 import { setPlayLog, flushPlayLog, cancelPlayLogFlush } from './playlog.js';
 import {
   initEQ,
@@ -120,18 +119,6 @@ import {
   importPaths,
   startWatchNative
 } from './watchfolder.js'; // Bug #7 fix : startWatchNative ajouté
-import { renderStats, getHeatPeriod, initHeatPeriod } from './stats.js';
-import {
-  switchPlTab,
-  openSmartPlaylistModal,
-  _setSmartSeed,
-  smartSeedSearch,
-  smartPreview,
-  confirmSmartPlaylist,
-  regenerateSmartPlaylist
-} from './smartplaylist.js';
-import { detectDupes, removeDupeTrack, deleteAllDupes, closeDupes } from './dupes.js';
-import { checkOrphans } from './orphans.js';
 import {
   selection,
   selectionMode,
@@ -156,8 +143,6 @@ import {
   setRGTarget,
   analyzeAndApplyRG
 } from './replaygain.js';
-import { openTagEditor, saveTagEdit, cancelTagEdit } from './tagedit.js';
-import { toast, toastWithAction, confirmAction, initRipple } from './ui.js';
 import { checkForUpdate, checkForUpdateManual, initAppVersion } from './updater.js';
 import {
   getFiltered,
@@ -674,7 +659,8 @@ async function boot() {
       set('recentPls', recentPls);
     }
     // Modules persist — restauration anticipée (avant les tracks)
-    if (cfg.heatPeriod) initHeatPeriod(cfg.heatPeriod);
+    if (cfg.heatPeriod)
+      import('./stats.js').then(({ initHeatPeriod }) => initHeatPeriod(cfg.heatPeriod));
     if (cfg.radioSeedId) initRadioSeedId(cfg.radioSeedId);
     initLang(cfg.lang || 'fr');
     initSettingsVars({
@@ -954,7 +940,7 @@ async function boot() {
 
     // C-2 : vérification des fichiers orphelins — 6s après boot, non-bloquant
     // (après l'artwork retry pour ne pas cumuler les I/O au démarrage)
-    _orphansTimer = setTimeout(() => checkOrphans(), CFG.ORPHAN_START_DELAY_MS); // FIX #22 — stocker le timer
+    _orphansTimer = setTimeout(() => import('./orphans.js').then(({ checkOrphans }) => checkOrphans()), CFG.ORPHAN_START_DELAY_MS); // FIX #22 — stocker le timer
 
     // MINOR-1 FIX : applyLang() / setMode() / sync UI AVANT le await BOOT-1.
     // Avant ce fix, ces appels venaient après le bloc if/else → bloqués jusqu'à 5s

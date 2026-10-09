@@ -32,8 +32,6 @@ import {
   savePlaylists,
   movePlaylistTrack
 } from './playlists.js';
-import { openSmartPlaylistModal } from './smartplaylist.js';
-import { openTagEditor } from './tagedit.js';
 import { invoke } from './ipc.js';
 // Playlists demande la fermeture du menu contextuel — évite le cycle playlists.js ↔ ctxmenu.js.
 on(EVENTS.CTX_MENU_CLOSE, () => closeCtxMenu());
@@ -251,7 +249,7 @@ export function ctxRemoveFromPlaylist() {
 }
 export function ctxSmartPlaylist() {
   closeCtxMenu();
-  openSmartPlaylistModal(get('ctxTrackId'));
+  import('./smartplaylist.js').then(({ openSmartPlaylistModal }) => openSmartPlaylistModal(get('ctxTrackId')));
 }
 
 export function ctxPlayNext() {
@@ -287,20 +285,21 @@ export function ctxCopyInfo() {
     .catch(() => {});
 }
 
-export function ctxEditTags() {
+export async function ctxEditTags() {
   const id = get('ctxTrackId');
   closeCtxMenu();
   // Scroller jusqu'à la piste si elle est hors vue, puis ouvrir l'éditeur
   const el = document.getElementById('tr-' + id);
   if (el) {
     el.scrollIntoView({ block: 'nearest' });
+    const { openTagEditor } = await import('./tagedit.js');
     openTagEditor(id);
   } else {
     // Hors de la fenêtre virtuelle — renderLib puis ré-essayer
     invalidateFilterCache();
     emit(EVENTS.FILTER_CHANGED, {});
     emit(EVENTS.RENDER_LIB, {});
-    requestAnimationFrame(() => openTagEditor(id));
+    import('./tagedit.js').then(({ openTagEditor }) => requestAnimationFrame(() => openTagEditor(id)));
   }
 }
 

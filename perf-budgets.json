@@ -3,26 +3,47 @@
   "_unknownBucketPolicy": "warn",
   "_note": "Edited by `npm run perf:baseline`. Manual overrides preserved.",
   "buckets": {
+    "backup": {
+      "rawBytes": 2589
+    },
+    "dupes": {
+      "rawBytes": 3579
+    },
     "gsap": {
-      "rawBytes": 76106
+      "rawBytes": 76103
     },
     "libreflow-core": {
-      "rawBytes": 4567
+      "rawBytes": 4565
     },
     "libreflow-extras": {
-      "rawBytes": 436145
+      "rawBytes": 404988
     },
-    "_css": {
-      "rawBytes": 237958
+    "m3u": {
+      "rawBytes": 4343
     },
     "main": {
-      "rawBytes": 56896
+      "rawBytes": 61309
+    },
+    "_css": {
+      "rawBytes": 236969
     },
     "mini": {
-      "rawBytes": 9591
+      "rawBytes": 9583
     },
     "modulepreload-polyfill": {
-      "rawBytes": 698
+      "rawBytes": 670
+    },
+    "orphans": {
+      "rawBytes": 4779
+    },
+    "smartplaylist": {
+      "rawBytes": 15139
+    },
+    "stats": {
+      "rawBytes": 10382
+    },
+    "tagedit": {
+      "rawBytes": 6588
     }
   }
 }

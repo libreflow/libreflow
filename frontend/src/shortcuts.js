@@ -60,7 +60,6 @@ import { closePlModal } from './playlists.js';
 import { closeCtxMenu } from './ctxmenu.js';
 import { toggleMiniPlayer } from './miniplayer.js';
 import { toggleMiniOverlay } from './minioverlay.js';
-import { detectDupes } from './dupes.js';
 import { setVizMode, getVizMode } from './viz.js';
 import { renderLib } from './renderer.js';
 import { showView } from './views.js';
@@ -325,7 +324,7 @@ export function initShortcuts({ updateVolSlider, closeModal, cycleSpeed }) {
     // Note : 'b' (cycleCinemaBg) et 'f' (toggleCinemaFullscreen) en mode cinéma sont gérés
     // par _onCinKey dans cinema-input.js — ces guards `&& cinemaOpen` seraient inatteignables ici
     // car le `if (cinemaOpen) return` ci-dessus les bloque.
-    if (e.key.toLowerCase() === 'd' && !e.ctrlKey) detectDupes();
+    if (e.key.toLowerCase() === 'd' && !e.ctrlKey) import('./dupes.js').then(({ detectDupes }) => detectDupes());
     if (e.key.toLowerCase() === 'x' && !e.ctrlKey && !e.altKey) cycleSpeed();
     if (e.key.toLowerCase() === 'v' && !e.ctrlKey && !e.altKey) {
       const _vmodes = ['bars', 'oscilloscope', 'circle'];

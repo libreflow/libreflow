@@ -45,7 +45,6 @@ import {
 import { getVizMode, getVizEnabled } from './viz.js';
 import { getWatchPath } from './watchfolder.js';
 import { getMiniPos } from './miniplayer.js';
-import { getHeatPeriod } from './stats.js';
 import { getQueueState } from './queue.js';
 import { radioActive, getRadioSeedId } from './radio.js';
 import { getDeviceProfiles } from './eqdevice.js';
@@ -196,7 +195,7 @@ async function _doSaveCfg() {
         drillDisplayName,
         plFolders,
         recentPls,
-        heatPeriod: getHeatPeriod(),
+        heatPeriod: get('heatPeriod') ?? 30,
         queueState: getQueueState(),
         radioSeedId: radioActive ? getRadioSeedId() : null,
         autoUpdate,

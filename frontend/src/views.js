@@ -27,10 +27,8 @@ import {
   updatePlActionBar
 } from './renderer.js';
 import { renderGenresGrid, setContentView, invalidateGenreGridSig, drillGenre } from './genres.js';
-import { renderStats } from './stats.js';
 import { renderRadioView, syncRadioLibBar } from './radio.js';
 import { openNewPlaylistModal, renderPlHero } from './playlists.js';
-import { openSmartPlaylistModal } from './smartplaylist.js';
 import { saveCfg } from './cfgsave.js';
 import { clearSelection } from './selection.js';
 import { runViewTransition, triggerNavWipe } from './view-transition.js';
@@ -746,7 +744,7 @@ function _svSyncDetailPlBtns(v, mainSortBtn) {
   });
   const plSmartBtn = _svLazyBtn('pl-smart-btn', (b) => {
     b.title = i18n('sb_smart_pl') || 'Playlist intelligente';
-    b.addEventListener('click', openSmartPlaylistModal);
+    b.addEventListener('click', () => import('./smartplaylist.js').then(({ openSmartPlaylistModal }) => openSmartPlaylistModal()));
     b.innerHTML =
       '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>';
     mainSortBtn?.parentNode?.insertBefore(b, plNewBtn);
@@ -816,7 +814,7 @@ function _svDispatchView(v, plId) {
   if (v === 'stats') {
     _setSrchDisabled(true);
     _showViewRaw('stats');
-    renderStats(tracks, _trackIdxMap);
+    import('./stats.js').then(({ renderStats }) => renderStats(tracks, _trackIdxMap));
     saveCfg();
     return;
   }

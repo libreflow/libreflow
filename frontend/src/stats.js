@@ -10,11 +10,12 @@ import { playLog } from './playlog.js';
 import { esc, extEmoji, fmtDuration } from './utils.js';
 import { getLang, i18n } from './i18n.js';
 import { _normalizeGenre, _trackIdxMap } from './search.js'; // B35 : clé de drill genre normalisée
-import { get } from './store.js';
+import { get, set } from './store.js';
 import { emit, EVENTS } from './bus.js';
 
 // ── État UI persistent entre re-renders ───────────────────────
 let _heatPeriod = 30; // 7 | 30 | 90 jours
+set('heatPeriod', _heatPeriod); // mirror store — lu par cfgsave.js sans couplage statique
 let _cachedTracks = null;
 let _cachedTrackIdxMap = null;
 // ── Memoïsation — évite de recalculer quand rien n'a changé ──
@@ -30,19 +31,21 @@ let _statsSig = null;
 // ── Changer la période du heatmap ─────────────────────────────────────────────
 /** Retourne la période active (7 | 30 | 90) — pour la persistance en cfg. */
 export function getHeatPeriod() {
-  return _heatPeriod;
+  return /** @type {7|30|90} */ (get('heatPeriod')) ?? _heatPeriod;
 }
 
 /** Restaure la période sans déclencher de re-render (appelé au boot avant renderStats). */
 export function initHeatPeriod(d) {
   if (d === 7 || d === 30 || d === 90) {
     _heatPeriod = d;
+    set('heatPeriod', d);
     _statsSig = null;
   }
 }
 
 export function setHeatPeriod(d) {
   _heatPeriod = d;
+  set('heatPeriod', d);
   _statsSig = null; // forcer le recalcul
   // Bug #17 fix : fermer explicitement le panneau de détail du jour avant le re-render.
   // Sans ça, si la mémoïsation court-circuite renderStats(), le panneau reste affiché
