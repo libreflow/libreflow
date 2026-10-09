@@ -116,6 +116,8 @@ let _lastCinArt = null; // dernière URL d'art — évite le bug de normalisatio
 // _cinBgCtx → cinema-bg.js ; _beatTimer → cinema-viz.js (renderer passif, boucle dans cinema-loop.js)
 // Couleur dominante : état privé dans cinema-bg.js — muté via snapArtColor()/stepArtColorLerp().
 let _kbVariant = 0; // variante Ken Burns courante (0-3)
+let _cinCssGen = 0; // génération d'ouverture — invalide une activation différée après close
+let _cinCssLoaded = false; // cinema.css déjà chargé (PERF-LH)
 let _lastCinIdx = -1; // dernier curIdx vu dans updateCinema — détecte le changement de piste
 
 // Horloge
@@ -185,11 +187,34 @@ export function toggleCinema() {
 export function openCinema() {
   if (cinemaOpen) return;
   cinemaOpen = true;
-  // PERF-LH : le CSS du mode cinéma (~40 KB) est différé — chargé seulement
-  // à la première ouverture. Règle de masquage critique dans style.css.
-  import('./cinema.css');
   const overlay = document.getElementById('cinema-overlay');
-  if (!overlay) return;
+  if (!overlay) return void (cinemaOpen = false);
+  // FIX (freeze) : activer l'overlay SEULEMENT une fois cinema.css (chunk PERF-LH
+  // différé) appliqué — sinon .active/.cin-enter/Ken Burns partent avant que
+  // @keyframes/transitions existent (entrée figée).
+  const gen = ++_cinCssGen;
+  const activate = () => {
+    if (gen !== _cinCssGen || !cinemaOpen) return;
+    _applyOpenCinema(overlay);
+  };
+  if (_cinCssLoaded) {
+    activate();
+    return;
+  }
+  import('./cinema.css').then(
+    () => {
+      _cinCssLoaded = true;
+      activate();
+    },
+    (err) => {
+      console.warn('[cinema] cinema.css a échoué:', err);
+      activate();
+    }
+  );
+}
+
+/** Corps d'ouverture — cinema.css garanti appliqué. */
+function _applyOpenCinema(overlay) {
   // A11Y A.8 — capture previous focus; move focus into overlay on next paint
   // (overlay has tabindex="-1" from A.7, so it is programmatically focusable)
   _cinemaLastFocus = document.activeElement;
@@ -311,6 +336,7 @@ function _runOpenChoreography() {
 }
 
 export function closeCinema() {
+  _cinCssGen++; // invalide une activation différée en vol (cinema.css pas encore chargé)
   cinemaOpen = false;
   const overlay = document.getElementById('cinema-overlay');
   if (!overlay) return;
