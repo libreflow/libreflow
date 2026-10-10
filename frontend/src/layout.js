@@ -8,11 +8,15 @@
 // titlebar). La géométrie de chaque panneau vit dans store ('panelLayout')
 // et est persistée par cfgsave.js (clé panelLayout).
 //
-// En mode libre :
-//   - <body data-free-layout="on"> : #app passe en position:relative et les
-//     panneaux sortent de la grille (position:fixed inline + width/height) ;
-//   - un panneau actif monte au-dessus (z-index géré en JS) ;
-//   - double-clic sur la poignée de déplacement = recentre/optimise le panneau.
+// PRÉCISION (v2) :
+//   - Snap magnétique multi-cibles pendant le drag/resize : bords + centres
+//     de la fenêtre, bords des autres panneaux, et titlebar (marge 8px) ;
+//   - Guides d'alignement (.snap-guide-x/.snap-guide-y) affichés pendant
+//     l'accroche, retirés dès la sortie du champ magnétique ;
+//   - Alt maintenu = snap désactivé pour un placement libre au pixel ;
+//   - Clavier : flèches = 8 px, Maj+flèches = 32 px, Alt+flèches = 1 px ;
+//     Home/End/Shift+Home… respectent le snap (bords fenêtre) ;
+//   - Double-clic sur .panel-drag = répartition optimisée (métro).
 //
 // Mode par défaut inchangé : aucune classe/attribut tant que le mode n'est
 // pas activé (tests-garde-fous du layout griddle préservés).
@@ -27,6 +31,12 @@ const PANELS = ['sb', 'main', 'pl'];
 const MIN_W = 220;
 const MIN_H = 120;
 const PL_MIN_H = 88;
+/** Champ magnétique d'accroche (px). */
+const SNAP_RANGE = 8;
+/** Marge minimum entre un panneau et le bord de la fenêtre (px). */
+const EDGE_MARGIN = 8;
+const TB_H = 40; // hauteur titlebar (var --tb) — zone sous le titre
+
 /** @type {Record<string,PanelRect>|null} */
 let _dragged = null;
 
@@ -53,10 +63,10 @@ function _clampRect(id, rect) {
   const vw = window.innerWidth;
   const vh = window.innerHeight;
   const minH = id === 'pl' ? PL_MIN_H : MIN_H;
-  const w = Math.max(MIN_W, Math.min(rect.w, vw));
-  const h = Math.max(minH, Math.min(rect.h, vh));
-  const x = Math.max(8, Math.min(Math.round(rect.x), vw - w - 8));
-  const y = Math.max(8, Math.min(Math.round(rect.y), vh - h - 8));
+  const w = Math.max(MIN_W, Math.min(rect.w, vw - 2 * EDGE_MARGIN));
+  const h = Math.max(minH, Math.min(rect.h, vh - TB_H - EDGE_MARGIN));
+  const x = Math.max(EDGE_MARGIN, Math.min(Math.round(rect.x), vw - w - EDGE_MARGIN));
+  const y = Math.max(TB_H, Math.min(Math.round(rect.y), vh - h - EDGE_MARGIN));
   return { x, y, w: Math.round(w), h: Math.round(h), z: rect.z ?? null };
 }
 
@@ -151,6 +161,160 @@ function _bringToFront(id) {
   _persist();
 }
 
+// ── Snap magnétique + guides visuels ────────────────────────────────────────
+
+/**
+ * Collecte les cibles X (verticales) et Y (horizontales) candidates :
+ * bords + centres de la fenêtre, bords des autres panneaux.
+ * Retourne { xs:Set<number>, ys:Set<number> }.
+ */
+function _snapTargets(dragId) {
+  /** @type {Set<number>} */
+  const xs = new Set();
+  /** @type {Set<number>} */
+  const ys = new Set();
+  const vw = window.innerWidth;
+  const vh = window.innerHeight;
+  // Fenêtre : bords (avec marge) + centre
+  xs.add(EDGE_MARGIN);
+  xs.add(Math.round(vw / 2));
+  xs.add(vw - EDGE_MARGIN);
+  ys.add(TB_H);
+  ys.add(Math.round((TB_H + vh) / 2));
+  ys.add(vh - EDGE_MARGIN);
+  // Autres panneaux : bords gauche/droit (X), haut/bas (Y)
+  const layout = get('panelLayout') || {};
+  for (const p of PANELS) {
+    if (p === dragId) continue;
+    const r = layout[p];
+    if (!r) continue;
+    xs.add(r.x);
+    xs.add(r.x + r.w);
+    ys.add(r.y);
+    ys.add(r.y + r.h);
+  }
+  return { xs, ys };
+}
+
+/** Retourne la valeur snappée si une cible est à ≤ SNAP_RANGE, sinon null. */
+function _snapTo(val, targets) {
+  let best = null;
+  let bestD = SNAP_RANGE + 1;
+  for (const t of targets) {
+    const d = Math.abs(t - val);
+    if (d <= SNAP_RANGE && d < bestD) {
+      best = t;
+      bestD = d;
+    }
+  }
+  return best;
+}
+
+let _guideX = null;
+let _guideY = null;
+
+/** Crée/met à jour les deux lignes guides (une par axe). */
+function _showGuides() {
+  if (!_guideX) {
+    _guideX = document.createElement('div');
+    _guideX.className = 'snap-guide snap-guide-y'; // ligne verticale (axe X)
+    _guideX.setAttribute('aria-hidden', 'true');
+    document.body.appendChild(_guideX);
+  }
+  if (!_guideY) {
+    _guideY = document.createElement('div');
+    _guideY.className = 'snap-guide snap-guide-x'; // ligne horizontale (axe Y)
+    _guideY.setAttribute('aria-hidden', 'true');
+    document.body.appendChild(_guideY);
+  }
+}
+
+function _hideGuides() {
+  _guideX?.remove();
+  _guideY?.remove();
+  _guideX = null;
+  _guideY = null;
+}
+
+/** Positionne un guide vertical sur x (pleine hauteur) ou horizontal sur y. */
+function _placeGuideX(x) {
+  _showGuides();
+  _guideX.style.display = 'block';
+  _guideX.style.left = x + 'px';
+}
+function _placeGuideY(y) {
+  _showGuides();
+  _guideY.style.display = 'block';
+  _guideY.style.top = y + 'px';
+}
+function _clearGuides() {
+  if (_guideX) _guideX.style.display = 'none';
+  if (_guideY) _guideY.style.display = 'none';
+}
+
+/**
+ * Applique le snap magnétique au rect proposé pour `id` (mode 'move').
+ * Prend en compte le bord gauche/droit et haut/bas du panneau en mouvement,
+ * mais aussi son centre. Alt (ev.altKey) = snap off.
+ */
+function _snapMove(id, rect, altKey) {
+  if (altKey) return { rect, guides: null };
+  const { xs, ys } = _snapTargets(id);
+  const cx = rect.x + rect.w / 2;
+  const cy = rect.y + rect.h / 2;
+  const out = { ...rect };
+  const guides = { x: null, y: null };
+  // X : bord gauche, centre, bord droit
+  for (const [val, set] of [
+    [rect.x, xs],
+    [cx, xs],
+    [rect.x + rect.w, xs]
+  ]) {
+    const s = _snapTo(val, set);
+    if (s != null) {
+      out.x = rect.x + (s - val);
+      guides.x = s;
+      break;
+    }
+  }
+  // Y : bord haut, centre, bord bas
+  for (const [val, set] of [
+    [rect.y, ys],
+    [cy, ys],
+    [rect.y + rect.h, ys]
+  ]) {
+    const s = _snapTo(val, set);
+    if (s != null) {
+      out.y = rect.y + (s - val);
+      guides.y = s;
+      break;
+    }
+  }
+  return { rect: out, guides };
+}
+
+/**
+ * Snap en mode resize : coin inférieur droit (bords droit/bas) — le coin
+ * s'aligne sur les bords des cibles.
+ */
+function _snapResize(id, rect, altKey) {
+  if (altKey) return { rect, guides: null };
+  const { xs, ys } = _snapTargets(id);
+  const out = { ...rect };
+  const guides = { x: null, y: null };
+  const sx = _snapTo(rect.x + rect.w, xs);
+  if (sx != null) {
+    out.w = sx - out.x;
+    guides.x = sx;
+  }
+  const sy = _snapTo(rect.y + rect.h, ys);
+  if (sy != null) {
+    out.h = sy - out.y;
+    guides.y = sy;
+  }
+  return { rect: out, guides };
+}
+
 // ── Pointer handling (drag + resize) ────────────────────────────────────────
 
 function _startGesture(e, mode) {
@@ -171,17 +335,30 @@ function _startGesture(e, mode) {
     const dx = ev.clientX - sx;
     const dy = ev.clientY - sy;
     if (_dragged.mode === 'move') {
-      _setRect(_dragged.id, { ...start, x: start.x + dx, y: start.y + dy }, false);
+      const raw = { ...start, x: start.x + dx, y: start.y + dy };
+      const { rect, guides } = _snapMove(_dragged.id, raw, ev.altKey);
+      _setRect(_dragged.id, rect, false);
+      if (guides?.x != null) _placeGuideX(guides.x);
+      else if (_guideX) _guideX.style.display = 'none';
+      if (guides?.y != null) _placeGuideY(guides.y);
+      else if (_guideY) _guideY.style.display = 'none';
     } else {
-      _setRect(_dragged.id, { ...start, w: start.w + dx, h: start.h + dy }, false);
+      const raw = { ...start, w: start.w + dx, h: start.h + dy };
+      const { rect, guides } = _snapResize(_dragged.id, raw, ev.altKey);
+      _setRect(_dragged.id, rect, false);
+      if (guides?.x != null) _placeGuideX(guides.x);
+      else if (_guideX) _guideX.style.display = 'none';
+      if (guides?.y != null) _placeGuideY(guides.y);
+      else if (_guideY) _guideY.style.display = 'none';
     }
   };
-  const onUp = (ev2) => {
+  const onUp = () => {
     el.removeEventListener('pointermove', onMove);
     el.removeEventListener('pointerup', onUp);
     el.removeEventListener('pointercancel', onUp);
     document.body.classList.remove('panel-gesturing');
     _dragged = null;
+    _hideGuides();
     saveCfg();
   };
   el.addEventListener('pointermove', onMove);
@@ -201,9 +378,15 @@ function _onDragPointerDown(e) {
   }
 }
 
-// ── Keyboard a11y : flèches = déplacer, Shift+flèches = redimensionner ──────
+// ── Keyboard a11y : flèches = déplacer/redimensionner, snap inclus ──────────
 
-const KSTEP = 16;
+/**
+ * Pas clavier : 1 px (Alt), 8 px, 32 px (Maj).
+ */
+function _kStep(e) {
+  if (e.altKey) return 1;
+  return e.shiftKey ? 32 : 8;
+}
 
 function _onKeyDown(e) {
   const t = e.target;
@@ -222,14 +405,24 @@ function _onKeyDown(e) {
     if (e.key === 'Enter' && isDrag) {
       e.preventDefault();
       _bringToFront(id);
+    } else if (isDrag && (e.key === 'Home' || e.key === 'End')) {
+      e.preventDefault();
+      // Home = bord gauche, End = bord droit (avec snap marge)
+      const vw = window.innerWidth;
+      const start = _rectOf(id);
+      if (e.key === 'Home') _setRect(id, { ...start, x: EDGE_MARGIN });
+      else _setRect(id, { ...start, x: vw - start.w - EDGE_MARGIN });
     }
     return;
   }
   e.preventDefault();
   const start = _rectOf(id);
-  const step = e.shiftKey ? KSTEP * 4 : KSTEP;
+  const step = _kStep(e);
   if (isDrag) {
-    _setRect(id, { ...start, x: start.x + delta[0] * step, y: start.y + delta[1] * step });
+    const raw = { ...start, x: start.x + delta[0] * step, y: start.y + delta[1] * step };
+    // Snap léger au clavier aussi (sauf Alt = pas fin)
+    const { rect } = e.altKey ? { rect: raw } : _snapMove(id, raw, false);
+    _setRect(id, rect);
   } else {
     _setRect(id, {
       ...start,

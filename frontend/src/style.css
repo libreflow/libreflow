@@ -12480,3 +12480,25 @@ body[data-free-layout='on'] #app.panel-eq-open #main,
 body[data-free-layout='on'] #app.panel-eq-open.eq-expert-mode #main {
   padding-right: 0;
 }
+
+/* ── Guides d'alignement magnétique (layout.js, mode libre) ────────────── */
+.snap-guide {
+  position: fixed;
+  z-index: 35; /* sous les panneaux (40+) : le guide traverse, pas le panneau */
+  pointer-events: none;
+  display: none;
+  background: var(--accent, #f59e0b);
+  opacity: 0.85;
+}
+.snap-guide-y {
+  /* ligne verticale — accroche sur l'axe X */
+  width: 1px;
+  top: 0;
+  bottom: 0;
+}
+.snap-guide-x {
+  /* ligne horizontale — accroche sur l'axe Y */
+  height: 1px;
+  left: 0;
+  right: 0;
+}
