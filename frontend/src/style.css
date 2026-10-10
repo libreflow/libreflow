@@ -3738,14 +3738,20 @@ html[data-motion='reduce'] #vw::after {
      Right shelf : clamp(88px, 18vw, 280px) → 280px à ≥1556px, 88px à ≤489px. */
   /* AUDIT-2026-07-27 : étagères symétriques — le bouton play tombe au centre
      exact de la fenêtre (l'œil l'attend là sur une barre pleine largeur). */
+  /* REWORK 2026-10-10 « horizon » : la progression quitte la colonne centrale
+     pour devenir une ligne full-width posée au ras du bas — l'aiguille du
+     temps dessine l'horizon de la barre. Au-dessus : 3 zones (infos, transport,
+     réglages). Le DOM est inchangé, c'est une réorganisation CSS pure :
+     .pl-c transporte la pill transport, .pl-prog vit en rangée 2. */
   display: grid;
   grid-template-columns: minmax(0, clamp(160px, 24vw, 300px)) minmax(0, 1fr) minmax(
       0,
       clamp(160px, 24vw, 300px)
     );
+  grid-template-rows: 1fr auto;
   align-items: center;
   padding: 0 clamp(var(--space-2), 2vw, var(--space-5));
-  gap: clamp(var(--space-2), 1.5vw, var(--space-4));
+  gap: 0 clamp(var(--space-2), 1.5vw, var(--space-4));
   transition: background 1.2s ease;
   view-transition-name: player-bar;
   contain: layout;
@@ -3776,6 +3782,7 @@ html[data-motion='reduce'] #vw::after {
   align-items: center;
   gap: var(--space-2);
   min-width: 0;
+  grid-row: 1;
 }
 .pl-art {
   width: var(--art-player);
@@ -4009,40 +4016,25 @@ html[data-motion='reduce'] #vw::after {
   align-items: center;
   gap: var(--space-2);
   min-width: 0; /* R-C5 */
-  position: relative; /* ancre les séparateurs RAFFINEMENT-4 */
+  grid-row: 1; /* « horizon » : le transport reste en rangée contenu */
+  /* Pill flottante originale : le groupe transport se détache de la barre
+     comme un dock translucide — verre dépoli teinté accent, chevauchant
+     légèrement la ligne de temps en rangée 2. */
+  position: relative;
+  align-self: end;
+  margin-bottom: calc(-1 * var(--space-2));
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-pill);
+  background: color-mix(in srgb, var(--art-color) 6%, rgba(20, 20, 22, 0.55));
+  backdrop-filter: blur(var(--blur-md)) saturate(1.3);
+  -webkit-backdrop-filter: blur(var(--blur-md)) saturate(1.3);
+  box-shadow:
+    var(--shadow-lg),
+    0 0 0 1px rgba(255, 255, 255, 0.06),
+    0 0 24px rgba(var(--g-rgb), 0.12);
 }
-/* RAFFINEMENT-4 : séparateurs verticaux discrets entre les 3 zones de la barre.
-   Dégradés transparent→sep→transparent : ils s'estompent aux extrémités,
-   structurant sans durcir. Disparaissent en compact (<900px) où l'espace est compté. */
-.pl-c::before,
-.pl-c::after {
-  content: '';
-  position: absolute;
-  top: 25%;
-  bottom: 25%;
-  width: 1px;
-  background: linear-gradient(
-    180deg,
-    transparent,
-    var(--sep) 30%,
-    var(--sep) 70%,
-    transparent
-  );
-  opacity: 0.6;
-  pointer-events: none;
-}
-.pl-c::before {
-  left: calc(-0.5 * var(--space-2));
-}
-.pl-c::after {
-  right: calc(-0.5 * var(--space-2));
-}
-@container playerbar (max-width: 900px) {
-  .pl-c::before,
-  .pl-c::after {
-    display: none;
-  }
-}
+/* (RAFFINEMENT-4 retiré — les séparateurs verticaux cédaient la structure
+   à la pill transport flottante du rework « horizon » 2026-10-10.) */
 .pl-btns {
   display: flex;
   align-items: center;
@@ -4215,6 +4207,11 @@ html[data-motion='reduce'] #vw::after {
   align-items: center;
   gap: var(--space-2);
   width: 100%;
+  /* « horizon » : la ligne de temps traverse toute la barre, colonnes 1 → -1,
+     posée au ras du bas (padding-bottom du #pl la soulève de 2px). */
+  grid-row: 2;
+  grid-column: 1 / -1;
+  padding-bottom: var(--space-1);
 }
 .pt {
   font-size: var(--text-xs);
@@ -4406,6 +4403,7 @@ html[data-motion='reduce'] #vw::after {
   justify-content: flex-end;
   gap: var(--space-2);
   min-width: 0; /* R-C5 */
+  grid-row: 1; /* « horizon » : rangée contenu, la ligne de temps est en rangée 2 */
 }
 .vol {
   display: flex;
@@ -11223,6 +11221,16 @@ html[data-mode='light'] .rv-start-btn {
   .vol .vslider {
     width: var(--vol-slider-sm);
   }
+  /* « horizon » compact : la pill transport se simplifie (pas de marge
+     négative qui risquerait de chevaucher la ligne de temps) */
+  .pl-c {
+    margin-bottom: 0;
+    padding: 0 var(--space-2);
+    background: transparent;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    box-shadow: none;
+  }
 }
 
 /* Extras cèdent au transport (jamais touché).
@@ -12435,11 +12443,7 @@ body[data-free-layout='on'] #sel-bar {
   z-index: 5;
   cursor: grab;
   touch-action: none;
-  background: linear-gradient(
-    to bottom,
-    rgba(255, 255, 255, 0.04),
-    transparent
-  );
+  background: linear-gradient(to bottom, rgba(255, 255, 255, 0.04), transparent);
   border-radius: var(--radius-lg) var(--radius-lg) 0 0;
 }
 .panel-drag::after {
