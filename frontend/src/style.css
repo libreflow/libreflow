@@ -12379,3 +12379,104 @@ html[data-motion='reduce'] #main.view-fade {
 .vol {
   gap: 4px;
 } /* 8px → 4px : icône mute + slider plus proches */
+
+/* ══ Disposition libre (layout.js) — panneaux flottants ══════════════════ */
+body[data-free-layout='on'] #app {
+  /* Le mode libre sort les panneaux de la grille : on garde #app comme fond
+     d'écran art-blur, les panneaux sont en position:fixed posés par layout.js */
+  display: block;
+}
+body[data-free-layout='on'] #app > *:not(#tb):not(#sb):not(#main):not(#pl):not(#art-blur-bg) {
+  display: none;
+}
+body[data-free-layout='on'] #sb,
+body[data-free-layout='on'] #main,
+body[data-free-layout='on'] #pl {
+  border-radius: var(--radius-lg);
+  border: var(--border-w-sm) solid var(--border-1);
+  box-shadow: var(--shadow-4, 0 12px 32px rgba(0, 0, 0, 0.45));
+  background: var(--bg1);
+  overflow: hidden;
+}
+.panel-drag {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 28px;
+  z-index: 5;
+  cursor: grab;
+  touch-action: none;
+  background: linear-gradient(
+    to bottom,
+    rgba(255, 255, 255, 0.04),
+    transparent
+  );
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+}
+.panel-drag::after {
+  content: '';
+  position: absolute;
+  top: 8px;
+  left: 50%;
+  width: 36px;
+  height: 3px;
+  border-radius: 2px;
+  transform: translateX(-50%);
+  background: var(--t3);
+}
+.panel-drag:active {
+  cursor: grabbing;
+}
+.panel-drag:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: calc(-1 * var(--focus-offset, 2px));
+}
+.panel-size {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 18px;
+  height: 18px;
+  z-index: 5;
+  cursor: nwse-resize;
+  touch-action: none;
+  background: transparent;
+  border: none;
+}
+.panel-size::after {
+  content: '';
+  position: absolute;
+  right: 4px;
+  bottom: 4px;
+  width: 8px;
+  height: 8px;
+  border-right: 2px solid var(--t3);
+  border-bottom: 2px solid var(--t3);
+  border-radius: 0 0 1px 0;
+}
+.panel-size:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: calc(-1 * var(--focus-offset, 2px));
+}
+body.panel-gesturing {
+  user-select: none;
+  cursor: grabbing;
+}
+body.panel-gesturing .panel-size {
+  cursor: nwse-resize;
+}
+/* Le panneau sous interaction passe au premier plan (z-index géré par JS) */
+#sb,
+#main,
+#pl {
+  transition: box-shadow var(--motion-fast) var(--ease);
+}
+
+/* En mode libre, les panneaux Queue/EQ ne poussent plus #main (flottant) ;
+   ils restent utilisables en overlay au-dessus des panneaux déplaçables. */
+body[data-free-layout='on'] #app.panel-queue-open #main,
+body[data-free-layout='on'] #app.panel-eq-open #main,
+body[data-free-layout='on'] #app.panel-eq-open.eq-expert-mode #main {
+  padding-right: 0;
+}

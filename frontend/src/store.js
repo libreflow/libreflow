@@ -55,6 +55,8 @@
  * @property {PlSortKey}        plSort
  * @property {string|null}      ctxTrackId
  * @property {string}           formatFilter
+ * @property {boolean}          freeLayout
+ * @property {Record<string,{x:number,y:number,w:number,h:number,z:number|null}>|null} panelLayout
  */
 
 /** @type {AppState} */
@@ -99,7 +101,9 @@ const _state = {
 
   // ── Misc ─────────────────────────────────────────────────────────────
   ctxTrackId: null, // string | null — track id for context menu
-  formatFilter: '' // '' = tous, 'MP3'/'FLAC'/etc. = filtre actif
+  formatFilter: '', // '' = tous, 'MP3'/'FLAC'/etc. = filtre actif
+  freeLayout: false, // boolean — mode disposition libre (panneaux déplaçables)
+  panelLayout: null // Record<string,{x,y,w,h,z}> | null — géométrie des panneaux en mode libre
 };
 
 /** @type {Map<string, Set<Function>>} */
