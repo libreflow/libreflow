@@ -35,7 +35,28 @@ const PL_MIN_H = 88;
 const SNAP_RANGE = 8;
 /** Marge minimum entre un panneau et le bord de la fenêtre (px). */
 const EDGE_MARGIN = 8;
-const TB_H = 40; // hauteur titlebar (var --tb) — zone sous le titre
+/** Plan des panneaux flottants — sous les dropdowns (200) et la titlebar. */
+const PANEL_Z_BASE = 150;
+const PANEL_Z_SPAN = 20;
+
+function _tbHeight() {
+  const el = document.getElementById('tb');
+  return el ? Math.round(el.getBoundingClientRect().height) || 38 : 38;
+}
+
+function _panelOrder() {
+  // Ordre visuel courant : le panneau avec le plus grand z au-dessus.
+  const layout = get('panelLayout') || {};
+  return [...PANELS].sort(
+    (a, b) => (layout[a]?.z ?? 0) - (layout[b]?.z ?? 0) || a.localeCompare(b)
+  );
+}
+
+function _zIndexFor(z) {
+  // z borné : les 3 panneaux occupent PANEL_Z_BASE..PANEL_Z_BASE+SPAN
+  const k = PANELS.length > 1 ? Math.min(z, PANELS.length - 1) / (PANELS.length - 1) : 1;
+  return Math.round(PANEL_Z_BASE + k * PANEL_Z_SPAN);
+}
 
 /** @type {Record<string,PanelRect>|null} */
 let _dragged = null;
@@ -58,15 +79,16 @@ function _defaultRect(id) {
   };
 }
 
-/** Clamp le panneau dans les limites de la fenêtre. */
+/** Clamp le panneau dans les limites de la fenêtre (titlebar dynamique). */
 function _clampRect(id, rect) {
   const vw = window.innerWidth;
   const vh = window.innerHeight;
+  const top = _tbHeight();
   const minH = id === 'pl' ? PL_MIN_H : MIN_H;
   const w = Math.max(MIN_W, Math.min(rect.w, vw - 2 * EDGE_MARGIN));
-  const h = Math.max(minH, Math.min(rect.h, vh - TB_H - EDGE_MARGIN));
+  const h = Math.max(minH, Math.min(rect.h, vh - top - EDGE_MARGIN));
   const x = Math.max(EDGE_MARGIN, Math.min(Math.round(rect.x), vw - w - EDGE_MARGIN));
-  const y = Math.max(TB_H, Math.min(Math.round(rect.y), vh - h - EDGE_MARGIN));
+  const y = Math.max(top, Math.min(Math.round(rect.y), vh - h - EDGE_MARGIN));
   return { x, y, w: Math.round(w), h: Math.round(h), z: rect.z ?? null };
 }
 
@@ -99,7 +121,7 @@ function _applyAll() {
     el.style.top = r.y + 'px';
     el.style.width = r.w + 'px';
     el.style.height = r.h + 'px';
-    el.style.zIndex = String(40 + (r.z ?? 0));
+    el.style.zIndex = String(_zIndexFor(r.z ?? 0));
     if (id === 'pl') el.style.setProperty('--pb', r.h + 'px');
     if (!el.querySelector('.panel-drag')) {
       const drag = document.createElement('div');
@@ -149,13 +171,13 @@ function _setRect(id, rect, persist = true) {
 
 function _bringToFront(id) {
   const layout = get('panelLayout') || {};
-  const top = PANELS.reduce((m, p) => Math.max(m, layout[p]?.z ?? 0), 0);
-  if ((layout[id]?.z ?? 0) === top && top > 0) return;
+  // Renormalise : le panneau demandé passe à z = 2, les autres répartis 0..1
+  // selon leur ordre visuel courant (z borné, pas de croissance infinie).
+  const order = _panelOrder().filter((p) => p !== id);
   const next = { ...layout };
-  for (const p of PANELS) {
-    const z = next[p]?.z ?? 0;
-    next[p] = { ...(next[p] || _defaultRect(p)), z: p === id ? top + 1 : Math.max(0, z - 1) };
-  }
+  let z = 0;
+  for (const p of order) next[p] = { ...(next[p] || _defaultRect(p)), z: z++ };
+  next[id] = { ...(next[id] || _defaultRect(id)), z: PANELS.length - 1 };
   set('panelLayout', next);
   _applyAll();
   _persist();
@@ -175,12 +197,13 @@ function _snapTargets(dragId) {
   const ys = new Set();
   const vw = window.innerWidth;
   const vh = window.innerHeight;
+  const top = _tbHeight();
   // Fenêtre : bords (avec marge) + centre
   xs.add(EDGE_MARGIN);
   xs.add(Math.round(vw / 2));
   xs.add(vw - EDGE_MARGIN);
-  ys.add(TB_H);
-  ys.add(Math.round((TB_H + vh) / 2));
+  ys.add(top);
+  ys.add(Math.round((top + vh) / 2));
   ys.add(vh - EDGE_MARGIN);
   // Autres panneaux : bords gauche/droit (X), haut/bas (Y)
   const layout = get('panelLayout') || {};
