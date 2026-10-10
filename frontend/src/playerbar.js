@@ -44,7 +44,9 @@ export function updateVolSlider(el) {
   const vel = el instanceof Element ? el : document.getElementById('vol');
   if (!vel) return;
   const pct = Math.round(+vel.value * 100);
-  vel.style.background = `linear-gradient(to right, var(--g) ${pct}%, var(--bg5) ${pct}%)`;
+  // Rework design 2026-10-10 : le JS ne peint plus le dégradé — il expose
+  // --vol-pct et le CSS construit la piste pill (source unique du design).
+  vel.style.setProperty('--vol-pct', pct + '%');
   const tip = document.getElementById('vol-tip');
   if (tip) {
     tip.textContent = pct + '%';
