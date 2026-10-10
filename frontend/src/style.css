@@ -12389,21 +12389,35 @@ body[data-free-layout='on'] #app {
 body[data-free-layout='on'] #app > *:not(#tb):not(#sb):not(#main):not(#pl):not(#art-blur-bg) {
   display: none;
 }
+body[data-free-layout='on'] #app > #tb {
+  grid-area: auto;
+}
+/* Fond opaque #main : sinon la liste laisse transparaître l'art blur (var --bg
+   est semi-transparent dans certains thèmes) → texte illisible en mode libre. */
+body[data-free-layout='on'] #main {
+  background: var(--bg1);
+}
 body[data-free-layout='on'] #sb,
 body[data-free-layout='on'] #main,
 body[data-free-layout='on'] #pl {
   border-radius: var(--radius-lg);
   border: var(--border-w-sm) solid var(--border-1);
-  box-shadow: var(--shadow-4, 0 12px 32px rgba(0, 0, 0, 0.45));
+  box-shadow: var(--shadow-xl);
   background: var(--bg1);
   overflow: hidden;
+}
+/* La barre de sélection multiple est ancrée à la player bar en layout
+   classique (bottom: var(--pb)) — en mode libre elle resterait coincée au
+   bord bas de la fenêtre : masquée (les actions restent dans le ctxmenu). */
+body[data-free-layout='on'] #sel-bar {
+  display: none;
 }
 .panel-drag {
   position: absolute;
   top: 0;
   left: 0;
   right: 0;
-  height: 28px;
+  height: 24px;
   z-index: 5;
   cursor: grab;
   touch-action: none;
@@ -12436,9 +12450,9 @@ body[data-free-layout='on'] #pl {
   position: absolute;
   right: 0;
   bottom: 0;
-  width: 18px;
-  height: 18px;
-  z-index: 5;
+  width: 20px;
+  height: 20px;
+  z-index: 6;
   cursor: nwse-resize;
   touch-action: none;
   background: transparent;
@@ -12447,13 +12461,20 @@ body[data-free-layout='on'] #pl {
 .panel-size::after {
   content: '';
   position: absolute;
-  right: 4px;
-  bottom: 4px;
-  width: 8px;
-  height: 8px;
+  right: 5px;
+  bottom: 5px;
+  width: 9px;
+  height: 9px;
   border-right: 2px solid var(--t3);
   border-bottom: 2px solid var(--t3);
   border-radius: 0 0 1px 0;
+  opacity: 0;
+  transition: opacity var(--motion-fast) var(--ease);
+}
+.panel-size:hover::after,
+.panel-size:focus-visible::after,
+body.panel-gesturing .panel-size::after {
+  opacity: 1;
 }
 .panel-size:focus-visible {
   outline: var(--focus-ring);
@@ -12479,4 +12500,28 @@ body[data-free-layout='on'] #app.panel-queue-open #main,
 body[data-free-layout='on'] #app.panel-eq-open #main,
 body[data-free-layout='on'] #app.panel-eq-open.eq-expert-mode #main {
   padding-right: 0;
+}
+
+/* ── Guides d'alignement magnétique (layout.js, mode libre) ────────────── */
+.snap-guide {
+  position: fixed;
+  /* Au-DESSUS des panneaux (150..170) : le guide doit rester visible même
+     quand la ligne passe derrière/à travers un panneau voisin. */
+  z-index: 199;
+  pointer-events: none;
+  display: none;
+  background: var(--accent);
+  opacity: 0.85;
+}
+.snap-guide-y {
+  /* ligne verticale — accroche sur l'axe X */
+  width: 1px;
+  top: 0;
+  bottom: 0;
+}
+.snap-guide-x {
+  /* ligne horizontale — accroche sur l'axe Y */
+  height: 1px;
+  left: 0;
+  right: 0;
 }

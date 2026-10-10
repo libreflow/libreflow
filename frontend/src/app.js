@@ -281,7 +281,7 @@ import {
 import { initDrop } from './dropin.js';
 import { initKeyNav } from './keynav.js';
 import { initSbResize } from './sbresize.js';
-import { initFreeLayout, syncFreeLayoutBtn } from './layout.js';
+
 import { initShortcuts } from './shortcuts.js';
 import { setTlistZoom, initTlistZoomWheel } from './tlistZoom.js';
 import { confirmClear, closeModal } from './modal.js';
@@ -1247,8 +1247,12 @@ waitForTauri(() => {
   initRipple(); // Ripple feedback sur boutons et lignes
   initKeyNav({ reorderTrack: movePlaylistTrack }); // A11Y: roving tabindex arrow-key nav + Alt+↑/↓ reorder (SC 2.5.7)
   initSbResize(); // QUALITÉ-1 : sidebar redimensionnable (largeur restaurée depuis cfg.sbWidth)
-  initFreeLayout(); // Disposition libre : panneaux déplaçables/redimensionnables (restaurés depuis cfg)
-  syncFreeLayoutBtn();
+  // Disposition libre : panneaux déplaçables/redimensionnables (restaurés depuis
+  // cfg). Lazy-load (budget main) — pattern stats.js/orphans.js.
+  import('./layout.js').then(({ initFreeLayout, syncFreeLayoutBtn }) => {
+    initFreeLayout();
+    syncFreeLayoutBtn();
+  });
 
   // Commandes depuis le mini-player (fenêtre séparée)
   // BUG FIX F6 : stocker l'unlistener mini-cmd avec les autres (voir boot())
