@@ -15,6 +15,9 @@
     "gsap": {
       "rawBytes": 76103
     },
+    "layout": {
+      "rawBytes": 6789
+    },
     "libreflow-core": {
       "rawBytes": 5186
     },
