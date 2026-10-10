@@ -145,9 +145,18 @@
   --border-subtle: rgba(255, 255, 255, 0.45); /* 3.1:1 vs #030303 */
   --border-default: rgba(255, 255, 255, 0.55); /* 4.0:1 */
 
-  /* --- États -------------------------------------------------------------- */
-  --state-error: #ff5a5f;
-  --state-success: #4ade80;
+  /* --- États — calibrés sur la palette dark Vantablack (audit design
+     2026-10-10) : le vert Tailwind #4ade80 et le corail #ff5a5f, pensés
+     pour des fonds clairs, « criardaient » sur #030303 et fuchaient avec
+     l'Electric Indigo. Désaturés + teintés vers la famille accent :
+     success = vert menthe sobre (AA 8.6:1 sur --bg-base), error = corail
+     assombri (AA 5.4:1). Ces tokens sont la SOURCE UNIQUE des états —
+     --green (stats trend) et --red (danger) aliasent ici, plus de double
+     palette concurrente. */
+  --state-success: #57c787; /* iconographie succès, toasts, chip validé */
+  --state-error: #f2636a; /* erreurs, danger, suppression */
+  --state-success-rgb: 87, 199, 135;
+  --state-error-rgb: 242, 99, 106;
 }
 
 /* ============================================================================
@@ -347,7 +356,7 @@ html[data-mode='light'] {
   /* Icônes — sous-échelle SVG resserrée (harmonisation, audit §2.7 / FND-09).
      Ancres icône : xs 12 / xl 16 / 3xl 20 / 4xl 24 / 32. Les tokens servant de
      dimension de conteneur (dot, 22/26/28/30/36/40/44, icon-4) restent littéraux. */
-  --red-rgb: 232, 64, 64;
+  --red-rgb: 242, 99, 106; /* alias --state-error-rgb (audit design 2026-10-10) */
   --eq-cool: #5baeff; /* bande aiguë froide (band 10) */
   --pb: var(--player-height); /* 96px — alias de §5 --player-height */
   --tb: 38px;
@@ -363,13 +372,17 @@ html[data-mode='light'] {
   --tint-2: rgba(255, 255, 255, 0.1);
   --fw-medium: 500;
   --fw-bold: 700;
-  --red: #e84040;
+  --red: var(--state-error); /* alias — l'ancien #e84040 (3e rouge concurrent) est retiré */
   --c-spectrum-bg: #0a0a12; /* fond cinéma « Spectre » — noir teinté bleu volontaire */
   --c-black: #000000; /* noir pur — cinema bg, spl-mode active text */
-  --like-active: #e0304a; /* cœur like actif dans le mini-player */
+  --like-active: var(
+    --state-error
+  ); /* cœur like actif — alias (l'ancien #e0304a, 3e rouge, est retiré) */
   --c-genre-fb-1: #1e1e1e; /* fallback gradient carte genre sans --gc (audit 2026-07-27) */
   --c-white: #ffffff; /* blanc pur — cercle dot, eq-preset, select-input */
-  --green: #1db954; /* success / up trend */
+  --green: var(
+    --state-success
+  ); /* alias — l'ancien vert Spotify #1db954 est retiré (audit design) */
   --sb: var(--sidebar-width); /* 260px — alias de §5 --sidebar-width */
   --eq-warm: #f48a3d; /* bande grave chaude (band 2) */
   --amber: #f59e0b;
@@ -753,7 +766,9 @@ html[data-mode='light'] {
      --glass-toast reste sombre même en light (toasts always-dark = convention UX). */
   --glass-surface: rgba(20, 20, 20, 0.82); /* fond modales (playlist, settings, confirm) */
   --glass-panel: rgba(22, 22, 22, 0.88); /* fond ctx-menu, drawers */
-  --glass-toast: rgba(22, 22, 22, 0.92); /* fond toasts — NE PAS surcharger en light */
+  /* Audit design 2026-10-10 : aligné sur --bg-elevated (#1c1c20) au lieu
+     d'un gris 22,22,22 hors échelle qui détonait sur le Vantablack. */
+  --glass-toast: rgba(28, 28, 32, 0.92); /* fond toasts — NE PAS surcharger en light */
 
   /* ── Scrims (overlay de fond sous les modales) ── */
   --scrim: rgba(0, 0, 0, 0.5); /* modal std, batch-tag, orphans */

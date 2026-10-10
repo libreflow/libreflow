@@ -144,9 +144,13 @@ export class LfToastStack extends LitElement {
       color: var(--lf-toast-fg, var(--text-primary));
       padding: 14px 16px;
       border-radius: var(--radius-lg);
+      /* Audit design 2026-10-10 : plus de halo coloré tout autour au repos —
+         le périmètre reste neutre (hairline), l'accent vit sur l'icône et la
+         barre de progression uniquement, comme le prévoit la spec du bloc
+         per-type ci-dessous. */
       box-shadow:
         var(--shadow-lg),
-        0 0 0 1px color-mix(in srgb, var(--lf-toast-accent) 35%, transparent);
+        0 0 0 1px var(--lf-toast-ring, rgba(255, 255, 255, 0.08));
       display: flex;
       align-items: center;
       gap: 12px;
@@ -179,7 +183,7 @@ export class LfToastStack extends LitElement {
       transform: translateY(-1px);
       box-shadow:
         var(--shadow-xl, var(--shadow-lg)),
-        0 0 0 1px color-mix(in srgb, var(--lf-toast-accent) 55%, transparent);
+        0 0 0 1px var(--lf-toast-ring, rgba(255, 255, 255, 0.14));
     }
     .t-item:active {
       transform: scale(0.985);
@@ -218,7 +222,7 @@ export class LfToastStack extends LitElement {
       flex: 0 0 auto;
       background: transparent;
       border: none;
-      color: var(--lf-toast-action, var(--lf-toast-accent, #8ab4f8));
+      color: var(--lf-toast-action, var(--lf-toast-accent));
       padding: 6px 8px;
       margin: -4px -4px -4px 8px;
       border-radius: 4px;
