@@ -4456,8 +4456,8 @@ html[data-motion='reduce'] #vw::after {
 .vslider {
   -webkit-appearance: none;
   width: var(--slider-w);
-  height: calc(var(--track-h-md) + 2 * var(--space-3));
-  padding-block: var(--space-3);
+  height: calc(var(--track-h-md) + 2 * var(--space-2));
+  padding-block: var(--space-2);
   border-radius: var(--radius-pill);
   background:
     linear-gradient(to right, var(--g) var(--vol-pct, 100%), transparent var(--vol-pct, 100%)),
@@ -4472,7 +4472,7 @@ html[data-motion='reduce'] #vw::after {
 }
 .vslider:hover,
 .vslider:active {
-  height: calc(var(--track-h-lg) + 2 * var(--space-3));
+  height: calc(var(--track-h-lg) + 2 * var(--space-2));
 }
 /* Halo discret sur la portion remplie pendant l'interaction */
 .vslider:hover {
@@ -4480,8 +4480,8 @@ html[data-motion='reduce'] #vw::after {
 }
 .vslider::-webkit-slider-thumb {
   -webkit-appearance: none;
-  width: var(--icon-xs);
-  height: var(--icon-xs);
+  width: 10px;
+  height: 10px;
   border-radius: 50%;
   background: var(--c-white);
   /* Thumb magnétique : scale(0) au repos, la piste reste une barre nette ;
@@ -4497,7 +4497,7 @@ html[data-motion='reduce'] #vw::after {
 .vslider:hover::-webkit-slider-thumb,
 .vslider:active::-webkit-slider-thumb,
 .vslider:focus-visible::-webkit-slider-thumb {
-  transform: scale(1.25);
+  transform: scale(1.2);
 }
 /* Mute button — reuses .pl-queue-btn base; muted state tints accent */
 .vol-mute-btn {

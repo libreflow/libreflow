@@ -441,7 +441,7 @@ html[data-mode='light'] {
   --track-h: 3px; /* piste standard slider / progress */
   --track-h-md: 4px; /* piste large — cf-slider, scan-bar, rg-bar */
   --track-h-lg: 6px; /* piste expansée — pbar:hover, genre-bar */
-  --slider-w: 72px; /* largeur volume slider */
+  --slider-w: 64px; /* largeur volume slider — resserrée (retour utilisateur 2026-10-10) */
   --lang-w: 24px; /* largeur indicateur langue (non-carré) */
 
   /* Skeleton loaders */
@@ -482,7 +482,7 @@ html[data-mode='light'] {
   --ctx-pane-min: 190px; /* min-width panneau ctx / tag dropdown */
   --app-min-w: 520px; /* min-width application */
   --stats-bar-min: 60px; /* min-width barre progression stats */
-  --vol-slider-sm: 60px; /* width volume slider (responsive sm) */
+  --vol-slider-sm: 52px; /* width volume slider (responsive sm) */
 
   /* Contraintes de largeur — max-width layout */
   --text-empty-max: 260px; /* max-width texte état vide */
