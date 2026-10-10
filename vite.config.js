@@ -40,8 +40,8 @@ export default defineConfig(({ mode }) => {
       rolldownOptions: {
         // Multi-page: main window + mini player window
         input: {
-          main: resolve(__dirname, 'frontend/index.html'),
-          mini: resolve(__dirname, 'frontend/mini.html')
+          main: resolve(import.meta.dirname, 'frontend/index.html'),
+          mini: resolve(import.meta.dirname, 'frontend/mini.html')
         },
 
         output: {
