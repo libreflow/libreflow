@@ -101,6 +101,8 @@ async function _doSaveCfg() {
     const albumDetailSort = get('albumDetailSort') ?? 'track';
     const plGridSort = get('plGridSort') ?? 'manual';
     const sbWidth = get('sbWidth') ?? null;
+    const freeLayout = get('freeLayout') === true;
+    const panelLayout = get('panelLayout') ?? null;
     const curPlId = get('curPlId') ?? null;
     const drillKey = get('drillKey') ?? '';
     const drillFrom = get('drillFrom') ?? '';
@@ -172,6 +174,8 @@ async function _doSaveCfg() {
         albumDetailSort,
         plGridSort,
         sbWidth,
+        freeLayout,
+        panelLayout,
         eqEnabled,
         eqExpert,
         eqGains: getEQGains(),

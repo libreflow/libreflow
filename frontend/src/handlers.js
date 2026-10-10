@@ -143,7 +143,7 @@ import {
   setMode,
   switchSetTab,
   syncMiniSettingsBtn
-} from './settings.js';
+} from './settings.js';import { toggleFreeLayout, syncFreeLayoutBtn } from './layout.js';
 import {
   goHome,
   setView,
@@ -237,6 +237,10 @@ const _ACTIONS = {
   'toggle-mini-player': async () => {
     await toggleMiniPlayer();
     syncMiniSettingsBtn();
+  },
+  'toggle-free-layout': () => {
+    toggleFreeLayout();
+    syncFreeLayoutBtn();
   },
   'toggle-mini-overlay': () => toggleMiniOverlay(),
 

@@ -281,6 +281,7 @@ import {
 import { initDrop } from './dropin.js';
 import { initKeyNav } from './keynav.js';
 import { initSbResize } from './sbresize.js';
+import { initFreeLayout, syncFreeLayoutBtn } from './layout.js';
 import { initShortcuts } from './shortcuts.js';
 import { setTlistZoom, initTlistZoomWheel } from './tlistZoom.js';
 import { confirmClear, closeModal } from './modal.js';
@@ -718,6 +719,10 @@ async function boot() {
     }
     if (Number.isFinite(cfg.sbWidth) && cfg.sbWidth >= 200 && cfg.sbWidth <= 420) {
       set('sbWidth', cfg.sbWidth);
+    }
+    if (cfg.freeLayout === true) set('freeLayout', true);
+    if (cfg.panelLayout && typeof cfg.panelLayout === 'object') {
+      set('panelLayout', cfg.panelLayout);
     }
     // EQ : sera appliqué après initEQ() (les nodes n'existent pas encore)
     initBootEQ(cfg.eqGains, cfg.eqEnabled, cfg.eqPreset);
@@ -1242,6 +1247,8 @@ waitForTauri(() => {
   initRipple(); // Ripple feedback sur boutons et lignes
   initKeyNav({ reorderTrack: movePlaylistTrack }); // A11Y: roving tabindex arrow-key nav + Alt+↑/↓ reorder (SC 2.5.7)
   initSbResize(); // QUALITÉ-1 : sidebar redimensionnable (largeur restaurée depuis cfg.sbWidth)
+  initFreeLayout(); // Disposition libre : panneaux déplaçables/redimensionnables (restaurés depuis cfg)
+  syncFreeLayoutBtn();
 
   // Commandes depuis le mini-player (fenêtre séparée)
   // BUG FIX F6 : stocker l'unlistener mini-cmd avec les autres (voir boot())
