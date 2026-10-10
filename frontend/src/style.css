@@ -4448,41 +4448,57 @@ html[data-motion='reduce'] #vw::after {
   border: var(--border-w-2xl) solid transparent;
   border-top-color: var(--bg3);
 }
-/* Piste fine (3px) mais zone interactive ~23px : padding vertical transparent,
-   la piste visible est peinte via background-clip content-box (audit 2026-07-27). */
+/* ── Rework design 2026-10-10 — slider volume « moderne » ──────────────────
+   Piste pill symétrique (pas de rectangle plat) : le remplissage est peint
+   en CSS via --vol-pct (posé par updateVolSlider, playerbar.js), le JS ne
+   touche plus au background. Zone interactive ~23px conservée via le
+   padding vertical transparent + background-clip content-box.
+   Thumb magnétique : invisible au repos (la piste se lit comme une barre
+   continue, façon Spotify), il apparaît scale-in au hover/drag. */
 .vslider {
   -webkit-appearance: none;
   width: var(--slider-w);
-  height: calc(var(--track-h) + 2 * var(--space-3));
+  height: calc(var(--track-h-md) + 2 * var(--space-3));
   padding-block: var(--space-3);
-  border-radius: var(--radius-xs);
-  background: rgba(var(--g-rgb), 0.12);
+  border-radius: var(--radius-pill);
+  background:
+    linear-gradient(to right, var(--g) var(--vol-pct, 100%), transparent var(--vol-pct, 100%)),
+    rgba(255, 255, 255, 0.14);
   background-clip: content-box;
   outline: none;
   cursor: pointer;
   transition:
     height var(--motion-fast) var(--ease-spring),
-    padding var(--motion-fast) var(--ease-spring);
+    padding var(--motion-fast) var(--ease-spring),
+    box-shadow var(--motion-fast) var(--ease-standard);
 }
-.vslider:hover {
+.vslider:hover,
+.vslider:active {
   height: calc(var(--track-h-lg) + 2 * var(--space-3));
 }
-/* AUDIT-2026-07-27 : thumb accent invisible sur la portion remplie (accent sur
-   accent) — passé en blanc avec ombre + liseré, lisible sur piste pleine et vide. */
+/* Halo discret sur la portion remplie pendant l'interaction */
+.vslider:hover {
+  box-shadow: 0 0 0 1px rgba(var(--g-rgb), 0.18);
+}
 .vslider::-webkit-slider-thumb {
   -webkit-appearance: none;
   width: var(--icon-xs);
   height: var(--icon-xs);
   border-radius: 50%;
   background: var(--c-white);
+  /* Thumb magnétique : scale(0) au repos, la piste reste une barre nette ;
+     survol/drag → scale(1.25) + glow accent (héritage visuel de .pbar). */
+  transform: scale(0);
   box-shadow:
     0 1px 4px rgba(0, 0, 0, 0.45),
-    0 0 0 1px rgba(0, 0, 0, 0.12);
+    0 0 12px rgba(var(--g-rgb), 0.45);
   transition:
-    transform var(--ease),
-    background var(--ease);
+    transform var(--motion-fast) var(--ease-spring),
+    box-shadow var(--motion-fast) var(--ease-standard);
 }
-.vslider:hover::-webkit-slider-thumb {
+.vslider:hover::-webkit-slider-thumb,
+.vslider:active::-webkit-slider-thumb,
+.vslider:focus-visible::-webkit-slider-thumb {
   transform: scale(1.25);
 }
 /* Mute button — reuses .pl-queue-btn base; muted state tints accent */
@@ -4567,9 +4583,7 @@ html[data-motion='reduce'] #vw::after {
     0 0 0 2px var(--g),
     0 0 0 4px rgba(var(--g-rgb), 0.18);
 }
-.vslider:focus-visible::-webkit-slider-thumb {
-  transform: scale(1.3);
-}
+/* (thumb focus-visible géré par la règle magnétique ci-dessus — scale 1.25) */
 
 .pl-queue-btn {
   background: none;
